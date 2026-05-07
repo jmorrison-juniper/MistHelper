@@ -17,6 +17,8 @@ import os
 import re
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any
 
 import mistapi
@@ -31,6 +33,44 @@ SelectDeviceFn = Callable[[str, str], str | None]
 SafeInputFn = Callable[..., str]
 WebSocketManagerFactory = Callable[[Any], Any]
 IsDebugModeFn = Callable[[], bool]
+
+
+@dataclass
+class RoutingTableContext:
+    """Shared context for routing table WebSocket operations."""
+
+    websocket_manager: Any
+    session_id: str
+    device_id: str
+    device_info: dict[str, Any] | None
+    payload: dict[str, Any]
+    debug_mode: bool
+
+
+@dataclass
+class SsrRouteQuery:
+    """User inputs for building an SSR/SRX route query payload."""
+
+    protocol_input: str
+    prefix_input: str
+    vrf_input: str
+    neighbor_input: str
+    route_direction: str
+    node_input: str
+    interval_input: str
+    duration_input: str
+
+
+@dataclass
+class SsrRouteContext:
+    """Shared context for SSR/SRX routing WebSocket operations."""
+
+    websocket_manager: Any
+    session_id: str
+    device_id: str
+    device_info: dict[str, Any] | None
+    request_body: dict[str, Any]
+    debug_mode: bool
 
 
 class RoutingUtils:
@@ -1059,7 +1099,7 @@ class RoutingUtils:
             print(f"[DEBUG] HTTP Response Status = {response.status_code}")
             print(f"[DEBUG] HTTP Response Body = {response.text}")
 
-        if response.status_code != 200:  # noqa: PLR2004
+        if response.status_code != HTTPStatus.OK:
             return None, f"HTTP {response.status_code}: {response.text}"
 
         response_data = response.json()
@@ -1275,12 +1315,14 @@ class RoutingUtils:
                 return
 
             self._process_routing_table_results(
-                websocket_manager,
-                session_id,
-                device_id,
-                device_info,
-                payload,
-                debug_mode,
+                RoutingTableContext(
+                    websocket_manager=websocket_manager,
+                    session_id=session_id,
+                    device_id=device_id,
+                    device_info=device_info,
+                    payload=payload,
+                    debug_mode=debug_mode,
+                )
             )
 
         except KeyboardInterrupt:
@@ -1448,28 +1490,23 @@ class RoutingUtils:
 
         return session_id
 
-    def _process_routing_table_results(  # noqa: PLR0913
+    def _process_routing_table_results(
         self,
-        websocket_manager: Any,
-        session_id: str,
-        device_id: str,
-        device_info: dict[str, Any] | None,
-        payload: dict[str, Any],
-        debug_mode: bool,
+        ctx: RoutingTableContext,
     ) -> None:
         """Wait for and process routing table results."""
-        if debug_mode:
+        if ctx.debug_mode:
             print("[DEBUG] Starting to wait for WebSocket results...")
 
-        result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=60)
+        result = ctx.websocket_manager.wait_for_command_result(ctx.session_id, timeout_seconds=60)
 
-        if debug_mode:
+        if ctx.debug_mode:
             print(f"[DEBUG] wait_for_command_result returned:" f" {result is not None}")
             if result:
                 print(f"[DEBUG] Result keys: {list(result.keys())}")
 
         if result:
-            self._display_routing_table_output(result, device_id, device_info, payload, debug_mode)
+            self._display_routing_table_output(result, ctx)
         else:
             print("! Timeout waiting for routing table results")
             print("! This may indicate:")
@@ -1477,13 +1514,10 @@ class RoutingUtils:
             print("  - The device has no" " routing protocols configured")
             print("  - The device is busy or not responding")
 
-    def _display_routing_table_output(  # noqa: PLR0913
+    def _display_routing_table_output(
         self,
         result: dict[str, Any],
-        device_id: str,
-        device_info: dict[str, Any] | None,
-        payload: dict[str, Any],
-        debug_mode: bool,
+        ctx: RoutingTableContext,
     ) -> None:
         """Display formatted routing table results."""
         print("\n" + "=" * 80)
@@ -1493,7 +1527,7 @@ class RoutingUtils:
         raw_output = result.get("raw", "")
         if raw_output:
             entries = self._parse_routing_table(raw_output)
-            self._display_routing_summary(entries, payload)
+            self._display_routing_summary(entries, ctx.payload)
 
         output_fields = result.get("Output", "")
         if output_fields and output_fields != raw_output:
@@ -1501,13 +1535,13 @@ class RoutingUtils:
             print("ADDITIONAL OUTPUT:")
             print("=" * 40)
             additional = self._parse_routing_table(output_fields)
-            self._display_routing_summary(additional, payload)
+            self._display_routing_summary(additional, ctx.payload)
 
-        self._display_debug_result_fields(result, debug_mode)
+        self._display_debug_result_fields(result, ctx.debug_mode)
         self._display_no_data_message(result, "routing table")
 
         print("=" * 80)
-        self._log_command_completion("show routing table", device_id, device_info)
+        self._log_command_completion("show routing table", ctx.device_id, ctx.device_info)
 
     # =====================================================================
     # ORCHESTRATOR: SSR/SRX ROUTES
@@ -1538,12 +1572,14 @@ class RoutingUtils:
                 return
 
             self._process_ssr_route_results(
-                websocket_manager,
-                session_id,
-                device_id,
-                device_info,
-                request_body,
-                debug_mode,
+                SsrRouteContext(
+                    websocket_manager=websocket_manager,
+                    session_id=session_id,
+                    device_id=device_id,
+                    device_info=device_info,
+                    request_body=request_body,
+                    debug_mode=debug_mode,
+                )
             )
 
         except KeyboardInterrupt:
@@ -1643,43 +1679,38 @@ class RoutingUtils:
             duration_input = self.safe_input_fn("Refresh duration in seconds" " (0-300, press Enter for 30): ").strip()
 
         return self._build_ssr_payload(
-            protocol_input,
-            prefix_input,
-            vrf_input,
-            neighbor_input,
-            route_direction,
-            node_input,
-            interval_input,
-            duration_input,
+            SsrRouteQuery(
+                protocol_input=protocol_input,
+                prefix_input=prefix_input,
+                vrf_input=vrf_input,
+                neighbor_input=neighbor_input,
+                route_direction=route_direction,
+                node_input=node_input,
+                interval_input=interval_input,
+                duration_input=duration_input,
+            )
         )
 
-    def _build_ssr_payload(  # noqa: PLR0913
+    def _build_ssr_payload(
         self,
-        protocol_input: str,
-        prefix_input: str,
-        vrf_input: str,
-        neighbor_input: str,
-        route_direction: str,
-        node_input: str,
-        interval_input: str,
-        duration_input: str,
+        query: SsrRouteQuery,
     ) -> dict[str, Any]:
         """Build SSR/SRX routing API request body from user inputs."""
         request_body: dict[str, Any] = {}
         valid_protocols = ["any", "bgp", "ospf", "static", "direct", "evpn"]
-        if protocol_input and protocol_input in valid_protocols:
-            request_body["protocol"] = protocol_input
-        if prefix_input:
-            request_body["prefix"] = prefix_input
-        if vrf_input:
-            request_body["vrf"] = vrf_input
-        if neighbor_input:
-            request_body["neighbor"] = neighbor_input
-            if route_direction and route_direction in ["received", "advertised"]:
-                request_body["route"] = route_direction
-        if node_input and node_input in ["node0", "node1"]:
-            request_body["node"] = {"node": node_input}
-        self._apply_ssr_refresh_params(request_body, interval_input, duration_input)
+        if query.protocol_input and query.protocol_input in valid_protocols:
+            request_body["protocol"] = query.protocol_input
+        if query.prefix_input:
+            request_body["prefix"] = query.prefix_input
+        if query.vrf_input:
+            request_body["vrf"] = query.vrf_input
+        if query.neighbor_input:
+            request_body["neighbor"] = query.neighbor_input
+            if query.route_direction and query.route_direction in ["received", "advertised"]:
+                request_body["route"] = query.route_direction
+        if query.node_input and query.node_input in ["node0", "node1"]:
+            request_body["node"] = {"node": query.node_input}
+        self._apply_ssr_refresh_params(request_body, query.interval_input, query.duration_input)
         return request_body
 
     def _apply_ssr_refresh_params(
@@ -1776,22 +1807,17 @@ class RoutingUtils:
             print(f"[DEBUG] Full session ID:" f" {session_id}")
         return session_id
 
-    def _process_ssr_route_results(  # noqa: PLR0913
+    def _process_ssr_route_results(
         self,
-        websocket_manager: Any,
-        session_id: str,
-        device_id: str,
-        device_info: dict[str, Any] | None,
-        request_body: dict[str, Any],
-        debug_mode: bool,
+        ctx: SsrRouteContext,
     ) -> None:
         """Wait for and process SSR/SRX routing table results."""
-        if debug_mode:
+        if ctx.debug_mode:
             print("[DEBUG] Starting to wait for WebSocket results...")
 
-        result = websocket_manager.wait_for_command_result(session_id, timeout_seconds=60)
+        result = ctx.websocket_manager.wait_for_command_result(ctx.session_id, timeout_seconds=60)
 
-        if debug_mode:
+        if ctx.debug_mode:
             print(f"[DEBUG] wait_for_command_result returned:" f" {result is not None}")
             if result:
                 print(f"[DEBUG] Result keys: {list(result.keys())}")
@@ -1799,22 +1825,16 @@ class RoutingUtils:
         if result:
             self._display_ssr_route_output(
                 result,
-                device_id,
-                device_info,
-                request_body,
-                debug_mode,
+                ctx,
             )
         else:
             print("! Timeout waiting for" " SSR/SRX routing table results")
             print("! Try the generic routing table command" " (Menu 7) as fallback")
 
-    def _display_ssr_route_output(  # noqa: PLR0913
+    def _display_ssr_route_output(
         self,
         result: dict[str, Any],
-        device_id: str,
-        device_info: dict[str, Any] | None,
-        request_body: dict[str, Any],
-        debug_mode: bool,
+        ctx: SsrRouteContext,
     ) -> None:
         """Display formatted SSR/SRX routing table results."""
         print("\n" + "=" * 80)
@@ -1823,20 +1843,20 @@ class RoutingUtils:
 
         raw_output = result.get("raw", "")
         if raw_output:
-            self._display_ssr_parsed_section(raw_output, request_body)
+            self._display_ssr_parsed_section(raw_output, ctx.request_body)
 
         output_fields = result.get("Output", "")
         if output_fields and output_fields != raw_output:
             print("\n" + "=" * 40)
             print("ADDITIONAL OUTPUT:")
             print("=" * 40)
-            self._display_ssr_parsed_section(output_fields, request_body)
+            self._display_ssr_parsed_section(output_fields, ctx.request_body)
 
-        self._display_debug_result_fields(result, debug_mode)
+        self._display_debug_result_fields(result, ctx.debug_mode)
         self._display_no_data_message(result, "routing table")
 
         print("=" * 80)
-        self._log_command_completion("SSR/SRX routing table", device_id, device_info)
+        self._log_command_completion("SSR/SRX routing table", ctx.device_id, ctx.device_info)
 
     def _display_ssr_parsed_section(
         self,

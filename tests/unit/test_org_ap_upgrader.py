@@ -152,36 +152,45 @@ class TestInit:
 
 
 class TestParseSelection:
-    """Tests for _parse_selection static method."""
+    """Tests for _parse_selection instance method."""
 
     def test_single_number(self):
-        assert OrgLevelAPFirmwareUpgrader._parse_selection("1", 5) == [0]
+        u = _make_upgrader()
+        assert u._parse_selection("1", 5) == [0]
 
     def test_multiple_comma(self):
-        assert OrgLevelAPFirmwareUpgrader._parse_selection("1,3,5", 5) == [0, 2, 4]
+        u = _make_upgrader()
+        assert u._parse_selection("1,3,5", 5) == [0, 2, 4]
 
     def test_range_dash(self):
-        assert OrgLevelAPFirmwareUpgrader._parse_selection("1-3", 5) == [0, 1, 2]
+        u = _make_upgrader()
+        assert u._parse_selection("1-3", 5) == [0, 1, 2]
 
     def test_through_keyword(self):
-        assert OrgLevelAPFirmwareUpgrader._parse_selection("1 through 3", 5) == [0, 1, 2]
+        u = _make_upgrader()
+        assert u._parse_selection("1 through 3", 5) == [0, 1, 2]
 
     def test_out_of_range(self):
-        assert OrgLevelAPFirmwareUpgrader._parse_selection("10", 5) == []
+        u = _make_upgrader()
+        assert u._parse_selection("10", 5) == []
 
     def test_invalid_text(self):
-        assert OrgLevelAPFirmwareUpgrader._parse_selection("abc", 5) == []
+        u = _make_upgrader()
+        assert u._parse_selection("abc", 5) == []
 
     def test_mixed_input(self):
-        result = OrgLevelAPFirmwareUpgrader._parse_selection("1,3", 5)
+        u = _make_upgrader()
+        result = u._parse_selection("1,3", 5)
         assert result == [0, 2]
 
     def test_dedup(self):
-        result = OrgLevelAPFirmwareUpgrader._parse_selection("1,1,1", 5)
+        u = _make_upgrader()
+        result = u._parse_selection("1,1,1", 5)
         assert result == [0]
 
     def test_empty_string(self):
-        assert OrgLevelAPFirmwareUpgrader._parse_selection("", 5) == []
+        u = _make_upgrader()
+        assert u._parse_selection("", 5) == []
 
 
 # ===================================================================

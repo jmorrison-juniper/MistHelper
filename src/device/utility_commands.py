@@ -150,7 +150,7 @@ class DeviceUtilityCommands:
         try:
             response = mistapi.api.v1.sites.stats.getSiteDeviceStats(self._apisession, site_id, device_id)
             if hasattr(response, "data") and isinstance(response.data, dict):
-                return response.data  # type: ignore[no-any-return]
+                return response.data
         except Exception as error:
             logging.error(f"Failed to get device stats: {error}")
         return None

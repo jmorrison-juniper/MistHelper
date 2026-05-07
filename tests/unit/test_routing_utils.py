@@ -22,7 +22,7 @@ _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 
 
-from src.network.routing_utils import RoutingUtils
+from src.network.routing_utils import RoutingTableContext, RoutingUtils, SsrRouteContext
 
 
 def setup_module() -> None:
@@ -1083,14 +1083,30 @@ class TestProcessRoutingTableResults:
             "raw": json.dumps([{"prefix": "10.0.0.0/8", "nextHop": "gw1", "protocol": "BGP"}]),
             "session": "sess-1",
         }
-        ru._process_routing_table_results(ws_mgr, "sess-1", "dev-1", None, {}, False)
+        ctx = RoutingTableContext(
+            websocket_manager=ws_mgr,
+            session_id="sess-1",
+            device_id="dev-1",
+            device_info=None,
+            payload={},
+            debug_mode=False,
+        )
+        ru._process_routing_table_results(ctx)
         output = capsys.readouterr().out
         assert "ROUTING TABLE RESULTS" in output
 
     def test_timeout(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         ws_mgr = MagicMock()
         ws_mgr.wait_for_command_result.return_value = None
-        ru._process_routing_table_results(ws_mgr, "sess-1", "dev-1", None, {}, False)
+        ctx = RoutingTableContext(
+            websocket_manager=ws_mgr,
+            session_id="sess-1",
+            device_id="dev-1",
+            device_info=None,
+            payload={},
+            debug_mode=False,
+        )
+        ru._process_routing_table_results(ctx)
         output = capsys.readouterr().out
         assert "Timeout" in output
 
@@ -1104,14 +1120,30 @@ class TestProcessSsrRouteResults:
             "raw": json.dumps({"status": "SUCCESS", "columns": ["prefix"], "rows": [{"prefix": "10.0.0.0/8"}]}),
             "session": "sess-1",
         }
-        ru._process_ssr_route_results(ws_mgr, "sess-1", "dev-1", None, {}, False)
+        ctx = SsrRouteContext(
+            websocket_manager=ws_mgr,
+            session_id="sess-1",
+            device_id="dev-1",
+            device_info=None,
+            request_body={},
+            debug_mode=False,
+        )
+        ru._process_ssr_route_results(ctx)
         output = capsys.readouterr().out
         assert "SSR/SRX ROUTING TABLE RESULTS" in output
 
     def test_timeout(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         ws_mgr = MagicMock()
         ws_mgr.wait_for_command_result.return_value = None
-        ru._process_ssr_route_results(ws_mgr, "sess-1", "dev-1", None, {}, False)
+        ctx = SsrRouteContext(
+            websocket_manager=ws_mgr,
+            session_id="sess-1",
+            device_id="dev-1",
+            device_info=None,
+            request_body={},
+            debug_mode=False,
+        )
+        ru._process_ssr_route_results(ctx)
         output = capsys.readouterr().out
         assert "Timeout" in output
 
@@ -1179,13 +1211,29 @@ class TestDisplayRoutingTableOutput:
             "raw": json.dumps([{"prefix": "10.0.0.0/8", "nextHop": "gw1", "protocol": "BGP"}]),
             "session": "s",
         }
-        ru._display_routing_table_output(result, "dev-1", None, {}, False)
+        ctx = RoutingTableContext(
+            websocket_manager=MagicMock(),
+            session_id="",
+            device_id="dev-1",
+            device_info=None,
+            payload={},
+            debug_mode=False,
+        )
+        ru._display_routing_table_output(result, ctx)
         output = capsys.readouterr().out
         assert "ROUTING TABLE RESULTS" in output
 
     def test_no_data(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         result = {"session": "s"}
-        ru._display_routing_table_output(result, "dev-1", None, {}, False)
+        ctx = RoutingTableContext(
+            websocket_manager=MagicMock(),
+            session_id="",
+            device_id="dev-1",
+            device_info=None,
+            payload={},
+            debug_mode=False,
+        )
+        ru._display_routing_table_output(result, ctx)
         output = capsys.readouterr().out
         assert "No routing table data" in output
 
@@ -1201,7 +1249,15 @@ class TestDisplaySsrRouteOutput:
             "rows": [{"prefix": "10.0.0.0/8", "nextHops": "gw1", "vrfName": "default", "status": "active"}],
         }
         result = {"raw": json.dumps(ssr_data), "session": "s"}
-        ru._display_ssr_route_output(result, "dev-1", None, {}, False)
+        ctx = SsrRouteContext(
+            websocket_manager=MagicMock(),
+            session_id="",
+            device_id="dev-1",
+            device_info=None,
+            request_body={},
+            debug_mode=False,
+        )
+        ru._display_ssr_route_output(result, ctx)
         output = capsys.readouterr().out
         assert "SSR/SRX ROUTING TABLE RESULTS" in output
 
@@ -1212,13 +1268,29 @@ class TestDisplaySsrRouteOutput:
             "raw": json.dumps(ssr_failed),
             "session": "s",
         }
-        ru._display_ssr_route_output(result, "dev-1", None, {}, False)
+        ctx = SsrRouteContext(
+            websocket_manager=MagicMock(),
+            session_id="",
+            device_id="dev-1",
+            device_info=None,
+            request_body={},
+            debug_mode=False,
+        )
+        ru._display_ssr_route_output(result, ctx)
         output = capsys.readouterr().out
         assert "SSR/SRX ROUTING TABLE RESULTS" in output
 
     def test_no_data(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         result = {"session": "s"}
-        ru._display_ssr_route_output(result, "dev-1", None, {}, False)
+        ctx = SsrRouteContext(
+            websocket_manager=MagicMock(),
+            session_id="",
+            device_id="dev-1",
+            device_info=None,
+            request_body={},
+            debug_mode=False,
+        )
+        ru._display_ssr_route_output(result, ctx)
         output = capsys.readouterr().out
         assert "No routing table data" in output
 
@@ -1582,7 +1654,17 @@ class TestDisplayRoutingTableOutputDebug:
             "session": "s",
             "extra_field": "extra_value",
         }
-        ru._display_routing_table_output(result, "dev-1", None, {}, True)
+        ru._display_routing_table_output(
+            result,
+            RoutingTableContext(
+                websocket_manager=MagicMock(),
+                session_id="",
+                device_id="dev-1",
+                device_info=None,
+                payload={},
+                debug_mode=True,
+            ),
+        )
         output = capsys.readouterr().out
         assert "[DEBUG]" in output
 
@@ -1592,7 +1674,17 @@ class TestDisplayRoutingTableOutputDebug:
             "Output": json.dumps([{"prefix": "172.16.0.0/12", "nextHop": "gw2", "protocol": "OSPF"}]),
             "session": "s",
         }
-        ru._display_routing_table_output(result, "dev-1", None, {}, False)
+        ru._display_routing_table_output(
+            result,
+            RoutingTableContext(
+                websocket_manager=MagicMock(),
+                session_id="",
+                device_id="dev-1",
+                device_info=None,
+                payload={},
+                debug_mode=False,
+            ),
+        )
         output = capsys.readouterr().out
         assert "ADDITIONAL OUTPUT" in output
 
@@ -1601,7 +1693,17 @@ class TestDisplayRoutingTableOutputDebug:
             "raw": json.dumps([{"prefix": "10.0.0.0/8", "nextHop": "gw1", "protocol": "BGP"}]),
             "session": "s",
         }
-        ru._display_routing_table_output(result, "dev-1", {"type": "switch", "name": "sw-core"}, {}, False)
+        ru._display_routing_table_output(
+            result,
+            RoutingTableContext(
+                websocket_manager=MagicMock(),
+                session_id="",
+                device_id="dev-1",
+                device_info={"type": "switch", "name": "sw-core"},
+                payload={},
+                debug_mode=False,
+            ),
+        )
         output = capsys.readouterr().out
         assert "ROUTING TABLE RESULTS" in output
 
@@ -1625,7 +1727,17 @@ class TestDisplaySsrRouteOutputDebug:
             "session": "s",
             "extra_field": "extra_value",
         }
-        ru._display_ssr_route_output(result, "dev-1", None, {}, True)
+        ru._display_ssr_route_output(
+            result,
+            SsrRouteContext(
+                websocket_manager=MagicMock(),
+                session_id="",
+                device_id="dev-1",
+                device_info=None,
+                request_body={},
+                debug_mode=True,
+            ),
+        )
         output = capsys.readouterr().out
         assert "[DEBUG]" in output
 
@@ -1645,7 +1757,17 @@ class TestDisplaySsrRouteOutputDebug:
             "Output": json.dumps(ssr_data_alt),
             "session": "s",
         }
-        ru._display_ssr_route_output(result, "dev-1", None, {}, False)
+        ru._display_ssr_route_output(
+            result,
+            SsrRouteContext(
+                websocket_manager=MagicMock(),
+                session_id="",
+                device_id="dev-1",
+                device_info=None,
+                request_body={},
+                debug_mode=False,
+            ),
+        )
         output = capsys.readouterr().out
         assert "ADDITIONAL OUTPUT" in output
 
@@ -1656,7 +1778,17 @@ class TestDisplaySsrRouteOutputDebug:
             "rows": [{"prefix": "10.0.0.0/8", "nextHops": "gw1"}],
         }
         result = {"raw": json.dumps(ssr_data), "session": "s"}
-        ru._display_ssr_route_output(result, "dev-1", {"type": "gateway", "name": "ssr-edge"}, {}, False)
+        ru._display_ssr_route_output(
+            result,
+            SsrRouteContext(
+                websocket_manager=MagicMock(),
+                session_id="",
+                device_id="dev-1",
+                device_info={"type": "gateway", "name": "ssr-edge"},
+                request_body={},
+                debug_mode=False,
+            ),
+        )
         output = capsys.readouterr().out
         assert "SSR/SRX ROUTING TABLE RESULTS" in output
 

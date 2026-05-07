@@ -15,6 +15,7 @@ import os
 import time
 import traceback
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -79,6 +80,20 @@ class AddressComparisonCounters:
         if self.parse_failure_reasons:
             logging.info(f"Parse failure breakdown: {self.parse_failure_reasons}")
         logging.info(f"Processing duration: {self.get_duration():.2f} seconds")
+
+
+@dataclass
+class ComparisonItemConfig:
+    """Configuration for building mismatch and diff report items."""
+
+    device: dict[str, Any]
+    device_serial: str
+    mist_address: dict[str, str]
+    comparison_address: dict[str, str]
+    comparison_result: dict[str, Any]
+    week_key: str
+    mismatch_type: str
+    validation_result: dict[str, Any] | None
 
 
 class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
@@ -1035,25 +1050,29 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             week_key = self._get_week_key(device)
             mismatch_type = self._determine_mismatch_type(comparison_result)
             mismatch_item = self._build_mismatch_item(
-                device,
-                device_serial,
-                mist_address,
-                comparison_address,
-                comparison_result,
-                week_key,
-                mismatch_type,
-                validation_result,
+                ComparisonItemConfig(
+                    device=device,
+                    device_serial=device_serial,
+                    mist_address=mist_address,
+                    comparison_address=comparison_address,
+                    comparison_result=comparison_result,
+                    week_key=week_key,
+                    mismatch_type=mismatch_type,
+                    validation_result=validation_result,
+                )
             )
             self.mismatched_items.append(mismatch_item)
             diff_item = self._build_diff_item(
-                device,
-                device_serial,
-                mist_address,
-                comparison_address,
-                comparison_result,
-                week_key,
-                mismatch_type,
-                validation_result,
+                ComparisonItemConfig(
+                    device=device,
+                    device_serial=device_serial,
+                    mist_address=mist_address,
+                    comparison_address=comparison_address,
+                    comparison_result=comparison_result,
+                    week_key=week_key,
+                    mismatch_type=mismatch_type,
+                    validation_result=validation_result,
+                )
             )
             self.diff_report_items.append(diff_item)
         except Exception as error:  # pylint: disable=broad-exception-caught
@@ -1082,93 +1101,83 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             return "State Mismatch"
         return "Multi-field Address Mismatch"
 
-    def _build_mismatch_item(  # noqa: PLR0913
+    def _build_mismatch_item(
         self,
-        device: dict[str, Any],
-        device_serial: str,
-        mist_address: dict[str, str],
-        comparison_address: dict[str, str],
-        comparison_result: dict[str, Any],
-        week_key: str,
-        mismatch_type: str,
-        validation_result: dict[str, Any] | None,
+        config: ComparisonItemConfig,
     ) -> dict[str, Any]:
         """Build a mismatch item dictionary."""
         return {
-            "Week": week_key,
-            "Full Site": device.get("site_name", ""),
-            "System Serial Number": device_serial,
-            "System Model Number": device.get("model", ""),
+            "Week": config.week_key,
+            "Full Site": config.device.get("site_name", ""),
+            "System Serial Number": config.device_serial,
+            "System Model Number": config.device.get("model", ""),
             "End Customer Name": self.end_customer_name,
-            "Address Line 1": mist_address["address"],
+            "Address Line 1": config.mist_address["address"],
             "Address Line 2": "",
-            "City": mist_address["city"],
-            "State": mist_address["state"],
-            "Current Zip Code": mist_address["zip"],
-            "Current Zip Normalized": (self._address_utils.normalize_zip(mist_address["zip"])),
-            "Comparison Zip Code": comparison_address["zip"],
+            "City": config.mist_address["city"],
+            "State": config.mist_address["state"],
+            "Current Zip Code": config.mist_address["zip"],
+            "Current Zip Normalized": (self._address_utils.normalize_zip(config.mist_address["zip"])),
+            "Comparison Zip Code": config.comparison_address["zip"],
             "End Customer Account ID": (self.end_customer_account_id),
-            "Mismatch Type": mismatch_type,
-            "Overall Similarity": (f"{comparison_result['overall_similarity']:.1f}%"),
-            "Address Similarity": (f"{comparison_result['field_similarities']['address']:.1f}%"),
-            "City Similarity": (f"{comparison_result['field_similarities']['city']:.1f}%"),
-            "State Similarity": (f"{comparison_result['field_similarities']['state']:.1f}%"),
-            "Zip Similarity": (f"{comparison_result['field_similarities']['zip']:.1f}%"),
-            "Failed Fields": ", ".join(comparison_result["failed_fields"]),
-            "Mist_Parse_Status": comparison_result["parse_status"]["mist_parseable"],
-            "Comparison_Parse_Status": comparison_result["parse_status"]["comparison_parseable"],
-            "Parse_Issues": self._format_parse_issues(comparison_result),
-            "Mist_Validation_Status": (self._get_validation_status(validation_result, "mist")),
-            "Mist_Confidence": (self._get_validation_confidence(validation_result, "mist")),
-            "Comparison_Validation_Status": (self._get_validation_status(validation_result, "comparison")),
-            "Comparison_Confidence": (self._get_validation_confidence(validation_result, "comparison")),
-            "Validation_Recommendation": (validation_result["recommendation"] if validation_result else "N/A"),
+            "Mismatch Type": config.mismatch_type,
+            "Overall Similarity": (f"{config.comparison_result['overall_similarity']:.1f}%"),
+            "Address Similarity": (f"{config.comparison_result['field_similarities']['address']:.1f}%"),
+            "City Similarity": (f"{config.comparison_result['field_similarities']['city']:.1f}%"),
+            "State Similarity": (f"{config.comparison_result['field_similarities']['state']:.1f}%"),
+            "Zip Similarity": (f"{config.comparison_result['field_similarities']['zip']:.1f}%"),
+            "Failed Fields": ", ".join(config.comparison_result["failed_fields"]),
+            "Mist_Parse_Status": config.comparison_result["parse_status"]["mist_parseable"],
+            "Comparison_Parse_Status": config.comparison_result["parse_status"]["comparison_parseable"],
+            "Parse_Issues": self._format_parse_issues(config.comparison_result),
+            "Mist_Validation_Status": (self._get_validation_status(config.validation_result, "mist")),
+            "Mist_Confidence": (self._get_validation_confidence(config.validation_result, "mist")),
+            "Comparison_Validation_Status": (self._get_validation_status(config.validation_result, "comparison")),
+            "Comparison_Confidence": (self._get_validation_confidence(config.validation_result, "comparison")),
+            "Validation_Recommendation": (
+                config.validation_result["recommendation"] if config.validation_result else "N/A"
+            ),
         }
 
-    def _build_diff_item(  # noqa: PLR0913
+    def _build_diff_item(
         self,
-        device: dict[str, Any],
-        device_serial: str,
-        mist_address: dict[str, str],
-        comparison_address: dict[str, str],
-        comparison_result: dict[str, Any],
-        week_key: str,
-        mismatch_type: str,
-        validation_result: dict[str, Any] | None,
+        config: ComparisonItemConfig,
     ) -> dict[str, Any]:
         """Build a diff report item dictionary."""
         return {
-            "Week": week_key,
-            "Full Site": device.get("site_name", ""),
-            "System Serial Number": device_serial,
-            "System Model Number": device.get("model", ""),
+            "Week": config.week_key,
+            "Full Site": config.device.get("site_name", ""),
+            "System Serial Number": config.device_serial,
+            "System Model Number": config.device.get("model", ""),
             "End Customer Name": self.end_customer_name,
-            "Mist_Address_Line_1": mist_address["address"],
-            "Mist_City": mist_address["city"],
-            "Mist_State": mist_address["state"],
-            "Mist_Zip_Code": mist_address["zip"],
-            "Mist_Zip_Normalized": (self._address_utils.normalize_zip(mist_address["zip"])),
-            "Comparison_Address": (comparison_address["address"]),
-            "Comparison_City": comparison_address["city"],
-            "Comparison_State": comparison_address["state"],
-            "Comparison_Zip_Code": comparison_address["zip"],
-            "Comparison_Zip_Normalized": (self._address_utils.normalize_zip(comparison_address["zip"])),
+            "Mist_Address_Line_1": config.mist_address["address"],
+            "Mist_City": config.mist_address["city"],
+            "Mist_State": config.mist_address["state"],
+            "Mist_Zip_Code": config.mist_address["zip"],
+            "Mist_Zip_Normalized": (self._address_utils.normalize_zip(config.mist_address["zip"])),
+            "Comparison_Address": (config.comparison_address["address"]),
+            "Comparison_City": config.comparison_address["city"],
+            "Comparison_State": config.comparison_address["state"],
+            "Comparison_Zip_Code": config.comparison_address["zip"],
+            "Comparison_Zip_Normalized": (self._address_utils.normalize_zip(config.comparison_address["zip"])),
             "End Customer Account ID": (self.end_customer_account_id),
-            "Mismatch Type": mismatch_type,
-            "Overall Similarity": (f"{comparison_result['overall_similarity']:.1f}%"),
-            "Address Similarity": (f"{comparison_result['field_similarities']['address']:.1f}%"),
-            "City Similarity": (f"{comparison_result['field_similarities']['city']:.1f}%"),
-            "State Similarity": (f"{comparison_result['field_similarities']['state']:.1f}%"),
-            "Zip Similarity": (f"{comparison_result['field_similarities']['zip']:.1f}%"),
-            "Failed Fields": ", ".join(comparison_result["failed_fields"]),
-            "Mist_Parse_Status": comparison_result["parse_status"]["mist_parseable"],
-            "Comparison_Parse_Status": comparison_result["parse_status"]["comparison_parseable"],
-            "Parse_Issues": self._format_parse_issues(comparison_result),
-            "Mist_Validation_Status": (self._get_validation_status(validation_result, "mist")),
-            "Mist_Confidence": (self._get_validation_confidence(validation_result, "mist")),
-            "Comparison_Validation_Status": (self._get_validation_status(validation_result, "comparison")),
-            "Comparison_Confidence": (self._get_validation_confidence(validation_result, "comparison")),
-            "Validation_Recommendation": (validation_result["recommendation"] if validation_result else "N/A"),
+            "Mismatch Type": config.mismatch_type,
+            "Overall Similarity": (f"{config.comparison_result['overall_similarity']:.1f}%"),
+            "Address Similarity": (f"{config.comparison_result['field_similarities']['address']:.1f}%"),
+            "City Similarity": (f"{config.comparison_result['field_similarities']['city']:.1f}%"),
+            "State Similarity": (f"{config.comparison_result['field_similarities']['state']:.1f}%"),
+            "Zip Similarity": (f"{config.comparison_result['field_similarities']['zip']:.1f}%"),
+            "Failed Fields": ", ".join(config.comparison_result["failed_fields"]),
+            "Mist_Parse_Status": config.comparison_result["parse_status"]["mist_parseable"],
+            "Comparison_Parse_Status": config.comparison_result["parse_status"]["comparison_parseable"],
+            "Parse_Issues": self._format_parse_issues(config.comparison_result),
+            "Mist_Validation_Status": (self._get_validation_status(config.validation_result, "mist")),
+            "Mist_Confidence": (self._get_validation_confidence(config.validation_result, "mist")),
+            "Comparison_Validation_Status": (self._get_validation_status(config.validation_result, "comparison")),
+            "Comparison_Confidence": (self._get_validation_confidence(config.validation_result, "comparison")),
+            "Validation_Recommendation": (
+                config.validation_result["recommendation"] if config.validation_result else "N/A"
+            ),
         }
 
     def _format_parse_issues(self, comparison_result: dict[str, Any]) -> str:
