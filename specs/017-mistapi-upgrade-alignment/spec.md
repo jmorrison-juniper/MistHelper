@@ -1,143 +1,463 @@
-# Feature Specification: Systematic mistapi Upgrade Alignment
+# Feature Specification: mistapi 0.57.2 → 0.62.0 Full Alignment
 
-**Feature Branch**: `017-mistapi-upgrade-alignment`  
-**Created**: 2026-03-29  
-**Status**: Draft  
-**Input**: User description: "Systematically analyze and improve all MistHelper menu options to leverage new features, breaking changes, and improvements from mistapi releases v0.59.1 through v0.61.3. This includes adopting new WebSocket streaming module, device utilities module, search_after pagination, updated SLE endpoints, insights API parameter changes, alarm search enhancements, map stacks API, async helpers, auto-reconnect, bounded message queues, and exception-based error handling replacing sys.exit calls."
-
-## User Scenarios & Testing *(mandatory)*
-
-### User Story 1 - Breaking Change Fixes (Priority: P1)
-
-A NOC engineer runs MistHelper menu options that call mistapi API functions whose signatures changed in v0.59.1-v0.61.3. Currently these calls may fail silently, pass incorrect parameters, or produce unexpected errors because the underlying API functions changed parameter names, types, or behavior.
-
-**Why this priority**: Breaking changes cause runtime failures. If MistHelper passes parameters that no longer exist or calls deprecated functions, operations fail for users with no explanation. This must be fixed first.
-
-**Independent Test**: Run `python MistHelper.py --test` with mistapi >= 0.61.3 installed. All safe menu options complete without parameter-mismatch errors or deprecation warnings.
-
-**Acceptance Scenarios**:
-
-1. **Given** mistapi v0.61.3 is installed, **When** user runs Menu 68 (Site Insight Metrics), **Then** `getSiteInsightMetrics()` is called with `metrics` as a query parameter (not a path parameter) per v0.61.2 change, and data exports successfully
-2. **Given** mistapi v0.61.3 is installed, **When** user runs Menu 69 (Client Insight Metrics), **Then** `getSiteInsightMetricsForClient()` uses `metrics` query parameter instead of `metric` path parameter
-3. **Given** mistapi v0.61.3 is installed, **When** user runs Menu 53 (SLE Insights), **Then** no deprecation warnings appear for `getSiteSleSummary` or `getSiteSleClassifierDetails` (migrated to `getSiteSleSummaryTrend` and `getSiteSleClassifierSummaryTrend`)
-4. **Given** mistapi v0.61.3 is installed, **When** API session initialization encounters an authentication failure, **Then** MistHelper catches `ConnectionError` or `ValueError` exceptions (not `SystemExit`) and displays a clear error message
+**Feature Branch**: `feat/260-mistapi-upgrade-alignment`
+**GitHub Issue**: #260
+**Created**: 2026-03-29
+**Revamped**: 2026-05-07
+**Status**: Ready for Implementation
+**Changelog Reference**: `data/mistapi-changelog-0.57.2-to-0.62.0.md`
 
 ---
 
-### User Story 2 - Enhanced Alarm and Search Operations (Priority: P2)
+## Overview
 
-A NOC engineer uses Menu 1 (Org Alarms) and wants to leverage new filtering capabilities added in v0.59.5: `group`, `severity`, `ack_admin_name`, and `acked` parameters for `searchOrgAlarms()` and `searchSiteAlarms()`.
+MistHelper has been upgraded from mistapi 0.57.2 to 0.62.0 (13 releases, Dec 2025 – May 2026).
+A thorough code audit was performed: every mistapi call in MistHelper.py (~38,000 lines) was
+located and cross-referenced against actual 0.62.0 module signatures using `inspect.signature()`.
 
-**Why this priority**: Alarm triage is a daily NOC task. Enhanced filtering reduces noise and speeds incident response.
-
-**Independent Test**: Run Menu 1 and verify the exported alarm data includes group and severity fields. If the underlying API supports the new parameters, they should be passed through.
-
-**Acceptance Scenarios**:
-
-1. **Given** an organization with active alarms, **When** user runs Menu 1 (Export Org Alarms), **Then** the alarm export includes `group`, `severity`, `ack_admin_name`, and `acked` fields in the output
-2. **Given** mistapi v0.61.3 is installed, **When** any search endpoint is paginated, **Then** `search_after` cursor-based pagination is used where available for more efficient large-result-set traversal
+This spec is a ground-up rewrite. It replaces the prior shallow draft with confirmed findings.
 
 ---
 
-### User Story 3 - Device Utility Commands Use New mistapi.device_utils Module (Priority: P2)
+## Audit Methodology
 
-A NOC engineer uses Menu options 123-157 (Device Utility Commands) which currently call low-level `mistapi.api.v1.sites.devices.*` functions directly. The new `mistapi.device_utils` module (v0.61.0+) provides higher-level wrappers with WebSocket streaming, non-blocking execution, and `UtilResponse` objects.
+All function calls were located via grep. Existence verified with `hasattr(module, name)`.
+Signatures verified with `inspect.signature()`. Three categories:
 
-**Why this priority**: The device_utils module handles WebSocket plumbing automatically, provides structured response objects, and supports non-blocking execution. This improves reliability and reduces custom WebSocket management code.
-
-**Independent Test**: Run each device utility command (Menu 123-157) and verify they produce the same or better output using the new module.
-
-**Acceptance Scenarios**:
-
-1. **Given** a site with an online switch, **When** user runs Menu 130 (Show BGP Summary), **Then** the command uses `mistapi.device_utils.ex.retrieveBgpSummary()` and returns structured data via `UtilResponse`
-2. **Given** a site with an online gateway, **When** user runs Menu 123 (Traceroute), **Then** the command uses the appropriate `device_utils` function with non-blocking execution
-3. **Given** a site with an online switch, **When** user runs Menu 136 (Monitor Traffic), **Then** the streaming command uses `device_utils.ex.monitorTraffic()` with real-time message delivery
+1. **Confirmed runtime breaks** — AttributeError will crash the menu
+2. **Dead parameters** — silently ignored by mistapi but will cause confusion
+3. **New capabilities** — verified as present in the installed 0.62.0 library
 
 ---
 
-### User Story 4 - WebSocket Operations Use New mistapi.websockets Module (Priority: P3)
+## SECTION 1 — CONFIRMED RUNTIME BREAKAGES  (P0: Must fix before merge)
 
-A NOC engineer uses Menu options 5-8 (WebSocket device commands) and Menu 9-10 (Packet Captures). The current implementation uses raw `websocket.WebSocketApp` connections. The new `mistapi.websockets` module (v0.61.0+) provides auto-reconnect, bounded message queues, thread-safety, and header redaction.
+These are `AttributeError` crashes. The function names were renamed in mistapi and the
+old names no longer exist in 0.62.0.
 
-**Why this priority**: WebSocket reliability directly impacts real-time operations. The new module adds auto-reconnect (v0.61.2), bounded queues preventing memory leak (v0.61.3), and thread-safety fixes. This is a robustness improvement.
+### Break 1 — `searchOrgBgpPeers` → `searchOrgBgpStats`
 
-**Independent Test**: Run Menu 5 (Show MAC Table) and Menu 9 (Packet Capture) and verify WebSocket connections use the new module with configurable reconnect and queue limits.
-
-**Acceptance Scenarios**:
-
-1. **Given** a site with an online switch, **When** user runs Menu 5 (Show MAC Table via WebSocket), **Then** the connection uses `mistapi.websockets` module with `auto_reconnect=True` and `queue_maxsize` configured
-2. **Given** a packet capture is started, **When** the WebSocket connection drops transiently, **Then** it auto-reconnects using exponential backoff without user intervention
-3. **Given** a high-frequency WebSocket stream, **When** the message buffer fills, **Then** oldest messages are dropped with a warning instead of unbounded memory growth
-
----
-
-### User Story 5 - New API Endpoints and Parameters Adoption (Priority: P3)
-
-A NOC engineer benefits from new API capabilities added in v0.59.1-v0.61.3: OSPF stats search endpoints, map stacks API, inventory model filtering, port-level insight metrics, and JSI date-based filters.
-
-**Why this priority**: These are incremental improvements that expand MistHelper's data coverage.
-
-**Independent Test**: Verify new endpoints are available via dedicated menu options or enhanced existing exports.
-
-**Acceptance Scenarios**:
-
-1. **Given** an organization with OSPF-configured devices, **When** OSPF stats are queried, **Then** the new `searchOrgOspfStats()` and `searchSiteOspfStats()` endpoints are available
-2. **Given** mistapi v0.61.3 is installed, **When** user runs device-level insight metrics (Menu 81), **Then** the optional `port_id` parameter is supported for port-level filtering
-3. **Given** a site with maps, **When** map data is exported (Menu 51), **Then** the new map stacks API (`listSiteMapStacks`) data is included alongside existing map data
+**Line**: ~16191 in MistHelper.py
+**Current**: `api_call=mistapi.api.v1.orgs.stats.searchOrgBgpPeers`
+**Fix**: `api_call=mistapi.api.v1.orgs.stats.searchOrgBgpStats`
+**Verified**: `hasattr(orgs.stats, 'searchOrgBgpPeers')` = False; `searchOrgBgpStats` = True
+**New signature**: `(mist_session, org_id, mac, neighbor_mac, site_id, vrf_name, limit,
+  start, end, duration, sort, search_after)` — same logical params, new name
 
 ---
 
-### Edge Cases
+### Break 2 — `searchOrgTunnels` → `searchOrgTunnelsStats`
 
-- What happens when MistHelper is run with an older mistapi version (< 0.61.0) that doesn't have the new modules? Graceful fallback to legacy API calls with a warning message
-- How does the system handle `ConnectionError` or `ValueError` exceptions from the new mistapi error handling (v0.59.5) during session initialization? Clear user-facing error messages with retry guidance
-- What happens when `getSiteInsightMetrics()` is called with the old path-parameter style? The function signature changed; the call must be updated to use query parameters
-- What happens when a device_utils function is called on a device type it doesn't support (e.g., calling `ex.monitorTraffic` on an AP)? The menu option should only offer commands applicable to the selected device type
-- How does the bounded message queue (`queue_maxsize`) interact with long-running packet captures? Messages are dropped with logging when the queue is full; the capture continues
+**Line**: ~16198 in MistHelper.py
+**Current**: `api_call=mistapi.api.v1.orgs.stats.searchOrgTunnels`
+**Fix**: `api_call=mistapi.api.v1.orgs.stats.searchOrgTunnelsStats`
+**Verified**: `hasattr(orgs.stats, 'searchOrgTunnels')` = False; `searchOrgTunnelsStats` = True
 
-## Requirements *(mandatory)*
+---
 
-### Functional Requirements
+### Break 3 — `listOrgSitesStats` → `listOrgSiteStats`  (trailing 's' removed)
 
-- **FR-001**: System MUST update `getSiteInsightMetrics()` calls to use `metrics` as a query parameter instead of a path parameter (v0.61.2 breaking change)
-- **FR-002**: System MUST update `getSiteInsightMetricsForClient()` calls to use `metrics` query parameter instead of `metric` path parameter (v0.61.2 breaking change)
-- **FR-003**: System MUST migrate deprecated SLE functions to their replacements: `getSiteSleSummary` to `getSiteSleSummaryTrend`, `getSiteSleClassifierDetails` to `getSiteSleClassifierSummaryTrend` (v0.59.2)
-- **FR-004**: System MUST handle `ConnectionError` and `ValueError` exceptions from mistapi session initialization instead of relying on `sys.exit()` behavior (v0.59.5 breaking change)
-- **FR-005**: System MUST pass new alarm search parameters (`group`, `severity`, `ack_admin_name`, `acked`) to `searchOrgAlarms()` and `searchSiteAlarms()` (v0.59.5)
-- **FR-006**: System MUST adopt `search_after` cursor-based pagination where available for large result sets (v0.59.1)
-- **FR-007**: System MUST migrate Device Utility Commands (Menu 123-157) to use `mistapi.device_utils` module where applicable (v0.61.0)
-- **FR-008**: System MUST migrate WebSocket operations (Menu 5-8, 9-10) to use `mistapi.websockets` module with auto-reconnect and bounded message queues (v0.61.0, v0.61.2, v0.61.3)
-- **FR-009**: System MUST update `requirements.txt` to specify `mistapi>=0.61.3` as the minimum version
-- **FR-010**: System MUST provide graceful fallback when running with older mistapi versions, logging a clear warning about limited functionality
-- **FR-011**: System MUST leverage the new `port_id` parameter for device insight metrics functions (v0.61.3)
-- **FR-012**: System MUST adopt the `validate` parameter for `set_api_token()` to allow faster initialization when tokens are known valid (v0.61.0)
-- **FR-013**: System MUST update the `searchOrgInventory()` call to support the new `model` parameter for device model filtering (v0.60.4)
-- **FR-014**: Each menu option MUST be updated and verified individually with a syntax check and test run between changes (systematic, one-at-a-time approach)
+**Line**: ~16205 in MistHelper.py
+**Current**: `api_call=mistapi.api.v1.orgs.stats.listOrgSitesStats`
+**Fix**: `api_call=mistapi.api.v1.orgs.stats.listOrgSiteStats`
+**Verified**: `hasattr(orgs.stats, 'listOrgSitesStats')` = False; `listOrgSiteStats` = True
+**Note**: v0.61.2 also removed `start`/`end`/`duration` params from this function.
+  MistHelper's generic `APIDataFetcher` does not pass those params, so no kwarg changes needed.
 
-### Key Entities
+---
 
-- **Menu Option**: A numbered operation in MistHelper's CLI menu (1-158) that calls one or more mistapi API functions
-- **mistapi Release**: A versioned release of the mistapi SDK (v0.59.1 through v0.61.3) containing new features, breaking changes, or bug fixes
-- **API Function Call**: A specific invocation of a mistapi function within MistHelper, identified by module path and parameters
-- **Breaking Change**: A mistapi change that alters function signatures, parameter names, or behavior in a way that causes existing calls to fail
-- **Enhancement**: A mistapi change that adds new parameters, endpoints, or modules that MistHelper can optionally adopt
+## SECTION 2 — INSIGHT METRICS (v0.61.2 path→query param change)
 
-## Assumptions
+The changelog states `metrics` moved from path param to query param in v0.61.2.
 
-- MistHelper will target mistapi >= 0.61.3 as the minimum supported version going forward
-- The systematic update process will proceed menu-by-menu (1, 2, 3, ..., 158) with validation between each
-- Device utility commands that currently use low-level `mistapi.api.v1.sites.devices.*` functions will be migrated to `mistapi.device_utils.*` where a corresponding high-level function exists
-- WebSocket operations will be migrated incrementally - packet captures and device commands first
-- The `search_after` pagination enhancement will be applied to all search endpoints that support it, as a cross-cutting improvement
-- Existing CSV/SQLite output format and column names will be preserved for backward compatibility
+### getSiteInsightMetrics (line ~17579)
+```python
+# CURRENT
+mistapi.api.v1.sites.insights.getSiteInsightMetrics(apisession, site_id, metric)
+```
+0.62.0 signature: `(mist_session, site_id, metrics, ...)` — `metrics` is 3rd positional.
+Current call passes local variable `metric` (singular) positionally. This WORKS because
+positional order is unchanged. No runtime break. Variable name mismatch is cosmetic only.
 
-## Success Criteria *(mandatory)*
+### getSiteInsightMetricsForClient (line ~16785)
+```python
+# CURRENT
+mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(
+    apisession, site_id, normalized_client_mac, metrics=metric
+)
+```
+Uses `metrics=` keyword already. **No change needed.**
 
-### Measurable Outcomes
+### getSiteInsightMetricsForDevice (line ~17690)
+```python
+# CURRENT
+mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(
+    apisession, site_id, metric, normalized_device_mac
+)
+```
+0.62.0 signature: `(mist_session, site_id, metric, device_mac, port_id, ...)` — positional
+order unchanged, `port_id` is a new optional trailing param. **No change needed.**
 
-- **SC-001**: All 158 menu options complete without deprecation warnings or parameter-mismatch errors when run with mistapi v0.61.3
-- **SC-002**: `python MistHelper.py --test` passes all safe menu options (excluding skip list) with zero failures related to API signature changes
-- **SC-003**: WebSocket operations reconnect automatically within 30 seconds of a transient connection drop
-- **SC-004**: Device utility commands return results within the same or shorter timeframe as the current implementation
-- **SC-005**: Memory usage during long-running WebSocket streams remains bounded (queue_maxsize prevents unbounded growth)
-- **SC-006**: Each menu option update is committed individually with `python -m py_compile MistHelper.py` validation before merge
+---
+
+## SECTION 3 — AUTHENTICATION EXCEPTION HANDLING (v0.59.5)
+
+**Status: Already implemented.** Lines ~2669–2682 in `initialize_mist_session_interactive()`
+catch `ConnectionError` and `ValueError` explicitly. The `except SystemExit` blocks at
+lines ~2514 and ~2527 are for `safe_input()` EOF handling, not mistapi. No action required.
+
+---
+
+## SECTION 4 — DEPRECATED FUNCTIONS
+
+### SLE Summary Functions (deprecated v0.59.2, removal planned ~v0.65.0)
+
+| Deprecated | Replacement |
+| - | - |
+| `sites.sle.getSiteSleSummary()` | `sites.sle.getSiteSleSummaryTrend()` |
+| `sites.sle.getSiteSleClassifierDetails()` | `sites.sle.getSiteSleClassifierSummaryTrend()` |
+
+**Audit result**: Neither deprecated function is called anywhere in MistHelper.py.
+If SLE summary menus are added in a future spec, use the `Trend` variants from the start.
+
+### `getOrg128TRegistrationCommands` (deprecated v0.59.1)
+
+**Audit result**: Not called anywhere in MistHelper.py.
+Replacement: `getOrgSsrRegistrationCommands`. Verify during implementation (FR-012).
+
+### `searchOrgJsiAssetsAndContracts` — Parameter rename (v0.60.0 / v0.60.4)
+
+Old params `eol_duration`, `eos_duration` removed.
+New params: `eol_after`, `eol_before`, `eos_after`, `eos_before`, `version_eos_after`,
+`version_eos_before`, `sirt_id`, `pbn_id`.
+
+**Audit result**: Only appears in `ENDPOINT_PRIMARY_KEY_STRATEGIES` dict (line ~4523),
+not in any live API call. No runtime impact. Update PK strategy entry comments if JSI
+menus are added.
+
+### `addOrgMxEdgeImage` → `addOrgMxEdgeImageFile` (renamed v0.60.0)
+
+**Audit result**: Not called anywhere in MistHelper.py. No action required.
+
+---
+
+## SECTION 5 — ENHANCED PARAMETERS (Additive; low risk)
+
+### 5.1 Alarm Search — New Filters (v0.59.5)
+
+`searchOrgAlarms()` and `searchSiteAlarms()` gained: `group`, `severity`,
+`ack_admin_name`, `acked`, `search_after`.
+
+MistHelper line ~13284 already passes `acked=False`. The new `group` and `severity`
+params could be added as interactive prompts for filtered alarm exports. Low priority.
+
+### 5.2 `search_after` Cursor Pagination (v0.59.1)
+
+Added to 40+ search functions. `APIDataFetcher` does not currently pass `search_after`
+from page N into page N+1. Adding this would make all large exports more reliable.
+Tracked as FR-013 (see below) but scoped as P3 — architectural improvement.
+
+### 5.3 New `port_id` on Insight Metrics (v0.61.3)
+
+`getSiteInsightMetricsForDevice`, `ForGateway`, `ForMxEdge`, `ForSwitch` all gained
+optional `port_id`. Additive; no action unless port-level metric menus are desired.
+
+### 5.4 WebSocket reconnect parameters (v0.61.2 / v0.61.4)
+
+`mistapi.websockets.*` gained `auto_reconnect`, `max_reconnect_attempts`,
+`reconnect_backoff`, `max_reconnect_backoff`, `queue_maxsize`.
+MistHelper uses raw `websocket.WebSocketApp`, not `mistapi.websockets`. Not applicable.
+
+---
+
+## SECTION 6 — NEW MODULES (P3: Architecture — separate specs)
+
+### 6.1 `mistapi.websockets` (v0.61.0)
+
+Provides 12 real-time channels with auto-reconnect, bounded queues, thread safety,
+and header redaction. MistHelper's `WebSocketManager` and `PacketCaptureManager` use
+raw `websocket.WebSocketApp`. Migration would eliminate custom WebSocket plumbing.
+
+**Decision**: Separate spec required. Touches `WebSocketManager`, `PacketCaptureManager`,
+Menus 5–8, 87–89. Too broad for this pass. **OUT OF SCOPE.**
+
+### 6.2 `mistapi.device_utils` (v0.61.0 / v0.61.1)
+
+High-level AP/EX/SRX/SSR diagnostic utilities returning `UtilResponse`.
+
+Available in installed 0.62.0:
+- `device_utils.ap`: `ping`, `traceroute`, `retrieveArpTable`
+- `device_utils.ex`: `ping`, `traceroute`, `bouncePort`, `cableTest`, `clearBpduError`,
+  `clearDot1xSessions`, `clearHitCount`, `clearLearnedMac`, `clearMacTable`,
+  `createShellSession`, `interactiveShell`, `monitorTraffic`, `releaseDhcpLeases`,
+  `retrieveArpTable`, `retrieveBgpSummary`, `retrieveDhcpLeases`, `retrieveMacTable`,
+  `topCommand`
+
+Migration would replace device command handlers (Menus 88–89 / device utility WebSocket
+commands). High value but architecturally broad. **OUT OF SCOPE for this pass.**
+Track as separate spec.
+
+### 6.3 `mistapi.arun()` Async Helper (v0.61.1)
+
+Wraps sync calls in `asyncio.to_thread()`. MistHelper has no async code. Not applicable.
+
+---
+
+## SECTION 7 — NEW API ENDPOINTS (P2: Add as new menu operations)
+
+All verified present in installed mistapi 0.62.0 via `inspect.signature()`.
+
+### 7.1 E911 Report Management (v0.62.0)
+
+Module: `mistapi.api.v1.orgs.exports`
+- `getOrgE911Report(mist_session, org_id)` → APIResponse
+- `enableOrgE911Report(mist_session, org_id)` → APIResponse
+- `disableOrgE911Report(mist_session, org_id)` → APIResponse
+
+Proposed: New read-only export menu for `getOrgE911Report`. The enable/disable
+operations are writes — defer to a separate spec. PK: `auto_increment_with_unique`.
+
+### 7.2 NAC Change of Authorization (v0.62.0)
+
+- `orgs.nac_clients.sendOrgNacClientCoA(mist_session, org_id, client_mac, body)`
+- `sites.nac_clients.sendSiteNacClientCoA(mist_session, site_id, client_mac, body)`
+
+These are write/action operations affecting live clients. Must use safe_input confirmation.
+PK: N/A (no data export). Proposed as utility action menus, not export menus.
+Requires `client_mac` prompt and CoA body input. Add to Menus 90–100 range.
+
+### 7.3 MxEdge Upgrade Lifecycle (v0.62.0)
+
+Read-only (safe to add now):
+- `sites.mxedges.listSiteMxEdgeUpgrades(mist_session, site_id)` → APIResponse
+- `sites.mxedges.getSiteMxEdgeUpgrade(mist_session, site_id, upgrade_id)`
+- Org equivalents via `orgs.mxedges`
+
+Write operations (defer): `updateOrgMxEdgeUpgrade`, `cancelOrgMxEdgeUpgrade`,
+`upgradeSiteMxEdges`, `updateSiteMxEdgeUpgrade`, `cancelSiteMxEdgeUpgrade`
+
+Proposed: New export menu — List MxEdge Upgrade Status (site-level).
+PK: `natural_pk` with `(id)` if upgrade record has UUID, else `auto_increment_with_unique`.
+
+### 7.4 Site Auto-Map Assignment (v0.62.0)
+
+Read-only:
+- `sites.auto_map_assignment.getSiteAutoMapAssignmentStatus(mist_session, site_id)`
+
+Write operations (defer separately): `startSiteAutoMapAssignment`, `cancelSiteAutoMapAssignment`,
+`applySiteAutoMapAssignment`, `clearSiteAutoMapAssignment`
+
+Proposed: New export menu — Get Auto-Map Assignment Status.
+PK: `auto_increment_with_unique` (site_id indexed).
+
+### 7.5 JSI PBN and SIRT Search (v0.60.0 + v0.62.0 enhancements)
+
+PK strategies already defined in `ENDPOINT_PRIMARY_KEY_STRATEGIES`. No live calls yet.
+
+- `orgs.jsi.searchOrgJsiPbn(mist_session, org_id, ...)` → search PBN data
+- `orgs.jsi.searchOrgJsiSirt(mist_session, org_id, ...)` → v0.62.0 adds
+  `updated_after`, `updated_before`, `published_after`, `published_before`, `text`, `sort`
+
+Proposed: New export menus for JSI PBN and JSI SIRT alongside existing JSI menus.
+
+### 7.6 OSPF Stats Search (v0.59.1)
+
+New endpoints not yet in MistHelper:
+- `orgs.stats.countOrgOspfStats(mist_session, org_id, distinct, ...)`
+- `orgs.stats.searchOrgOspfStats(mist_session, org_id, site_id, mac, peer_ip, ...)`
+- `sites.stats.countSiteOspfStats(...)`
+- `sites.stats.searchSiteOspfStats(...)`
+
+Proposed: New export menus alongside existing BGP stats menus. PK strategy needed.
+Composite: `(mac, peer_ip, timestamp)` or site-scoped auto_increment.
+
+### 7.7 `LogSanitizer` Security Filter (v0.59.3)
+
+`mistapi.__logger.LogSanitizer` is a Python logging filter that automatically redacts
+sensitive fields from log messages. Verified available in installed 0.62.0.
+
+```python
+from mistapi.__logger import LogSanitizer
+logging.getLogger().addFilter(LogSanitizer())
+```
+
+Attach to MistHelper's root logger during initialization. Defense-in-depth for any
+accidentally-logged API tokens, passwords, or MAC addresses.
+
+### 7.8 Zigbee Join Enable (v0.62.0)
+
+`sites.devices.enableSiteDeviceZigbeeJoin(mist_session, site_id, device_id, body)`
+This is a device action (write). Belongs in destructive menu range. Defer separately.
+
+---
+
+## SECTION 8 — FUNCTIONAL REQUIREMENTS
+
+### P0 — Must fix before merge
+
+| ID | Requirement | Line | Test |
+| - | - | - | - |
+| FR-001 | Rename `searchOrgBgpPeers` → `searchOrgBgpStats` | ~16191 | BGP stats menu must not AttributeError |
+| FR-002 | Rename `searchOrgTunnels` → `searchOrgTunnelsStats` | ~16198 | Tunnel stats menu must not AttributeError |
+| FR-003 | Rename `listOrgSitesStats` → `listOrgSiteStats` | ~16205 | Site stats menu must not AttributeError |
+
+### P1 — Important hardening
+
+| ID | Requirement | Notes |
+| - | - | - |
+| FR-004 | Add `LogSanitizer` filter to root logger at startup | After existing logging.basicConfig setup |
+| FR-005 | Update `requirements.txt` to `mistapi>=0.62.0` | Was `mistapi>=0.57.2` or similar |
+| FR-012 | Verify `getOrg128TRegistrationCommands` is not called | Grep; replace with `getOrgSsrRegistrationCommands` if found |
+
+### P2 — New menus (high value, safe read operations)
+
+| ID | Requirement | API Function | PK Strategy |
+| - | - | - | - |
+| FR-006 | Add E911 Report export menu | `orgs.exports.getOrgE911Report` | auto_increment_with_unique |
+| FR-007 | Add JSI PBN search export menu | `orgs.jsi.searchOrgJsiPbn` | Already defined |
+| FR-008 | Add JSI SIRT search export menu | `orgs.jsi.searchOrgJsiSirt` | Already defined |
+| FR-009 | Add OSPF Stats menus (org + site) | `searchOrgOspfStats`, `searchSiteOspfStats` | composite_pk |
+| FR-010 | Add MxEdge Upgrade Status menu (site) | `sites.mxedges.listSiteMxEdgeUpgrades` | natural_pk or auto_increment |
+| FR-011 | Add Auto-Map Assignment Status menu | `sites.auto_map_assignment.getSiteAutoMapAssignmentStatus` | auto_increment_with_unique |
+
+### P3 — Tracked for future specs (out of scope this pass)
+
+| ID | Item | Future Spec |
+| - | - | - |
+| FR-013 | `search_after` cursor pagination in `APIDataFetcher` | Pagination improvement spec |
+| FR-014 | Migrate `WebSocketManager` to `mistapi.websockets` | WebSocket refactor spec |
+| FR-015 | Migrate device command menus to `mistapi.device_utils` | Device utils adoption spec |
+| FR-016 | NAC CoA action menus (write, requires confirmation) | NAC operations spec |
+| FR-017 | Zigbee join enable menu (write, destructive range) | Zigbee spec |
+| FR-018 | MxEdge upgrade write operations | Firmware upgrade lifecycle spec |
+| FR-019 | Port-level insight metrics with `port_id` | Metrics enhancement spec |
+
+---
+
+## SECTION 9 — NON-GOALS (This Pass)
+
+- WebSocketManager / PacketCaptureManager migration to mistapi.websockets
+- Device command menu migration to mistapi.device_utils
+- mistapi.arun() async adoption
+- NAC CoA write operations
+- MxEdge upgrade write/cancel operations
+- Zigbee join enable
+- `search_after` cursor support in APIDataFetcher
+- alarm group/severity interactive prompts
+- Port-level `port_id` insight metrics filtering
+
+---
+
+## SECTION 10 — CONSTRAINTS
+
+- Python 3.13+, mistapi >= 0.62.0
+- All new menus must have `ENDPOINT_PRIMARY_KEY_STRATEGIES` entry before implementation
+- No Unicode/emoji in log output — ASCII only
+- New input prompts must use `InputUtils.safe_input()` with context label
+- `safe_input()` must be used for all NAC CoA confirmations if added later
+- New menus must be added to README.md operation count and table
+- CHANGELOG.md updated with `YY.MM.DD.HH.MM` UTC format version
+
+---
+
+## SECTION 11 — ACCEPTANCE CRITERIA
+
+### P0 — Required before any merge
+- [ ] `python -m py_compile MistHelper.py` — no syntax errors
+- [ ] `python -m ruff check MistHelper.py` — no violations
+- [ ] `python -m black --check MistHelper.py` — no formatting issues
+- [ ] BGP stats export menu runs without `AttributeError` (FR-001)
+- [ ] Tunnel stats export menu runs without `AttributeError` (FR-002)
+- [ ] Site stats export menu runs without `AttributeError` (FR-003)
+- [ ] `requirements.txt` pins `mistapi>=0.62.0` (FR-005)
+- [ ] `getOrg128TRegistrationCommands` not found in any live API call (FR-012)
+
+### P1 — Security hardening
+- [ ] Root logger has `LogSanitizer` filter attached at startup (FR-004)
+
+### P2 — New menus
+- [ ] E911 Report export menu exists and runs without error (FR-006)
+- [ ] JSI PBN export menu exists and runs without error (FR-007)
+- [ ] JSI SIRT export menu exists and runs without error (FR-008)
+- [ ] OSPF Stats menus (org + site) exist and export data (FR-009)
+- [ ] MxEdge Upgrade Status menu runs and exports data (FR-010)
+- [ ] Auto-Map Assignment Status menu runs without error (FR-011)
+
+### Documentation
+- [ ] `python MistHelper.py --test` passes (skip 14, 18, 63–65, 90–100)
+- [ ] CHANGELOG.md entry added
+- [ ] README.md operation count updated
+
+---
+
+## SECTION 12 — IMPLEMENTATION HINTS
+
+### Order of Implementation
+
+1. P0 three-line attribute renames (FR-001–003) — verify immediately with py_compile
+2. LogSanitizer (FR-004) — single import + addFilter call
+3. requirements.txt pin (FR-005)
+4. FR-012 grep check
+5. New menus in order: E911 → JSI PBN → JSI SIRT → OSPF → MxEdge Status → Auto-Map Status
+
+### Pattern: New Read-Only Export Menu
+
+```python
+@staticmethod
+def export_e911_report() -> None:
+    """Export E911 report for the organization."""
+    response = mistapi.api.v1.orgs.exports.getOrgE911Report(apisession, org_id)
+    DataExporter.write_with_format_selection(
+        response.data,
+        "E911_Report.csv",
+        api_function_name="getOrgE911Report",
+    )
+```
+
+### Pattern: Site-Level Export with Selector
+
+```python
+@staticmethod
+def export_mxedge_upgrade_status() -> None:
+    """Export MxEdge upgrade status for a selected site."""
+    site_id, site_name = SiteSelector.get_site(apisession, org_id)
+    if not site_id:
+        return
+    APIDataFetcher(
+        title=f"MxEdge Upgrade Status - {site_name}",
+        api_call=mistapi.api.v1.sites.mxedges.listSiteMxEdgeUpgrades,
+        filename="MxEdge_Upgrade_Status.csv",
+        sort_key="id",
+        limit=1000,
+    ).execute(site_id=site_id)
+```
+
+### PK Strategy Entries (add before implementing menus)
+
+```python
+"getOrgE911Report": {
+    "type": "auto_increment_with_unique",
+    "primary_key": ["misthelper_internal_id"],
+    "indexes": ["org_id"],
+},
+"searchOrgOspfStats": {
+    "type": "composite_pk",
+    "primary_key": ["mac", "peer_ip", "timestamp"],
+    "indexes": ["org_id", "site_id", "state"],
+},
+"searchSiteOspfStats": {
+    "type": "composite_pk",
+    "primary_key": ["mac", "peer_ip", "timestamp"],
+    "indexes": ["site_id", "state"],
+},
+"listSiteMxEdgeUpgrades": {
+    "type": "natural_pk",
+    "primary_key": ["id"],
+    "indexes": ["site_id", "status"],
+},
+"getSiteAutoMapAssignmentStatus": {
+    "type": "auto_increment_with_unique",
+    "primary_key": ["misthelper_internal_id"],
+    "indexes": ["site_id"],
+},
+```

@@ -56,6 +56,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - N/A (no CSV/SQLite output — interactive display + API write only) (186-wan-hub-group-number)
 - Python 3.13+ + `mistapi` 0.59+ (Mist API SDK) (187-wan-vpn-builder)
 - N/A (API-only, no local persistence) (187-wan-vpn-builder)
+- Python 3.13+ + `requests` (present), `subprocess` (stdlib), (189-quality-gate-remediation)
+- N/A -- no data model or schema changes (189-quality-gate-remediation)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -75,9 +77,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
-- 187-wan-vpn-builder: Added Python 3.13+ + `mistapi` 0.59+ (Mist API SDK)
-- 186-wan-hub-group-number: Added Python 3.13+ + mistapi 0.59+ (`orgs.deviceprofiles`, `orgs.vpns`)
-- 184-polyglot-db-migration: Added Python 3.13+ + `mistapi>=0.61.4`, `python-arango>=8.3.2`, `redis>=7.4.0` (with hiredis)
+- 189-quality-gate-remediation: Added Python 3.13+ + `requests` (present), `subprocess` (stdlib),
+- 189-quality-gate-remediation: Added Python 3.13+ + `requests` (present), `subprocess` (stdlib),
+- 189-quality-gate-remediation: Added Python 3.13+ + `requests` (present), `subprocess` (stdlib),
 
 
 <!-- MANUAL ADDITIONS START -->
