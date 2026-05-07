@@ -205,6 +205,14 @@ logging.basicConfig(
     force=True,
 )
 
+# Attach LogSanitizer to redact sensitive fields (API tokens, passwords, MACs) from logs
+try:
+    from mistapi.__logger import LogSanitizer
+
+    logging.getLogger().addFilter(LogSanitizer())
+except ImportError:
+    pass  # mistapi pre-0.59.3 does not have LogSanitizer; safe to skip
+
 # Log Python version warning if below minimum requirement
 if sys.version_info < MINIMUM_PYTHON_VERSION:
     version_str = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
@@ -5337,6 +5345,27 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": [],  # Will be determined at runtime based on available fields
         "unique_constraints": [],  # Will be applied if 'id' field exists in data
         "description": "Fallback strategy with auto-increment primary key and unique constraint on API id",
+    },
+    "getOrgE911Report": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "E911 report data for the organization",
+    },
+    "listSiteMxEdgeUpgrades": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "status"],
+        "unique_constraints": [],
+        "description": "MxEdge upgrade status records for a site",
+    },
+    "getSiteAutoMapAssignmentStatus": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "Auto-map assignment status for a site",
     },
 }
 
@@ -16182,21 +16211,21 @@ class OrgExportUtils:
     def _bgp_peers():  # type: ignore[no-untyped-def]
         """Export BGP peer data to OrgBgpPeers.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.orgs.stats.searchOrgBgpPeers, data_type="bgp peers", sort_key="peer_ip"
+            api_call=mistapi.api.v1.orgs.stats.searchOrgBgpStats, data_type="bgp peers", sort_key="peer_ip"
         )
 
     @staticmethod
     def _tunnel_stats():  # type: ignore[no-untyped-def]
         """Export tunnel statistics to OrgTunnelStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.orgs.stats.searchOrgTunnels, data_type="tunnel stats", sort_key="name"
+            api_call=mistapi.api.v1.orgs.stats.searchOrgTunnelsStats, data_type="tunnel stats", sort_key="name"
         )
 
     @staticmethod
     def _site_stats():  # type: ignore[no-untyped-def]
         """Export site statistics to OrgSiteStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.orgs.stats.listOrgSitesStats, data_type="site stats", sort_key="name"
+            api_call=mistapi.api.v1.orgs.stats.listOrgSiteStats, data_type="site stats", sort_key="name"
         )
 
     @staticmethod
@@ -16204,6 +16233,42 @@ class OrgExportUtils:
         """Export MX Edge statistics to OrgMxedgeStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.listOrgMxEdgesStats, data_type="mx edge stats", sort_key="name"
+        )
+
+    @staticmethod
+    def e911_report():  # type: ignore[no-untyped-def]
+        """Export E911 report for the organization to OrgE911Report.csv."""
+        OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.orgs.exports.getOrgE911Report,
+            data_type="e911 report",
+            sort_key="name",
+        )
+
+    @staticmethod
+    def jsi_pbn():  # type: ignore[no-untyped-def]
+        """Export JSI PBN (Product Bulletin Notifications) data to OrgJsiPbn.csv."""
+        OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiPbn,
+            data_type="jsi pbn",
+            sort_key="id",
+        )
+
+    @staticmethod
+    def jsi_sirt():  # type: ignore[no-untyped-def]
+        """Export JSI SIRT (Security Incident Response Team) advisories to OrgJsiSirt.csv."""
+        OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiSirt,
+            data_type="jsi sirt",
+            sort_key="id",
+        )
+
+    @staticmethod
+    def ospf_stats():  # type: ignore[no-untyped-def]
+        """Export OSPF adjacency statistics for the organization to OrgOspfStats.csv."""
+        OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.orgs.stats.searchOrgOspfStats,
+            data_type="ospf stats",
+            sort_key="mac",
         )
 
     @staticmethod
@@ -17834,6 +17899,33 @@ class SiteExportUtils:
             data_type="fast roam events",
             sort_key="timestamp",
             duration=f"{hours}h",
+        )
+
+    @staticmethod
+    def ospf_stats():  # type: ignore[no-untyped-def]
+        """Export OSPF adjacency statistics for a selected site to SiteOspfStats.csv."""
+        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.sites.stats.searchSiteOspfStats,
+            data_type="ospf stats",
+            sort_key="mac",
+        )
+
+    @staticmethod
+    def mxedge_upgrade_status():  # type: ignore[no-untyped-def]
+        """Export MxEdge upgrade status for a selected site to SiteMxEdgeUpgrades.csv."""
+        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.sites.mxedges.listSiteMxEdgeUpgrades,
+            data_type="mxedge upgrade status",
+            sort_key="id",
+        )
+
+    @staticmethod
+    def auto_map_assignment_status():  # type: ignore[no-untyped-def]
+        """Export auto-map assignment status for a selected site to SiteAutoMapAssignmentStatus.csv."""
+        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.sites.auto_map_assignment.getSiteAutoMapAssignmentStatus,
+            data_type="auto map assignment status",
+            sort_key="id",
         )
 
 
@@ -35284,6 +35376,16 @@ menu_actions = {
         ),
         "Bulk Org Data Collection (populate ArangoDB/Redis/SQLite with all org-level APIs)",
     ),
+    # ==============================
+    # MISTAPI 0.62.0 NEW ENDPOINTS
+    # ==============================
+    "166": (OrgExportUtils.e911_report, "Export E911 report for the organization"),
+    "167": (OrgExportUtils.jsi_pbn, "Export JSI PBN (Product Bulletin Notifications) data"),
+    "168": (OrgExportUtils.jsi_sirt, "Export JSI SIRT (Security Incident Response) advisories"),
+    "169": (OrgExportUtils.ospf_stats, "Export OSPF adjacency statistics for the organization"),
+    "170": (SiteExportUtils.ospf_stats, "Export OSPF adjacency statistics for a selected site"),
+    "171": (SiteExportUtils.mxedge_upgrade_status, "Export MxEdge upgrade status for a selected site"),
+    "172": (SiteExportUtils.auto_map_assignment_status, "Export auto-map assignment status for a selected site"),
 }
 
 
