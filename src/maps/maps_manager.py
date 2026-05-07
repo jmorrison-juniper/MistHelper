@@ -9513,8 +9513,8 @@ class MapsManager:
                 else:
                     return jsonify({"maps": []})
             except Exception as e:
-                logging.error(f"Error fetching maps: {e}")
-                return jsonify({"error": str(e), "maps": []}), 500
+                logging.error(f"Error fetching maps: {e}", exc_info=True)
+                return jsonify({"error": "Failed to fetch maps. Check server logs for details.", "maps": []}), 500
 
         @flask_app.route("/api/map-image/<site_id>/<map_id>")
         def get_map_image(site_id, map_id):
@@ -9551,8 +9551,8 @@ class MapsManager:
                     return f"Image fetch failed: {image_response.status_code}", 404
 
             except Exception as e:
-                logging.error(f"Error fetching map image: {e}")
-                return str(e), 500
+                logging.error(f"Error fetching map image: {e}", exc_info=True)
+                return "Failed to fetch map image. Check server logs for details.", 500
 
         @flask_app.route("/api/map/<site_id>/<map_id>")
         def get_map_data(site_id, map_id):
@@ -9888,7 +9888,7 @@ class MapsManager:
 
             except Exception as e:
                 logging.error(f"Error fetching map data: {e}", exc_info=True)
-                return jsonify({"error": str(e)}), 500
+                return jsonify({"error": "Failed to fetch map data. Check server logs for details."}), 500
 
         # Determine host and port
         flask_host = "127.0.0.1"
