@@ -1,7 +1,9 @@
-# Research: mistapi v0.59.1-v0.61.3 Upgrade Alignment
+# Research: mistapi v0.59.1-v0.62.0 Upgrade Alignment
 
-**Date**: 2026-03-29
-**Feature**: 017-mistapi-upgrade-alignment
+**Date**: 2026-03-29  
+**Updated**: 2026-05-07  
+**Feature**: 017-mistapi-upgrade-alignment  
+**GitHub Issue**: #260
 
 ## Decision 1: Insights API Parameter Migration
 
@@ -152,6 +154,67 @@ The current `WebSocketManager` (line 3945) handles: auth headers, channel subscr
 
 **Problem**: FR-009 requires `mistapi>=0.61.3` as minimum. FR-010 requires graceful fallback for older versions. These are contradictory.
 
-**Decision**: Hard minimum with startup version check. Set `mistapi>=0.61.3` in `requirements.txt`. Add a version check at startup that prints upgrade instructions and exits gracefully if the installed version is too old. Remove FR-010 (no runtime fallback code). This avoids maintaining two code paths.
+**Decision**: Hard minimum with startup version check. Set `mistapi>=0.62.0` in `requirements.txt`. Add a version check at startup that prints upgrade instructions and exits gracefully if the installed version is too old. Remove FR-010 (no runtime fallback code). This avoids maintaining two code paths.
 
 **Rationale**: MistHelper already requires Python 3.13+. A hard SDK minimum is consistent. Users with older mistapi get a clear error message telling them to upgrade. Dead fallback code is worse than a clean version gate.
+
+---
+
+## Discovery 9: v0.61.4 WebSocket Reconnect Hardening
+
+**Finding**: v0.61.4 (April 1, 2026) added two important WebSocket improvements:
+
+1. `max_reconnect_backoff` parameter — caps the exponential backoff delay to prevent multi-minute waits:
+   ```python
+   ws = mistapi.websockets.sites.PcapEvents(..., auto_reconnect=True, max_reconnect_backoff=60.0)
+   ```
+2. `max_reconnect_attempts=0` enables unlimited reconnection — suitable for long-running captures and menu sessions.
+
+**Impact on MistHelper**:
+- `PacketCaptureManager` should use `max_reconnect_attempts=0` and `max_reconnect_backoff=60.0` to survive transient cloud disconnects during captures that can run for hours.
+- Device command WebSocket sessions (Menu 5-8) should use `max_reconnect_attempts=3` with `max_reconnect_backoff=30.0` — short commands do not need unlimited retries.
+- `WebSocketManager` constructor should expose these as configurable parameters.
+
+**Decision**: Update `PacketCaptureManager` WebSocket init to `max_reconnect_attempts=0, max_reconnect_backoff=60.0`. Update `WebSocketManager` to `max_reconnect_attempts=3, max_reconnect_backoff=30.0`.
+
+**Risk**: LOW — additive parameters, defaults are backward-compatible.
+
+---
+
+## Discovery 10: v0.61.5 Privileges Fix (No Action Required)
+
+**Finding**: v0.61.5 (April 22, 2026) fixed `Privileges.__init__()` to handle lists containing already-instantiated `_Privilege` objects instead of only raw dicts. This was a mistapi internal bug.
+
+**Impact on MistHelper**: None. MistHelper does not instantiate `Privileges` directly — it receives privilege data from `mistapi.APISession` which handles instantiation internally. The fix resolves an edge case that could cause errors when re-using session objects across certain initialization patterns.
+
+**Decision**: No code changes in MistHelper. Note the fix in the version pin (`mistapi>=0.62.0`) which includes this fix transitively.
+
+**Risk**: NONE.
+
+---
+
+## Discovery 11: v0.62.0 New Endpoints — Prioritization
+
+**Finding**: v0.62.0 (May 1, 2026) added the following endpoint groups. Prioritized by NOC value:
+
+| Priority | Endpoint Group | New Functions | MistHelper Menu Target |
+| - | - | - | - |
+| HIGH | NAC CoA | `sendOrgNacClientCoA`, `sendSiteNacClientCoA` | New menu option under NAC operations |
+| HIGH | MxEdge Upgrade Lifecycle | `updateOrgMxEdgeUpgrade`, `cancelOrgMxEdgeUpgrade`, `listSiteMxEdgeUpgrades`, `getSiteMxEdgeUpgrade`, `updateSiteMxEdgeUpgrade`, `cancelSiteMxEdgeUpgrade` | Extend existing MxEdge menus |
+| MEDIUM | E911 Report Management | `getOrgE911Report`, `enableOrgE911Report`, `disableOrgE911Report` | New org export/compliance menu option |
+| MEDIUM | Site Auto-Map Assignment | `startSiteAutoMapAssignment`, `getSiteAutoMapAssignmentStatus`, `cancelSiteAutoMapAssignment`, `applySiteAutoMapAssignment`, `clearSiteAutoMapAssignment` | New site maps operations menu |
+| MEDIUM | Channel Scores | `getSiteChannelScores` | Extend RF/RRM data export |
+| LOW | Zigbee Join | `enableSiteDeviceZigbeeJoin` | New IoT device management option |
+| LOW | IoT Endpoint Search | `searchSiteIotEndpoints` | New IoT search option |
+| LOW | SSO Admin Removal | `deleteOrgSsoAdmins`, `deleteMspSsoAdmins` | Destructive — needs explicit confirmation |
+
+**Decision**: Implement HIGH and MEDIUM priority endpoints in the initial implementation. LOW priority endpoints deferred to follow-on PR. SSO admin removal requires additional safety review before exposing.
+
+**Additional v0.62.0 improvements** (no new menu options needed, but code should use them):
+- `countOrgInventory()` now supports `site_id`, `model`, `version`, `status` filters — update Menu 11 inventory export to pass these when provided by user
+- `countOrgAuditLogs()` and `listOrgAuditLogs()` now map to corrected API paths — verify Menu 66 (audit logs) uses the updated functions
+- Expanded band enum values (`5-dedicated`, `5-selectable`, `6-dedicated`, `6-selectable`) across wireless client and RRM APIs — no code change needed, values flow through transparently
+
+**Risk**: LOW for read endpoints. MEDIUM for CoA and MxEdge lifecycle (side effects on live devices).
+
+**Changelog reference**: `data/mistapi-changelog-0.57.2-to-0.62.0.md`
