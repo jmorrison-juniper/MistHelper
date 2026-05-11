@@ -16242,6 +16242,7 @@ class OrgExportUtils:
             api_call=mistapi.api.v1.orgs.exports.getOrgE911Report,
             data_type="e911 report",
             sort_key="name",
+            limit=None,  # getOrgE911Report only accepts (mist_session, org_id) - no limit param
         )
 
     @staticmethod
@@ -36137,6 +36138,7 @@ class OperationRegistry:
             "category": "resource_intensive",
             "skip_reason": "Bulk org data collection - runs 57 API calls, resource intensive",
         },
+        "170": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)
