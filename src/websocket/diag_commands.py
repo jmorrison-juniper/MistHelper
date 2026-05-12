@@ -28,7 +28,9 @@ class WebSocketNetworkDiagCommands:
     """
 
     @staticmethod
-    def ping_device(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    def ping_device(
+        deps: WebSocketCmdDeps,
+    ) -> None:  # noqa: C901, PLR0912, PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """Execute ping command on a network device via WebSocket.
 
         Follows the documented Mist API pattern:
@@ -219,7 +221,11 @@ class WebSocketNetworkDiagCommands:
             logging.debug("EXIT: ping_device_websocket")
 
     @staticmethod
-    def arp_device(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-nested-blocks
+    def arp_device(
+        deps: WebSocketCmdDeps,
+    ) -> (
+        None
+    ):  # noqa: C901, PLR0912, PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-nested-blocks
         """Execute ARP command on a network device via WebSocket.
 
         Follows the documented Mist API pattern for ARP commands:

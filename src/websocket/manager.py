@@ -104,9 +104,7 @@ def select_ws_site(deps: Any, debug_mode: bool) -> str | None:
     return site_id
 
 
-def check_mist_credentials(
-    ws_mgr: Any, mist_host: str | None, mist_apitoken: str | None, debug_mode: bool
-) -> bool:
+def check_mist_credentials(ws_mgr: Any, mist_host: str | None, mist_apitoken: str | None, debug_mode: bool) -> bool:
     """Validate Mist host and token; disconnect ws_mgr and return False if invalid."""
     if not mist_host or not mist_apitoken:
         print("! Mist host or API token not found in session or environment")

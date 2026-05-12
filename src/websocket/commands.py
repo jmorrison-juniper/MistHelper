@@ -35,7 +35,9 @@ class WebSocketCommands:
     """
 
     @staticmethod
-    def show_mac_table(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    def show_mac_table(
+        deps: WebSocketCmdDeps,
+    ) -> None:  # noqa: C901, PLR0912, PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """Execute show MAC table command on a switch device via WebSocket.
 
         MAC tables are a Layer 2 switching feature and are only meaningful on switches.
