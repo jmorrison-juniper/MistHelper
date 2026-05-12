@@ -430,7 +430,7 @@ class FirmwareManager:
             print(f"  Error fetching org-level upgrades: {e}")
             logging.error(f"Error in _show_org_level_upgrade_jobs: {e}")
 
-    def _fetch_device_stats_for_monitoring(self, site_filter: str | None) -> list[Any]:
+    def _fetch_device_stats_for_monitoring(self, site_filter: str | None) -> Any:
         """Fetch fresh device statistics from API for monitoring purposes."""
         if site_filter:
             stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
@@ -1908,10 +1908,12 @@ class FirmwareManager:
             gw_model = gw.get("model", "")
             if gw_type == "ssr" or "SSR" in gw_model or "128T" in gw_model:
                 ssr_count += 1
-                if gw.get("version"):
-                    versions.add(gw.get("version"))  # type: ignore[arg-type]
-                if gw.get("model"):
-                    models.add(gw.get("model"))  # type: ignore[arg-type]
+                version = gw.get("version")
+                if version:
+                    versions.add(version)
+                model_val = gw.get("model")
+                if model_val:
+                    models.add(model_val)
         return ssr_count, models, versions
 
     def _display_ssr_inventory_stats(self, ssr_count: int, models: set[str], versions: set[str]) -> None:
@@ -1957,7 +1959,7 @@ class FirmwareManager:
                     continue
                 idx = int(choice) - 1
                 if 0 <= idx < len(available_versions):
-                    target_version = available_versions[idx]["version"]
+                    target_version = str(available_versions[idx]["version"])
                     print(f"-> Selected firmware version: {target_version}")
                     return target_version
                 print(f"X  Please enter a number between 1 and {len(available_versions)}")
