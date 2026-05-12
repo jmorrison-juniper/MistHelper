@@ -9,8 +9,9 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Refactored
 
+- Reduced `interactive_map_viewer` CC from 43 to 8 in `src/maps/maps_manager.py` (#295)
+  - Extracted `_install_visualization_packages` (CC=5), `_check_visualization_packages` (CC=4), `_fetch_map_details` (CC=3), `_fetch_devices_on_map` (CC=3), `_fetch_zones_on_map` (CC=3), `_filter_clients_for_map` (CC=5), `_fetch_clients_on_map` (CC=8), `_handle_coverage_exception` (CC=3), `_fetch_map_coverage` (CC=6)
 - Reduced `launch_viewer_standalone` CC from 30 to 3 in `src/maps/maps_manager.py` (#296)
-  - Extracted `_resolve_initial_site`, `_resolve_initial_map`, `_fetch_entities_on_map`, and `_fetch_site_maps` helpers (each CC ≤7)
 
 ### Refactored
 
