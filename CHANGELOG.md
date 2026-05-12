@@ -9,6 +9,11 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Refactored
 
+- Reduced `launch_viewer_standalone` CC from 30 to 3 in `src/maps/maps_manager.py` (#296)
+  - Extracted `_resolve_initial_site`, `_resolve_initial_map`, `_fetch_entities_on_map`, and `_fetch_site_maps` helpers (each CC ≤7)
+
+### Refactored
+
 - Reduced cyclomatic complexity of most methods in `src/maps/maps_manager.py` (#251); remaining high-CC methods deferred to dedicated follow-on issues (#293–#296)
   - Extracted `_check_dependencies`, `_configure_logging`, `_setup_api_session`, `_filter_org_privileges`, `_prompt_org_selection`, `_detect_org_from_session`, and `_resolve_org_id` from `main()` (CC 29→7)
   - Extracted `_download_all_site_map_images`, `_select_map_from_site`, `_backup_print_summary`, and other helpers to reduce method-level CC throughout the module

@@ -9897,6 +9897,43 @@ class MapsManager:
         plt.show()
         logging.info("Matplotlib map viewer closed by user")
 
+    def _resolve_initial_site(self, sites_sorted: list, requested_site_id: str | None) -> tuple[str, str]:
+        """Resolve the initial site for standalone viewer from requested or default."""
+        maps_by_id = {s.get("id"): s for s in sites_sorted}
+        if requested_site_id and requested_site_id in maps_by_id:
+            site = maps_by_id[requested_site_id]
+            return site.get("id"), site.get("name", "Unknown")
+        default_site = next((s for s in sites_sorted if s.get("name", "") == "CAS0123G"), None)
+        site = default_site or sites_sorted[0]
+        return site.get("id"), site.get("name", "Unknown")
+
+    def _resolve_initial_map(self, all_maps: list, requested_map_id: str | None) -> tuple[str, dict]:
+        """Resolve the initial map from requested or first available."""
+        maps_by_id = {m.get("id"): m for m in all_maps}
+        if requested_map_id and requested_map_id in maps_by_id:
+            return requested_map_id, maps_by_id[requested_map_id]
+        return all_maps[0].get("id"), all_maps[0]
+
+    def _fetch_entities_on_map(self, api_fn, site_id: str, map_id: str, **kwargs) -> list:
+        """Call api_fn for site_id, return entities filtered to map_id."""
+        try:
+            resp = api_fn(self.apisession, site_id=site_id, **kwargs)
+            if resp.status_code == 200:
+                return [entity for entity in (resp.data or []) if entity.get("map_id") == map_id]
+        except Exception:
+            pass
+        return []
+
+    def _fetch_site_maps(self, site_id: str) -> list:
+        """Fetch maps for a site; return empty list on failure."""
+        try:
+            resp = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
+            if resp.status_code == 200 and resp.data:
+                return resp.data
+        except Exception as error:
+            logging.error("Error fetching maps for site %s: %s", site_id, error)
+        return []
+
     def launch_viewer_standalone(self, requested_site_id: str = None, requested_map_id: str = None):
         """Launch the interactive map viewer directly without CLI site selection.
 
@@ -9912,14 +9949,12 @@ class MapsManager:
             requested_map_id: Optional map ID to load initially (from URL parameter)
         """
         logging.info("launch_viewer_standalone: Starting web-first viewer mode")
-
-        # Fetch all sites upfront
         print("\n" + "=" * 70)
         print("  MAPS MANAGER - Standalone Web Viewer")
         print("  Select a site and map from the browser interface")
         print("=" * 70)
-
         print("\n  Loading sites...")
+
         all_sites = self._fetch_sites()
         if not all_sites:
             print("\n  [!] No sites found in organization")
@@ -9928,102 +9963,35 @@ class MapsManager:
         sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())
         print(f"  Found {len(sites_sorted)} sites")
 
-        # Use requested site_id if provided and valid, otherwise look for default test site, then first site
-        valid_site_ids = {s.get("id"): s for s in sites_sorted}
-        default_test_site_name = "CAS0123G"  # Default test site with walls/wayfinding configured
-
-        if requested_site_id and requested_site_id in valid_site_ids:
-            target_site = valid_site_ids[requested_site_id]
-            target_site_id = requested_site_id
-            target_site_name = target_site.get("name", "Unknown")
-            logging.info(f"launch_viewer_standalone: Using requested site {target_site_name}")
-        else:
-            # Look for default test site by name first
-            target_site = next((s for s in sites_sorted if s.get("name", "") == default_test_site_name), None)
-            if target_site:
-                target_site_id = target_site.get("id")
-                target_site_name = target_site.get("name", "Unknown")
-                logging.info(f"launch_viewer_standalone: Using default test site {target_site_name}")
-            else:
-                # Fall back to first site
-                target_site = sites_sorted[0]
-                target_site_id = target_site.get("id")
-                target_site_name = target_site.get("name", "Unknown")
-
+        target_site_id, target_site_name = self._resolve_initial_site(sites_sorted, requested_site_id)
         print(f"  Loading maps for site: {target_site_name}...")
 
-        # Fetch maps for target site
-        try:
-            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=target_site_id)
-            if maps_response.status_code == 200 and maps_response.data:
-                all_maps = maps_response.data
-            else:
-                all_maps = []
-        except Exception as maps_error:
-            logging.error(f"Error fetching maps: {maps_error}")
-            all_maps = []
+        all_maps = self._fetch_site_maps(target_site_id)
+
+        devices: list = []
+        zones: list = []
+        clients: list = []
+        map_id: str | None = None
 
         if not all_maps:
             print(f"\n  [!] No maps found for site {target_site_name}")
             print("  Launching viewer anyway - select a different site in browser")
-            # Create placeholder state for initial load
-            devices = []
-            zones = []
-            clients = []
-            map_id = None
         else:
-            # Use requested map_id if provided and valid, otherwise use first map
-            valid_map_ids = {m.get("id"): m for m in all_maps}
-            if requested_map_id and requested_map_id in valid_map_ids:
-                target_map = valid_map_ids[requested_map_id]
-                map_id = requested_map_id
-                logging.info(f"launch_viewer_standalone: Using requested map {target_map.get('name')}")
-            else:
-                target_map = all_maps[0]
-                map_id = target_map.get("id")
-
+            map_id, target_map = self._resolve_initial_map(all_maps, requested_map_id)
             print(f"  Loading map: {target_map.get('name', 'Unnamed')}...")
-
-            # Fetch devices for this map (type='all' includes APs, switches, and gateways)
-            try:
-                devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                    self.apisession, site_id=target_site_id, type="all", limit=1000
-                )
-                if devices_response.status_code == 200:
-                    all_devices = devices_response.data or []
-                    devices = [d for d in all_devices if d.get("map_id") == map_id]
-                else:
-                    devices = []
-            except Exception:
-                devices = []
-
-            # Fetch zones for this site
-            try:
-                zones_response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=target_site_id)
-                if zones_response.status_code == 200:
-                    all_zones = zones_response.data or []
-                    zones = [z for z in all_zones if z.get("map_id") == map_id]
-                else:
-                    zones = []
-            except Exception:
-                zones = []
-
-            # Fetch clients for this map
-            try:
-                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
-                    self.apisession, site_id=target_site_id
-                )
-                if clients_response.status_code == 200:
-                    all_clients = clients_response.data or []
-                    clients = [c for c in all_clients if c.get("map_id") == map_id]
-                else:
-                    clients = []
-            except Exception:
-                clients = []
-
+            devices = self._fetch_entities_on_map(
+                mistapi.api.v1.sites.stats.listSiteDevicesStats,
+                target_site_id,
+                map_id,
+                type="all",
+                limit=1000,
+            )
+            zones = self._fetch_entities_on_map(mistapi.api.v1.sites.zones.listSiteZones, target_site_id, map_id)
+            clients = self._fetch_entities_on_map(
+                mistapi.api.v1.sites.stats.listSiteWirelessClientsStats, target_site_id, map_id
+            )
             print(f"  Found {len(devices)} devices, {len(zones)} zones, {len(clients)} clients")
 
-        # Launch the Flask-based viewer (simpler and more reliable than Dash)
         self._launch_flask_viewer(
             initial_site_id=target_site_id, initial_map_id=map_id, all_sites=sites_sorted, all_maps=all_maps
         )
