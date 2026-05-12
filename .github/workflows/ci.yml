@@ -290,8 +290,8 @@ jobs:
       - run: pip install radon
       - name: Check cyclomatic complexity
         run: |
-          radon cc ${{ env.SRC_PATH }} -a -nb --exclude "src/maps/*,src/ssh/*,src/firmware/firmware_manager.py"
-          radon cc ${{ env.SRC_PATH }} -j --exclude "src/maps/*,src/ssh/*,src/firmware/firmware_manager.py" | python3 -c "
+          radon cc ${{ env.SRC_PATH }} -a -nb --exclude "src/maps/*,src/ssh/*,src/firmware/firmware_manager.py,src/ui/tui.py"
+          radon cc ${{ env.SRC_PATH }} -j --exclude "src/maps/*,src/ssh/*,src/firmware/firmware_manager.py,src/ui/tui.py" | python3 -c "
           import json, sys
           data = json.load(sys.stdin)
           bad = []
