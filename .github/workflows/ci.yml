@@ -292,7 +292,6 @@ jobs:
         run: |
           radon cc ${{ env.SRC_PATH }} -a -nb --exclude "src/maps/*,src/ssh/*,src/ui/tui.py,src/websocket/*"
           radon cc ${{ env.SRC_PATH }} -j --exclude "src/maps/*,src/ssh/*,src/ui/tui.py,src/websocket/*" | python3 -c "
-
           import json, sys
           data = json.load(sys.stdin)
           bad = []
