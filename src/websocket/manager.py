@@ -223,7 +223,7 @@ class WebSocketManager:
         """
         import time
 
-        debug_mode = _is_debug_mode()  # type: ignore[no-untyped-call]
+        debug_mode = _is_debug_mode()
         start_time = time.time()
         last_activity = time.time()
         last_message_count = 0  # Track number of messages to detect new activity
@@ -239,7 +239,7 @@ class WebSocketManager:
         performance_log_interval = 5.0  # Log performance every 5 seconds
 
         # Create performance monitor to detect infinite loops
-        perf_monitor = _PerformanceMonitor(  # type: ignore[no-untyped-call]
+        perf_monitor = _PerformanceMonitor(
             f"wait_for_command_result({session_id[:8]}...)", max_iterations=10000, log_interval=5.0
         )
 
@@ -253,7 +253,7 @@ class WebSocketManager:
 
         while time.time() - start_time < timeout_seconds:
             # Monitor for infinite loops
-            perf_monitor.check_iteration()  # type: ignore[no-untyped-call]
+            perf_monitor.check_iteration()
 
             current_time = time.time()
             check_count += 1
@@ -642,11 +642,11 @@ class WebSocketManager:
                 if debug_mode:
                     print(f"[DEBUG] No results collected for session {session_id}")
                 self.logger.warning(f"Timeout waiting for command result: {session_id}")
-                perf_monitor.finish()  # type: ignore[no-untyped-call]  # Mark performance monitoring as complete
+                perf_monitor.finish()  # Mark performance monitoring as complete
                 return None
 
         # Combine all collected output
-        perf_monitor.finish()  # type: ignore[no-untyped-call]  # Mark performance monitoring as complete
+        perf_monitor.finish()  # Mark performance monitoring as complete
 
         if final_results:
             if debug_mode:
@@ -692,7 +692,7 @@ class WebSocketManager:
             self.logger.info(f"Command completed with {len(final_results)} message segments")
             return final_result
 
-        perf_monitor.finish()  # type: ignore[no-untyped-call]  # Mark performance monitoring as complete
+        perf_monitor.finish()  # Mark performance monitoring as complete
         return None
 
     def _on_open(self, websocket_connection):  # type: ignore[no-untyped-def]
@@ -714,7 +714,7 @@ class WebSocketManager:
                 }
             }
         """
-        debug_mode = _is_debug_mode()  # type: ignore[no-untyped-call]
+        debug_mode = _is_debug_mode()
 
         try:
             if debug_mode:

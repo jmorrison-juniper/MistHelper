@@ -16,8 +16,8 @@ class WebSocketCmdDeps:
     """
 
     apisession: Any
-    select_site_fn: Callable
-    select_device_fn: Callable
-    validate_target_fn: Callable
-    list_devices_fn: Callable
-    safe_input_fn: Callable
+    select_site_fn: Callable[..., Any]
+    select_device_fn: Callable[..., Any]
+    validate_target_fn: Callable[..., Any]
+    list_devices_fn: Callable[..., Any]
+    safe_input_fn: Callable[..., Any]
