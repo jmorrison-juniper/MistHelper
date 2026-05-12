@@ -5,6 +5,12 @@ All notable changes to MistHelper are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
+## [26.05.12.07.25] - 2026-05-12
+
+### Refactored
+
+- Eliminated 3 thin wrapper classes (`SSIDTemplateConsolidationManager`, `E911BSSIDReportGenerator`, `ZoneConfigurationAnalyzer`) and 1 standalone wrapper function (`update_gateway_templates_wan2_variable`) by moving their logic directly into appropriate existing classes: `OrgExportUtils.ssid_template_consolidation`, `OrgExportUtils.e911_bssid_compliance_report`, `SiteExportUtils.zone_config_analysis`, `GatewayExportUtils.wan2_variable_migration`. Updated dispatch entries 104, 119, 159, and 160 accordingly (#287)
+
 ## [26.05.12.06.57] - 2026-05-12
 
 ### Added

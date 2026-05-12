@@ -14705,51 +14705,6 @@ class OfflineDeviceReporter:
         print(f"\nReport completed in {elapsed:.1f} seconds")
 
 
-class SSIDTemplateConsolidationManager:
-    """Thin wrapper that delegates to src.ssid_consolidation.ssid_template_consolidation."""
-
-    @staticmethod
-    def execute():  # type: ignore[no-untyped-def]
-        """Static entry point - delegates to extracted module."""
-        from src.ssid_consolidation.ssid_template_consolidation import SSIDTemplateConsolidationManager as _Impl
-
-        _Impl.execute(
-            apisession=apisession,
-            page_limit=DEFAULT_API_PAGE_LIMIT,
-            safe_input_fn=InputUtils.safe_input,
-            write_data_fn=DataExporter.write_with_format_selection,
-            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
-        )
-
-
-class E911BSSIDReportGenerator:
-    """E911 BSSID Compliance Report (Menu 160).
-
-    Implementation extracted to src/reports/e911_bssid.py.
-    This stub delegates to the extracted module while providing
-    access to MistHelper globals (apisession, ConfigUtils, etc.).
-    """
-
-    @staticmethod
-    def execute() -> None:
-        """Generate E911 BSSID compliance report (Menu 160)."""
-        from src.reports.e911_bssid import (
-            E911BSSIDReportGenerator as _E911,
-        )
-
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            print("! No organization selected. Exiting.")
-            return
-        _E911.execute(
-            apisession=apisession,
-            page_limit=DEFAULT_API_PAGE_LIMIT,
-            org_id=current_org_id,
-            safe_input_fn=InputUtils.safe_input,
-            write_data_fn=DataExporter.write_with_format_selection,
-        )
-
-
 class OrgTemplateExporter:
     """
     Organization Template Exporter
@@ -16521,6 +16476,38 @@ class OrgExportUtils:
         if emitter:
             emitter.emit_progress_complete("66", "sle_metrics", total_items, items_done, False, time.time() - op_start)
 
+    @staticmethod
+    def ssid_template_consolidation() -> None:
+        """SSID template consolidation workflow (Menu #159). Delegates to src.ssid_consolidation."""
+        from src.ssid_consolidation.ssid_template_consolidation import (  # noqa: PLC0415
+            SSIDTemplateConsolidationManager as _Impl,
+        )
+
+        _Impl.execute(
+            apisession=apisession,
+            page_limit=DEFAULT_API_PAGE_LIMIT,
+            safe_input_fn=InputUtils.safe_input,
+            write_data_fn=DataExporter.write_with_format_selection,
+            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
+        )
+
+    @staticmethod
+    def e911_bssid_compliance_report() -> None:
+        """E911 BSSID compliance report (Menu #160). Delegates to src.reports.e911_bssid."""
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not current_org_id:
+            print("! No organization selected. Exiting.")
+            return
+        from src.reports.e911_bssid import E911BSSIDReportGenerator as _E911  # noqa: PLC0415
+
+        _E911.execute(
+            apisession=apisession,
+            page_limit=DEFAULT_API_PAGE_LIMIT,
+            org_id=current_org_id,
+            safe_input_fn=InputUtils.safe_input,
+            write_data_fn=DataExporter.write_with_format_selection,
+        )
+
 
 # ============================================================================
 # SITE DATA EXPORT UTILITIES CLASS
@@ -18033,6 +18020,19 @@ class SiteExportUtils:
             api_call=mistapi.api.v1.sites.auto_map_assignment.getSiteAutoMapAssignmentStatus,
             data_type="auto map assignment status",
             sort_key="id",
+        )
+
+    @staticmethod
+    def zone_config_analysis() -> None:
+        """Zone, engagement, and occupancy config analysis (Menu #119). Delegates to src.analytics.zone_analyzer."""
+        from src.analytics.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA  # noqa: PLC0415
+
+        _ZCA.analyze(
+            apisession=apisession,
+            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
+            check_stop_fn=ConfigUtils.check_stop_signal,
+            all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
+            save_data_fn=DataExporter.save_data_to_output,
         )
 
 
@@ -22800,6 +22800,25 @@ class GatewayExportUtils:
 
         return list(gateway_sites)
 
+    @staticmethod
+    def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:
+        """Update gateway templates WAN2 variable (Menu #104). Delegates to src.gateway.wan2_variable."""
+        from src.gateway.wan2_variable import GatewayWan2VariableMigrator  # noqa: PLC0415
+
+        migrator = GatewayWan2VariableMigrator(
+            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
+            apisession=apisession,
+            site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
+            generate_templates_fn=GatewayExportUtils.templates,
+            generate_sites_fn=OrgSiteExporter.sites,
+            get_csv_path_fn=FilePathUtils.get_csv_path,
+            save_data_fn=DataExporter.save_data_to_output,
+            input_fn=InputUtils.safe_input,
+            connection_pool_fn=execute_with_connection_pool_management,
+        )
+        migrator.execute(fast=fast, dry_run=dry_run)
+
 
 # NOTE: generate_support_package moved to DataCollectionManager.generate_support_packages
 
@@ -24798,25 +24817,6 @@ class WAN2MigrationManager:
             print(f"\n  INFO: {info_sites} sites have same-IP-type overrides (likely safe)")
             print("  Template and device use same IP configuration type (both DHCP or both Static)")
             print("  Overrides may be for description, usage, or other non-critical fields")
-
-
-def update_gateway_templates_wan2_variable(fast: bool = False, dry_run: bool = False):  # type: ignore[no-untyped-def]
-    """Menu #104: Update Gateway Templates WAN2 Variable Migration. Delegated to src.gateway.wan2_variable."""
-    from src.gateway.wan2_variable import GatewayWan2VariableMigrator  # pylint: disable=import-outside-toplevel
-
-    migrator = GatewayWan2VariableMigrator(
-        org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-        apisession=apisession,
-        site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
-        check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-        generate_templates_fn=GatewayExportUtils.templates,
-        generate_sites_fn=OrgSiteExporter.sites,
-        get_csv_path_fn=FilePathUtils.get_csv_path,
-        save_data_fn=DataExporter.save_data_to_output,
-        input_fn=InputUtils.safe_input,
-        connection_pool_fn=execute_with_connection_pool_management,
-    )
-    return migrator.execute(fast=fast, dry_run=dry_run)
 
 
 # ============================================================================
@@ -29733,26 +29733,6 @@ class BulkRadiusWLANConfigManager:
 # have been refactored into GatewayTemplateConfigManager class methods.
 
 
-class ZoneConfigurationAnalyzer:
-    """Zone, engagement, and occupancy configuration analysis (Menu 119).
-
-    Implementation extracted to src/analytics/zone_analyzer.py.
-    """
-
-    @staticmethod
-    def analyze() -> None:
-        """Delegate to extracted module."""
-        from src.analytics.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA
-
-        _ZCA.analyze(
-            apisession=apisession,
-            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
-            check_stop_fn=ConfigUtils.check_stop_signal,
-            all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-            save_data_fn=DataExporter.save_data_to_output,
-        )
-
-
 class SiteAnalyticsConfigurator:
     """
     Configures site analytics settings to standard values across all sites.
@@ -30756,7 +30736,7 @@ menu_actions = {
         "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)",  # noqa: E501
     ),
     "104": (
-        lambda fast=False, dry_run=False: update_gateway_templates_wan2_variable(fast=fast, dry_run=dry_run),  # type: ignore[misc]
+        lambda fast=False, dry_run=False: GatewayExportUtils.wan2_variable_migration(fast=fast, dry_run=dry_run),  # type: ignore[misc]
         " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation, supports --dry-run)",  # noqa: E501
     ),
     "105": (
@@ -31004,7 +30984,7 @@ menu_actions = {
     # ZONE & ENGAGEMENT CONFIGURATION ANALYSIS
     # ==============================
     "119": (
-        ZoneConfigurationAnalyzer.analyze,
+        SiteExportUtils.zone_config_analysis,
         "Site Config Analysis - Scan all sites for zone, engagement dwell tag, and occupancy setting deviations",
     ),
     # ==============================
@@ -31080,8 +31060,8 @@ menu_actions = {
     "157": (DeviceUtilityCommands.create_device_snapshot, "Create Device Snapshot on Switch"),
     # > Offline / Reporting
     "158": (OfflineDeviceReporter.execute, "Offline Device Report"),
-    "159": (SSIDTemplateConsolidationManager.execute, "SSID Template Consolidation (5-Phase Guided Workflow)"),
-    "160": (E911BSSIDReportGenerator.execute, "E911 BSSID Compliance Report"),
+    "159": (OrgExportUtils.ssid_template_consolidation, "SSID Template Consolidation (5-Phase Guided Workflow)"),
+    "160": (OrgExportUtils.e911_bssid_compliance_report, "E911 BSSID Compliance Report"),
     "161": (GlobalWiredClientReportGenerator.execute, "Global Wired Client Report (operator-based MAC/MFG filtering)"),
     "162": (
         WiredClientManufacturerReportGenerator.execute,
