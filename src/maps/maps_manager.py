@@ -1680,6 +1680,383 @@ class MapsManager:
             logging.error(f"Error cloning map: {e}", exc_info=True)
             print(f"\n! Error cloning map: {e}")
 
+    def _wizard_fetch_devices(self, site_id: str, map_id: str) -> list:
+        """Fetch all devices placed on the given map."""
+        try:
+            resp = mistapi.api.v1.sites.devices.listSiteDevices(self.apisession, site_id=site_id, type="all")
+            if resp.status_code == 200:
+                all_devices = resp.data if isinstance(resp.data, list) else []
+                return [d for d in all_devices if d.get("map_id") == map_id]
+        except Exception as err:
+            logging.debug("Could not fetch devices for wizard: %s", err)
+        return []
+
+    def _wizard_fetch_zones(self, site_id: str, map_id: str) -> list:
+        """Fetch all zones placed on the given map."""
+        try:
+            resp = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
+            if resp.status_code == 200:
+                return [z for z in resp.data if z.get("map_id") == map_id]
+        except Exception as err:
+            logging.debug("Could not fetch zones for wizard: %s", err)
+        return []
+
+    def _wizard_fetch_beacons(self, site_id: str, map_id: str) -> tuple[list, list]:
+        """Fetch BLE beacons and virtual beacons on the given map. Returns (beacons, vbeacons)."""
+        beacons: list = []
+        vbeacons: list = []
+        try:
+            b_resp = mistapi.api.v1.sites.beacons.listSiteBeacons(self.apisession, site_id=site_id)
+            if b_resp.status_code == 200:
+                beacons = [b for b in b_resp.data if b.get("map_id") == map_id]
+            v_resp = mistapi.api.v1.sites.vbeacons.listSiteVBeacons(self.apisession, site_id=site_id)
+            if v_resp.status_code == 200:
+                vbeacons = [v for v in v_resp.data if v.get("map_id") == map_id]
+        except Exception as err:
+            logging.debug("Could not fetch beacons for wizard: %s", err)
+        return beacons, vbeacons
+
+    def _wizard_fetch_assets(self, site_id: str, map_id: str) -> dict:
+        """Fetch all map assets: devices, zones, beacons, vbeacons.
+
+        Returns dict with keys devices, zones, beacons, vbeacons (all lists).
+        """
+        beacons, vbeacons = self._wizard_fetch_beacons(site_id, map_id)
+        return {
+            "devices": self._wizard_fetch_devices(site_id, map_id),
+            "zones": self._wizard_fetch_zones(site_id, map_id),
+            "beacons": beacons,
+            "vbeacons": vbeacons,
+        }
+
+    def _wizard_get_new_image(self) -> tuple[str, int, int] | None:
+        """Prompt for the replacement image file path and return (path, width, height).
+
+        Returns None if input is cancelled or invalid.
+        """
+        import os
+
+        from PIL import Image
+
+        print(f"\n{'-' * 80}")
+        print("STEP 2: Select New Floor Plan Image")
+        print("-" * 80)
+        print("\nEnter the path to the new floor plan image:")
+        print("Supported formats: PNG, JPG, JPEG, GIF")
+
+        try:
+            file_path = input("File path: ").strip()
+        except EOFError:
+            logging.info("EOF detected during file path input")
+            return None
+
+        file_path = file_path.strip('"').strip("'")
+
+        if not file_path:
+            print("\n! No file path provided")
+            return None
+
+        if not os.path.exists(file_path) or not os.path.isfile(file_path):
+            print(f"\n! File not found or not a file: {file_path}")
+            return None
+
+        valid_extensions = [".png", ".jpg", ".jpeg", ".gif"]
+        file_ext = os.path.splitext(file_path)[1].lower()
+        if file_ext not in valid_extensions:
+            print(f"\n! Invalid file type: {file_ext}. Supported: {', '.join(valid_extensions)}")
+            return None
+
+        try:
+            with Image.open(file_path) as img:
+                new_width_px, new_height_px = img.size
+                print(f"\nNew image dimensions: {new_width_px} x {new_height_px} pixels")
+        except Exception as img_err:
+            print(f"\n! Failed to read image dimensions: {img_err}")
+            return None
+
+        return file_path, new_width_px, new_height_px
+
+    def _wizard_determine_scaling(
+        self,
+        original_width_px: int,
+        original_height_px: int,
+        original_ppm: float,
+        original_width_m: float,
+        new_width_px: int,
+        new_height_px: int,
+    ) -> tuple[str, float, float, float] | None:
+        """Prompt user for scaling mode and return (scaling_mode, scale_x, scale_y, new_ppm).
+
+        Returns None if the user cancels.
+        """
+        print(f"\n{'-' * 80}")
+        print("STEP 3: Configure Scaling")
+        print("-" * 80)
+
+        same_dimensions = new_width_px == original_width_px and new_height_px == original_height_px
+        if same_dimensions:
+            print("\nImage dimensions match exactly - no coordinate translation needed.")
+            return "none", 1.0, 1.0, original_ppm
+
+        width_ratio = new_width_px / original_width_px if original_width_px > 0 else 1.0
+        height_ratio = new_height_px / original_height_px if original_height_px > 0 else 1.0
+
+        print(f"\n  Original: {original_width_px} x {original_height_px} px")
+        print(f"  New:      {new_width_px} x {new_height_px} px")
+        w_sign = "+" if width_ratio > 1 else ""
+        h_sign = "+" if height_ratio > 1 else ""
+        print(f"  Width ratio:  {width_ratio:.4f}x ({w_sign}{((width_ratio - 1) * 100):.1f}%)")
+        print(f"  Height ratio: {height_ratio:.4f}x ({h_sign}{((height_ratio - 1) * 100):.1f}%)")
+
+        aspect_diff = abs(width_ratio - height_ratio)
+        if aspect_diff >= 0.01:
+            print(f"\n  WARNING: Aspect ratio differs by {aspect_diff:.2%} - placements may appear distorted.")
+
+        print("\nScaling options:")
+        print("  1. Proportional - Scale all coordinates by image ratio (recommended)")
+        print("  2. Preserve Physical - Keep real-world positions, update PPM only")
+        print("  3. Manual PPM - Enter new pixels-per-meter value manually")
+        print("  4. No Scaling - Replace image only, keep all coordinates unchanged")
+
+        try:
+            scale_choice = input("\nSelect scaling mode [1]: ").strip() or "1"
+        except EOFError:
+            logging.info("EOF detected during scale mode selection")
+            return None
+
+        return self._apply_scale_choice(
+            scale_choice, width_ratio, height_ratio, original_ppm, original_width_m, new_width_px
+        )
+
+    def _apply_scale_choice(
+        self,
+        scale_choice: str,
+        width_ratio: float,
+        height_ratio: float,
+        original_ppm: float,
+        original_width_m: float,
+        new_width_px: int,
+    ) -> tuple[str, float, float, float]:
+        """Map a scaling menu choice to (scaling_mode, scale_x, scale_y, new_ppm)."""
+        if scale_choice == "2":
+            if original_width_m and original_width_m > 0:
+                new_ppm = new_width_px / original_width_m
+            else:
+                new_ppm = new_width_px / (new_width_px / original_ppm) if original_ppm else 1.0
+            print(f"\nPreserving physical positions. New PPM: {new_ppm:.2f}")
+            return "preserve_physical", 1.0, 1.0, new_ppm
+
+        if scale_choice == "3":
+            try:
+                new_ppm_input = input(f"Enter new PPM (current: {original_ppm:.2f}): ").strip()
+                new_ppm = float(new_ppm_input) if new_ppm_input else original_ppm
+            except (ValueError, EOFError):
+                print("Invalid PPM value, using original")
+                new_ppm = original_ppm
+            print(f"\nUsing manual PPM: {new_ppm:.2f}, scaling: x={width_ratio:.4f}, y={height_ratio:.4f}")
+            return "manual_ppm", width_ratio, height_ratio, new_ppm
+
+        if scale_choice == "4":
+            print("\nNo coordinate scaling - image replacement only")
+            return "none", 1.0, 1.0, original_ppm
+
+        # Default: proportional (choice "1" or anything else)
+        print(f"\nUsing proportional scaling: x={width_ratio:.4f}, y={height_ratio:.4f}")
+        return "proportional", width_ratio, height_ratio, original_ppm
+
+    def _wizard_scale_path_nodes(self, nodes: list, scale_x: float, scale_y: float) -> list:
+        """Return a copy of path nodes with x/y coordinates scaled."""
+        scaled = []
+        for node in nodes:
+            scaled_node = dict(node)
+            if isinstance(scaled_node.get("x"), (int, float)):
+                scaled_node["x"] = scaled_node["x"] * scale_x
+            if isinstance(scaled_node.get("y"), (int, float)):
+                scaled_node["y"] = scaled_node["y"] * scale_y
+            scaled.append(scaled_node)
+        return scaled
+
+    def _wizard_scale_geometry(
+        self, current_map: dict, scale_x: float, scale_y: float, new_width_px: int, new_height_px: int, new_ppm: float
+    ) -> dict:
+        """Build the map-update body: dimensions, PPM, and scaled wall/wayfinding paths."""
+        map_update: dict = {"width": new_width_px, "height": new_height_px, "ppm": new_ppm}
+        if new_ppm and new_ppm > 0:
+            map_update["width_m"] = new_width_px / new_ppm
+            map_update["height_m"] = new_height_px / new_ppm
+
+        if scale_x == 1.0 and scale_y == 1.0:
+            return map_update
+
+        for path_key in ("wall_path", "wayfinding_path"):
+            nodes = current_map.get(path_key, {}).get("nodes")
+            if not nodes:
+                continue
+            scaled_nodes = self._wizard_scale_path_nodes(nodes, scale_x, scale_y)
+            map_update[path_key] = {"nodes": scaled_nodes}
+            logging.debug("Scaled %d %s nodes", len(scaled_nodes), path_key)
+
+        return map_update
+
+    def _wizard_scale_devices(self, site_id: str, devices: list, scale_x: float, scale_y: float, errors: list) -> None:
+        """Scale device x/y positions and update each device via the API."""
+        print(f"  Updating {len(devices)} device positions...")
+        updated, failed = 0, 0
+        for device in devices:
+            try:
+                resp = mistapi.api.v1.sites.devices.updateSiteDevice(
+                    self.apisession,
+                    site_id=site_id,
+                    device_id=device.get("id"),
+                    body={"x": device.get("x", 0) * scale_x, "y": device.get("y", 0) * scale_y},
+                )
+                if resp.status_code == 200:
+                    updated += 1
+                else:
+                    failed += 1
+                    logging.warning("Device update failed for %s: HTTP %d", device.get("id"), resp.status_code)
+            except Exception as err:
+                failed += 1
+                logging.error("Device update error for %s: %s", device.get("id"), err)
+        print(f"    Devices updated: {updated}, failed: {failed}")
+        if failed:
+            errors.append(f"{failed} device updates failed")
+
+    def _wizard_scale_zones(self, site_id: str, zones: list, scale_x: float, scale_y: float, errors: list) -> None:
+        """Scale zone vertex coordinates and update each zone via the API."""
+        print(f"  Updating {len(zones)} zone positions...")
+        updated, failed = 0, 0
+        for zone in zones:
+            try:
+                vertices = zone.get("vertices", [])
+                if not vertices:
+                    updated += 1
+                    continue
+                scaled_vertices = [{"x": v.get("x", 0) * scale_x, "y": v.get("y", 0) * scale_y} for v in vertices]
+                resp = mistapi.api.v1.sites.zones.updateSiteZone(
+                    self.apisession, site_id=site_id, zone_id=zone.get("id"), body={"vertices": scaled_vertices}
+                )
+                if resp.status_code == 200:
+                    updated += 1
+                else:
+                    failed += 1
+                    logging.warning("Zone update failed for %s: HTTP %d", zone.get("id"), resp.status_code)
+            except Exception as err:
+                failed += 1
+                logging.error("Zone update error for %s: %s", zone.get("id"), err)
+        print(f"    Zones updated: {updated}, failed: {failed}")
+        if failed:
+            errors.append(f"{failed} zone updates failed")
+
+    def _wizard_scale_beacons(self, site_id: str, beacons: list, scale_x: float, scale_y: float, errors: list) -> None:
+        """Scale beacon positions and update each beacon via the API."""
+        print(f"  Updating {len(beacons)} beacon positions...")
+        updated, failed = 0, 0
+        for beacon in beacons:
+            try:
+                resp = mistapi.api.v1.sites.beacons.updateSiteBeacon(
+                    self.apisession,
+                    site_id=site_id,
+                    beacon_id=beacon.get("id"),
+                    body={"x": beacon.get("x", 0) * scale_x, "y": beacon.get("y", 0) * scale_y},
+                )
+                if resp.status_code == 200:
+                    updated += 1
+                else:
+                    failed += 1
+            except Exception as err:
+                failed += 1
+                logging.error("Beacon update error: %s", err)
+        print(f"    Beacons updated: {updated}, failed: {failed}")
+        if failed:
+            errors.append(f"{failed} beacon updates failed")
+
+    def _wizard_scale_vbeacons(
+        self, site_id: str, vbeacons: list, scale_x: float, scale_y: float, errors: list
+    ) -> None:
+        """Scale virtual beacon positions and update each vbeacon via the API."""
+        print(f"  Updating {len(vbeacons)} virtual beacon positions...")
+        updated, failed = 0, 0
+        for vbeacon in vbeacons:
+            try:
+                resp = mistapi.api.v1.sites.vbeacons.updateSiteVBeacon(
+                    self.apisession,
+                    site_id=site_id,
+                    vbeacon_id=vbeacon.get("id"),
+                    body={"x": vbeacon.get("x", 0) * scale_x, "y": vbeacon.get("y", 0) * scale_y},
+                )
+                if resp.status_code == 200:
+                    updated += 1
+                else:
+                    failed += 1
+            except Exception as err:
+                failed += 1
+                logging.error("Virtual beacon update error: %s", err)
+        print(f"    Virtual beacons updated: {updated}, failed: {failed}")
+        if failed:
+            errors.append(f"{failed} virtual beacon updates failed")
+
+    def _wizard_run(self, site_id: str, site_name: str) -> None:
+        """Execute the core wizard steps after site selection."""
+        map_id = self._wizard_select_and_display_map(site_id, site_name)
+        if not map_id:
+            return
+
+        current_map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map_id)
+        if current_map_response.status_code != 200:
+            print(f"\n! Failed to fetch map details: HTTP {current_map_response.status_code}")
+            return
+
+        current_map = current_map_response.data
+        map_name = current_map.get("name", "Unnamed")
+        assets = self._wizard_fetch_assets(site_id, map_id)
+        self._wizard_print_map_summary(current_map, map_name, assets)
+
+        image_result = self._wizard_get_new_image()
+        if not image_result:
+            return
+        file_path, new_width_px, new_height_px = image_result
+
+        scaling_result = self._wizard_determine_scaling(
+            original_width_px=current_map.get("width", 0),
+            original_height_px=current_map.get("height", 0),
+            original_ppm=current_map.get("ppm", 1.0),
+            original_width_m=current_map.get("width_m", 0),
+            new_width_px=new_width_px,
+            new_height_px=new_height_px,
+        )
+        if scaling_result is None:
+            return
+        scaling_mode, scale_x, scale_y, new_ppm = scaling_result
+
+        backup_file = self._wizard_create_backup(site_id, map_id, map_name)
+        if backup_file is None:
+            return
+
+        self._wizard_preview(
+            current_map, map_name, assets, new_width_px, new_height_px, new_ppm, scaling_mode, scale_x, scale_y
+        )
+        if not self._wizard_confirm():
+            return
+
+        errors: list = []
+        self._wizard_apply(
+            site_id,
+            map_id,
+            file_path,
+            current_map,
+            assets,
+            new_width_px,
+            new_height_px,
+            new_ppm,
+            scaling_mode,
+            scale_x,
+            scale_y,
+            errors,
+        )
+        self._wizard_print_summary(map_name, new_width_px, new_height_px, new_ppm, scaling_mode, backup_file, errors)
+        logging.info("wizard completed for %s: mode=%s errors=%d", map_id, scaling_mode, len(errors))
+
     def intelligent_map_replacement_wizard(self):
         """Intelligent Map Replacement Wizard.
 
@@ -1698,588 +2075,210 @@ class MapsManager:
         print("\n" + "=" * 80)
         print("INTELLIGENT MAP REPLACEMENT WIZARD")
         print("=" * 80)
-        print("\nThis wizard helps you replace a floor plan image while preserving")
-        print("device placements, zones, walls, and other map data.")
-        print("\nThe wizard will:")
-        print("  1. Backup current map data")
-        print("  2. Analyze dimension and scale differences")
-        print("  3. Calculate coordinate translations")
-        print("  4. Preview affected devices/zones")
-        print("  5. Apply changes with confirmation")
-        print("=" * 80)
 
         site_id, site_name = self.get_current_site()
         if not site_id:
             logging.warning("Map replacement wizard aborted: No site selected")
             return
 
-        logging.debug(f"Map replacement wizard - Site: {site_name} (ID: {site_id})")
-
         try:
-            import os
-
-            from PIL import Image
-
-            # Step 1: Select the map to update
-            print("\n" + "-" * 80)
-            print("STEP 1: Select Map to Replace")
-            print("-" * 80)
-
-            map_id = self._select_map_from_site(site_id, site_name)
-            if not map_id:
-                logging.info("Map replacement wizard aborted: No map selected")
-                return
-
-            # Fetch current map details
-            print("\nFetching current map data...")
-            current_map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map_id)
-
-            if current_map_response.status_code != 200:
-                print(f"\n! Failed to fetch map details: HTTP {current_map_response.status_code}")
-                return
-
-            current_map = current_map_response.data
-            map_name = current_map.get("name", "Unnamed")
-
-            # Display current map info
-            print(f"\n{'-' * 80}")
-            print(f"Current Map: {map_name}")
-            print(f"{'-' * 80}")
-            print(f"  Type: {current_map.get('type', 'N/A')}")
-            print(f"  Pixel Dimensions: {current_map.get('width', 'N/A')} x {current_map.get('height', 'N/A')} px")
-            print(f"  Physical Size: {current_map.get('width_m', 'N/A')} x {current_map.get('height_m', 'N/A')} meters")
-            print(f"  Scale (PPM): {current_map.get('ppm', 'N/A')} pixels/meter")
-            print(f"  Has Image: {'Yes' if 'url' in current_map else 'No'}")
-            print(f"  Has Walls: {'Yes' if current_map.get('wall_path', {}).get('nodes') else 'No'}")
-            print(f"  Has Wayfinding: {'Yes' if current_map.get('wayfinding_path', {}).get('nodes') else 'No'}")
-
-            # Store original properties
-            original_width_px = current_map.get("width", 0)
-            original_height_px = current_map.get("height", 0)
-            original_ppm = current_map.get("ppm", 1)
-            original_width_m = current_map.get("width_m", 0)
-
-            # Count devices on this map
-            devices_on_map = []
-            try:
-                devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
-                    self.apisession, site_id=site_id, type="all"
-                )
-                if devices_response.status_code == 200:
-                    all_devices = devices_response.data if isinstance(devices_response.data, list) else []
-                    devices_on_map = [d for d in all_devices if d.get("map_id") == map_id]
-            except Exception as device_error:
-                logging.debug("Could not fetch devices for map detail: %s", device_error)
-
-            # Count zones on this map
-            zones_on_map = []
-            try:
-                zones_response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
-                if zones_response.status_code == 200:
-                    zones_on_map = [z for z in zones_response.data if z.get("map_id") == map_id]
-            except Exception as zone_error:
-                logging.debug("Could not fetch zones for map detail: %s", zone_error)
-            beacons_on_map = []
-            vbeacons_on_map = []
-            try:
-                beacons_response = mistapi.api.v1.sites.beacons.listSiteBeacons(self.apisession, site_id=site_id)
-                if beacons_response.status_code == 200:
-                    beacons_on_map = [b for b in beacons_response.data if b.get("map_id") == map_id]
-
-                vbeacons_response = mistapi.api.v1.sites.vbeacons.listSiteVBeacons(self.apisession, site_id=site_id)
-                if vbeacons_response.status_code == 200:
-                    vbeacons_on_map = [v for v in vbeacons_response.data if v.get("map_id") == map_id]
-            except Exception as beacon_error:
-                logging.debug("Could not fetch beacons for map detail: %s", beacon_error)
-
-            print("\nAssets on this map:")
-            print(f"  Devices: {len(devices_on_map)}")
-            print(f"  Zones: {len(zones_on_map)}")
-            print(f"  BLE Beacons: {len(beacons_on_map)}")
-            print(f"  Virtual Beacons: {len(vbeacons_on_map)}")
-            wall_nodes = len(current_map.get("wall_path", {}).get("nodes", []))
-            wayfinding_nodes = len(current_map.get("wayfinding_path", {}).get("nodes", []))
-            print(f"  Wall Nodes: {wall_nodes}")
-            print(f"  Wayfinding Nodes: {wayfinding_nodes}")
-
-            # Step 2: Get new image file
-            print(f"\n{'-' * 80}")
-            print("STEP 2: Select New Floor Plan Image")
-            print("-" * 80)
-            print("\nEnter the path to the new floor plan image:")
-            print("Supported formats: PNG, JPG, JPEG, GIF")
-
-            try:
-                file_path = input("File path: ").strip()
-            except EOFError:
-                logging.info("EOF detected during file path input")
-                return
-
-            # Clean up path
-            file_path = file_path.strip('"').strip("'")
-
-            if not file_path:
-                print("\n! No file path provided")
-                return
-
-            if not os.path.exists(file_path):
-                print(f"\n! File not found: {file_path}")
-                return
-
-            if not os.path.isfile(file_path):
-                print(f"\n! Path is not a file: {file_path}")
-                return
-
-            # Validate file extension
-            valid_extensions = [".png", ".jpg", ".jpeg", ".gif"]
-            file_ext = os.path.splitext(file_path)[1].lower()
-            if file_ext not in valid_extensions:
-                print(f"\n! Invalid file type: {file_ext}")
-                print(f"Supported types: {', '.join(valid_extensions)}")
-                return
-
-            # Get new image dimensions
-            try:
-                with Image.open(file_path) as img:
-                    new_width_px, new_height_px = img.size
-                    print(f"\nNew image dimensions: {new_width_px} x {new_height_px} pixels")
-            except Exception as img_err:
-                print(f"\n! Failed to read image dimensions: {img_err}")
-                return
-
-            # Step 3: Determine scaling mode
-            print(f"\n{'-' * 80}")
-            print("STEP 3: Configure Scaling")
-            print("-" * 80)
-
-            # Check if dimensions are the same
-            same_dimensions = new_width_px == original_width_px and new_height_px == original_height_px
-
-            if same_dimensions:
-                print("\nImage dimensions match exactly - no coordinate translation needed.")
-                scale_x = 1.0
-                scale_y = 1.0
-                new_ppm = original_ppm
-                scaling_mode = "none"
-            else:
-                print("\nDimension comparison:")
-                print(f"  Original: {original_width_px} x {original_height_px} px")
-                print(f"  New:      {new_width_px} x {new_height_px} px")
-
-                width_ratio = new_width_px / original_width_px if original_width_px > 0 else 1
-                height_ratio = new_height_px / original_height_px if original_height_px > 0 else 1
-
-                print(
-                    f"\n  Width ratio:  {width_ratio:.4f}x"
-                    f" ({'+' if width_ratio > 1 else ''}{((width_ratio - 1) * 100):.1f}%)"
-                )
-                print(
-                    f"  Height ratio: {height_ratio:.4f}x"
-                    f" ({'+' if height_ratio > 1 else ''}{((height_ratio - 1) * 100):.1f}%)"
-                )
-
-                # Check if aspect ratio is preserved
-                aspect_diff = abs(width_ratio - height_ratio)
-                if aspect_diff < 0.01:
-                    print("\n  Aspect ratio: Preserved (uniform scaling)")
-                else:
-                    print(f"\n  WARNING: Aspect ratio differs by {aspect_diff:.2%}")
-                    print("  This may cause device placements to appear distorted.")
-
-                print("\nScaling options:")
-                print("  1. Proportional - Scale all coordinates by image ratio (recommended)")
-                print("  2. Preserve Physical - Keep real-world positions, update PPM only")
-                print("  3. Manual PPM - Enter new pixels-per-meter value manually")
-                print("  4. No Scaling - Replace image only, keep all coordinates unchanged")
-
-                try:
-                    scale_choice = input("\nSelect scaling mode [1]: ").strip() or "1"
-                except EOFError:
-                    logging.info("EOF detected during scale mode selection")
-                    return
-
-                if scale_choice == "1":
-                    # Proportional scaling
-                    scale_x = width_ratio
-                    scale_y = height_ratio
-                    new_ppm = original_ppm  # PPM stays same, coordinates scale
-                    scaling_mode = "proportional"
-                    print(f"\nUsing proportional scaling: x={scale_x:.4f}, y={scale_y:.4f}")
-
-                elif scale_choice == "2":
-                    # Preserve physical dimensions - adjust PPM
-                    scale_x = 1.0
-                    scale_y = 1.0
-                    if original_width_m and original_width_m > 0:
-                        new_ppm = new_width_px / original_width_m
-                    else:
-                        new_ppm = new_width_px / (original_width_px / original_ppm) if original_ppm else 1
-                    scaling_mode = "preserve_physical"
-                    print(f"\nPreserving physical positions. New PPM: {new_ppm:.2f}")
-
-                elif scale_choice == "3":
-                    # Manual PPM entry
-                    try:
-                        new_ppm_input = input(f"Enter new PPM (current: {original_ppm:.2f}): ").strip()
-                        new_ppm = float(new_ppm_input) if new_ppm_input else original_ppm
-                    except (ValueError, EOFError):
-                        print("Invalid PPM value, using original")
-                        new_ppm = original_ppm
-                    scale_x = width_ratio
-                    scale_y = height_ratio
-                    scaling_mode = "manual_ppm"
-                    print(f"\nUsing manual PPM: {new_ppm:.2f}, scaling: x={scale_x:.4f}, y={scale_y:.4f}")
-
-                else:
-                    # No scaling
-                    scale_x = 1.0
-                    scale_y = 1.0
-                    new_ppm = original_ppm
-                    scaling_mode = "none"
-                    print("\nNo coordinate scaling - image replacement only")
-
-            # Step 4: Create backup
-            print(f"\n{'-' * 80}")
-            print("STEP 4: Creating Backup")
-            print("-" * 80)
-
-            print("\nBacking up current map data...")
-            backup_file = self._backup_map_geometry(
-                api_session=self.apisession,
-                site_id=site_id,
-                map_id=map_id,
-                map_name=map_name,
-                backup_reason="pre_replacement",
-            )
-
-            if backup_file:
-                print(f"Backup saved: {backup_file}")
-            else:
-                print("! Warning: Backup may not have completed fully")
-                try:
-                    proceed = input("Continue anyway? (yes/no): ").strip().lower()
-                    if proceed not in ["yes", "y"]:
-                        print("\n! Operation cancelled")
-                        return
-                except EOFError:
-                    return
-
-            # Step 5: Preview changes
-            print(f"\n{'-' * 80}")
-            print("STEP 5: Preview Changes")
-            print("-" * 80)
-
-            print(f"\nMap: {map_name}")
-            print("\nImage Changes:")
-            print(f"  Dimensions: {original_width_px}x{original_height_px} -> {new_width_px}x{new_height_px} px")
-            print(f"  PPM: {original_ppm:.2f} -> {new_ppm:.2f}")
-            print(f"  Scaling Mode: {scaling_mode}")
-
-            if scaling_mode != "none" and (scale_x != 1.0 or scale_y != 1.0):
-                print(f"\nCoordinate Translation (scale_x={scale_x:.4f}, scale_y={scale_y:.4f}):")
-
-                # Preview device translations
-                if devices_on_map:
-                    print(f"\n  Devices ({len(devices_on_map)}):")
-                    for _, device in enumerate(devices_on_map[:5]):  # Show first 5
-                        old_x = device.get("x", 0)
-                        old_y = device.get("y", 0)
-                        new_x = old_x * scale_x
-                        new_y = old_y * scale_y
-                        name = device.get("name", device.get("mac", "Unknown"))
-                        print(f"    {name}: ({old_x:.1f}, {old_y:.1f}) -> ({new_x:.1f}, {new_y:.1f})")
-                    if len(devices_on_map) > 5:
-                        print(f"    ... and {len(devices_on_map) - 5} more devices")
-
-                # Preview zone translations
-                if zones_on_map:
-                    print(f"\n  Zones ({len(zones_on_map)}):")
-                    for _, zone in enumerate(zones_on_map[:3]):
-                        zone_name = zone.get("name", "Unnamed")
-                        vertex_count = len(zone.get("vertices", []))
-                        print(f"    {zone_name}: {vertex_count} vertices will be scaled")
-                    if len(zones_on_map) > 3:
-                        print(f"    ... and {len(zones_on_map) - 3} more zones")
-
-                if wall_nodes > 0 or wayfinding_nodes > 0:
-                    print("\n  Geometry:")
-                    if wall_nodes > 0:
-                        print(f"    {wall_nodes} wall nodes will be scaled")
-                    if wayfinding_nodes > 0:
-                        print(f"    {wayfinding_nodes} wayfinding nodes will be scaled")
-            else:
-                print("\n  No coordinate changes required (same dimensions or no scaling selected)")
-
-            # Step 6: Confirm and apply
-            print(f"\n{'-' * 80}")
-            print("STEP 6: Confirm and Apply")
-            print("-" * 80)
-
-            print("\n! WARNING: This will modify the map and update all device/zone positions.")
-            print("! A backup has been saved. Review the preview above before proceeding.")
-
-            try:
-                confirm = input("\nType 'REPLACE' to proceed: ").strip()
-            except EOFError:
-                logging.info("EOF detected during confirmation")
-                return
-
-            if confirm != "REPLACE":
-                print("\n! Operation cancelled")
-                return
-
-            logging.info(f"Map replacement confirmed for map {map_id} with scaling_mode={scaling_mode}")
-
-            # Apply changes
-            print("\nApplying changes...")
-            errors = []
-
-            # 6a. Update map properties (dimensions, PPM)
-            print("  Updating map properties...")
-            try:
-                map_update = {"width": new_width_px, "height": new_height_px, "ppm": new_ppm}
-
-                # Calculate new physical dimensions
-                if new_ppm and new_ppm > 0:
-                    map_update["width_m"] = new_width_px / new_ppm
-                    map_update["height_m"] = new_height_px / new_ppm
-
-                # Scale wall paths if needed
-                if scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
-                    if current_map.get("wall_path", {}).get("nodes"):
-                        scaled_wall_path = {"nodes": []}
-                        for node in current_map["wall_path"]["nodes"]:
-                            scaled_node = {}
-                            for key, value in node.items():
-                                if key == "x" and isinstance(value, (int, float)):
-                                    scaled_node[key] = value * scale_x
-                                elif key == "y" and isinstance(value, (int, float)):
-                                    scaled_node[key] = value * scale_y
-                                else:
-                                    scaled_node[key] = value
-                            scaled_wall_path["nodes"].append(scaled_node)
-                        map_update["wall_path"] = scaled_wall_path
-                        logging.debug(f"Scaled {len(scaled_wall_path['nodes'])} wall nodes")
-
-                    if current_map.get("wayfinding_path", {}).get("nodes"):
-                        scaled_wf_path = {"nodes": []}
-                        for node in current_map["wayfinding_path"]["nodes"]:
-                            scaled_node = {}
-                            for key, value in node.items():
-                                if key == "x" and isinstance(value, (int, float)):
-                                    scaled_node[key] = value * scale_x
-                                elif key == "y" and isinstance(value, (int, float)):
-                                    scaled_node[key] = value * scale_y
-                                else:
-                                    scaled_node[key] = value
-                            scaled_wf_path["nodes"].append(scaled_node)
-                        map_update["wayfinding_path"] = scaled_wf_path
-                        logging.debug(f"Scaled {len(scaled_wf_path['nodes'])} wayfinding nodes")
-
-                update_response = mistapi.api.v1.sites.maps.updateSiteMap(
-                    self.apisession, site_id=site_id, map_id=map_id, body=map_update
-                )
-
-                if update_response.status_code == 200:
-                    print("    Map properties updated successfully")
-                else:
-                    errors.append(f"Map update failed: HTTP {update_response.status_code}")
-                    print(f"    ! Failed to update map: HTTP {update_response.status_code}")
-
-            except Exception as map_err:
-                errors.append(f"Map update error: {map_err}")
-                print(f"    ! Error updating map: {map_err}")
-
-            # 6b. Upload new image
-            print("  Uploading new image...")
-            try:
-                upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
-                    self.apisession, site_id=site_id, map_id=map_id, file=file_path
-                )
-
-                if upload_response.status_code in [200, 201]:
-                    print("    Image uploaded successfully")
-                else:
-                    errors.append(f"Image upload failed: HTTP {upload_response.status_code}")
-                    print(f"    ! Failed to upload image: HTTP {upload_response.status_code}")
-
-            except Exception as img_err:
-                errors.append(f"Image upload error: {img_err}")
-                print(f"    ! Error uploading image: {img_err}")
-
-            # 6c. Update device positions
-            if devices_on_map and scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
-                print(f"  Updating {len(devices_on_map)} device positions...")
-                devices_updated = 0
-                devices_failed = 0
-
-                for device in devices_on_map:
-                    try:
-                        device_id = device.get("id")
-                        old_x = device.get("x", 0)
-                        old_y = device.get("y", 0)
-                        new_x = old_x * scale_x
-                        new_y = old_y * scale_y
-
-                        device_update = {"x": new_x, "y": new_y}
-
-                        update_dev_response = mistapi.api.v1.sites.devices.updateSiteDevice(
-                            self.apisession, site_id=site_id, device_id=device_id, body=device_update
-                        )
-
-                        if update_dev_response.status_code == 200:
-                            devices_updated += 1
-                        else:
-                            devices_failed += 1
-                            logging.warning(
-                                f"Device update failed for {device_id}: HTTP {update_dev_response.status_code}"
-                            )
-
-                    except Exception as dev_err:
-                        devices_failed += 1
-                        logging.error(f"Device update error for {device.get('id')}: {dev_err}")
-
-                print(f"    Devices updated: {devices_updated}, failed: {devices_failed}")
-                if devices_failed > 0:
-                    errors.append(f"{devices_failed} device updates failed")
-
-            # 6d. Update zone positions
-            if zones_on_map and scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
-                print(f"  Updating {len(zones_on_map)} zone positions...")
-                zones_updated = 0
-                zones_failed = 0
-
-                for zone in zones_on_map:
-                    try:
-                        zone_id = zone.get("id")
-                        vertices = zone.get("vertices", [])
-
-                        if vertices:
-                            scaled_vertices = []
-                            for vertex in vertices:
-                                scaled_vertex = {"x": vertex.get("x", 0) * scale_x, "y": vertex.get("y", 0) * scale_y}
-                                scaled_vertices.append(scaled_vertex)
-
-                            zone_update = {"vertices": scaled_vertices}
-
-                            update_zone_response = mistapi.api.v1.sites.zones.updateSiteZone(
-                                self.apisession, site_id=site_id, zone_id=zone_id, body=zone_update
-                            )
-
-                            if update_zone_response.status_code == 200:
-                                zones_updated += 1
-                            else:
-                                zones_failed += 1
-                                logging.warning(
-                                    f"Zone update failed for {zone_id}: HTTP {update_zone_response.status_code}"
-                                )
-                        else:
-                            zones_updated += 1  # No vertices to update
-
-                    except Exception as zone_err:
-                        zones_failed += 1
-                        logging.error(f"Zone update error for {zone.get('id')}: {zone_err}")
-
-                print(f"    Zones updated: {zones_updated}, failed: {zones_failed}")
-                if zones_failed > 0:
-                    errors.append(f"{zones_failed} zone updates failed")
-
-            # 6e. Update beacon positions
-            if beacons_on_map and scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
-                print(f"  Updating {len(beacons_on_map)} beacon positions...")
-                beacons_updated = 0
-                beacons_failed = 0
-
-                for beacon in beacons_on_map:
-                    try:
-                        beacon_id = beacon.get("id")
-                        old_x = beacon.get("x", 0)
-                        old_y = beacon.get("y", 0)
-
-                        beacon_update = {"x": old_x * scale_x, "y": old_y * scale_y}
-
-                        update_beacon_response = mistapi.api.v1.sites.beacons.updateSiteBeacon(
-                            self.apisession, site_id=site_id, beacon_id=beacon_id, body=beacon_update
-                        )
-
-                        if update_beacon_response.status_code == 200:
-                            beacons_updated += 1
-                        else:
-                            beacons_failed += 1
-
-                    except Exception as beacon_err:
-                        beacons_failed += 1
-                        logging.error(f"Beacon update error: {beacon_err}")
-
-                print(f"    Beacons updated: {beacons_updated}, failed: {beacons_failed}")
-                if beacons_failed > 0:
-                    errors.append(f"{beacons_failed} beacon updates failed")
-
-            # 6f. Update virtual beacon positions
-            if vbeacons_on_map and scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
-                print(f"  Updating {len(vbeacons_on_map)} virtual beacon positions...")
-                vbeacons_updated = 0
-                vbeacons_failed = 0
-
-                for vbeacon in vbeacons_on_map:
-                    try:
-                        vbeacon_id = vbeacon.get("id")
-                        old_x = vbeacon.get("x", 0)
-                        old_y = vbeacon.get("y", 0)
-
-                        vbeacon_update = {"x": old_x * scale_x, "y": old_y * scale_y}
-
-                        update_vbeacon_response = mistapi.api.v1.sites.vbeacons.updateSiteVBeacon(
-                            self.apisession, site_id=site_id, vbeacon_id=vbeacon_id, body=vbeacon_update
-                        )
-
-                        if update_vbeacon_response.status_code == 200:
-                            vbeacons_updated += 1
-                        else:
-                            vbeacons_failed += 1
-
-                    except Exception as vbeacon_err:
-                        vbeacons_failed += 1
-                        logging.error(f"Virtual beacon update error: {vbeacon_err}")
-
-                print(f"    Virtual beacons updated: {vbeacons_updated}, failed: {vbeacons_failed}")
-                if vbeacons_failed > 0:
-                    errors.append(f"{vbeacons_failed} virtual beacon updates failed")
-
-            # Summary
-            print(f"\n{'=' * 80}")
-            print("MAP REPLACEMENT COMPLETE")
-            print("=" * 80)
-            print(f"\nMap: {map_name}")
-            print(f"New Dimensions: {new_width_px} x {new_height_px} px")
-            print(f"New PPM: {new_ppm:.2f}")
-            print(f"Scaling Mode: {scaling_mode}")
-
-            if errors:
-                print(f"\n! Completed with {len(errors)} warning(s):")
-                for err in errors:
-                    print(f"  - {err}")
-                print(f"\nBackup file: {backup_file}")
-                print("Use the backup to restore if needed.")
-            else:
-                print("\nAll changes applied successfully!")
-                print(f"Backup file: {backup_file}")
-
-            logging.info(
-                f"Map replacement wizard completed for {map_id}: scaling_mode={scaling_mode}, errors={len(errors)}"
-            )
-
+            self._wizard_run(site_id, site_name)
         except EOFError:
             logging.info("EOF detected in map replacement wizard")
-            return
         except ImportError as import_err:
             print(f"\n! Missing required dependency: {import_err}")
             print("Install with: pip install Pillow")
-            logging.error(f"Map replacement wizard import error: {import_err}")
+            logging.error("Map replacement wizard import error: %s", import_err)
+        except Exception as err:
+            logging.error("Error in map replacement wizard: %s", err, exc_info=True)
+            print(f"\n! Error: {err}")
+
+    def _wizard_select_and_display_map(self, site_id: str, site_name: str) -> str | None:
+        """Select map and display current map info header. Returns map_id or None."""
+        print("\nThis wizard helps you replace a floor plan image while preserving")
+        print("device placements, zones, walls, and other map data.")
+        print("=" * 80)
+        print("\n" + "-" * 80)
+        print("STEP 1: Select Map to Replace")
+        print("-" * 80)
+        map_id = self._select_map_from_site(site_id, site_name)
+        if not map_id:
+            logging.info("Map replacement wizard aborted: No map selected")
+        return map_id
+
+    def _wizard_print_map_summary(self, current_map: dict, map_name: str, assets: dict) -> None:
+        """Print current map properties and asset counts to the console."""
+        print(f"\n{'-' * 80}")
+        print(f"Current Map: {map_name}")
+        print(f"{'-' * 80}")
+        print(f"  Dimensions: {current_map.get('width', 'N/A')} x {current_map.get('height', 'N/A')} px")
+        print(f"  PPM: {current_map.get('ppm', 'N/A')}")
+        print(f"  Has Image: {'Yes' if 'url' in current_map else 'No'}")
+        wall_nodes = len(current_map.get("wall_path", {}).get("nodes", []))
+        wayfinding_nodes = len(current_map.get("wayfinding_path", {}).get("nodes", []))
+        print("\nAssets on this map:")
+        print(f"  Devices: {len(assets['devices'])}")
+        print(f"  Zones: {len(assets['zones'])}")
+        print(f"  BLE Beacons: {len(assets['beacons'])}")
+        print(f"  Virtual Beacons: {len(assets['vbeacons'])}")
+        print(f"  Wall Nodes: {wall_nodes}")
+        print(f"  Wayfinding Nodes: {wayfinding_nodes}")
+
+    def _wizard_create_backup(self, site_id: str, map_id: str, map_name: str) -> str | None:
+        """Create a backup of current map geometry. Returns backup_file path or None on cancel."""
+        print(f"\n{'-' * 80}")
+        print("STEP 4: Creating Backup")
+        print("-" * 80)
+        backup_file = self._backup_map_geometry(
+            api_session=self.apisession,
+            site_id=site_id,
+            map_id=map_id,
+            map_name=map_name,
+            backup_reason="pre_replacement",
+        )
+        if backup_file:
+            print(f"Backup saved: {backup_file}")
+            return backup_file
+
+        print("! Warning: Backup may not have completed fully")
+        try:
+            proceed = input("Continue anyway? (yes/no): ").strip().lower()
+        except EOFError:
+            return None
+        if proceed not in ("yes", "y"):
+            print("\n! Operation cancelled")
+            return None
+        return ""
+
+    def _wizard_preview(
+        self,
+        current_map: dict,
+        map_name: str,
+        assets: dict,
+        new_width_px: int,
+        new_height_px: int,
+        new_ppm: float,
+        scaling_mode: str,
+        scale_x: float,
+        scale_y: float,
+    ) -> None:
+        """Print step-5 preview of what will change."""
+        print(f"\n{'-' * 80}")
+        print("STEP 5: Preview Changes")
+        print("-" * 80)
+        print(f"\nMap: {map_name}")
+        orig_w, orig_h = current_map.get("width", 0), current_map.get("height", 0)
+        orig_ppm = current_map.get("ppm", 0)
+        print(f"  Dimensions: {orig_w}x{orig_h} -> {new_width_px}x{new_height_px} px")
+        print(f"  PPM: {orig_ppm:.2f} -> {new_ppm:.2f}  Mode: {scaling_mode}")
+
+        if scaling_mode == "none" or (scale_x == 1.0 and scale_y == 1.0):
+            print("\n  No coordinate changes required")
             return
-        except Exception as e:
-            logging.error(f"Error in map replacement wizard: {e}", exc_info=True)
-            print(f"\n! Error: {e}")
+
+        print(f"\nCoordinate Translation (scale_x={scale_x:.4f}, scale_y={scale_y:.4f}):")
+        for device in assets["devices"][:5]:
+            old_x, old_y = device.get("x", 0), device.get("y", 0)
+            name = device.get("name", device.get("mac", "Unknown"))
+            print(f"    {name}: ({old_x:.1f}, {old_y:.1f}) -> ({old_x * scale_x:.1f}, {old_y * scale_y:.1f})")
+        if len(assets["devices"]) > 5:
+            print(f"    ... and {len(assets['devices']) - 5} more devices")
+        for zone in assets["zones"][:3]:
+            print(f"    Zone {zone.get('name', 'Unnamed')}: {len(zone.get('vertices', []))} vertices will be scaled")
+        if len(assets["zones"]) > 3:
+            print(f"    ... and {len(assets['zones']) - 3} more zones")
+
+    def _wizard_confirm(self) -> bool:
+        """Prompt for REPLACE confirmation. Returns True if confirmed."""
+        print(f"\n{'-' * 80}")
+        print("STEP 6: Confirm and Apply")
+        print("-" * 80)
+        print("\n! WARNING: This will modify the map and update all device/zone positions.")
+        try:
+            confirm = input("\nType 'REPLACE' to proceed: ").strip()
+        except EOFError:
+            logging.info("EOF detected during confirmation")
+            return False
+        if confirm != "REPLACE":
+            print("\n! Operation cancelled")
+            return False
+        return True
+
+    def _wizard_apply(
+        self,
+        site_id: str,
+        map_id: str,
+        file_path: str,
+        current_map: dict,
+        assets: dict,
+        new_width_px: int,
+        new_height_px: int,
+        new_ppm: float,
+        scaling_mode: str,
+        scale_x: float,
+        scale_y: float,
+        errors: list,
+    ) -> None:
+        """Apply all wizard changes: map update, image upload, and coordinate scaling."""
+        print("\nApplying changes...")
+        print("  Updating map properties...")
+        map_update = self._wizard_scale_geometry(current_map, scale_x, scale_y, new_width_px, new_height_px, new_ppm)
+        try:
+            resp = mistapi.api.v1.sites.maps.updateSiteMap(
+                self.apisession, site_id=site_id, map_id=map_id, body=map_update
+            )
+            if resp.status_code == 200:
+                print("    Map properties updated successfully")
+            else:
+                errors.append(f"Map update failed: HTTP {resp.status_code}")
+                print(f"    ! Failed to update map: HTTP {resp.status_code}")
+        except Exception as map_err:
+            errors.append(f"Map update error: {map_err}")
+            print(f"    ! Error updating map: {map_err}")
+
+        print("  Uploading new image...")
+        try:
+            upload_resp = mistapi.api.v1.sites.maps.addSiteMapImageFile(
+                self.apisession, site_id=site_id, map_id=map_id, file=file_path
+            )
+            if upload_resp.status_code in (200, 201):
+                print("    Image uploaded successfully")
+            else:
+                errors.append(f"Image upload failed: HTTP {upload_resp.status_code}")
+                print(f"    ! Failed to upload image: HTTP {upload_resp.status_code}")
+        except Exception as img_err:
+            errors.append(f"Image upload error: {img_err}")
+            print(f"    ! Error uploading image: {img_err}")
+
+        if scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
+            self._wizard_scale_devices(site_id, assets["devices"], scale_x, scale_y, errors)
+            self._wizard_scale_zones(site_id, assets["zones"], scale_x, scale_y, errors)
+            self._wizard_scale_beacons(site_id, assets["beacons"], scale_x, scale_y, errors)
+            self._wizard_scale_vbeacons(site_id, assets["vbeacons"], scale_x, scale_y, errors)
+
+    def _wizard_print_summary(
+        self,
+        map_name: str,
+        new_width_px: int,
+        new_height_px: int,
+        new_ppm: float,
+        scaling_mode: str,
+        backup_file: str,
+        errors: list,
+    ) -> None:
+        """Print the completion summary."""
+        print(f"\n{'=' * 80}")
+        print("MAP REPLACEMENT COMPLETE")
+        print("=" * 80)
+        print(f"\nMap: {map_name}  New: {new_width_px}x{new_height_px} px  PPM: {new_ppm:.2f}  Mode: {scaling_mode}")
+        if errors:
+            print(f"\n! Completed with {len(errors)} warning(s):")
+            for err in errors:
+                print(f"  - {err}")
+            print(f"\nBackup file: {backup_file}")
+        else:
+            print("\nAll changes applied successfully!")
+            print(f"Backup file: {backup_file}")
 
     def maps_without_images_report(self):
         """Generate report of maps that don't have uploaded images."""
