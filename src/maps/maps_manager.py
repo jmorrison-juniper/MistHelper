@@ -7958,7 +7958,11 @@ class MapsManager:
 
             except Exception as e:
                 logging.error(f"Clone operation failed: {e}", exc_info=True)
-                return html.Span(f"! Clone failed: {str(e)}", style={"color": "#ff4444"}), no_update
+                error_span = html.Span(
+                    "! Clone operation failed. Check server logs for details.",
+                    style={"color": "#ff4444"},
+                )
+                return error_span, no_update
 
         # Callback to refresh map dropdown after clone/delete operations or page load (cache bust)
         @app.callback(
