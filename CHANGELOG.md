@@ -9,6 +9,9 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Refactored
 
+- Reduced `intelligent_map_replacement_wizard` CC from 126 to ≤10 in `src/maps/maps_manager.py` (#294)
+  - Extracted `_wizard_run` (orchestration body), `_wizard_fetch_devices`, `_wizard_fetch_zones`, `_wizard_fetch_beacons`, `_wizard_scale_path_nodes`, and updated `_wizard_fetch_assets`, `_wizard_scale_geometry`, `intelligent_map_replacement_wizard` to delegate to helpers
+  - All new methods CC ≤10; `src/maps/*` remains in CI radon exclusion pending #293
 - Reduced `interactive_map_viewer` CC from 43 to 8 in `src/maps/maps_manager.py` (#295)
   - Extracted `_install_visualization_packages` (CC=5), `_check_visualization_packages` (CC=4), `_fetch_map_details` (CC=3), `_fetch_devices_on_map` (CC=3), `_fetch_zones_on_map` (CC=3), `_filter_clients_for_map` (CC=5), `_fetch_clients_on_map` (CC=8), `_handle_coverage_exception` (CC=3), `_fetch_map_coverage` (CC=6)
 - Reduced `launch_viewer_standalone` CC from 30 to 3 in `src/maps/maps_manager.py` (#296)
