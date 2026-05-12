@@ -35,7 +35,7 @@ PROGRESS_EMITTER: Any = None
 try:
     import mistapi
 except ImportError:  # pragma: no cover
-    mistapi = None  # type: ignore[assignment]
+    mistapi = None
 
 
 class FirmwareManager:
@@ -56,7 +56,7 @@ class FirmwareManager:
     - Rollback and recovery capabilities
     """
 
-    def __init__(  # type: ignore[no-untyped-def]
+    def __init__(
         self,
         apisession: Any,
         org_id: str,
@@ -212,6 +212,9 @@ class FirmwareManager:
         if scope_choice == "2" and site_filter is None:
             # Get specific site selection
             logging.debug("User selected specific site mode")
+            if self._select_site_fn is None:
+                logging.error("select_site_fn not configured")
+                return
             site_filter = self._select_site_fn()
             if not site_filter:
                 print(" No site selected. Exiting.")
@@ -520,8 +523,11 @@ class FirmwareManager:
                     import sys as _sys
 
                     _main_d = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
-                    DisplayUtils = _main_d.DisplayUtils  # lazy import avoids circular
-                    progress_bar = DisplayUtils.create_progress_bar(upgrade["progress"], bar_length=15)
+                    if _main_d is None:
+                        progress_bar = ""
+                    else:
+                        DisplayUtils = _main_d.DisplayUtils  # lazy import avoids circular
+                        progress_bar = DisplayUtils.create_progress_bar(upgrade["progress"], bar_length=15)
                     print(
                         f"  {upgrade['name']:<25} {upgrade['type']:<10} {upgrade['model']:<15} "
                         f"{upgrade['status']:<12} {progress_bar}"
@@ -561,8 +567,9 @@ class FirmwareManager:
 
         # Step 1: Ensure required CSVs are fresh
         print("\n  Preparing template and site data...")
-        self._check_cache_fn("OrgGatewayTemplates.csv", self._gateway_templates_fn)
-        self._check_cache_fn("SiteList.csv", self._sites_fn)
+        if self._check_cache_fn is not None:
+            self._check_cache_fn("OrgGatewayTemplates.csv", self._gateway_templates_fn)
+            self._check_cache_fn("SiteList.csv", self._sites_fn)
 
         # Step 2: Load gateway templates and build template-to-sites mapping
         template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()  # type: ignore[no-untyped-call]
@@ -614,8 +621,9 @@ class FirmwareManager:
         print("  Preparing template and site data...")
 
         # Generate required CSV files using existing export functions
-        self._check_cache_fn("OrgGatewayTemplates.csv", self._gateway_templates_fn)
-        self._check_cache_fn("SiteList.csv", self._sites_fn)
+        if self._check_cache_fn is not None:
+            self._check_cache_fn("OrgGatewayTemplates.csv", self._gateway_templates_fn)
+            self._check_cache_fn("SiteList.csv", self._sites_fn)
 
         logging.debug("Template CSV files ensured fresh")
 
@@ -629,6 +637,8 @@ class FirmwareManager:
         template_sites_mapping: dict[str, list[dict[str, Any]]] = {}  # template_id -> list of site info dicts
 
         try:
+            if self._get_csv_path_fn is None:
+                return template_name_to_id, template_sites_mapping
             # Load gateway templates
             gateway_templates_path = self._get_csv_path_fn("OrgGatewayTemplates.csv")
             with open(gateway_templates_path, encoding="utf-8") as f:
@@ -1298,6 +1308,8 @@ class FirmwareManager:
                 import sys as _sys
 
                 _main_msp = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
+                if _main_msp is None:
+                    continue
                 _BulkAPUpgrader = _main_msp.BulkAPFirmwareUpgrader  # lazy import avoids circular
                 upgrader = _BulkAPUpgrader(target_org_id, sites_for_upgrader, dry_run=dry_run)
                 upgrader.execute()
@@ -1456,6 +1468,8 @@ class FirmwareManager:
         import sys as _sys
 
         _main = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
+        if _main is None:
+            return
         BulkAPFirmwareUpgrader = _main.BulkAPFirmwareUpgrader  # lazy import avoids circular
         # Check for dry_run flag from global args
         dry_run = getattr(getattr(_main, "args", None), "dry_run", False)
@@ -1467,6 +1481,8 @@ class FirmwareManager:
         import sys as _sys
 
         _main = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
+        if _main is None:
+            return
         FirmwareUpgradeStatusChecker = _main.FirmwareUpgradeStatusChecker  # lazy import avoids circular
         # Set up the implementation to use this class's session and org_id
         global apisession
@@ -1556,6 +1572,8 @@ class FirmwareManager:
         import sys as _sys
 
         _main = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
+        if _main is None:
+            return
         BulkSwitchFirmwareUpgrader = _main.BulkSwitchFirmwareUpgrader  # lazy import avoids circular
         BulkSwitchFirmwareUpgrader(self.org_id, sites_to_upgrade_override).execute()
 
