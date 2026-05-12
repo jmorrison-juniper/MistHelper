@@ -5366,6 +5366,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Auto-map assignment status for a site",
     },
+    "getSitesByAPModel": {
+        "type": "natural_pk",
+        "primary_key": ["site_id"],
+        "indexes": ["org_id", "site_name", "ap_model", "ap_count"],
+        "unique_constraints": [],
+        "description": "Sites filtered by AP model with site address and AP count",
+    },
 }
 
 
@@ -17471,6 +17478,106 @@ class SiteAnomalyExporter:
             # Restore original logging levels
             for logger_name, original_level in original_levels.items():
                 logging.getLogger(logger_name).setLevel(original_level)
+
+
+class SitesByAPModelExporter:
+    """
+    Sites by AP Model Exporter.
+
+    Exports a CSV listing every site that contains APs of a user-selected model,
+    including the site address, AP count, and individual AP MAC addresses.
+    Site detail lookups use the mistapi pagination engine, which internally
+    parallelises multi-page fetches across all available CPU cores.
+    """
+
+    @staticmethod
+    def _get_ap_models(org_id: str) -> tuple[list[dict], list[str]]:  # type: ignore[type-arg]
+        """Return (ap_inventory, sorted_unique_models) for the organisation."""
+        inventory = APIFetchUtils.all_inventory_with_limit(org_id)
+        aps = [d for d in inventory if d.get("type") == "ap"]
+        models = sorted({d.get("model", "") for d in aps if d.get("model")})
+        return aps, models
+
+    @staticmethod
+    def _prompt_model_selection(models: list[str], aps: list[dict]) -> str | None:  # type: ignore[type-arg]
+        """Prompt user to select an AP model from the numbered list."""
+        print("\nAvailable AP models:")
+        for idx, model in enumerate(models, 1):
+            count = sum(1 for d in aps if d.get("model") == model)
+            print(f"  {idx:3d}. {model} ({count} APs)")
+        choice = InputUtils.safe_input(
+            "\nSelect model number (or Enter to cancel): ",
+            context="ap_model_selection",
+        )
+        if not choice.strip():
+            return None
+        try:
+            selected = int(choice.strip()) - 1
+            return models[selected] if 0 <= selected < len(models) else None
+        except (ValueError, IndexError):
+            print("! Invalid selection.")
+            return None
+
+    @staticmethod
+    def _build_export_rows(
+        aps: list[dict],  # type: ignore[type-arg]
+        model: str,
+        site_map: dict[str, dict],  # type: ignore[type-arg]
+    ) -> list[dict]:  # type: ignore[type-arg]
+        """Group APs by site and build one CSV row per matching site."""
+        grouped: dict[str, list[dict]] = {}  # type: ignore[type-arg]
+        for device in aps:
+            if device.get("model") == model and device.get("site_id"):
+                grouped.setdefault(device["site_id"], []).append(device)
+        rows = []
+        for site_id, devices in sorted(grouped.items(), key=lambda x: site_map.get(x[0], {}).get("name", "")):
+            site = site_map.get(site_id, {})
+            rows.append(
+                {
+                    "site_id": site_id,
+                    "site_name": site.get("name", ""),
+                    "ap_model": model,
+                    "ap_count": len(devices),
+                    "address": site.get("address", ""),
+                    "city": site.get("city", ""),
+                    "state": site.get("state", ""),
+                    "country": site.get("country_code", ""),
+                    "ap_macs": ", ".join(d.get("mac", "") for d in devices),
+                }
+            )
+        return rows
+
+    @staticmethod
+    def export_sites_by_ap_model() -> None:
+        """Export CSV of sites containing APs of a selected model with site address info."""
+        print("Export Sites by AP Model:")
+        logging.info("Starting export of sites by AP model...")
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+
+        print("! Fetching AP inventory from organization...")
+        aps, models = SitesByAPModelExporter._get_ap_models(org_id)
+        if not models:
+            print("! No APs found in organization inventory.")
+            return
+
+        model = SitesByAPModelExporter._prompt_model_selection(models, aps)
+        if not model:
+            return
+
+        print(f"! Fetching site details for sites with {model} APs...")
+        all_sites = APIFetchUtils.all_sites_with_limit(org_id)
+        site_map = {site["id"]: site for site in all_sites if site.get("id")}
+
+        rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)
+        if not rows:
+            print(f"! No sites found with {model} APs.")
+            return
+
+        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)
+        filename = f"SitesByAPModel_{safe_model}.csv"
+        DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")
+        print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")
+        logging.info(f"Exported {len(rows)} sites with AP model {model}")
 
 
 # ============================================================================
@@ -31007,6 +31114,7 @@ menu_actions = {
     "170": (SiteExportUtils.ospf_stats, "Export OSPF adjacency statistics for a selected site"),
     "171": (SiteExportUtils.mxedge_upgrade_status, "Export MxEdge upgrade status for a selected site"),
     "172": (SiteExportUtils.auto_map_assignment_status, "Export auto-map assignment status for a selected site"),
+    "173": (SitesByAPModelExporter.export_sites_by_ap_model, "Export sites by AP model with site address (CSV)"),
 }
 
 
@@ -31763,6 +31871,7 @@ class OperationRegistry:
         "170": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "171": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "172": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "173": {"category": "interactive_safe", "skip_reason": "Requires AP model selection"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)

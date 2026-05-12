@@ -5,6 +5,12 @@ All notable changes to MistHelper are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
+## [26.05.12.06.57] - 2026-05-12
+
+### Added
+
+- New menu item 173: `SitesByAPModelExporter.export_sites_by_ap_model` — prompts user to select an AP model from the models present in the organisation, then exports a CSV listing every site that contains APs of that model, including site name, site address, city, state, country, AP count, and individual AP MAC addresses. Uses mistapi's paginated fetch engine for parallel multi-page retrieval (#286)
+
 ## [26.05.11.00.00] - 2026-05-11
 
 ### Refactored
