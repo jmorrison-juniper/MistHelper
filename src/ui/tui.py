@@ -1953,7 +1953,9 @@ class MistHelperTUI:
             logging.info(f"TUI: Successfully executed {func_name}")
 
             if self.debug_mode:
-                result_len = len(result) if hasattr(result, "__len__") else "N/A"  # type: ignore[arg-type]  # guarded by hasattr
+                result_len: int | str = (
+                    len(result) if isinstance(result, (list, dict, str, tuple, set, bytes)) else "N/A"
+                )
                 logging.debug(f"TUI_DEBUG: Execution successful - result type: {result_type}, length: {result_len}")
 
         except KeyboardInterrupt:
