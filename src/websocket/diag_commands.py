@@ -4,15 +4,20 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
-import time
-import traceback
 
 import requests
 
 from src.websocket.context import WebSocketCmdDeps
-from src.websocket.manager import WebSocketManager
+from src.websocket.manager import (
+    WebSocketManager,
+    check_mist_credentials,
+    cleanup_ws_connection,
+    dump_ws_debug_state,
+    get_mist_credentials,
+    log_ws_error,
+    select_ws_site,
+)
 
 
 class WebSocketNetworkDiagCommands:
@@ -23,7 +28,7 @@ class WebSocketNetworkDiagCommands:
     """
 
     @staticmethod
-    def ping_device(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915
+    def ping_device(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """Execute ping command on a network device via WebSocket.
 
         Follows the documented Mist API pattern:
@@ -49,13 +54,9 @@ class WebSocketNetworkDiagCommands:
 
         try:
             # Interactive site and device selection
-            site_id = deps.select_site_fn()
-            if not site_id:
-                print("! No site selected. Operation cancelled.")
+            site_id = select_ws_site(deps, debug_mode)
+            if site_id is None:
                 return
-
-            if debug_mode:
-                print(f"[DEBUG] Selected site_id = {site_id}")
 
             # Get device selection
             device_id = deps.select_device_fn(site_id, device_type="all")
@@ -104,34 +105,10 @@ class WebSocketNetworkDiagCommands:
             print(f"-> Ping count: {ping_count}")
             print("-> Establishing WebSocket connection...")
 
-            # Initialize WebSocket manager
+            # Initialize WebSocket manager and connect+subscribe in one step
             websocket_manager = WebSocketManager(deps.apisession)
-
-            if debug_mode:
-                print("[DEBUG] WebSocketManager initialized")
-
-            # Connect to WebSocket
-            if not websocket_manager.connect():
-                print("! Failed to establish WebSocket connection")
+            if not websocket_manager.connect_and_subscribe(site_id, device_id, debug_mode):
                 return
-
-            if debug_mode:
-                print("[DEBUG] WebSocket connection established")
-
-            # Subscribe to device command channel
-            command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-            if not websocket_manager.subscribe_to_channel(command_channel):
-                print("! Failed to subscribe to device command channel")
-                websocket_manager.disconnect()
-                return
-
-            if debug_mode:
-                print(f"[DEBUG] Subscribed to channel: {command_channel}")
-
-            print("-> WebSocket connected and subscribed")
-
-            # Wait a moment for subscription to be established
-            time.sleep(1)
 
             # Issue ping command via REST API
             ping_payload = {"host": target_host, "count": ping_count}
@@ -143,17 +120,9 @@ class WebSocketNetworkDiagCommands:
                 print(f"[DEBUG] Ping payload = {ping_payload}")
 
             # Get authentication details for direct HTTP request
-            mist_host = getattr(deps.apisession, "host", None) or os.getenv("MIST_HOST")
-            mist_apitoken = getattr(deps.apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
-
-            if not mist_host or not mist_apitoken:
-                print("! Mist host or API token not found in session or environment")
-                websocket_manager.disconnect()
+            mist_host, mist_apitoken = get_mist_credentials(deps.apisession)
+            if not check_mist_credentials(websocket_manager, mist_host, mist_apitoken, debug_mode):
                 return
-
-            if debug_mode:
-                print(f"[DEBUG] mist_host = {mist_host}")
-                print(f"[DEBUG] API token length = {len(mist_apitoken) if mist_apitoken else 0}")
 
             # Make direct POST request to trigger ping
             ping_url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/ping"
@@ -238,42 +207,19 @@ class WebSocketNetworkDiagCommands:
             else:
                 print("! Timeout waiting for ping results")
                 logging.warning("WebSocket ping operation timed out")
-
-                if debug_mode:
-                    print("[DEBUG] Checking WebSocket manager state...")
-                    print(f"[DEBUG] Connected = {websocket_manager.connected}")
-                    print(f"[DEBUG] Subscribed channels = {websocket_manager.subscribed_channels}")
-                    with websocket_manager.results_lock:
-                        print(f"[DEBUG] Pending results = {list(websocket_manager.command_results.keys())}")
+                dump_ws_debug_state(websocket_manager, debug_mode)
 
         except Exception as ping_error:
             error_message = f"WebSocket ping operation failed: {ping_error}"
-            print(f"! {error_message}")
-            logging.error(error_message)
-
-            if debug_mode:
-                print("[DEBUG] Exception details:")
-                traceback.print_exc()
-
+            log_ws_error(error_message, debug_mode)
             logging.debug("EXIT: ping_device_websocket - error")
 
         finally:
-            # Always cleanup WebSocket connection
-            try:
-                websocket_manager_local = locals().get("websocket_manager")
-                if websocket_manager_local is not None:
-                    websocket_manager_local.disconnect()
-                    print("-> WebSocket connection closed")
-
-                    if debug_mode:
-                        print("[DEBUG] WebSocket cleanup completed")
-            except Exception as cleanup_error:
-                logging.warning(f"WebSocket cleanup error: {cleanup_error}")
-
+            cleanup_ws_connection(locals().get("websocket_manager"), debug_mode)
             logging.debug("EXIT: ping_device_websocket")
 
     @staticmethod
-    def arp_device(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915
+    def arp_device(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-nested-blocks
         """Execute ARP command on a network device via WebSocket.
 
         Follows the documented Mist API pattern for ARP commands:
@@ -294,13 +240,9 @@ class WebSocketNetworkDiagCommands:
 
         try:
             # Interactive site and device selection
-            site_id = deps.select_site_fn()
-            if not site_id:
-                print("! No site selected. Operation cancelled.")
+            site_id = select_ws_site(deps, debug_mode)
+            if site_id is None:
                 return
-
-            if debug_mode:
-                print(f"[DEBUG] Selected site_id = {site_id}")
 
             # Get device selection
             device_id = deps.select_device_fn(site_id, device_type="all")
@@ -366,48 +308,16 @@ class WebSocketNetworkDiagCommands:
             print(f"\n-> Executing ARP command on device {device_id}...")
             print("-> Establishing WebSocket connection...")
 
-            if debug_mode:
-                print("[DEBUG] WebSocketManager initialized")
-
-            # Initialize WebSocket manager
+            # Initialize WebSocket manager and connect+subscribe in one step
             websocket_manager = WebSocketManager(deps.apisession)
-
-            # Connect to WebSocket
-            if not websocket_manager.connect():
-                print("! Failed to establish WebSocket connection")
+            if not websocket_manager.connect_and_subscribe(site_id, device_id, debug_mode):
                 return
-
-            if debug_mode:
-                print("[DEBUG] WebSocket connection established")
-
-            # Subscribe to device command channel
-            command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-            if not websocket_manager.subscribe_to_channel(command_channel):
-                print("! Failed to subscribe to device command channel")
-                websocket_manager.disconnect()
-                return
-
-            if debug_mode:
-                print(f"[DEBUG] Subscribed to channel: {command_channel}")
-
-            print("-> WebSocket connected and subscribed")
-
-            # Wait a moment for subscription to be established
-            time.sleep(1)
 
             print("-> Issuing ARP command...")
 
             # Get authentication details for direct HTTP request
-            mist_host = getattr(deps.apisession, "host", None) or os.getenv("MIST_HOST")
-            mist_apitoken = getattr(deps.apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
-
-            if debug_mode:
-                print(f"[DEBUG] mist_host = {mist_host}")
-                print(f"[DEBUG] API token length = {len(mist_apitoken) if mist_apitoken else 'None'}")
-
-            if not mist_host or not mist_apitoken:
-                print("! Mist host or API token not found in session or environment")
-                websocket_manager.disconnect()
+            mist_host, mist_apitoken = get_mist_credentials(deps.apisession)
+            if not check_mist_credentials(websocket_manager, mist_host, mist_apitoken, debug_mode):
                 return
 
             # Make direct POST request to trigger ARP command
@@ -625,18 +535,9 @@ class WebSocketNetworkDiagCommands:
 
         except Exception as arp_error:
             error_message = f"WebSocket ARP operation failed: {arp_error}"
-            print(f"! {error_message}")
-            logging.error(error_message)
+            log_ws_error(error_message, False)
             logging.debug("EXIT: arp_device_websocket - error")
 
         finally:
-            # Always cleanup WebSocket connection
-            try:
-                websocket_manager_local = locals().get("websocket_manager")
-                if websocket_manager_local is not None:
-                    websocket_manager_local.disconnect()
-                    print("-> WebSocket connection closed")
-            except Exception as cleanup_error:
-                logging.warning(f"WebSocket cleanup error: {cleanup_error}")
-
+            cleanup_ws_connection(locals().get("websocket_manager"))
             logging.debug("EXIT: arp_device_websocket")

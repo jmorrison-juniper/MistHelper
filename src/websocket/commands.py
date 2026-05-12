@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
-import time
-import traceback
 from typing import Any
 
 import requests
 
 from src.websocket.context import WebSocketCmdDeps
-from src.websocket.manager import WebSocketManager
+from src.websocket.manager import (
+    WebSocketManager,
+    check_mist_credentials,
+    cleanup_ws_connection,
+    dump_ws_debug_state,
+    get_mist_credentials,
+    log_ws_error,
+    select_ws_site,
+)
 
 
 class WebSocketCommands:
@@ -30,7 +35,7 @@ class WebSocketCommands:
     """
 
     @staticmethod
-    def show_mac_table(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915
+    def show_mac_table(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """Execute show MAC table command on a switch device via WebSocket.
 
         MAC tables are a Layer 2 switching feature and are only meaningful on switches.
@@ -57,13 +62,9 @@ class WebSocketCommands:
 
         try:
             # Interactive site selection
-            site_id = deps.select_site_fn()
-            if not site_id:
-                print("! No site selected. Operation cancelled.")
+            site_id = select_ws_site(deps, debug_mode)
+            if site_id is None:
                 return
-
-            if debug_mode:
-                print(f"[DEBUG] Selected site_id = {site_id}")
 
             # Get device selection - MAC table is a Layer 2 switching feature
             print("-> MAC table is available on switches (Layer 2 devices)")
@@ -81,34 +82,10 @@ class WebSocketCommands:
             print(f"\n-> Executing show MAC table on device {device_id}...")
             print("-> Establishing WebSocket connection...")
 
-            # Initialize WebSocket manager
+            # Initialize WebSocket manager and connect+subscribe in one step
             websocket_manager = WebSocketManager(deps.apisession)
-
-            if debug_mode:
-                print("[DEBUG] WebSocketManager initialized")
-
-            # Connect to WebSocket
-            if not websocket_manager.connect():
-                print("! Failed to establish WebSocket connection")
+            if not websocket_manager.connect_and_subscribe(site_id, device_id, debug_mode):
                 return
-
-            if debug_mode:
-                print("[DEBUG] WebSocket connection established")
-
-            # Subscribe to device command channel
-            command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-            if not websocket_manager.subscribe_to_channel(command_channel):
-                print("! Failed to subscribe to device command channel")
-                websocket_manager.disconnect()
-                return
-
-            if debug_mode:
-                print(f"[DEBUG] Subscribed to channel: {command_channel}")
-
-            print("-> WebSocket connected and subscribed")
-
-            # Wait a moment for subscription to be established
-            time.sleep(1)
 
             # Issue show MAC table command via REST API
             mac_table_payload: dict[str, Any] = {}  # show_mac_table typically doesn't require additional parameters
@@ -120,17 +97,9 @@ class WebSocketCommands:
                 print(f"[DEBUG] MAC table payload = {mac_table_payload}")
 
             # Get authentication details for direct HTTP request
-            mist_host = getattr(deps.apisession, "host", None) or os.getenv("MIST_HOST")
-            mist_apitoken = getattr(deps.apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
-
-            if not mist_host or not mist_apitoken:
-                print("! Mist host or API token not found in session or environment")
-                websocket_manager.disconnect()
+            mist_host, mist_apitoken = get_mist_credentials(deps.apisession)
+            if not check_mist_credentials(websocket_manager, mist_host, mist_apitoken, debug_mode):
                 return
-
-            if debug_mode:
-                print(f"[DEBUG] mist_host = {mist_host}")
-                print(f"[DEBUG] API token length = {len(mist_apitoken) if mist_apitoken else 0}")
 
             # Make direct POST request to trigger show MAC table
             mac_table_url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/show_mac_table"
@@ -220,36 +189,14 @@ class WebSocketCommands:
                 print("  - Network connectivity issues")
                 print("! Note: MAC tables are primarily a Layer 2 (switch) feature")
                 logging.warning("WebSocket show MAC table operation timed out")
-
-                if debug_mode:
-                    print("[DEBUG] Checking WebSocket manager state...")
-                    print(f"[DEBUG] Connected = {websocket_manager.connected}")
-                    print(f"[DEBUG] Subscribed channels = {websocket_manager.subscribed_channels}")
-                    with websocket_manager.results_lock:
-                        print(f"[DEBUG] Pending results = {list(websocket_manager.command_results.keys())}")
+                dump_ws_debug_state(websocket_manager, debug_mode)
 
         except Exception as mac_table_error:
             error_message = f"WebSocket show MAC table operation failed: {mac_table_error}"
-            print(f"! {error_message}")
-            logging.error(error_message)
-
-            if debug_mode:
-                print("[DEBUG] Exception details:")
-                traceback.print_exc()
-
+            log_ws_error(error_message, debug_mode)
             logging.debug("EXIT: show_mac_table_websocket - error")
 
         finally:
             # Always cleanup WebSocket connection
-            try:
-                websocket_manager_local = locals().get("websocket_manager")
-                if websocket_manager_local is not None:
-                    websocket_manager_local.disconnect()
-                    print("-> WebSocket connection closed")
-
-                    if debug_mode:
-                        print("[DEBUG] WebSocket cleanup completed")
-            except Exception as cleanup_error:
-                logging.warning(f"WebSocket cleanup error: {cleanup_error}")
-
+            cleanup_ws_connection(locals().get("websocket_manager"), debug_mode)
             logging.debug("EXIT: show_mac_table_websocket")

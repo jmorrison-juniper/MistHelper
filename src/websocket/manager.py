@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 import threading
 import time
+import traceback
 from typing import Any
 
 try:
@@ -53,6 +55,70 @@ class _PerformanceMonitor:
             print(f"[PERF] {self.name} completed: {self.iteration_count} iterations in {elapsed:.1f}s")
 
 
+def log_ws_error(error_message: str, debug_mode: bool) -> None:
+    """Print and log a WebSocket operation error with optional debug traceback."""
+    print(f"! {error_message}")
+    logging.error(error_message)
+    if debug_mode:
+        print("[DEBUG] Exception details:")
+        traceback.print_exc()
+
+
+def cleanup_ws_connection(ws_manager: Any, debug_mode: bool = False) -> None:
+    """Disconnect WebSocket manager and log cleanup, swallowing cleanup errors."""
+    try:
+        if ws_manager is not None:
+            ws_manager.disconnect()
+            print("-> WebSocket connection closed")
+            if debug_mode:
+                print("[DEBUG] WebSocket cleanup completed")
+    except Exception as cleanup_error:
+        logging.warning(f"WebSocket cleanup error: {cleanup_error}")
+
+
+def get_mist_credentials(apisession: Any) -> tuple[str | None, str | None]:
+    """Extract Mist host and API token from session or environment variables."""
+    mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")
+    mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
+    return mist_host, mist_apitoken
+
+
+def dump_ws_debug_state(ws_mgr: Any, debug_mode: bool) -> None:
+    """Print WebSocket manager debug state when debug mode is active."""
+    if debug_mode:
+        print("[DEBUG] Checking WebSocket manager state...")
+        print(f"[DEBUG] Connected = {ws_mgr.connected}")
+        print(f"[DEBUG] Subscribed channels = {ws_mgr.subscribed_channels}")
+        with ws_mgr.results_lock:
+            print(f"[DEBUG] Pending results = {list(ws_mgr.command_results.keys())}")
+
+
+def select_ws_site(deps: Any, debug_mode: bool) -> str | None:
+    """Prompt for site selection, returning None and printing a message if cancelled."""
+    site_id: str | None = deps.select_site_fn() or None
+    if not site_id:
+        print("! No site selected. Operation cancelled.")
+        return None
+    if debug_mode:
+        print(f"[DEBUG] Selected site_id = {site_id}")
+    return site_id
+
+
+def check_mist_credentials(
+    ws_mgr: Any, mist_host: str | None, mist_apitoken: str | None, debug_mode: bool
+) -> bool:
+    """Validate Mist host and token; disconnect ws_mgr and return False if invalid."""
+    if not mist_host or not mist_apitoken:
+        print("! Mist host or API token not found in session or environment")
+        if ws_mgr is not None:
+            ws_mgr.disconnect()
+        return False
+    if debug_mode:
+        print(f"[DEBUG] mist_host = {mist_host}")
+        print(f"[DEBUG] API token length = {len(mist_apitoken) if mist_apitoken else 0}")
+    return True
+
+
 class WebSocketManager:
     """WebSocket Manager for Mist API real-time communications.
 
@@ -86,6 +152,7 @@ class WebSocketManager:
         # Results storage for command outputs
         self.command_results: dict[str, Any] = {}
         self.results_lock = threading.Lock()
+        self.websocket_thread: threading.Thread | None = None
 
     def connect(self) -> bool:
         """Establish WebSocket connection with proper authentication.
@@ -139,6 +206,43 @@ class WebSocketManager:
             self.logger.error(f"WebSocket connection failed: {connection_error}")
             return False
 
+    def connect_and_subscribe(self, site_id: str, device_id: str, debug_mode: bool) -> bool:
+        """Connect to WebSocket and subscribe to the device command channel.
+
+        Handles initialization, connection, subscription, and a brief stabilization
+        wait as a single atomic setup step used by all WebSocket command methods.
+
+        Args:
+            site_id (str): Mist site UUID.
+            device_id (str): Mist device UUID.
+            debug_mode (bool): Whether to print debug output.
+
+        Returns:
+            bool: True if connected and subscribed, False otherwise.
+        """
+        if debug_mode:
+            print("[DEBUG] WebSocketManager initialized")
+
+        if not self.connect():
+            print("! Failed to establish WebSocket connection")
+            return False
+
+        if debug_mode:
+            print("[DEBUG] WebSocket connection established")
+
+        command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"
+        if not self.subscribe_to_channel(command_channel):
+            print("! Failed to subscribe to device command channel")
+            self.disconnect()
+            return False
+
+        if debug_mode:
+            print(f"[DEBUG] Subscribed to channel: {command_channel}")
+
+        print("-> WebSocket connected and subscribed")
+        time.sleep(1)
+        return True
+
     def subscribe_to_channel(self, channel_path: str) -> bool:
         """Subscribe to a WebSocket channel for receiving command outputs.
 
@@ -175,8 +279,6 @@ class WebSocketManager:
         Returns:
             bool: True if confirmation received, False if timeout
         """
-        import time
-
         start_time = time.time()
 
         debug_mode = getattr(self, "debug_mode", False) or os.getenv("DEBUG", "").lower() in ["true", "1", "yes"]
@@ -202,7 +304,7 @@ class WebSocketManager:
         self.logger.warning(f"Timeout waiting for subscription confirmation: {channel_path}")
         return False
 
-    def wait_for_command_result(  # noqa: C901, PLR0912, PLR0915
+    def wait_for_command_result(  # noqa: C901, PLR0912, PLR0915  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-nested-blocks
         self,
         session_id: str,
         timeout_seconds: int = 30,
@@ -221,8 +323,6 @@ class WebSocketManager:
         Returns:
             dict: Complete command result data or None if timeout
         """
-        import time
-
         debug_mode = _is_debug_mode()
         start_time = time.time()
         last_activity = time.time()
@@ -490,8 +590,6 @@ class WebSocketManager:
                             or "thernet switching table" in all_raw_content.lower()
                         ):
                             # Search for "Ethernet switching table : XXX entries" pattern in reassembled buffer
-                            import re
-
                             # Look for pattern like "Ethernet switching table : 44 entries" (handles chunking)
                             table_pattern = r"ethernet switching table\s*:\s*(\d+)\s+entries"
                             match = re.search(table_pattern, all_raw_content.lower())
@@ -700,7 +798,7 @@ class WebSocketManager:
         self.connected = True
         self.logger.debug("WebSocket connection opened")
 
-    def _on_message(self, websocket_connection, message):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
+    def _on_message(self, websocket_connection, message):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915  # pylint: disable=too-many-branches,too-many-statements,too-many-nested-blocks
         r"""Handle incoming message from stream.
 
         Processes incoming messages following the documented Mist API format::
