@@ -54,8 +54,7 @@ class _PerformanceMonitor:
 
 
 class WebSocketManager:
-    """
-    WebSocket Manager for Mist API real-time communications.
+    """WebSocket Manager for Mist API real-time communications.
 
     This class handles WebSocket connections to the Mist API following the
     documented patterns: subscribe first, issue POST command, await results.
@@ -65,8 +64,7 @@ class WebSocketManager:
     """
 
     def __init__(self, mist_session: Any, mist_host: str | None = None) -> None:
-        """
-        Initialize WebSocket manager with Mist session.
+        """Initialize WebSocket manager with Mist session.
 
         Args:
             mist_session: Authenticated Mist API session
@@ -90,8 +88,7 @@ class WebSocketManager:
         self.results_lock = threading.Lock()
 
     def connect(self) -> bool:
-        """
-        Establish WebSocket connection with proper authentication.
+        """Establish WebSocket connection with proper authentication.
 
         Returns:
             bool: True if connection successful, False otherwise
@@ -143,8 +140,7 @@ class WebSocketManager:
             return False
 
     def subscribe_to_channel(self, channel_path: str) -> bool:
-        """
-        Subscribe to a WebSocket channel for receiving command outputs.
+        """Subscribe to a WebSocket channel for receiving command outputs.
 
         Args:
             channel_path (str): Channel path (e.g., "/sites/{site_id}/devices/{device_id}/cmd")
@@ -170,8 +166,7 @@ class WebSocketManager:
             return False
 
     def wait_for_subscription_confirmation(self, channel_path, timeout_seconds=10):  # type: ignore[no-untyped-def]
-        """
-        Wait for WebSocket subscription confirmation for a specific channel.
+        """Wait for WebSocket subscription confirmation for a specific channel.
 
         Args:
             channel_path (str): Channel path to wait for confirmation
@@ -213,8 +208,7 @@ class WebSocketManager:
         timeout_seconds: int = 30,
         activity_timeout_seconds: int | None = None,
     ) -> dict[str, Any] | None:
-        """
-        Wait for command result with specific session ID.
+        """Wait for command result with specific session ID.
 
         For commands like ping that produce multiple output segments,
         this will collect all results until the command completes.
@@ -702,23 +696,23 @@ class WebSocketManager:
         return None
 
     def _on_open(self, websocket_connection):  # type: ignore[no-untyped-def]
-        """WebSocket connection opened callback."""
+        """Handle connection-opened event from stream."""
         self.connected = True
         self.logger.debug("WebSocket connection opened")
 
     def _on_message(self, websocket_connection, message):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        WebSocket message received callback.
+        r"""Handle incoming message from stream.
 
-        Processes incoming messages following the documented Mist API format:
-        {
-            "event": "data",
-            "channel": "/sites/{site_id}/devices/{device_id}/cmd",
-            "data": {
-                "session": "session_id",
-                "raw": "64 bytes from 23.211.0.110: seq=8 ttl=58 time=12.323 ms\n"
+        Processes incoming messages following the documented Mist API format::
+
+            {
+                "event": "data",
+                "channel": "/sites/{site_id}/devices/{device_id}/cmd",
+                "data": {
+                    "session": "session_id",
+                    "raw": "64 bytes from 23.211.0.110: seq=8 ttl=58 time=12.323 ms\n"
+                }
             }
-        }
         """
         debug_mode = _is_debug_mode()  # type: ignore[no-untyped-call]
 
@@ -874,12 +868,12 @@ class WebSocketManager:
             self.logger.debug(f"Message type: {type(message)}")
 
     def _on_error(self, websocket_connection, error):  # type: ignore[no-untyped-def]
-        """WebSocket error callback."""
+        """Handle error events from connection."""
         self.logger.debug(f"WebSocket error type: {type(error).__name__}")
         self.logger.error(f"WebSocket error: {error}")
 
     def _on_close(self, websocket_connection, close_status_code, close_message):  # type: ignore[no-untyped-def]
-        """WebSocket connection closed callback."""
+        """Handle closed connection event."""
         self.connected = False
         self.logger.debug(f"WebSocket close details: status_code={close_status_code}, message={close_message}")
         self.logger.info(f"WebSocket connection closed (status: {close_status_code})")

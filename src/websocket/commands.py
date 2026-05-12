@@ -16,8 +16,7 @@ from src.websocket.manager import WebSocketManager
 
 
 class WebSocketCommands:
-    """
-    WebSocket Commands Class for Mist API device operations.
+    """WebSocket Commands Class for Mist API device operations.
 
     This class organizes all WebSocket-based device command functions following
     the agents guide requirement that "All features, or helpers need to live
@@ -32,8 +31,7 @@ class WebSocketCommands:
 
     @staticmethod
     def show_mac_table(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915
-        """
-        Execute show MAC table command on a switch device via WebSocket.
+        """Execute show MAC table command on a switch device via WebSocket.
 
         MAC tables are a Layer 2 switching feature and are only meaningful on switches.
         Routers/gateways operate at Layer 3 and typically don't maintain MAC tables.

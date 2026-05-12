@@ -16,8 +16,7 @@ from src.websocket.manager import WebSocketManager
 
 
 class WebSocketNetworkDiagCommands:
-    """
-    WebSocket Network Diagnostic Commands
+    """WebSocket Network Diagnostic Commands.
 
     Handles ping, ARP, and service ping operations via WebSocket.
     Extracted from WebSocketCommands.
@@ -25,8 +24,7 @@ class WebSocketNetworkDiagCommands:
 
     @staticmethod
     def ping_device(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915
-        """
-        Execute ping command on a network device via WebSocket.
+        """Execute ping command on a network device via WebSocket.
 
         Follows the documented Mist API pattern:
         1. Connect to WebSocket
@@ -276,8 +274,7 @@ class WebSocketNetworkDiagCommands:
 
     @staticmethod
     def arp_device(deps: WebSocketCmdDeps) -> None:  # noqa: C901, PLR0912, PLR0915
-        """
-        Execute ARP command on a network device via WebSocket.
+        """Execute ARP command on a network device via WebSocket.
 
         Follows the documented Mist API pattern for ARP commands:
         1. Subscribe to WebSocket channel
