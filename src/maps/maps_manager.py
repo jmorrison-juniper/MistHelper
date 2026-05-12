@@ -2740,7 +2740,207 @@ class MapsManager:
         print("\n! Feature coming soon: Map usage statistics")
         logging.info("map_usage_statistics called (placeholder)")
 
-    def interactive_map_viewer(self):
+    def _install_visualization_packages(self) -> None:
+        """Attempt to install plotly, dash, kaleido, and matplotlib via the global import_manager."""
+        _import_manager = globals().get("import_manager")
+        if _import_manager is None:
+            logging.debug("import_manager not available (standalone mode) - skipping package installation checks")
+            return
+        required = {"plotly": "plotly>=5.14.0", "dash": "dash>=2.9.0"}
+        optional = {"kaleido": "kaleido>=0.2.1", "matplotlib": "matplotlib>=3.5.0"}
+        for package_name, package_spec in required.items():
+            logging.debug(f"Checking required package: {package_name} ({package_spec})")
+            _import_manager.import_module_safely(
+                package_name, package_spec=package_spec, required=False, skip_deps=False, skip_upgrade=True
+            )
+            logging.debug(f"Package {package_name} check completed")
+        for package_name, package_spec in optional.items():
+            try:
+                logging.debug(f"Checking optional package: {package_name} ({package_spec})")
+                _import_manager.import_module_safely(
+                    package_name, package_spec=package_spec, required=False, skip_deps=False, skip_upgrade=True
+                )
+                logging.debug(f"Optional package {package_name} installed/verified")
+            except Exception as pkg_error:
+                logging.debug(f"Optional package {package_name} unavailable: {pkg_error}")
+
+    def _check_visualization_packages(self) -> "bool | None":
+        """Check available visualization packages and prompt user if plotly is unavailable.
+
+        Returns True if plotly/Dash is available, False for matplotlib fallback, or None to abort.
+        """
+        print("\nChecking visualization dependencies...")
+        logging.info("Starting visualization dependency check")
+        self._install_visualization_packages()
+        if importlib.util.find_spec("plotly"):
+            logging.info("Successfully imported plotly modules")
+            logging.debug("Using Plotly/Dash mode for interactive viewer")
+            return True
+        logging.error("plotly not available")
+        print("\n! Missing required package: plotly")
+        print("! Install with: pip install plotly dash")
+        confirm = input("\nWould you like to continue without interactive features? (yes/no): ").strip().lower()
+        if confirm not in ["yes", "y"]:
+            logging.info("User declined matplotlib fallback")
+            return None
+        if not importlib.util.find_spec("matplotlib"):
+            logging.error("matplotlib fallback also not available")
+            print("\n! No visualization libraries available")
+            print("! Install plotly: pip install plotly dash")
+            print("! Or matplotlib: pip install matplotlib")
+            return None
+        print("\n! Using matplotlib fallback (view-only mode)")
+        logging.info("Successfully imported matplotlib for fallback mode")
+        return False
+
+    def _fetch_map_details(self, site_id: str, map_id: str) -> "dict | None":
+        """Fetch map metadata from the API; warn if PPM is unset.
+
+        Returns the map data dict on success, or None on API failure.
+        """
+        print("\nLoading map data...")
+        logging.info(f"Fetching map details - site_id: {site_id}, map_id: {map_id}")
+        map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map_id)
+        logging.debug(f"getSiteMap API response: HTTP {map_response.status_code}")
+        if map_response.status_code != 200:
+            logging.error(
+                f"Failed to fetch map details - HTTP {map_response.status_code}, "
+                f"Response: {map_response.data if hasattr(map_response, 'data') else 'No data'}"
+            )
+            print(f"\n! Failed to fetch map: HTTP {map_response.status_code}")
+            return None
+        map_data = map_response.data
+        map_name = map_data.get("name", "Unnamed")
+        map_ppm = map_data.get("ppm", 0)
+        logging.info(f"Map loaded: {map_name} (ID: {map_id})")
+        logging.debug(
+            f"Map dimensions: {map_data.get('width', 1000)}x{map_data.get('height', 1000)}px, PPM: {map_ppm}, "
+            f"Orientation: {map_data.get('orientation', 0)}"
+        )
+        logging.debug(
+            f"Map has image: {'url' in map_data}, Has walls: {'wall_path' in map_data}, "
+            f"Has wayfinding: {'wayfinding_path' in map_data}"
+        )
+        print(f"\nMap: {map_name}")
+        print(f"Dimensions: {map_data.get('width', 1000)}x{map_data.get('height', 1000)} pixels")
+        if not map_ppm or map_ppm == 0:
+            logging.warning(f"MAP NOT SCALED: Map '{map_name}' has PPM=0 - image has not been scaled in Mist Portal")
+            print("\n" + "!" * 60)
+            print("! WARNING: This map image has NOT been scaled!")
+            print("! RF coverage heatmap and location features will not work correctly.")
+            print("! Please scale this map in Mist Portal: Location > Set Scale")
+            print("!" * 60 + "\n")
+        return map_data
+
+    def _fetch_devices_on_map(self, site_id: str, map_id: str) -> list:
+        """Fetch device stats for the site and filter to the given map_id."""
+        logging.info(f"Fetching device stats for site {site_id} (type=all)")
+        devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(self.apisession, site_id=site_id, limit=1000)
+        logging.debug(f"listSiteDevicesStats API response: HTTP {devices_response.status_code}")
+        if devices_response.status_code != 200:
+            logging.error(f"Failed to fetch devices - HTTP {devices_response.status_code}")
+            print(f"\n! Failed to fetch devices: HTTP {devices_response.status_code}")
+            return []
+        all_devices = devices_response.data
+        logging.debug(f"Total devices at site: {len(all_devices)}")
+        devices_on_map = [d for d in all_devices if d.get("map_id") == map_id]
+        logging.info(f"Devices on selected map: {len(devices_on_map)}")
+        device_type_counts: dict[str, int] = {}
+        for device in devices_on_map:
+            dtype = device.get("type", "unknown")
+            device_type_counts[dtype] = device_type_counts.get(dtype, 0) + 1
+        logging.debug(f"Device breakdown on map: {device_type_counts}")
+        return devices_on_map
+
+    def _fetch_zones_on_map(self, site_id: str, map_id: str) -> list:
+        """Fetch site zones and filter to the given map_id."""
+        logging.info(f"Fetching zones for site {site_id}")
+        try:
+            zones_response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
+            if zones_response.status_code == 200:
+                all_zones = zones_response.data
+                zones_on_map = [z for z in all_zones if z.get("map_id") == map_id]
+                logging.info(f"Total zones at site: {len(all_zones)}, Zones on this map: {len(zones_on_map)}")
+                logging.debug(f"Zones on map: {zones_on_map}")
+                return zones_on_map
+            logging.warning(f"Failed to fetch zones - HTTP {zones_response.status_code}")
+            return []
+        except Exception as zone_error:
+            logging.error(f"Error fetching zones: {zone_error}", exc_info=True)
+            return []
+
+    def _filter_clients_for_map(self, all_clients: list, map_id: str) -> list:
+        """Return clients whose map_id matches and who have valid x/y coordinates."""
+        return [
+            c for c in all_clients if c.get("map_id") == map_id and c.get("x") is not None and c.get("y") is not None
+        ]
+
+    def _fetch_clients_on_map(self, site_id: str, map_id: str) -> list:
+        """Fetch wireless client stats with pagination and filter to map_id with valid x/y coordinates."""
+        try:
+            logging.info(f"Fetching connected wireless client stats for site {site_id}")
+            clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+                self.apisession, site_id=site_id, limit=1000
+            )
+            if clients_response.status_code != 200:
+                logging.warning(f"Failed to fetch client stats - HTTP {clients_response.status_code}")
+                return []
+            all_clients = mistapi.get_all(response=clients_response, mist_session=self.apisession)
+            logging.info(f"Total wireless clients retrieved: {len(all_clients)}")
+            client_map_ids = {c.get("map_id") for c in all_clients if c.get("map_id")}
+            logging.info(f"Client map_ids found: {client_map_ids}")
+            logging.info(f"Looking for map_id: {map_id}")
+            clients_on_map = self._filter_clients_for_map(all_clients, map_id)
+            logging.info(f"Clients on this map (after filtering): {len(clients_on_map)}")
+            if clients_on_map:
+                logging.info(f"Sample client data: {clients_on_map[0]}")
+            elif all_clients:
+                logging.warning(f"No clients matched map_id {map_id}. Sample: {all_clients[0]}")
+            return clients_on_map
+        except Exception as client_error:
+            logging.error(f"Error fetching client stats: {client_error}", exc_info=True)
+            return []
+
+    def _handle_coverage_exception(self, coverage_data: dict) -> None:
+        """Log and report an error-structure response from the RF coverage API."""
+        exception_str = str(coverage_data.get("exception", ""))
+        if "psycopg2" in exception_str or "database" in exception_str.lower():
+            logging.warning("RF Coverage temporarily unavailable: Mist backend database connectivity issue")
+            logging.debug(f"Coverage API backend error: {exception_str}")
+        else:
+            logging.error(f"Coverage API returned error response (first 500 chars): {exception_str[:500]}")
+            logging.debug(f"Coverage API full error response: {exception_str}")
+            logging.debug(f"Error details - Query: {coverage_data.get('query')}, URI: {coverage_data.get('uri')}")
+        print("  Note: RF Coverage heatmap unavailable (Mist backend issue) - continuing without it")
+
+    def _fetch_map_coverage(self, site_id: str, map_id: str) -> "dict | None":
+        """Fetch RF coverage heatmap data for the given map from the Mist location API."""
+        try:
+            logging.info(f"Fetching RF coverage data for map {map_id}")
+            coverage_url = f"/api/v1/sites/{site_id}/location/coverage"
+            coverage_params = {
+                "resolution": "fine",
+                "duration": "1d",
+                "map_id": map_id,
+                "type": "client",
+                "from_apollo": "true",  # Undocumented: forces Apollo backend instead of PostgreSQL
+            }
+            coverage_response = self.apisession.mist_get(coverage_url, query=coverage_params)
+            if coverage_response.status_code != 200:
+                logging.warning(f"Failed to fetch RF coverage data - HTTP {coverage_response.status_code}")
+                return None
+            coverage_data = coverage_response.data
+            if isinstance(coverage_data, dict) and "exception" in coverage_data:
+                self._handle_coverage_exception(coverage_data)
+                return None
+            result_count = len(coverage_data.get("results", [])) if coverage_data else 0
+            logging.info(f"RF coverage data retrieved: {result_count} grid points")
+            return coverage_data
+        except Exception as coverage_error:
+            logging.error(f"Error fetching RF coverage data: {coverage_error}", exc_info=True)
+            return None
+
+    def interactive_map_viewer(self) -> None:
         """Interactive map viewer with Plotly/Dash for viewing and editing.
 
         Supports:
@@ -2754,269 +2954,36 @@ class MapsManager:
         print("\n" + "-" * 80)
         print("INTERACTIVE MAP VIEWER")
         print("-" * 80)
-
         site_id, site_name = self.get_current_site()
         if not site_id:
             logging.warning("Interactive map viewer aborted: No site selected")
             return
-
         logging.debug(f"Interactive map viewer - Site: {site_name} (ID: {site_id})")
-
         try:
-            # Explicitly check and install required visualization packages
-            print("\nChecking visualization dependencies...")
-            logging.info("Starting visualization dependency check")
-            required_packages = {"plotly": "plotly>=5.14.0", "dash": "dash>=2.9.0"}
-            optional_viz_packages = {"kaleido": "kaleido>=0.2.1", "matplotlib": "matplotlib>=3.5.0"}
-
-            # Trigger installation check through global import_manager instance
-            # Access the global import_manager variable created at module initialization in MistHelper.py
-            # When running standalone, import_manager may not exist - skip dependency checks in that case
-            _import_manager = globals().get("import_manager")
-
-            if _import_manager is not None:
-                for package_name, package_spec in required_packages.items():
-                    logging.debug(f"Checking required package: {package_name} ({package_spec})")
-                    _import_manager.import_module_safely(
-                        package_name,
-                        package_spec=package_spec,
-                        required=False,  # Don't fail if can't install
-                        skip_deps=False,  # Allow installation
-                        skip_upgrade=True,  # Don't check for upgrades
-                    )
-                    logging.debug(f"Package {package_name} check completed")
-
-                # Optional packages (best-effort)
-                for package_name, package_spec in optional_viz_packages.items():
-                    try:
-                        logging.debug(f"Checking optional package: {package_name} ({package_spec})")
-                        _import_manager.import_module_safely(
-                            package_name, package_spec=package_spec, required=False, skip_deps=False, skip_upgrade=True
-                        )
-                        logging.debug(f"Optional package {package_name} installed/verified")
-                    except Exception as e:
-                        logging.debug(f"Optional package {package_name} unavailable: {e}")
-            else:
-                logging.debug("import_manager not available (standalone mode) - skipping package installation checks")
-
-            # Now attempt imports
-            if not importlib.util.find_spec("plotly"):
-                logging.error("plotly not available")
-                print("\n! Missing required package: plotly")
-                print("! Install with: pip install plotly dash")
-                confirm = input("\nWould you like to continue without interactive features? (yes/no): ").strip().lower()
-                if confirm not in ["yes", "y"]:
-                    logging.info("User declined matplotlib fallback")
-                    return
-                # Fallback to basic matplotlib if available
-                if not importlib.util.find_spec("matplotlib"):
-                    logging.error("matplotlib fallback also not available")
-                    print("\n! No visualization libraries available")
-                    print("! Install plotly: pip install plotly dash")
-                    print("! Or matplotlib: pip install matplotlib")
-                    return
-                print("\n! Using matplotlib fallback (view-only mode)")
-                logging.info("Successfully imported matplotlib for fallback mode")
-                use_plotly = False
-            else:
-                logging.info("Successfully imported plotly modules")
-                use_plotly = True
-                logging.debug("Using Plotly/Dash mode for interactive viewer")
-
-            # Select map to view and get list of all maps for dropdown
+            use_plotly = self._check_visualization_packages()
+            if use_plotly is None:
+                return
             logging.debug(f"Prompting user to select map from site {site_name}")  # nosec B608 — not SQL, just logging
             map_id, all_maps = self._select_map_from_site(site_id, site_name, return_all_maps=True)
             if not map_id:
                 logging.info("Map viewer aborted: No map selected")
                 return
-
             logging.debug(f"Selected map_id: {map_id}, Total maps available: {len(all_maps)}")
-
-            # Fetch map details
-            print("\nLoading map data...")
-            logging.info(f"Fetching map details - site_id: {site_id}, map_id: {map_id}")
-            map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map_id)
-
-            logging.debug(f"getSiteMap API response: HTTP {map_response.status_code}")
-            if map_response.status_code != 200:
-                logging.error(
-                    f"Failed to fetch map details - HTTP {map_response.status_code}, "
-                    f"Response: {map_response.data if hasattr(map_response, 'data') else 'No data'}"
-                )
-                print(f"\n! Failed to fetch map: HTTP {map_response.status_code}")
+            map_data = self._fetch_map_details(site_id, map_id)
+            if map_data is None:
                 return
-
-            map_data = map_response.data
-            map_name = map_data.get("name", "Unnamed")
-            map_width = map_data.get("width", 1000)
-            map_height = map_data.get("height", 1000)
-            map_ppm = map_data.get("ppm", 0)
-
-            logging.info(f"Map loaded: {map_name} (ID: {map_id})")
-            logging.debug(
-                f"Map dimensions: {map_width}x{map_height}px, PPM: {map_ppm}, "
-                f"Orientation: {map_data.get('orientation', 0)}"
-            )
-            logging.debug(
-                f"Map has image: {'url' in map_data}, Has walls: {'wall_path' in map_data}, "
-                f"Has wayfinding: {'wayfinding_path' in map_data}"
-            )
-
-            print(f"\nMap: {map_name}")
-            print(f"Dimensions: {map_width}x{map_height} pixels")
-
-            # Check if map has been scaled - PPM of 0 or very low indicates unscaled map
-            if not map_ppm or map_ppm == 0:
-                logging.warning(
-                    f"MAP NOT SCALED: Map '{map_name}' has PPM=0 - image has not been scaled in Mist Portal"
-                )
-                print("\n" + "!" * 60)
-                print("! WARNING: This map image has NOT been scaled!")
-                print("! RF coverage heatmap and location features will not work correctly.")
-                print("! Please scale this map in Mist Portal: Location > Set Scale")
-                print("!" * 60 + "\n")
-
-            # Fetch devices on this map (use stats API for status information)
             print("Loading devices...")
-            logging.info(f"Fetching device stats for site {site_id} (type=all)")
-            devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                self.apisession, site_id=site_id, limit=1000
-            )
-
-            logging.debug(f"listSiteDevicesStats API response: HTTP {devices_response.status_code}")
-            if devices_response.status_code != 200:
-                logging.error(f"Failed to fetch devices - HTTP {devices_response.status_code}")
-                print(f"\n! Failed to fetch devices: HTTP {devices_response.status_code}")
-                devices_on_map = []
-            else:
-                all_devices = devices_response.data
-                logging.debug(f"Total devices at site: {len(all_devices)}")
-                devices_on_map = [d for d in all_devices if d.get("map_id") == map_id]
-                logging.info(f"Devices on selected map: {len(devices_on_map)}")
-
-                # Log device type breakdown
-                device_type_counts = {}
-                for device in devices_on_map:
-                    device_type = device.get("type", "unknown")
-                    device_type_counts[device_type] = device_type_counts.get(device_type, 0) + 1
-                logging.debug(f"Device breakdown on map: {device_type_counts}")
-
+            devices_on_map = self._fetch_devices_on_map(site_id, map_id)
             print(f"Devices on map: {len(devices_on_map)}")
-
-            # Fetch zones for this site
-            logging.info(f"Fetching zones for site {site_id}")
-            try:
-                zones_response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
-
-                if zones_response.status_code == 200:
-                    all_zones = zones_response.data
-                    # Filter zones that are on this specific map
-                    zones_on_map = [z for z in all_zones if z.get("map_id") == map_id]
-                    logging.info(f"Total zones at site: {len(all_zones)}, Zones on this map: {len(zones_on_map)}")
-                    logging.debug(f"Zones on map: {zones_on_map}")
-                else:
-                    logging.warning(f"Failed to fetch zones - HTTP {zones_response.status_code}")
-                    zones_on_map = []
-            except Exception as zone_error:
-                logging.error(f"Error fetching zones: {zone_error}", exc_info=True)
-                zones_on_map = []
-
+            zones_on_map = self._fetch_zones_on_map(site_id, map_id)
             print(f"Zones on map: {len(zones_on_map)}")
-
-            # Fetch connected clients for the site to display on map
-            clients_on_map = []
-            try:
-                logging.info(f"Fetching connected wireless client stats for site {site_id}")
-                # Use stats API which includes location data (x, y, map_id)
-                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
-                    self.apisession, site_id=site_id, limit=1000
-                )
-
-                if clients_response.status_code == 200:
-                    # Use get_all to handle pagination
-                    all_clients = mistapi.get_all(response=clients_response, mist_session=self.apisession)
-                    logging.info(f"Total wireless clients retrieved: {len(all_clients)}")
-
-                    # Log all unique map_ids to see what we have
-                    client_map_ids = set(c.get("map_id") for c in all_clients if c.get("map_id"))
-                    logging.info(f"Client map_ids found: {client_map_ids}")
-                    logging.info(f"Looking for map_id: {map_id}")
-
-                    # Filter clients that have map location data matching this map
-                    clients_on_map = [
-                        c
-                        for c in all_clients
-                        if c.get("map_id") == map_id and c.get("x") is not None and c.get("y") is not None
-                    ]
-                    logging.info(f"Clients on this map (after filtering): {len(clients_on_map)}")
-
-                    if clients_on_map:
-                        logging.info(f"Sample client data: {clients_on_map[0]}")
-                    elif all_clients:
-                        logging.warning(
-                            f"No clients matched map_id {map_id}. "
-                            f"Sample of all clients: {all_clients[0] if all_clients else 'none'}"
-                        )
-                else:
-                    logging.warning(f"Failed to fetch client stats - HTTP {clients_response.status_code}")
-            except Exception as client_error:
-                logging.error(f"Error fetching client stats: {client_error}", exc_info=True)
-
+            clients_on_map = self._fetch_clients_on_map(site_id, map_id)
             print(f"Connected clients on map: {len(clients_on_map)}")
-
-            # Fetch RF coverage data from Mist API
-            coverage_data = None
-            try:
-                logging.info(f"Fetching RF coverage data for map {map_id}")
-                coverage_url = f"/api/v1/sites/{site_id}/location/coverage"
-                coverage_params = {
-                    "resolution": "fine",
-                    "duration": "1d",
-                    "map_id": map_id,
-                    "type": "client",
-                    "from_apollo": "true",  # Undocumented: forces Apollo backend instead of PostgreSQL
-                }
-
-                coverage_response = self.apisession.mist_get(coverage_url, query=coverage_params)
-
-                if coverage_response.status_code == 200:
-                    coverage_data = coverage_response.data
-
-                    # Check for error response structure
-                    if isinstance(coverage_data, dict) and "exception" in coverage_data:
-                        exception_str = str(coverage_data.get("exception", ""))
-
-                        if "psycopg2" in exception_str or "database" in exception_str.lower():
-                            logging.warning(
-                                "RF Coverage temporarily unavailable: Mist backend database connectivity issue"
-                            )
-                            logging.debug(f"Coverage API backend error: {exception_str}")
-                        else:
-                            logging.error(
-                                f"Coverage API returned error response (first 500 chars): {exception_str[:500]}"
-                            )
-                            logging.debug(f"Coverage API full error response: {exception_str}")
-                            logging.debug(
-                                f"Error details - Query: {coverage_data.get('query')}, URI: {coverage_data.get('uri')}"
-                            )
-
-                        coverage_data = None
-                        print("  Note: RF Coverage heatmap unavailable (Mist backend issue) - continuing without it")
-                    else:
-                        result_count = len(coverage_data.get("results", [])) if coverage_data else 0
-                        logging.info(f"RF coverage data retrieved: {result_count} grid points")
-                else:
-                    logging.warning(f"Failed to fetch RF coverage data - HTTP {coverage_response.status_code}")
-                    coverage_data = None
-            except Exception as coverage_error:
-                logging.error(f"Error fetching RF coverage data: {coverage_error}", exc_info=True)
-                coverage_data = None
-
-            # Fetch all sites for site selector dropdown in the viewer
+            coverage_data = self._fetch_map_coverage(site_id, map_id)
             print("Loading organization sites...")
             all_sites = self._fetch_sites()
             logging.info(f"Fetched {len(all_sites)} sites for site selector dropdown")
-
+            map_name = map_data.get("name", "Unnamed")
             if use_plotly:
                 logging.info(f"Launching Plotly/Dash viewer for map {map_name}")
                 self._launch_plotly_viewer(
@@ -3034,7 +3001,6 @@ class MapsManager:
             else:
                 logging.info(f"Launching matplotlib fallback viewer for map {map_name}")
                 self._launch_matplotlib_viewer(map_data, devices_on_map)
-
         except EOFError:
             logging.info("EOF detected during interactive map viewer")
             return
