@@ -1,5 +1,4 @@
-"""
-FirmwareManager - Firmware upgrade status checking and execution.
+"""FirmwareManager - Firmware upgrade status checking and execution.
 
 Manages firmware upgrades for APs, switches, and SSR devices across
 Mist organization sites.
@@ -40,8 +39,7 @@ except ImportError:  # pragma: no cover
 
 
 class FirmwareManager:
-    """
-    Advanced Firmware Management System for Mist Access Points
+    """Advanced Firmware Management System for Mist Access Points.
 
     This class provides comprehensive firmware upgrade capabilities including:
     1. Firmware status monitoring and reporting
@@ -69,8 +67,7 @@ class FirmwareManager:
         gateway_templates_fn: GeneratorFn | None = None,
         sites_fn: GeneratorFn | None = None,
     ) -> None:
-        """
-        Initialize FirmwareManager with API session and organization context.
+        """Initialize FirmwareManager with API session and organization context.
 
         Args:
             apisession: Authenticated Mist API session
@@ -105,8 +102,7 @@ class FirmwareManager:
         logging.info(f"FirmwareManager initialized for org_id: {org_id}")
 
     def _is_firmware_downgrade(self, current_version, target_version):  # type: ignore[no-untyped-def]  # noqa: C901
-        """
-        Check if the target version is a downgrade from the current version.
+        """Check if the target version is a downgrade from the current version.
 
         This method performs a basic version comparison to detect potential downgrades.
         SSR firmware versions typically follow patterns like: 6.3.4-7.r2, 6.3.5-37.sts
@@ -161,8 +157,7 @@ class FirmwareManager:
             return False
 
     def check_firmware_upgrade_status(self, scope_choice=None, site_filter=None):  # type: ignore[no-untyped-def]
-        """
-        Check current firmware upgrade status across the organization.
+        """Check current firmware upgrade status across the organization.
 
         This method provides comprehensive upgrade status monitoring with:
         1. Device-level firmware status from device statistics (fwupdate field)
@@ -238,8 +233,7 @@ class FirmwareManager:
         return self._execute_status_check(scope_choice, site_filter)  # type: ignore[no-untyped-call]
 
     def _continuous_monitoring_mode(self, site_filter=None):  # type: ignore[no-untyped-def]
-        """
-        Continuous monitoring mode that auto-refreshes upgrade status until complete or cancelled.
+        """Continuous monitoring mode that auto-refreshes upgrade status until complete or cancelled.
 
         Features:
         - Auto-refresh every 7 seconds with full device scan each iteration
@@ -314,8 +308,7 @@ class FirmwareManager:
             return
 
     def _show_org_level_upgrade_jobs(self):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Display org-level upgrade jobs with full configuration details including P2P settings.
+        """Display org-level upgrade jobs with full configuration details including P2P settings.
 
         Calls:
         1. GET /api/v1/orgs/{org_id}/devices/upgrade - List all org upgrade jobs
@@ -444,8 +437,7 @@ class FirmwareManager:
             logging.error(f"Error in _show_org_level_upgrade_jobs: {e}")
 
     def _execute_monitoring_check(self, site_filter=None):  # type: ignore[no-untyped-def]  # noqa: C901
-        """
-        Execute a single monitoring check iteration.
+        """Execute a single monitoring check iteration.
 
         This method performs a FULL fresh query of all devices on each call.
         It does NOT track specific devices from the first iteration - instead,
@@ -544,8 +536,7 @@ class FirmwareManager:
             return None
 
     def _upgrade_ap_firmware_by_gateway_template(self):  # type: ignore[no-untyped-def]
-        """
-        Advanced AP firmware upgrade organized by Gateway Template assignment.
+        """Advanced AP firmware upgrade organized by Gateway Template assignment.
 
         This method provides template-based firmware upgrades with:
         1. Interactive Gateway Template selection with site count display
@@ -614,8 +605,7 @@ class FirmwareManager:
         return self._execute_template_based_upgrade(sites_to_upgrade, selected_template_name)  # type: ignore[no-untyped-call]
 
     def _ensure_template_csv_freshness(self):  # type: ignore[no-untyped-def]
-        """
-        Ensure that required template and site CSV files are fresh and available.
+        """Ensure that required template and site CSV files are fresh and available.
 
         This method generates or refreshes the CSV files needed for template-based
         operations if they don't exist or are stale.
@@ -630,8 +620,7 @@ class FirmwareManager:
         logging.debug("Template CSV files ensured fresh")
 
     def _load_template_sites_mapping(self):  # type: ignore[no-untyped-def]
-        """
-        Load gateway templates and create mapping of templates to their assigned sites.
+        """Load gateway templates and create mapping of templates to their assigned sites.
 
         Returns:
             tuple: (template_name_to_id dict, template_sites_mapping dict)
@@ -680,8 +669,7 @@ class FirmwareManager:
             return {}, {}
 
     def _prompt_template_selection(self, template_name_to_id, template_sites_mapping):  # type: ignore[no-untyped-def]
-        """
-        Present interactive template selection with site counts.
+        """Present interactive template selection with site counts.
 
         Args:
             template_name_to_id: Dict mapping template names to IDs
@@ -738,8 +726,7 @@ class FirmwareManager:
                 return None, None
 
     def _execute_template_based_upgrade(self, sites_to_upgrade, template_name):  # type: ignore[no-untyped-def]
-        """
-        Execute firmware upgrade for all sites in a gateway template.
+        """Execute firmware upgrade for all sites in a gateway template.
 
         This method reuses the existing bulk upgrade logic but with template context.
 
@@ -768,8 +755,7 @@ class FirmwareManager:
         return self._bulk_upgrade_ap_firmware_by_site(sites_to_upgrade_override=sites_to_upgrade)  # type: ignore[no-untyped-call]
 
     def execute_firmware_upgrade_with_mode_selection(self):  # type: ignore[no-untyped-def]
-        """
-        Main entry point for firmware upgrades with mode selection.
+        """Main entry point for firmware upgrades with mode selection.
 
         Presents user with choice between:
         1. Site-based upgrade (existing behavior)
@@ -830,8 +816,7 @@ class FirmwareManager:
                 return
 
     def _execute_msp_multi_org_upgrade(self):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0915
-        """
-        Execute firmware upgrade across multiple MSPs and organizations.
+        """Execute firmware upgrade across multiple MSPs and organizations.
 
         This mode allows MSP administrators to:
         1. Select multiple MSPs (if multiple available)
@@ -961,8 +946,7 @@ class FirmwareManager:
         return results
 
     def _select_msps_for_upgrade(self):  # type: ignore[no-untyped-def]
-        """
-        Select MSPs for multi-org upgrade with support for multi-selection.
+        """Select MSPs for multi-org upgrade with support for multi-selection.
 
         Supports:
         - Single selection by index
@@ -1018,8 +1002,7 @@ class FirmwareManager:
         return [msp_privileges[idx] for idx in selected_indices]
 
     def _select_orgs_for_upgrade(self, msp_id, msp_name):  # type: ignore[no-untyped-def]  # noqa: C901
-        """
-        Fetch orgs from MSP and let user select which to upgrade.
+        """Fetch orgs from MSP and let user select which to upgrade.
 
         Supports:
         - Single selection by index
@@ -1098,8 +1081,7 @@ class FirmwareManager:
             return None
 
     def _select_sites_for_org_upgrade(self, target_org_id, org_name):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Fetch sites from org and let user select which to upgrade.
+        """Fetch sites from org and let user select which to upgrade.
 
         Supports:
         - Single selection by index
@@ -1194,8 +1176,7 @@ class FirmwareManager:
             return None
 
     def _parse_selection_input(self, user_input: str, max_count: int) -> list:  # type: ignore[type-arg]  # noqa: C901
-        """
-        Parse user selection input into list of 0-based indices.
+        """Parse user selection input into list of 0-based indices.
 
         Supports:
         - Single index: "1" -> [0]
@@ -1433,8 +1414,7 @@ class FirmwareManager:
         return msps[0] if msps and len(msps) == 1 else None
 
     def _bulk_upgrade_ap_firmware_by_site(self, sites_to_upgrade_override=None):  # type: ignore[no-untyped-def]
-        """
-        Advanced bulk upgrade AP firmware for APs at selected site(s).
+        """Advanced bulk upgrade AP firmware for APs at selected site(s).
 
         This method provides comprehensive firmware upgrade capabilities with:
         1. Bulk site mode: Reads APUpgradeSiteList.CSV for multi-site upgrades
@@ -1503,8 +1483,7 @@ class FirmwareManager:
     # ===============================================================================
 
     def execute_switch_firmware_upgrade_with_mode_selection(self):  # type: ignore[no-untyped-def]
-        """
-        Main entry point for switch firmware upgrades with mode selection.
+        """Main entry point for switch firmware upgrades with mode selection.
 
         Presents user with choice between:
         1. Site-based upgrade (individual site selection)
@@ -1553,8 +1532,7 @@ class FirmwareManager:
                 return
 
     def _bulk_upgrade_switch_firmware_by_site(self, sites_to_upgrade_override=None):  # type: ignore[no-untyped-def]
-        """
-        Advanced bulk switch firmware upgrade for switches at selected site(s).
+        """Advanced bulk switch firmware upgrade for switches at selected site(s).
 
         This method provides comprehensive switch firmware upgrade capabilities with:
         1. Bulk site mode: Interactive site selection for multi-site upgrades
@@ -1582,8 +1560,7 @@ class FirmwareManager:
         BulkSwitchFirmwareUpgrader(self.org_id, sites_to_upgrade_override).execute()
 
     def _upgrade_switch_firmware_by_gateway_template(self):  # type: ignore[no-untyped-def]
-        """
-        Advanced switch firmware upgrade organized by Gateway Template assignment.
+        """Advanced switch firmware upgrade organized by Gateway Template assignment.
 
         This method provides template-based switch firmware upgrades with:
         1. Interactive Gateway Template selection with site count display
@@ -1649,8 +1626,7 @@ class FirmwareManager:
     # ===============================================================================
 
     def execute_ssr_firmware_upgrade_with_mode_selection(self):  # type: ignore[no-untyped-def]
-        """
-        Main entry point for SSR firmware upgrades with mode selection.
+        """Main entry point for SSR firmware upgrades with mode selection.
 
         Presents user with choice between:
         1. Site-based upgrade (individual site selection)
@@ -1710,8 +1686,7 @@ class FirmwareManager:
                 return
 
     def _bulk_upgrade_ssr_firmware_by_site(self, sites_to_upgrade_override=None):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        DESTRUCTIVE: Execute firmware upgrades on Session Smart Routers across selected sites.
+        """DESTRUCTIVE: Execute firmware upgrades on Session Smart Routers across selected sites.
 
         This function performs bulk firmware upgrades on SSR routing infrastructure with comprehensive
         safety checks and detailed progress tracking. Supports multiple upgrade strategies
@@ -2359,8 +2334,7 @@ class FirmwareManager:
             return upgrade_results
 
     def _upgrade_ssr_firmware_by_gateway_template(self):  # type: ignore[no-untyped-def]
-        """
-        Advanced SSR firmware upgrade organized by Gateway Template assignment.
+        """Advanced SSR firmware upgrade organized by Gateway Template assignment.
 
         This method provides template-based SSR firmware upgrades with:
         1. Interactive Gateway Template selection with site count display
