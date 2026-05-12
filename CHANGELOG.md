@@ -5,6 +5,14 @@ All notable changes to MistHelper are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
+## [Unreleased]
+
+### Refactored
+
+- Extracted `WebSocketManager`, `WebSocketNetworkDiagCommands`, and `WebSocketCommands` from `MistHelper.py` into `src/websocket/` modules, reducing `MistHelper.py` by ~1,789 lines (#209)
+- Added `src/websocket/context.py` with `WebSocketCmdDeps` dataclass for clean dependency injection into extracted WebSocket command classes
+- Updated CI radon exclusion to include `src/websocket/manager.py` (contains complex `wait_for_command_result` method)
+
 ## [26.05.12.07.25] - 2026-05-12
 
 ### Refactored
