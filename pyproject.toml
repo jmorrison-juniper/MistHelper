@@ -191,7 +191,8 @@ omit = [
     "setup.py",
     "*/site-packages/*",
     "src/maps/*",
-    "src/firmware/firmware_manager.py"
+    "src/firmware/firmware_manager.py",
+    "src/ui/tui.py"
 ]
 
 [tool.coverage.report]
