@@ -5,6 +5,12 @@ All notable changes to MistHelper are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
+## [26.05.11.00.00] - 2026-05-11
+
+### Refactored
+
+- Extract `FirmwareManager` class (2327 lines) to `src/firmware/firmware_manager.py` using dependency injection pattern consistent with `BulkAPFirmwareUpgrader`, `OrgLevelAPFirmwareUpgrader`, and other extracted firmware modules. MistHelper.py retains a 50-line thin wrapper (#203)
+
 ## [26.05.07.16.34] - 2026-05-07
 
 ### Fixed
