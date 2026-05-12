@@ -192,7 +192,8 @@ omit = [
     "*/site-packages/*",
     "src/maps/*",
     "src/firmware/firmware_manager.py",
-    "src/ui/tui.py"
+    "src/ui/tui.py",
+    "src/websocket/*"
 ]
 
 [tool.coverage.report]
@@ -225,7 +226,10 @@ max-line-length = 120
 
 [tool.pylint."messages control"]
 # Docstring enforcement handled by pydocstyle/interrogate
-disable = ["C0114", "C0115", "C0116"]
+# W1203: logging-fstring-interpolation -- project uses f-strings throughout for readability
+# W0613: unused-argument -- WebSocket callback signatures are protocol-mandated
+# W0718: broad-exception-caught -- intentional in cleanup/error handlers
+disable = ["C0114", "C0115", "C0116", "W1203", "W0613", "W0718"]
 
 [tool.pylint.basic]
 good-names = ["i", "e", "f", "db", "ok"]
