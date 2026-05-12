@@ -75,7 +75,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
         --trusted-host files.pythonhosted.org
 
 # Copy application files
-COPY MistHelper.py __init__.py maps_manager.py wsgi.py ./
+COPY MistHelper.py __init__.py wsgi.py ./
 COPY src/ ./src/
 COPY web_portal/ ./web_portal/
 
