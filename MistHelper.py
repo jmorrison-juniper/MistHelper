@@ -36139,6 +36139,8 @@ class OperationRegistry:
             "skip_reason": "Bulk org data collection - runs 57 API calls, resource intensive",
         },
         "170": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "171": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "172": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)
