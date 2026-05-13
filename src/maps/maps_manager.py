@@ -33,6 +33,7 @@ from datetime import datetime
 from typing import Any
 
 from src.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer
+from src.maps.plotly_map_figure_builder import PlotlyMapFigureBuilder
 from src.maps.plotly_map_serializer import PlotlyMapDataSerializer
 from src.maps.plotly_map_templates import DashTemplateManager
 
@@ -3075,6 +3076,7 @@ class MapsManager:
 
         # Initialize template manager for CSS/HTML/metadata
         template_mgr = DashTemplateManager(org_id=self.org_id)
+        figure_builder = PlotlyMapFigureBuilder(logger=logging.getLogger(__name__))
         heatmap_renderer = PlotlyCoverageHeatmapRenderer(logger=logging.getLogger(__name__))
         serializer = PlotlyMapDataSerializer()
         app_meta = template_mgr.get_app_meta()
@@ -3146,204 +3148,9 @@ class MapsManager:
         else:
             logging.warning("Map has no background image URL")
 
-        # Add walls if present
-        if "wall_path" in map_data and map_data["wall_path"]:
-            wall_path = map_data["wall_path"]
-            logging.debug(f"Wall path data structure: {wall_path}")
-
-            if "nodes" in wall_path:
-                logging.info(f"Processing {len(wall_path['nodes'])} wall path nodes")
-
-                # Wall paths are SEGMENTS, not a continuous line
-                # Each node has 'edges' that define which other nodes it connects to
-                # We need to draw individual line segments based on edges
-
-                # First, build a lookup of nodes by name
-                node_lookup = {}
-                for node in wall_path["nodes"]:
-                    node_name = node.get("name", "")
-                    pos = node.get("position", {})
-                    if node_name and pos:
-                        node_lookup[node_name] = pos
-                        logging.debug(
-                            f"Wall node '{node_name}': x={pos.get('x')}, "
-                            f"y={pos.get('y')}, edges={node.get('edges', {})}"
-                        )
-
-                # Now draw segments based on edges
-                for node in wall_path["nodes"]:
-                    node_name = node.get("name", "")
-                    node_pos = node.get("position", {})
-                    edges = node.get("edges", {})
-
-                    if not node_pos or not edges:
-                        continue
-
-                    # Draw a line from this node to each connected node
-                    for edge_name in edges.keys():
-                        if edge_name in node_lookup:
-                            target_pos = node_lookup[edge_name]
-
-                            # Draw segment
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=[node_pos.get("x", 0), target_pos.get("x", 0)],
-                                    y=[node_pos.get("y", 0), target_pos.get("y", 0)],
-                                    mode="lines",
-                                    name="Walls",
-                                    line=dict(color="#ff3333", width=4),
-                                    visible=True,
-                                    showlegend=False,
-                                    hoverinfo="skip",
-                                )
-                            )
-
-                # Add one invisible trace just for the legend
-                fig.add_trace(
-                    go.Scatter(
-                        x=[None],
-                        y=[None],
-                        mode="lines",
-                        name="Walls",
-                        line=dict(color="#ff3333", width=4),
-                        visible=True,
-                        showlegend=True,
-                    )
-                )
-
-        # Add wayfinding paths if present
-        if "wayfinding_path" in map_data and map_data["wayfinding_path"]:
-            wf_path = map_data["wayfinding_path"]
-            logging.debug(f"Wayfinding path data structure: {wf_path}")
-
-            if "nodes" in wf_path:
-                logging.info(f"Processing {len(wf_path['nodes'])} wayfinding path nodes")
-
-                # Wayfinding paths also use edge-based segments like walls
-                # Build node lookup
-                node_lookup = {}
-                for node in wf_path["nodes"]:
-                    node_name = node.get("name", "")
-                    pos = node.get("position", {})
-                    if node_name and pos:
-                        node_lookup[node_name] = pos
-                        logging.debug(
-                            f"Wayfinding node '{node_name}': x={pos.get('x')}, "
-                            f"y={pos.get('y')}, edges={node.get('edges', {})}"
-                        )
-
-                # Draw segments based on edges
-                for node in wf_path["nodes"]:
-                    node_name = node.get("name", "")
-                    node_pos = node.get("position", {})
-                    edges = node.get("edges", {})
-
-                    if not node_pos or not edges:
-                        continue
-
-                    # Draw a line from this node to each connected node
-                    for edge_name in edges.keys():
-                        if edge_name in node_lookup:
-                            target_pos = node_lookup[edge_name]
-
-                            # Draw segment
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=[node_pos.get("x", 0), target_pos.get("x", 0)],
-                                    y=[node_pos.get("y", 0), target_pos.get("y", 0)],
-                                    mode="lines+markers",
-                                    name="Wayfinding",
-                                    line=dict(color="#4488ff", width=3, dash="dash"),
-                                    marker=dict(size=8, color="#4488ff"),
-                                    visible=True,
-                                    showlegend=False,
-                                    hoverinfo="skip",
-                                )
-                            )
-
-                # Add one invisible trace just for the legend
-                fig.add_trace(
-                    go.Scatter(
-                        x=[None],
-                        y=[None],
-                        mode="lines+markers",
-                        name="Wayfinding",
-                        line=dict(color="#4488ff", width=3, dash="dash"),
-                        marker=dict(size=8, color="#4488ff"),
-                        visible=True,
-                        showlegend=True,
-                    )
-                )
-
-        # Add zones if present
-        if zones and len(zones) > 0:
-            logging.info(f"Processing {len(zones)} zones on this map")
-            zone_colors = [
-                "rgba(255,165,0,0.2)",
-                "rgba(0,255,255,0.2)",
-                "rgba(255,0,255,0.2)",
-                "rgba(255,255,0,0.2)",
-                "rgba(0,255,0,0.2)",
-                "rgba(128,0,255,0.2)",
-            ]
-
-            for idx, zone in enumerate(zones):
-                zone_name = zone.get("name", f"Zone {idx + 1}")
-                vertices = zone.get("vertices", [])
-
-                logging.debug(f"Zone '{zone_name}': {len(vertices)} vertices - {vertices}")
-
-                if vertices and len(vertices) >= 3:
-                    # Extract x,y coordinates from vertices
-                    zone_x = [v.get("x", 0) for v in vertices]
-                    zone_y = [v.get("y", 0) for v in vertices]
-                    # Close the polygon
-                    zone_x.append(zone_x[0])
-                    zone_y.append(zone_y[0])
-
-                    color = zone_colors[idx % len(zone_colors)]
-                    border_color = color.replace("0.2", "0.8")  # More opaque border
-
-                    logging.debug(f"Drawing zone '{zone_name}' with {len(zone_x)} points")
-
-                    fig.add_trace(
-                        go.Scatter(
-                            x=zone_x,
-                            y=zone_y,
-                            mode="lines",
-                            name=f"Zone: {zone_name}",
-                            line=dict(color=border_color, width=2, dash="dot"),
-                            fill="toself",
-                            fillcolor=color,
-                            opacity=1.0,  # Don't apply additional opacity - it's in the color
-                            visible=True,
-                            showlegend=True,
-                            hovertext=f"Zone: {zone_name}",
-                            hoverinfo="text",
-                        )
-                    )
-
-                    # Add zone name label at upper-left corner
-                    min_x = min(zone_x)
-                    min_y = min(zone_y)
-                    fig.add_annotation(
-                        x=min_x + 10,  # Small offset from corner
-                        y=min_y + 10,
-                        text=f"<b>{zone_name}</b>",
-                        showarrow=False,
-                        font=dict(size=14, color="white", family="Arial Black"),
-                        bgcolor=border_color.replace("0.8", "0.9"),
-                        bordercolor="white",
-                        borderwidth=2,
-                        borderpad=4,
-                        xanchor="left",
-                        yanchor="top",
-                        name="Zone Label",  # For toggle control
-                    )
-                else:
-                    logging.warning(f"Zone '{zone_name}' has insufficient vertices: {len(vertices)}")
-        else:
-            logging.info("No zones found on this map")
+        figure_builder.add_walls(fig, map_data)
+        figure_builder.add_wayfinding(fig, map_data)
+        figure_builder.add_zones(fig, zones)
 
         # Add validation paths (site survey paths) if present
         if "sitesurvey_path" in map_data and map_data["sitesurvey_path"]:
