@@ -32,6 +32,7 @@ import sys
 from datetime import datetime
 from typing import Any
 
+from src.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer
 from src.maps.plotly_map_serializer import PlotlyMapDataSerializer
 from src.maps.plotly_map_templates import DashTemplateManager
 
@@ -3074,6 +3075,7 @@ class MapsManager:
 
         # Initialize template manager for CSS/HTML/metadata
         template_mgr = DashTemplateManager(org_id=self.org_id)
+        heatmap_renderer = PlotlyCoverageHeatmapRenderer(logger=logging.getLogger(__name__))
         serializer = PlotlyMapDataSerializer()
         app_meta = template_mgr.get_app_meta()
 
@@ -3869,131 +3871,14 @@ class MapsManager:
             logging.info("No BLE beacons found on this map")
 
         # Add RF Coverage Heatmap from Mist API data
-        if coverage_data and "results" in coverage_data and len(coverage_data.get("results", [])) > 0:
-            logging.info(f"Processing RF coverage data - {len(coverage_data.get('results', []))} grid points")
-
-            # API returns coordinates in METERS - must convert to pixels using PPM
-            result_def = coverage_data.get("result_def", [])
-            results = coverage_data.get("results", [])
-            gridsize_meters = coverage_data.get("gridsize", 1)
-
-            logging.debug(f"Coverage result_def: {result_def}")
-            logging.debug(f"Coverage gridsize: {gridsize_meters} meters, PPM: {ppm}")
-
-            # Find indices for data fields
-            try:
-                x_idx = result_def.index("x")
-                y_idx = result_def.index("y")
-                max_rssi_idx = result_def.index("max_rssi")
-                avg_rssi_idx = result_def.index("avg_rssi")
-            except ValueError as e:
-                logging.error(f"Coverage data missing expected fields: {e}")
-                x_idx, y_idx, max_rssi_idx, avg_rssi_idx = 0, 1, 4, 5
-
-            # Build grid data structure for heatmap
-            grid_data = {}
-            for result in results:
-                if len(result) <= max(x_idx, y_idx, max_rssi_idx, avg_rssi_idx):
-                    continue
-
-                x_meters = result[x_idx]
-                y_meters = result[y_idx]
-                pixel_x = x_meters * ppm
-                pixel_y = y_meters * ppm
-                max_rssi = result[max_rssi_idx]
-
-                grid_data[(pixel_x, pixel_y)] = max_rssi
-
-            if grid_data:
-                # Auto-scale color range based on actual data
-                all_rssi_values = [v for v in grid_data.values() if v is not None]
-                if all_rssi_values:
-                    min_rssi = min(all_rssi_values)  # Most negative (weakest)
-                    max_rssi = max(all_rssi_values)  # Closest to zero (strongest)
-                    logging.info(f"RF Coverage RSSI range: {min_rssi} dBm (weakest) to {max_rssi} dBm (strongest)")
-                else:
-                    min_rssi = -100
-                    max_rssi = -40
-
-                # Convert to regular grid for Heatmap trace
-                unique_x = sorted(set(x for x, y in grid_data.keys()))
-                unique_y = sorted(set(y for x, y in grid_data.keys()))
-
-                # Diagnostic logging for coordinate alignment debugging
-                logging.info(f"HEATMAP DEBUG - Map dimensions: {map_width}x{map_height} pixels, PPM: {ppm}")
-                logging.info(
-                    f"HEATMAP DEBUG - Coverage X range: {min(unique_x):.1f} to {max(unique_x):.1f} pixels "
-                    f"(from {min(unique_x) / ppm:.1f}m to {max(unique_x) / ppm:.1f}m)"
-                )
-                logging.info(
-                    f"HEATMAP DEBUG - Coverage Y range: {min(unique_y):.1f} to {max(unique_y):.1f} pixels "
-                    f"(from {min(unique_y) / ppm:.1f}m to {max(unique_y) / ppm:.1f}m)"
-                )
-                logging.info(
-                    f"HEATMAP DEBUG - Grid size: {len(unique_x)} x {len(unique_y)} = {len(grid_data)} data points"
-                )
-
-                # Create Z matrix for heatmap - use None for missing data points
-                # This prevents artificial values from being interpolated
-                z_matrix = []
-                for y_val in unique_y:
-                    row = []
-                    for x_val in unique_x:
-                        rssi = grid_data.get((x_val, y_val), None)  # None for missing - no fake data
-                        row.append(rssi)
-                    z_matrix.append(row)
-
-                # Custom colorscale: red (strongest/closest to 0) -> blue (weakest/most negative)
-                colorscale = [
-                    [0.0, "rgb(0, 0, 255)"],  # Blue (weakest/most negative)
-                    [0.33, "rgb(0, 255, 0)"],  # Green
-                    [0.50, "rgb(255, 255, 0)"],  # Yellow
-                    [0.67, "rgb(255, 165, 0)"],  # Orange
-                    [1.0, "rgb(255, 0, 0)"],  # Red (strongest/closest to 0)
-                ]
-
-                fig.add_trace(
-                    go.Heatmap(
-                        x=unique_x,
-                        y=unique_y,
-                        z=z_matrix,
-                        colorscale=colorscale,
-                        zmin=min_rssi,  # Auto-scale to actual data range
-                        zmax=max_rssi,
-                        opacity=0.5,
-                        name="RF Coverage",
-                        hovertemplate="X: %{x}<br>Y: %{y}<br>RSSI: %{z} dBm<extra></extra>",
-                        visible=False,
-                        showscale=True,  # Show color scale legend
-                        colorbar=dict(
-                            title=dict(text="RSSI (dBm)", side="right", font=dict(size=12, color="white")),
-                            thickness=20,
-                            len=0.5,
-                            y=0.95,
-                            yanchor="top",
-                            x=1.02,
-                            tickfont=dict(size=10, color="white"),
-                            tickmode="linear",
-                            tick0=min_rssi,
-                            dtick=(max_rssi - min_rssi) / 5,  # Show 6 tick marks
-                            outlinewidth=1,
-                            outlinecolor="white",
-                        ),
-                        connectgaps=True,  # Interpolate across gaps for smooth coverage
-                        zsmooth="best",  # Smooth interpolation between data points
-                    )
-                )
-
-                logging.info(
-                    f"Added RF Coverage heatmap: {len(grid_data)} cells "
-                    f"({gridsize_meters}m grid) with auto-scaled colors ({min_rssi} to {max_rssi} dBm)"
-                )
-            else:
-                logging.warning("No valid coverage grid data to visualize")
-        elif coverage_data:
-            logging.warning("Coverage data received but no results")
-        else:
-            logging.info("No RF coverage data available")
+        heatmap_trace = heatmap_renderer.build_heatmap_trace(
+            coverage_data=coverage_data,
+            ppm=ppm,
+            map_width=map_width,
+            map_height=map_height,
+        )
+        if heatmap_trace is not None:
+            fig.add_trace(heatmap_trace)
 
         # Add map origin marker (coordinate reference point)
         origin = map_data.get("origin", {}) or {}
