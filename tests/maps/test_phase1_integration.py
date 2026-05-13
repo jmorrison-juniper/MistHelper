@@ -1,15 +1,8 @@
-"""
-Integration tests for Phase 1: DashTemplateManager Integration
+"""Integration tests for Phase 1: DashTemplateManager integration."""
 
-Validates that DashTemplateManager is properly integrated into MapsManager,
-ensuring CSS/HTML templates are used correctly and UI rendering is unchanged.
-"""
-
-import pytest
 from unittest.mock import Mock, patch
 
 from src.maps.plotly_map_templates import DashTemplateManager
-from src.maps.maps_manager import MapsManager
 
 
 class TestDashTemplateManagerIntegration:
@@ -19,6 +12,7 @@ class TestDashTemplateManagerIntegration:
         """DashTemplateManager can be imported from maps_manager."""
         # This verifies the import statement exists in maps_manager.py
         from src.maps.maps_manager import DashTemplateManager
+
         assert DashTemplateManager is not None
 
     def test_template_manager_creates_instance(self):
@@ -191,6 +185,7 @@ class TestTemplateIntegrationWithMapsManager:
         """MapsManager properly imports DashTemplateManager."""
         # This import should succeed without errors
         from src.maps.maps_manager import DashTemplateManager
+
         assert DashTemplateManager is not None
 
     @patch("src.maps.maps_manager.Dash")
@@ -206,9 +201,7 @@ class TestTemplateIntegrationWithMapsManager:
             "update_title": "",
             "suppress_callback_exceptions": True,
         }
-        mock_mgr_instance.get_html_template.return_value = (
-            "<!DOCTYPE html><html><body>{%app_entry%}</body></html>"
-        )
+        mock_mgr_instance.get_html_template.return_value = "<!DOCTYPE html><html><body>{%app_entry%}</body></html>"
 
         # Verify mock setup
         assert mock_mgr_instance.get_app_meta.return_value is not None
@@ -235,8 +228,8 @@ class TestPhase1Completion:
     def test_phase1_integration_complete(self):
         """Phase 1 integration is complete with all components."""
         # Import both
-        from src.maps.plotly_map_templates import DashTemplateManager
         from src.maps.maps_manager import DashTemplateManager as MapsImportedDTM
+        from src.maps.plotly_map_templates import DashTemplateManager
 
         # They should be the same class
         assert DashTemplateManager is MapsImportedDTM

@@ -1,9 +1,4 @@
-"""
-Plotly/Dash Map Viewer Template Management
-
-Provides centralized management of HTML/CSS templates and styling for the
-interactive Plotly-based map viewer.
-"""
+"""Plotly/Dash map viewer template management."""
 
 
 class DashTemplateManager:
