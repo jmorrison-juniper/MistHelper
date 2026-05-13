@@ -26,6 +26,9 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   - Replaced inline `dcc.Store` payload dict/list construction for map config, available maps/sites, selected zone, refresh times, and cache bust
   - Replaced repeated dropdown/store map list serialization in site-switch and map-refresh callbacks
   - Added serializer unit tests in `tests/maps/test_plotly_map_serializer.py` (5 tests)
+- Extracted `PlotlyCoverageHeatmapRenderer` into `src/maps/plotly_heatmap_renderer.py` and delegated RF heatmap trace construction from `_launch_plotly_viewer` (#293, Phase 3)
+  - Replaced large inline coverage parsing/rendering block with `build_heatmap_trace(...)`
+  - Added heatmap renderer unit tests in `tests/maps/test_plotly_heatmap_renderer.py` (5 tests)
 
 ### Refactored
 
