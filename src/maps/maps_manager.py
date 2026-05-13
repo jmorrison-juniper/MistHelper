@@ -32,6 +32,8 @@ import sys
 from datetime import datetime
 from typing import Any
 
+from src.maps.plotly_map_templates import DashTemplateManager
+
 # Optional visualization imports — use find_spec for availability checks
 PLOTLY_AVAILABLE = importlib.util.find_spec("plotly") is not None
 DASH_AVAILABLE = importlib.util.find_spec("dash") is not None
@@ -3068,154 +3070,20 @@ class MapsManager:
         # update_title="" prevents "Updating..." flash in browser tab during callbacks
         # suppress_callback_exceptions=True is required for allow_duplicate=True on callback outputs
         logging.debug("Creating Dash application instance")
-        app = Dash(__name__, update_title="", title="MistHelper Map Viewer", suppress_callback_exceptions=True)
 
-        # Inject custom CSS for dark mode and responsive design
-        app.index_string = """
-        <!DOCTYPE html>
-        <html>
-            <head>
-                {%metas%}
-                <title>{%title%}</title>
-                {%favicon%}
-                {%css%}
-                <style>
-                    body {
-                        margin: 0;
-                        padding: 0;
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-                            Roboto, "Helvetica Neue", Arial, sans-serif;
-                        background-color: #1a1a1a;
-                        color: #e0e0e0;
-                    }
-                    #react-entry-point {
-                        height: 100vh;
-                        display: flex;
-                        flex-direction: column;
-                    }
-                    .main-container {
-                        flex: 1;
-                        display: flex;
-                        overflow: hidden;
-                    }
-                    .map-container {
-                        flex: 1;
-                        display: flex;
-                        flex-direction: column;
-                        padding: 15px;
-                        overflow: hidden;
-                    }
-                    .sidebar {
-                        width: 280px;
-                        background-color: #2d2d2d;
-                        padding: 20px;
-                        overflow-y: auto;
-                        border-left: 1px solid #444;
-                        box-shadow: -2px 0 10px rgba(0,0,0,0.3);
-                    }
-                    h1 {
-                        margin: 0;
-                        padding: 20px;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        color: white;
-                        font-size: 24px;
-                        font-weight: 600;
-                        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-                    }
-                    h3 {
-                        color: #a0a0ff;
-                        font-size: 16px;
-                        margin-top: 0;
-                        margin-bottom: 15px;
-                        border-bottom: 2px solid #444;
-                        padding-bottom: 8px;
-                    }
-                    .sidebar p {
-                        margin: 8px 0;
-                        color: #b0b0b0;
-                        font-size: 14px;
-                    }
-                    .sidebar hr {
-                        border: none;
-                        border-top: 1px solid #444;
-                        margin: 20px 0;
-                    }
-                    /* Custom checkbox styling */
-                    .sidebar label {
-                        color: #d0d0d0 !important;
-                        cursor: pointer;
-                        transition: color 0.2s;
-                    }
-                    .sidebar label:hover {
-                        color: #ffffff !important;
-                    }
-                    /* Graph container */
-                    #map-display {
-                        height: 100% !important;
-                        width: 100% !important;
-                    }
-                    .js-plotly-plot {
-                        height: 100% !important;
-                    }
-                    /* Info badges */
-                    .info-badge {
-                        display: inline-block;
-                        padding: 4px 12px;
-                        background-color: #3d3d3d;
-                        border-radius: 12px;
-                        margin: 4px 0;
-                        font-size: 13px;
-                        color: #a0a0ff;
-                    }
-                    .device-detail {
-                        background-color: #3d3d3d;
-                        padding: 12px;
-                        border-radius: 8px;
-                        margin: 8px 0;
-                        border-left: 3px solid #667eea;
-                    }
-                    .device-detail strong {
-                        color: #a0a0ff;
-                    }
-                    /* Dark theme dropdown styling */
-                    .dark-dropdown .Select-control {
-                        background-color: #3d3d3d !important;
-                        border-color: #555 !important;
-                    }
-                    .dark-dropdown .Select-menu-outer {
-                        background-color: #3d3d3d !important;
-                        border-color: #555 !important;
-                    }
-                    .dark-dropdown .Select-option {
-                        background-color: #3d3d3d !important;
-                        color: #e0e0e0 !important;
-                    }
-                    .dark-dropdown .Select-option:hover,
-                    .dark-dropdown .Select-option.is-focused {
-                        background-color: #505050 !important;
-                        color: #ffffff !important;
-                    }
-                    .dark-dropdown .Select-value-label,
-                    .dark-dropdown .Select-placeholder {
-                        color: #e0e0e0 !important;
-                    }
-                    .dark-dropdown .Select-arrow {
-                        border-color: #888 transparent transparent !important;
-                    }
-                    /* NOTE: CSS text-shadow doesn't work on Plotly SVG text elements.
-                       Text labels use annotations with bgcolor/bordercolor instead. */
-                </style>
-            </head>
-            <body>
-                {%app_entry%}
-                <footer>
-                    {%config%}
-                    {%scripts%}
-                    {%renderer%}
-                </footer>
-            </body>
-        </html>
-        """
+        # Initialize template manager for CSS/HTML/metadata
+        template_mgr = DashTemplateManager(org_id=self.org_id)
+        app_meta = template_mgr.get_app_meta()
+
+        app = Dash(
+            __name__,
+            update_title=app_meta["update_title"],
+            title=app_meta["title"],
+            suppress_callback_exceptions=app_meta["suppress_callback_exceptions"],
+        )
+
+        # Set app template and CSS from template manager
+        app.index_string = template_mgr.get_html_template()
 
         # Build figure
         logging.debug("Building Plotly figure")
