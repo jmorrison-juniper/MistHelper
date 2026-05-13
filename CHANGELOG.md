@@ -32,6 +32,9 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - Extracted `PlotlyMapFigureBuilder` into `src/maps/plotly_map_figure_builder.py` and delegated walls/wayfinding/zones rendering from `_launch_plotly_viewer` (#293, Phase 4)
   - Replaced large inline layer rendering blocks with `add_walls(...)`, `add_wayfinding(...)`, and `add_zones(...)`
   - Added figure builder unit tests in `tests/maps/test_plotly_map_figure_builder.py` (5 tests)
+- Extracted initial callback logic into `src/maps/plotly_map_callback_manager.py` and delegated `_launch_plotly_viewer` callbacks for layer toggles and click-details rendering (#293, Phase 5a)
+  - Replaced inline callback bodies with `apply_layer_toggles(...)` and `build_click_details(...)`
+  - Added callback manager unit tests in `tests/maps/test_plotly_map_callback_manager.py` (5 tests)
 
 ### Refactored
 

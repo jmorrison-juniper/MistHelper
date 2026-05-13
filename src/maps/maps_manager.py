@@ -33,6 +33,7 @@ from datetime import datetime
 from typing import Any
 
 from src.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer
+from src.maps.plotly_map_callback_manager import PlotlyMapCallbackManager
 from src.maps.plotly_map_figure_builder import PlotlyMapFigureBuilder
 from src.maps.plotly_map_serializer import PlotlyMapDataSerializer
 from src.maps.plotly_map_templates import DashTemplateManager
@@ -3075,6 +3076,7 @@ class MapsManager:
         logging.debug("Creating Dash application instance")
 
         # Initialize template manager for CSS/HTML/metadata
+        callback_manager = PlotlyMapCallbackManager()
         template_mgr = DashTemplateManager(org_id=self.org_id)
         figure_builder = PlotlyMapFigureBuilder(logger=logging.getLogger(__name__))
         heatmap_renderer = PlotlyCoverageHeatmapRenderer(logger=logging.getLogger(__name__))
@@ -5938,123 +5940,19 @@ class MapsManager:
             State("map-display", "figure"),
         )
         def toggle_layers(infra_layers, beacon_layers, client_layers, device_layers, filter_layers, current_fig):
-            # Combine all layer selections
-            all_layers = (
-                (infra_layers or [])
-                + (beacon_layers or [])
-                + (client_layers or [])
-                + (device_layers or [])
-                + (filter_layers or [])
+            return callback_manager.apply_layer_toggles(
+                current_fig=current_fig,
+                infra_layers=infra_layers,
+                beacon_layers=beacon_layers,
+                client_layers=client_layers,
+                device_layers=device_layers,
+                filter_layers=filter_layers,
             )
-
-            # Toggle traces (markers, lines, shapes)
-            for trace in current_fig["data"]:
-                trace_name = trace.get("name", "").lower()
-
-                # Infrastructure
-                if "wall" in trace_name:
-                    trace["visible"] = "walls" in all_layers
-                elif "wayfinding" in trace_name:
-                    trace["visible"] = "wayfinding" in all_layers
-                elif "zone" in trace_name:
-                    trace["visible"] = "zones" in all_layers
-                elif "validation" in trace_name:
-                    trace["visible"] = "validation" in all_layers
-                elif "rf coverage" in trace_name:
-                    trace["visible"] = "rf_heatmap" in all_layers
-                elif "map origin" in trace_name:
-                    trace["visible"] = "origin" in all_layers
-
-                # Beacons
-                elif "vbeacon" in trace_name or "virtual beacon" in trace_name:
-                    trace["visible"] = "vbeacons" in all_layers
-                elif "ble beacon" in trace_name or trace_name.startswith("beacon "):
-                    trace["visible"] = "ble_beacons" in all_layers
-
-                # Clients (with WiFi/Wired filtering)
-                elif "wifi client" in trace_name:
-                    trace["visible"] = "wifi_clients" in all_layers
-                elif "wired client" in trace_name:
-                    trace["visible"] = "wired_clients" in all_layers
-                elif "client" in trace_name:  # Generic clients (fallback)
-                    trace["visible"] = "wifi_clients" in all_layers or "wired_clients" in all_layers
-                elif "client-ap link" in trace_name:
-                    trace["visible"] = "show_client_ap" in all_layers
-
-                # Mesh links
-                elif "mesh link" in trace_name:
-                    trace["visible"] = "mesh_links" in all_layers
-
-                # Beacon coverage
-                elif "vbeacon coverage" in trace_name:
-                    trace["visible"] = "vbeacon_coverage" in all_layers
-
-                # Devices and their orientation indicators
-                elif "ap" in trace_name or "access point" in trace_name:
-                    trace["visible"] = "aps" in all_layers
-                elif "switch" in trace_name:
-                    trace["visible"] = "switches" in all_layers
-                elif "gateway" in trace_name:
-                    trace["visible"] = "gateways" in all_layers
-
-            # Toggle annotations (text labels)
-            for annotation in current_fig.get("layout", {}).get("annotations", []):
-                annotation_name = annotation.get("name", "").lower()
-
-                # Zone labels
-                if "zone label" in annotation_name:
-                    annotation["visible"] = "zones" in all_layers
-
-                # Device labels
-                elif "access points label" in annotation_name:
-                    annotation["visible"] = "aps" in all_layers
-                elif "switches label" in annotation_name:
-                    annotation["visible"] = "switches" in all_layers
-                elif "gateways label" in annotation_name:
-                    annotation["visible"] = "gateways" in all_layers
-
-                # Client labels
-                elif "wifi clients label" in annotation_name:
-                    annotation["visible"] = "wifi_clients" in all_layers
-                elif "wired clients label" in annotation_name:
-                    annotation["visible"] = "wired_clients" in all_layers
-                elif "clients label" in annotation_name:  # Generic clients (fallback)
-                    annotation["visible"] = "wifi_clients" in all_layers or "wired_clients" in all_layers
-
-                # Beacon labels
-                elif "virtual beacons label" in annotation_name:
-                    annotation["visible"] = "vbeacons" in all_layers
-                elif "ble beacons label" in annotation_name:
-                    annotation["visible"] = "ble_beacons" in all_layers
-
-            return current_fig
 
         # Callback for click events - enhanced device details display
         @app.callback(Output("click-data", "children"), Input("map-display", "clickData"))
         def display_click_data(clickData):
-            if clickData is None:
-                return [
-                    html.H3("Device Info"),
-                    html.P("Click a device for details", style={"color": "#888", "fontStyle": "italic"}),
-                ]
-
-            point = clickData["points"][0]
-            hover_text = point.get("hovertext", "")
-
-            # Parse hover text to extract device info
-            details = []
-            if hover_text:
-                lines = hover_text.split("<br>")
-                for line in lines:
-                    if line.strip():
-                        details.append(
-                            html.P(
-                                line.replace("<b>", "").replace("</b>", ""),
-                                className="device-detail" if "Type:" in line else None,
-                            )
-                        )
-
-            return [html.H3("Device Details"), html.Div(details if details else [html.P("No device data available")])]
+            return callback_manager.build_click_details(click_data=clickData, html=html)
 
         # Callback to add multi-unit labels to drawn shapes
         @app.callback(
