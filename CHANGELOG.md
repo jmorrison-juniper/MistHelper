@@ -29,6 +29,9 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - Extracted `PlotlyCoverageHeatmapRenderer` into `src/maps/plotly_heatmap_renderer.py` and delegated RF heatmap trace construction from `_launch_plotly_viewer` (#293, Phase 3)
   - Replaced large inline coverage parsing/rendering block with `build_heatmap_trace(...)`
   - Added heatmap renderer unit tests in `tests/maps/test_plotly_heatmap_renderer.py` (5 tests)
+- Extracted `PlotlyMapFigureBuilder` into `src/maps/plotly_map_figure_builder.py` and delegated walls/wayfinding/zones rendering from `_launch_plotly_viewer` (#293, Phase 4)
+  - Replaced large inline layer rendering blocks with `add_walls(...)`, `add_wayfinding(...)`, and `add_zones(...)`
+  - Added figure builder unit tests in `tests/maps/test_plotly_map_figure_builder.py` (5 tests)
 
 ### Refactored
 
