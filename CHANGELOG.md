@@ -22,6 +22,10 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - Reduced `interactive_map_viewer` CC from 43 to 8 in `src/maps/maps_manager.py` (#295)
   - Extracted `_install_visualization_packages` (CC=5), `_check_visualization_packages` (CC=4), `_fetch_map_details` (CC=3), `_fetch_devices_on_map` (CC=3), `_fetch_zones_on_map` (CC=3), `_filter_clients_for_map` (CC=5), `_fetch_clients_on_map` (CC=8), `_handle_coverage_exception` (CC=3), `_fetch_map_coverage` (CC=6)
 - Reduced `launch_viewer_standalone` CC from 30 to 3 in `src/maps/maps_manager.py` (#296)
+- Extracted `PlotlyMapDataSerializer` into `src/maps/plotly_map_serializer.py` and integrated `_launch_plotly_viewer` store/dropdown payload construction through serializer helpers (#293, Phase 2)
+  - Replaced inline `dcc.Store` payload dict/list construction for map config, available maps/sites, selected zone, refresh times, and cache bust
+  - Replaced repeated dropdown/store map list serialization in site-switch and map-refresh callbacks
+  - Added serializer unit tests in `tests/maps/test_plotly_map_serializer.py` (5 tests)
 
 ### Refactored
 
