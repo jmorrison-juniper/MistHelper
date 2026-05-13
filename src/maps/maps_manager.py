@@ -32,6 +32,7 @@ import sys
 from datetime import datetime
 from typing import Any
 
+from src.maps.plotly_map_serializer import PlotlyMapDataSerializer
 from src.maps.plotly_map_templates import DashTemplateManager
 
 # Optional visualization imports — use find_spec for availability checks
@@ -3073,6 +3074,7 @@ class MapsManager:
 
         # Initialize template manager for CSS/HTML/metadata
         template_mgr = DashTemplateManager(org_id=self.org_id)
+        serializer = PlotlyMapDataSerializer()
         app_meta = template_mgr.get_app_meta()
 
         app = Dash(
@@ -5060,32 +5062,32 @@ class MapsManager:
                 # Hidden stores for state management
                 dcc.Store(
                     id="map-config-store",
-                    data={
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "map_id": map_id,
-                        "map_name": map_data.get("name", "Unknown"),
-                        "ppm": ppm,
-                        "map_width": map_width,
-                        "map_height": map_height,
-                    },
+                    data=serializer.build_map_config(
+                        site_id=site_id,
+                        site_name=site_name,
+                        map_id=map_id,
+                        map_name=map_data.get("name", "Unknown"),
+                        ppm=ppm,
+                        map_width=map_width,
+                        map_height=map_height,
+                    ),
                 ),
                 # Store for available maps list (for dropdown)
                 dcc.Store(
                     id="available-maps-store",
-                    data=[{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in all_maps],
+                    data=serializer.build_named_items(all_maps, default_name="Unnamed"),
                 ),
                 # Store for available sites list (for dropdown)
                 dcc.Store(
                     id="available-sites-store",
-                    data=[{"id": s.get("id"), "name": s.get("name", "Unnamed Site")} for s in all_sites],
+                    data=serializer.build_named_items(all_sites, default_name="Unnamed Site"),
                 ),
                 # Store for tracking selected zone ID
-                dcc.Store(id="selected-zone-store", data={"zone_id": None, "zone_name": None}),
+                dcc.Store(id="selected-zone-store", data=serializer.build_selected_zone_store()),
                 # Store for tracking last refresh times
-                dcc.Store(id="refresh-times-store", data={"client_last_refresh": 0, "coverage_last_refresh": 0}),
+                dcc.Store(id="refresh-times-store", data=serializer.build_refresh_times_store()),
                 # Store to trigger map list refresh (cache bust) after clone/delete operations
-                dcc.Store(id="cache-bust-store", data={"trigger": 0}),
+                dcc.Store(id="cache-bust-store", data=serializer.build_cache_bust_store()),
                 # Interval components for live refresh (enabled by default since auto-refresh is on)
                 dcc.Interval(
                     id="client-refresh-interval",
@@ -5267,8 +5269,8 @@ class MapsManager:
                     return [], None, [], updated_config, empty_fig
 
                 # Build new dropdown options
-                new_map_options = [{"label": m.get("name", "Unnamed"), "value": m.get("id")} for m in new_maps]
-                new_maps_store = [{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in new_maps]
+                new_map_options = serializer.build_dropdown_options(new_maps, default_name="Unnamed")
+                new_maps_store = serializer.build_named_items(new_maps, default_name="Unnamed")
                 print(f"[DEBUG] Built {len(new_map_options)} dropdown options")
 
                 # Select first map
@@ -7668,9 +7670,9 @@ class MapsManager:
                 logging.info(f"Map dropdown refreshed: {len(fresh_maps)} maps found")
 
                 # Build new dropdown options
-                new_options = [{"label": m.get("name", "Unnamed"), "value": m.get("id")} for m in fresh_maps]
+                new_options = serializer.build_dropdown_options(fresh_maps, default_name="Unnamed")
                 # Build new available maps store data
-                new_store_data = [{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in fresh_maps]
+                new_store_data = serializer.build_named_items(fresh_maps, default_name="Unnamed")
 
                 return new_options, new_store_data
 
