@@ -7,6 +7,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Security
+
+- Fixed CodeQL `py/stack-trace-exposure` violations in `src/maps/maps_manager.py` (#302)
+  - Updated exception logging to use `type(e).__name__: {str(e)}` instead of exception objects (lines 9506, 9528, 9556)
+- Fixed CodeQL `py/clear-text-logging-sensitive-data` violation in `src/device/utility_commands.py` (#302)
+  - Removed `exc_info=True` from error logging in ZTP password handler (line 1302)
+
 ### Refactored
 
 - Reduced `intelligent_map_replacement_wizard` CC from 126 to ≤10 in `src/maps/maps_manager.py` (#294)

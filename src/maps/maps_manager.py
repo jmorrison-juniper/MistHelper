@@ -9503,7 +9503,7 @@ class MapsManager:
                                     }
                                 )
                 except Exception as e:
-                    logging.warning(f"Error fetching WiFi clients: {e}")
+                    logging.warning(f"Error fetching WiFi clients: {type(e).__name__}: {str(e)}")
 
                 # Fetch unconnected WiFi clients (grey)
                 unconnected_clients = []
@@ -9524,7 +9524,7 @@ class MapsManager:
                                     }
                                 )
                 except Exception as e:
-                    logging.warning(f"Error fetching unconnected clients: {e}")
+                    logging.warning(f"Error fetching unconnected clients: {type(e).__name__}: {str(e)}")
 
                 # Fetch BLE/Bluetooth discovered assets (blue)
                 ble_devices = []
@@ -9553,7 +9553,7 @@ class MapsManager:
                                     }
                                 )
                 except Exception as e:
-                    logging.warning(f"Error fetching assets: {e}")
+                    logging.warning(f"Error fetching assets: {type(e).__name__}: {str(e)}")
 
                 # Fetch SDK/Marvis clients (light blue) - these use the Mist SDK for indoor location
                 sdk_clients = []

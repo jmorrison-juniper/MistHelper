@@ -1298,8 +1298,9 @@ class DeviceUtilityCommands:
             else:
                 print("! No password data returned.")
         except Exception as error:
-            logging.error(f"ZTP password request failed: {error}", exc_info=True)
-            print(f"! ZTP password request failed: {error}")
+            error_msg = f"{type(error).__name__}: {str(error)}"
+            logging.error(f"ZTP password request failed: {error_msg}")
+            print(f"! ZTP password request failed: {error_msg}")
 
     def get_config_commands(self) -> None:
         """Menu 145: Get configuration CLI commands for switch."""
