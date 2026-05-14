@@ -250,3 +250,7 @@ interrogate_badge.svg
 
 # SpaceX Enterprise API reference (upstream clone, not MistHelper code)
 starlink-api-reference/
+
+# Archived spec folders (local reference only, not for GitHub commits)
+finished-specs/
+abandoned-specs/
