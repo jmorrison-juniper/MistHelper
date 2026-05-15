@@ -58,6 +58,13 @@ git checkout main && git pull origin main
 - **File paths**: Use `os.path.join()` or `pathlib.Path()`, never hardcoded separators
 - **Container**: Podman primary, port 2200 (SSH), port 8055 (web UI)
 - **Zscaler**: Use GitHub Actions for container builds, never local `podman push`
+- **Inline comments on EVERY line** (NON-NEGOTIABLE): Every executable line of AI-generated
+  code must have an inline comment explaining *why*, not just *what*. Code without comments
+  is incomplete. When editing existing code, add comments to the entire block being touched.
+- **Action logging before/after EVERY operation** (NON-NEGOTIABLE): `logging.info()` before
+  every action, `logging.debug()` after with result summary. Code without logging is code
+  without observability. When editing existing code, add logging to the entire block being
+  touched.
 
 ## External Resources
 

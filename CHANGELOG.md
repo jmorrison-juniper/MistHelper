@@ -7,6 +7,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Added
+
+- Menu 176: Export Org WAN/Gateway Config — exports 6 org-level config types (networks, services, VPNs, gateway templates, device profiles, service policies) to a single timestamped JSON bundle for cross-org migration (#191)
+- Menu 177: Import Org WAN/Gateway Config — imports config bundle into destination org with conflict detection (name match, IP/subnet overlap), dependency-ordered creation, cross-reference ID remapping, and dry-run mode (#191)
+- New `OrgConfigMigrationManager` class encapsulating all export/import/conflict/remapping logic
+
 ### Security
 
 - Fixed CodeQL `py/stack-trace-exposure` violations in `src/maps/maps_manager.py` (#302)

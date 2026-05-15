@@ -72,10 +72,6 @@ try:
 except ImportError:
     DB_LAYER_AVAILABLE = False
 
-from src.audit.analyzer import AuditLogAnalyzer
-from src.audit.filter import AuditLogFilter
-from src.audit.renderer import AuditReportRenderer
-from src.audit.time_parser import TimeRangeParser
 from src.org_data_collector import OrgDataCollector
 from src.ssh.ssh_runner import EnhancedSSHRunner
 from src.wan_hub_group_manager import WanHubGroupNumberManager
@@ -5423,8 +5419,8 @@ class CacheUtils:
         # Get the full path to the CSV file in the data directory
         full_file_path = FilePathUtils.get_csv_path(file_name)
 
-        # Only use cache when --fast mode is active
-        if FAST_MODE_ENABLED and os.path.exists(full_file_path):
+        # Check if the file already exists
+        if os.path.exists(full_file_path):
             try:
                 # Get the last modified time of the file
                 file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path))
@@ -5457,162 +5453,6 @@ class CacheUtils:
             logging.error(f"Failed to generate {file_name} using {generate_function.__name__}: {error}")
             logging.debug("EXIT: check_and_generate_csv - generation failed")
             return False
-
-    @staticmethod
-    def fast_cache_hit(output_file: str) -> bool:
-        """Check if fast mode cache hit applies for the given output file.
-
-        Returns True (and prints cache message) if FAST_MODE_ENABLED is True
-        AND the output file exists in data/ AND is fresh (< CSV_FRESHNESS_MINUTES).
-        Callers should ``return`` early when this returns True.
-        """
-        if not FAST_MODE_ENABLED:
-            return False
-        full_path = FilePathUtils.get_csv_path(output_file)
-        if not os.path.exists(full_path):
-            return False
-        try:
-            age_minutes = (time.time() - os.path.getmtime(full_path)) / 60.0
-            if age_minutes < CSV_FRESHNESS_MINUTES:
-                logging.info(
-                    f" Fast mode cache hit: {output_file} is fresh "
-                    f"({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch."
-                )
-                print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
-                return True
-        except OSError as error:
-            logging.debug(f"Fast mode freshness check failed for {output_file}: {error}")
-        return False
-
-    # Static output files that MistHelper operations generate
-    GENERATED_FILES: set[str] = {
-        "AllDevicesWithSiteInfo.csv",
-        "AllGatewayDeviceStats.csv",
-        "AllGatewaySyntheticTests.csv",
-        "AllGatewayTestResults.csv",
-        "AllSiteGatewayConfigs.csv",
-        "ConstInsightMetrics.csv",
-        "DeviceConfig.csv",
-        "DeviceStats.csv",
-        "DeviceTestResults.csv",
-        "FilteredGatewayPortConfigs.csv",
-        "GatewayManagementIPs.csv",
-        "GatewayOverriddenPorts.csv",
-        "GatewayWANPortConflicts.csv",
-        "GatewaysWithSiteInfo.csv",
-        "GlobalWiredClientReport.csv",
-        "MSP_Inventory_Export.csv",
-        "MspOrganizations.csv",
-        "OrgAdmins.csv",
-        "OrgAlarms.csv",
-        "OrgApiTokens.csv",
-        "OrgApTemplates.csv",
-        "OrgAuditAnalysis.html",
-        "OrgAuditAnalysis.md",
-        "OrgAuditLogs.csv",
-        "OrgCurrentGuests.csv",
-        "OrgDeviceEvents.csv",
-        "OrgDeviceEvents_52w.csv",
-        "OrgDevicePortStats.csv",
-        "OrgDeviceStats.csv",
-        "OrgDevices.csv",
-        "OrgE911Report.csv",
-        "OrgGatewayStats.csv",
-        "OrgGatewayTemplates.csv",
-        "OrgHistoricalGuests.csv",
-        "OrgInsightMetrics_Legacy.csv",
-        "OrgInventory.csv",
-        "OrgJsiPbn.csv",
-        "OrgJsiSirt.csv",
-        "OrgLicenses.csv",
-        "OrgMetricsResults.csv",
-        "OrgMetricsSummary.csv",
-        "OrgMetricsTimeSeries.csv",
-        "OrgMxEdges.csv",
-        "OrgNetworkTemplates.csv",
-        "OrgOspfStats.csv",
-        "OrgPsks.csv",
-        "OrgRfTemplates.csv",
-        "OrgRogueAPs.csv",
-        "OrgRogueClients.csv",
-        "OrgRogueData.csv",
-        "OrgSLEMetrics.csv",
-        "OrgSecIntelProfiles.csv",
-        "OrgSecurityPolicies.csv",
-        "OrgSiteTemplates.csv",
-        "OrgSitesData.csv",
-        "OrgSitesSLESummary.csv",
-        "OrgSso.csv",
-        "OrgSwitchTemplates.csv",
-        "OrgSwitchVCStats.csv",
-        "OrgUsage.csv",
-        "OrgVPNPeerStats.csv",
-        "OrgWebhooks.csv",
-        "OrgWiredClients.csv",
-        "OrgWirelessClients.csv",
-        "OrgWlans.csv",
-        "SiteInventory.csv",
-        "SiteList.csv",
-        "SiteList_ListAPI.csv",
-        "SiteWiFiClients.CSV",
-        "SitesWithLocations.csv",
-        "VirtualChassisConversionStatus.csv",
-        "WAN2_SiteVariable_Report.csv",
-    }
-
-    # Prefix patterns for dynamically-named operation outputs
-    GENERATED_PREFIXES: tuple[str, ...] = (
-        "ActiveUpgradeOperations_",
-        "Const",
-        "FirmwareUpgradeStatus_",
-        "GatewayDevice_WAN_Probe_Override_Audit",
-        "GatewayTemplate_WAN",
-        "GatewayTemplateReboot",
-        "MergedTransceiverData",
-        "OfflineDeviceReport_",
-        "Org",
-        "Site",
-        "VirtualChassis",
-        "WiredClientManufacturerReport",
-    )
-
-    @staticmethod
-    def _is_generated_file(filename: str) -> bool:
-        """Check if a file was generated by a MistHelper operation."""
-        if filename in CacheUtils.GENERATED_FILES:
-            return True
-        return filename.startswith(CacheUtils.GENERATED_PREFIXES)
-
-    @staticmethod
-    def clear_cache() -> None:
-        """Delete files generated by MistHelper operations from the data/ directory.
-
-        Only removes files that match known operation output names or prefixes.
-        Preserves user files, infrastructure files, and subdirectories.
-        """
-        data_dir = FilePathUtils.get_csv_path("")
-        if not os.path.isdir(data_dir):
-            print("No data/ directory found. Nothing to clear.")
-            return
-        deleted = 0
-        errors = 0
-        for entry in os.listdir(data_dir):
-            full_path = os.path.join(data_dir, entry)
-            if os.path.isdir(full_path):
-                continue
-            if not CacheUtils._is_generated_file(entry):
-                continue
-            try:
-                os.remove(full_path)
-                logging.info(f"Deleted: {entry}")
-                deleted += 1
-            except OSError as error:
-                logging.error(f"Failed to delete {entry}: {error}")
-                errors += 1
-        print(f"Cache cleared: {deleted} files deleted.")
-        if errors:
-            print(f"  {errors} files could not be deleted (see log).")
-        logging.info(f"Cache clear complete: {deleted} deleted, {errors} errors")
 
     @staticmethod
     def load_csv_grouped_by_key(filename: str, key: str) -> dict[str, list[dict[str, Any]]]:
@@ -12640,8 +12480,6 @@ class OrgAlarmEventExporter:
         """
         Export open organization alarms from the past 24 hours to OrgAlarms.csv.
         """
-        if CacheUtils.fast_cache_hit("OrgAlarms.csv"):
-            return
         logging.info("Menu #1: Starting organization alarms export")
         logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
@@ -12688,8 +12526,6 @@ class OrgAlarmEventExporter:
         """
         Export all device events from the past 24 hours to OrgDeviceEvents.csv.
         """
-        if CacheUtils.fast_cache_hit("OrgDeviceEvents.csv"):
-            return
         logging.info("Menu #2: Starting device events export")
         logging.info("Search Org Device Events:")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -12922,8 +12758,6 @@ class OrgSiteExporter:
         Output format determined by global OUTPUT_FORMAT setting.
         Uses APIDataFetcher to handle API call and output writing.
         """
-        if CacheUtils.fast_cache_hit("SiteList.csv"):
-            return
         logging.info("Starting export of organization site list...")
         emitter = PROGRESS_EMITTER
         if emitter:
@@ -12971,8 +12805,6 @@ class OrgSiteExporter:
         """
         Export a list of sites with all available fields to SitesWithLocations.csv.
         """
-        if CacheUtils.fast_cache_hit("SitesWithLocations.csv"):
-            return
         print("Sites with Location and Timezone Info:")
         logging.info("Listing Sites with Full Info:")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -12990,8 +12822,6 @@ class OrgSiteExporter:
         """
         Export all current guest users in the org to OrgCurrentGuests.csv
         """
-        if CacheUtils.fast_cache_hit("OrgCurrentGuests.csv"):
-            return
         print("Current and Historical Guest Users:")
         logging.info("Exporting all current guest users in the org...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -13010,8 +12840,6 @@ class OrgSiteExporter:
         """
         Export all guest users from the last 7 days to OrgHistoricalGuests.csv
         """
-        if CacheUtils.fast_cache_hit("OrgHistoricalGuests.csv"):
-            return
         logging.info("Exporting all guest users from the last 7 days...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
         end_time = int(time.time())
@@ -13043,8 +12871,6 @@ class OrgInventoryExporter:
         Fetches and exports the full inventory of devices in the organization to OrgInventory.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
-        if CacheUtils.fast_cache_hit("OrgInventory.csv"):
-            return
         logging.info("Starting export of organization device inventory...")
         emitter = PROGRESS_EMITTER
         if emitter:
@@ -13067,8 +12893,6 @@ class OrgInventoryExporter:
         Fetches and exports a list of all devices in the organization to OrgDevices.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
-        if CacheUtils.fast_cache_hit("OrgDevices.csv"):
-            return
         logging.info("Starting export of all organization devices...")
         emitter = PROGRESS_EMITTER
         if emitter:
@@ -13097,8 +12921,6 @@ class OrgInventoryExporter:
             - Master CSV: data/CombinedInventory_ByWeek/CombinedInventory_Master.csv
               (with simplified headers: serial, model, Street Address, City, State, Zip)
         """
-        if CacheUtils.fast_cache_hit("AllDevicesWithSiteInfo.csv"):
-            return
         print("Combined Inventory with Site Info by Calendar Week:")
 
         # Load environment variables
@@ -13361,8 +13183,6 @@ class OrgInventoryExporter:
         Fetches all gateway devices in the organization, enriches them with site and address info,
         and exports the result to GatewaysWithSiteInfo.csv. Also logs and displays a summary table.
         """
-        if CacheUtils.fast_cache_hit("GatewaysWithSiteInfo.csv"):
-            return
         print("Gateways with Site and Address Info:")
         logging.info("Fetching Gateways with Site Info...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -14075,8 +13895,6 @@ class OrgTemplateExporter:
         """
         Export all organization templates (gateway, network, RF, site, AP) to CSV files.
         """
-        if CacheUtils.fast_cache_hit("OrgGatewayTemplates.csv"):
-            return
         logging.info("Starting export of organization templates...")
         try:
             APIDataFetcher(
@@ -14133,8 +13951,6 @@ class OrgTemplateExporter:
     @staticmethod
     def network_templates():  # type: ignore[no-untyped-def]
         """Export network templates to OrgNetworkTemplates.csv."""
-        if CacheUtils.fast_cache_hit("OrgNetworkTemplates.csv"):
-            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
             data_type="network templates",
@@ -14144,8 +13960,6 @@ class OrgTemplateExporter:
     @staticmethod
     def rf_templates():  # type: ignore[no-untyped-def]
         """Export RF templates to OrgRfTemplates.csv."""
-        if CacheUtils.fast_cache_hit("OrgRfTemplates.csv"):
-            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates, data_type="rf templates", sort_key="name"
         )
@@ -14153,8 +13967,6 @@ class OrgTemplateExporter:
     @staticmethod
     def ap_templates():  # type: ignore[no-untyped-def]
         """Export AP templates to OrgApTemplates.csv."""
-        if CacheUtils.fast_cache_hit("OrgApTemplates.csv"):
-            return
         print("Export Organization AP Templates:")
         logging.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -14185,8 +13997,6 @@ class OrgTemplateExporter:
     @staticmethod
     def switch_templates():  # type: ignore[no-untyped-def]
         """Export switch templates to OrgSwitchTemplates.csv."""
-        if CacheUtils.fast_cache_hit("OrgSwitchTemplates.csv"):
-            return
         print("Export Organization Switch Templates:")
         logging.info("Starting export of organization switch templates (canonical networktemplates)...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -14226,8 +14036,6 @@ class OrgClientSecurityExporter:
     @staticmethod
     def wireless_clients():  # type: ignore[no-untyped-def]
         """Export wireless client statistics for the entire organization to OrgWirelessClients.csv."""
-        if CacheUtils.fast_cache_hit("OrgWirelessClients.csv"):
-            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.clients.searchOrgWirelessClients, data_type="wireless clients", sort_key="mac"
         )
@@ -14235,8 +14043,6 @@ class OrgClientSecurityExporter:
     @staticmethod
     def wired_clients():  # type: ignore[no-untyped-def]
         """Export wired client statistics for the entire organization to OrgWiredClients.csv."""
-        if CacheUtils.fast_cache_hit("OrgWiredClients.csv"):
-            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients, data_type="wired clients", sort_key="mac"
         )
@@ -14974,8 +14780,6 @@ class OrgAdminExporter:
     @staticmethod
     def api_tokens():  # type: ignore[no-untyped-def]
         """Export organization API tokens to OrgApiTokens.csv."""
-        if CacheUtils.fast_cache_hit("OrgApiTokens.csv"):
-            return
         logging.info("Starting export of organization api tokens...")
         APIDataFetcher(
             title="Organization Api Tokens:",
@@ -14987,8 +14791,6 @@ class OrgAdminExporter:
     @staticmethod
     def admins():  # type: ignore[no-untyped-def]
         """Export organization admins to OrgAdmins.csv."""
-        if CacheUtils.fast_cache_hit("OrgAdmins.csv"):
-            return
         logging.info("Starting export of organization admins...")
         APIDataFetcher(
             title="Organization Admins:",
@@ -15000,15 +14802,11 @@ class OrgAdminExporter:
     @staticmethod
     def sso():  # type: ignore[no-untyped-def]
         """Export organization SSO configuration to OrgSso.csv."""
-        if CacheUtils.fast_cache_hit("OrgSso.csv"):
-            return
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.ssos.listOrgSsos, data_type="sso", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
     def licenses():  # type: ignore[no-untyped-def]
         """Export organization licenses to OrgLicenses.csv."""
-        if CacheUtils.fast_cache_hit("OrgLicenses.csv"):
-            return
         logging.info("Starting export of organization licenses (canonical endpoint)...")
         filename = "OrgLicenses.csv"
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -15046,8 +14844,6 @@ class OrgAdminExporter:
     @staticmethod
     def usage():  # type: ignore[no-untyped-def]
         """Export organization usage data to OrgUsage.csv."""
-        if CacheUtils.fast_cache_hit("OrgUsage.csv"):
-            return
         logging.info("Starting export of organization license usage...")
         APIDataFetcher(
             title="Organization License Usage:",
@@ -15070,15 +14866,11 @@ class OrgConfigExporter:
     @staticmethod
     def psks():  # type: ignore[no-untyped-def]
         """Export organization PSKs to OrgPsks.csv."""
-        if CacheUtils.fast_cache_hit("OrgPsks.csv"):
-            return
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.psks.listOrgPsks, data_type="psks", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
     def webhooks():  # type: ignore[no-untyped-def]
         """Export organization webhooks to OrgWebhooks.csv."""
-        if CacheUtils.fast_cache_hit("OrgWebhooks.csv"):
-            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.webhooks.listOrgWebhooks, data_type="webhooks", sort_key="name"
         )
@@ -15086,15 +14878,11 @@ class OrgConfigExporter:
     @staticmethod
     def wlans():  # type: ignore[no-untyped-def]
         """Export organization WLANs to OrgWlans.csv."""
-        if CacheUtils.fast_cache_hit("OrgWlans.csv"):
-            return
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.wlans.listOrgWlans, data_type="wlans", sort_key="ssid")  # type: ignore[no-untyped-call]
 
     @staticmethod
     def mx_edges():  # type: ignore[no-untyped-def]
         """Export MX Edge data to OrgMxEdges.csv."""
-        if CacheUtils.fast_cache_hit("OrgMxEdges.csv"):
-            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.mxedges.listOrgMxEdges, data_type="mx edges", sort_key="name"
         )
@@ -15268,8 +15056,6 @@ class OrgExportUtils:
     @staticmethod
     def sites_sle_summary():  # type: ignore[no-untyped-def]
         """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
-        if CacheUtils.fast_cache_hit("OrgSitesSLESummary.csv"):
-            return
         print("Export Organization Sites SLE Summary:")
         logging.info("Starting export of sites SLE summary...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -15324,8 +15110,6 @@ class OrgExportUtils:
     @staticmethod
     def insight_metrics():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide insight metrics to normalized CSV files."""
-        if CacheUtils.fast_cache_hit("OrgMetricsSummary.csv"):
-            return
         print("Export Organization Insight Metrics (Normalized):")
         logging.info("Starting export of organization insight metrics with normalized structure...")
 
@@ -15592,8 +15376,6 @@ class OrgExportUtils:
     @staticmethod
     def e911_report():  # type: ignore[no-untyped-def]
         """Export E911 report for the organization to OrgE911Report.csv."""
-        if CacheUtils.fast_cache_hit("OrgE911Report.csv"):
-            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.exports.getOrgE911Report,
             data_type="e911 report",
@@ -15604,8 +15386,6 @@ class OrgExportUtils:
     @staticmethod
     def jsi_pbn():  # type: ignore[no-untyped-def]
         """Export JSI PBN (Product Bulletin Notifications) data to OrgJsiPbn.csv."""
-        if CacheUtils.fast_cache_hit("OrgJsiPbn.csv"):
-            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiPbn,
             data_type="jsi pbn",
@@ -15615,8 +15395,6 @@ class OrgExportUtils:
     @staticmethod
     def jsi_sirt():  # type: ignore[no-untyped-def]
         """Export JSI SIRT (Security Incident Response Team) advisories to OrgJsiSirt.csv."""
-        if CacheUtils.fast_cache_hit("OrgJsiSirt.csv"):
-            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiSirt,
             data_type="jsi sirt",
@@ -15626,8 +15404,6 @@ class OrgExportUtils:
     @staticmethod
     def ospf_stats():  # type: ignore[no-untyped-def]
         """Export OSPF adjacency statistics for the organization to OrgOspfStats.csv."""
-        if CacheUtils.fast_cache_hit("OrgOspfStats.csv"):
-            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgOspfStats,
             data_type="ospf stats",
@@ -15659,8 +15435,6 @@ class OrgExportUtils:
         If False, pulls only the last 24 hours.
         If duration is provided, uses it as the duration parameter.
         """
-        if CacheUtils.fast_cache_hit("OrgAuditLogs.csv"):
-            return
         logging.info("Menu #3: Starting audit logs export")
         logging.debug(f"ENTRY: OrgExportUtils.audit_logs(full_history={full_history}, duration={duration})")
         try:
@@ -15699,8 +15473,6 @@ class OrgExportUtils:
     @staticmethod
     def sle_metrics(fast: bool = False):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
-        if CacheUtils.fast_cache_hit("OrgSLEMetrics.csv"):
-            return
         print("Export Organization SLE Metrics:")
         logging.info("Starting export of organization SLE metrics...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -16891,56 +16663,24 @@ class SitesByAPModelExporter:
         return aps, models
 
     @staticmethod
-    def _parse_index_selection(choice: str, max_index: int) -> list[int]:
-        """Parse comma-separated and dashed range index selections.
-
-        Supports: "1", "1,3,5", "1-3", "1-3,5,7-9"
-        Returns sorted unique 0-based indices, or empty list on error.
-        """
-        indices: set[int] = set()
-        for part in choice.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            if "-" in part:
-                bounds = part.split("-", 1)
-                try:
-                    start = int(bounds[0].strip())
-                    end = int(bounds[1].strip())
-                except ValueError:
-                    return []
-                if start > end:
-                    start, end = end, start
-                for i in range(start, end + 1):
-                    if 1 <= i <= max_index:
-                        indices.add(i - 1)
-            else:
-                try:
-                    val = int(part)
-                except ValueError:
-                    return []
-                if 1 <= val <= max_index:
-                    indices.add(val - 1)
-        return sorted(indices)
-
-    @staticmethod
-    def _prompt_model_selection(models: list[str], aps: list[dict]) -> list[str] | None:  # type: ignore[type-arg]
-        """Prompt user to select AP model(s) from the numbered list."""
+    def _prompt_model_selection(models: list[str], aps: list[dict]) -> str | None:  # type: ignore[type-arg]
+        """Prompt user to select an AP model from the numbered list."""
         print("\nAvailable AP models:")
         for idx, model in enumerate(models, 1):
             count = sum(1 for d in aps if d.get("model") == model)
             print(f"  {idx:3d}. {model} ({count} APs)")
         choice = InputUtils.safe_input(
-            "\nSelect model number(s) (e.g. 1,3,5 or 1-3): ",
+            "\nSelect model number (or Enter to cancel): ",
             context="ap_model_selection",
         )
         if not choice.strip():
             return None
-        indices = SitesByAPModelExporter._parse_index_selection(choice.strip(), len(models))
-        if not indices:
+        try:
+            selected = int(choice.strip()) - 1
+            return models[selected] if 0 <= selected < len(models) else None
+        except (ValueError, IndexError):
             print("! Invalid selection.")
             return None
-        return [models[i] for i in indices]
 
     @staticmethod
     def _split_address(address: str) -> tuple[str, str, str, str, str]:
@@ -16961,14 +16701,13 @@ class SitesByAPModelExporter:
     @staticmethod
     def _build_export_rows(
         aps: list[dict],  # type: ignore[type-arg]
-        models: list[str],
+        model: str,
         site_map: dict[str, dict],  # type: ignore[type-arg]
     ) -> list[dict]:  # type: ignore[type-arg]
         """Group APs by site and build one CSV row per matching site."""
-        model_set = set(models)
         grouped: dict[str, list[dict]] = {}  # type: ignore[type-arg]
         for device in aps:
-            if device.get("model") in model_set and device.get("site_id"):
+            if device.get("model") == model and device.get("site_id"):
                 grouped.setdefault(device["site_id"], []).append(device)
         rows = []
         for site_id, devices in sorted(grouped.items(), key=lambda x: site_map.get(x[0], {}).get("name", "")):
@@ -16979,7 +16718,7 @@ class SitesByAPModelExporter:
                 {
                     "site_id": site_id,
                     "site_name": site.get("name", ""),
-                    "ap_model": ", ".join(sorted({d.get("model", "") for d in devices})),
+                    "ap_model": model,
                     "ap_count": len(devices),
                     "address": street,
                     "city": city,
@@ -16993,7 +16732,7 @@ class SitesByAPModelExporter:
 
     @staticmethod
     def export_sites_by_ap_model() -> None:
-        """Export CSV of sites containing APs of selected model(s) with site address info."""
+        """Export CSV of sites containing APs of a selected model with site address info."""
         print("Export Sites by AP Model:")
         logging.info("Starting export of sites by AP model...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -17004,25 +16743,24 @@ class SitesByAPModelExporter:
             print("! No APs found in organization inventory.")
             return
 
-        selected_models = SitesByAPModelExporter._prompt_model_selection(models, aps)
-        if not selected_models:
+        model = SitesByAPModelExporter._prompt_model_selection(models, aps)
+        if not model:
             return
 
-        model_label = ", ".join(selected_models)
-        print(f"! Fetching site details for sites with {model_label} APs...")
+        print(f"! Fetching site details for sites with {model} APs...")
         all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)
         site_map = {site["id"]: site for site in all_sites if site.get("id")}
 
-        rows = SitesByAPModelExporter._build_export_rows(aps, selected_models, site_map)
+        rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)
         if not rows:
-            print(f"! No sites found with {model_label} APs.")
+            print(f"! No sites found with {model} APs.")
             return
 
-        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", "_".join(selected_models))
+        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)
         filename = f"SitesByAPModel_{safe_model}.csv"
         DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")
-        print(f"\n[OK] Exported {len(rows)} sites with {model_label} APs to {filename}")
-        logging.info(f"Exported {len(rows)} sites with AP model(s) {model_label}")
+        print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")
+        logging.info(f"Exported {len(rows)} sites with AP model {model}")
 
 
 # ============================================================================
@@ -20814,8 +20552,6 @@ class GatewayExportUtils:
     @staticmethod
     def templates():  # type: ignore[no-untyped-def]
         """Exports gateway templates."""
-        if CacheUtils.fast_cache_hit("OrgGatewayTemplates.csv"):
-            return
         print("Gateway Templates:")
         logging.info("Exporting gateway templates for the organization...")
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -23335,6 +23071,646 @@ class WAN2MigrationManager:
             print(f"\n  INFO: {info_sites} sites have same-IP-type overrides (likely safe)")
             print("  Template and device use same IP configuration type (both DHCP or both Static)")
             print("  Overrides may be for description, usage, or other non-critical fields")
+
+
+# ============================================================================
+# ORG CONFIG MIGRATION MANAGER CLASS
+# ============================================================================
+class OrgConfigMigrationManager:
+    """
+    Export and import org-level WAN/gateway configuration for cross-org migration.
+
+    Menu 176: Export 6 config types to a timestamped JSON bundle.
+    Menu 177: Import a bundle into the current org with conflict detection.
+    """
+
+    STRIP_FIELDS = frozenset(  # Fields to strip before import
+        {"id", "org_id", "created_time", "modified_time", "for_site"}
+    )
+
+    CONFIG_TYPES = [
+        {
+            "key": "networks",  # Internal key for this config type in the bundle
+            "list_fn": "mistapi.api.v1.orgs.networks.listOrgNetworks",  # Dotted path to list API
+            "create_fn": "mistapi.api.v1.orgs.networks.createOrgNetwork",  # Dotted path to create API
+            "import_order": 0,  # Import first -- no dependencies on other types
+            "display_name": "Networks",  # User-facing label for menus and reports
+            "conflict_check": "subnet",  # Enables IP/subnet overlap detection
+        },
+        {
+            "key": "services",  # Internal key for services in the bundle
+            "list_fn": "mistapi.api.v1.orgs.services.listOrgServices",  # Dotted path to list API
+            "create_fn": "mistapi.api.v1.orgs.services.createOrgService",  # Dotted path to create API
+            "import_order": 0,  # Import first -- no dependencies on other types
+            "display_name": "Services",  # User-facing label for menus and reports
+            "conflict_check": "addresses",  # Enables IP address overlap detection
+        },
+        {
+            "key": "vpns",  # Internal key for VPNs in the bundle
+            "list_fn": "mistapi.api.v1.orgs.vpns.listOrgVpns",  # Dotted path to list API
+            "create_fn": "mistapi.api.v1.orgs.vpns.createOrgVpn",  # Dotted path to create API
+            "import_order": 1,  # Import second -- depends on networks
+            "display_name": "VPNs",  # User-facing label for menus and reports
+        },
+        {
+            "key": "gateway_templates",  # Internal key for gateway templates in the bundle
+            "list_fn": "mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",  # Dotted path to list API
+            "create_fn": "mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",  # Dotted path to create API
+            "import_order": 1,  # Import second -- depends on networks and VPNs
+            "display_name": "Gateway Templates",  # User-facing label for menus and reports
+        },
+        {
+            "key": "device_profiles",  # Internal key for device profiles in the bundle
+            "list_fn": "mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",  # Dotted path to list API
+            "create_fn": "mistapi.api.v1.orgs.deviceprofiles.createOrgDeviceProfile",  # Dotted path to create API
+            "import_order": 2,  # Import last -- depends on gateway templates
+            "display_name": "Device Profiles",  # User-facing label for menus and reports
+            "list_kwargs": {"type": "gateway"},  # Filter to gateway profiles only
+        },
+        {
+            "key": "service_policies",  # Internal key for service policies in the bundle
+            "list_fn": "mistapi.api.v1.orgs.servicepolicies.listOrgServicePolicies",  # Dotted path to list API
+            "create_fn": "mistapi.api.v1.orgs.servicepolicies.createOrgServicePolicy",  # Dotted path to create API
+            "import_order": 2,  # Import last -- depends on services
+            "display_name": "Service Policies",  # User-facing label for menus and reports
+        },
+    ]
+
+    def __init__(self, session, org_id_fn, safe_input_fn):  # type: ignore[no-untyped-def]
+        """Initialize with API session, org_id resolver, and safe_input function."""
+        self.session = session  # Authenticated mistapi session for API calls
+        self.org_id_fn = org_id_fn  # Callable that returns current org_id (may prompt user)
+        self.safe_input_fn = safe_input_fn  # EOF-safe input wrapper for SSH/container contexts
+        self.org_id = ""  # Resolved org ID, set during export_config or import_config
+        self._remap_table: dict[str, str] = {}  # Maps source object IDs to destination IDs
+        self._existing: dict[str, list] = {}  # type: ignore[type-arg] # Cached destination org objects for conflict detection
+
+    # ------------------------------------------------------------------
+    # Public entry points
+    # ------------------------------------------------------------------
+
+    def export_config(self) -> None:
+        """Menu 176: Export org WAN/gateway config to a JSON bundle."""
+        logging.info("Menu 176: Starting org config export")  # Log operation start for traceability
+        self.org_id = self.org_id_fn()  # Resolve current org ID from cache or user prompt
+        org_name = self._get_org_name()  # Fetch human-readable org name for bundle metadata
+        print(f"\n  Exporting WAN/Gateway config from org: {org_name}")  # User feedback
+
+        results = self._fetch_all_types()  # Fetch all 6 config types from the API
+        bundle = self._build_export_bundle(results, org_name)  # Wrap results with metadata
+        filepath = self._save_bundle_to_file(bundle, org_name)  # Write bundle to data/ directory
+        self._display_export_summary(bundle, filepath)  # Show summary table to user
+        logging.info("Menu 176: Export complete, saved to %s", filepath)  # Log completion
+
+    def _fetch_all_types(self) -> dict[str, list]:  # type: ignore[type-arg]
+        """Fetch all 6 config types and return as a keyed dictionary."""
+        results: dict[str, list] = {}  # type: ignore[type-arg] # Accumulates fetched objects by type key
+        for config_type in self.CONFIG_TYPES:  # Iterate each registered config type
+            items = self._fetch_config_type(config_type)  # Fetch objects from Mist API
+            results[config_type["key"]] = items  # Store under the type's key name
+        return results  # Return complete results dict
+
+    def import_config(self) -> None:
+        """Menu 177: Import a JSON bundle into the current org."""
+        logging.info("Menu 177: Starting org config import")  # Log operation start for traceability
+        self.org_id = self.org_id_fn()  # Resolve destination org ID from cache or user prompt
+        filepath = self._select_import_file()  # Let user pick from available export bundles
+        if not filepath:  # User cancelled or no files found
+            return
+
+        bundle = self._load_and_validate_bundle(filepath)  # Parse JSON and validate structure
+        if not bundle:  # Invalid or unreadable bundle
+            return
+
+        self._display_bundle_preview(bundle)  # Show what the bundle contains before proceeding
+        dry_run = self._prompt_dry_run()  # Ask if user wants preview-only mode
+        if not dry_run and not self._confirm_import():  # Require typed IMPORT for real operations
+            return
+
+        self._fetch_existing_objects()  # Cache destination org objects for conflict detection
+        results = self._execute_import(bundle, dry_run)  # Run the dependency-ordered import
+        self._display_import_report(results)  # Show final summary of what happened
+        logging.info("Menu 177: Import complete, %s objects processed", len(results))  # Log completion
+
+    # ------------------------------------------------------------------
+    # Export helpers
+    # ------------------------------------------------------------------
+
+    def _get_org_name(self) -> str:
+        """Fetch organization name from the API."""
+        logging.info("Fetching org name for org %s", self.org_id)  # Log before API call
+        try:
+            response = mistapi.api.v1.orgs.orgs.getOrg(self.session, self.org_id)  # Query Mist API for org details
+            if hasattr(response, "data") and response.data:  # Verify response has data attribute
+                name = response.data.get("name", "Unknown")  # Extract org name from response
+                logging.debug("Org name resolved: %s", name)  # Log resolved name
+                return name  # type: ignore[no-any-return] # Return org name string
+        except Exception as error:  # Catch network/auth errors gracefully
+            logging.warning("Could not fetch org name: %s", error)  # Log warning with error details
+        return "Unknown"  # Fallback when API call fails
+
+    def _resolve_api_fn(self, dotted_path: str):  # type: ignore[no-untyped-def]
+        """Resolve a dotted string like 'mistapi.api.v1.orgs.networks.listOrgNetworks' to a callable."""
+        parts = dotted_path.split(".")  # Split dotted path into module segments
+        current = mistapi  # Start from the top-level mistapi module
+        for part in parts[1:]:  # Walk down the module tree, skipping 'mistapi' prefix
+            current = getattr(current, part)  # Resolve each nested attribute
+        return current  # Return the final callable function
+
+    def _fetch_config_type(self, config_type: dict) -> list:  # type: ignore[type-arg]
+        """Fetch all objects of a single config type from the API."""
+        display_name = config_type["display_name"]  # Human-readable name for logging
+        logging.info("Fetching %s from org %s", display_name, self.org_id)  # Log before API call
+        try:
+            list_fn = self._resolve_api_fn(config_type["list_fn"])  # Resolve dotted path to callable
+            kwargs = config_type.get("list_kwargs", {})  # Extra kwargs like type=gateway for device profiles
+            response = list_fn(self.session, self.org_id, limit=1000, **kwargs)  # Call Mist API with pagination limit
+            items = self._extract_response_data(response)  # Extract list data from response wrapper
+            print(f"    {display_name}: {len(items)} objects")  # User feedback showing count
+            logging.debug("Fetched %s %s objects", len(items), display_name)  # Log result count
+            return items  # Return list of config objects
+        except Exception as error:  # Catch API errors without crashing the entire export
+            print(f"  X {display_name}: Error - {error}")  # User feedback showing failure
+            logging.error("Failed to fetch %s: %s", display_name, error)  # Log error with context
+            return []  # Return empty list so other types can still proceed
+
+    def _extract_response_data(self, response) -> list:  # type: ignore[type-arg, no-untyped-def]
+        """Extract list data from an API response, handling pagination."""
+        if hasattr(response, "data") and isinstance(response.data, list):  # Check for direct list response
+            return response.data  # type: ignore[no-any-return] # Return data directly if already a list
+        items = mistapi.get_all(response=response, mist_session=self.session)  # Handle paginated responses
+        return items if items else []  # Return items or empty list if None
+
+    def _build_export_bundle(self, results: dict, org_name: str) -> dict:  # type: ignore[type-arg]
+        """Build the export bundle with metadata wrapper."""
+        counts = {key: len(items) for key, items in results.items()}  # Count objects per type for metadata
+        metadata = {
+            "source_org_id": self.org_id,  # Track which org this data came from
+            "source_org_name": org_name,  # Human-readable org name for import preview
+            "export_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),  # UTC timestamp
+            "schema_version": "1.0",  # Bundle format version for future compatibility
+            "object_counts": counts,  # Per-type counts for quick inspection
+        }
+        bundle: dict = {"metadata": metadata}  # type: ignore[type-arg] # Start bundle with metadata section
+        bundle.update(results)  # Add all config type data to the bundle
+        return bundle  # Return complete export bundle
+
+    def _save_bundle_to_file(self, bundle: dict, org_name: str) -> str:  # type: ignore[type-arg]
+        """Save the export bundle as indented JSON to data/ directory."""
+        safe_name = "".join(  # Sanitize org name for safe filename
+            c if c.isalnum() or c in "-_" else "_" for c in org_name
+        )
+        timestamp = datetime.datetime.now(datetime.timezone.utc).strftime(  # UTC timestamp for uniqueness
+            "%Y%m%d_%H%M%S"
+        )
+        filename = f"OrgConfig_Export_{safe_name}_{timestamp}.json"  # Construct descriptive filename
+        filepath = os.path.join("data", filename)  # Use os.path.join for cross-platform paths
+        logging.info("Saving export bundle to %s", filepath)  # Log before file write
+        with open(filepath, "w", encoding="utf-8") as output_file:  # Open file with UTF-8 encoding
+            json.dump(bundle, output_file, indent=2, default=str)  # Write indented JSON for readability
+        logging.debug("Export bundle saved, %s bytes", os.path.getsize(filepath))  # Log file size after write
+        return filepath  # Return path for summary display
+
+    def _display_export_summary(self, bundle: dict, filepath: str) -> None:  # type: ignore[type-arg]
+        """Print a summary table of the export results."""
+        counts = bundle["metadata"]["object_counts"]  # Extract per-type counts from metadata
+        total = sum(counts.values())  # Calculate total objects across all types
+        print(f"\n  Export Summary - saved to {filepath}")  # Show output file location
+        print("  " + "-" * 40)  # Visual separator for table
+        for config_type in self.CONFIG_TYPES:  # Iterate types in registry order
+            key = config_type["key"]  # Get the bundle key for this type
+            print(f"    {config_type['display_name']:<25} {counts.get(key, 0):>5}")  # Aligned count column
+        print("  " + "-" * 40)  # Visual separator for totals row
+        print(f"    {'TOTAL':<25} {total:>5}")  # Grand total
+
+    # ------------------------------------------------------------------
+    # Import helpers
+    # ------------------------------------------------------------------
+
+    def _select_import_file(self) -> str:
+        """List available export bundles and let the user pick one."""
+        import glob  # Local import -- only needed for this method
+
+        pattern = os.path.join("data", "OrgConfig_Export_*.json")  # Glob pattern for export bundles
+        files = sorted(glob.glob(pattern), reverse=True)  # Most recent files first
+        logging.debug("Found %s export bundles in data/", len(files))  # Log discovery count
+        if not files:  # No export bundles exist yet
+            print("\n  No export bundles found in data/ directory.")  # User feedback
+            print("  Run Menu 176 first to export config from a source org.")  # Guidance
+            return ""  # Signal no selection made
+
+        if len(files) == 1:  # Auto-select when only one file exists
+            print(f"\n  Found 1 export bundle: {os.path.basename(files[0])}")  # Confirm auto-selection
+            return files[0]  # Return the only available file
+
+        return self._prompt_file_selection(files)  # Multiple files -- let user choose
+
+    def _prompt_file_selection(self, files: list) -> str:  # type: ignore[type-arg]
+        """Display numbered file list and get user selection."""
+        print("\n  Available export bundles:")  # Section header
+        for index, filepath in enumerate(files, 1):  # Number each file starting at 1
+            print(f"    {index}. {os.path.basename(filepath)}")  # Show filename only, not full path
+
+        choice = self.safe_input_fn(  # EOF-safe input for SSH/container contexts
+            f"\n  Select bundle [1-{len(files)}]: ",
+            context="import_file_selection",
+        )
+        try:
+            selected = int(choice) - 1  # Convert 1-based user input to 0-based index
+            if 0 <= selected < len(files):  # Validate index is within range
+                return files[selected]  # Return the selected file path
+        except (ValueError, IndexError):  # Handle non-numeric or out-of-range input
+            pass
+        print("  Invalid selection.")  # User feedback for bad input
+        return ""  # Signal no valid selection
+
+    def _load_and_validate_bundle(self, filepath: str) -> dict | None:  # type: ignore[type-arg]
+        """Parse and validate the export bundle JSON file."""
+        logging.info("Loading bundle from %s", filepath)  # Log before file read
+        try:
+            with open(filepath, encoding="utf-8") as bundle_file:  # Open with UTF-8 for JSON
+                bundle = json.load(bundle_file)  # Parse JSON into Python dict
+        except (json.JSONDecodeError, OSError) as error:  # Handle corrupt JSON or file access errors
+            print(f"  X Error reading bundle: {error}")  # User feedback
+            logging.error("Failed to load bundle %s: %s", filepath, error)  # Log error details
+            return None  # Signal invalid bundle
+
+        logging.debug("Bundle loaded, validating structure")  # Log validation start
+        if not self._validate_bundle_structure(bundle):  # Check required keys exist
+            return None  # Signal failed validation
+        return bundle  # type: ignore[no-any-return] # Return validated bundle
+
+    def _validate_bundle_structure(self, bundle: dict) -> bool:  # type: ignore[type-arg]
+        """Check that the bundle has required metadata and type keys."""
+        if "metadata" not in bundle:  # Metadata section is mandatory
+            print("  X Invalid bundle: missing 'metadata' section.")  # User feedback
+            return False  # Fail validation
+
+        required_keys = {ct["key"] for ct in self.CONFIG_TYPES}  # Build set of expected type keys
+        missing = required_keys - set(bundle.keys())  # Find any missing config type sections
+        if missing:  # Some config types are not in the bundle
+            print(f"  X Invalid bundle: missing config types: {', '.join(sorted(missing))}")  # Show which
+            return False  # Fail validation
+
+        source_org = bundle["metadata"].get("source_org_id", "unknown")  # Check source org identity
+        if source_org == self.org_id:  # Source matches destination -- likely a mistake
+            print(f"  ! WARNING: Source org ({source_org[:8]}...) matches destination org.")  # Warn user
+            print("  This will likely result in all objects being detected as conflicts.")  # Explain
+
+        return True  # Bundle structure is valid
+
+    def _display_bundle_preview(self, bundle: dict) -> None:  # type: ignore[type-arg]
+        """Show a preview of what the bundle contains before importing."""
+        metadata = bundle["metadata"]  # Extract metadata section for display
+        print(f"\n  Bundle from: {metadata.get('source_org_name', 'Unknown')}")  # Source org name
+        print(f"  Exported at: {metadata.get('export_timestamp', 'Unknown')}")  # When it was exported
+        print(f"  Source org:  {metadata.get('source_org_id', 'Unknown')[:8]}...")  # Truncated org ID
+        counts = metadata.get("object_counts", {})  # Per-type object counts
+        total = sum(counts.values())  # Total across all types
+        print(f"  Total objects: {total}")  # Grand total for user awareness
+
+    def _prompt_dry_run(self) -> bool:
+        """Ask if the user wants a dry-run (preview only)."""
+        choice = self.safe_input_fn(  # EOF-safe input for SSH/container contexts
+            "\n  Run as dry-run (preview only)? [Y/n]: ",
+            default_value="Y",  # Default to dry-run for safety
+            context="import_dry_run",
+        )
+        return choice.upper() != "N"  # Anything except explicit 'N' means dry-run
+
+    def _confirm_import(self) -> bool:
+        """Require typed 'IMPORT' confirmation for actual import."""
+        print("\n  WARNING: This will create configuration objects in the destination org.")  # Safety warning
+        print("  This operation cannot be automatically undone.")  # Emphasize irreversibility
+        confirmation = self.safe_input_fn(  # EOF-safe typed confirmation
+            "  Type 'IMPORT' to proceed: ",
+            context="import_confirmation",
+        )
+        if confirmation != "IMPORT":  # Exact match required -- no partial or lowercase
+            print("  Import cancelled.")  # User feedback
+            return False  # Signal cancellation
+        return True  # User explicitly confirmed
+
+    # ------------------------------------------------------------------
+    # Conflict detection
+    # ------------------------------------------------------------------
+
+    def _fetch_existing_objects(self) -> None:
+        """Fetch current objects from destination org for conflict detection."""
+        print("\n  Fetching existing config from destination org...")  # User feedback
+        logging.info("Fetching existing objects from destination org for conflict detection")  # Log operation
+        for config_type in self.CONFIG_TYPES:  # Iterate all 6 config types
+            items = self._fetch_config_type(config_type)  # Reuse same fetch logic as export
+            self._existing[config_type["key"]] = items  # Cache for conflict checks
+        logging.debug("Cached %s total existing objects", sum(len(v) for v in self._existing.values()))  # Log count
+
+    def _detect_conflicts(self, new_obj: dict, type_key: str) -> dict | None:  # type: ignore[type-arg]
+        """Check for name match and IP/subnet overlap with existing objects."""
+        existing_list = self._existing.get(type_key, [])  # Get cached objects for this type
+        conflict = self._check_name_conflict(new_obj, existing_list)  # Check name collision first
+        if conflict:  # Name match found -- return immediately
+            return conflict
+
+        config_entry = next((ct for ct in self.CONFIG_TYPES if ct["key"] == type_key), None)  # Find config metadata
+        if config_entry and config_entry.get("conflict_check"):  # Only check subnets for types that need it
+            return self._check_subnet_overlap(new_obj, existing_list, type_key)  # Check IP/subnet overlaps
+        return None  # No conflicts detected
+
+    def _check_name_conflict(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
+        """Check if an object with the same name already exists (case-insensitive)."""
+        new_name = (new_obj.get("name") or "").lower()  # Normalize to lowercase for comparison
+        if not new_name:  # Skip unnamed objects (shouldn't happen but be defensive)
+            return None
+        for existing in existing_list:  # Check every existing object in destination
+            existing_name = (existing.get("name") or "").lower()  # Normalize existing name
+            if new_name == existing_name:  # Case-insensitive match found
+                return {
+                    "reason": "name_match",  # Conflict type for reporting
+                    "detail": f"Object named '{existing.get('name')}' already exists",  # Human-readable
+                    "existing_id": existing.get("id"),  # Preserve for ID remapping
+                }
+        return None  # No name conflict found
+
+    def _check_subnet_overlap(self, new_obj: dict, existing_list: list, type_key: str) -> dict | None:  # type: ignore[type-arg]
+        """Check for IP/subnet overlaps between new and existing objects."""
+        if type_key == "networks":  # Networks use subnet field for CIDR
+            return self._check_network_subnet_overlap(new_obj, existing_list)
+        if type_key == "services":  # Services use addresses[] array
+            return self._check_service_address_overlap(new_obj, existing_list)
+        return None  # Other types don't have IP fields
+
+    def _check_network_subnet_overlap(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
+        """Check network subnet overlap using ipaddress module."""
+        new_subnet = new_obj.get("subnet")  # Get the CIDR subnet string
+        if not new_subnet:  # No subnet defined -- skip overlap check
+            return None
+        try:
+            new_net = ipaddress.ip_network(new_subnet, strict=False)  # Parse CIDR, allow host bits
+        except ValueError:  # Invalid CIDR format -- skip gracefully
+            return None
+        for existing in existing_list:  # Compare against each existing network
+            existing_subnet = existing.get("subnet")  # Get existing network's CIDR
+            if not existing_subnet:  # Skip existing networks without subnets
+                continue
+            try:
+                existing_net = ipaddress.ip_network(existing_subnet, strict=False)  # Parse for comparison
+                if new_net.overlaps(existing_net):  # Check if any IP addresses are shared
+                    return {
+                        "reason": "subnet_overlap",  # Conflict type for reporting
+                        "detail": f"{new_subnet} overlaps with '{existing.get('name')}' ({existing_subnet})",
+                    }
+            except ValueError:  # Invalid existing CIDR -- skip and continue
+                continue
+        return None  # No subnet overlaps found
+
+    def _check_service_address_overlap(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
+        """Check service address overlap for objects with addresses[] field."""
+        new_addrs = new_obj.get("addresses", [])  # Get list of IP/CIDR addresses
+        if not new_addrs:  # No addresses to check -- skip
+            return None
+        for addr in new_addrs:  # Check each address in the new service
+            overlap = self._check_single_address(addr, existing_list)  # Compare against all existing
+            if overlap:  # First overlap found -- return immediately
+                return overlap
+        return None  # No address overlaps found
+
+    def _check_single_address(self, addr: str, existing_list: list) -> dict | None:  # type: ignore[type-arg]
+        """Check a single address against all existing service addresses."""
+        try:
+            new_net = ipaddress.ip_network(addr, strict=False)  # Parse address as network for overlap check
+        except ValueError:  # Invalid address format -- skip
+            return None
+        for existing in existing_list:  # Compare against each existing service
+            for ex_addr in existing.get("addresses", []):  # Check each address in existing service
+                try:
+                    ex_net = ipaddress.ip_network(ex_addr, strict=False)  # Parse existing address
+                    if new_net.overlaps(ex_net):  # Check if any IP addresses overlap
+                        return {
+                            "reason": "address_overlap",  # Conflict type for reporting
+                            "detail": f"{addr} overlaps with '{existing.get('name')}' ({ex_addr})",
+                        }
+                except ValueError:  # Invalid existing address -- skip and continue
+                    continue
+        return None  # No address overlap found
+
+    # ------------------------------------------------------------------
+    # ID remapping
+    # ------------------------------------------------------------------
+
+    def _build_remap_entry(self, source_id: str, dest_id: str) -> None:
+        """Record a source-to-destination ID mapping."""
+        self._remap_table[source_id] = dest_id  # Store mapping for cross-reference remapping
+        logging.debug("ID remap: %s -> %s", source_id[:8], dest_id[:8])  # Log truncated IDs for tracing
+
+    def _remap_object_references(self, obj: dict, type_key: str) -> dict:  # type: ignore[type-arg]
+        """Remap foreign ID references in an object using the remap table."""
+        if type_key == "vpns":  # VPNs reference network IDs
+            self._remap_vpn_networks(obj)
+        elif type_key == "gateway_templates":  # Gateway templates reference network/VPN IDs
+            self._remap_gateway_template_refs(obj)
+        elif type_key == "device_profiles":  # Device profiles reference gateway template IDs
+            self._remap_device_profile_refs(obj)
+        elif type_key == "service_policies":  # Service policies reference service IDs
+            self._remap_service_policy_refs(obj)
+        return obj  # Return object with remapped references
+
+    def _remap_vpn_networks(self, obj: dict) -> None:  # type: ignore[type-arg]
+        """Remap network IDs inside VPN network entries."""
+        networks = obj.get("networks", {})  # VPN networks is a dict of name->config
+        if not isinstance(networks, dict):  # Guard against unexpected data shapes
+            return
+        remapped: dict[str, dict] = {}  # type: ignore[type-arg] # Build new dict with remapped IDs
+        for net_name, net_config in networks.items():  # Iterate each network entry
+            if isinstance(net_config, dict) and "id" in net_config:  # Check if entry has an ID to remap
+                old_id = net_config["id"]  # Capture source org's network ID
+                net_config["id"] = self._remap_table.get(old_id, old_id)  # Swap to dest ID or keep original
+            remapped[net_name] = net_config  # Preserve the entry in remapped dict
+        obj["networks"] = remapped  # Replace with remapped version
+
+    def _remap_gateway_template_refs(self, obj: dict) -> None:  # type: ignore[type-arg]
+        """Remap network and VPN IDs in gateway template config."""
+        networks = obj.get("networks", {})  # Gateway template networks section
+        if isinstance(networks, dict):  # Verify expected dict structure
+            for _net_name, net_config in networks.items():  # Iterate each network reference
+                if isinstance(net_config, dict) and "id" in net_config:  # Has remappable ID
+                    old_id = net_config["id"]  # Capture source org's ID
+                    net_config["id"] = self._remap_table.get(old_id, old_id)  # Swap to dest ID
+
+    def _remap_device_profile_refs(self, obj: dict) -> None:  # type: ignore[type-arg]
+        """Remap gateway_template_id in device profiles."""
+        old_id = obj.get("gateway_template_id")  # Check if profile references a gateway template
+        if old_id and old_id in self._remap_table:  # Only remap if we have a mapping
+            obj["gateway_template_id"] = self._remap_table[old_id]  # Swap to destination template ID
+
+    def _remap_service_policy_refs(self, obj: dict) -> None:  # type: ignore[type-arg]
+        """Remap service IDs in service policy rules."""
+        services = obj.get("services", [])  # Service policies contain a list of service refs
+        if not isinstance(services, list):  # Guard against unexpected data shapes
+            return
+        for service_entry in services:  # Iterate each service reference in the policy
+            if isinstance(service_entry, dict) and "id" in service_entry:  # Has remappable ID
+                old_id = service_entry["id"]  # Capture source org's service ID
+                service_entry["id"] = self._remap_table.get(old_id, old_id)  # Swap to dest service ID
+
+    # ------------------------------------------------------------------
+    # Import execution
+    # ------------------------------------------------------------------
+
+    def _strip_source_fields(self, obj: dict) -> dict:  # type: ignore[type-arg]
+        """Return a copy of obj with source-org-specific fields removed."""
+        return {key: value for key, value in obj.items() if key not in self.STRIP_FIELDS}  # Filter out id, org_id, etc.
+
+    def _execute_import(self, bundle: dict, dry_run: bool) -> list:  # type: ignore[type-arg]
+        """Import objects in dependency order, skipping conflicts."""
+        results: list = []  # type: ignore[type-arg] # Accumulates import results for final report
+        sorted_types = sorted(self.CONFIG_TYPES, key=lambda ct: ct["import_order"])  # Dependency order
+        action_label = "[DRY RUN] " if dry_run else ""  # Prefix for user output in dry-run mode
+        print(f"\n  {action_label}Importing configuration objects...")  # User feedback
+
+        for config_type in sorted_types:  # Process each type in dependency order
+            objects = bundle.get(config_type["key"], [])  # Get objects of this type from bundle
+            if not objects:  # Skip empty types
+                continue
+            self._import_type_batch(config_type, objects, dry_run, results)  # Import the batch
+        return results  # Return all results for report
+
+    def _import_type_batch(  # type: ignore[type-arg]
+        self,
+        config_type: dict,
+        objects: list,
+        dry_run: bool,
+        results: list,
+    ) -> None:
+        """Import a batch of objects for a single config type."""
+        display = config_type["display_name"]  # Human-readable type name for output
+        label = "[DRY RUN] " if dry_run else ""  # Prefix for dry-run output
+        print(f"\n    {label}{display} ({len(objects)} objects):")  # User feedback with count
+        logging.info("Importing %s %s objects (dry_run=%s)", len(objects), display, dry_run)  # Log batch start
+
+        for obj in objects:  # Process each object in the batch
+            self._process_import_object(config_type, obj, dry_run, results)  # Delegate per-object logic
+
+    def _process_import_object(  # type: ignore[type-arg]
+        self,
+        config_type: dict,
+        obj: dict,
+        dry_run: bool,
+        results: list,
+    ) -> None:
+        """Process a single object: conflict check, remap, create or skip."""
+        obj_name = obj.get("name", "unnamed")  # Extract object name for logging and reporting
+        source_id = obj.get("id", "")  # Capture source org ID for remapping
+        type_key = config_type["key"]  # Bundle key for this config type
+        label = "[DRY RUN] " if dry_run else ""  # Prefix for output
+
+        conflict = self._detect_conflicts(obj, type_key)  # Check for name/subnet conflicts
+        if conflict:  # Conflict found -- skip and record
+            self._record_conflict(type_key, obj_name, source_id, conflict, results)
+            return
+
+        cleaned = self._strip_source_fields(obj)  # Remove source-org-specific fields
+        cleaned = self._remap_object_references(cleaned, type_key)  # Remap cross-references to dest IDs
+
+        if dry_run:  # Preview mode -- don't make API calls
+            print(f"      {label}Would import: {obj_name}")  # Show what would happen
+            results.append({"type": type_key, "name": obj_name, "status": "would_import"})  # Record for report
+            return
+
+        self._create_and_record(config_type, cleaned, obj_name, source_id, results)  # Create via API
+
+    def _record_conflict(  # type: ignore[type-arg]
+        self,
+        type_key: str,
+        name: str,
+        source_id: str,
+        conflict: dict,
+        results: list,
+    ) -> None:
+        """Record a skipped object due to conflict and update remap table."""
+        print(f"      SKIP: {name} - {conflict['detail']}")  # User feedback showing skip reason
+        results.append({"type": type_key, "name": name, "status": "skipped", "reason": conflict["detail"]})  # Record
+        existing_id = conflict.get("existing_id")  # Get destination org's matching object ID
+        if existing_id and source_id:  # Both IDs available -- record mapping for cross-references
+            self._build_remap_entry(source_id, existing_id)
+
+    def _create_and_record(  # type: ignore[type-arg]
+        self,
+        config_type: dict,
+        cleaned: dict,
+        name: str,
+        source_id: str,
+        results: list,
+    ) -> None:
+        """Create a single object via the API and record the result."""
+        type_key = config_type["key"]  # Bundle key for logging
+        logging.info("Creating %s '%s' in destination org", type_key, name)  # Log before API call
+        try:
+            create_fn = self._resolve_api_fn(config_type["create_fn"])  # Resolve create endpoint
+            response = create_fn(self.session, self.org_id, body=cleaned)  # Call Mist API to create
+            new_id = self._extract_created_id(response)  # Extract new object ID from response
+            if source_id and new_id:  # Record mapping for downstream cross-references
+                self._build_remap_entry(source_id, new_id)
+            print(f"      OK: {name}")  # User feedback showing success
+            logging.debug("Created %s '%s' with ID %s", type_key, name, new_id[:8] if new_id else "n/a")  # Log result
+            results.append({"type": type_key, "name": name, "status": "imported"})  # Record success
+        except Exception as error:  # Catch API errors without stopping the entire import
+            print(f"      FAIL: {name} - {error}")  # User feedback showing failure
+            logging.error("Failed to create %s '%s': %s", type_key, name, error)  # Log error with context
+            results.append({"type": type_key, "name": name, "status": "failed", "reason": str(error)})  # Record failure
+
+    def _extract_created_id(self, response) -> str:  # type: ignore[no-untyped-def]
+        """Extract the new object ID from a create API response."""
+        if hasattr(response, "data") and isinstance(response.data, dict):  # Check response has data dict
+            return response.data.get("id", "")  # type: ignore[no-any-return] # Return the new ID
+        return ""  # Fallback when response format is unexpected
+
+    # ------------------------------------------------------------------
+    # Import report
+    # ------------------------------------------------------------------
+
+    def _display_import_report(self, results: list) -> None:  # type: ignore[type-arg]
+        """Print a summary report of the import operation."""
+        imported = [r for r in results if r["status"] == "imported"]  # Filter successfully imported
+        skipped = [r for r in results if r["status"] == "skipped"]  # Filter conflict-skipped
+        failed = [r for r in results if r["status"] == "failed"]  # Filter API failures
+        would_import = [r for r in results if r["status"] == "would_import"]  # Filter dry-run previews
+
+        print("\n  " + "=" * 55)  # Report header separator
+        print("  IMPORT REPORT")  # Report title
+        print("  " + "=" * 55)  # Report header separator
+
+        if would_import:  # Show dry-run preview section if applicable
+            self._print_report_section("WOULD IMPORT (dry-run)", would_import)
+        if imported:  # Show successfully imported section
+            self._print_report_section("IMPORTED", imported)
+        if skipped:  # Show skipped-due-to-conflicts section
+            self._print_report_section("SKIPPED (conflicts)", skipped)
+        if failed:  # Show failed-to-import section
+            self._print_report_section("FAILED", failed)
+
+        self._print_report_totals(imported, skipped, failed, would_import)  # Show grand totals
+
+    def _print_report_section(self, title: str, items: list) -> None:  # type: ignore[type-arg]
+        """Print a single section of the import report."""
+        print(f"\n  {title} ({len(items)}):")  # Section header with count
+        for item in items:  # Iterate each result in this section
+            reason = item.get("reason", "")  # Get conflict/error reason if present
+            suffix = f" -- {reason}" if reason else ""  # Append reason as suffix
+            print(f"    {item['type']:<20} {item['name']:<30}{suffix}")  # Aligned columns
+
+    def _print_report_totals(self, imported: list, skipped: list, failed: list, would_import: list) -> None:  # type: ignore[type-arg]
+        """Print the totals row of the import report."""
+        print("\n  " + "-" * 55)  # Separator before totals
+        total = len(imported) + len(skipped) + len(failed) + len(would_import)  # Grand total
+        print(f"  Total: {total} objects processed")  # Total line
+        if would_import:  # Show dry-run count
+            print(f"    Would import: {len(would_import)}")
+        if imported:  # Show imported count
+            print(f"    Imported:     {len(imported)}")
+        if skipped:  # Show skipped count
+            print(f"    Skipped:      {len(skipped)}")
+        if failed:  # Show failed count
+            print(f"    Failed:       {len(failed)}")
 
 
 # ============================================================================
@@ -29121,62 +29497,6 @@ class SiteInventoryHealthAnalyzer:
             print("! No sites found with offline infrastructure (all switches and gateways are online)")
 
 
-class AuditAnalysisOps:
-    """Menu #174: Audit Log Analysis operations."""
-
-    @staticmethod
-    def audit_log_analysis():
-        """Fetch org audit logs, filter noise, generate analysis reports."""
-        if CacheUtils.fast_cache_hit("OrgAuditAnalysis.md"):
-            return
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not org_id:
-            return
-
-        test_mode = getattr(sys, "_misthelper_test_mode", False)
-        if test_mode:
-            time_input = "7d"
-        else:
-            print("\nTime range examples: 7d, 4w, 3m, 1y, 6w-2w (6 weeks ago to 2 weeks ago)")
-            time_input = InputUtils.safe_input("Enter time range [7d]: ", context="audit_analysis").strip()
-
-        parser = TimeRangeParser()
-        try:
-            time_range = parser.parse(time_input)
-        except ValueError as exc:
-            logging.error(f"Invalid time range: {exc}")
-            return
-
-        print(f"\nFetching audit logs for: {time_range.description}")
-        api_kwargs = TimeRangeParser.to_api_kwargs(time_range)
-
-        try:
-            response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **api_kwargs, limit=1000)
-            entries = mistapi.get_all(response=response, mist_session=apisession) or []
-        except Exception as exc:
-            logging.error(f"API call failed: {exc}")
-            return
-
-        print(f"Retrieved {len(entries)} raw entries")
-
-        log_filter = AuditLogFilter()
-        filtered, stats = log_filter.filter_with_stats(entries)
-        print(f"Filtered: {stats['kept_count']} kept, " f"{stats['removed_count']} noise removed")
-
-        analyzer = AuditLogAnalyzer()
-        analysis = analyzer.analyze(filtered, time_range.description)
-
-        renderer = AuditReportRenderer()
-
-        md_path = os.path.join("data", "OrgAuditAnalysis.md")
-        renderer.render_mermaid(analysis, md_path)
-        print(f"Mermaid report: {md_path}")
-
-        html_path = os.path.join("data", "OrgAuditAnalysis.html")
-        renderer.render_html(analysis, html_path)
-        print(f"HTML report: {html_path}")
-
-
 def _ws_cmd_deps() -> WebSocketCmdDeps:
     """Create WebSocket command dependency context for the dispatch table."""
     import mistapi.api.v1.sites.devices as _site_devices  # noqa: PLC0415
@@ -29686,8 +30006,18 @@ menu_actions = {
     "171": (SiteExportUtils.mxedge_upgrade_status, "Export MxEdge upgrade status for a selected site"),
     "172": (SiteExportUtils.auto_map_assignment_status, "Export auto-map assignment status for a selected site"),
     "173": (SitesByAPModelExporter.export_sites_by_ap_model, "Export sites by AP model with site address (CSV)"),
-    "174": (AuditAnalysisOps.audit_log_analysis, "Audit Log Analysis - Mermaid timeline + interactive HTML report"),
-    "175": (CacheUtils.clear_cache, "Clear cached output files from data/ directory"),
+    "176": (
+        lambda: OrgConfigMigrationManager(
+            apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
+        ).export_config(),
+        "Export Org WAN/Gateway Config (JSON bundle for cross-org migration)",
+    ),
+    "177": (
+        lambda: OrgConfigMigrationManager(
+            apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
+        ).import_config(),
+        "Import Org WAN/Gateway Config (cross-org migration with conflict detection)",
+    ),
 }
 
 
@@ -30173,12 +30503,12 @@ class OperationRegistry:
         },
         # --- interactive (needs user input, not automatable) -----------------
         "9": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: Packet capture - triggers capture on device (API write)",
+            "category": "interactive",
+            "skip_reason": "Packet capture - requires interactive configuration and site selection",
         },
         "10": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: Packet capture - triggers capture on device (API write)",
+            "category": "interactive",
+            "skip_reason": "Packet capture - requires interactive configuration and MxEdge ID",
         },
         "56": {"category": "interactive", "skip_reason": "MSP export - requires interactive MSP selection"},
         "60": {
@@ -30198,12 +30528,12 @@ class OperationRegistry:
         "79": {"category": "interactive", "skip_reason": "Interactive CLI shell session"},
         "101": {"category": "interactive", "skip_reason": "Interactive TUI API browser - keyboard navigation required"},
         "102": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: WLAN RADIUS timer management - modifies WLAN auth settings",
+            "category": "interactive",
+            "skip_reason": "WLAN RADIUS timer management - requires interactive site selection",
         },
         "103": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: WAN2 variable configuration - sets site variables",
+            "category": "interactive",
+            "skip_reason": "Requires interactive site selection for WAN2 variable configuration",
         },
         "105": {
             "category": "interactive",
@@ -30342,12 +30672,12 @@ class OperationRegistry:
             "skip_reason": "Run top streaming - interactive device + Ctrl+C",
         },
         "138": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: Locate device - blinks LED (API write)",
+            "category": "interactive",
+            "skip_reason": "Locate device - interactive device selection",
         },
         "139": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: Unlocate device - stops LED blink (API write)",
+            "category": "interactive",
+            "skip_reason": "Unlocate device - interactive device selection",
         },
         "140": {
             "category": "destructive",
@@ -30362,20 +30692,20 @@ class OperationRegistry:
             "skip_reason": "DESTRUCTIVE: Reprovision - pushes fresh config",
         },
         "143": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: Re-adopt device - changes device adoption state",
+            "category": "interactive",
+            "skip_reason": "Re-adopt device - interactive switch selection",
         },
         "144": {
             "category": "interactive",
-            "skip_reason": "Get ZTP password - read-only, interactive device selection",
+            "skip_reason": "ZTP password - interactive device selection",
         },
         "145": {
             "category": "interactive",
-            "skip_reason": "Get config CLI commands - read-only, interactive switch selection",
+            "skip_reason": "Config CLI commands - interactive switch",
         },
         "146": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: Upload support file - triggers device action (API write)",
+            "category": "interactive",
+            "skip_reason": "Upload support file - interactive device/type",
         },
         "147": {
             "category": "destructive",
@@ -30415,27 +30745,27 @@ class OperationRegistry:
         },
         "156": {
             "category": "interactive",
-            "skip_reason": "Poll switch stats - read-only, interactive switch selection",
+            "skip_reason": "Poll switch stats - interactive switch",
         },
         "157": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: Create device snapshot - writes snapshot (API write)",
+            "category": "interactive",
+            "skip_reason": "Create device snapshot - interactive switch",
         },
         "158": {"category": "safe"},
         "159": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: Multi-phase workflow with write-capable phases",
+            "category": "interactive",
+            "skip_reason": "Interactive multi-phase workflow with write-capable phases",
         },
         "160": {"category": "interactive_safe"},
         "161": {"category": "interactive_safe"},
         "162": {"category": "interactive_safe"},
         "163": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: VPN pod management - API writes",
+            "category": "interactive",
+            "skip_reason": "Interactive VPN pod management with API writes",
         },
         "164": {
-            "category": "destructive",
-            "skip_reason": "DESTRUCTIVE: VPN builder - API writes",
+            "category": "interactive",
+            "skip_reason": "Interactive VPN builder with API writes",
         },
         "165": {
             "category": "resource_intensive",
@@ -30445,63 +30775,8 @@ class OperationRegistry:
         "171": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "172": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "173": {"category": "interactive_safe", "skip_reason": "Requires AP model selection"},
-        # ------------------------------------------------------------------
-        # Org-level data exports (no user input, fully automated)
-        # ------------------------------------------------------------------
-        "1": {"category": "safe"},
-        "2": {"category": "safe"},
-        "3": {"category": "safe"},
-        "4": {"category": "safe"},
-        "11": {"category": "safe"},
-        "12": {"category": "safe"},
-        "13": {"category": "safe"},
-        "15": {"category": "safe"},
-        "16": {"category": "safe"},
-        "17": {"category": "safe"},
-        "19": {"category": "safe"},
-        "20": {"category": "safe"},
-        "21": {"category": "safe"},
-        "22": {"category": "safe"},
-        "23": {"category": "safe"},
-        "24": {"category": "safe"},
-        "25": {"category": "safe"},
-        "26": {"category": "safe"},
-        "27": {"category": "safe"},
-        "28": {"category": "safe"},
-        "35": {"category": "safe"},
-        "36": {"category": "safe"},
-        "37": {"category": "safe"},
-        "38": {"category": "safe"},
-        "39": {"category": "safe"},
-        "40": {"category": "safe"},
-        "41": {"category": "safe"},
-        "42": {"category": "safe"},
-        "43": {"category": "safe"},
-        "44": {"category": "safe"},
-        "45": {"category": "safe"},
-        "46": {"category": "safe"},
-        "47": {"category": "safe"},
-        "48": {"category": "safe"},
-        "54": {"category": "safe"},
-        "55": {"category": "safe"},
-        "57": {"category": "safe"},
-        "58": {"category": "safe"},
-        "59": {"category": "safe"},
-        "66": {"category": "safe"},
-        "67": {"category": "safe"},
-        "82": {"category": "safe"},
-        "83": {"category": "safe"},
-        "94": {"category": "safe"},
-        "95": {"category": "safe"},
-        "96": {"category": "safe"},
-        "119": {"category": "safe"},
-        "121": {"category": "safe"},
-        "166": {"category": "safe"},
-        "167": {"category": "safe"},
-        "168": {"category": "safe"},
-        "169": {"category": "safe"},
-        "174": {"category": "safe"},
-        "175": {"category": "dangerous"},
+        "176": {"category": "safe"},
+        "177": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)
@@ -30591,7 +30866,6 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
         bool: True if all tests passed, False if any failed
     """
     start_time = time.time()
-    sys._misthelper_test_mode = True  # type: ignore[attr-defined]
     print(" Starting systematic test of MistHelper menu options...")
     print("  Note: This will skip interactive, websocket, POST, and destructive operations")
     print(f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
