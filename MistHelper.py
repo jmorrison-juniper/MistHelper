@@ -13035,7 +13035,9 @@ class OrgInventoryExporter:
             org_name_for_filename = END_CUSTOMER_NAME
         if not org_name_for_filename:
             org_name_for_filename = current_org_id or "UnknownOrg"
-        safe_org_name = "".join(character if character.isalnum() or character in "-_" else "_" for character in org_name_for_filename)  # noqa: E501
+        safe_org_name = "".join(
+            character if character.isalnum() or character in "-_" else "_" for character in org_name_for_filename
+        )  # noqa: E501
 
         # Always regenerate fresh data (fast=True uses cached SiteList + OrgInventory CSVs)
         OrgInventoryExporter.devices_with_site_info()
@@ -13079,8 +13081,10 @@ class OrgInventoryExporter:
                 json.dump(raw_no_vc, jf, indent=2, default=str)  # Pretty-print for human readability
             logging.info("Saved %d entries to %s", len(raw_no_vc), no_vc_path)
 
-            print(f"  Raw JSON saved: vc=True ({len(raw_vc_true)}), "  # User-facing progress
-                  f"vc=False ({len(raw_vc_false)}), no-vc ({len(raw_no_vc)}) entries")
+            print(
+                f"  Raw JSON saved: vc=True ({len(raw_vc_true)}), "  # User-facing progress
+                f"vc=False ({len(raw_vc_false)}), no-vc ({len(raw_no_vc)}) entries"
+            )
         except Exception as json_save_error:  # Don't let JSON export failure break menu 25
             logging.warning("Failed to save raw inventory JSON: %s", json_save_error)
 
@@ -13088,9 +13092,7 @@ class OrgInventoryExporter:
         # getOrgInventory with vc=True returns both physical chassis AND virtual VC identifiers.
         # Virtual VC entries have MACs starting with '020003' and are NOT real hardware.
         # Filter to only physical devices for the master report.
-        devices_with_site_info_path = FilePathUtils.get_csv_path(  # Enriched inventory CSV
-            "AllDevicesWithSiteInfo.csv"
-        )
+        devices_with_site_info_path = FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")  # Enriched inventory CSV
         with open(devices_with_site_info_path, encoding="utf-8") as file:  # Open CSV for reading
             all_devices = list(csv.DictReader(file))  # Load all device rows into memory
         # Exclude virtual chassis identifier entries (020003* MACs) - they aren't physical hardware
@@ -13108,17 +13110,22 @@ class OrgInventoryExporter:
 
         logging.info(
             "Loaded %d total devices, filtered to %d physical devices (excluded %d virtual VC identifiers)",
-            len(all_devices), len(site_configs), len(all_devices) - len(site_configs),
+            len(all_devices),
+            len(site_configs),
+            len(all_devices) - len(site_configs),
         )
         logging.info(
             "Virtual VC breakdown: %d duplicate entries (real hardware counted elsewhere) + "
             "%d empty VC shells (provisioned but no physical members assigned)",
-            duplicate_vc_entries, len(empty_vc_shells),
+            duplicate_vc_entries,
+            len(empty_vc_shells),
         )
         if empty_vc_shells:  # Call out the dashboard vs report delta explicitly
             print(f"  NOTE: {len(empty_vc_shells)} provisioned VC shells exist with no physical members.")
-            print(f"        Dashboard shows {len(site_configs) + len(empty_vc_shells)} 'Physical Devices' "
-                  f"but {len(empty_vc_shells)} are empty VC placeholders (020003* MAC, no serial/SKU).")
+            print(
+                f"        Dashboard shows {len(site_configs) + len(empty_vc_shells)} 'Physical Devices' "
+                f"but {len(empty_vc_shells)} are empty VC placeholders (020003* MAC, no serial/SKU)."
+            )
             print(f"        Report correctly includes only {len(site_configs)} devices with real hardware.")
 
         # Create a subfolder for weekly CSV files in the data directory
@@ -13823,12 +13830,18 @@ class OrgDeviceStatsExporter:
             serial = switch.get("serial", "")  # Serial number for debug context
             logging.debug(
                 "Processing switch: name=%s, id=%s, site_id=%s, mac=%s, model=%s, serial=%s",
-                name, device_id, site_id, mac, model, serial,
+                name,
+                device_id,
+                site_id,
+                mac,
+                model,
+                serial,
             )  # Log per-switch context before API call
             if not site_id or not device_id:  # Skip if missing required API params
                 logging.warning(
                     "Skipping switch with missing site_id or device_id: name=%s, mac=%s",
-                    name, mac,
+                    name,
+                    mac,
                 )  # Warn so operator can investigate gaps
                 return None  # Signal caller to skip this switch
             try:
@@ -13840,7 +13853,9 @@ class OrgDeviceStatsExporter:
             except Exception as fetch_error:  # Non-fatal: skip on failure
                 logging.warning(
                     "Failed to fetch VC stats for switch %s (%s): %s",
-                    name, device_id, fetch_error,
+                    name,
+                    device_id,
+                    fetch_error,
                 )  # Log failure with context for later review
                 return None  # Signal caller to skip this switch
 
@@ -13848,12 +13863,12 @@ class OrgDeviceStatsExporter:
             max_workers = FAST_MODE_MAX_CONCURRENT_CONNECTIONS  # From env (default 8)
             logging.info(
                 "Fast mode: fetching VC stats for %d switches with %d concurrent workers",
-                len(switches), max_workers,
+                len(switches),
+                max_workers,
             )  # Log concurrency config before pool starts
             with ThreadPoolExecutor(max_workers=max_workers) as executor:  # Thread pool
                 future_to_switch = {  # Submit all switches as concurrent tasks
-                    executor.submit(_fetch_vc_for_switch, switch): switch
-                    for switch in switches
+                    executor.submit(_fetch_vc_for_switch, switch): switch for switch in switches
                 }
                 with tqdm(  # type: ignore[no-untyped-call]
                     total=len(switches), desc="Switches", unit="switch"
@@ -17627,10 +17642,14 @@ class ServicePingManager:
 
     def _confirm_proceed(self) -> bool:
         """Prompt user to confirm proceeding with non-optimal device."""
-        choice = InputUtils.safe_input(
-            "   -> Continue anyway? (y/N): ",
-            context="service_ping_continue",
-        ).strip().lower()
+        choice = (
+            InputUtils.safe_input(
+                "   -> Continue anyway? (y/N): ",
+                context="service_ping_continue",
+            )
+            .strip()
+            .lower()
+        )
         if choice != "y":
             print("Operation cancelled.")
             return False
@@ -18190,10 +18209,14 @@ class ServicePingManager:
 
     def _prompt_for_node(self) -> str | None:
         """Prompt for HA node selection."""
-        node_input = InputUtils.safe_input(
-            "Enter HA node (node0/node1) [optional]: ",
-            context="service_ping_node",
-        ).strip().lower()
+        node_input = (
+            InputUtils.safe_input(
+                "Enter HA node (node0/node1) [optional]: ",
+                context="service_ping_node",
+            )
+            .strip()
+            .lower()
+        )
         return node_input if node_input in ["node0", "node1"] else None
 
     def _build_payload(self, service: str, tenant: str | None, params: dict) -> dict:  # type: ignore[type-arg]
@@ -24200,10 +24223,14 @@ class WANProbeConfigManager:
         print("   Or 'all' to modify all templates")
         print("   Or 'cancel' to abort")
 
-        selection = InputUtils.safe_input(
-            "\n  Selection: ",
-            context="wan_probe_template_selection",
-        ).strip().lower()
+        selection = (
+            InputUtils.safe_input(
+                "\n  Selection: ",
+                context="wan_probe_template_selection",
+            )
+            .strip()
+            .lower()
+        )
 
         if selection == "cancel":
             print(" Operation cancelled.")
@@ -24634,10 +24661,14 @@ class WANProbeDeviceOverrideManager:
         print("   Enter a template number to select")
         print("   Or 'cancel' to abort")
 
-        selection = InputUtils.safe_input(
-            "\n  Selection: ",
-            context="wan_probe_device_template_selection",
-        ).strip().lower()
+        selection = (
+            InputUtils.safe_input(
+                "\n  Selection: ",
+                context="wan_probe_device_template_selection",
+            )
+            .strip()
+            .lower()
+        )
 
         if selection == "cancel":
             print(" Operation cancelled.")
@@ -25961,10 +25992,14 @@ class DeviceRebootManager:
         print(f"   Please create this file at: {reboot_list_path}")
         print("   This file should contain template names to reboot, one per line.")
 
-        user_input = InputUtils.safe_input(
-            "   Would you like to create an empty file? (y/n): ",
-            context="gateway_reboot_create_template_file",
-        ).strip().lower()
+        user_input = (
+            InputUtils.safe_input(
+                "   Would you like to create an empty file? (y/n): ",
+                context="gateway_reboot_create_template_file",
+            )
+            .strip()
+            .lower()
+        )
         if user_input in ["y", "yes"]:
             try:
                 template_path = FilePathUtils.create_csv_template("GatewayTemplateRebootList.CSV")
@@ -29893,7 +29928,8 @@ class AuditAnalysisOps:
         try:
             logging.info(
                 "Fetching audit logs for org %s with range %s",
-                org_id, time_range.description,
+                org_id,
+                time_range.description,
             )  # Log before API call
             response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(
                 apisession, org_id, **api_kwargs, limit=1000
