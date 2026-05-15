@@ -485,12 +485,20 @@ class TestGetRateLimitedDelay:
 
     def test_returns_tuple(self, api_cache):
         """Returns a 2-tuple of (smoothed_delay, delay_in_seconds)."""
-        smoothed, delay = RateLimitingUtils.get_rate_limited_delay(
-            smoothed_delay=None, apisession=None, api_usage_cache=api_cache
-        )
-        assert isinstance(smoothed, float)
-        assert isinstance(delay, float)
-        assert delay >= 0.01
+        import src.utils.rate_limiting as rl
+
+        filepath = os.path.join("data", "tuning_data.json")
+        original = rl.tuning_data_file
+        rl.tuning_data_file = filepath
+        try:
+            smoothed, delay = RateLimitingUtils.get_rate_limited_delay(
+                smoothed_delay=None, apisession=None, api_usage_cache=api_cache
+            )
+            assert isinstance(smoothed, float)
+            assert isinstance(delay, float)
+            assert delay >= 0.01
+        finally:
+            rl.tuning_data_file = original
 
     def test_delay_is_positive(self, api_cache):
         """Delay is always positive."""
@@ -514,9 +522,17 @@ class TestGetRateLimitedDelay:
 
     def test_writes_metrics_log(self, api_cache):
         """Delay metrics log file is created after a call."""
-        RateLimitingUtils.get_rate_limited_delay(smoothed_delay=None, apisession=None, api_usage_cache=api_cache)
-        filepath = os.path.join("data", "delay_metrics.json")
-        assert os.path.exists(filepath)
+        import src.utils.rate_limiting as rl
+
+        tuning_filepath = os.path.join("data", "tuning_data.json")
+        original = rl.tuning_data_file
+        rl.tuning_data_file = tuning_filepath
+        try:
+            RateLimitingUtils.get_rate_limited_delay(smoothed_delay=None, apisession=None, api_usage_cache=api_cache)
+            filepath = os.path.join("data", "delay_metrics.json")
+            assert os.path.exists(filepath)
+        finally:
+            rl.tuning_data_file = original
 
 
 # ---------------------------------------------------------------------------

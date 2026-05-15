@@ -72,6 +72,10 @@ try:
 except ImportError:
     DB_LAYER_AVAILABLE = False
 
+from src.audit.analyzer import AuditLogAnalyzer
+from src.audit.filter import AuditLogFilter
+from src.audit.renderer import AuditReportRenderer
+from src.audit.time_parser import TimeRangeParser
 from src.org_data_collector import OrgDataCollector
 from src.ssh.ssh_runner import EnhancedSSHRunner
 from src.wan_hub_group_manager import WanHubGroupNumberManager
@@ -5419,8 +5423,8 @@ class CacheUtils:
         # Get the full path to the CSV file in the data directory
         full_file_path = FilePathUtils.get_csv_path(file_name)
 
-        # Check if the file already exists
-        if os.path.exists(full_file_path):
+        # Only use cache when --fast mode is active
+        if FAST_MODE_ENABLED and os.path.exists(full_file_path):
             try:
                 # Get the last modified time of the file
                 file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path))
@@ -5453,6 +5457,162 @@ class CacheUtils:
             logging.error(f"Failed to generate {file_name} using {generate_function.__name__}: {error}")
             logging.debug("EXIT: check_and_generate_csv - generation failed")
             return False
+
+    @staticmethod
+    def fast_cache_hit(output_file: str) -> bool:
+        """Check if fast mode cache hit applies for the given output file.
+
+        Returns True (and prints cache message) if FAST_MODE_ENABLED is True
+        AND the output file exists in data/ AND is fresh (< CSV_FRESHNESS_MINUTES).
+        Callers should ``return`` early when this returns True.
+        """
+        if not FAST_MODE_ENABLED:
+            return False
+        full_path = FilePathUtils.get_csv_path(output_file)
+        if not os.path.exists(full_path):
+            return False
+        try:
+            age_minutes = (time.time() - os.path.getmtime(full_path)) / 60.0
+            if age_minutes < CSV_FRESHNESS_MINUTES:
+                logging.info(
+                    f" Fast mode cache hit: {output_file} is fresh "
+                    f"({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch."
+                )
+                print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
+                return True
+        except OSError as error:
+            logging.debug(f"Fast mode freshness check failed for {output_file}: {error}")
+        return False
+
+    # Static output files that MistHelper operations generate
+    GENERATED_FILES: set[str] = {
+        "AllDevicesWithSiteInfo.csv",
+        "AllGatewayDeviceStats.csv",
+        "AllGatewaySyntheticTests.csv",
+        "AllGatewayTestResults.csv",
+        "AllSiteGatewayConfigs.csv",
+        "ConstInsightMetrics.csv",
+        "DeviceConfig.csv",
+        "DeviceStats.csv",
+        "DeviceTestResults.csv",
+        "FilteredGatewayPortConfigs.csv",
+        "GatewayManagementIPs.csv",
+        "GatewayOverriddenPorts.csv",
+        "GatewayWANPortConflicts.csv",
+        "GatewaysWithSiteInfo.csv",
+        "GlobalWiredClientReport.csv",
+        "MSP_Inventory_Export.csv",
+        "MspOrganizations.csv",
+        "OrgAdmins.csv",
+        "OrgAlarms.csv",
+        "OrgApiTokens.csv",
+        "OrgApTemplates.csv",
+        "OrgAuditAnalysis.html",
+        "OrgAuditAnalysis.md",
+        "OrgAuditLogs.csv",
+        "OrgCurrentGuests.csv",
+        "OrgDeviceEvents.csv",
+        "OrgDeviceEvents_52w.csv",
+        "OrgDevicePortStats.csv",
+        "OrgDeviceStats.csv",
+        "OrgDevices.csv",
+        "OrgE911Report.csv",
+        "OrgGatewayStats.csv",
+        "OrgGatewayTemplates.csv",
+        "OrgHistoricalGuests.csv",
+        "OrgInsightMetrics_Legacy.csv",
+        "OrgInventory.csv",
+        "OrgJsiPbn.csv",
+        "OrgJsiSirt.csv",
+        "OrgLicenses.csv",
+        "OrgMetricsResults.csv",
+        "OrgMetricsSummary.csv",
+        "OrgMetricsTimeSeries.csv",
+        "OrgMxEdges.csv",
+        "OrgNetworkTemplates.csv",
+        "OrgOspfStats.csv",
+        "OrgPsks.csv",
+        "OrgRfTemplates.csv",
+        "OrgRogueAPs.csv",
+        "OrgRogueClients.csv",
+        "OrgRogueData.csv",
+        "OrgSLEMetrics.csv",
+        "OrgSecIntelProfiles.csv",
+        "OrgSecurityPolicies.csv",
+        "OrgSiteTemplates.csv",
+        "OrgSitesData.csv",
+        "OrgSitesSLESummary.csv",
+        "OrgSso.csv",
+        "OrgSwitchTemplates.csv",
+        "OrgSwitchVCStats.csv",
+        "OrgUsage.csv",
+        "OrgVPNPeerStats.csv",
+        "OrgWebhooks.csv",
+        "OrgWiredClients.csv",
+        "OrgWirelessClients.csv",
+        "OrgWlans.csv",
+        "SiteInventory.csv",
+        "SiteList.csv",
+        "SiteList_ListAPI.csv",
+        "SiteWiFiClients.CSV",
+        "SitesWithLocations.csv",
+        "VirtualChassisConversionStatus.csv",
+        "WAN2_SiteVariable_Report.csv",
+    }
+
+    # Prefix patterns for dynamically-named operation outputs
+    GENERATED_PREFIXES: tuple[str, ...] = (
+        "ActiveUpgradeOperations_",
+        "Const",
+        "FirmwareUpgradeStatus_",
+        "GatewayDevice_WAN_Probe_Override_Audit",
+        "GatewayTemplate_WAN",
+        "GatewayTemplateReboot",
+        "MergedTransceiverData",
+        "OfflineDeviceReport_",
+        "Org",
+        "Site",
+        "VirtualChassis",
+        "WiredClientManufacturerReport",
+    )
+
+    @staticmethod
+    def _is_generated_file(filename: str) -> bool:
+        """Check if a file was generated by a MistHelper operation."""
+        if filename in CacheUtils.GENERATED_FILES:
+            return True
+        return filename.startswith(CacheUtils.GENERATED_PREFIXES)
+
+    @staticmethod
+    def clear_cache() -> None:
+        """Delete files generated by MistHelper operations from the data/ directory.
+
+        Only removes files that match known operation output names or prefixes.
+        Preserves user files, infrastructure files, and subdirectories.
+        """
+        data_dir = FilePathUtils.get_csv_path("")
+        if not os.path.isdir(data_dir):
+            print("No data/ directory found. Nothing to clear.")
+            return
+        deleted = 0
+        errors = 0
+        for entry in os.listdir(data_dir):
+            full_path = os.path.join(data_dir, entry)
+            if os.path.isdir(full_path):
+                continue
+            if not CacheUtils._is_generated_file(entry):
+                continue
+            try:
+                os.remove(full_path)
+                logging.info(f"Deleted: {entry}")
+                deleted += 1
+            except OSError as error:
+                logging.error(f"Failed to delete {entry}: {error}")
+                errors += 1
+        print(f"Cache cleared: {deleted} files deleted.")
+        if errors:
+            print(f"  {errors} files could not be deleted (see log).")
+        logging.info(f"Cache clear complete: {deleted} deleted, {errors} errors")
 
     @staticmethod
     def load_csv_grouped_by_key(filename: str, key: str) -> dict[str, list[dict[str, Any]]]:
@@ -10332,6 +10492,23 @@ class DataExporter:
         DataExporter._route_to_polyglot(data, api_function_name, raw_data=raw_data)
         return csv_ok
 
+    _standalone_logged = False
+
+    @staticmethod
+    def _is_standalone_mode() -> bool:
+        """Auto-detect standalone mode: skip polyglot when not in a container."""
+        standalone_env = os.getenv("MISTHELPER_STANDALONE", "").lower()
+        if standalone_env == "true":
+            return True
+        if standalone_env == "false":
+            return False
+        if not EnvironmentUtils.is_running_in_container():
+            if not DataExporter._standalone_logged:
+                logging.info("Standalone mode auto-detected (not in container), skipping polyglot database")
+                DataExporter._standalone_logged = True
+            return True
+        return False
+
     @staticmethod
     def _route_to_polyglot(
         data: list[dict[str, Any]],
@@ -10340,6 +10517,8 @@ class DataExporter:
     ) -> None:
         """Send data to polyglot backends (ArangoDB/Redis) if available."""
         if not api_function_name or not DB_LAYER_AVAILABLE:
+            return
+        if DataExporter._is_standalone_mode():
             return
         DataExporter._init_router()
         if DataExporter._router is None:
@@ -12461,6 +12640,8 @@ class OrgAlarmEventExporter:
         """
         Export open organization alarms from the past 24 hours to OrgAlarms.csv.
         """
+        if CacheUtils.fast_cache_hit("OrgAlarms.csv"):
+            return
         logging.info("Menu #1: Starting organization alarms export")
         logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
@@ -12507,6 +12688,8 @@ class OrgAlarmEventExporter:
         """
         Export all device events from the past 24 hours to OrgDeviceEvents.csv.
         """
+        if CacheUtils.fast_cache_hit("OrgDeviceEvents.csv"):
+            return
         logging.info("Menu #2: Starting device events export")
         logging.info("Search Org Device Events:")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -12739,6 +12922,8 @@ class OrgSiteExporter:
         Output format determined by global OUTPUT_FORMAT setting.
         Uses APIDataFetcher to handle API call and output writing.
         """
+        if CacheUtils.fast_cache_hit("SiteList.csv"):
+            return
         logging.info("Starting export of organization site list...")
         emitter = PROGRESS_EMITTER
         if emitter:
@@ -12786,6 +12971,8 @@ class OrgSiteExporter:
         """
         Export a list of sites with all available fields to SitesWithLocations.csv.
         """
+        if CacheUtils.fast_cache_hit("SitesWithLocations.csv"):
+            return
         print("Sites with Location and Timezone Info:")
         logging.info("Listing Sites with Full Info:")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -12803,6 +12990,8 @@ class OrgSiteExporter:
         """
         Export all current guest users in the org to OrgCurrentGuests.csv
         """
+        if CacheUtils.fast_cache_hit("OrgCurrentGuests.csv"):
+            return
         print("Current and Historical Guest Users:")
         logging.info("Exporting all current guest users in the org...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -12821,6 +13010,8 @@ class OrgSiteExporter:
         """
         Export all guest users from the last 7 days to OrgHistoricalGuests.csv
         """
+        if CacheUtils.fast_cache_hit("OrgHistoricalGuests.csv"):
+            return
         logging.info("Exporting all guest users from the last 7 days...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
         end_time = int(time.time())
@@ -12852,6 +13043,8 @@ class OrgInventoryExporter:
         Fetches and exports the full inventory of devices in the organization to OrgInventory.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
+        if CacheUtils.fast_cache_hit("OrgInventory.csv"):
+            return
         logging.info("Starting export of organization device inventory...")
         emitter = PROGRESS_EMITTER
         if emitter:
@@ -12874,6 +13067,8 @@ class OrgInventoryExporter:
         Fetches and exports a list of all devices in the organization to OrgDevices.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
+        if CacheUtils.fast_cache_hit("OrgDevices.csv"):
+            return
         logging.info("Starting export of all organization devices...")
         emitter = PROGRESS_EMITTER
         if emitter:
@@ -12902,6 +13097,8 @@ class OrgInventoryExporter:
             - Master CSV: data/CombinedInventory_ByWeek/CombinedInventory_Master.csv
               (with simplified headers: serial, model, Street Address, City, State, Zip)
         """
+        if CacheUtils.fast_cache_hit("AllDevicesWithSiteInfo.csv"):
+            return
         print("Combined Inventory with Site Info by Calendar Week:")
 
         # Load environment variables
@@ -13164,6 +13361,8 @@ class OrgInventoryExporter:
         Fetches all gateway devices in the organization, enriches them with site and address info,
         and exports the result to GatewaysWithSiteInfo.csv. Also logs and displays a summary table.
         """
+        if CacheUtils.fast_cache_hit("GatewaysWithSiteInfo.csv"):
+            return
         print("Gateways with Site and Address Info:")
         logging.info("Fetching Gateways with Site Info...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -13876,6 +14075,8 @@ class OrgTemplateExporter:
         """
         Export all organization templates (gateway, network, RF, site, AP) to CSV files.
         """
+        if CacheUtils.fast_cache_hit("OrgGatewayTemplates.csv"):
+            return
         logging.info("Starting export of organization templates...")
         try:
             APIDataFetcher(
@@ -13932,6 +14133,8 @@ class OrgTemplateExporter:
     @staticmethod
     def network_templates():  # type: ignore[no-untyped-def]
         """Export network templates to OrgNetworkTemplates.csv."""
+        if CacheUtils.fast_cache_hit("OrgNetworkTemplates.csv"):
+            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
             data_type="network templates",
@@ -13941,6 +14144,8 @@ class OrgTemplateExporter:
     @staticmethod
     def rf_templates():  # type: ignore[no-untyped-def]
         """Export RF templates to OrgRfTemplates.csv."""
+        if CacheUtils.fast_cache_hit("OrgRfTemplates.csv"):
+            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates, data_type="rf templates", sort_key="name"
         )
@@ -13948,6 +14153,8 @@ class OrgTemplateExporter:
     @staticmethod
     def ap_templates():  # type: ignore[no-untyped-def]
         """Export AP templates to OrgApTemplates.csv."""
+        if CacheUtils.fast_cache_hit("OrgApTemplates.csv"):
+            return
         print("Export Organization AP Templates:")
         logging.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -13978,6 +14185,8 @@ class OrgTemplateExporter:
     @staticmethod
     def switch_templates():  # type: ignore[no-untyped-def]
         """Export switch templates to OrgSwitchTemplates.csv."""
+        if CacheUtils.fast_cache_hit("OrgSwitchTemplates.csv"):
+            return
         print("Export Organization Switch Templates:")
         logging.info("Starting export of organization switch templates (canonical networktemplates)...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -14017,6 +14226,8 @@ class OrgClientSecurityExporter:
     @staticmethod
     def wireless_clients():  # type: ignore[no-untyped-def]
         """Export wireless client statistics for the entire organization to OrgWirelessClients.csv."""
+        if CacheUtils.fast_cache_hit("OrgWirelessClients.csv"):
+            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.clients.searchOrgWirelessClients, data_type="wireless clients", sort_key="mac"
         )
@@ -14024,6 +14235,8 @@ class OrgClientSecurityExporter:
     @staticmethod
     def wired_clients():  # type: ignore[no-untyped-def]
         """Export wired client statistics for the entire organization to OrgWiredClients.csv."""
+        if CacheUtils.fast_cache_hit("OrgWiredClients.csv"):
+            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients, data_type="wired clients", sort_key="mac"
         )
@@ -14761,6 +14974,8 @@ class OrgAdminExporter:
     @staticmethod
     def api_tokens():  # type: ignore[no-untyped-def]
         """Export organization API tokens to OrgApiTokens.csv."""
+        if CacheUtils.fast_cache_hit("OrgApiTokens.csv"):
+            return
         logging.info("Starting export of organization api tokens...")
         APIDataFetcher(
             title="Organization Api Tokens:",
@@ -14772,6 +14987,8 @@ class OrgAdminExporter:
     @staticmethod
     def admins():  # type: ignore[no-untyped-def]
         """Export organization admins to OrgAdmins.csv."""
+        if CacheUtils.fast_cache_hit("OrgAdmins.csv"):
+            return
         logging.info("Starting export of organization admins...")
         APIDataFetcher(
             title="Organization Admins:",
@@ -14783,11 +15000,15 @@ class OrgAdminExporter:
     @staticmethod
     def sso():  # type: ignore[no-untyped-def]
         """Export organization SSO configuration to OrgSso.csv."""
+        if CacheUtils.fast_cache_hit("OrgSso.csv"):
+            return
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.ssos.listOrgSsos, data_type="sso", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
     def licenses():  # type: ignore[no-untyped-def]
         """Export organization licenses to OrgLicenses.csv."""
+        if CacheUtils.fast_cache_hit("OrgLicenses.csv"):
+            return
         logging.info("Starting export of organization licenses (canonical endpoint)...")
         filename = "OrgLicenses.csv"
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -14825,6 +15046,8 @@ class OrgAdminExporter:
     @staticmethod
     def usage():  # type: ignore[no-untyped-def]
         """Export organization usage data to OrgUsage.csv."""
+        if CacheUtils.fast_cache_hit("OrgUsage.csv"):
+            return
         logging.info("Starting export of organization license usage...")
         APIDataFetcher(
             title="Organization License Usage:",
@@ -14847,11 +15070,15 @@ class OrgConfigExporter:
     @staticmethod
     def psks():  # type: ignore[no-untyped-def]
         """Export organization PSKs to OrgPsks.csv."""
+        if CacheUtils.fast_cache_hit("OrgPsks.csv"):
+            return
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.psks.listOrgPsks, data_type="psks", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
     def webhooks():  # type: ignore[no-untyped-def]
         """Export organization webhooks to OrgWebhooks.csv."""
+        if CacheUtils.fast_cache_hit("OrgWebhooks.csv"):
+            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.webhooks.listOrgWebhooks, data_type="webhooks", sort_key="name"
         )
@@ -14859,11 +15086,15 @@ class OrgConfigExporter:
     @staticmethod
     def wlans():  # type: ignore[no-untyped-def]
         """Export organization WLANs to OrgWlans.csv."""
+        if CacheUtils.fast_cache_hit("OrgWlans.csv"):
+            return
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.wlans.listOrgWlans, data_type="wlans", sort_key="ssid")  # type: ignore[no-untyped-call]
 
     @staticmethod
     def mx_edges():  # type: ignore[no-untyped-def]
         """Export MX Edge data to OrgMxEdges.csv."""
+        if CacheUtils.fast_cache_hit("OrgMxEdges.csv"):
+            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.mxedges.listOrgMxEdges, data_type="mx edges", sort_key="name"
         )
@@ -15037,6 +15268,8 @@ class OrgExportUtils:
     @staticmethod
     def sites_sle_summary():  # type: ignore[no-untyped-def]
         """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
+        if CacheUtils.fast_cache_hit("OrgSitesSLESummary.csv"):
+            return
         print("Export Organization Sites SLE Summary:")
         logging.info("Starting export of sites SLE summary...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -15091,6 +15324,8 @@ class OrgExportUtils:
     @staticmethod
     def insight_metrics():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide insight metrics to normalized CSV files."""
+        if CacheUtils.fast_cache_hit("OrgMetricsSummary.csv"):
+            return
         print("Export Organization Insight Metrics (Normalized):")
         logging.info("Starting export of organization insight metrics with normalized structure...")
 
@@ -15357,6 +15592,8 @@ class OrgExportUtils:
     @staticmethod
     def e911_report():  # type: ignore[no-untyped-def]
         """Export E911 report for the organization to OrgE911Report.csv."""
+        if CacheUtils.fast_cache_hit("OrgE911Report.csv"):
+            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.exports.getOrgE911Report,
             data_type="e911 report",
@@ -15367,6 +15604,8 @@ class OrgExportUtils:
     @staticmethod
     def jsi_pbn():  # type: ignore[no-untyped-def]
         """Export JSI PBN (Product Bulletin Notifications) data to OrgJsiPbn.csv."""
+        if CacheUtils.fast_cache_hit("OrgJsiPbn.csv"):
+            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiPbn,
             data_type="jsi pbn",
@@ -15376,6 +15615,8 @@ class OrgExportUtils:
     @staticmethod
     def jsi_sirt():  # type: ignore[no-untyped-def]
         """Export JSI SIRT (Security Incident Response Team) advisories to OrgJsiSirt.csv."""
+        if CacheUtils.fast_cache_hit("OrgJsiSirt.csv"):
+            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiSirt,
             data_type="jsi sirt",
@@ -15385,6 +15626,8 @@ class OrgExportUtils:
     @staticmethod
     def ospf_stats():  # type: ignore[no-untyped-def]
         """Export OSPF adjacency statistics for the organization to OrgOspfStats.csv."""
+        if CacheUtils.fast_cache_hit("OrgOspfStats.csv"):
+            return
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgOspfStats,
             data_type="ospf stats",
@@ -15416,6 +15659,8 @@ class OrgExportUtils:
         If False, pulls only the last 24 hours.
         If duration is provided, uses it as the duration parameter.
         """
+        if CacheUtils.fast_cache_hit("OrgAuditLogs.csv"):
+            return
         logging.info("Menu #3: Starting audit logs export")
         logging.debug(f"ENTRY: OrgExportUtils.audit_logs(full_history={full_history}, duration={duration})")
         try:
@@ -15454,6 +15699,8 @@ class OrgExportUtils:
     @staticmethod
     def sle_metrics(fast: bool = False):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
+        if CacheUtils.fast_cache_hit("OrgSLEMetrics.csv"):
+            return
         print("Export Organization SLE Metrics:")
         logging.info("Starting export of organization SLE metrics...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -16638,55 +16885,107 @@ class SitesByAPModelExporter:
     @staticmethod
     def _get_ap_models(org_id: str) -> tuple[list[dict], list[str]]:  # type: ignore[type-arg]
         """Return (ap_inventory, sorted_unique_models) for the organisation."""
-        inventory = APIFetchUtils.all_inventory_with_limit(org_id)
+        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
         aps = [d for d in inventory if d.get("type") == "ap"]
         models = sorted({d.get("model", "") for d in aps if d.get("model")})
         return aps, models
 
     @staticmethod
-    def _prompt_model_selection(models: list[str], aps: list[dict]) -> str | None:  # type: ignore[type-arg]
-        """Prompt user to select an AP model from the numbered list."""
+    def _parse_index_selection(choice: str, max_index: int) -> list[int]:
+        """Parse comma-separated and dashed range index selections.
+
+        Supports: "1", "1,3,5", "1-3", "1-3,5,7-9"
+        Returns sorted unique 0-based indices, or empty list on error.
+        """
+        indices: set[int] = set()
+        for part in choice.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if "-" in part:
+                bounds = part.split("-", 1)
+                try:
+                    start = int(bounds[0].strip())
+                    end = int(bounds[1].strip())
+                except ValueError:
+                    return []
+                if start > end:
+                    start, end = end, start
+                for i in range(start, end + 1):
+                    if 1 <= i <= max_index:
+                        indices.add(i - 1)
+            else:
+                try:
+                    val = int(part)
+                except ValueError:
+                    return []
+                if 1 <= val <= max_index:
+                    indices.add(val - 1)
+        return sorted(indices)
+
+    @staticmethod
+    def _prompt_model_selection(models: list[str], aps: list[dict]) -> list[str] | None:  # type: ignore[type-arg]
+        """Prompt user to select AP model(s) from the numbered list."""
         print("\nAvailable AP models:")
         for idx, model in enumerate(models, 1):
             count = sum(1 for d in aps if d.get("model") == model)
             print(f"  {idx:3d}. {model} ({count} APs)")
         choice = InputUtils.safe_input(
-            "\nSelect model number (or Enter to cancel): ",
+            "\nSelect model number(s) (e.g. 1,3,5 or 1-3): ",
             context="ap_model_selection",
         )
         if not choice.strip():
             return None
-        try:
-            selected = int(choice.strip()) - 1
-            return models[selected] if 0 <= selected < len(models) else None
-        except (ValueError, IndexError):
+        indices = SitesByAPModelExporter._parse_index_selection(choice.strip(), len(models))
+        if not indices:
             print("! Invalid selection.")
             return None
+        return [models[i] for i in indices]
+
+    @staticmethod
+    def _split_address(address: str) -> tuple[str, str, str, str, str]:
+        """Split a full address string into street, city, state, zip, country."""
+        try:
+            parts = address.split(", ")
+            street = parts[0]
+            city = parts[1]
+            state_zip = parts[2].split()
+            state = state_zip[0]
+            zip_code = state_zip[1]
+            country = parts[3]
+            return street, city, state, zip_code, country
+        except Exception as exception:
+            logging.debug(f"Failed to split address '{address}': {exception}")
+            return address, "", "", "", ""
 
     @staticmethod
     def _build_export_rows(
         aps: list[dict],  # type: ignore[type-arg]
-        model: str,
+        models: list[str],
         site_map: dict[str, dict],  # type: ignore[type-arg]
     ) -> list[dict]:  # type: ignore[type-arg]
         """Group APs by site and build one CSV row per matching site."""
+        model_set = set(models)
         grouped: dict[str, list[dict]] = {}  # type: ignore[type-arg]
         for device in aps:
-            if device.get("model") == model and device.get("site_id"):
+            if device.get("model") in model_set and device.get("site_id"):
                 grouped.setdefault(device["site_id"], []).append(device)
         rows = []
         for site_id, devices in sorted(grouped.items(), key=lambda x: site_map.get(x[0], {}).get("name", "")):
             site = site_map.get(site_id, {})
+            address = site.get("address", "")
+            street, city, state, zip_code, country = SitesByAPModelExporter._split_address(address)
             rows.append(
                 {
                     "site_id": site_id,
                     "site_name": site.get("name", ""),
-                    "ap_model": model,
+                    "ap_model": ", ".join(sorted({d.get("model", "") for d in devices})),
                     "ap_count": len(devices),
-                    "address": site.get("address", ""),
-                    "city": site.get("city", ""),
-                    "state": site.get("state", ""),
-                    "country": site.get("country_code", ""),
+                    "address": street,
+                    "city": city,
+                    "state": state,
+                    "zip": zip_code,
+                    "country": country,
                     "ap_macs": ", ".join(d.get("mac", "") for d in devices),
                 }
             )
@@ -16694,7 +16993,7 @@ class SitesByAPModelExporter:
 
     @staticmethod
     def export_sites_by_ap_model() -> None:
-        """Export CSV of sites containing APs of a selected model with site address info."""
+        """Export CSV of sites containing APs of selected model(s) with site address info."""
         print("Export Sites by AP Model:")
         logging.info("Starting export of sites by AP model...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -16705,24 +17004,25 @@ class SitesByAPModelExporter:
             print("! No APs found in organization inventory.")
             return
 
-        model = SitesByAPModelExporter._prompt_model_selection(models, aps)
-        if not model:
+        selected_models = SitesByAPModelExporter._prompt_model_selection(models, aps)
+        if not selected_models:
             return
 
-        print(f"! Fetching site details for sites with {model} APs...")
-        all_sites = APIFetchUtils.all_sites_with_limit(org_id)
+        model_label = ", ".join(selected_models)
+        print(f"! Fetching site details for sites with {model_label} APs...")
+        all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)
         site_map = {site["id"]: site for site in all_sites if site.get("id")}
 
-        rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)
+        rows = SitesByAPModelExporter._build_export_rows(aps, selected_models, site_map)
         if not rows:
-            print(f"! No sites found with {model} APs.")
+            print(f"! No sites found with {model_label} APs.")
             return
 
-        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)
+        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", "_".join(selected_models))
         filename = f"SitesByAPModel_{safe_model}.csv"
         DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")
-        print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")
-        logging.info(f"Exported {len(rows)} sites with AP model {model}")
+        print(f"\n[OK] Exported {len(rows)} sites with {model_label} APs to {filename}")
+        logging.info(f"Exported {len(rows)} sites with AP model(s) {model_label}")
 
 
 # ============================================================================
@@ -20514,6 +20814,8 @@ class GatewayExportUtils:
     @staticmethod
     def templates():  # type: ignore[no-untyped-def]
         """Exports gateway templates."""
+        if CacheUtils.fast_cache_hit("OrgGatewayTemplates.csv"):
+            return
         print("Gateway Templates:")
         logging.info("Exporting gateway templates for the organization...")
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -28819,6 +29121,62 @@ class SiteInventoryHealthAnalyzer:
             print("! No sites found with offline infrastructure (all switches and gateways are online)")
 
 
+class AuditAnalysisOps:
+    """Menu #174: Audit Log Analysis operations."""
+
+    @staticmethod
+    def audit_log_analysis():
+        """Fetch org audit logs, filter noise, generate analysis reports."""
+        if CacheUtils.fast_cache_hit("OrgAuditAnalysis.md"):
+            return
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        if not org_id:
+            return
+
+        test_mode = getattr(sys, "_misthelper_test_mode", False)
+        if test_mode:
+            time_input = "7d"
+        else:
+            print("\nTime range examples: 7d, 4w, 3m, 1y, 6w-2w (6 weeks ago to 2 weeks ago)")
+            time_input = InputUtils.safe_input("Enter time range [7d]: ", context="audit_analysis").strip()
+
+        parser = TimeRangeParser()
+        try:
+            time_range = parser.parse(time_input)
+        except ValueError as exc:
+            logging.error(f"Invalid time range: {exc}")
+            return
+
+        print(f"\nFetching audit logs for: {time_range.description}")
+        api_kwargs = TimeRangeParser.to_api_kwargs(time_range)
+
+        try:
+            response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **api_kwargs, limit=1000)
+            entries = mistapi.get_all(response=response, mist_session=apisession) or []
+        except Exception as exc:
+            logging.error(f"API call failed: {exc}")
+            return
+
+        print(f"Retrieved {len(entries)} raw entries")
+
+        log_filter = AuditLogFilter()
+        filtered, stats = log_filter.filter_with_stats(entries)
+        print(f"Filtered: {stats['kept_count']} kept, " f"{stats['removed_count']} noise removed")
+
+        analyzer = AuditLogAnalyzer()
+        analysis = analyzer.analyze(filtered, time_range.description)
+
+        renderer = AuditReportRenderer()
+
+        md_path = os.path.join("data", "OrgAuditAnalysis.md")
+        renderer.render_mermaid(analysis, md_path)
+        print(f"Mermaid report: {md_path}")
+
+        html_path = os.path.join("data", "OrgAuditAnalysis.html")
+        renderer.render_html(analysis, html_path)
+        print(f"HTML report: {html_path}")
+
+
 def _ws_cmd_deps() -> WebSocketCmdDeps:
     """Create WebSocket command dependency context for the dispatch table."""
     import mistapi.api.v1.sites.devices as _site_devices  # noqa: PLC0415
@@ -29328,6 +29686,8 @@ menu_actions = {
     "171": (SiteExportUtils.mxedge_upgrade_status, "Export MxEdge upgrade status for a selected site"),
     "172": (SiteExportUtils.auto_map_assignment_status, "Export auto-map assignment status for a selected site"),
     "173": (SitesByAPModelExporter.export_sites_by_ap_model, "Export sites by AP model with site address (CSV)"),
+    "174": (AuditAnalysisOps.audit_log_analysis, "Audit Log Analysis - Mermaid timeline + interactive HTML report"),
+    "175": (CacheUtils.clear_cache, "Clear cached output files from data/ directory"),
 }
 
 
@@ -29813,12 +30173,12 @@ class OperationRegistry:
         },
         # --- interactive (needs user input, not automatable) -----------------
         "9": {
-            "category": "interactive",
-            "skip_reason": "Packet capture - requires interactive configuration and site selection",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Packet capture - triggers capture on device (API write)",
         },
         "10": {
-            "category": "interactive",
-            "skip_reason": "Packet capture - requires interactive configuration and MxEdge ID",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Packet capture - triggers capture on device (API write)",
         },
         "56": {"category": "interactive", "skip_reason": "MSP export - requires interactive MSP selection"},
         "60": {
@@ -29838,12 +30198,12 @@ class OperationRegistry:
         "79": {"category": "interactive", "skip_reason": "Interactive CLI shell session"},
         "101": {"category": "interactive", "skip_reason": "Interactive TUI API browser - keyboard navigation required"},
         "102": {
-            "category": "interactive",
-            "skip_reason": "WLAN RADIUS timer management - requires interactive site selection",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: WLAN RADIUS timer management - modifies WLAN auth settings",
         },
         "103": {
-            "category": "interactive",
-            "skip_reason": "Requires interactive site selection for WAN2 variable configuration",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: WAN2 variable configuration - sets site variables",
         },
         "105": {
             "category": "interactive",
@@ -29982,12 +30342,12 @@ class OperationRegistry:
             "skip_reason": "Run top streaming - interactive device + Ctrl+C",
         },
         "138": {
-            "category": "interactive",
-            "skip_reason": "Locate device - interactive device selection",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Locate device - blinks LED (API write)",
         },
         "139": {
-            "category": "interactive",
-            "skip_reason": "Unlocate device - interactive device selection",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Unlocate device - stops LED blink (API write)",
         },
         "140": {
             "category": "destructive",
@@ -30002,20 +30362,20 @@ class OperationRegistry:
             "skip_reason": "DESTRUCTIVE: Reprovision - pushes fresh config",
         },
         "143": {
-            "category": "interactive",
-            "skip_reason": "Re-adopt device - interactive switch selection",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Re-adopt device - changes device adoption state",
         },
         "144": {
             "category": "interactive",
-            "skip_reason": "ZTP password - interactive device selection",
+            "skip_reason": "Get ZTP password - read-only, interactive device selection",
         },
         "145": {
             "category": "interactive",
-            "skip_reason": "Config CLI commands - interactive switch",
+            "skip_reason": "Get config CLI commands - read-only, interactive switch selection",
         },
         "146": {
-            "category": "interactive",
-            "skip_reason": "Upload support file - interactive device/type",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Upload support file - triggers device action (API write)",
         },
         "147": {
             "category": "destructive",
@@ -30055,27 +30415,27 @@ class OperationRegistry:
         },
         "156": {
             "category": "interactive",
-            "skip_reason": "Poll switch stats - interactive switch",
+            "skip_reason": "Poll switch stats - read-only, interactive switch selection",
         },
         "157": {
-            "category": "interactive",
-            "skip_reason": "Create device snapshot - interactive switch",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Create device snapshot - writes snapshot (API write)",
         },
         "158": {"category": "safe"},
         "159": {
-            "category": "interactive",
-            "skip_reason": "Interactive multi-phase workflow with write-capable phases",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Multi-phase workflow with write-capable phases",
         },
         "160": {"category": "interactive_safe"},
         "161": {"category": "interactive_safe"},
         "162": {"category": "interactive_safe"},
         "163": {
-            "category": "interactive",
-            "skip_reason": "Interactive VPN pod management with API writes",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: VPN pod management - API writes",
         },
         "164": {
-            "category": "interactive",
-            "skip_reason": "Interactive VPN builder with API writes",
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: VPN builder - API writes",
         },
         "165": {
             "category": "resource_intensive",
@@ -30085,6 +30445,63 @@ class OperationRegistry:
         "171": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "172": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "173": {"category": "interactive_safe", "skip_reason": "Requires AP model selection"},
+        # ------------------------------------------------------------------
+        # Org-level data exports (no user input, fully automated)
+        # ------------------------------------------------------------------
+        "1": {"category": "safe"},
+        "2": {"category": "safe"},
+        "3": {"category": "safe"},
+        "4": {"category": "safe"},
+        "11": {"category": "safe"},
+        "12": {"category": "safe"},
+        "13": {"category": "safe"},
+        "15": {"category": "safe"},
+        "16": {"category": "safe"},
+        "17": {"category": "safe"},
+        "19": {"category": "safe"},
+        "20": {"category": "safe"},
+        "21": {"category": "safe"},
+        "22": {"category": "safe"},
+        "23": {"category": "safe"},
+        "24": {"category": "safe"},
+        "25": {"category": "safe"},
+        "26": {"category": "safe"},
+        "27": {"category": "safe"},
+        "28": {"category": "safe"},
+        "35": {"category": "safe"},
+        "36": {"category": "safe"},
+        "37": {"category": "safe"},
+        "38": {"category": "safe"},
+        "39": {"category": "safe"},
+        "40": {"category": "safe"},
+        "41": {"category": "safe"},
+        "42": {"category": "safe"},
+        "43": {"category": "safe"},
+        "44": {"category": "safe"},
+        "45": {"category": "safe"},
+        "46": {"category": "safe"},
+        "47": {"category": "safe"},
+        "48": {"category": "safe"},
+        "54": {"category": "safe"},
+        "55": {"category": "safe"},
+        "57": {"category": "safe"},
+        "58": {"category": "safe"},
+        "59": {"category": "safe"},
+        "66": {"category": "safe"},
+        "67": {"category": "safe"},
+        "82": {"category": "safe"},
+        "83": {"category": "safe"},
+        "94": {"category": "safe"},
+        "95": {"category": "safe"},
+        "96": {"category": "safe"},
+        "119": {"category": "safe"},
+        "121": {"category": "safe"},
+        "166": {"category": "safe"},
+        "167": {"category": "safe"},
+        "168": {"category": "safe"},
+        "169": {"category": "safe"},
+        "174": {"category": "safe"},
+        "175": {"category": "dangerous"},
     }
 
     # Categories that are safe for --test (fully automated, no user input)
@@ -30174,6 +30591,7 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
         bool: True if all tests passed, False if any failed
     """
     start_time = time.time()
+    sys._misthelper_test_mode = True  # type: ignore[attr-defined]
     print(" Starting systematic test of MistHelper menu options...")
     print("  Note: This will skip interactive, websocket, POST, and destructive operations")
     print(f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
