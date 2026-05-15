@@ -72,6 +72,10 @@ try:
 except ImportError:
     DB_LAYER_AVAILABLE = False
 
+from src.audit.analyzer import AuditLogAnalyzer  # Audit log analysis engine
+from src.audit.filter import AuditLogFilter  # Audit log filtering to remove noise
+from src.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering
+from src.audit.time_parser import TimeRangeParser  # Audit log time range parsing (7d, 4w, etc.)
 from src.org_data_collector import OrgDataCollector
 from src.ssh.ssh_runner import EnhancedSSHRunner
 from src.wan_hub_group_manager import WanHubGroupNumberManager
@@ -5522,6 +5526,81 @@ class CacheUtils:
 
         logging.info(f"Support package written to {csv_file_path}")
 
+    # Known generated cache CSV filenames -- cleared by Menu 175
+    GENERATED_FILES: set[str] = {  # Explicit list of MistHelper-generated cache CSVs to protect non-data files
+        "AllDevicesWithSiteInfo.csv",
+        "GatewayDeviceStats.csv",
+        "GatewayDeviceStatsWithSiteInfo.csv",
+        "GatewayMgmtIPs.csv",
+        "OrgDeviceEvents.csv",
+        "OrgInventory.csv",
+        "OrgSwitchVCStats.csv",
+        "PortStats.csv",
+        "SiteList.csv",
+        "SitePortStats.csv",
+        "VPNPeerStats.csv",
+    }
+
+    # Generated CSV filename prefixes -- any file in data/ matching these is a cache candidate
+    GENERATED_PREFIXES: tuple[str, ...] = (  # Prefixes that identify auto-generated cache files
+        "AllDevices",
+        "AuditLogs",
+        "DeviceEvents",
+        "DevicePort",
+        "Gateway",
+        "Org",
+        "Port",
+        "Site",
+        "Switch",
+        "VPN",
+    )
+
+    @staticmethod
+    def _is_generated_file(filename: str) -> bool:  # Check if file is MistHelper-generated
+        """Return True if the filename matches a known generated cache file."""
+        name = os.path.basename(filename)  # Strip any path component for clean matching
+        if name in CacheUtils.GENERATED_FILES:  # Exact match against the explicit allowlist
+            return True  # Explicitly listed -- safe to delete
+        if name.endswith(".csv") and name.startswith(CacheUtils.GENERATED_PREFIXES):  # Prefix match
+            return True  # Prefix match -- safe to delete
+        return False  # Not a recognised generated file -- leave it alone
+
+    @staticmethod
+    def clear_cache() -> None:  # Menu 175: delete all generated cache CSVs from data/ directory
+        """Delete all MistHelper-generated cache CSV files from the data/ directory."""
+        data_dir = "data"  # Use relative path to data/ directory consistent with FilePathUtils.get_csv_path()
+        logging.info("Scanning data directory for generated cache CSVs: %s", data_dir)  # Log scan target
+        try:
+            candidates = [  # List only safe-to-delete files
+                f for f in os.listdir(data_dir) if CacheUtils._is_generated_file(f)
+            ]
+        except OSError as scan_error:  # Handle permission or missing directory errors gracefully
+            logging.error("Failed to list data directory %s: %s", data_dir, scan_error)  # Log I/O failure with context
+            print(f"! Error scanning data directory: {scan_error}")  # Surface error to operator
+            return  # Abort -- nothing to delete if we can't list the directory
+        if not candidates:  # Nothing to delete -- inform operator and return early
+            print("! No generated cache CSV files found to delete.")  # User-friendly empty state message
+            logging.info("No generated cache CSVs found in %s", data_dir)  # Log empty result
+            return  # Early return -- nothing to do
+        print(f"Found {len(candidates)} generated cache CSV file(s) to delete:")  # Show operator what will be removed
+        for name in sorted(candidates):  # Sort for readable output
+            print(f"  {name}")  # List each file so operator knows exactly what is affected
+        deleted = 0  # Track successful deletions for summary
+        errors = 0  # Track failures for summary
+        for name in candidates:  # Delete each identified cache file
+            full_path = os.path.join(data_dir, name)  # Build absolute path for deletion
+            logging.info("Deleting cache CSV: %s", full_path)  # Log before deletion for audit trail
+            try:
+                os.remove(full_path)  # Delete the file from disk
+                logging.debug("Deleted: %s", full_path)  # Confirm deletion at debug level
+                deleted += 1  # Increment success counter
+            except OSError as delete_error:  # Handle individual file deletion failures without aborting the batch
+                logging.error("Failed to delete %s: %s", full_path, delete_error)  # Log failure with path and reason
+                print(f"  ! Could not delete {name}: {delete_error}")  # Surface individual failure to operator
+                errors += 1  # Increment error counter
+        print(f"! Cache cleared: {deleted} file(s) deleted, {errors} error(s).")  # Summary line for operator
+        logging.info("Cache clear complete: %d deleted, %d errors", deleted, errors)  # Log summary for post-run review
+
     @staticmethod
     def create_address_parse_failures_csv(
         parse_failures: list[dict[str, Any]], filename: str = "AddressParseFailures.csv"
@@ -8894,11 +8973,13 @@ class APICoreFetchUtils:
             org_id: The organization ID
 
         Returns:
-            List of inventory dictionaries
+            List of inventory dictionaries (includes all VC physical members)
 
         SECURITY: Read-only; no secrets in inventory object fields.
         """
-        response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
+        response = mistapi.api.v1.orgs.inventory.getOrgInventory(
+            apisession, org_id, vc=True, limit=DEFAULT_API_PAGE_LIMIT
+        )  # vc=True includes all physical VC member devices
         return mistapi.get_all(response=response, mist_session=apisession)  # type: ignore[no-any-return]
 
 
@@ -11900,7 +11981,10 @@ class PromptUtils:
         print(table)
         logging.info("Displayed device selection table to user.")
 
-        user_input = input("Enter the index or name of the device to view device: ").strip()
+        user_input = InputUtils.safe_input(
+            "Enter the index or name of the device to view device: ",
+            context="device_inventory_selection",
+        ).strip()
         logging.debug(f"User input for device selection: {user_input}")
 
         # Accept common dotted-index input (e.g., ".2") from interactive tests/operators.
@@ -11955,7 +12039,7 @@ class PromptUtils:
         for idx, row in index_to_site.items():
             print(f"[{idx}] {row.get('name', 'Unnamed')}")
 
-        user_input = input("\nEnter site index or name: ").strip()
+        user_input = InputUtils.safe_input("\nEnter site index or name: ", context="site_selection").strip()
         logging.debug(f"User input for site selection: {user_input}")
 
         global LAST_SELECTED_SITE_ID
@@ -12040,7 +12124,14 @@ class PromptUtils:
         if site_id:
             return site_id
 
-        scope_choice = input("Search scope - (s)ite-specific or (o)rganization-wide? [s/o]: ").strip().lower()
+        scope_choice = (
+            InputUtils.safe_input(
+                "Search scope - (s)ite-specific or (o)rganization-wide? [s/o]: ",
+                context="client_search_scope",
+            )
+            .strip()
+            .lower()
+        )
         if scope_choice == "s":
             selected_site = PromptUtils.select_site()
             if not selected_site:
@@ -12267,7 +12358,10 @@ class PromptUtils:
         """
         try:
             max_index = len(all_clients) - 1
-            user_input = input(f"\n  Enter client index (0-{max_index}) or 'q' to quit: ").strip()
+            user_input = InputUtils.safe_input(
+                f"\n  Enter client index (0-{max_index}) or 'q' to quit: ",
+                context="client_selection_index",
+            ).strip()
 
             if user_input.lower() in ["q", "quit", "exit"]:
                 print(" Exiting client selection...")
@@ -12881,6 +12975,7 @@ class OrgInventoryExporter:
             api_call=mistapi.api.v1.orgs.inventory.getOrgInventory,
             filename="OrgInventory.csv",
             sort_key="model",
+            vc=True,  # Include all physical VC member devices (6186 vs 3224 logical)
             limit=1000,
         ).execute()
         logging.info("Completed organization inventory export and wrote results to OrgInventory.csv.")
@@ -12918,7 +13013,7 @@ class OrgInventoryExporter:
         Outputs:
             - Weekly CSV files: data/CombinedInventory_ByWeek/YYYY_Week_##.csv
             - Summary report: data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv
-            - Master CSV: data/CombinedInventory_ByWeek/CombinedInventory_Master.csv
+            - Master CSV: data/CombinedInventory_ByWeek/<OrgName>_CombinedInventory_Master.csv
               (with simplified headers: serial, model, Street Address, City, State, Zip)
         """
         print("Combined Inventory with Site Info by Calendar Week:")
@@ -12928,13 +13023,110 @@ class OrgInventoryExporter:
         END_CUSTOMER_NAME = os.getenv("END_CUSTOMER_NAME")
         END_CUSTOMER_ACCOUNT_ID = os.getenv("END_CUSTOMER_ACCOUNT_ID")
 
-        # Always regenerate fresh data
+        # Resolve organization context for output naming and report metadata
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        org_name_for_filename = None
+        try:
+            org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, current_org_id)
+            org_name_for_filename = getattr(org_response, "data", {}).get("name")
+        except Exception as exception:
+            logging.warning(f"Unable to resolve org name from API for combined inventory filename: {exception}")
+        if not org_name_for_filename:
+            org_name_for_filename = END_CUSTOMER_NAME
+        if not org_name_for_filename:
+            org_name_for_filename = current_org_id or "UnknownOrg"
+        safe_org_name = "".join(
+            character if character.isalnum() or character in "-_" else "_" for character in org_name_for_filename
+        )  # noqa: E501
+
+        # Always regenerate fresh data (fast=True uses cached SiteList + OrgInventory CSVs)
         OrgInventoryExporter.devices_with_site_info()
 
-        # Load the enriched device + site info
-        devices_with_site_info_path = FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")
-        with open(devices_with_site_info_path, encoding="utf-8") as file:
-            site_configs = list(csv.DictReader(file))
+        # Save raw JSON from all three inventory query modes for delta comparison
+        logging.info("Saving raw inventory JSON for delta comparison...")
+        try:
+            json_output_dir = os.path.join("data", "CombinedInventory_ByWeek")  # Same folder as weekly CSVs
+            os.makedirs(json_output_dir, exist_ok=True)  # Ensure output directory exists
+
+            # vc=True: expanded view showing all physical VC members individually
+            logging.info("Fetching raw inventory with vc=True for JSON export...")
+            resp_vc_true = mistapi.api.v1.orgs.inventory.getOrgInventory(
+                apisession, current_org_id, vc=True, type="switch", limit=DEFAULT_API_PAGE_LIMIT
+            )  # Fetch expanded inventory including physical VC members
+            raw_vc_true = mistapi.get_all(response=resp_vc_true, mist_session=apisession)  # Paginate all results
+            vc_true_path = os.path.join(json_output_dir, "raw_inventory_vc_true.json")  # Output path
+            with open(vc_true_path, "w", encoding="utf-8") as jf:  # Write JSON to disk
+                json.dump(raw_vc_true, jf, indent=2, default=str)  # Pretty-print for human readability
+            logging.info("Saved %d entries to %s", len(raw_vc_true), vc_true_path)
+
+            # vc=False: collapsed view (one logical entry per VC stack)
+            logging.info("Fetching raw inventory with vc=False for JSON export...")
+            resp_vc_false = mistapi.api.v1.orgs.inventory.getOrgInventory(
+                apisession, current_org_id, vc=False, type="switch", limit=DEFAULT_API_PAGE_LIMIT
+            )  # Fetch collapsed VC view (logical devices only)
+            raw_vc_false = mistapi.get_all(response=resp_vc_false, mist_session=apisession)  # Paginate all results
+            vc_false_path = os.path.join(json_output_dir, "raw_inventory_vc_false.json")  # Output path
+            with open(vc_false_path, "w", encoding="utf-8") as jf:  # Write JSON to disk
+                json.dump(raw_vc_false, jf, indent=2, default=str)  # Pretty-print for human readability
+            logging.info("Saved %d entries to %s", len(raw_vc_false), vc_false_path)
+
+            # No vc parameter: API default behavior (confirmed identical to vc=False)
+            logging.info("Fetching raw inventory with no vc parameter for JSON export...")
+            resp_no_vc = mistapi.api.v1.orgs.inventory.getOrgInventory(
+                apisession, current_org_id, type="switch", limit=DEFAULT_API_PAGE_LIMIT
+            )  # Fetch with API default (no vc flag = collapsed view)
+            raw_no_vc = mistapi.get_all(response=resp_no_vc, mist_session=apisession)  # Paginate all results
+            no_vc_path = os.path.join(json_output_dir, "raw_inventory_no_vc_param.json")  # Output path
+            with open(no_vc_path, "w", encoding="utf-8") as jf:  # Write JSON to disk
+                json.dump(raw_no_vc, jf, indent=2, default=str)  # Pretty-print for human readability
+            logging.info("Saved %d entries to %s", len(raw_no_vc), no_vc_path)
+
+            print(
+                f"  Raw JSON saved: vc=True ({len(raw_vc_true)}), "  # User-facing progress
+                f"vc=False ({len(raw_vc_false)}), no-vc ({len(raw_no_vc)}) entries"
+            )
+        except Exception as json_save_error:  # Don't let JSON export failure break menu 25
+            logging.warning("Failed to save raw inventory JSON: %s", json_save_error)
+
+        # Load the enriched device + site info.
+        # getOrgInventory with vc=True returns both physical chassis AND virtual VC identifiers.
+        # Virtual VC entries have MACs starting with '020003' and are NOT real hardware.
+        # Filter to only physical devices for the master report.
+        devices_with_site_info_path = FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")  # Enriched inventory CSV
+        with open(devices_with_site_info_path, encoding="utf-8") as file:  # Open CSV for reading
+            all_devices = list(csv.DictReader(file))  # Load all device rows into memory
+        # Exclude virtual chassis identifier entries (020003* MACs) - they aren't physical hardware
+        virtual_entries = [d for d in all_devices if d.get("mac", "").startswith("020003")]  # All 020003* entries
+        site_configs = [d for d in all_devices if not d.get("mac", "").startswith("020003")]  # Only real chassis
+
+        # Identify empty VC shells: 020003* entries not referenced by any physical device's vc_mac
+        physical_vc_mac_targets = {  # vc_mac values referenced by real hardware
+            d.get("vc_mac", "") for d in site_configs if d.get("vc_mac")
+        }
+        empty_vc_shells = [  # VCs with zero physical members
+            v for v in virtual_entries if v.get("mac") not in physical_vc_mac_targets
+        ]
+        duplicate_vc_entries = len(virtual_entries) - len(empty_vc_shells)  # Duplicates of real chassis
+
+        logging.info(
+            "Loaded %d total devices, filtered to %d physical devices (excluded %d virtual VC identifiers)",
+            len(all_devices),
+            len(site_configs),
+            len(all_devices) - len(site_configs),
+        )
+        logging.info(
+            "Virtual VC breakdown: %d duplicate entries (real hardware counted elsewhere) + "
+            "%d empty VC shells (provisioned but no physical members assigned)",
+            duplicate_vc_entries,
+            len(empty_vc_shells),
+        )
+        if empty_vc_shells:  # Call out the dashboard vs report delta explicitly
+            print(f"  NOTE: {len(empty_vc_shells)} provisioned VC shells exist with no physical members.")
+            print(
+                f"        Dashboard shows {len(site_configs) + len(empty_vc_shells)} 'Physical Devices' "
+                f"but {len(empty_vc_shells)} are empty VC placeholders (020003* MAC, no serial/SKU)."
+            )
+            print(f"        Report correctly includes only {len(site_configs)} devices with real hardware.")
 
         # Create a subfolder for weekly CSV files in the data directory
         output_folder = os.path.join("data", "CombinedInventory_ByWeek")
@@ -12944,7 +13136,7 @@ class OrgInventoryExporter:
         weekly_data: defaultdict[str, list] = defaultdict(list)  # type: ignore[type-arg]
         summary_data: defaultdict[tuple[int, int], int] = defaultdict(int)
 
-        # Process each device entry
+        # Process each device entry (getOrgInventory already has one row per physical device)
         for device in site_configs:
             try:
                 created_time = int(device.get("created_time", 0))
@@ -12956,6 +13148,7 @@ class OrgInventoryExporter:
                     {
                         "Full Site": device.get("site_name", ""),
                         "System Serial Number": device.get("serial", ""),
+                        "System MAC Address": device.get("mac", ""),
                         "System Model Number": device.get("model", ""),
                         "End Customer Name": END_CUSTOMER_NAME,
                         "Address Line 1": device.get("street", ""),
@@ -12976,6 +13169,7 @@ class OrgInventoryExporter:
         fieldnames = [
             "Full Site",
             "System Serial Number",
+            "System MAC Address",
             "System Model Number",
             "End Customer Name",
             "Address Line 1",
@@ -13009,6 +13203,7 @@ class OrgInventoryExporter:
             master_csv_data.append(
                 {
                     "serial": device.get("serial", ""),
+                    "mac": device.get("mac", ""),
                     "model": device.get("model", ""),
                     "Street Address": device.get("street", ""),
                     "City": device.get("city", ""),
@@ -13017,8 +13212,9 @@ class OrgInventoryExporter:
                 }
             )
 
-        master_csv_file = os.path.join(output_folder, "CombinedInventory_Master.csv")
-        master_csv_fieldnames = ["serial", "model", "Street Address", "City", "State", "Zip"]
+        master_csv_filename = f"{safe_org_name}_CombinedInventory_Master.csv"
+        master_csv_file = os.path.join(output_folder, master_csv_filename)
+        master_csv_fieldnames = ["serial", "mac", "model", "Street Address", "City", "State", "Zip"]
         with open(master_csv_file, mode="w", newline="", encoding="utf-8") as file:
             writer = csv.DictWriter(file, fieldnames=master_csv_fieldnames)
             writer.writeheader()
@@ -13032,7 +13228,7 @@ class OrgInventoryExporter:
         )
         print("! Summary report exported to data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv")
         print(
-            f"! Master inventory exported to data/CombinedInventory_ByWeek/CombinedInventory_Master.csv ({len(master_csv_data)} devices)"  # noqa: E501
+            f"! Master inventory exported to data/CombinedInventory_ByWeek/{master_csv_filename} ({len(master_csv_data)} devices)"  # noqa: E501
         )
 
     @staticmethod
@@ -13121,20 +13317,49 @@ class OrgInventoryExporter:
                 logging.debug(f"Failed to split address '{address}': {exception}")
                 return address, "", "", "", ""
 
+        # Build mac -> site_id lookup for VC member site inheritance.
+        # Physical VC members have vc_mac but no site_id in the API response.
+        # Their vc_mac may point to either:
+        #   1) A virtual VC entry (020003* MAC) that carries site_id, OR
+        #   2) The primary physical chassis MAC (real MAC) that has site_id.
+        # We index ALL devices with site_id so both cases are covered.
+        mac_to_site_id: dict[str, str] = {}  # Universal mac -> site_id lookup for inheritance
+        for device in inventory:  # Scan all inventory entries
+            mac = device.get("mac", "")  # Get device MAC address
+            if mac and device.get("site_id"):  # Any device with a site assignment
+                mac_to_site_id[mac] = device["site_id"]  # Index for vc_mac lookups
+        logging.info(
+            "Built mac->site_id lookup with %d entries for VC member site inheritance",
+            len(mac_to_site_id),
+        )
+
         enriched_devices = []
+        vc_inherited_count = 0  # Track how many physical members inherited site info from their VC
         for device in tqdm(inventory, desc="Processing Devices", unit="device"):  # type: ignore[no-untyped-call]
-            site_id = device.get("site_id")
-            site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})
-            device["site_name"] = site_info["name"]
-            device["site_address"] = site_info["address"]
+            site_id = device.get("site_id")  # Check if device has its own site_id
+            # Fallback: if device has no site_id, inherit from VC parent (virtual or primary member)
+            if not site_id and device.get("vc_mac"):  # Device missing site assignment but part of a VC
+                inherited_site_id = mac_to_site_id.get(device["vc_mac"])  # Look up site from VC parent MAC
+                if inherited_site_id:  # Found the parent's site
+                    site_id = inherited_site_id  # Use the parent's site_id for enrichment
+                    device["site_id"] = inherited_site_id  # Persist inherited site_id on the device record
+                    vc_inherited_count += 1  # Count successful inheritance
+            site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})  # Resolve site details
+            device["site_name"] = site_info["name"]  # Apply site name to device record
+            device["site_address"] = site_info["address"]  # Apply full site address to device record
             street, city, state, zip_code, country = split_address(site_info["address"])  # type: ignore[no-untyped-call]
-            device["street"] = street
-            device["city"] = city
-            device["state"] = state
-            device["zip_code"] = zip_code
-            device["country"] = country
-            enriched_devices.append(device)
+            device["street"] = street  # Set street address component
+            device["city"] = city  # Set city component
+            device["state"] = state  # Set state/province component
+            device["zip_code"] = zip_code  # Set postal/zip code component
+            device["country"] = country  # Set country component
+            enriched_devices.append(device)  # Add enriched device to output list
             logging.debug(f"Enriched device {device.get('name', '')} ({device.get('mac', '')}) with site info.")
+        if vc_inherited_count:  # Log inheritance summary if any members were fixed
+            logging.info(
+                "%d physical VC members inherited site info from their VC parent",
+                vc_inherited_count,
+            )
 
         # Flatten nested fields and escape multiline strings for CSV compatibility
         enriched_devices = DataProcessingUtils.flatten_nested_fields(enriched_devices)
@@ -13594,29 +13819,74 @@ class OrgDeviceStatsExporter:
         if not switches:
             logging.warning("No switches found in OrgInventory.csv.")
             return
-        all_vc_stats = []
-        for switch in tqdm(switches, desc="Switches", unit="switch"):  # type: ignore[no-untyped-call]
-            if ConfigUtils.check_stop_signal():
-                break
-            site_id = switch.get("site_id")
-            device_id = switch.get("id")
-            name = switch.get("name", "")
-            mac = switch.get("mac", "")
-            model = switch.get("model", "")
-            serial = switch.get("serial", "")
+        all_vc_stats = []  # Accumulates one merged dict per switch
+
+        def _fetch_vc_for_switch(switch):  # type: ignore[no-untyped-def]  # Fetch VC stats for a single switch; returns merged dict or None
+            site_id = switch.get("site_id")  # Required for the getSiteDeviceVirtualChassis API call
+            device_id = switch.get("id")  # Device UUID used as API path parameter
+            name = switch.get("name", "")  # Human-readable name for log messages
+            mac = switch.get("mac", "")  # MAC address for log messages
+            model = switch.get("model", "")  # Model string for debug context
+            serial = switch.get("serial", "")  # Serial number for debug context
             logging.debug(
-                f"Processing switch: name={name}, id={device_id}, site_id={site_id}, mac={mac}, model={model}, serial={serial}"  # noqa: E501
-            )
-            if not site_id or not device_id:
-                logging.warning(f"Skipping switch with missing site_id or device_id: name={name}, mac={mac}")
-                continue
+                "Processing switch: name=%s, id=%s, site_id=%s, mac=%s, model=%s, serial=%s",
+                name,
+                device_id,
+                site_id,
+                mac,
+                model,
+                serial,
+            )  # Log per-switch context before API call
+            if not site_id or not device_id:  # Skip if missing required API params
+                logging.warning(
+                    "Skipping switch with missing site_id or device_id: name=%s, mac=%s",
+                    name,
+                    mac,
+                )  # Warn so operator can investigate gaps
+                return None  # Signal caller to skip this switch
             try:
-                vc_stats = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id).data
-                logging.debug(f"Fetched VC stats for switch {name} ({device_id}): {vc_stats}")
-                entry = {**switch, **vc_stats}
-                all_vc_stats.append(entry)
-            except Exception as e:
-                logging.warning(f"Failed to fetch VC stats for switch {name} ({device_id}): {e}")
+                vc_stats = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(
+                    apisession, site_id, device_id
+                ).data  # Fetch per-switch VC membership and cable info
+                logging.debug("Fetched VC stats for switch %s (%s)", name, device_id)
+                return {**switch, **vc_stats}  # Merge inventory + VC stats
+            except Exception as fetch_error:  # Non-fatal: skip on failure
+                logging.warning(
+                    "Failed to fetch VC stats for switch %s (%s): %s",
+                    name,
+                    device_id,
+                    fetch_error,
+                )  # Log failure with context for later review
+                return None  # Signal caller to skip this switch
+
+        if FAST_MODE_ENABLED:  # Parallelize per-switch API calls in fast mode
+            max_workers = FAST_MODE_MAX_CONCURRENT_CONNECTIONS  # From env (default 8)
+            logging.info(
+                "Fast mode: fetching VC stats for %d switches with %d concurrent workers",
+                len(switches),
+                max_workers,
+            )  # Log concurrency config before pool starts
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:  # Thread pool
+                future_to_switch = {  # Submit all switches as concurrent tasks
+                    executor.submit(_fetch_vc_for_switch, switch): switch for switch in switches
+                }
+                with tqdm(  # type: ignore[no-untyped-call]
+                    total=len(switches), desc="Switches", unit="switch"
+                ) as progress:  # Progress bar for concurrent mode
+                    for future in as_completed(future_to_switch):  # Process results as each thread finishes
+                        if ConfigUtils.check_stop_signal():  # Allow graceful stop between completions
+                            break  # Abort remaining tasks on stop signal
+                        result = future.result()  # Retrieve the merged dict or None from the thread
+                        if result is not None:  # Skip switches where API call failed or params were missing
+                            all_vc_stats.append(result)  # Collect successful result for CSV export
+                        progress.update(1)  # Advance the progress bar for each completed future
+        else:  # Sequential fetch (original behavior — used when --fast is not active)
+            for switch in tqdm(switches, desc="Switches", unit="switch"):  # type: ignore[no-untyped-call]  # Iterate switches one at a time with progress bar
+                if ConfigUtils.check_stop_signal():  # Allow graceful stop between switches
+                    break  # Abort loop on stop signal
+                result = _fetch_vc_for_switch(switch)  # Fetch VC stats for this switch
+                if result is not None:  # Skip failed/invalid switches
+                    all_vc_stats.append(result)  # Collect successful result for CSV export
         logging.info(f"Flattening and sanitizing {len(all_vc_stats)} VC stats entries for CSV export.")
         all_vc_stats = DataProcessingUtils.flatten_nested_fields(all_vc_stats)
         all_vc_stats = DataProcessingUtils.escape_multiline(all_vc_stats)  # type: ignore[no-untyped-call]
@@ -15959,7 +16229,10 @@ class SiteClientExporter:
 
         # Prompt for client MAC address
         print("\nEnter client MAC address or index number (or press Enter to skip):")
-        client_input = input("Client MAC/Index: ").strip()
+        client_input = InputUtils.safe_input(
+            "Client MAC/Index: ",
+            context="site_client_insights_selection",
+        ).strip()
 
         if not client_input:
             print("! No client input provided. Skipping client insights export.")
@@ -16238,9 +16511,15 @@ class SiteConfigExporter:
                 return
 
         try:
-            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())
+            response = mistapi.api.v1.orgs.sites.listOrgSites(
+                apisession,
+                ConfigUtils.get_cached_or_prompted_org_id(),
+            )
             sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
+            site_name = next(
+                (site["name"] for site in sites if site["id"] == site_id),
+                site_id,
+            )
         except Exception as exception:
             logging.error(f"Error getting site name for WLAN export: {exception}")
             site_name = site_id
@@ -17064,15 +17343,28 @@ class SiteExportUtils:
                 DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} device insight metrics exported to {filename}")
                 logging.info(
-                    f"Exported {metrics_retrieved} device insight metrics for {device_name} at {site_name} to {filename}"  # noqa: E501
+                    "Exported %s device insight metrics for %s at %s to %s",
+                    metrics_retrieved,
+                    device_name,
+                    site_name,
+                    filename,
                 )
             else:
                 print(f"! 0 device insights exported to {filename} (no data available)")
-                logging.warning(f"No device insight data available for {device_name} at {site_name}")
+                logging.warning(
+                    "No device insight data available for %s at %s",
+                    device_name,
+                    site_name,
+                )
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
         except Exception as exception:
             print(f"! Error exporting device insights: {exception}")
-            logging.error(f"Failed to export device insights for {device_name} at {site_name}: {exception}")
+            logging.error(
+                "Failed to export device insights for %s at %s: %s",
+                device_name,
+                site_name,
+                exception,
+            )
             DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
 
     @staticmethod
@@ -17304,8 +17596,11 @@ class ServicePingManager:
             bool: True if device is valid for service ping, False otherwise
         """
         try:
+            logging.info("Fetching gateway device details for site %s and device %s", self.site_id, self.device_id)
             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, self.site_id, type="gateway").data
+            logging.debug("Retrieved %d gateway devices for site %s", len(rawdata or []), self.site_id)
             self.device_info = next((device for device in rawdata if device.get("id") == self.device_id), None)
+            logging.debug("Device lookup complete for %s, found=%s", self.device_id, self.device_info is not None)
         except Exception as error:
             logging.warning(f"Could not retrieve device details: {error}")
             self._debug_print(f"Device details error: {error}")
@@ -17347,7 +17642,14 @@ class ServicePingManager:
 
     def _confirm_proceed(self) -> bool:
         """Prompt user to confirm proceeding with non-optimal device."""
-        choice = input("   -> Continue anyway? (y/N): ").strip().lower()
+        choice = (
+            InputUtils.safe_input(
+                "   -> Continue anyway? (y/N): ",
+                context="service_ping_continue",
+            )
+            .strip()
+            .lower()
+        )
         if choice != "y":
             print("Operation cancelled.")
             return False
@@ -17431,8 +17733,10 @@ class ServicePingManager:
     def _fetch_device_config(self) -> None:
         """Fetch device configuration for tenants and services."""
         try:
+            logging.info("Fetching device configuration for site %s device %s", self.site_id, self.device_id)
             config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, self.site_id, self.device_id)
             device_config = getattr(config_response, "data", {})
+            logging.debug("Device configuration retrieved with %d top-level keys", len(device_config.keys()))
             self._debug_print(f"Device config keys: {list(device_config.keys())}")
 
             self._extract_from_device_config(device_config)
@@ -17502,8 +17806,14 @@ class ServicePingManager:
     def _extract_from_device_stats(self) -> None:
         """Extract additional services from device stats."""
         try:
+            logging.info(
+                "Fetching device stats for service discovery on site %s device %s",
+                self.site_id,
+                self.device_id,
+            )
             stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, self.site_id, self.device_id)
             stats_data = getattr(stats_response, "data", {})
+            logging.debug("Device stats retrieved with %d top-level keys", len(stats_data.keys()))
             self._debug_print(f"Stats keys: {list(stats_data.keys())}")
 
             for service_stat in stats_data.get("service_stat", []):
@@ -17514,6 +17824,12 @@ class ServicePingManager:
                             self.device_services.sort()
 
         except Exception as error:
+            logging.debug(
+                "Device stats retrieval failed for site %s device %s: %s",
+                self.site_id,
+                self.device_id,
+                error,
+            )
             self._debug_print(f"Could not fetch stats: {error}")
 
     def _report_device_config_results(self) -> None:
@@ -17661,7 +17977,7 @@ class ServicePingManager:
                 else:
                     prompt += " [default: skip]: "
 
-                selection = input(prompt).strip()
+                selection = InputUtils.safe_input(prompt, context="service_ping_tenant_selection").strip()
 
                 if not selection:
                     if default_index is not None:
@@ -17706,7 +18022,10 @@ class ServicePingManager:
     def _prompt_manual_tenant(self) -> str | None:
         """Prompt for manual tenant entry when none available."""
         print("\n-> No tenants found in any configuration source")
-        manual = input("-> Enter tenant name manually (or press Enter to skip): ").strip()
+        manual = InputUtils.safe_input(
+            "-> Enter tenant name manually (or press Enter to skip): ",
+            context="service_ping_tenant_manual",
+        ).strip()
         if manual:
             print(f"!? Manual tenant: {manual}")
             return manual
@@ -17772,7 +18091,7 @@ class ServicePingManager:
                 else:
                     prompt += ": "
 
-                selection = input(prompt).strip()
+                selection = InputUtils.safe_input(prompt, context="service_ping_service_selection").strip()
 
                 if not selection:
                     if default_index is not None:
@@ -17820,7 +18139,10 @@ class ServicePingManager:
     def _prompt_custom_service(self) -> str:
         """Prompt for custom service name."""
         while True:
-            service = input("Enter custom service name: ").strip()
+            service = InputUtils.safe_input(
+                "Enter custom service name: ",
+                context="service_ping_custom_service",
+            ).strip()
             if service:
                 print(f"!? Custom service: {service}")
                 return service
@@ -17830,7 +18152,10 @@ class ServicePingManager:
         """Prompt for required service when none available."""
         print("\n-> No services found in organization or device configuration")
         while True:
-            service = input("Enter service name: ").strip()
+            service = InputUtils.safe_input(
+                "Enter service name: ",
+                context="service_ping_required_service",
+            ).strip()
             if service:
                 print(f"!? Custom service: {service}")
                 return service
@@ -17839,7 +18164,10 @@ class ServicePingManager:
     def _prompt_for_ping_parameters(self) -> dict:  # type: ignore[type-arg]
         """Prompt for ping parameters and build payload."""
         # Host
-        host = input("\nEnter target host/IP to ping [default: 8.8.8.8]: ").strip()
+        host = InputUtils.safe_input(
+            "\nEnter target host/IP to ping [default: 8.8.8.8]: ",
+            context="service_ping_host",
+        ).strip()
         if not host:
             host = self.DEFAULT_HOST
             print(f"!? Using default destination: {host}")
@@ -17857,7 +18185,10 @@ class ServicePingManager:
 
     def _prompt_for_count(self) -> int:
         """Prompt for ping count."""
-        count_input = input("Enter ping count [default: 4]: ").strip()
+        count_input = InputUtils.safe_input(
+            "Enter ping count [default: 4]: ",
+            context="service_ping_count",
+        ).strip()
         try:
             count = int(count_input) if count_input else self.DEFAULT_COUNT
             return max(1, count)
@@ -17866,7 +18197,10 @@ class ServicePingManager:
 
     def _prompt_for_size(self) -> int:
         """Prompt for packet size."""
-        size_input = input("Enter packet size in bytes [default: 56]: ").strip()
+        size_input = InputUtils.safe_input(
+            "Enter packet size in bytes [default: 56]: ",
+            context="service_ping_size",
+        ).strip()
         try:
             size = int(size_input) if size_input else self.DEFAULT_SIZE
             return max(self.MIN_SIZE, min(size, self.MAX_SIZE))
@@ -17875,7 +18209,14 @@ class ServicePingManager:
 
     def _prompt_for_node(self) -> str | None:
         """Prompt for HA node selection."""
-        node_input = input("Enter HA node (node0/node1) [optional]: ").strip().lower()
+        node_input = (
+            InputUtils.safe_input(
+                "Enter HA node (node0/node1) [optional]: ",
+                context="service_ping_node",
+            )
+            .strip()
+            .lower()
+        )
         return node_input if node_input in ["node0", "node1"] else None
 
     def _build_payload(self, service: str, tenant: str | None, params: dict) -> dict:  # type: ignore[type-arg]
@@ -18079,11 +18420,18 @@ class ServicePingManager:
             name = self.device_info.get("name", "Unknown Device")
             dtype = self.device_info.get("type", "unknown")
             logging.info(
-                f"Service ping completed for {name} ({dtype}) - Service: {payload['service']}, Host: {payload['host']}"
+                "Service ping completed for %s (%s) - Service: %s, Host: %s",
+                name,
+                dtype,
+                payload["service"],
+                payload["host"],
             )
         else:
             logging.info(
-                f"Service ping completed for device {self.device_id} - Service: {payload['service']}, Host: {payload['host']}"  # noqa: E501
+                "Service ping completed for device %s - Service: %s, Host: %s",
+                self.device_id,
+                payload["service"],
+                payload["host"],
             )
 
     def _display_timeout_results(self, payload: dict) -> None:  # type: ignore[type-arg]
@@ -21453,7 +21801,7 @@ class TroubleshootUtils:
         print("5. Exit")
         print()
 
-        choice = input("Select an option (1-5): ").strip()
+        choice = InputUtils.safe_input("Select an option (1-5): ", context="marvis_launch_menu").strip()
         logging.debug(f"MARVIS DEBUG: User selected option: {choice}")
 
         if choice == "1":
@@ -21809,25 +22157,20 @@ class SSHRunnerManager:
     def _collect_missing_data(hosts, username, password, commands):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912
         """Interactively collect missing SSH configuration data."""
         if not hosts:
-            try:
-                host_input = input("Enter SSH host(s) (comma-separated): ").strip()
-                if host_input:
-                    hosts = [h.strip() for h in host_input.split(",") if h.strip()]
-                else:
-                    print("X  SSH host is required")
-                    return None, None, None, None
-            except (EOFError, KeyboardInterrupt):
-                print("\n[CANCELLED] Operation cancelled")
+            host_input = InputUtils.safe_input(
+                "Enter SSH host(s) (comma-separated): ",
+                context="ssh_runner_hosts",
+            ).strip()
+            if host_input:
+                hosts = [h.strip() for h in host_input.split(",") if h.strip()]
+            else:
+                print("X  SSH host is required")
                 return None, None, None, None
 
         if not username:
-            try:
-                username = input("Enter SSH username: ").strip()
-                if not username:
-                    print("X  SSH username is required")
-                    return None, None, None, None
-            except (EOFError, KeyboardInterrupt):
-                print("\n[CANCELLED] Operation cancelled")
+            username = InputUtils.safe_input("Enter SSH username: ", context="ssh_runner_username").strip()
+            if not username:
+                print("X  SSH username is required")
                 return None, None, None, None
 
         if not password:
@@ -21844,13 +22187,9 @@ class SSHRunnerManager:
 
         if not commands:
             print("\nNo commands configured. Enter command or press Enter for CSV fallback:")
-            try:
-                choice = input("Command: ").strip()
-                if choice:
-                    commands = [choice]
-            except (EOFError, KeyboardInterrupt):
-                print("\n[CANCELLED] Operation cancelled")
-                return None, None, None, None
+            choice = InputUtils.safe_input("Command: ", context="ssh_runner_command_prompt").strip()
+            if choice:
+                commands = [choice]
 
         return hosts, username, password, commands
 
@@ -21942,27 +22281,29 @@ class SSHRunnerManager:
             )
             print(f"     {i:2}. {name} ({total} total, {online} online)")
 
-        try:
-            selection = input(f"\n  Enter template number (1-{len(templates)}) or name: ").strip()
-
-            try:
-                idx = int(selection) - 1
-                if 0 <= idx < len(templates):
-                    return templates[idx]
-                print("! Invalid selection.")
-                return None
-            except ValueError:
-                matches = [t for t in templates if selection.lower() in t.lower()]
-                if len(matches) == 1:
-                    return matches[0]
-                elif len(matches) > 1:
-                    print(f"! Ambiguous: {', '.join(matches)}")
-                else:
-                    print(f"! Template '{selection}' not found.")
-                return None
-        except (EOFError, KeyboardInterrupt):
+        selection = InputUtils.safe_input(
+            f"\n  Enter template number (1-{len(templates)}) or name: ",
+            context="ssh_runner_template_selection",
+        ).strip()
+        if not selection:
             print("\n! Operation cancelled.")
-            logging.info("Template selection cancelled (EOF or interrupt) - SSH/container safe exit")
+            logging.info("Template selection cancelled (empty/EOF/interrupt) - SSH/container safe exit")
+            return None
+
+        try:
+            idx = int(selection) - 1
+            if 0 <= idx < len(templates):
+                return templates[idx]
+            print("! Invalid selection.")
+            return None
+        except ValueError:
+            matches = [t for t in templates if selection.lower() in t.lower()]
+            if len(matches) == 1:
+                return matches[0]
+            elif len(matches) > 1:
+                print(f"! Ambiguous: {', '.join(matches)}")
+            else:
+                print(f"! Template '{selection}' not found.")
             return None
 
     @staticmethod
@@ -21990,13 +22331,19 @@ class SSHRunnerManager:
     @staticmethod
     def _confirm_execution(count):  # type: ignore[no-untyped-def]
         """Get user confirmation before SSH execution."""
-        try:
-            confirm = input(f"\n  Execute SSH commands on {count} gateways? (y/N): ").strip().lower()
-            return confirm in ["y", "yes"]
-        except (EOFError, KeyboardInterrupt):
+        confirm = (
+            InputUtils.safe_input(
+                f"\n  Execute SSH commands on {count} gateways? (y/N): ",
+                context="ssh_runner_confirm_execution",
+            )
+            .strip()
+            .lower()
+        )
+        if not confirm:
             print("\n! Operation cancelled.")
-            logging.info("SSH execution confirmation cancelled (EOF or interrupt) - SSH/container safe exit")
+            logging.info("SSH execution confirmation cancelled (empty/EOF/interrupt) - SSH/container safe exit")
             return False
+        return confirm in ["y", "yes"]
 
     @staticmethod
     def _execute_by_template(management_ips, template_name):  # type: ignore[no-untyped-def]
@@ -22600,7 +22947,10 @@ class WAN2MigrationManager:
         print("   2. All sites in organization")
         print("   3. Cancel")
 
-        selection_choice = input("\n  Choose selection method (1-3): ").strip()
+        selection_choice = InputUtils.safe_input(
+            "\n  Choose selection method (1-3): ",
+            context="wan2_site_selection_method",
+        ).strip()
 
         if selection_choice == "1":
             return self._select_individual_sites()
@@ -22620,7 +22970,7 @@ class WAN2MigrationManager:
             print(f"   [{index}] {site_name} ({site_id})")
 
         print("\n  Enter site numbers to configure (comma-separated, e.g., 1,3,5):")
-        site_indices_input = input("  Site numbers: ").strip()
+        site_indices_input = InputUtils.safe_input("  Site numbers: ", context="wan2_site_index_selection").strip()
 
         try:
             selected_indices = [int(idx.strip()) - 1 for idx in site_indices_input.split(",")]
@@ -22658,7 +23008,14 @@ class WAN2MigrationManager:
     def _confirm_site_variable_operation(self, site_count: int) -> bool:
         """Confirm the site variable operation with user."""
         print(f"\n  Will configure {site_count} sites with wan2_interface variable.")
-        confirm = input("\n  Proceed with setting site variables? (yes/no): ").strip().lower()
+        confirm = (
+            InputUtils.safe_input(
+                "\n  Proceed with setting site variables? (yes/no): ",
+                context="wan2_site_variable_confirm",
+            )
+            .strip()
+            .lower()
+        )
 
         if confirm not in ["yes", "y"]:
             print(" Operation cancelled.")
@@ -23866,7 +24223,14 @@ class WANProbeConfigManager:
         print("   Or 'all' to modify all templates")
         print("   Or 'cancel' to abort")
 
-        selection = input("\n  Selection: ").strip().lower()
+        selection = (
+            InputUtils.safe_input(
+                "\n  Selection: ",
+                context="wan_probe_template_selection",
+            )
+            .strip()
+            .lower()
+        )
 
         if selection == "cancel":
             print(" Operation cancelled.")
@@ -23991,7 +24355,10 @@ class WANProbeConfigManager:
         print("  !? Type 'APPLY' (all caps) to proceed or anything else to cancel")
         print(f"  {'=' * 70}")
 
-        confirmation = input("\n  Confirmation: ").strip()
+        confirmation = InputUtils.safe_input(
+            "\n  Confirmation: ",
+            context="wan_probe_apply_confirmation",
+        ).strip()
         if confirmation != "APPLY":
             print(" Operation cancelled.")
             logging.info("Menu #113 cancelled by user at final confirmation")
@@ -24294,7 +24661,14 @@ class WANProbeDeviceOverrideManager:
         print("   Enter a template number to select")
         print("   Or 'cancel' to abort")
 
-        selection = input("\n  Selection: ").strip().lower()
+        selection = (
+            InputUtils.safe_input(
+                "\n  Selection: ",
+                context="wan_probe_device_template_selection",
+            )
+            .strip()
+            .lower()
+        )
 
         if selection == "cancel":
             print(" Operation cancelled.")
@@ -24468,7 +24842,10 @@ class WANProbeDeviceOverrideManager:
         print("  !? Type 'APPLY' (all caps) to proceed or anything else to cancel")
         print(f"  {'=' * 70}")
 
-        confirmation = input("\n  Confirmation: ").strip()
+        confirmation = InputUtils.safe_input(
+            "\n  Confirmation: ",
+            context="wan_probe_device_apply_confirmation",
+        ).strip()
         if confirmation != "APPLY":
             print(" Operation cancelled.")
             logging.info("Menu #114 cancelled by user at final confirmation")
@@ -25615,7 +25992,14 @@ class DeviceRebootManager:
         print(f"   Please create this file at: {reboot_list_path}")
         print("   This file should contain template names to reboot, one per line.")
 
-        user_input = input("   Would you like to create an empty file? (y/n): ").strip().lower()
+        user_input = (
+            InputUtils.safe_input(
+                "   Would you like to create an empty file? (y/n): ",
+                context="gateway_reboot_create_template_file",
+            )
+            .strip()
+            .lower()
+        )
         if user_input in ["y", "yes"]:
             try:
                 template_path = FilePathUtils.create_csv_template("GatewayTemplateRebootList.CSV")
@@ -25807,7 +26191,10 @@ class DeviceRebootManager:
         print("   By typing 'REBOOT', you accept all risks and liability.")
 
         try:
-            user_input = input(">>> ").strip()
+            user_input = InputUtils.safe_input(
+                ">>> ",
+                context="gateway_reboot_confirmation",
+            ).strip()
             if user_input != "REBOOT":
                 print(" Reboot operation cancelled.")
                 logging.info("Gateway reboot cancelled by user")
@@ -28237,11 +28624,7 @@ class BulkRadiusWLANConfigManager:
 
     def _safe_input(self, prompt: str, context: str = "bulk_radius_config") -> str:
         """Universal input wrapper with EOF handling."""
-        try:
-            return input(prompt)
-        except EOFError:
-            logging.info(f"EOF detected in {context} - session disconnected")
-            sys.exit(0)
+        return InputUtils.safe_input(prompt, context=context)
 
     def _get_org_id(self) -> bool:
         """Get organization ID from cache or prompt."""
@@ -29511,6 +29894,72 @@ def _ws_cmd_deps() -> WebSocketCmdDeps:
     )
 
 
+class AuditAnalysisOps:
+    """Menu #174: Audit Log Analysis operations."""
+
+    @staticmethod
+    def audit_log_analysis():
+        """Fetch org audit logs, filter noise, generate analysis reports."""
+        if CacheUtils.fast_cache_hit("OrgAuditAnalysis.md"):  # Skip if cached report exists
+            return
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org context
+        if not org_id:
+            return
+
+        test_mode = getattr(sys, "_misthelper_test_mode", False)  # Check if running in test harness
+        if test_mode:
+            time_input = "7d"  # Default to 7 days in test mode
+        else:
+            print("\nTime range examples: 7d, 4w, 3m, 1y, 6w-2w (6 weeks ago to 2 weeks ago)")
+            time_input = InputUtils.safe_input(  # Prompt for time range
+                "Enter time range [7d]: ", context="audit_analysis"
+            ).strip()
+
+        parser = TimeRangeParser()  # Parse human-readable time range
+        try:
+            time_range = parser.parse(time_input)  # Convert input to TimeRange object
+        except ValueError as exc:
+            logging.error(f"Invalid time range: {exc}")  # Log parse failure
+            return
+
+        print(f"\nFetching audit logs for: {time_range.description}")
+        api_kwargs = TimeRangeParser.to_api_kwargs(time_range)  # Convert to API start/end params
+
+        try:
+            logging.info(
+                "Fetching audit logs for org %s with range %s",
+                org_id,
+                time_range.description,
+            )  # Log before API call
+            response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(
+                apisession, org_id, **api_kwargs, limit=1000
+            )  # Call Mist audit logs API
+            entries = mistapi.get_all(response=response, mist_session=apisession) or []  # Paginate all results
+            logging.debug("Retrieved %d raw audit log entries", len(entries))  # Log result count
+        except Exception as exc:
+            logging.error(f"API call failed: {exc}")  # Log API failure with context
+            return
+
+        print(f"Retrieved {len(entries)} raw entries")
+
+        log_filter = AuditLogFilter()  # Initialize noise filter
+        filtered, stats = log_filter.filter_with_stats(entries)  # Remove noise entries with stats
+        print(f"Filtered: {stats['kept_count']} kept, {stats['removed_count']} noise removed")
+
+        analyzer = AuditLogAnalyzer()  # Initialize pattern analyzer
+        analysis = analyzer.analyze(filtered, time_range.description)  # Detect patterns and anomalies
+
+        renderer = AuditReportRenderer()  # Initialize report generator
+
+        md_path = os.path.join("data", "OrgAuditAnalysis.md")  # Mermaid timeline output path
+        renderer.render_mermaid(analysis, md_path)  # Generate Mermaid timeline report
+        print(f"Mermaid report: {md_path}")
+
+        html_path = os.path.join("data", "OrgAuditAnalysis.html")  # Interactive HTML output path
+        renderer.render_html(analysis, html_path)  # Generate interactive HTML report
+        print(f"HTML report: {html_path}")
+
+
 menu_actions = {
     # ==============================
     # SYSTEM OPERATIONS
@@ -30006,6 +30455,8 @@ menu_actions = {
     "171": (SiteExportUtils.mxedge_upgrade_status, "Export MxEdge upgrade status for a selected site"),
     "172": (SiteExportUtils.auto_map_assignment_status, "Export auto-map assignment status for a selected site"),
     "173": (SitesByAPModelExporter.export_sites_by_ap_model, "Export sites by AP model with site address (CSV)"),
+    "174": (AuditAnalysisOps.audit_log_analysis, "Audit Log Analysis - Mermaid timeline + interactive HTML report"),
+    "175": (CacheUtils.clear_cache, "Clear CSV Cache Files (delete all generated cache CSVs)"),
     "176": (
         lambda: OrgConfigMigrationManager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
@@ -30775,6 +31226,8 @@ class OperationRegistry:
         "171": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "172": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "173": {"category": "interactive_safe", "skip_reason": "Requires AP model selection"},
+        "174": {"category": "safe"},
+        "175": {"category": "destructive", "skip_reason": "DANGEROUS: Deletes all generated cache CSV files"},
         "176": {"category": "safe"},
         "177": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},
     }
@@ -31428,6 +31881,7 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
             "OrgDeviceStatsExporter.device_stats",
             "OrgDeviceStatsExporter.device_port_stats",
             "OrgDeviceStatsExporter.vpn_peer_stats",
+            "OrgDeviceStatsExporter.switch_vc_stats",
         ]
         logging.info("FAST MODE ACTIVE: Enabling caching/concurrency shortcuts for: " + ", ".join(fast_capable))
         print("* Fast mode active (caching/concurrency). Functions optimized:")
@@ -31691,19 +32145,17 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
             func, description = menu_actions[key]
             print(f"{key}: {description}")
 
-        try:
-            iwant = input("\nEnter your selection number now: ").strip()
-        except EOFError:
+        iwant = InputUtils.safe_input(
+            "\nEnter your selection number now: ",
+            default_value="__EXIT__",
+            context="main_menu_selection",
+        ).strip()
+        if iwant == "__EXIT__":
             # Handle EOF condition (Ctrl+D, broken pipe, SSH disconnection)
             print("\n[EOF] Input stream closed. Exiting gracefully...")
             logging.info("EOF encountered on input - user disconnected or input stream closed")
             if container_mode:
                 print("[CONTAINER MODE] SSH session ended. Terminating MistHelper.")
-            break
-        except KeyboardInterrupt:
-            # Handle Ctrl+C
-            print("\n[INTERRUPT] User interrupted. Exiting...")
-            logging.info("KeyboardInterrupt encountered - user pressed Ctrl+C")
             break
 
         # Graceful handling of empty input: simply redisplay menu without logging an error
