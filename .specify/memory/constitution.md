@@ -1,27 +1,32 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: (none) -> 1.0.0 (initial ratification)
-  Modified principles: N/A (first version)
+  Version change: 1.3.0 -> 1.4.0
+  Modified principles:
+    - V. Observability & Logging: retained as-is
   Added sections:
-    - Core Principles (5): Five-Item Rule, Class-Based Architecture,
-      Safety-First, Full Deployment Pipeline, Observability & Logging
-    - Technology & Compatibility Constraints
-    - Development Workflow & Quality Gates
-    - Governance
+    - VI. Inline Comments (NON-NEGOTIABLE): every executable line of
+      AI-generated code must have a same-line inline comment explaining
+      why, not just what. Code without comments is incomplete.
+    - VII. Action Logging (NON-NEGOTIABLE): every meaningful action must
+      have logging.info() before and logging.debug() after execution.
+      Code without logging is code without observability.
   Removed sections: N/A
+  Governance updated: compliance review now references all seven
+    principles; VI and VII are explicitly non-negotiable quality gates.
   Templates requiring updates:
     - .specify/templates/plan-template.md: no changes needed
-      (Constitution Check section is generic; gates are evaluated at
-       plan-fill time against this constitution)
     - .specify/templates/spec-template.md: no changes needed
-      (spec template is technology-agnostic; constitution gates apply
-       at review time, not at template level)
     - .specify/templates/tasks-template.md: no changes needed
-      (task categories already support parallel/sequential and
-       user-story grouping; no principle-driven task types added)
     - .github/prompts/speckit.*.prompt.md: no changes needed
-      (command files reference constitution generically)
+  Related files updated simultaneously:
+    - .github/copilot-instructions.md: added Inline Comments and
+      Action Logging subsections under Critical Patterns, plus
+      Code Readability Requirements under Project-Specific Conventions
+    - agents.md: added two Key Conventions bullet points for inline
+      comments and action logging
+    - coding-standards.instructions.md (global): added Inline Comments
+      and Action Logging sections between Safety-First and Quality Gates
   Follow-up TODOs: None
 -->
 
@@ -159,6 +164,76 @@ boundary, not at the caller.
 local dev, Linux containers, SSH sessions). ASCII-only logging prevents
 encoding failures. Structured logs enable automated monitoring and
 incident correlation.
+
+### VI. Inline Comments (NON-NEGOTIABLE)
+
+Every line of AI-generated code MUST have an inline comment on the
+same line explaining what it does and why. This is not optional and
+MUST NOT be skipped under any circumstances.
+
+Comments MUST explain *why* and *what for*, not just restate the code.
+Blank lines, closing braces/parens, and decorators are exempt.
+
+When modifying existing code, inline comments MUST be added to the
+changed lines AND to any adjacent uncommented lines in the same block.
+When existing code is found lacking inline comments during any edit,
+comments MUST be added to the entire function or block being touched.
+
+```python
+# WRONG: No comments or restating the code
+result = api.get_sites(org_id)  # get sites
+
+# CORRECT: Explaining intent and context
+result = api.get_sites(org_id)  # Fetch all sites for this org from Mist API
+sites = [s for s in result if s.get("name")]  # Exclude unnamed/placeholder sites
+```
+
+Code without inline comments is considered incomplete and MUST NOT
+be committed, merged, or deployed.
+
+**Rationale**: Junior NOC engineers are the primary maintainers of
+this codebase. Every line must be self-explanatory without external
+context. Inline comments eliminate guesswork and reduce onboarding
+time from days to hours.
+
+### VII. Action Logging (NON-NEGOTIABLE)
+
+Every meaningful action in AI-generated code MUST have a logging
+statement BEFORE and AFTER execution. This enables operators to trace
+exactly what happened during any run.
+
+- Log an `info` message BEFORE every action (API call, file write,
+  database operation, data transformation, user prompt).
+- Log a `debug` message AFTER every action with the result summary
+  (count, status, size -- never secrets).
+- Log `error` with full context on any exception.
+- Use `%s` style formatting in logging calls (not f-strings) for
+  performance and security.
+
+When modifying existing code, if the function or block being touched
+lacks action logging, logging MUST be added to the entire function or
+block.
+
+```python
+# WRONG: No logging around actions
+result = api.list_devices(site_id)
+processed = flatten_response(result)
+
+# CORRECT: Log before and after every action
+logging.info("Fetching device list for site %s", site_id)
+result = api.list_devices(site_id)  # Call Mist API for all devices at this site
+logging.debug("Received %d devices from API", len(result))
+logging.info("Flattening device response data")
+processed = flatten_response(result)  # Normalize nested JSON to flat structure
+logging.debug("Flattened %d device records", len(processed))
+```
+
+Code without action logging is considered incomplete and MUST NOT be
+committed, merged, or deployed.
+
+**Rationale**: When a NOC engineer reports "it broke at step 3," the
+logs must show exactly what happened before, during, and after step 3.
+Code without logging is code without observability.
 
 ## Technology & Compatibility Constraints
 
@@ -385,12 +460,15 @@ rules. It supersedes all other practice documents when conflicts arise.
    accompany the amendment.
 
 **Compliance review**: Every PR and code review MUST verify adherence
-to all five Core Principles. Complexity that violates a principle MUST
+to all seven Core Principles. Complexity that violates a principle MUST
 be justified in writing (Complexity Tracking table in plan.md).
+Principles VI (Inline Comments) and VII (Action Logging) are
+non-negotiable quality gates -- code lacking either MUST NOT pass
+review, regardless of other merits.
 
 **Runtime guidance**: `agents.md` provides detailed implementation
 patterns and is the primary reference for day-to-day coding decisions.
 The constitution provides the non-negotiable rules; agents.md provides
 the how-to.
 
-**Version**: 1.3.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-04-06
+**Version**: 1.4.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-05-15
