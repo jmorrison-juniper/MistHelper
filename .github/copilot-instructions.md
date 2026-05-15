@@ -218,6 +218,40 @@ if confirmation != "UPGRADE":
 - Interactive menu selections
 - Any user input that could encounter EOF
 
+### Inline Comments (NON-NEGOTIABLE)
+Every line of AI-generated code MUST have an inline comment on the same line explaining what it does and why. This is not optional. Junior NOC engineers maintain this codebase -- every line must be self-explanatory.
+
+**Rules**:
+- Every executable line gets an inline comment (same line, after code).
+- Comments explain *why* and *what for*, not just *what* (no restating the code).
+- Blank lines, closing braces/parens, and decorators are exempt.
+- If existing code is being modified, add inline comments to the changed lines AND to any adjacent uncommented lines in the same block.
+- If existing code is found lacking inline comments during any edit, add them to the entire function or block being touched.
+
+```python
+# WRONG: No comments or restating the code
+result = api.get_sites(org_id)  # get sites
+
+# CORRECT: Explaining intent and context
+result = api.get_sites(org_id)  # Fetch all sites for this org from Mist API
+```
+
+### Action Logging (NON-NEGOTIABLE)
+Every meaningful action MUST have a logging statement BEFORE and AFTER execution. This enables operators to trace exactly what happened during any run.
+
+**Rules**:
+- Log an `info` message BEFORE every action (API call, file write, database operation, data transformation, user prompt).
+- Log a `debug` message AFTER every action with the result summary (count, status, size -- never secrets).
+- Log `error` with full context on any exception.
+- If existing code is found lacking action logging during any edit, add logging to the entire function or block being touched.
+- Use `%s` style formatting in logging calls (not f-strings) for performance and security.
+
+```python
+logging.info("Fetching device list for site %s", site_id)  # Log before API call
+result = api.list_devices(site_id)  # Call Mist API for all devices at this site
+logging.debug("Received %d devices from API", len(result))  # Log result count after API call
+```
+
 ### Logging Standards
 - **Debug**: Internal state changes, API responses
 - **Info**: User-facing progress messages
@@ -356,6 +390,13 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 - **No abbreviations**: `for device in devices` NOT `for d in devices`
 - **No AI markers**: Never use `...existing code...` or double ellipses
 - **Class-based**: All features organized under semantic class names
+
+### Code Readability Requirements (NON-NEGOTIABLE)
+All AI-generated code MUST include:
+1. **Inline comments on every line** -- Same-line comments explaining intent (see Critical Patterns > Inline Comments)
+2. **Action logging before/after every operation** -- `logging.info()` before, `logging.debug()` after (see Critical Patterns > Action Logging)
+
+Code that lacks either of these is considered incomplete and MUST NOT be committed. When touching existing code that lacks inline comments or action logging, add them to the entire function or block being modified.
 
 ---
 
@@ -984,4 +1025,5 @@ When implementing a Feature Spec, AI agents must follow this protocol:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
+at specs/191-org-config-export-import/plan.md
 <!-- SPECKIT END -->
