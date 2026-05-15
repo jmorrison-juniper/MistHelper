@@ -1,4 +1,5 @@
 """Analyze vpn_access flag patterns in orgaudit-filtered.json"""
+
 import json
 from collections import Counter
 

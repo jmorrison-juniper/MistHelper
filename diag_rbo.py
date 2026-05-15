@@ -1,4 +1,5 @@
 """Diagnostic: inspect RBO-Large-DIA Network Template entries."""
+
 import json
 
 from src.audit.renderer import AuditReportRenderer

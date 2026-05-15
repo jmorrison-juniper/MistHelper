@@ -1,4 +1,5 @@
 """Check device profile changes for VREDAL52RBO and VRECHI52RBO"""
+
 import json
 
 with open("data/orgaudit-filtered.json") as f:
