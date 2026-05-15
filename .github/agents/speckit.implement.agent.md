@@ -151,6 +151,8 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **Core development**: Implement models, services, CLI commands, endpoints
    - **Integration work**: Database connections, middleware, logging, external services
    - **Polish and validation**: Unit tests, performance optimization, documentation
+   - **Inline comments on EVERY line (NON-NEGOTIABLE)**: Every executable line of AI-generated code MUST have an inline comment on the same line explaining *why* and *what for*, not just restating the code. Code without inline comments is incomplete and MUST NOT be committed. When modifying existing code that lacks comments, add comments to the entire function or block being touched.
+   - **Action logging before/after EVERY action (NON-NEGOTIABLE)**: Every meaningful action (API call, file write, database operation, data transformation) MUST have `logging.info()` BEFORE and `logging.debug()` AFTER with result summary. Use `%s` style formatting, never f-strings. Code without action logging is code without observability and MUST NOT be committed. When modifying existing code that lacks logging, add logging to the entire function or block being touched.
 
 8. Progress tracking and error handling:
    - Report progress after each completed task
