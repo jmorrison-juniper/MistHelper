@@ -21783,15 +21783,15 @@ class TroubleshootUtils:
         3. Network connectivity analysis (site-level)
         4. View Marvis insights and capabilities
         """
-        logging.info(" Starting Marvis (VNA) troubleshooting workflow...")
+        logging.info("Entering TroubleshootUtils.launch_interactive")  # Entry envelope for logging compliance
         logging.debug("MARVIS DEBUG: Entering launch_interactive() method")
         print(" Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting")
         print("=" * 65)
         print()
 
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug(f"MARVIS DEBUG: Using org_id: {org_id} for Marvis troubleshooting")
-        logging.debug(f"MARVIS DEBUG: Session state - authenticated: {apisession is not None}")
+        logging.debug("MARVIS DEBUG: Using org_id: %s for Marvis troubleshooting", org_id)  # %s not f-string
+        logging.debug("MARVIS DEBUG: Session state - authenticated: %s", apisession is not None)  # %s not f-string
 
         print(" Marvis AI Troubleshooting Options:")
         print("1. Troubleshoot client connectivity issues (guided client selection)")
@@ -21802,7 +21802,7 @@ class TroubleshootUtils:
         print()
 
         choice = InputUtils.safe_input("Select an option (1-5): ", context="marvis_launch_menu").strip()
-        logging.debug(f"MARVIS DEBUG: User selected option: {choice}")
+        logging.debug("MARVIS DEBUG: User selected option: %s", choice)  # %s not f-string
 
         if choice == "1":
             logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.client_connectivity()")
@@ -21819,11 +21819,13 @@ class TroubleshootUtils:
         elif choice == "5":
             logging.debug("MARVIS DEBUG: User chose to exit")
             print("Exiting Marvis troubleshooting.")
+            logging.info("Exiting TroubleshootUtils.launch_interactive via user exit choice")  # Exit envelope
             return
         else:
             print(" Invalid option selected.")
-            logging.warning(f"MARVIS DEBUG: Invalid troubleshooting option selected: {choice}")
+            logging.warning("MARVIS DEBUG: Invalid troubleshooting option selected: %s", choice)  # %s not f-string
             logging.debug("MARVIS DEBUG: Exiting launch_interactive() due to invalid choice")
+        logging.info("Exiting TroubleshootUtils.launch_interactive with choice: %s", choice)  # Exit envelope
 
     @staticmethod
     def view_insights() -> None:
@@ -22156,6 +22158,12 @@ class SSHRunnerManager:
     @staticmethod
     def _collect_missing_data(hosts, username, password, commands):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912
         """Interactively collect missing SSH configuration data."""
+        logging.info(  # Entry envelope — log what data is already known before prompting
+            "Entering SSHRunnerManager._collect_missing_data: hosts=%s username=%s commands=%s",
+            len(hosts) if hosts else 0,
+            "provided" if username else "missing",
+            len(commands) if commands else 0,
+        )
         if not hosts:
             host_input = InputUtils.safe_input(
                 "Enter SSH host(s) (comma-separated): ",
@@ -22165,12 +22173,18 @@ class SSHRunnerManager:
                 hosts = [h.strip() for h in host_input.split(",") if h.strip()]
             else:
                 print("X  SSH host is required")
+                logging.info(  # Exit envelope on cancel (no hosts)
+                    "Exiting SSHRunnerManager._collect_missing_data: cancelled (no hosts provided)"
+                )
                 return None, None, None, None
 
         if not username:
             username = InputUtils.safe_input("Enter SSH username: ", context="ssh_runner_username").strip()
             if not username:
                 print("X  SSH username is required")
+                logging.info(  # Exit envelope on cancel (no username)
+                    "Exiting SSHRunnerManager._collect_missing_data: cancelled (no username provided)"
+                )
                 return None, None, None, None
 
         if not password:
@@ -22180,9 +22194,15 @@ class SSHRunnerManager:
                 password = getpass.getpass("Enter SSH password: ")
                 if not password:
                     print("X  SSH password is required")
+                    logging.info(  # Exit envelope on cancel (no password)
+                        "Exiting SSHRunnerManager._collect_missing_data: cancelled (no password provided)"
+                    )
                     return None, None, None, None
             except (EOFError, KeyboardInterrupt):
                 print("\n[CANCELLED] Operation cancelled")
+                logging.info(  # Exit envelope on cancel (EOF/interrupt)
+                    "Exiting SSHRunnerManager._collect_missing_data: cancelled (EOF/interrupt on password prompt)"
+                )
                 return None, None, None, None
 
         if not commands:
@@ -22191,6 +22211,11 @@ class SSHRunnerManager:
             if choice:
                 commands = [choice]
 
+        logging.debug(  # Exit envelope — log result summary without exposing password
+            "Exiting SSHRunnerManager._collect_missing_data: hosts=%s commands=%s password=***REDACTED***",
+            len(hosts) if hosts else 0,
+            len(commands) if commands else 0,
+        )
         return hosts, username, password, commands
 
     @staticmethod
@@ -22331,6 +22356,10 @@ class SSHRunnerManager:
     @staticmethod
     def _confirm_execution(count):  # type: ignore[no-untyped-def]
         """Get user confirmation before SSH execution."""
+        logging.info(  # Entry envelope — log scope before confirmation prompt
+            "Entering SSHRunnerManager._confirm_execution: requesting confirmation for %s gateways",
+            count,
+        )
         confirm = (
             InputUtils.safe_input(
                 f"\n  Execute SSH commands on {count} gateways? (y/N): ",
@@ -22342,8 +22371,11 @@ class SSHRunnerManager:
         if not confirm:
             print("\n! Operation cancelled.")
             logging.info("SSH execution confirmation cancelled (empty/EOF/interrupt) - SSH/container safe exit")
+            logging.info("Exiting SSHRunnerManager._confirm_execution: result=cancelled")  # Exit envelope on cancel
             return False
-        return confirm in ["y", "yes"]
+        result = confirm in ["y", "yes"]  # Evaluate confirmation response as boolean
+        logging.info("Exiting SSHRunnerManager._confirm_execution: result=%s", result)  # Exit envelope with result
+        return result
 
     @staticmethod
     def _execute_by_template(management_ips, template_name):  # type: ignore[no-untyped-def]
@@ -22941,6 +22973,10 @@ class WAN2MigrationManager:
 
     def _get_site_selection(self) -> list[dict[str, Any]]:
         """Prompt user for site selection. Returns selected sites or empty list."""
+        logging.info(  # Entry envelope — log scope before showing selection menu to user
+            "Entering WAN2MigrationManager._get_site_selection: %s sites available",
+            len(self.sites),
+        )
         print(f"\n  Found {len(self.sites)} sites in organization")
         print("  Site Selection:")
         print("   1. Select individual sites")
@@ -22953,12 +22989,25 @@ class WAN2MigrationManager:
         ).strip()
 
         if selection_choice == "1":
-            return self._select_individual_sites()
+            result = self._select_individual_sites()  # Delegate individual selection to helper
+            logging.info(  # Exit envelope on individual selection
+                "Exiting WAN2MigrationManager._get_site_selection: individual selection returned %s sites",
+                len(result),
+            )
+            return result
         elif selection_choice == "2":
-            return self.sites.copy()
+            all_sites = self.sites.copy()  # Return copy of all sites to avoid mutation
+            logging.info(  # Exit envelope on all-sites selection
+                "Exiting WAN2MigrationManager._get_site_selection: all-sites selection returned %s sites",
+                len(all_sites),
+            )
+            return all_sites
         else:
             print(" Operation cancelled.")
             logging.info("Menu #103 cancelled by user")
+            logging.info(  # Exit envelope on cancel
+                "Exiting WAN2MigrationManager._get_site_selection: cancelled by user"
+            )
             return []
 
     def _select_individual_sites(self) -> list[dict[str, Any]]:
@@ -23007,6 +23056,10 @@ class WAN2MigrationManager:
 
     def _confirm_site_variable_operation(self, site_count: int) -> bool:
         """Confirm the site variable operation with user."""
+        logging.info(  # Entry envelope — log scope before destructive confirmation prompt
+            "Entering WAN2MigrationManager._confirm_site_variable_operation: %s sites pending",
+            site_count,
+        )
         print(f"\n  Will configure {site_count} sites with wan2_interface variable.")
         confirm = (
             InputUtils.safe_input(
@@ -23020,7 +23073,14 @@ class WAN2MigrationManager:
         if confirm not in ["yes", "y"]:
             print(" Operation cancelled.")
             logging.info("Menu #103 cancelled by user at confirmation prompt")
+            logging.info(  # Exit envelope on cancel
+                "Exiting WAN2MigrationManager._confirm_site_variable_operation: result=cancelled"
+            )
             return False
+        logging.info(  # Exit envelope on confirm
+            "Exiting WAN2MigrationManager._confirm_site_variable_operation: result=confirmed for %s sites",
+            site_count,
+        )
         return True
 
     def _build_override_detection_map(self):  # type: ignore[no-untyped-def]
@@ -31232,6 +31292,31 @@ class OperationRegistry:
         "177": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},
     }
 
+    # Wave 1 deterministic baseline map used by routing guardrail tests.
+    # This remains intentionally small and representative for compliance checks.
+    WAVE1_ENTRY_ROUTING_BASELINE: dict[str, str] = {
+        "5": "websocket",
+        "29": "interactive_safe",
+        "63": "resource_intensive",
+        "89": "websocket",
+        "90": "destructive",
+        "91": "destructive",
+        "100": "destructive",
+        "101": "interactive",
+        "158": "safe",
+        "176": "safe",
+        "177": "destructive",
+    }
+
+    # Wave 1 deterministic safety-boundary baseline used by classification guardrails.
+    WAVE1_SAFETY_CLASSIFICATION_BASELINE: dict[str, list[str]] = {
+        "safe_true": ["158", "176", "9999"],
+        "safe_false": ["89", "90", "91", "99", "100", "177"],
+        "interactive_safe_true": ["29"],
+        "interactive_safe_false": ["90", "101", "177"],
+        "destructive_markers": ["90", "91", "99", "100", "107", "140", "177"],
+    }
+
     # Categories that are safe for --test (fully automated, no user input)
     SAFE_CATEGORIES = frozenset({"safe"})
     # Categories that are safe for --testinteractive (need site but automatable)
@@ -31300,6 +31385,16 @@ class OperationRegistry:
             [o for o in all_options if not cls.is_safe(o)],
             key=lambda x: float(x.replace("a", ".1")),
         )
+
+    @classmethod
+    def wave1_entry_routing_baseline(cls) -> dict[str, str]:
+        """Return a copy of the Wave 1 routing baseline map for deterministic tests."""
+        return dict(cls.WAVE1_ENTRY_ROUTING_BASELINE)
+
+    @classmethod
+    def wave1_safety_classification_baseline(cls) -> dict[str, list[str]]:
+        """Return a copy of the Wave 1 safety classification baseline for deterministic tests."""
+        return {key: list(values) for key, values in cls.WAVE1_SAFETY_CLASSIFICATION_BASELINE.items()}
 
 
 def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
