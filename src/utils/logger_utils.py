@@ -1,5 +1,4 @@
-"""
-Logging utilities for MistHelper.
+"""Logging utilities for MistHelper.
 
 Provides redaction helpers and log filters that prevent sensitive values
 (passwords, API tokens, PSKs) from appearing in log output.
@@ -22,8 +21,7 @@ _SENSITIVE_KEY_PATTERNS = re.compile(  # Compiled once at module load for perfor
 
 
 def redact_secret(value: str) -> str:
-    """
-    Replace a sensitive value with a fixed redaction placeholder.
+    """Replace a sensitive value with a fixed redaction placeholder.
 
     Use this when you need to log a variable that *might* hold a credential.
     Passing the return value instead of the raw value ensures the credential
@@ -45,8 +43,7 @@ def redact_secret(value: str) -> str:
 
 
 def redact_if_sensitive(key: str, value: str) -> str:
-    """
-    Conditionally redact a value based on whether its key looks credential-like.
+    """Conditionally redact a value based on whether its key looks credential-like.
 
     Useful when logging config dicts where some fields are sensitive and some
     are not, without having to enumerate every sensitive field name.
@@ -70,8 +67,7 @@ def redact_if_sensitive(key: str, value: str) -> str:
 
 
 class SensitiveFilter(logging.Filter):
-    """
-    Logging filter that scrubs credential-like substrings from log messages.
+    """Logging filter that scrubs credential-like substrings from log messages.
 
     Install on a handler to provide a defence-in-depth layer: even if a
     caller accidentally logs a raw password, this filter replaces it before
@@ -97,8 +93,7 @@ class SensitiveFilter(logging.Filter):
     )
 
     def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
-        """
-        Scrub the formatted log message in-place before it is emitted.
+        """Scrub the formatted log message in-place before it is emitted.
 
         Args:
             record: The log record being processed by the handler.

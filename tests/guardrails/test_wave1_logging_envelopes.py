@@ -55,13 +55,10 @@ class TestCollectMissingDataEnvelopes:
             _getpass_mod, "getpass", lambda prompt="Enter SSH password: ": "stubbed-pw"
         )
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
-            MistHelper.SSHRunnerManager._collect_missing_data(  # Call with all-missing data
-                [], None, None, []
-            )
+            MistHelper.SSHRunnerManager._collect_missing_data([], None, None, [])  # Call with all-missing data
         entry_msgs = _entry_messages(caplog.records)  # Collect entry envelope lines
         assert entry_msgs, (  # At least one entry envelope must be present
-            "No entry envelope logged by _collect_missing_data; "
-            "expected a message containing 'Entering'"
+            "No entry envelope logged by _collect_missing_data; " "expected a message containing 'Entering'"
         )
 
     def test_exit_envelope_emitted_on_success(self, caplog, monkeypatch):
