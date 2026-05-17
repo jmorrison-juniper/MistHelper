@@ -545,13 +545,14 @@ class TestKnownHostsManagement:
         path = runner._ensure_managed_known_hosts_file()
         assert os.path.exists(path)
 
+    @pytest.mark.skipif(os.name == "nt", reason="chmod 600 not enforced on Windows; file ACLs differ")
     def test_ensure_sets_permissions(self, runner, tmp_path, monkeypatch):
         """Ensure method sets restrictive permissions."""
-        monkeypatch.chdir(tmp_path)
-        os.makedirs("data", exist_ok=True)
-        path = runner._ensure_managed_known_hosts_file()
-        mode = oct(os.stat(path).st_mode)[-3:]
-        assert mode == "600"
+        monkeypatch.chdir(tmp_path)  # Isolate file creation to temp dir
+        os.makedirs("data", exist_ok=True)  # Create expected data directory
+        path = runner._ensure_managed_known_hosts_file()  # Create managed known-hosts file
+        mode = oct(os.stat(path).st_mode)[-3:]  # Read POSIX permission bits
+        assert mode == "600"  # Must be owner-read/write only
 
 
 # ---------------------------------------------------------------------------
@@ -829,19 +830,22 @@ class TestLoadSSHConfigFromEnv:
 
     def test_basic_env_parsing(self, tmp_path, monkeypatch):
         """Parses basic .env file with SSH variables."""
-        monkeypatch.chdir(tmp_path)
-        env_path = os.path.join(str(tmp_path), "test.env")
+        monkeypatch.chdir(tmp_path)  # Isolate working directory so relative path resolves to tmp
+        # Clear SSH env vars so load_dotenv does not skip them due to existing os.environ values
+        for key in ("SSH_HOST", "SSH_USER", "SSH_PASSWORD", "SSH_COMMANDS"):
+            monkeypatch.delenv(key, raising=False)  # Remove any real .env leftovers from os.environ
+        env_path = os.path.join(str(tmp_path), "test.env")  # Build path to test fixture file
         with open(env_path, "w", encoding="utf-8") as f:
-            f.write("SSH_HOST=10.0.0.1,10.0.0.2\n")
+            f.write("SSH_HOST=10.0.0.1,10.0.0.2\n")  # Write controlled test values
             f.write("SSH_USER=admin\n")
             f.write("SSH_PASSWORD=secret123\n")
             f.write("SSH_COMMANDS=show version,show route\n")
 
-        config = EnhancedSSHRunner.load_ssh_config_from_env("test.env")
-        assert "10.0.0.1" in config["hosts"]
-        assert config["username"] == "admin"
-        assert config["password"] == "secret123"
-        assert len(config["commands"]) >= 1
+        config = EnhancedSSHRunner.load_ssh_config_from_env("test.env")  # Parse test fixture
+        assert "10.0.0.1" in config["hosts"]  # First host must be parsed
+        assert config["username"] == "admin"  # Username must come from test file, not real env
+        assert config["password"] == "secret123"  # Password must come from test file
+        assert len(config["commands"]) >= 1  # At least one command parsed
 
     def test_comments_and_empty_lines(self, tmp_path, monkeypatch):
         """Comments and blank lines in .env are skipped."""
@@ -868,15 +872,18 @@ class TestLoadSSHConfigFromEnv:
 
     def test_quoted_values(self, tmp_path, monkeypatch):
         """Quoted values in .env are unquoted."""
-        monkeypatch.chdir(tmp_path)
-        env_path = os.path.join(str(tmp_path), "test.env")
+        monkeypatch.chdir(tmp_path)  # Isolate working directory to tmp
+        # Clear SSH env vars so load_dotenv does not skip them due to existing os.environ values
+        for key in ("SSH_HOST", "SSH_USER", "SSH_PASSWORD", "SSH_COMMANDS"):
+            monkeypatch.delenv(key, raising=False)  # Remove real env leftovers before parsing
+        env_path = os.path.join(str(tmp_path), "test.env")  # Build path to test fixture
         with open(env_path, "w", encoding="utf-8") as f:
-            f.write('SSH_USER="admin"\n')
-            f.write("SSH_PASSWORD='secret123'\n")
+            f.write('SSH_USER="admin"\n')  # Double-quoted value must be unquoted by parser
+            f.write("SSH_PASSWORD='secret123'\n")  # Single-quoted value must be unquoted
 
-        config = EnhancedSSHRunner.load_ssh_config_from_env("test.env")
-        assert config["username"] == "admin"
-        assert config["password"] == "secret123"
+        config = EnhancedSSHRunner.load_ssh_config_from_env("test.env")  # Parse test fixture
+        assert config["username"] == "admin"  # Quotes must be stripped from username
+        assert config["password"] == "secret123"  # Quotes must be stripped from password
 
 
 # ---------------------------------------------------------------------------
