@@ -22,10 +22,10 @@
 - Wave 1 task artifacts exist under `specs/192-compliance-decomposition-wave1/`.
 - Gate evidence destination is created and ready for tranche records.
 
-- [ ] T001 Create Wave 1 evidence tracker skeleton in specs/192-compliance-decomposition-wave1/tranche-validation.md
-- [ ] T002 Create baseline compliance metrics document in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
-- [ ] T003 Create bounded decomposition scope checklist in specs/192-compliance-decomposition-wave1/bounded-decomposition-checklist.md
-- [ ] T004 Create high-risk function selection worksheet in specs/192-compliance-decomposition-wave1/high-risk-function-map.md
+- [x] T001 Create Wave 1 evidence tracker skeleton in specs/192-compliance-decomposition-wave1/tranche-validation.md
+- [x] T002 Create baseline compliance metrics document in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
+- [x] T003 Create bounded decomposition scope checklist in specs/192-compliance-decomposition-wave1/bounded-decomposition-checklist.md
+- [x] T004 Create high-risk function selection worksheet in specs/192-compliance-decomposition-wave1/high-risk-function-map.md
 
 ---
 
@@ -40,13 +40,13 @@
 - Explicit Wave 1 exclusions and bounded decomposition constraints are recorded and testable.
 - Tranche gate command set is normalized in one executable helper.
 
-- [ ] T005 Inventory in-scope production prompt paths and context labels in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
-- [ ] T006 Capture baseline entry-routing guardrail matrix in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
-- [ ] T007 Capture baseline safety-classification guardrail matrix in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
-- [ ] T008 Define bounded decomposition hard boundaries and out-of-scope exclusions in specs/192-compliance-decomposition-wave1/bounded-decomposition-checklist.md
-- [ ] T009 [P] Implement tranche gate runner script for CS1 commands in scripts/wave1/run_wave1_gate.ps1
-- [ ] T010 [P] Add gate-run usage notes for maintainers in specs/192-compliance-decomposition-wave1/quickstart.md
-- [ ] T011 Add tranche stop/go policy and blocking semantics to specs/192-compliance-decomposition-wave1/tranche-validation.md
+- [x] T005 Inventory in-scope production prompt paths and context labels in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
+- [x] T006 Capture baseline entry-routing guardrail matrix in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
+- [x] T007 Capture baseline safety-classification guardrail matrix in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
+- [x] T008 Define bounded decomposition hard boundaries and out-of-scope exclusions in specs/192-compliance-decomposition-wave1/bounded-decomposition-checklist.md
+- [x] T009 [P] Implement tranche gate runner script for CS1 commands in scripts/wave1/run_wave1_gate.ps1
+- [x] T010 [P] Add gate-run usage notes for maintainers in specs/192-compliance-decomposition-wave1/quickstart.md
+- [x] T011 Add tranche stop/go policy and blocking semantics to specs/192-compliance-decomposition-wave1/tranche-validation.md
 
 **Checkpoint**: Foundation complete; story work can begin in priority order.
 
@@ -64,14 +64,14 @@
 
 ### Tests for User Story 1
 
-- [ ] T012 [P] [US1] Add EOF-safe prompt behavior tests for wave-1 prompt paths in tests/guardrails/test_wave1_safe_input_paths.py
-- [ ] T013 [P] [US1] Add regression tests for valid-input baseline flow equivalence in tests/guardrails/test_wave1_safe_input_paths.py
+- [x] T012 [P] [US1] Add EOF-safe prompt behavior tests for wave-1 prompt paths in tests/guardrails/test_wave1_safe_input_paths.py
+- [x] T013 [P] [US1] Add regression tests for valid-input baseline flow equivalence in tests/guardrails/test_wave1_safe_input_paths.py
 
 ### Implementation for User Story 1
 
-- [ ] T014 [US1] Replace in-scope production raw input calls with InputUtils.safe_input and context labels in MistHelper.py
-- [ ] T015 [US1] Add/normalize prompt context constants used by safe_input paths in MistHelper.py
-- [ ] T016 [US1] Update production prompt migration status table and SC-001 evidence in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
+- [x] T014 [US1] Replace in-scope production raw input calls with InputUtils.safe_input and context labels in MistHelper.py
+- [x] T015 [US1] Add/normalize prompt context constants used by safe_input paths in MistHelper.py
+- [x] T016 [US1] Update production prompt migration status table and SC-001 evidence in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
 
 ### Gate G1 (mandatory before continuing)
 
@@ -79,7 +79,7 @@
 - All CS1 commands pass with exit code 0.
 - Results are recorded in tranche evidence.
 
-- [ ] T017 [US1] Execute Wave 1 G1 command set and append output summary to specs/192-compliance-decomposition-wave1/tranche-validation.md
+- [x] T017 [US1] Execute Wave 1 G1 command set and append output summary to specs/192-compliance-decomposition-wave1/tranche-validation.md
 
 ---
 
@@ -95,15 +95,15 @@
 
 ### Tests for User Story 2
 
-- [ ] T018 [P] [US2] Implement entry-routing guardrail tests using baseline matrix in tests/guardrails/test_wave1_entry_routing_guardrails.py
-- [ ] T019 [P] [US2] Implement safety-classification boundary tests using baseline matrix in tests/guardrails/test_wave1_safety_classification_guardrails.py
-- [ ] T020 [P] [US2] Add representative destructive-confirmation flow assertions in tests/guardrails/test_wave1_safety_classification_guardrails.py
+- [x] T018 [P] [US2] Implement entry-routing guardrail tests using baseline matrix in tests/guardrails/test_wave1_entry_routing_guardrails.py
+- [x] T019 [P] [US2] Implement safety-classification boundary tests using baseline matrix in tests/guardrails/test_wave1_safety_classification_guardrails.py
+- [x] T020 [P] [US2] Add representative destructive-confirmation flow assertions in tests/guardrails/test_wave1_safety_classification_guardrails.py
 
 ### Implementation for User Story 2
 
-- [ ] T021 [US2] Add minimal testability hooks/constants needed for deterministic routing assertions in MistHelper.py
-- [ ] T022 [US2] Add minimal testability hooks/constants needed for deterministic safety classification assertions in MistHelper.py
-- [ ] T023 [US2] Record US2 guardrail coverage and SC-002 evidence in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
+- [x] T021 [US2] Add minimal testability hooks/constants needed for deterministic routing assertions in MistHelper.py
+- [x] T022 [US2] Add minimal testability hooks/constants needed for deterministic safety classification assertions in MistHelper.py
+- [x] T023 [US2] Record US2 guardrail coverage and SC-002 evidence in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
 
 ### Gate G2 (mandatory before continuing)
 
@@ -111,7 +111,7 @@
 - All CS1 commands pass with exit code 0.
 - Results are recorded in tranche evidence.
 
-- [ ] T024 [US2] Execute Wave 1 G2 command set and append output summary to specs/192-compliance-decomposition-wave1/tranche-validation.md
+- [x] T024 [US2] Execute Wave 1 G2 command set and append output summary to specs/192-compliance-decomposition-wave1/tranche-validation.md
 
 ---
 
@@ -127,15 +127,15 @@
 
 ### Tests for User Story 3
 
-- [ ] T027 [US3] Finalize selected high-risk touched function list and rationale in specs/192-compliance-decomposition-wave1/high-risk-function-map.md
-- [ ] T025 [P] [US3] Add logging envelope presence tests for selected high-risk functions in tests/guardrails/test_wave1_logging_envelopes.py
-- [ ] T026 [P] [US3] Add secret-exposure negative tests for logging payloads in tests/guardrails/test_wave1_logging_envelopes.py
+- [x] T027 [US3] Finalize selected high-risk touched function list and rationale in specs/192-compliance-decomposition-wave1/high-risk-function-map.md
+- [x] T025 [P] [US3] Add logging envelope presence tests for selected high-risk functions in tests/guardrails/test_wave1_logging_envelopes.py
+- [x] T026 [P] [US3] Add secret-exposure negative tests for logging payloads in tests/guardrails/test_wave1_logging_envelopes.py
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Add pre-action and post-action log envelopes in selected high-risk touched functions in MistHelper.py
-- [ ] T029 [US3] Add/adjust log redaction helpers used by selected envelopes in src/misthelper/logger_utils.py
-- [ ] T030 [US3] Record US3 logging coverage and SC-004 evidence in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
+- [x] T028 [US3] Add pre-action and post-action log envelopes in selected high-risk touched functions in MistHelper.py
+- [x] T029 [US3] Add/adjust log redaction helpers used by selected envelopes in src/misthelper/logger_utils.py
+- [x] T030 [US3] Record US3 logging coverage and SC-004 evidence in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
 
 ### Gate G3 (mandatory before continuing)
 
@@ -143,7 +143,7 @@
 - All CS1 commands pass with exit code 0.
 - Results are recorded in tranche evidence.
 
-- [ ] T031 [US3] Execute Wave 1 G3 command set and append output summary to specs/192-compliance-decomposition-wave1/tranche-validation.md
+- [x] T031 [US3] Execute Wave 1 G3 command set and append output summary to specs/192-compliance-decomposition-wave1/tranche-validation.md
 
 ---
 
@@ -159,14 +159,14 @@
 
 ### Tests for User Story 4
 
-- [ ] T032 [P] [US4] Add gate-runner regression tests for stop/go semantics in tests/guardrails/test_wave1_gate_runner.py
-- [ ] T033 [P] [US4] Add bounded decomposition scope-audit tests for forbidden change categories in tests/guardrails/test_wave1_scope_boundaries.py
+- [x] T032 [P] [US4] Add gate-runner regression tests for stop/go semantics in tests/guardrails/test_wave1_gate_runner.py
+- [x] T033 [P] [US4] Add bounded decomposition scope-audit tests for forbidden change categories in tests/guardrails/test_wave1_scope_boundaries.py
 
 ### Implementation for User Story 4
 
-- [ ] T034 [US4] Implement scope-audit script to verify Wave 1 exclusion boundaries in scripts/wave1/verify_wave1_scope_boundaries.py
-- [ ] T035 [US4] Integrate gate runner and scope audit sequence into execution flow notes in specs/192-compliance-decomposition-wave1/quickstart.md
-- [ ] T036 [US4] Record US4 gate-compliance and bounded-decomposition results in specs/192-compliance-decomposition-wave1/tranche-validation.md
+- [x] T034 [US4] Implement scope-audit script to verify Wave 1 exclusion boundaries in scripts/wave1/verify_wave1_scope_boundaries.py
+- [x] T035 [US4] Integrate gate runner and scope audit sequence into execution flow notes in specs/192-compliance-decomposition-wave1/quickstart.md
+- [x] T036 [US4] Record US4 gate-compliance and bounded-decomposition results in specs/192-compliance-decomposition-wave1/tranche-validation.md
 
 ### Gate G4 (final release gate)
 
@@ -175,7 +175,7 @@
 - Scope boundary audit passes with no violations.
 - Final tranche evidence is complete.
 
-- [ ] T037 [US4] Execute Wave 1 G4 final command set and append output summary to specs/192-compliance-decomposition-wave1/tranche-validation.md
+- [x] T037 [US4] Execute Wave 1 G4 final command set and append output summary to specs/192-compliance-decomposition-wave1/tranche-validation.md
 
 ---
 
@@ -187,11 +187,11 @@
 - All story evidence maps to spec success criteria SC-001..SC-005.
 - Tasks and evidence are audit-ready for implementation/PR execution.
 
-- [ ] T038 [P] Align success-criteria evidence mapping SC-001..SC-005 in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
-- [ ] T039 [P] Add final tranche summary table (T0..T4 and G1..G4) in specs/192-compliance-decomposition-wave1/tranche-validation.md
-- [ ] T040 Add implementation handoff checklist with gate replay steps in specs/192-compliance-decomposition-wave1/quickstart.md
-- [ ] T041 Add CS1 command parity verification across spec/plan/quickstart/gate script in specs/192-compliance-decomposition-wave1/tranche-validation.md
-- [ ] T042 Add explicit SC-005 safety-boundary evidence capture entry in specs/192-compliance-decomposition-wave1/tranche-validation.md
+- [x] T038 [P] Align success-criteria evidence mapping SC-001..SC-005 in specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md
+- [x] T039 [P] Add final tranche summary table (T0..T4 and G1..G4) in specs/192-compliance-decomposition-wave1/tranche-validation.md
+- [x] T040 Add implementation handoff checklist with gate replay steps in specs/192-compliance-decomposition-wave1/quickstart.md
+- [x] T041 Add CS1 command parity verification across spec/plan/quickstart/gate script in specs/192-compliance-decomposition-wave1/tranche-validation.md
+- [x] T042 Add explicit SC-005 safety-boundary evidence capture entry in specs/192-compliance-decomposition-wave1/tranche-validation.md
 
 ---
 
@@ -235,9 +235,9 @@
 
 ## Parallel Example: US2 Guardrail Work
 
-- [ ] T018 [P] [US2] Implement entry-routing guardrail tests using baseline matrix in tests/guardrails/test_wave1_entry_routing_guardrails.py
-- [ ] T019 [P] [US2] Implement safety-classification boundary tests using baseline matrix in tests/guardrails/test_wave1_safety_classification_guardrails.py
-- [ ] T020 [P] [US2] Add representative destructive-confirmation flow assertions in tests/guardrails/test_wave1_safety_classification_guardrails.py
+- [x] T018 [P] [US2] Implement entry-routing guardrail tests using baseline matrix in tests/guardrails/test_wave1_entry_routing_guardrails.py
+- [x] T019 [P] [US2] Implement safety-classification boundary tests using baseline matrix in tests/guardrails/test_wave1_safety_classification_guardrails.py
+- [x] T020 [P] [US2] Add representative destructive-confirmation flow assertions in tests/guardrails/test_wave1_safety_classification_guardrails.py
 
 ---
 
@@ -264,3 +264,8 @@
 - G1, G2, G3, G4 all recorded as pass in `specs/192-compliance-decomposition-wave1/tranche-validation.md`.
 - Evidence in `specs/192-compliance-decomposition-wave1/baseline-compliance-metrics.md` maps to SC-001..SC-005.
 - Bounded decomposition constraints remain intact per `specs/192-compliance-decomposition-wave1/bounded-decomposition-checklist.md`.
+
+
+
+
+

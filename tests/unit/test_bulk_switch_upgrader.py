@@ -636,7 +636,7 @@ class TestCaching:
         mock_response.data = [{"version": "23.4R2.21", "model": "EX4100-48P"}]
 
         mock_mistapi = sys.modules["mistapi"]
-        (mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.return_value) = mock_response
+        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.return_value = mock_response
 
         with patch.object(upgrader, "_save_to_cache"):
             result = upgrader._fetch_firmware_from_api()
@@ -648,7 +648,7 @@ class TestCaching:
         mock_response.data = []
 
         mock_mistapi = sys.modules["mistapi"]
-        (mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.return_value) = mock_response
+        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.return_value = mock_response
 
         result = upgrader._fetch_firmware_from_api()
         assert result == []
@@ -656,13 +656,13 @@ class TestCaching:
     def test_fetch_firmware_from_api_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify API exception handling."""
         mock_mistapi = sys.modules["mistapi"]
-        (mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect) = RuntimeError("API error")
+        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect = RuntimeError("API error")
 
         result = upgrader._fetch_firmware_from_api()
         assert result == []
 
         # Cleanup
-        (mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect) = None
+        mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions.side_effect = None
 
 
 # ---------------------------------------------------------------------------
