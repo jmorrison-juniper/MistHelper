@@ -1,8 +1,7 @@
-"""
-src/marvis/marvis_utils.py
+"""Utilities for processing Marvis AI API responses into CSV-ready format.
 
-Utilities for processing Marvis AI API responses into CSV-ready format.
-Extracted from MistHelper.py to keep the monolith under the 5-Item Rule limit.
+src/marvis/marvis_utils.py — extracted from MistHelper.py to keep the monolith
+under the 5-Item Rule limit.
 
 Dependencies are injected via the constructor to avoid circular imports
 with MistHelper.py. Callers must pass the data-processing callables they
@@ -19,14 +18,14 @@ from typing import Any  # Generic Any type hint for untyped API response data
 
 
 class MarvisDataUtils:
-    """
-    Processes Marvis AI API responses into CSV-ready row lists.
+    """Process Marvis AI API responses into CSV-ready row lists.
 
     Uses dependency injection for data-processing helpers to keep this
     module free of imports from MistHelper.py (which would create a
     circular dependency).
 
-    Usage in MistHelper.py:
+    Usage in MistHelper.py::
+
         marvis_data_utils = MarvisDataUtils(
             escape_fn=DataProcessingUtils.escape_multiline,
             flatten_fn=DataProcessingUtils.flatten_nested_fields,
@@ -43,8 +42,7 @@ class MarvisDataUtils:
             [list[Any]], list[dict[str, Any]]
         ],  # Callable to flatten deeply nested dicts into flat rows
     ) -> None:
-        """
-        Initialise MarvisDataUtils with injected data-processing helpers.
+        """Initialise MarvisDataUtils with injected data-processing helpers.
 
         Args:
             escape_fn:  Callable matching DataProcessingUtils.escape_multiline
@@ -62,8 +60,7 @@ class MarvisDataUtils:
         api_response_data: Any,  # Raw API response from a Marvis troubleshoot call
         analysis_type: str = "generic",  # Category label used to choose formatting strategy
     ) -> list[dict[str, Any]]:
-        """
-        Convert a raw Marvis API response into a flat list of dicts for CSV export.
+        """Convert a raw Marvis API response into a flat list of dicts for CSV export.
 
         Handles four known analysis types (client, device, network, sites) plus a
         generic fallback.  For "sites", each site in the results list becomes its
@@ -161,8 +158,7 @@ class MarvisDataUtils:
         item: dict[str, Any],  # Top-level response item that contains the nested "results" list
         accumulated: list[dict[str, Any]],  # Existing list to append the new site rows into
     ) -> list[dict[str, Any]]:
-        """
-        Expand the nested 'results' list from a sites SLE response into per-site rows.
+        """Expand the nested 'results' list from a sites SLE response into per-site rows.
 
         One row is emitted per site entry in item["results"].  Metadata keys
         (start, end, limit, page, total) from the parent item are copied into
@@ -205,8 +201,7 @@ class MarvisDataUtils:
         self,
         item: dict[str, Any],  # A single dict from the top-level Marvis response list
     ) -> dict[str, Any]:
-        """
-        Flatten one Marvis response item (client / device / network) into a single dict.
+        """Flatten one Marvis response item (client / device / network) into a single dict.
 
         The Marvis API wraps troubleshoot results in a nested "results" array.
         This method un-nests that array and emits columns like result_0_category,
@@ -244,8 +239,7 @@ class MarvisDataUtils:
         row: dict[str, Any],  # Existing partial row dict to add result columns into
         results: list[Any],  # The "results" list from a single Marvis troubleshoot response item
     ) -> dict[str, Any]:
-        """
-        Expand each entry in a Marvis 'results' array into prefixed columns.
+        """Expand each entry in a Marvis 'results' array into prefixed columns.
 
         E.g. results[0] = {"category": "WiFi", "reason": "low RSSI"} becomes
         result_0_category and result_0_reason columns in the CSV row.
@@ -272,8 +266,7 @@ class MarvisDataUtils:
         self,
         api_response_data: Any,  # The original raw API response that caused the formatting error
     ) -> list[dict[str, Any]]:
-        """
-        Recover from a formatting failure using the two injected processing callables.
+        """Recover from a formatting failure using the two injected processing callables.
 
         Falls back to the same flatten+escape pipeline that was used before the
         structured formatting was introduced.  Ensures the caller still gets data
