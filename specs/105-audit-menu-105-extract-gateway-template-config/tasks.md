@@ -1,1 +1,0 @@
-Tasks for Extract Gateway Template Config (menu 105). See plan.md and spec.md.

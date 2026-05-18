@@ -1,5 +1,0 @@
-- Implement CSV parser and header mapping
-- Implement create_site with idempotency checks
-- Add audit table sites_imports to SQLite
-- Add dry-run and summary CSV output
-- Tests and docs

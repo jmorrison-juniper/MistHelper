@@ -1,5 +1,0 @@
-# Create Country RF Templates (Menu 108)
-
-Generate RF templates tailored to country/regulatory settings. Support 2.4/5/6 GHz bands, channel planning defaults, and export to template library. Include checks for regulatory compliance and default power settings.
-
-Outputs: new template definitions and CSV summary. Dry-run default.

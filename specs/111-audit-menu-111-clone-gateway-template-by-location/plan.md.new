@@ -1,5 +1,0 @@
-1) Discover source template and ensure permissions
-2) Implement clone helper that accepts overrides and validates naming
-3) Implement dry-run preview and snapshot
-4) Apply clone and return new ID and YAML snapshot
-5) Tests and docs

@@ -1,6 +1,0 @@
-- Wire CLI/menu to call update_gateway_templates_wan2_variable with dry-run default
-- Implement discovery helper and template fetch
-- Implement diff generator and dry-run output
-- Create snapshot export and safe apply flow
-- Implement rollback helper and audit CSV
-- Add tests and docs

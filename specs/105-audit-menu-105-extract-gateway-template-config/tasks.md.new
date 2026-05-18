@@ -1,4 +1,0 @@
-- Implement template fetch and redact secrets
-- Serialize to YAML/JSON and write to data/exports/gateway_templates/
-- Add checksum metadata and manifest
-- CLI wiring and tests

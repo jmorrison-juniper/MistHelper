@@ -1,7 +1,0 @@
-# Create Test Sites From CSV (Menu 107)
-
-Import a CSV describing test sites and create sites via the Mist API. Support column mapping, idempotency (avoid duplicates), dry-run, and logging of created site IDs. Validate CSV format and required fields.
-
-Outputs: CSV summary of created sites and SQLite table for audit (sites_imports).
-
-Security: do not create real production sites unless --force is supplied.

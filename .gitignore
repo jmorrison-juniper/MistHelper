@@ -254,3 +254,6 @@ starlink-api-reference/
 # Archived spec folders (local reference only, not for GitHub commits)
 finished-specs/
 abandoned-specs/
+
+# Auto-generated audit-menu SpecKit stubs (stale, replaced by numbered specs)
+specs/*-audit-menu-*/

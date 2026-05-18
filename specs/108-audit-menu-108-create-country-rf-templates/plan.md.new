@@ -1,5 +1,0 @@
-1) Define country-to-regulatory defaults
-2) Implement template generator with sensible defaults per band
-3) Validate template with Mist API if possible
-4) Export to template library and YAML snapshots
-5) Tests and docs

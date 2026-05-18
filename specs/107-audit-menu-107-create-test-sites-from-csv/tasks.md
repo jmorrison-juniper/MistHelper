@@ -1,1 +1,0 @@
-Tasks for Create test sites from CSV (menu 107). See plan.md and sample CSV in this directory.

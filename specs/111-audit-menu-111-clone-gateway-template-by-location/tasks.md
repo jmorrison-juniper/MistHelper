@@ -1,1 +1,0 @@
-Tasks for Clone Gateway Template by location (menu 111). Include dry-run preview, backup snapshots, and audit records.
