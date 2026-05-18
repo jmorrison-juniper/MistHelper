@@ -30,6 +30,7 @@ import logging
 import os
 import sys
 from datetime import datetime
+from math import cos, pi, radians, sin
 from typing import Any
 
 from src.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer
@@ -3013,6 +3014,421 @@ class MapsManager:
             logging.error(f"Error in interactive map viewer: {e}", exc_info=True)
             print(f"\n! Error launching map viewer: {e}")
 
+    def _validate_ppm(self, clients: list, ppm: float) -> float:
+        """Validate pixels-per-meter ratio using client coordinate data and return corrected value."""
+        if not clients or len(clients) == 0:  # No clients to validate against -- return map PPM unchanged
+            return ppm  # Return the map's stored PPM value as-is
+        ppm_samples = []  # Collect sample PPM values from client x/y coordinates
+        for client in clients[:10]:  # Check first 10 clients only -- sufficient for validation
+            x_px = client.get("x")  # Client x in pixels
+            x_m = client.get("x_m")  # Client x in meters
+            y_px = client.get("y")  # Client y in pixels
+            y_m = client.get("y_m")  # Client y in meters
+            if x_px and x_m and x_m > 0:  # Both pixel and meter values required for ratio
+                ppm_samples.append(x_px / x_m)  # Calculate PPM from x coordinates
+            if y_px and y_m and y_m > 0:  # Both pixel and meter values required for ratio
+                ppm_samples.append(y_px / y_m)  # Calculate PPM from y coordinates
+        if not ppm_samples:  # No valid samples found -- cannot validate
+            return ppm  # Return original PPM unchanged
+        calculated_ppm = sum(ppm_samples) / len(ppm_samples)  # Average all samples for accuracy
+        ppm_ratio = calculated_ppm / ppm if ppm > 0 else 0  # Compare map PPM to calculated PPM
+        if abs(ppm_ratio - 1.0) > 0.1:  # More than 10% difference indicates mismatch
+            logging.warning(
+                "PPM MISMATCH DETECTED! Map PPM=%s, Calculated from clients=%s (ratio: %sx)",
+                ppm,
+                f"{calculated_ppm:.1f}",
+                f"{ppm_ratio:.2f}",
+            )  # Warn operator about calibration issue
+            logging.warning(  # Explain correction to operator
+                "Map may not be scaled correctly. Using calculated PPM for coverage heatmap."
+            )
+            return calculated_ppm  # Use client-derived PPM for better accuracy
+        logging.debug("PPM validation passed: map=%s, calculated=%s", ppm, f"{calculated_ppm:.1f}")  # Validation OK
+        return ppm  # Return original PPM when within acceptable range
+
+    def _add_site_survey_paths(self, fig, map_data: dict) -> None:
+        """Add site survey (validation) paths to the Plotly figure as dashed magenta lines."""
+        if not map_data.get("sitesurvey_path"):  # No validation paths on this map -- skip
+            logging.info("No validation paths found on this map")  # Informational for operator
+            return  # Nothing to draw
+        sitesurvey_paths = map_data["sitesurvey_path"]  # List of survey path objects from Mist API
+        logging.info("Processing %d validation paths", len(sitesurvey_paths))  # Log path count
+        for path_idx, path in enumerate(sitesurvey_paths):  # Iterate all paths
+            path_name = path.get("name", f"Path {path_idx + 1}")  # Use name or generate fallback label
+            path_coords = path.get("coordinate", [])  # List of {x, y} coordinate dicts
+            if not path_coords or len(path_coords) < 2:  # Need at least 2 points to draw a line
+                logging.warning("Validation path '%s' has insufficient coordinates: %d", path_name, len(path_coords))
+                continue  # Skip this path -- can't draw a line with fewer than 2 points
+            path_x = [coord.get("x", 0) for coord in path_coords]  # Extract x coordinates
+            path_y = [coord.get("y", 0) for coord in path_coords]  # Extract y coordinates
+            fig.add_trace(
+                go.Scatter(
+                    x=path_x,
+                    y=path_y,
+                    mode="lines+markers",
+                    name=f"Validation: {path_name}",
+                    line=dict(color="#ff00ff", width=3, dash="dot"),  # Magenta dashed line for visibility
+                    marker=dict(size=10, color="#ff00ff", symbol="diamond", line=dict(color="white", width=2)),
+                    visible=True,
+                    showlegend=True,
+                    hovertext=f"Validation Path: {path_name}<br>{len(path_coords)} points",
+                    hoverinfo="text",
+                )
+            )  # Draw the path as a connected line with diamond markers
+            fig.add_annotation(
+                x=path_x[0],
+                y=path_y[0] - 20,
+                text=f"<b>{path_name}</b>",
+                showarrow=False,
+                font=dict(size=11, color="white", family="Arial Black"),
+                bgcolor="rgba(255,0,255,0.9)",
+                bordercolor="white",
+                borderwidth=2,
+                borderpad=3,
+                xanchor="center",
+                yanchor="bottom",
+            )  # Label the start point of the path for identification
+            logging.debug("Added validation path '%s' with %d points", path_name, len(path_coords))
+
+    def _add_clients_to_figure(self, fig, clients: list, map_id: str) -> None:
+        """Add connected wireless client markers and labels to the Plotly figure."""
+        if not clients or len(clients) == 0:  # No clients on this map -- skip rendering
+            logging.info("No connected clients found on this map")  # Informational for operator
+            return  # Nothing to add
+        logging.info("Processing %d connected clients on this map", len(clients))  # Log client count
+        logging.debug("Client sample data: %s", clients[0] if clients else "None")  # Debug first record
+        client_x: list = []  # Client x pixel coordinates
+        client_y: list = []  # Client y pixel coordinates
+        client_hover: list = []  # HTML hover tooltip strings
+        client_names: list = []  # Display labels (hostname or short MAC)
+        for client in clients:  # Iterate all clients on the map
+            x = client.get("x")  # Client x pixel coordinate
+            y = client.get("y")  # Client y pixel coordinate
+            client_mac = client.get("mac", "unknown")  # MAC address for identification
+            client_map_id = client.get("map_id", "none")  # Map ID to verify placement
+            logging.debug(
+                "Client %s: x=%s, y=%s, map_id=%s (looking for map_id=%s)",
+                client_mac,
+                x,
+                y,
+                client_map_id,
+                map_id,
+            )  # Debug each client's coordinates
+            if x is None or y is None:  # Skip clients with no position data
+                continue  # Client has no coordinates -- not placed on map
+            client_x.append(x)  # Store valid x coordinate
+            client_y.append(y)  # Store valid y coordinate
+            hostname = client.get("hostname", "")  # Prefer hostname for label
+            label = hostname if hostname else client_mac[-8:]  # Fall back to last 8 chars of MAC
+            client_names.append(label)  # Add label for annotation rendering
+            hover = "<b>Client</b><br>"  # Build rich hover tooltip
+            hover += f"MAC: {client.get('mac', 'N/A')}<br>"  # MAC address line
+            hover += f"Hostname: {client.get('hostname', 'N/A')}<br>"  # Hostname line
+            hover += f"SSID: {client.get('ssid', 'N/A')}<br>"  # SSID line
+            hover += f"AP: {client.get('ap_name', 'N/A')}<br>"  # Associated AP
+            hover += f"Band: {client.get('band', 'N/A')}<br>"  # Radio band
+            hover += f"Signal: {client.get('rssi', 'N/A')} dBm<br>"  # Signal strength
+            hover += f"Position: ({x}, {y})"  # Pixel coordinates on map
+            client_hover.append(hover)  # Append completed hover text
+        if not client_x:  # No clients had valid coordinates
+            logging.warning("Found %d clients but none have x,y coordinates", len(clients))
+            return  # Nothing to render
+        fig.add_trace(
+            go.Scatter(
+                x=client_x,
+                y=client_y,
+                mode="markers",
+                name="Clients",
+                marker=dict(
+                    symbol="circle",
+                    size=12,
+                    color="#00ff00",  # Bright green for clients
+                    line=dict(color="white", width=2),
+                    opacity=0.9,
+                ),
+                hovertext=client_hover,
+                hoverinfo="text",
+                visible=True,
+                showlegend=True,
+            )
+        )  # Add client dot markers as a single trace for efficiency
+        for _, (x, y, name) in enumerate(zip(client_x, client_y, client_names, strict=True)):  # Add per-client labels
+            fig.add_annotation(
+                x=x,
+                y=y - 10,
+                text=f"<b>{name}</b>",
+                showarrow=False,
+                font=dict(size=9, color="white", family="Arial"),
+                bgcolor="rgba(0,128,0,0.9)",
+                bordercolor="white",
+                borderwidth=1,
+                borderpad=2,
+                xanchor="center",
+                yanchor="bottom",
+                name="Clients Label",
+            )  # Annotation positioned below the marker for readability
+        logging.info(
+            "Added %d clients to map visualization (out of %d total clients)",
+            len(client_x),
+            len(clients),
+        )  # Log how many clients were rendered
+
+    def _get_device_status(self, device: dict) -> str:
+        """Determine display status string for a device based on its API fields."""
+        if device.get("upgrade_status") or device.get("fwupdate", {}).get("progress") is not None:
+            return "upgrading"  # Firmware update in progress takes priority over connected/disconnected
+        status = device.get("status", "disconnected")  # API field: 'connected' or 'disconnected'
+        if status == "connected":  # Device is reachable and connected
+            return "connected"  # Standard connected state
+        return "disconnected"  # Default to disconnected for any other status value
+
+    def _build_device_hover_text(self, device: dict, device_status: str) -> str:
+        """Build rich HTML hover tooltip text for a device marker."""
+        text = f"<b>{device.get('name', 'Unnamed')}</b><br>"  # Device name as bold header
+        text += f"Type: {device.get('type', 'N/A')}<br>"  # Device type (ap/switch/gateway)
+        text += f"Model: {device.get('model', 'N/A')}<br>"  # Hardware model number
+        text += f"MAC: {device.get('mac', 'N/A')}<br>"  # MAC address for identification
+        text += f"Status: <b>{device_status.upper()}</b><br>"  # Status in bold uppercase for visibility
+        if device_status == "upgrading":  # Only show progress for upgrading devices
+            progress = device.get("fwupdate", {}).get("progress", "N/A")  # Firmware update progress
+            text += f"Upgrade Progress: {progress}%<br>" if progress != "N/A" else ""  # Percentage if available
+        text += f"Position: ({device.get('x', 'N/A')}, {device.get('y', 'N/A')})<br>"  # Pixel coordinates
+        text += f"Orientation: {device.get('orientation', 0)}deg"  # Device orientation in degrees
+        return text  # Return completed hover tooltip HTML string
+
+    def _add_mesh_links(self, fig, type_devices: list) -> None:
+        """Add dashed mesh link lines between APs that have mesh uplink relationships."""
+        mesh_links_added = 0  # Track how many links were drawn for logging
+        for _, device in enumerate(type_devices):  # Check each AP for mesh uplink info
+            mesh_uplink = device.get("mesh_uplink")  # MAC of the uplink AP in mesh topology
+            if not mesh_uplink:  # This AP has no mesh uplink -- skip
+                continue  # Not a mesh AP
+            for uplink_device in type_devices:  # Find the uplink AP by MAC
+                if uplink_device.get("mac") == mesh_uplink:  # Found the uplink device
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[device["x"], uplink_device["x"]],  # Line from this AP to its uplink
+                            y=[device["y"], uplink_device["y"]],
+                            mode="lines",
+                            line=dict(color="rgba(255,0,255,0.4)", width=2, dash="dash"),  # Transparent magenta dashes
+                            name="Mesh Link",
+                            showlegend=(mesh_links_added == 0),  # Only show once in legend
+                            hoverinfo="skip",  # No hover -- cosmetic line only
+                        )
+                    )  # Draw mesh link between AP pair
+                    mesh_links_added += 1  # Increment drawn link count
+                    break  # Found the uplink -- move to next device
+        if mesh_links_added > 0:  # Only log if any links were drawn
+            logging.info("Added %d mesh links between APs", mesh_links_added)  # Inform operator of topology
+
+    def _add_device_orientation_markers(
+        self,
+        fig,
+        x: float,
+        y: float,
+        angle: float,
+        device_color: str,
+        type_cfg: dict,
+    ) -> None:
+        """Add a Mist-style crosshair and directional dot to show device orientation on the map."""
+        crosshair_size = 40  # Crosshair arm length in pixels -- increased from 25 for visibility
+        fig.add_trace(
+            go.Scatter(
+                x=[x - crosshair_size, x + crosshair_size],
+                y=[y, y],
+                mode="lines",
+                line=dict(color=device_color, width=3),  # Status-based color for horizontal arm
+                name=f"{type_cfg['name']} Orientation",  # Group name enables layer toggle
+                showlegend=False,  # Don't clutter legend with individual crosshair lines
+                hoverinfo="skip",  # No hover needed -- orientation marker only
+            )
+        )  # Horizontal crosshair arm
+        fig.add_trace(
+            go.Scatter(
+                x=[x, x],
+                y=[y - crosshair_size, y + crosshair_size],
+                mode="lines",
+                line=dict(color=device_color, width=3),  # Status-based color for vertical arm
+                name=f"{type_cfg['name']} Orientation",  # Same group name for toggle
+                showlegend=False,  # Keep legend clean
+                hoverinfo="skip",  # Cosmetic only
+            )
+        )  # Vertical crosshair arm
+        dot_distance = 50  # Distance from device center to orientation dot -- increased from 35
+        math_angle = 90 - angle  # Convert Mist orientation (0=up) to math angle (0=right)
+        dot_x = x + dot_distance * cos(radians(math_angle))  # X position of directional dot
+        dot_y = y - dot_distance * sin(radians(math_angle))  # Y position -- subtract because Y increases downward
+        fig.add_trace(
+            go.Scatter(
+                x=[dot_x],
+                y=[dot_y],
+                mode="markers",
+                marker=dict(
+                    size=16,  # Larger dot for visibility -- increased from 10
+                    color=device_color,  # Status-based color matches device icon
+                    line=dict(color="white", width=2),  # White outline for contrast
+                ),
+                name=f"{type_cfg['name']} Orientation",  # Same group name for toggle
+                showlegend=False,  # Keep legend clean
+                hovertext=f"Orientation: {angle} deg",  # Show orientation angle on hover
+                hoverinfo="text",
+            )
+        )  # Directional dot indicating which way the device faces
+
+    def _add_vbeacons_to_figure(self, fig, map_data: dict) -> None:
+        """Add virtual beacon markers, labels, and coverage circles to the Plotly figure."""
+        if not map_data.get("vbeacons"):  # No virtual beacons on this map -- skip
+            logging.info("No virtual beacons found on this map")  # Informational for operator
+            return  # Nothing to add
+        vbeacons = map_data["vbeacons"]  # List of virtual beacon objects from Mist API
+        logging.info("Processing %d virtual beacons", len(vbeacons))  # Log beacon count
+        beacon_x: list = []  # Beacon x pixel coordinates
+        beacon_y: list = []  # Beacon y pixel coordinates
+        beacon_hover: list = []  # HTML hover tooltip strings
+        beacon_names: list = []  # Display name labels
+        for beacon in vbeacons:  # Iterate all virtual beacons
+            x = beacon.get("x")  # Beacon x pixel coordinate
+            y = beacon.get("y")  # Beacon y pixel coordinate
+            if x is None or y is None:  # Skip beacons without position data
+                continue  # Can't place beacon without coordinates
+            beacon_x.append(x)  # Store valid x coordinate
+            beacon_y.append(y)  # Store valid y coordinate
+            name = beacon.get("name", "Unnamed Beacon")  # Beacon display name
+            beacon_names.append(name)  # Store name for annotation
+            hover = f"<b>Virtual Beacon: {name}</b><br>"  # Bold header for hover tooltip
+            hover += f"UUID: {beacon.get('uuid', 'N/A')}<br>"  # Beacon UUID for iBeacon identification
+            hover += f"Major: {beacon.get('major', 'N/A')}<br>"  # iBeacon major value
+            hover += f"Minor: {beacon.get('minor', 'N/A')}<br>"  # iBeacon minor value
+            hover += f"Power: {beacon.get('power', 'N/A')}<br>"  # Transmit power in dBm
+            hover += f"Position: ({x}, {y})"  # Pixel coordinates on map
+            beacon_hover.append(hover)  # Append completed hover text
+        if not beacon_x:  # No beacons had valid coordinates
+            return  # Nothing to render
+        fig.add_trace(
+            go.Scatter(
+                x=beacon_x,
+                y=beacon_y,
+                mode="markers",
+                name="Virtual Beacons",
+                marker=dict(
+                    symbol="circle",
+                    size=14,
+                    color="#00ff00",  # Green for virtual beacons -- distinguishes from BLE (cyan)
+                    line=dict(color="white", width=2),
+                    opacity=0.9,
+                ),
+                hovertext=beacon_hover,
+                hoverinfo="text",
+                visible=True,
+                showlegend=True,
+            )
+        )  # Add all virtual beacon markers as a single trace
+        for _, (x, y, name) in enumerate(zip(beacon_x, beacon_y, beacon_names, strict=True)):  # Add per-beacon labels
+            fig.add_annotation(
+                x=x,
+                y=y - 12,
+                text=f"<b>{name}</b>",
+                showarrow=False,
+                font=dict(size=9, color="white", family="Arial"),
+                bgcolor="rgba(0,200,0,0.9)",
+                bordercolor="white",
+                borderwidth=1,
+                borderpad=2,
+                xanchor="center",
+                yanchor="bottom",
+                name="Virtual Beacons Label",
+            )  # Label positioned below marker
+        for beacon in vbeacons:  # Add power-based coverage circles for each beacon
+            x = beacon.get("x")  # Beacon center x
+            y = beacon.get("y")  # Beacon center y
+            power = beacon.get("power", 0)  # Transmit power in dBm (typical: -12 to +4)
+            if x is None or y is None:  # Skip beacons without coordinates
+                continue  # Can't draw circle without center point
+            base_radius = 50  # Base coverage radius in pixels
+            power_factor = (power + 12) / 16  # Normalize -12..+4 dBm range to 0..1
+            radius = base_radius + (power_factor * 100)  # Scale coverage radius by power
+            theta = [i * 2 * pi / 50 for i in range(51)]  # 50 points for smooth circle
+            circle_x = [x + radius * cos(t) for t in theta]  # X coordinates of circle
+            circle_y = [y + radius * sin(t) for t in theta]  # Y coordinates of circle
+            fig.add_trace(
+                go.Scatter(
+                    x=circle_x,
+                    y=circle_y,
+                    mode="lines",
+                    line=dict(color="rgba(0,255,0,0.3)", width=1, dash="dash"),  # Transparent green dashed ring
+                    fill="toself",
+                    fillcolor="rgba(0,255,0,0.05)",  # Very light fill for coverage area visualization
+                    name="vBeacon Coverage",
+                    showlegend=False,  # Don't add each circle to legend -- too many entries
+                    hoverinfo="skip",  # No hover needed -- visual indicator only
+                )
+            )  # Draw power-proportional coverage circle
+        logging.info("Added %d virtual beacons to map", len(beacon_x))  # Log final count
+
+    def _add_ble_beacons_to_figure(self, fig, map_data: dict) -> None:
+        """Add BLE beacon markers and labels to the Plotly figure."""
+        if not map_data.get("beacons"):  # No BLE beacons on this map -- skip
+            logging.info("No BLE beacons found on this map")  # Informational for operator
+            return  # Nothing to add
+        ble_beacons = map_data["beacons"]  # List of BLE beacon objects from Mist API
+        logging.info("Processing %d BLE beacons", len(ble_beacons))  # Log beacon count
+        ble_x: list = []  # BLE beacon x pixel coordinates
+        ble_y: list = []  # BLE beacon y pixel coordinates
+        ble_hover: list = []  # HTML hover tooltip strings
+        ble_names: list = []  # Display name labels
+        for beacon in ble_beacons:  # Iterate all BLE beacons
+            x = beacon.get("x")  # Beacon x pixel coordinate
+            y = beacon.get("y")  # Beacon y pixel coordinate
+            if x is None or y is None:  # Skip beacons without position data
+                continue  # Can't place beacon without coordinates
+            ble_x.append(x)  # Store valid x coordinate
+            ble_y.append(y)  # Store valid y coordinate
+            name = beacon.get("name", beacon.get("mac", "Unnamed"))  # Prefer name; fall back to MAC
+            ble_names.append(name)  # Store name for annotation
+            hover = f"<b>BLE Beacon: {name}</b><br>"  # Bold header for hover tooltip
+            hover += f"MAC: {beacon.get('mac', 'N/A')}<br>"  # Hardware MAC address
+            hover += f"Type: {beacon.get('type', 'N/A')}<br>"  # Beacon type (iBeacon, Eddystone, etc.)
+            hover += f"Power: {beacon.get('power', 'N/A')}<br>"  # Transmit power in dBm
+            hover += f"Position: ({x}, {y})"  # Pixel coordinates on map
+            ble_hover.append(hover)  # Append completed hover text
+        if not ble_x:  # No BLE beacons had valid coordinates
+            return  # Nothing to render
+        fig.add_trace(
+            go.Scatter(
+                x=ble_x,
+                y=ble_y,
+                mode="markers",
+                name="BLE Beacons",
+                marker=dict(
+                    symbol="circle",
+                    size=14,
+                    color="#00bfff",  # Cyan for BLE beacons -- distinguishes from virtual beacons (green)
+                    line=dict(color="white", width=2),
+                    opacity=0.9,
+                ),
+                hovertext=ble_hover,
+                hoverinfo="text",
+                visible=True,
+                showlegend=True,
+            )
+        )  # Add all BLE beacon markers as a single trace
+        for _, (x, y, name) in enumerate(zip(ble_x, ble_y, ble_names, strict=True)):  # Add per-beacon labels
+            fig.add_annotation(
+                x=x,
+                y=y - 12,
+                text=f"<b>{name}</b>",
+                showarrow=False,
+                font=dict(size=9, color="white", family="Arial"),
+                bgcolor="rgba(0,191,255,0.9)",
+                bordercolor="white",
+                borderwidth=1,
+                borderpad=2,
+                xanchor="center",
+                yanchor="bottom",
+                name="BLE Beacons Label",
+            )  # Label positioned below marker for readability
+        logging.info("Added %d BLE beacons to map", len(ble_x))  # Log final count
+
     def _launch_plotly_viewer(
         self,
         map_data,
@@ -3038,7 +3454,6 @@ class MapsManager:
         )
         import os
         import webbrowser
-        from math import cos, pi, radians, sin
 
         import plotly.graph_objects as go
 
@@ -3103,33 +3518,8 @@ class MapsManager:
         ppm = map_data.get("ppm", 10)  # pixels per meter, default to 10 if not set
         logging.debug(f"Map canvas dimensions: {map_width}x{map_height}, PPM from map: {ppm}")
 
-        # Validate PPM using client data if available
-        # Clients have both pixel coords (x, y) and meter coords (x_m, y_m) - we can verify PPM
-        if clients and len(clients) > 0:
-            ppm_samples = []
-            for client in clients[:10]:  # Check first 10 clients
-                x_px = client.get("x")
-                x_m = client.get("x_m")
-                y_px = client.get("y")
-                y_m = client.get("y_m")
-                if x_px and x_m and x_m > 0:
-                    ppm_samples.append(x_px / x_m)
-                if y_px and y_m and y_m > 0:
-                    ppm_samples.append(y_px / y_m)
-
-            if ppm_samples:
-                calculated_ppm = sum(ppm_samples) / len(ppm_samples)
-                ppm_ratio = calculated_ppm / ppm if ppm > 0 else 0
-
-                if abs(ppm_ratio - 1.0) > 0.1:  # More than 10% difference
-                    logging.warning(
-                        f"PPM MISMATCH DETECTED! Map PPM={ppm}, "
-                        f"Calculated from clients={calculated_ppm:.1f} (ratio: {ppm_ratio:.2f}x)"
-                    )
-                    logging.warning("Map may not be scaled correctly. Using calculated PPM for coverage heatmap.")
-                    ppm = calculated_ppm
-                else:
-                    logging.debug(f"PPM validation passed: map={ppm}, calculated={calculated_ppm:.1f}")
+        # Validate PPM using client coordinates to detect calibration mismatches
+        ppm = self._validate_ppm(clients, ppm)  # Returns corrected PPM if mismatch > 10%
 
         # Add map image if available
         # Note: Plotly uses bottom-left origin, but we keep Mist's coordinate system (top-left origin)
@@ -3155,138 +3545,10 @@ class MapsManager:
         figure_builder.add_zones(fig, zones)
 
         # Add validation paths (site survey paths) if present
-        if "sitesurvey_path" in map_data and map_data["sitesurvey_path"]:
-            sitesurvey_paths = map_data["sitesurvey_path"]
-            logging.info(f"Processing {len(sitesurvey_paths)} validation paths")
-
-            for path_idx, path in enumerate(sitesurvey_paths):
-                path_name = path.get("name", f"Path {path_idx + 1}")
-                path_coords = path.get("coordinate", [])
-
-                if path_coords and len(path_coords) >= 2:
-                    # Extract coordinates
-                    path_x = [coord.get("x", 0) for coord in path_coords]
-                    path_y = [coord.get("y", 0) for coord in path_coords]
-
-                    # Draw validation path as connected line with markers
-                    fig.add_trace(
-                        go.Scatter(
-                            x=path_x,
-                            y=path_y,
-                            mode="lines+markers",
-                            name=f"Validation: {path_name}",
-                            line=dict(color="#ff00ff", width=3, dash="dot"),
-                            marker=dict(size=10, color="#ff00ff", symbol="diamond", line=dict(color="white", width=2)),
-                            visible=True,
-                            showlegend=True,
-                            hovertext=f"Validation Path: {path_name}<br>{len(path_coords)} points",
-                            hoverinfo="text",
-                        )
-                    )
-
-                    # Add path name label at start point
-                    fig.add_annotation(
-                        x=path_x[0],
-                        y=path_y[0] - 20,
-                        text=f"<b>{path_name}</b>",
-                        showarrow=False,
-                        font=dict(size=11, color="white", family="Arial Black"),
-                        bgcolor="rgba(255,0,255,0.9)",
-                        bordercolor="white",
-                        borderwidth=2,
-                        borderpad=3,
-                        xanchor="center",
-                        yanchor="bottom",
-                    )
-
-                    logging.debug(f"Added validation path '{path_name}' with {len(path_coords)} points")
-                else:
-                    logging.warning(f"Validation path '{path_name}' has insufficient coordinates: {len(path_coords)}")
-        else:
-            logging.info("No validation paths found on this map")
+        self._add_site_survey_paths(fig, map_data)  # Draw any site survey paths on the map
 
         # Add connected clients if present
-        if clients and len(clients) > 0:
-            logging.info(f"Processing {len(clients)} connected clients on this map")
-            logging.debug(f"Client sample data: {clients[0] if clients else 'None'}")
-            client_x = []
-            client_y = []
-            client_hover = []
-            client_names = []
-
-            for client in clients:
-                x = client.get("x")
-                y = client.get("y")
-                client_mac = client.get("mac", "unknown")
-                client_map_id = client.get("map_id", "none")
-                logging.debug(
-                    f"Client {client_mac}: x={x}, y={y}, map_id={client_map_id} (looking for map_id={map_id})"
-                )
-                if x is not None and y is not None:
-                    client_x.append(x)
-                    client_y.append(y)
-
-                    # Use hostname or MAC for label
-                    hostname = client.get("hostname", "")
-                    label = hostname if hostname else client_mac[-8:]
-                    client_names.append(label)
-
-                    # Build hover text with client details
-                    hover = "<b>Client</b><br>"
-                    hover += f"MAC: {client.get('mac', 'N/A')}<br>"
-                    hover += f"Hostname: {client.get('hostname', 'N/A')}<br>"
-                    hover += f"SSID: {client.get('ssid', 'N/A')}<br>"
-                    hover += f"AP: {client.get('ap_name', 'N/A')}<br>"
-                    hover += f"Band: {client.get('band', 'N/A')}<br>"
-                    hover += f"Signal: {client.get('rssi', 'N/A')} dBm<br>"
-                    hover += f"Position: ({x}, {y})"
-                    client_hover.append(hover)
-
-            if client_x:
-                # Add client markers
-                fig.add_trace(
-                    go.Scatter(
-                        x=client_x,
-                        y=client_y,
-                        mode="markers",
-                        name="Clients",
-                        marker=dict(
-                            symbol="circle",
-                            size=12,
-                            color="#00ff00",  # Bright green
-                            line=dict(color="white", width=2),
-                            opacity=0.9,
-                        ),
-                        hovertext=client_hover,
-                        hoverinfo="text",
-                        visible=True,
-                        showlegend=True,
-                    )
-                )
-
-                # Add client name labels with shadow effect using annotations
-                for _, (x, y, name) in enumerate(zip(client_x, client_y, client_names, strict=True)):
-                    fig.add_annotation(
-                        x=x,
-                        y=y - 10,  # Position above marker
-                        text=f"<b>{name}</b>",
-                        showarrow=False,
-                        font=dict(size=9, color="white", family="Arial"),
-                        bgcolor="rgba(0,128,0,0.9)",
-                        bordercolor="white",
-                        borderwidth=1,
-                        borderpad=2,
-                        xanchor="center",
-                        yanchor="bottom",
-                        name="Clients Label",  # For toggle control
-                    )
-                logging.info(
-                    f"Added {len(client_x)} clients to map visualization (out of {len(clients)} total clients)"
-                )
-            else:
-                logging.warning(f"Found {len(clients)} clients but none have x,y coordinates")
-        else:
-            logging.info("No connected clients found on this map")
+        self._add_clients_to_figure(fig, clients, map_id)  # Draw connected client dots on the map
 
         # Add devices by type with LARGER, more visible markers
         device_types = {"ap": [], "switch": [], "gateway": []}
@@ -3344,38 +3606,13 @@ class MapsManager:
                     device_orientation = device.get("orientation", 0)
                     logging.debug(f"Device '{device_name}': orientation={device_orientation}")
 
-                # Determine status and color for each device
-                colors = []
-                statuses = []
-                for device in type_devices:
-                    # Check device status
-                    # Status can be: 'connected', 'disconnected', or check for upgrade in progress
-                    status = device.get("status", "disconnected")
-
-                    # Check if upgrading (upgrade_status field or checking for active upgrade)
-                    if device.get("upgrade_status") or device.get("fwupdate", {}).get("progress") is not None:
-                        device_status = "upgrading"
-                    elif status == "connected":
-                        device_status = "connected"
-                    else:
-                        device_status = "disconnected"
-
-                    statuses.append(device_status)
-                    colors.append(type_cfg["colors"][device_status])
-
-                hover_text = []
-                for device, device_status in zip(type_devices, statuses, strict=True):
-                    text = f"<b>{device.get('name', 'Unnamed')}</b><br>"
-                    text += f"Type: {device.get('type', 'N/A')}<br>"
-                    text += f"Model: {device.get('model', 'N/A')}<br>"
-                    text += f"MAC: {device.get('mac', 'N/A')}<br>"
-                    text += f"Status: <b>{device_status.upper()}</b><br>"
-                    if device_status == "upgrading":
-                        progress = device.get("fwupdate", {}).get("progress", "N/A")
-                        text += f"Upgrade Progress: {progress}%<br>" if progress != "N/A" else ""
-                    text += f"Position: ({device.get('x', 'N/A')}, {device.get('y', 'N/A')})<br>"
-                    text += f"Orientation: {device.get('orientation', 0)}deg"
-                    hover_text.append(text)
+                # Determine status and color for each device using extracted helpers
+                statuses = [self._get_device_status(device) for device in type_devices]  # Per-device status string
+                colors = [type_cfg["colors"][status] for status in statuses]  # Per-device color from type config
+                hover_text = [  # Per-device hover tooltip HTML
+                    self._build_device_hover_text(device, status)
+                    for device, status in zip(type_devices, statuses, strict=True)
+                ]
 
                 # Add device markers with status-based colors
                 fig.add_trace(
@@ -3417,267 +3654,18 @@ class MapsManager:
 
                 # Add mesh links for APs if mesh topology exists
                 if device_type == "ap":
-                    mesh_links_added = 0
-                    for _, device in enumerate(type_devices):
-                        # Check if this AP has mesh info
-                        mesh_uplink = device.get("mesh_uplink")
-                        if mesh_uplink:
-                            # Find the uplink AP
-                            for uplink_device in type_devices:
-                                if uplink_device.get("mac") == mesh_uplink:
-                                    # Draw mesh link
-                                    fig.add_trace(
-                                        go.Scatter(
-                                            x=[device["x"], uplink_device["x"]],
-                                            y=[device["y"], uplink_device["y"]],
-                                            mode="lines",
-                                            line=dict(color="rgba(255,0,255,0.4)", width=2, dash="dash"),
-                                            name="Mesh Link",
-                                            showlegend=(mesh_links_added == 0),  # Only show in legend once
-                                            hoverinfo="skip",
-                                        )
-                                    )
-                                    mesh_links_added += 1
-                                    break
-                    if mesh_links_added > 0:
-                        logging.info(f"Added {mesh_links_added} mesh links between APs")
+                    self._add_mesh_links(fig, type_devices)  # Draw dashed lines between mesh AP pairs
 
-                # Add Mist-style orientation indicators: crosshair + directional dot
-                # Use status-based colors for crosshair and orientation dot
-                for _, (x, y, angle, _device, device_color, _device_status) in enumerate(
-                    zip(x_coords, y_coords, orientations, type_devices, colors, statuses, strict=True)
-                ):
-                    # Crosshair at device location (always visible) - LARGER SIZE with status color
-                    crosshair_size = 40  # Increased from 25 to 40
+                # Add Mist-style orientation markers for each device using extracted helper
+                for x, y, angle, device_color in zip(x_coords, y_coords, orientations, colors, strict=True):
+                    # Delegate crosshair + directional dot drawing to extracted helper
+                    self._add_device_orientation_markers(fig, x, y, angle, device_color, type_cfg)
 
-                    # Horizontal line
-                    fig.add_trace(
-                        go.Scatter(
-                            x=[x - crosshair_size, x + crosshair_size],
-                            y=[y, y],
-                            mode="lines",
-                            line=dict(color=device_color, width=3),  # Status-based color
-                            name=f"{type_cfg['name']} Orientation",  # Name for toggle control
-                            showlegend=False,
-                            hoverinfo="skip",
-                        )
-                    )
+        # Add virtual beacons (vBeacons) if present in map data
+        self._add_vbeacons_to_figure(fig, map_data)  # Draw virtual beacon markers and power circles
 
-                    # Vertical line
-                    fig.add_trace(
-                        go.Scatter(
-                            x=[x, x],
-                            y=[y - crosshair_size, y + crosshair_size],
-                            mode="lines",
-                            line=dict(color=device_color, width=3),  # Status-based color
-                            name=f"{type_cfg['name']} Orientation",  # Name for toggle control
-                            showlegend=False,
-                            hoverinfo="skip",
-                        )
-                    )
-
-                    # Directional dot showing orientation (always visible for clarity)
-                    dot_distance = 50  # Increased from 35 to 50
-
-                    # Convert Mist orientation to standard cartesian coordinates:
-                    # - Mist: 0 deg = up (north), 90 deg = right (east), 180 deg = down, 270 deg = left
-                    # - Math: 0 deg = right (east), 90 deg = up (north), counter-clockwise
-                    # - Y-axis: Mist uses top-left origin with Y increasing downward
-                    # Conversion: math_angle = 90 deg - mist_angle, then flip Y component
-                    math_angle = 90 - angle
-                    dot_x = x + dot_distance * cos(radians(math_angle))
-                    dot_y = y - dot_distance * sin(radians(math_angle))  # Subtract because Y increases downward
-
-                    fig.add_trace(
-                        go.Scatter(
-                            x=[dot_x],
-                            y=[dot_y],
-                            mode="markers",
-                            marker=dict(
-                                size=16,  # Increased from 10 to 16
-                                color=device_color,  # Status-based color
-                                line=dict(color="white", width=2),
-                            ),
-                            name=f"{type_cfg['name']} Orientation",  # Name for toggle control
-                            showlegend=False,
-                            hovertext=f"Orientation: {angle} deg",
-                            hoverinfo="text",
-                        )
-                    )
-
-        # Add beacons (vBeacons and BLE beacons) if present in map data
-        if "vbeacons" in map_data and map_data["vbeacons"]:
-            vbeacons = map_data["vbeacons"]
-            logging.info(f"Processing {len(vbeacons)} virtual beacons")
-
-            beacon_x = []
-            beacon_y = []
-            beacon_hover = []
-            beacon_names = []
-
-            for beacon in vbeacons:
-                x = beacon.get("x")
-                y = beacon.get("y")
-                if x is not None and y is not None:
-                    beacon_x.append(x)
-                    beacon_y.append(y)
-
-                    name = beacon.get("name", "Unnamed Beacon")
-                    beacon_names.append(name)
-
-                    hover = f"<b>Virtual Beacon: {name}</b><br>"
-                    hover += f"UUID: {beacon.get('uuid', 'N/A')}<br>"
-                    hover += f"Major: {beacon.get('major', 'N/A')}<br>"
-                    hover += f"Minor: {beacon.get('minor', 'N/A')}<br>"
-                    hover += f"Power: {beacon.get('power', 'N/A')}<br>"
-                    hover += f"Position: ({x}, {y})"
-                    beacon_hover.append(hover)
-
-            if beacon_x:
-                # Add virtual beacon markers
-                fig.add_trace(
-                    go.Scatter(
-                        x=beacon_x,
-                        y=beacon_y,
-                        mode="markers",
-                        name="Virtual Beacons",
-                        marker=dict(
-                            symbol="circle",
-                            size=14,
-                            color="#00ff00",  # Green for virtual beacons
-                            line=dict(color="white", width=2),
-                            opacity=0.9,
-                        ),
-                        hovertext=beacon_hover,
-                        hoverinfo="text",
-                        visible=True,
-                        showlegend=True,
-                    )
-                )
-
-                # Add beacon name labels
-                for _, (x, y, name) in enumerate(zip(beacon_x, beacon_y, beacon_names, strict=True)):
-                    fig.add_annotation(
-                        x=x,
-                        y=y - 12,
-                        text=f"<b>{name}</b>",
-                        showarrow=False,
-                        font=dict(size=9, color="white", family="Arial"),
-                        bgcolor="rgba(0,200,0,0.9)",
-                        bordercolor="white",
-                        borderwidth=1,
-                        borderpad=2,
-                        xanchor="center",
-                        yanchor="bottom",
-                        name="Virtual Beacons Label",  # For toggle control
-                    )
-
-                # Add coverage circles for vBeacons based on power
-                for beacon in vbeacons:
-                    x = beacon.get("x")
-                    y = beacon.get("y")
-                    power = beacon.get("power", 0)  # Power in dBm
-
-                    if x is not None and y is not None:
-                        # Estimate coverage radius based on power (rough approximation)
-                        # Higher power = larger radius
-                        # Typical range: -12 to +4 dBm
-                        base_radius = 50  # Base radius in pixels
-                        power_factor = (power + 12) / 16  # Normalize -12 to +4 range
-                        radius = base_radius + (power_factor * 100)
-
-                        # Create circle using parametric plot
-                        theta = [i * 2 * pi / 50 for i in range(51)]
-                        circle_x = [x + radius * cos(t) for t in theta]
-                        circle_y = [y + radius * sin(t) for t in theta]
-
-                        fig.add_trace(
-                            go.Scatter(
-                                x=circle_x,
-                                y=circle_y,
-                                mode="lines",
-                                line=dict(color="rgba(0,255,0,0.3)", width=1, dash="dash"),
-                                fill="toself",
-                                fillcolor="rgba(0,255,0,0.05)",
-                                name="vBeacon Coverage",
-                                showlegend=False,
-                                hoverinfo="skip",
-                            )
-                        )
-
-                logging.info(f"Added {len(beacon_x)} virtual beacons to map")
-        else:
-            logging.info("No virtual beacons found on this map")
-
-        # Add BLE beacons if present
-        if "beacons" in map_data and map_data["beacons"]:
-            ble_beacons = map_data["beacons"]
-            logging.info(f"Processing {len(ble_beacons)} BLE beacons")
-
-            ble_x = []
-            ble_y = []
-            ble_hover = []
-            ble_names = []
-
-            for beacon in ble_beacons:
-                x = beacon.get("x")
-                y = beacon.get("y")
-                if x is not None and y is not None:
-                    ble_x.append(x)
-                    ble_y.append(y)
-
-                    name = beacon.get("name", beacon.get("mac", "Unnamed"))
-                    ble_names.append(name)
-
-                    hover = f"<b>BLE Beacon: {name}</b><br>"
-                    hover += f"MAC: {beacon.get('mac', 'N/A')}<br>"
-                    hover += f"Type: {beacon.get('type', 'N/A')}<br>"
-                    hover += f"Power: {beacon.get('power', 'N/A')}<br>"
-                    hover += f"Position: ({x}, {y})"
-                    ble_hover.append(hover)
-
-            if ble_x:
-                # Add BLE beacon markers
-                fig.add_trace(
-                    go.Scatter(
-                        x=ble_x,
-                        y=ble_y,
-                        mode="markers",
-                        name="BLE Beacons",
-                        marker=dict(
-                            symbol="circle",
-                            size=14,
-                            color="#00bfff",  # Cyan for BLE beacons
-                            line=dict(color="white", width=2),
-                            opacity=0.9,
-                        ),
-                        hovertext=ble_hover,
-                        hoverinfo="text",
-                        visible=True,
-                        showlegend=True,
-                    )
-                )
-
-                # Add BLE beacon name labels
-                for _, (x, y, name) in enumerate(zip(ble_x, ble_y, ble_names, strict=True)):
-                    fig.add_annotation(
-                        x=x,
-                        y=y - 12,
-                        text=f"<b>{name}</b>",
-                        showarrow=False,
-                        font=dict(size=9, color="white", family="Arial"),
-                        bgcolor="rgba(0,191,255,0.9)",
-                        bordercolor="white",
-                        borderwidth=1,
-                        borderpad=2,
-                        xanchor="center",
-                        yanchor="bottom",
-                        name="BLE Beacons Label",  # For toggle control
-                    )
-
-                logging.info(f"Added {len(ble_x)} BLE beacons to map")
-        else:
-            logging.info("No BLE beacons found on this map")
+        # Add BLE beacons if present in map data
+        self._add_ble_beacons_to_figure(fig, map_data)  # Draw BLE beacon markers on the map
 
         # Add RF Coverage Heatmap from Mist API data
         heatmap_trace = heatmap_renderer.build_heatmap_trace(
