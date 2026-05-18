@@ -9727,116 +9727,16 @@ class DataProcessingUtils:
         return data
 
 
-class MarvisDataUtils:
-    """
-    Utilities for processing Marvis AI API responses.
-    Centralizes Marvis-specific data formatting for CSV export.
-    All methods are static to avoid unnecessary object instantiation.
-    """
+# MarvisDataUtils extracted to src/marvis/marvis_utils.py (issue #330).
+# Dependency injection is used so the module has no circular import with MistHelper.
+from src.marvis.marvis_utils import MarvisDataUtils  # Import the extracted class
 
-    @staticmethod
-    def format_for_csv(api_response_data, analysis_type="generic"):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912
-        """
-        Optimized formatter for Marvis API responses to create readable CSV files.
-
-        Args:
-            api_response_data: Raw API response data from Marvis troubleshoot calls
-            analysis_type: Type of analysis ("client", "device", "network", "sites")
-
-        Returns:
-            List of dictionaries optimized for CSV readability
-        """
-        try:
-            # Handle different response structures
-            if not api_response_data:
-                logging.warning("Empty Marvis API response received")
-                return []
-
-            # Ensure we have a list to work with
-            if not isinstance(api_response_data, list):
-                data_list = [api_response_data]
-            else:
-                data_list = api_response_data
-
-            formatted_data = []
-
-            for item in data_list:
-                if not isinstance(item, dict):
-                    logging.warning(f"Unexpected data type in Marvis response: {type(item)}")
-                    continue
-
-                # Handle organization sites SLE data specially for readability
-                if analysis_type == "sites" and "results" in item and isinstance(item["results"], list):
-                    logging.info(f"Processing organization sites SLE data with {len(item['results'])} sites")
-
-                    # Create one row per site instead of flattening all sites into one massive row
-                    for idx, site_data in enumerate(item["results"]):
-                        site_row = {}
-
-                        # Add metadata from parent response
-                        for meta_key in ["start", "end", "limit", "page", "total"]:
-                            if meta_key in item:
-                                site_row[meta_key] = item[meta_key]
-
-                        # Add site index for reference
-                        site_row["site_index"] = idx
-
-                        # Add site data with clean column names
-                        if isinstance(site_data, dict):
-                            for key, value in site_data.items():
-                                # Use clean column names instead of results_X_key format
-                                clean_key = key.replace("-", "_")  # Replace hyphens for CSV compatibility
-                                site_row[clean_key] = value
-
-                        formatted_data.append(site_row)
-
-                    logging.info(f"Converted {len(item['results'])} sites into {len(formatted_data)} readable rows")
-
-                else:
-                    # Handle single troubleshoot results (client, device, network)
-                    formatted_row = {}
-
-                    # Add top-level metadata
-                    for key, value in item.items():
-                        if key == "results" and isinstance(value, list):
-                            # Handle results array - flatten each result with cleaner naming
-                            for idx, result in enumerate(value):
-                                if isinstance(result, dict):
-                                    for result_key, result_value in result.items():
-                                        # Use clean column names: result_0_category instead of results_0_category
-                                        clean_key = f"result_{idx}_{result_key.replace('-', '_')}"
-                                        formatted_row[clean_key] = result_value
-                                else:
-                                    formatted_row[f"result_{idx}"] = str(result)
-                        elif isinstance(value, dict):
-                            # Flatten nested dicts with clean naming
-                            for nested_key, nested_value in value.items():
-                                clean_key = f"{key}_{nested_key}".replace("-", "_")
-                                formatted_row[clean_key] = nested_value
-                        elif isinstance(value, list):
-                            # Join lists as comma-separated values
-                            formatted_row[key] = ",".join(map(str, value))
-                        else:
-                            # Direct assignment for simple values
-                            formatted_row[key] = value
-
-                    if formatted_row:  # Only add if we have data
-                        formatted_data.append(formatted_row)
-
-            # Apply final CSV-friendly formatting
-            formatted_data = DataProcessingUtils.escape_multiline(formatted_data)  # type: ignore[no-untyped-call]
-
-            logging.info(f"Marvis data formatting complete: {len(formatted_data)} rows for {analysis_type} analysis")
-            return formatted_data
-
-        except Exception as error:
-            logging.error(f"Error formatting Marvis data for CSV: {error}")
-            # Fall back to old method if new formatting fails
-            logging.info("Falling back to legacy flattening method")
-            fallback_data = [api_response_data] if not isinstance(api_response_data, list) else api_response_data
-            fallback_data = DataProcessingUtils.flatten_nested_fields(fallback_data)
-            fallback_data = DataProcessingUtils.escape_multiline(fallback_data)  # type: ignore[no-untyped-call]
-            return fallback_data
+# Create a module-level instance with the DataProcessingUtils callables injected.
+# All callers in this module use marvis_data_utils.format_for_csv(...) directly.
+marvis_data_utils = MarvisDataUtils(  # Instantiate with the two required data-processing helpers
+    escape_fn=DataProcessingUtils.escape_multiline,  # Callable to escape CSV strings in extracted class
+    flatten_fn=DataProcessingUtils.flatten_nested_fields,  # Pass flatten_nested_fields for the legacy fallback path
+)
 
 
 class DatabaseSchemaUtils:
@@ -21484,7 +21384,7 @@ class TroubleshootUtils:
                 print("! Analysis results available.")
 
                 # Save results to CSV with optimized formatting
-                data = MarvisDataUtils.format_for_csv(response.data, "client")  # type: ignore[no-untyped-call]
+                data = marvis_data_utils.format_for_csv(response.data, "client")  # Format client response for CSV
 
                 filename = f"MarvisInsights_Client_{client_mac.replace(':', '')}_{client_type}.csv"
                 DataExporter.save_data_to_output(data, filename)  # type: ignore[no-untyped-call]
@@ -21605,7 +21505,7 @@ class TroubleshootUtils:
                 print(" Marvis AI device analysis completed!")
 
                 # Save results to CSV with optimized formatting
-                data = MarvisDataUtils.format_for_csv(response.data, "device")  # type: ignore[no-untyped-call]
+                data = marvis_data_utils.format_for_csv(response.data, "device")  # Format device response for CSV
                 logging.debug(f"MARVIS DEBUG: Formatted device data length: {len(data) if data else 0}")
 
                 filename = f"MarvisInsights_Device_{device_mac.replace(':', '')}_{device_name.replace(' ', '_')}.csv"
@@ -21704,7 +21604,7 @@ class TroubleshootUtils:
 
                 # Save results to CSV with optimized formatting
                 logging.debug("MARVIS DEBUG: About to format data for CSV")
-                data = MarvisDataUtils.format_for_csv(response.data, "network")  # type: ignore[no-untyped-call]
+                data = marvis_data_utils.format_for_csv(response.data, "network")  # Format network response for CSV
                 logging.debug(f"MARVIS DEBUG: Formatted data length: {len(data) if data else 0}")
                 logging.debug(f"MARVIS DEBUG: Formatted data sample: {data[:1] if data else 'empty'}")
 
@@ -21916,7 +21816,7 @@ class TroubleshootUtils:
             print(f"  ... and {len(insights_data) - 5} more insights")
 
         if "Sites SLE" in endpoint_name:
-            formatted_insights = MarvisDataUtils.format_for_csv(data, "sites")  # type: ignore[no-untyped-call]
+            formatted_insights = marvis_data_utils.format_for_csv(data, "sites")  # Format sites SLE response for CSV
         else:
             formatted_insights = DataProcessingUtils.flatten_nested_fields(insights_data)
             formatted_insights = DataProcessingUtils.escape_multiline(formatted_insights)  # type: ignore[no-untyped-call]
