@@ -1,5 +1,0 @@
-# Apply Gateway Template Config (Menu 106)
-
-Apply a gateway template configuration from YAML/JSON snapshots created by menu 105. Supports dry-run, preview, batch apply with rate limiting, and snapshot validation (checksums). Provides rollback and idempotency checks.
-
-Security: validate caller permissions; secrets handled via secure store if included.

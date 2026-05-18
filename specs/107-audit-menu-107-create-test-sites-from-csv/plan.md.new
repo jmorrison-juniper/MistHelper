@@ -1,6 +1,0 @@
-1) Define CSV schema and required columns
-2) Implement CSV parser with header mapping
-3) Implement create_site helper with idempotency (lookup by name/country)
-4) Implement dry-run and confirmations
-5) Output summary CSV and write audit rows to SQLite
-6) Tests and docs

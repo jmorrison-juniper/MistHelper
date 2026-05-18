@@ -1,5 +1,0 @@
-# Clone Gateway Template By Location (Menu 111)
-
-Clone an existing gateway template and adapt network/ssid settings for a specific location. Support name suffixing, variable overrides, and dry-run. Produce snapshot of cloned template and an audit manifest.
-
-Outputs: cloned template ID or YAML snapshot; CSV summary and audit table.

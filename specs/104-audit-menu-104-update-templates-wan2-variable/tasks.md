@@ -1,1 +1,0 @@
-Tasks for Update Templates WAN2 Variable (menu 104). See plan.md for details.

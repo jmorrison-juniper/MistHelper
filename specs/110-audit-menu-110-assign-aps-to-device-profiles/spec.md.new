@@ -1,5 +1,0 @@
-# Assign APs To Device Profiles (Menu 110)
-
-Assign APs to device profiles by model or tag. Support dry-run, bulk assignment, and audit logging. Ensure idempotency and protect against accidental mass assignments without confirmation.
-
-Outputs: CSV summary and SQLite audit table.

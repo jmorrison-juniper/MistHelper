@@ -1,5 +1,0 @@
-- Add CLI wiring for apply_snapshot
-- Validate snapshot checksums
-- Implement preview/diff generator
-- Apply with batching and retries
-- Implement rollback and tests

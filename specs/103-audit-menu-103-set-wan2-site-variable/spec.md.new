@@ -1,3 +1,0 @@
-# Set WAN2 Interface Site Variable (Menu 103)
-
-This file contains the specification for the menu that sets the WAN2 interface site variable. The menu should validate inputs, support dry-run, and ensure idempotency and auditable logging.
