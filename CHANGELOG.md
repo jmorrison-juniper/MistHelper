@@ -9,6 +9,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Added
 
+- Menu 178: Export site aggregate health & capacity statistics (`getSiteStats`)
+- Menu 179: Export site gateway performance metrics summary (`getSiteGatewayMetrics`)
+- Menu 180: Export site switch performance metrics summary (`getSiteSwitchesMetrics`)
+- Menu 181: Export site BLE beacon statistics (`listSiteBeaconsStats`)
+- Menu 182: Export site WxLAN rule usage statistics (`getSiteWxRulesUsage`)
+- Menu 183: Export site asset statistics (`listSiteAssetsStats`)
+- Menu 184: Export current RRM channel & power plan per AP radio (`getSiteCurrentChannelPlanning`)
+- Menu 185: Export self (admin account) audit log (`listSelfAuditLogs`)
+- Menu 186: Export HA gateway cluster info, stats & node pair for a site (`GatewayHaExporter`) -- shows is_ha, node_name, cluster MAC (vc_mac), cluster_config/cluster_stat, and per-device node0/node1 MAC pair from `GetSiteDeviceHaClusterNode`
+- New `GatewayHaExporter` class for HA gateway cluster info (stats + cluster node membership)
+- New `SelfExportUtils` class for account-scoped data exports (admin audit logs)
+- 2 new `ENDPOINT_PRIMARY_KEY_STRATEGIES` entries: `GetSiteDeviceHaClusterNode` (composite_pk) and `listSiteGatewayHaStats` (composite_pk)
+- 18 net-new `ENDPOINT_PRIMARY_KEY_STRATEGIES` entries for previously uncovered endpoints
+  (15 natural_pk, 3 composite_pk, 3 auto_increment_with_unique from probe run 3)
+
+### Changed
+
+- `documentation/menu_reference.md` extended to include all menus 164-185 (was truncated at 163)
+- README operation count updated from 176 to 184
+
 - Menu 176: Export Org WAN/Gateway Config — exports 6 org-level config types (networks, services, VPNs, gateway templates, device profiles, service policies) to a single timestamped JSON bundle for cross-org migration (#191)
 - Menu 177: Import Org WAN/Gateway Config — imports config bundle into destination org with conflict detection (name match, IP/subnet overlap), dependency-ordered creation, cross-reference ID remapping, and dry-run mode (#191)
 - New `OrgConfigMigrationManager` class encapsulating all export/import/conflict/remapping logic

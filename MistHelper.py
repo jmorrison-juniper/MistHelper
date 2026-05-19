@@ -5382,6 +5382,169 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Sites filtered by AP model with site address and AP count",
     },
+    # ==============================
+    # NET-NEW ENTRIES FROM PROBE RUN 3
+    # 15 natural_pk + 3 composite_pk + key auto_increment reference endpoints
+    # Added in version 26.05 to align EPKS with all reachable mistapi endpoints
+    # ==============================
+    # --- natural_pk (single-entity GET endpoints with stable UUID key) ---
+    "getSiteInfo": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "country_code"],
+        "unique_constraints": [],
+        "description": "Full configuration snapshot for a single site",
+    },
+    "getSiteDevice": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "mac", "model", "type"],
+        "unique_constraints": [],
+        "description": "Single device configuration (AP, switch, or gateway) at a site",
+    },
+    "getSiteDeviceStats": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "mac", "type"],
+        "unique_constraints": [],
+        "description": "Runtime statistics for a single device at a site",
+    },
+    "getSiteDeviceVirtualChassis": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "Virtual chassis topology for a single switch at a site",
+    },
+    "getOrgMxEdge": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Configuration for a single MxEdge appliance in the org",
+    },
+    "getOrgMxEdgeStats": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "Runtime statistics for a single MxEdge appliance in the org",
+    },
+    "getOrgWebhook": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "url"],
+        "unique_constraints": [],
+        "description": "Configuration for a single webhook endpoint in the org",
+    },
+    "getSiteAssetsOfInterest": {
+        "type": "natural_pk",
+        "primary_key": ["mac"],
+        "indexes": ["site_id", "name"],
+        "unique_constraints": [],
+        "description": "Tracked BLE/WiFi assets flagged as assets of interest at a site",
+    },
+    "getSiteSetting": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "Full settings object for a single site (single-row result)",
+    },
+    "getSiteSettingDerived": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "Derived (merged org + site) settings for a single site",
+    },
+    "getSiteWxRulesUsage": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "WxLAN rule usage statistics for a site (aggregate, no stable key)",
+    },
+    "ListSiteWxRulesDerived": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "WxLAN rules with org-level inheritance resolved for a site",
+    },
+    "getSiteSiteRfdiagRecording": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "RF diagnostics recording for a site",
+    },
+    "listSiteBeaconsStats": {
+        "type": "composite_pk",
+        "primary_key": ["id", "site_id"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "BLE beacon statistics per site (composite key: beacon id + site)",
+    },
+    # --- composite_pk (no single stable UUID; identity is multi-field) ---
+    "getSiteCurrentChannelPlanning": {
+        "type": "composite_pk",
+        "primary_key": ["ap", "band"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "Current RRM channel and power plan per AP radio at a site",
+    },
+    "listNacEventsDefinitions": {
+        "type": "composite_pk",
+        "primary_key": ["key"],
+        "indexes": [],
+        "unique_constraints": [],
+        "description": "NAC event type definitions and descriptions (reference data)",
+    },
+    "listSelfAuditLogs": {
+        "type": "composite_pk",
+        "primary_key": ["id", "timestamp"],
+        "indexes": [],
+        "unique_constraints": [],
+        "description": "Audit log of changes made by the authenticated admin account",
+    },
+    # --- auto_increment_with_unique (site/org summary objects without stable keys) ---
+    "getSiteStats": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "Aggregate health and capacity statistics for a site",
+    },
+    "getSiteGatewayMetrics": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "Gateway performance metrics summary for a site",
+    },
+    "getSiteSwitchesMetrics": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "Switch performance metrics summary for a site",
+    },
+    # --- HA Gateway Cluster ---
+    "GetSiteDeviceHaClusterNode": {
+        "type": "composite_pk",
+        "primary_key": ["site_id", "device_id"],  # Each device has one HA node record per site
+        "indexes": ["site_id"],
+        "unique_constraints": [],
+        "description": "HA cluster node membership (node0/node1 MAC pair) for a gateway at a site",
+    },
+    "listSiteGatewayHaStats": {
+        "type": "composite_pk",
+        "primary_key": ["site_id", "mac"],  # Gateway MAC is unique per site
+        "indexes": ["site_id", "is_ha", "node_name"],
+        "unique_constraints": [],
+        "description": "Combined HA gateway stats and cluster node membership for all HA gateways at a site",
+    },
 }
 
 
@@ -15125,6 +15288,47 @@ class OrgAdminExporter:
         print(" License usage data exported to OrgUsage")
 
 
+class SelfExportUtils:
+    """
+    Authenticated Self / Account Export Utilities
+
+    Exports data scoped to the currently authenticated admin account rather
+    than an org or site. Handles self audit logs and similar account-level
+    read operations.
+    """
+
+    @staticmethod
+    def audit_logs() -> None:  # type: ignore[no-untyped-def]
+        """Export audit log of changes made by the authenticated admin account to SelfAuditLogs.csv."""
+        logging.info("Starting export of self (admin account) audit logs...")  # Log before operation
+        filename = "SelfAuditLogs.csv"  # Output filename for self audit log entries
+        try:
+            hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Use same lookback window as other audit log exports
+            TimeUtils.log_dynamic_lookback("self audit logs export", hours)  # Log lookback window selection
+            logging.info("Fetching self audit logs for last %d hours...", hours)  # Log before API call
+            response = mistapi.api.v1.self.logs.listSelfAuditLogs(  # Call Mist API for admin account audit log
+                apisession,
+                duration=f"{hours}h",  # Limit results to the dynamic lookback window
+                limit=1000,  # Request large page to minimise pagination round-trips
+            )
+            logging.debug("Raw API response received for self audit logs")  # Log after API call
+            rows = mistapi.get_all(response=response, mist_session=apisession)  # Paginate through all results
+            logging.debug("Received %d self audit log records after pagination", len(rows))  # Log record count
+            if not rows:  # No data returned — write empty output rather than failing silently
+                logging.warning(
+                    "No self audit log records returned for the last %d hours", hours
+                )  # Warn on empty result
+                DataExporter.save_data_to_output([], filename)  # Write empty file to signal successful run
+                return
+            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested change-detail dicts for CSV
+            DataExporter.save_data_to_output(
+                rows, filename, api_function_name="listSelfAuditLogs"
+            )  # Write to configured backend
+            logging.info("Exported %d self audit log records to %s", len(rows), filename)  # Log success
+        except Exception as exception:  # Catch any API or processing error
+            logging.error("Failed to export self audit logs: %s", exception, exc_info=True)  # Log full traceback
+
+
 class OrgConfigExporter:
     """
     Organization Configuration Exporter
@@ -17511,6 +17715,165 @@ class SiteExportUtils:
         )
 
     @staticmethod
+    def site_stats() -> None:  # type: ignore[no-untyped-def]
+        """Export aggregate health and capacity statistics for a selected site to SiteSiteStats.csv."""
+        logging.info("Starting export of site statistics...")  # Log before operation
+        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
+        if not site_id:  # Exit early if no site was selected
+            logging.error("No site selected. Aborting site stats export.")  # Log failure
+            return
+        try:
+            response = mistapi.api.v1.sites.stats.getSiteStats(
+                apisession, site_id
+            )  # Fetch site-level stats from Mist API
+            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope to get payload dict
+            rows = (
+                [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
+            )  # Normalize to list of dicts
+            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV compatibility
+            filename = "SiteSiteStats.csv"  # Output filename for site stats
+            DataExporter.save_data_to_output(
+                rows, filename, api_function_name="getSiteStats"
+            )  # Write results to configured backend
+            logging.info("Exported %d site stats records to %s", len(rows), filename)  # Log success with record count
+        except Exception as exception:  # Catch any API or processing error
+            logging.error(
+                "Failed to export site stats: %s", exception, exc_info=True
+            )  # Log full traceback for debugging
+
+    @staticmethod
+    def gateway_metrics() -> None:  # type: ignore[no-untyped-def]
+        """Export gateway performance metrics summary for a selected site to SiteGatewayMetrics.csv."""
+        logging.info("Starting export of site gateway metrics...")  # Log before operation
+        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
+        if not site_id:  # Exit early if no site was selected
+            logging.error("No site selected. Aborting gateway metrics export.")  # Log failure
+            return
+        try:
+            response = mistapi.api.v1.sites.stats.getSiteGatewayMetrics(
+                apisession, site_id
+            )  # Fetch gateway metrics from Mist API
+            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
+            rows = (
+                [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
+            )  # Normalize single object to list
+            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested metric dicts for CSV
+            filename = "SiteGatewayMetrics.csv"  # Output filename for gateway metrics
+            DataExporter.save_data_to_output(
+                rows, filename, api_function_name="getSiteGatewayMetrics"
+            )  # Write to configured backend
+            logging.info("Exported %d gateway metric records to %s", len(rows), filename)  # Log success
+        except Exception as exception:  # Catch any API or processing error
+            logging.error("Failed to export gateway metrics: %s", exception, exc_info=True)  # Log full traceback
+
+    @staticmethod
+    def switches_metrics() -> None:  # type: ignore[no-untyped-def]
+        """Export switch performance metrics summary for a selected site to SiteSwitchesMetrics.csv."""
+        logging.info("Starting export of site switches metrics...")  # Log before operation
+        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
+        if not site_id:  # Exit early if no site was selected
+            logging.error("No site selected. Aborting switches metrics export.")  # Log failure
+            return
+        try:
+            response = mistapi.api.v1.sites.stats.getSiteSwitchesMetrics(
+                apisession, site_id
+            )  # Fetch switch metrics from Mist API
+            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
+            rows = [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])  # Normalize to list
+            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV
+            filename = "SiteSwitchesMetrics.csv"  # Output filename for switch metrics
+            DataExporter.save_data_to_output(
+                rows, filename, api_function_name="getSiteSwitchesMetrics"
+            )  # Write to configured backend
+            logging.info("Exported %d switches metric records to %s", len(rows), filename)  # Log success
+        except Exception as exception:  # Catch any API or processing error
+            logging.error("Failed to export switches metrics: %s", exception, exc_info=True)  # Log full traceback
+
+    @staticmethod
+    def beacons_stats() -> None:  # type: ignore[no-untyped-def]
+        """Export BLE beacon statistics for a selected site to SiteBeaconsStats.csv."""
+        logging.info("Starting export of site BLE beacon statistics...")  # Log before operation
+        # Delegate to generic site export using paginated list endpoint
+        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.sites.stats.listSiteBeaconsStats,  # BLE beacon stats list endpoint
+            data_type="beacons stats",  # Human-readable label for log messages and filename generation
+            sort_key="id",  # Sort beacons by their ID field for consistent output ordering
+        )
+
+    @staticmethod
+    def wxrules_usage() -> None:  # type: ignore[no-untyped-def]
+        """Export WxLAN rule usage statistics for a selected site to SiteWxrulesUsage.csv."""
+        logging.info("Starting export of site WxLAN rules usage statistics...")  # Log before operation
+        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
+        if not site_id:  # Exit early if no site was selected
+            logging.error("No site selected. Aborting WxRules usage export.")  # Log failure
+            return
+        try:
+            response = mistapi.api.v1.sites.stats.getSiteWxRulesUsage(apisession, site_id)  # Fetch WxRules usage stats
+            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
+            rows = [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])  # Normalize to list
+            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested policy stats for CSV
+            filename = "SiteWxrulesUsage.csv"  # Output filename for WxRules usage
+            DataExporter.save_data_to_output(
+                rows, filename, api_function_name="getSiteWxRulesUsage"
+            )  # Write to configured backend
+            logging.info("Exported %d WxRules usage records to %s", len(rows), filename)  # Log success
+        except Exception as exception:  # Catch any API or processing error
+            logging.error("Failed to export WxRules usage: %s", exception, exc_info=True)  # Log full traceback
+
+    @staticmethod
+    def assets_stats() -> None:  # type: ignore[no-untyped-def]
+        """Export asset statistics for a selected site to SiteAssetsStats.csv."""
+        logging.info("Starting export of site asset statistics...")  # Log before operation
+        # Delegate to generic site export using paginated list endpoint
+        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.sites.stats.listSiteAssetsStats,  # Asset stats list endpoint
+            data_type="assets stats",  # Human-readable label used in log messages and filename generation
+            sort_key="mac",  # Sort assets by MAC address for consistent output ordering
+        )
+
+    @staticmethod
+    def current_channel_planning() -> None:  # type: ignore[no-untyped-def]
+        """Export current RRM channel and power plan per AP radio for a selected site."""
+        logging.info("Starting export of site current channel planning (RRM)...")  # Log before operation
+        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
+        if not site_id:  # Exit early if no site was selected
+            logging.error("No site selected. Aborting channel planning export.")  # Log failure
+            return
+        try:
+            response = mistapi.api.v1.sites.rrm.getSiteCurrentChannelPlanning(
+                apisession, site_id
+            )  # Fetch current RRM channel plan
+            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
+            # The channel planning response is a dict with AP MAC keys mapping to band channel assignments
+            if isinstance(raw, dict):  # Single dict response — flatten per-AP entries into rows
+                rows = []  # Accumulate one row per AP per band for tabular output
+                for ap_mac, bands in raw.items():  # Iterate APs and their band assignments
+                    if isinstance(bands, dict):  # Each AP has per-band channel/power assignments
+                        for band, assignment in bands.items():  # Iterate radio bands (2.4G, 5G, 6G)
+                            row = {"ap": ap_mac, "band": band, "site_id": site_id}  # Base row with identity fields
+                            row.update(
+                                assignment if isinstance(assignment, dict) else {"value": assignment}
+                            )  # Merge assignment fields
+                            rows.append(row)  # Add completed row to output list
+                    else:  # Unexpected structure — store raw value
+                        rows.append(
+                            {"ap": ap_mac, "site_id": site_id, "value": bands}
+                        )  # Fallback row for unknown structure
+            else:  # Response is already a list
+                rows = raw if isinstance(raw, list) else [raw]  # Wrap scalar in list for consistent processing
+            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten any remaining nested dicts for CSV
+            filename = "SiteCurrentChannelPlanning.csv"  # Output filename for channel planning
+            DataExporter.save_data_to_output(
+                rows, filename, api_function_name="getSiteCurrentChannelPlanning"
+            )  # Write to configured backend
+            logging.info(
+                "Exported %d channel planning records to %s", len(rows), filename
+            )  # Log success with record count
+        except Exception as exception:  # Catch any API or processing error
+            logging.error("Failed to export channel planning: %s", exception, exc_info=True)  # Log full traceback
+
+    @staticmethod
     def zone_config_analysis() -> None:
         """Zone, engagement, and occupancy config analysis (Menu #119). Delegates to src.analytics.zone_analyzer."""
         from src.analytics.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA  # noqa: PLC0415
@@ -17522,6 +17885,152 @@ class SiteExportUtils:
             all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
             save_data_fn=DataExporter.save_data_to_output,
         )
+
+
+class GatewayHaExporter:
+    """
+    Exporter for HA (High-Availability) gateway cluster information.
+
+    Collects per-site HA gateway stats and cluster node membership,
+    then exports the combined dataset to the configured output backend.
+
+    Menu #186 -- Gateway HA Cluster Info.
+    """
+
+    # Field names preserved from the stats_gateway response that describe HA state
+    HA_STAT_FIELDS = [
+        "mac",
+        "name",
+        "model",
+        "serial",
+        "site_id",
+        "is_ha",
+        "node_name",
+        "vc_mac",
+        "status",
+        "version",
+        "ip",
+        "uptime",
+        "cluster_config",
+        "cluster_stat",
+    ]
+
+    @staticmethod
+    def ha_cluster_info() -> None:
+        """Export HA gateway cluster info for a selected site (Menu #186).
+
+        Flow:
+          1. Prompt for site selection.
+          2. Pull all gateway device stats for that site.
+          3. Filter to gateways that have is_ha == True.
+          4. For each HA gateway, call GetSiteDeviceHaClusterNode to get the pair membership.
+          5. Merge the node-pair info into each row.
+          6. Print a summary table to the screen.
+          7. Export the combined records to the configured output backend.
+        """
+        logging.info("Starting Gateway HA Cluster Info export (Menu #186)")  # Log entry point
+        try:
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Retrieve or prompt for org ID
+            site_id = PromptUtils.select_site(org_id)  # Prompt user to pick a site from the list
+            if not site_id:  # User cancelled or no sites available
+                logging.warning("No site selected -- aborting HA cluster export")  # Log cancellation
+                return  # Exit without exporting
+            logging.info("Fetching gateway device stats for site %s", site_id)  # Log before API call
+            stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                apisession, site_id, type="gateway"
+            )  # Pull all gateway stats from the Mist API for this site
+            all_gateways = APICoreFetchUtils.get_api_response_data(stats_resp)  # Unwrap list from response
+            logging.debug("Received %d gateway stat records for site %s", len(all_gateways), site_id)  # Log count
+            ha_gateways = [gw for gw in all_gateways if gw.get("is_ha") is True]  # Filter to HA-enabled gateways only
+            logging.info("Found %d HA gateways in site %s", len(ha_gateways), site_id)  # Log HA gateway count
+            if not ha_gateways:  # No HA gateways at this site
+                print("No HA gateways found for the selected site.")  # Inform user of empty result
+                return  # Nothing to export
+            rows = GatewayHaExporter._build_ha_rows(ha_gateways, site_id)  # Merge stats + cluster node info
+            GatewayHaExporter._print_ha_summary(rows)  # Print tabular summary to the terminal
+            flat_rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV/DB
+            filename = "GatewayHaClusterInfo.csv"  # Output filename for the export
+            DataExporter.save_data_to_output(
+                flat_rows, filename, api_function_name="listSiteGatewayHaStats"
+            )  # Write to configured backend (CSV, SQLite, ArangoDB, etc.)
+            logging.info("Exported %d HA gateway records to %s", len(flat_rows), filename)  # Log export success
+        except Exception as exception:  # Catch any API or processing error
+            logging.error(
+                "Failed to export HA gateway cluster info: %s", exception, exc_info=True
+            )  # Log full traceback
+
+    @staticmethod
+    def _build_ha_rows(ha_gateways: list, site_id: str) -> list:
+        """Build merged rows combining gateway stats with cluster node pair membership.
+
+        For each HA gateway, fetches the /ha endpoint to get the peer node MAC addresses,
+        then merges that info into the stats row.
+
+        Args:
+            ha_gateways: List of stats_gateway dicts where is_ha is True.
+            site_id: The site ID used for the per-device HA query.
+
+        Returns:
+            List of merged dicts ready for flattening and export.
+        """
+        rows = []  # Accumulate merged rows here
+        for gateway in ha_gateways:  # Iterate over each HA-enabled gateway device
+            device_id = gateway.get("id", "")  # Get device ID (UUID) from stats record
+            row = {
+                field: gateway.get(field) for field in GatewayHaExporter.HA_STAT_FIELDS
+            }  # Copy HA-relevant stat fields
+            row["site_id"] = site_id  # Ensure site_id is always present in the row
+            logging.info(
+                "Fetching HA cluster node info for gateway %s (%s)", gateway.get("name"), device_id
+            )  # Log per-device call
+            try:
+                ha_resp = mistapi.api.v1.sites.devices.GetSiteDeviceHaClusterNode(
+                    apisession, site_id, device_id
+                )  # Call /sites/{site_id}/devices/{device_id}/ha to get node pair membership
+                ha_data = APICoreFetchUtils.get_api_response_data(ha_resp)  # Unwrap the response body
+                logging.debug("HA cluster node response for %s: %s", device_id, ha_data)  # Log raw response
+                if isinstance(ha_data, dict):  # Expect a gateway_cluster object with a "nodes" list
+                    nodes = ha_data.get("nodes", [])  # Extract the nodes array (each node has a "mac" field)
+                    row["ha_cluster_node0_mac"] = nodes[0].get("mac") if len(nodes) > 0 else None  # Node 0 MAC
+                    row["ha_cluster_node1_mac"] = nodes[1].get("mac") if len(nodes) > 1 else None  # Node 1 MAC
+                    row["ha_cluster_node_count"] = len(nodes)  # How many nodes are in this cluster
+                else:  # API returned unexpected shape
+                    row["ha_cluster_node0_mac"] = None  # Mark as unknown if response malformed
+                    row["ha_cluster_node1_mac"] = None  # Mark as unknown
+                    row["ha_cluster_node_count"] = 0  # Zero nodes if response malformed
+            except Exception as exception:  # HA endpoint may return 404 for partial cluster states
+                logging.warning("Could not fetch HA node info for %s: %s", device_id, exception)  # Log soft failure
+                row["ha_cluster_node0_mac"] = None  # Fill with None so row still exports cleanly
+                row["ha_cluster_node1_mac"] = None  # Fill with None
+                row["ha_cluster_node_count"] = 0  # Zero nodes on error
+            rows.append(row)  # Add merged row to results list
+        logging.debug("Built %d merged HA gateway rows", len(rows))  # Log total built
+        return rows  # Return the complete merged dataset
+
+    @staticmethod
+    def _print_ha_summary(rows: list) -> None:
+        """Print a formatted summary of HA gateway cluster pairs to the terminal.
+
+        Args:
+            rows: List of merged HA gateway rows to display.
+        """
+        logging.info("Printing HA gateway cluster summary table to terminal")  # Log before display
+        print("\n=== HA Gateway Cluster Summary ===\n")  # Section header for the terminal output
+        # Build column header string for the HA cluster summary table
+        header = (
+            f"{'Name':<30} {'Node':<8} {'Status':<12}" f" {'Node0 MAC':<20} {'Node1 MAC':<20} {'Cluster MAC':<18}"
+        )  # Column headers
+        print(header)  # Print headers to terminal
+        print("-" * len(header))  # Print separator line
+        for row in rows:  # Iterate each HA gateway record
+            name = str(row.get("name", ""))[:28]  # Truncate long names for display
+            node_name = str(row.get("node_name", ""))  # Which node (node0 / node1)
+            status = str(row.get("status", ""))  # Connected / Disconnected / etc.
+            node0_mac = str(row.get("ha_cluster_node0_mac") or "")  # MAC of node0 in the pair
+            node1_mac = str(row.get("ha_cluster_node1_mac") or "")  # MAC of node1 in the pair
+            vc_mac = str(row.get("vc_mac") or "")  # Shared cluster MAC address
+            print(f"{name:<30} {node_name:<8} {status:<12} {node0_mac:<20} {node1_mac:<20} {vc_mac:<18}")  # Print row
+        print()  # Blank line after table for readability
 
 
 class ServicePingManager:
@@ -30529,6 +31038,18 @@ menu_actions = {
         ).import_config(),
         "Import Org WAN/Gateway Config (cross-org migration with conflict detection)",
     ),
+    # ==============================
+    # SITE STATS, METRICS & CHANNEL PLANNING
+    # ==============================
+    "178": (SiteExportUtils.site_stats, "Export site aggregate health & capacity statistics"),
+    "179": (SiteExportUtils.gateway_metrics, "Export site gateway performance metrics summary"),
+    "180": (SiteExportUtils.switches_metrics, "Export site switch performance metrics summary"),
+    "181": (SiteExportUtils.beacons_stats, "Export site BLE beacon statistics"),
+    "182": (SiteExportUtils.wxrules_usage, "Export site WxLAN rule usage statistics"),
+    "183": (SiteExportUtils.assets_stats, "Export site asset statistics"),
+    "184": (SiteExportUtils.current_channel_planning, "Export current RRM channel & power plan per AP radio"),
+    "185": (SelfExportUtils.audit_logs, "Export self (admin account) audit log"),
+    "186": (GatewayHaExporter.ha_cluster_info, "Export HA gateway cluster info, stats & node pair for a site"),
 }
 
 
@@ -31290,6 +31811,17 @@ class OperationRegistry:
         "175": {"category": "destructive", "skip_reason": "DANGEROUS: Deletes all generated cache CSV files"},
         "176": {"category": "safe"},
         "177": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},
+        # Site Stats, Metrics & Channel Planning (178-185)
+        "178": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "179": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "180": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "181": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "182": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "183": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "184": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "185": {"category": "safe"},
+        # HA Gateway Cluster Info (186)
+        "186": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
     }
 
     # Wave 1 deterministic baseline map used by routing guardrail tests.
