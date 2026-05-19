@@ -3,23 +3,20 @@
 src/api/tenant_fetch.py -- extracted from MistHelper.py to keep the monolith
 under the 5-Item Rule limit (Wave 2 decomposition, issue #331).
 
-Dependencies are injected via the constructor so this module has no
-circular imports with MistHelper.py.
-
 Target audience: Junior NOC engineers -- every line has an inline comment.
 """
 
-from __future__ import annotations  # Enable postponed evaluation of annotations
+from __future__ import annotations
 
-import logging  # Standard library logging for all diagnostic output
-from collections.abc import Callable  # Callable type hint for the org ID resolver
+import logging
+from collections.abc import Callable
 
-import mistapi.api.v1.orgs.gatewaytemplates  # Mist API: org-level gateway template operations
-import mistapi.api.v1.orgs.networks  # Mist API: org-level network operations
-import mistapi.api.v1.orgs.servicepolicies  # Mist API: org-level service policy operations
-import mistapi.api.v1.sites.gatewaytemplates  # Mist API: site-level gateway template operations
-import mistapi.api.v1.sites.networks  # Mist API: site-level derived network operations
-import mistapi.api.v1.sites.servicepolicies  # Mist API: site-level service policy operations
+import mistapi.api.v1.orgs.gatewaytemplates
+import mistapi.api.v1.orgs.networks
+import mistapi.api.v1.orgs.servicepolicies
+import mistapi.api.v1.sites.gatewaytemplates
+import mistapi.api.v1.sites.networks
+import mistapi.api.v1.sites.servicepolicies
 
 
 class APITenantFetchUtils:
@@ -27,14 +24,6 @@ class APITenantFetchUtils:
 
     Uses constructor injection for the Mist API session and org ID resolver callable
     to keep this module free of circular imports with MistHelper.py.
-
-    Usage::
-
-        _utils = APITenantFetchUtils(
-            apisession=apisession,
-            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
-        )
-        tenants = _utils.organization_tenants()
 
     Extracted from MistHelper.py for Wave 2 systematic decomposition (issue #331).
     """
@@ -46,391 +35,270 @@ class APITenantFetchUtils:
             apisession: Active Mist API session for making API calls.
             get_org_id_fn: Callable that returns the current org ID string.
         """
-        self._session = apisession  # Store Mist API session for all API calls in this instance
-        self._get_org_id = get_org_id_fn  # Store org ID resolver -- called lazily per method
+        self._session = apisession  # Mist API session for all API calls
+        self._get_org_id = get_org_id_fn  # Org ID resolver called lazily per method
 
     def organization_tenants(self) -> list[str]:
-        """Fetch all tenants defined in organization networks using the Mist API.
+        """Fetch all tenants defined in organization networks.
 
         Returns:
-            list: List of tenant names found in organization networks, or empty list if error.
-
-        SECURITY: Read-only operation fetching configuration data only.
+            List of tenant names found in organization networks, or empty list if error.
         """
         try:
-            org_id = self._get_org_id()  # Resolve org ID at call time via injected callable
-            # Log before API call
-            logging.info("Fetching organization networks for tenant information from org_id: %s", org_id)
-
-            # Fetch all org networks from Mist API
-            response = mistapi.api.v1.orgs.networks.listOrgNetworks(self._session, org_id, limit=1000)
-
-            if hasattr(response, "data") and response.data:  # Validate response has data before processing
-                networks_data = response.data  # Extract data payload from API response
-                logging.debug("Received %d organization networks from API", len(networks_data))  # Log result count
-
-                tenant_names: set[str] = set()  # Use set to deduplicate tenant names across networks
-                for network in networks_data:  # Iterate each network object in the response
-                    if isinstance(network, dict):  # Only process dict-type network entries
-                        network_name = network.get("name")  # The network name itself is a valid tenant for service ping
-                        if network_name and isinstance(network_name, str):  # Only add non-empty string names
-                            tenant_names.add(network_name)  # Add network name as tenant
-                            logging.debug("Found network tenant '%s'", network_name)  # Log each tenant discovered
-
-                        if "tenants" in network:  # Check for explicit tenant sub-keys inside the network object
-                            tenants_dict = network.get("tenants", {})  # Extract tenants sub-dictionary
-                            if isinstance(tenants_dict, dict):  # Only process dict-type tenant containers
-                                for tenant_name in tenants_dict.keys():  # Each key in tenants dict is a tenant name
-                                    if tenant_name and isinstance(tenant_name, str):  # Filter out empty/non-string keys
-                                        tenant_names.add(tenant_name)  # Add explicit tenant name to the set
-                                        logging.debug(
-                                            "Found explicit tenant '%s' in network '%s'",
-                                            tenant_name,
-                                            network.get("name", "unnamed"),  # Include network context in log
-                                        )
-
-                tenant_list = sorted(tenant_names)  # Sort for deterministic output and display
-                # Log final count
-                logging.info("Found %d unique tenants across organization networks: %s", len(tenant_list), tenant_list)
-                return tenant_list  # Return sorted list of unique tenant names
-
-            else:
-                # Warn operator of empty response
-                logging.warning("No organization networks found or response data is empty")
-                return []  # Return empty list on missing data
-
-        except Exception as error:  # Catch all errors to prevent cascading failures in ServicePingManager
-            logging.error("Error fetching organization tenants from networks: %s", error)  # Log full error context
-            return []  # Return empty list on error so caller can continue
+            org_id = self._get_org_id()  # Resolve org ID via injected callable
+            logging.info("Fetching org networks for tenant info from org_id: %s", org_id)
+            response = mistapi.api.v1.orgs.networks.listOrgNetworks(
+                self._session, org_id, limit=1000
+            )  # Fetch all org networks from Mist API
+            if not (hasattr(response, "data") and response.data):
+                logging.warning("No org networks found or response data is empty")
+                return []
+            logging.debug("Received %d org networks from API", len(response.data))
+            tenant_list = sorted(self._extract_tenants_from_networks(response.data))
+            logging.info("Found %d unique org-network tenants: %s", len(tenant_list), tenant_list)
+            return tenant_list
+        except Exception as error:
+            logging.error("Error fetching org tenants from networks: %s", error)
+            return []
 
     def site_tenants(self, site_id: str) -> list[str]:
-        """Fetch all tenants defined in site-level derived networks using the Mist API.
+        """Fetch all tenants defined in site-level derived networks.
 
         Args:
             site_id: The site ID to fetch tenants for.
 
         Returns:
-            list: List of tenant names found in site derived networks, or empty list if error.
-
-        SECURITY: Read-only operation fetching configuration data only.
+            List of tenant names found in site derived networks, or empty list if error.
         """
         try:
-            # Log before API call
-            logging.info("Fetching site derived networks for tenant information from site_id: %s", site_id)
+            logging.info("Fetching site derived networks for tenant info from site_id: %s", site_id)
+            response = mistapi.api.v1.sites.networks.listSiteNetworksDerived(
+                self._session, site_id
+            )  # Fetch site-derived network list from Mist API
+            if not (hasattr(response, "data") and response.data):
+                logging.warning("No site derived networks found or response data is empty")
+                return []
+            logging.debug("Received %d site derived networks from API", len(response.data))
+            tenant_list = sorted(self._extract_tenants_from_networks(response.data))
+            logging.info("Found %d unique site-network tenants: %s", len(tenant_list), tenant_list)
+            return tenant_list
+        except Exception as error:
+            logging.error("Error fetching site tenants from derived networks: %s", error)
+            return []
 
-            # Fetch site-derived network list from Mist API
-            response = mistapi.api.v1.sites.networks.listSiteNetworksDerived(self._session, site_id)
-
-            if hasattr(response, "data") and response.data:  # Validate response has data
-                networks_data = response.data  # Extract data payload
-                logging.debug("Received %d site derived networks from API", len(networks_data))  # Log result count
-
-                tenant_names: set[str] = set()  # Use set to deduplicate tenant names
-                for network in networks_data:  # Iterate each site-derived network
-                    if isinstance(network, dict):  # Only process dict-type network entries
-                        network_name = network.get("name")  # Network name serves as a tenant identifier
-                        if network_name and isinstance(network_name, str):  # Only add non-empty string names
-                            tenant_names.add(network_name)  # Add network name as tenant
-                            logging.debug("Found site network tenant '%s'", network_name)  # Log each discovered tenant
-
-                        if "tenants" in network:  # Check for explicit tenant sub-keys
-                            tenants_dict = network.get("tenants", {})  # Extract tenants sub-dict
-                            if isinstance(tenants_dict, dict):  # Only process dict-type tenant containers
-                                for tenant_name in tenants_dict.keys():  # Each key is a tenant name
-                                    if tenant_name and isinstance(tenant_name, str):  # Filter empty/non-string keys
-                                        tenant_names.add(tenant_name)  # Add tenant to the set
-                                        logging.debug(
-                                            "Found explicit tenant '%s' in site network '%s'",
-                                            tenant_name,
-                                            network.get("name", "unnamed"),  # Include network context in log
-                                        )
-
-                tenant_list = sorted(tenant_names)  # Sort for deterministic output
-                # Log final count
-                logging.info("Found %d unique tenants across site derived networks: %s", len(tenant_list), tenant_list)
-                return tenant_list  # Return sorted list of unique tenant names
-
-            else:
-                logging.warning("No site derived networks found or response data is empty")  # Warn on empty response
-                return []  # Return empty list on missing data
-
-        except Exception as error:  # Catch all errors to prevent cascading failures in caller
-            logging.error("Error fetching site tenants from derived networks: %s", error)  # Log full error context
-            return []  # Return empty list on error
-
-    def service_policy_tenants(self, site_id: str | None = None) -> list[str]:  # noqa: C901, PLR0912, PLR0915
+    def service_policy_tenants(self, site_id: str | None = None) -> list[str]:
         """Fetch all tenants defined in organization and site service policies.
 
         Args:
-            site_id: Optional site ID for site-specific policies. If None, only org policies fetched.
+            site_id: Optional site ID. If None, only org policies are fetched.
 
         Returns:
-            list: List of tenant names found in service policies, or empty list if error.
-
-        SECURITY: Read-only operation fetching configuration data only.
+            List of tenant names found in service policies, or empty list if error.
         """
         try:
-            tenant_names: set[str] = set()  # Use set to deduplicate across org and site policies
-
-            org_id = self._get_org_id()  # Resolve org ID at call time via injected callable
-            # Log before API call
-            logging.info("Fetching organization service policies for tenant information from org_id: %s", org_id)
-
-            try:
-                # Fetch all org service policies
-                response = mistapi.api.v1.orgs.servicepolicies.listOrgServicePolicies(self._session, org_id, limit=1000)
-
-                if hasattr(response, "data") and response.data:  # Validate response has data
-                    policies_data = response.data  # Extract data payload
-                    # Log result count
-                    logging.debug("Received %d organization service policies from API", len(policies_data))
-
-                    for policy in policies_data:  # Iterate each org service policy
-                        if isinstance(policy, dict):  # Only process dict-type policy entries
-                            tenants_list = policy.get("tenants", [])  # Extract tenants array from policy
-                            if isinstance(tenants_list, list):  # Only process list-type tenant containers
-                                for tenant_name in tenants_list:  # Each entry in tenants list is a tenant name
-                                    if tenant_name and isinstance(tenant_name, str):  # Filter empty/non-string values
-                                        tenant_names.add(tenant_name)  # Add tenant to the set
-                                        logging.debug(
-                                            "Found tenant '%s' in org service policy '%s'",
-                                            tenant_name,
-                                            policy.get("name", "unnamed"),  # Include policy context in log
-                                        )
-
-                            # Check legacy single-tenant field for compatibility
-                            tenant_name_single = policy.get("tenant", "")
-                            if tenant_name_single and isinstance(tenant_name_single, str):  # Only add non-empty string
-                                tenant_names.add(tenant_name_single)  # Add legacy single tenant
-                                logging.debug(
-                                    "Found single tenant '%s' in org service policy '%s'",
-                                    tenant_name_single,
-                                    policy.get("name", "unnamed"),  # Include policy context in log
-                                )
-
-                            services = policy.get("services", [])  # Check nested services array for tenant refs
-                            if isinstance(services, list):  # Only process list-type services containers
-                                for service in services:  # Iterate each service in the policy
-                                    if isinstance(service, dict):  # Only process dict-type service entries
-                                        service_tenant = service.get("tenant", "")  # Extract tenant from service entry
-                                        # Only add non-empty string
-                                        if service_tenant and isinstance(service_tenant, str):
-                                            tenant_names.add(service_tenant)  # Add service-level tenant
-                                            logging.debug(
-                                                "Found tenant '%s' in org service policy service", service_tenant
-                                            )  # Log nested discovery
-
-            except Exception as org_error:  # Catch org policy errors without blocking site policy fetch
-                logging.warning("Could not fetch organization service policies: %s", org_error)  # Warn but continue
-
+            tenant_names: set[str] = set()  # Deduplicate across org and site policies
+            org_id = self._get_org_id()  # Resolve org ID via injected callable
+            tenant_names.update(self._fetch_org_policy_tenants(org_id))
             if site_id:  # Only fetch site policies when a site_id is provided
-                # Log before API call
-                logging.info("Fetching site service policies for tenant information from site_id: %s", site_id)
-
-                try:
-                    response = mistapi.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived(
-                        self._session, site_id
-                    )  # Fetch site-derived service policies
-
-                    if hasattr(response, "data") and response.data:  # Validate response has data
-                        policies_data = response.data  # Extract data payload
-                        # Log result count
-                        logging.debug("Received %d site service policies from API", len(policies_data))
-
-                        for policy in policies_data:  # Iterate each site service policy
-                            if isinstance(policy, dict):  # Only process dict-type policy entries
-                                tenants_list = policy.get("tenants", [])  # Extract tenants array from policy
-                                if isinstance(tenants_list, list):  # Only process list-type tenant containers
-                                    for tenant_name in tenants_list:  # Each entry is a tenant name
-                                        # Filter empty/non-string values
-                                        if tenant_name and isinstance(tenant_name, str):
-                                            tenant_names.add(tenant_name)  # Add tenant to the set
-                                            logging.debug(
-                                                "Found tenant '%s' in site service policy '%s'",
-                                                tenant_name,
-                                                policy.get("name", "unnamed"),  # Include policy context in log
-                                            )
-
-                                tenant_name_single = policy.get("tenant", "")  # Check legacy single-tenant field
-                                # Only add non-empty string
-                                if tenant_name_single and isinstance(tenant_name_single, str):
-                                    tenant_names.add(tenant_name_single)  # Add legacy single tenant
-                                    logging.debug(
-                                        "Found single tenant '%s' in site service policy '%s'",
-                                        tenant_name_single,
-                                        policy.get("name", "unnamed"),  # Include policy context in log
-                                    )
-
-                                services = policy.get("services", [])  # Check nested services array
-                                if isinstance(services, list):  # Only process list-type services
-                                    for service in services:  # Iterate each service entry
-                                        if isinstance(service, dict):  # Only process dict-type services
-                                            service_tenant = service.get("tenant", "")  # Extract tenant from service
-                                            # Only add non-empty string
-                                            if service_tenant and isinstance(service_tenant, str):
-                                                tenant_names.add(service_tenant)  # Add service-level tenant
-                                                logging.debug(
-                                                    "Found tenant '%s' in site service policy service", service_tenant
-                                                )  # Log nested discovery
-
-                except Exception as site_error:  # Catch site policy errors without blocking the full result
-                    logging.warning("Could not fetch site service policies: %s", site_error)  # Warn but continue
-
-            tenant_list = sorted(tenant_names)  # Sort for deterministic output
-            # Log final count
+                tenant_names.update(self._fetch_site_policy_tenants(site_id))
+            tenant_list = sorted(tenant_names)
             logging.info("Found %d unique tenants across service policies: %s", len(tenant_list), tenant_list)
-            return tenant_list  # Return sorted list of all discovered tenant names
+            return tenant_list
+        except Exception as error:
+            logging.error("Error fetching tenants from service policies: %s", error)
+            return []
 
-        except Exception as error:  # Catch outer errors to prevent cascading failures
-            logging.error("Error fetching tenants from service policies: %s", error)  # Log full error context
-            return []  # Return empty list on error
-
-    def gateway_template_tenants(self, site_id: str | None = None) -> list[str]:  # noqa: C901, PLR0912, PLR0915
+    def gateway_template_tenants(self, site_id: str | None = None) -> list[str]:
         """Fetch all tenants defined in organization and site gateway templates.
 
         Args:
-            site_id: Optional site ID for site-specific templates. If None, only org templates fetched.
+            site_id: Optional site ID. If None, only org templates are fetched.
 
         Returns:
-            list: List of tenant names found in gateway templates, or empty list if error.
-
-        SECURITY: Read-only operation fetching configuration data only.
+            List of tenant names found in gateway templates, or empty list if error.
         """
         try:
-            tenant_names: set[str] = set()  # Use set to deduplicate across org and site templates
-
-            org_id = self._get_org_id()  # Resolve org ID at call time via injected callable
-            # Log before API call
-            logging.info("Fetching organization gateway templates for tenant information from org_id: %s", org_id)
-
-            try:
-                response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(
-                    self._session, org_id, limit=1000
-                )  # Fetch all org gateway templates
-
-                if hasattr(response, "data") and response.data:  # Validate response has data
-                    templates_data = response.data  # Extract data payload
-                    # Log result count
-                    logging.debug("Received %d organization gateway templates from API", len(templates_data))
-
-                    for template in templates_data:  # Iterate each org gateway template
-                        if isinstance(template, dict):  # Only process dict-type template entries
-                            router_config = template.get("router", {})  # Extract router configuration block
-                            if isinstance(router_config, dict):  # Only process dict-type router configs
-                                # Extract tenant list from router config
-                                tenants_config = router_config.get("tenants", [])
-                                if isinstance(tenants_config, list):  # Only process list-type tenant containers
-                                    for tenant_item in tenants_config:  # Iterate each tenant config item
-                                        if isinstance(tenant_item, dict):  # Only process dict-type tenant items
-                                            tenant_name = tenant_item.get("name", "")  # Extract tenant name field
-                                            # Filter empty/non-string names
-                                            if tenant_name and isinstance(tenant_name, str):
-                                                tenant_names.add(tenant_name)  # Add tenant to the set
-                                                logging.debug(
-                                                    "Found tenant '%s' in org gateway template '%s'",
-                                                    tenant_name,
-                                                    template.get("name", "unnamed"),  # Include template context in log
-                                                )
-
-                                # Extract tenant profiles dict
-                                tenant_profiles = router_config.get("tenant_profiles", {})
-                                if isinstance(tenant_profiles, dict):  # Only process dict-type tenant profiles
-                                    for tenant_name in tenant_profiles.keys():  # Each key is a tenant profile name
-                                        # Filter empty/non-string names
-                                        if tenant_name and isinstance(tenant_name, str):
-                                            tenant_names.add(tenant_name)  # Add tenant profile name
-                                            logging.debug(
-                                                "Found tenant profile '%s' in org gateway template", tenant_name
-                                            )  # Log discovery
-
-                            networks_config = template.get("networks", [])  # Extract networks configuration list
-                            if isinstance(networks_config, list):  # Only process list-type network configs
-                                for network in networks_config:  # Iterate each network in the template
-                                    # Only process network dicts with tenants
-                                    if isinstance(network, dict) and "tenants" in network:
-                                        tenants_dict = network.get("tenants", {})  # Extract tenants sub-dict
-                                        if isinstance(tenants_dict, dict):  # Only process dict-type tenant containers
-                                            for tenant_name in tenants_dict.keys():  # Each key is a tenant name
-                                                # Filter empty/non-string keys
-                                                if tenant_name and isinstance(tenant_name, str):
-                                                    tenant_names.add(tenant_name)  # Add tenant to the set
-                                                    logging.debug(
-                                                        "Found tenant '%s' in org gateway template network", tenant_name
-                                                    )  # Log discovery
-
-            except Exception as org_error:  # Catch org template errors without blocking site template fetch
-                logging.warning("Could not fetch organization gateway templates: %s", org_error)  # Warn but continue
-
+            tenant_names: set[str] = set()  # Deduplicate across org and site templates
+            org_id = self._get_org_id()  # Resolve org ID via injected callable
+            tenant_names.update(self._fetch_org_template_tenants(org_id))
             if site_id:  # Only fetch site templates when a site_id is provided
-                # Log before API call
-                logging.info("Fetching site gateway templates for tenant information from site_id: %s", site_id)
-
-                try:
-                    response = mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived(
-                        self._session, site_id
-                    )  # Fetch site-derived gateway templates
-
-                    if hasattr(response, "data") and response.data:  # Validate response has data
-                        templates_data = response.data  # Extract data payload
-                        # Log result count
-                        logging.debug("Received %d site gateway templates from API", len(templates_data))
-
-                        for template in templates_data:  # Iterate each site gateway template
-                            if isinstance(template, dict):  # Only process dict-type template entries
-                                router_config = template.get("router", {})  # Extract router configuration block
-                                if isinstance(router_config, dict):  # Only process dict-type router configs
-                                    # Extract tenant list from router config
-                                    tenants_config = router_config.get("tenants", [])
-                                    if isinstance(tenants_config, list):  # Only process list-type tenant containers
-                                        for tenant_item in tenants_config:  # Iterate each tenant config item
-                                            if isinstance(tenant_item, dict):  # Only process dict-type tenant items
-                                                tenant_name = tenant_item.get("name", "")  # Extract tenant name field
-                                                # Filter empty/non-string names
-                                                if tenant_name and isinstance(tenant_name, str):
-                                                    tenant_names.add(tenant_name)  # Add tenant to the set
-                                                    logging.debug(
-                                                        "Found tenant '%s' in site gateway template '%s'",
-                                                        tenant_name,
-                                                        # Include template context in log
-                                                        template.get("name", "unnamed"),
-                                                    )
-
-                                    # Extract tenant profiles dict
-                                    tenant_profiles = router_config.get("tenant_profiles", {})
-                                    if isinstance(tenant_profiles, dict):  # Only process dict-type tenant profiles
-                                        for tenant_name in tenant_profiles.keys():  # Each key is a tenant profile name
-                                            # Filter empty/non-string names
-                                            if tenant_name and isinstance(tenant_name, str):
-                                                tenant_names.add(tenant_name)  # Add tenant profile name
-                                                logging.debug(
-                                                    "Found tenant profile '%s' in site gateway template", tenant_name
-                                                )  # Log discovery
-
-                                networks_config = template.get("networks", [])  # Extract networks configuration list
-                                if isinstance(networks_config, list):  # Only process list-type network configs
-                                    for network in networks_config:  # Iterate each network in the template
-                                        # Only process network dicts with tenants
-                                        if isinstance(network, dict) and "tenants" in network:
-                                            tenants_dict = network.get("tenants", {})  # Extract tenants sub-dict
-                                            # Only process dict-type tenant containers
-                                            if isinstance(tenants_dict, dict):
-                                                for tenant_name in tenants_dict.keys():  # Each key is a tenant name
-                                                    # Filter empty/non-string keys
-                                                    if tenant_name and isinstance(tenant_name, str):
-                                                        tenant_names.add(tenant_name)  # Add tenant to the set
-                                                        logging.debug(
-                                                            "Found tenant '%s' in site gateway template network",
-                                                            tenant_name,
-                                                        )  # Log discovery
-
-                except Exception as site_error:  # Catch site template errors without blocking the full result
-                    logging.warning("Could not fetch site gateway templates: %s", site_error)  # Warn but continue
-
-            tenant_list = sorted(tenant_names)  # Sort for deterministic output
-            # Log final count
+                tenant_names.update(self._fetch_site_template_tenants(site_id))
+            tenant_list = sorted(tenant_names)
             logging.info("Found %d unique tenants across gateway templates: %s", len(tenant_list), tenant_list)
-            return tenant_list  # Return sorted list of all discovered tenant names
+            return tenant_list
+        except Exception as error:
+            logging.error("Error fetching tenants from gateway templates: %s", error)
+            return []
 
-        except Exception as error:  # Catch outer errors to prevent cascading failures
-            logging.error("Error fetching tenants from gateway templates: %s", error)  # Log full error context
-            return []  # Return empty list on error
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_tenants_from_networks(networks_data: list) -> set[str]:
+        """Extract tenant names from a list of Mist network objects.
+
+        Each network contributes its name as a tenant identifier and may also
+        contain an explicit ``tenants`` dict whose keys are tenant names.
+        """
+        tenant_names: set[str] = set()
+        for network in networks_data:  # Iterate each network object in the response
+            if not isinstance(network, dict):  # Skip any non-dict entries
+                continue
+            network_name = network.get("name")  # Network name is itself a tenant identifier
+            if network_name and isinstance(network_name, str):
+                tenant_names.add(network_name)
+                logging.debug("Found network tenant '%s'", network_name)
+            tenants_dict = network.get("tenants", {})  # Explicit tenants sub-dict (may be absent)
+            if isinstance(tenants_dict, dict):
+                for name in tenants_dict:  # Each key in the dict is a tenant name
+                    if name and isinstance(name, str):
+                        tenant_names.add(name)
+                        logging.debug("Found explicit tenant '%s' in network '%s'", name, network_name)
+        return tenant_names
+
+    @staticmethod
+    def _extract_tenants_from_policy_item(policy: dict) -> set[str]:
+        """Extract tenant names from a single Mist service policy dict.
+
+        Handles three patterns: ``tenants`` list, ``tenant`` scalar, and
+        ``services[].tenant`` nested strings.
+        """
+        tenant_names: set[str] = set()  # Collected from all patterns in this policy
+        policy_name = policy.get("name", "unnamed")  # For log context only
+        for name in policy.get("tenants", []):  # Preferred list format
+            if name and isinstance(name, str):
+                tenant_names.add(name)
+                logging.debug("Found tenant '%s' in policy '%s'", name, policy_name)
+        single = policy.get("tenant", "")  # Legacy scalar field
+        if single and isinstance(single, str):
+            tenant_names.add(single)
+            logging.debug("Found single tenant '%s' in policy '%s'", single, policy_name)
+        for svc in policy.get("services", []):  # Per-service tenant references
+            if isinstance(svc, dict):
+                svc_tenant = svc.get("tenant", "")
+                if svc_tenant and isinstance(svc_tenant, str):
+                    tenant_names.add(svc_tenant)
+                    logging.debug("Found tenant '%s' in service within policy '%s'", svc_tenant, policy_name)
+        return tenant_names
+
+    @staticmethod
+    def _extract_tenants_from_policies(policies_data: list) -> set[str]:
+        """Extract tenant names from a list of Mist service policy objects."""
+        tenant_names: set[str] = set()  # Deduplicate across all policies
+        for policy in policies_data:  # Iterate each service policy object
+            if not isinstance(policy, dict):  # Skip any non-dict entries
+                continue
+            tenant_names.update(APITenantFetchUtils._extract_tenants_from_policy_item(policy))
+        return tenant_names
+
+    @staticmethod
+    def _extract_router_tenants(router: dict, tmpl_name: str) -> set[str]:
+        """Extract tenant names from a gateway template router configuration dict."""
+        tenant_names: set[str] = set()  # Collected from router.tenants and router.tenant_profiles
+        for item in router.get("tenants", []):  # Named tenant objects in router config
+            if isinstance(item, dict):
+                name = item.get("name", "")
+                if name and isinstance(name, str):
+                    tenant_names.add(name)
+                    logging.debug("Found tenant '%s' in template '%s' router", name, tmpl_name)
+        for name in router.get("tenant_profiles", {}):  # Profile names are tenant identifiers
+            if name and isinstance(name, str):
+                tenant_names.add(name)
+                logging.debug("Found tenant profile '%s' in template '%s'", name, tmpl_name)
+        return tenant_names
+
+    @staticmethod
+    def _extract_network_tenants(networks: list, tmpl_name: str) -> set[str]:
+        """Extract tenant names from gateway template network blocks."""
+        tenant_names: set[str] = set()  # Collected from networks[].tenants dict keys
+        for network in networks:  # Iterate each network block in the template
+            if not isinstance(network, dict):  # Skip any non-dict entries
+                continue
+            for name in network.get("tenants", {}):  # Each key in the dict is a tenant name
+                if name and isinstance(name, str):
+                    tenant_names.add(name)
+                    logging.debug("Found tenant '%s' in template '%s' network", name, tmpl_name)
+        return tenant_names
+
+    @staticmethod
+    def _extract_tenants_from_templates(templates_data: list) -> set[str]:
+        """Extract tenant names from a list of Mist gateway template objects.
+
+        Handles: ``router.tenants[].name``, ``router.tenant_profiles`` keys,
+        and ``networks[].tenants`` dict keys.
+        """
+        tenant_names: set[str] = set()  # Deduplicate across all templates
+        for tmpl in templates_data:  # Iterate each gateway template object
+            if not isinstance(tmpl, dict):  # Skip any non-dict entries
+                continue
+            tmpl_name = tmpl.get("name", "unnamed")  # For log context only
+            router = tmpl.get("router", {})  # Router config sub-dict (may be absent)
+            if isinstance(router, dict):  # Only process dict-type router configs
+                tenant_names.update(APITenantFetchUtils._extract_router_tenants(router, tmpl_name))
+            tenant_names.update(APITenantFetchUtils._extract_network_tenants(tmpl.get("networks", []), tmpl_name))
+        return tenant_names
+
+    def _fetch_org_policy_tenants(self, org_id: str) -> set[str]:
+        """Fetch and extract tenant names from org-level service policies."""
+        try:
+            logging.info("Fetching org service policies for tenant info from org_id: %s", org_id)
+            response = mistapi.api.v1.orgs.servicepolicies.listOrgServicePolicies(
+                self._session, org_id, limit=1000
+            )  # Org service policies endpoint
+            if not (hasattr(response, "data") and response.data):
+                logging.warning("No org service policies found or response data is empty")
+                return set()
+            logging.debug("Received %d org service policies", len(response.data))
+            return self._extract_tenants_from_policies(response.data)
+        except Exception as error:
+            logging.warning("Could not fetch org service policies: %s", error)
+            return set()
+
+    def _fetch_site_policy_tenants(self, site_id: str) -> set[str]:
+        """Fetch and extract tenant names from site-level derived service policies."""
+        try:
+            logging.info("Fetching site service policies for tenant info from site_id: %s", site_id)
+            response = mistapi.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived(
+                self._session, site_id
+            )  # Site service policies endpoint
+            if not (hasattr(response, "data") and response.data):
+                logging.warning("No site service policies found or response data is empty")
+                return set()
+            logging.debug("Received %d site service policies", len(response.data))
+            return self._extract_tenants_from_policies(response.data)
+        except Exception as error:
+            logging.warning("Could not fetch site service policies: %s", error)
+            return set()
+
+    def _fetch_org_template_tenants(self, org_id: str) -> set[str]:
+        """Fetch and extract tenant names from org-level gateway templates."""
+        try:
+            logging.info("Fetching org gateway templates for tenant info from org_id: %s", org_id)
+            response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(
+                self._session, org_id, limit=1000
+            )  # Org templates endpoint
+            if not (hasattr(response, "data") and response.data):
+                logging.warning("No org gateway templates found or response data is empty")
+                return set()
+            logging.debug("Received %d org gateway templates", len(response.data))
+            return self._extract_tenants_from_templates(response.data)
+        except Exception as error:
+            logging.warning("Could not fetch org gateway templates: %s", error)
+            return set()
+
+    def _fetch_site_template_tenants(self, site_id: str) -> set[str]:
+        """Fetch and extract tenant names from site-level derived gateway templates."""
+        try:
+            logging.info("Fetching site gateway templates for tenant info from site_id: %s", site_id)
+            response = mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived(
+                self._session, site_id
+            )  # Site templates endpoint
+            if not (hasattr(response, "data") and response.data):
+                logging.warning("No site gateway templates found or response data is empty")
+                return set()
+            logging.debug("Received %d site gateway templates", len(response.data))
+            return self._extract_tenants_from_templates(response.data)
+        except Exception as error:
+            logging.warning("Could not fetch site gateway templates: %s", error)
+            return set()
