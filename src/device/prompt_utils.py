@@ -1,5 +1,4 @@
-"""
-PromptNetworkDeviceUtils -- Interactive network device selection prompts.
+"""PromptNetworkDeviceUtils -- Interactive network device selection prompts.
 
 Extracted from MistHelper.py to src/device/prompt_utils.py as part of
 Wave 2 systematic decomposition (issue #332).
@@ -23,8 +22,7 @@ from prettytable import PrettyTable  # Tabular display for device and port selec
 
 
 class PromptNetworkDeviceUtils:
-    """
-    Interactive prompts for selecting network devices and ports from a Mist site.
+    """Interactive prompts for selecting network devices and ports from a Mist site.
 
     Extracted from MistHelper.py PromptNetworkDeviceUtils to allow constructor
     injection of runtime dependencies (API session and helper callables) so
@@ -40,8 +38,7 @@ class PromptNetworkDeviceUtils:
     """
 
     def __init__(self, apisession: Any, safe_input_fn: Any, expand_port_range_fn: Any) -> None:
-        """
-        Initialise with injected runtime dependencies.
+        """Initialise with injected runtime dependencies.
 
         Args:
             apisession: Active mistapi session object used for all API calls.
@@ -60,8 +57,7 @@ class PromptNetworkDeviceUtils:
     # ------------------------------------------------------------------
 
     def select_ap_mac(self, site_id: str) -> str | None:
-        """
-        Prompt the user to choose an AP from a site and return its MAC address.
+        """Prompt the user to choose an AP from a site and return its MAC address.
 
         Fetches all APs at the site, renders a numbered selection table,
         and returns the chosen MAC or the special sentinel "ALL_APS".
@@ -148,8 +144,7 @@ class PromptNetworkDeviceUtils:
             return None
 
     def select_gateway_mac(self, site_id: str) -> str | None:
-        """
-        Prompt the user to choose a gateway from a site and return its MAC address.
+        """Prompt the user to choose a gateway from a site and return its MAC address.
 
         Args:
             site_id: Mist site ID to scope the gateway inventory query.
@@ -223,8 +218,7 @@ class PromptNetworkDeviceUtils:
             return None
 
     def select_switch_mac(self, site_id: str) -> str | None:
-        """
-        Prompt the user to choose a switch from a site and return its MAC address.
+        """Prompt the user to choose a switch from a site and return its MAC address.
 
         Args:
             site_id: Mist site ID to scope the switch inventory query.
@@ -304,8 +298,7 @@ class PromptNetworkDeviceUtils:
         device_type: str = "switch",
         return_available: bool = False,
     ):
-        """
-        Prompt the user to select one or more ports from a switch or gateway.
+        """Prompt the user to select one or more ports from a switch or gateway.
 
         Fetches live port status from the Mist Stats API and falls back to device
         config when stats are unavailable (e.g., device offline).  Displays a
@@ -366,11 +359,12 @@ class PromptNetworkDeviceUtils:
             )
 
             if not port_stat:  # Stats completely unavailable -- try building from config instead
-                port_stat = self._build_port_stat_from_config(  # Returns fake port_stat dict using config values
+                _fallback_stat = self._build_port_stat_from_config(  # Returns fallback port_stat dict or None
                     port_config, device_id, device_type, device_name
                 )
-                if port_stat is None:  # Config fallback also failed -- nothing to show
+                if _fallback_stat is None:  # Config fallback also failed -- nothing to show
                     return None
+                port_stat = _fallback_stat  # Narrowed to dict[str, Any] after None guard
 
             available_ports = self._filter_and_sort_ports(port_stat)  # Exclude mgmt ports, keep UP ports, sort
 
@@ -392,9 +386,7 @@ class PromptNetworkDeviceUtils:
     # Private helpers -- called only by select_ports_from_device
     # ------------------------------------------------------------------
 
-    def _find_device_by_mac(  # type: ignore[no-untyped-def]
-        self, devices: list[Any], normalized_target: str, original_mac: str
-    ) -> Any | None:
+    def _find_device_by_mac(self, devices: list[Any], normalized_target: str, original_mac: str) -> Any | None:
         """Return the first device dict whose MAC matches normalized_target, or None."""
         for dev in devices:  # Iterate over every device returned by the API
             dev_mac = dev.get("mac", "")  # Raw MAC from API (may include colons)
@@ -413,11 +405,8 @@ class PromptNetworkDeviceUtils:
         )
         return None  # No match found in inventory
 
-    def _fetch_port_stats(  # type: ignore[no-untyped-def]
-        self, site_id: str, device_id: str, device_mac: str, device_type: str
-    ) -> dict[str, Any]:
-        """
-        Retrieve per-port status data for a switch, gateway, or AP.
+    def _fetch_port_stats(self, site_id: str, device_id: str, device_mac: str, device_type: str) -> dict[str, Any]:
+        """Retrieve per-port status data for a switch, gateway, or AP.
 
         Uses searchSiteSwOrGwPorts for switches/gateways (richer per-port data)
         and getSiteDeviceStats for APs (uses port_stat embedded in device stats).
@@ -466,9 +455,8 @@ class PromptNetworkDeviceUtils:
 
         return port_stat  # May be empty if device is offline -- caller handles this case
 
-    def _fetch_port_config(self, site_id: str, device_id: str) -> dict[str, Any]:  # type: ignore[no-untyped-def]
-        """
-        Retrieve device configuration and return the port_config section.
+    def _fetch_port_config(self, site_id: str, device_id: str) -> dict[str, Any]:
+        """Retrieve device configuration and return the port_config section.
 
         Falls back to an empty dict if the device config API call fails.
         """
@@ -485,8 +473,7 @@ class PromptNetworkDeviceUtils:
             return {}  # Return empty dict so callers don't need to guard for None
 
     def _build_port_to_config_map(self, port_config: dict[str, Any]) -> dict[str, Any]:
-        """
-        Expand range-based port config keys to individual port name mappings.
+        """Expand range-based port config keys to individual port name mappings.
 
         Converts {'ge-0/0/0-5': {...}} to {'ge-0/0/0': {...}, 'ge-0/0/1': {...}, ...}
         so per-port config lookups are O(1).
@@ -509,15 +496,14 @@ class PromptNetworkDeviceUtils:
         logging.info("Built port_to_config map with %d individual port entries", len(port_to_config))
         return port_to_config
 
-    def _build_port_stat_from_config(  # type: ignore[no-untyped-def]
+    def _build_port_stat_from_config(
         self,
         port_config: dict[str, Any],
         device_id: str,
         device_type: str,
         device_name: str,
     ) -> dict[str, Any] | None:
-        """
-        Build a synthetic port_stat dict from device config when live stats are unavailable.
+        """Build a synthetic port_stat dict from device config when live stats are unavailable.
 
         Used as a fallback when the device is offline or has not yet reported stats.
         Returns None if neither stats nor config are available.
@@ -569,11 +555,8 @@ class PromptNetworkDeviceUtils:
 
         return port_stat  # Caller will proceed with synthetic stats and display the fallback notice
 
-    def _filter_and_sort_ports(  # type: ignore[no-untyped-def]
-        self, port_stat: dict[str, Any]
-    ) -> list[tuple[str, Any]]:
-        """
-        Filter management/service ports and DOWN ports, then sort remaining UP ports naturally.
+    def _filter_and_sort_ports(self, port_stat: dict[str, Any]) -> list[tuple[str, Any]]:
+        """Filter management/service ports and DOWN ports, then sort remaining UP ports naturally.
 
         Returns a list of (port_name, port_info) tuples ordered by natural sort key.
         """
@@ -601,7 +584,7 @@ class PromptNetworkDeviceUtils:
                 continue
             available_ports.append((port_name, port_info))  # Keep this UP user-facing port
 
-        def _natural_sort_key(port_tuple: tuple[str, Any]) -> list[Any]:  # type: ignore[return]
+        def _natural_sort_key(port_tuple: tuple[str, Any]) -> list[Any]:
             """Split port name on digit runs for natural (human) sort order."""
             parts = re.split(r"(\d+)", port_tuple[0])  # Split 'ge-0/0/1' into ['ge-', '0', '/', '0', '/', '1', '']
             return [int(part) if part.isdigit() else part for part in parts]  # Convert digit runs to ints for sorting
@@ -619,8 +602,7 @@ class PromptNetworkDeviceUtils:
         device_type: str,
         return_available: bool,
     ):
-        """
-        Render the port selection table and collect the user's choice.
+        """Render the port selection table and collect the user's choice.
 
         Enforces the Mist API 6-port-per-capture limit.  Returns the selected
         port name list (or tuple with available ports if return_available is True),
@@ -679,9 +661,7 @@ class PromptNetworkDeviceUtils:
 
         return self._parse_port_indices(user_input, index_to_port, return_available, available_ports)
 
-    def _build_port_table(  # type: ignore[no-untyped-def]
-        self, available_ports: list[tuple[str, Any]], port_to_config: dict[str, Any]
-    ) -> PrettyTable:
+    def _build_port_table(self, available_ports: list[tuple[str, Any]], port_to_config: dict[str, Any]) -> PrettyTable:
         """Build and return a PrettyTable of available ports with status, speed, and config info."""
         table = PrettyTable()  # Create table with column headers matching operator expectations
         table.field_names = ["Index", "Port Name", "Status", "Speed", "Duplex", "Profile", "Description"]
@@ -754,69 +734,66 @@ class PromptNetworkDeviceUtils:
             return [], available_ports
         return []  # Empty list signals 'all ports' to the caller
 
-    def _parse_port_indices(  # type: ignore[no-untyped-def]  # noqa: C901
+    def _expand_index_range(self, part: str, index_to_port: dict[int, str]) -> set[int]:
+        """Expand a range token like '2-5' into validated individual port indices."""
+        result: set[int] = set()  # Accumulate validated indices from this range token
+        range_parts = part.split("-")  # Split the range notation on '-' separator
+        if len(range_parts) != 2:  # Skip malformed ranges like '2-3-4' or just '-'
+            return result
+        start_idx = int(range_parts[0].strip())  # Inclusive start index of the range
+        end_idx = int(range_parts[1].strip())  # Inclusive end index of the range
+        for i in range(start_idx, end_idx + 1):  # Expand range to individual indices
+            if i in index_to_port:  # Only accept indices within the displayed table
+                result.add(i)
+            else:
+                print(f"\n! Warning: Index {i} is out of range, skipping")
+                logging.warning("Invalid port index in range: %d", i)  # Log for diagnostics
+        return result  # Set of valid indices from this range token
+
+    def _collect_selected_indices(self, user_input: str, index_to_port: dict[int, str]) -> set[int] | None:
+        """Parse comma-separated and range-style input into a validated index set, or None on error."""
+        selected: set[int] = set()  # Accumulate deduplicated valid indices across all tokens
+        try:
+            for part in [p.strip() for p in user_input.split(",")]:  # Split on commas, strip whitespace
+                if "-" in part:  # Range notation like '2-5' -- delegate to range expander
+                    selected |= self._expand_index_range(part, index_to_port)  # Merge range results
+                else:  # Single index token
+                    idx = int(part)  # Must be a numeric string -- raises ValueError if not
+                    if idx in index_to_port:  # Validate against displayed table size
+                        selected.add(idx)
+                    else:
+                        print(f"\n! Warning: Index {idx} is out of range, skipping")
+                        logging.warning("Invalid port index: %d", idx)  # Log bad index for diagnostics
+        except ValueError as parse_error:  # User entered non-numeric text -- cannot parse
+            print(f"\n! Invalid input format: {parse_error}")
+            logging.error("Port selection parse error: %s", parse_error)  # Log for audit trail
+            return None  # Signal parse failure to caller
+        return selected  # Set of all valid selected indices
+
+    def _parse_port_indices(  # type: ignore[no-untyped-def]
         self,
         user_input: str,
         index_to_port: dict[int, str],
         return_available: bool,
         available_ports: list[tuple[str, Any]],
     ):
-        """
-        Parse comma-separated and range-style port index input and return selected port names.
-
-        Supports formats: '0', '0,2,5', '0-3', or combinations thereof.
-        Warns on out-of-range indices without aborting the whole selection.
-        Returns None on parse errors or if the selection exceeds the 6-port limit.
-        """
-        selected_indices: set[int] = set()  # Use a set to deduplicate repeated indices
-
-        try:
-            parts = user_input.split(",")  # Split on commas first to handle multiple segments
-            for part in parts:
-                part = part.strip()  # Remove surrounding whitespace from each segment
-
-                if "-" in part:  # Range notation: '2-5' -> indices 2, 3, 4, 5
-                    range_parts = part.split("-")
-                    if len(range_parts) == 2:  # Valid range has exactly two endpoints
-                        start_idx = int(range_parts[0].strip())  # Inclusive start
-                        end_idx = int(range_parts[1].strip())  # Inclusive end
-                        for i in range(start_idx, end_idx + 1):  # Expand range to individual indices
-                            if i in index_to_port:  # Only accept indices within the displayed table
-                                selected_indices.add(i)
-                            else:
-                                print(f"\n! Warning: Index {i} is out of range, skipping")
-                                logging.warning("Invalid port index in range: %d", i)
-                else:  # Single index
-                    idx = int(part)  # Must be a numeric string
-                    if idx in index_to_port:  # Validate against displayed table size
-                        selected_indices.add(idx)
-                    else:
-                        print(f"\n! Warning: Index {idx} is out of range, skipping")
-                        logging.warning("Invalid port index: %d", idx)
-
-            if not selected_indices:  # No valid indices after parsing -- nothing to capture
-                print("\n! No valid ports selected")
-                logging.error("No valid port indices provided by user")
-                return None
-
-            selected_ports = [index_to_port[idx] for idx in sorted(selected_indices)]  # Ordered list of port names
-
-            if len(selected_ports) > 6:  # Enforce Mist API hard limit of 6 ports per capture
-                print(f"\n! ERROR: Selected {len(selected_ports)} ports, but API maximum is 6 ports per capture")
-                print("  Please refine your selection to 6 or fewer ports")
-                logging.error(  # Log the violation for audit trail
-                    "User selected %d ports -- exceeds API limit of 6", len(selected_ports)
-                )
-                return None
-
-            print(f"\n! Selected {len(selected_ports)} port(s): {', '.join(selected_ports)}")
-            logging.info("User selected ports: %s", selected_ports)  # Log final selection after validation
-
-            if return_available:  # Caller wants both the selection and the full available list
-                return selected_ports, available_ports
-            return selected_ports  # Return just the selected port name list
-
-        except ValueError as value_error:  # User entered non-numeric text -- cannot parse as index
-            print(f"\n! Invalid input format: {value_error}")
-            logging.error("Port selection parse error: %s", value_error)
+        """Parse user port index input and return validated selected port name list."""
+        logging.debug("Parsing port selection input: %s", user_input)  # Log raw input for diagnostics
+        selected_indices = self._collect_selected_indices(user_input, index_to_port)  # Parse to index set
+        if selected_indices is None:  # Parse failure -- error already printed by helper
             return None
+        if not selected_indices:  # No valid indices after parsing -- nothing to capture
+            print("\n! No valid ports selected")
+            logging.error("No valid port indices provided by user")  # Log empty result for audit
+            return None
+        selected_ports = [index_to_port[idx] for idx in sorted(selected_indices)]  # Ordered port names
+        if len(selected_ports) > 6:  # Enforce Mist API hard limit of 6 ports per capture
+            print(f"\n! ERROR: Selected {len(selected_ports)} ports, but API maximum is 6 ports per capture")
+            print("  Please refine your selection to 6 or fewer ports")
+            logging.error("User selected %d ports -- exceeds API limit of 6", len(selected_ports))  # Log violation
+            return None
+        print(f"\n! Selected {len(selected_ports)} port(s): {', '.join(selected_ports)}")
+        logging.info("User selected ports: %s", selected_ports)  # Log final validated selection
+        if return_available:  # Caller wants both the selection and the full available list
+            return selected_ports, available_ports
+        return selected_ports  # Return just the selected port name list
