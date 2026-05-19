@@ -5808,6 +5808,40 @@ class CacheUtils:
             logging.error(f"Failed to create address parse failures CSV: {e}")
             print(f"! Failed to create address parse failures CSV: {e}")
 
+    @staticmethod
+    def fast_cache_hit(filename: str, max_age_minutes: int = 60) -> bool:  # Check if cached output file is fresh
+        """Return True if the file exists in data/ and was written within max_age_minutes.
+
+        Used as a lightweight guard to skip expensive re-generation when a fresh
+        output already exists (e.g. a Markdown report generated earlier in the session).
+
+        Args:
+            filename: Filename to check inside the data/ directory
+            max_age_minutes: How old the file can be before it is considered stale
+
+        Returns:
+            bool: True if file exists and is fresh (skip re-generation), False otherwise
+        """
+        full_path = FilePathUtils.get_csv_path(filename)  # Resolve path inside data/ directory
+        logging.debug("fast_cache_hit check for %s (max_age=%d min)", filename, max_age_minutes)  # Log check
+        if not os.path.exists(full_path):  # File not present -- always a miss
+            logging.debug("fast_cache_hit MISS: %s not found", filename)  # Log miss reason
+            return False  # Cache miss -- caller should generate the file
+        try:
+            age_seconds = time.time() - os.path.getmtime(full_path)  # Seconds since last modification
+            age_minutes = age_seconds / 60.0  # Convert to minutes for readable comparison
+            if age_minutes <= max_age_minutes:  # File is within the freshness window
+                logging.info("fast_cache_hit HIT: %s (%.1f min old)", filename, age_minutes)  # Log cache hit
+                print(  # Inform user that cached output is being reused
+                    f"! Using cached {filename} ({age_minutes:.0f} min old) -- skipping re-generation."
+                )
+                return True  # Cache hit -- caller can skip expensive work
+            logging.debug("fast_cache_hit MISS: %s is stale (%.1f min old)", filename, age_minutes)  # Log stale
+            return False  # File is too old -- cache miss
+        except OSError as stat_error:  # Handle race conditions or permission issues
+            logging.warning("fast_cache_hit: could not stat %s: %s", filename, stat_error)  # Log I/O issue
+            return False  # Treat stat failure as a miss to be safe
+
 
 # ============================================================================
 # DISPLAY UTILITIES CLASS
@@ -14925,7 +14959,7 @@ class GlobalWiredClientReportGenerator:
             "records_matched": matched,
             "remote_filter_used": remote_used,
             "local_filter_used": local_used,
-            "generated_at": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),  # UTC ISO timestamp for report metadata
         }
         if criteria:
             if criteria.get("mac_operator"):
@@ -24073,7 +24107,7 @@ class OrgConfigMigrationManager:
         metadata = {
             "source_org_id": self.org_id,  # Track which org this data came from
             "source_org_name": org_name,  # Human-readable org name for import preview
-            "export_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),  # UTC timestamp
+            "export_timestamp": datetime.now(UTC).isoformat(),  # UTC timestamp
             "schema_version": "1.0",  # Bundle format version for future compatibility
             "object_counts": counts,  # Per-type counts for quick inspection
         }
@@ -24086,9 +24120,7 @@ class OrgConfigMigrationManager:
         safe_name = "".join(  # Sanitize org name for safe filename
             c if c.isalnum() or c in "-_" else "_" for c in org_name
         )
-        timestamp = datetime.datetime.now(datetime.timezone.utc).strftime(  # UTC timestamp for uniqueness
-            "%Y%m%d_%H%M%S"
-        )
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # UTC timestamp for uniqueness
         filename = f"OrgConfig_Export_{safe_name}_{timestamp}.json"  # Construct descriptive filename
         filepath = os.path.join("data", filename)  # Use os.path.join for cross-platform paths
         logging.info("Saving export bundle to %s", filepath)  # Log before file write
