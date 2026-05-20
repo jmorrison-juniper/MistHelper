@@ -7,6 +7,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+## [26.05.20.17.31]
+
+### Refactored
+
+- `main()` decomposed into 9 focused private helper functions: `_initialize_deferred_imports`, `_build_argument_parser`, `_setup_runtime_flags`, `_initialize_dependencies`, `_establish_mist_session`, `_configure_runtime_options`, `_run_tui_mode`, `_run_cli_mode`, `_run_interactive_mode`. Function reduced from 561 lines / CC 89 (Grade F) to 25 lines / CC 13 (Grade C). Behavior and CLI interface unchanged. Closes #353
+
 ## [26.05.20.16.57]
 
 ### Refactored

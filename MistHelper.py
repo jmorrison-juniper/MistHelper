@@ -31545,64 +31545,63 @@ def _launch_web_portal(args):  # type: ignore[no-untyped-def]
         app.run(host=host, port=port, debug=args.debug)
 
 
-def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-    """Main entry point for MistHelper CLI application."""
-    logging.debug("ENTRY: main()")
-
-    # Handle deferred import initialization if needed (only once)
-    global success, global_assignments
+def _initialize_deferred_imports() -> None:  # noqa: C901, PLR0912
+    """Initialize deferred module imports if not already completed at startup."""
+    global success, global_assignments  # Modify module-level import tracking variables
+    logging.debug("_initialize_deferred_imports: checking deferred import status")  # Log entry
     if not success and not global_assignments and not hasattr(import_manager, "_deferred_init_done"):
-        logging.info("Initializing deferred imports at application start...")
-        success, global_assignments = import_manager.initialize_all_imports()
-        import_manager._deferred_init_done = True  # Mark as completed
-
-        # Apply global assignments to module namespace
-        if global_assignments:
+        logging.info("Initializing deferred imports at application start...")  # Log before import process
+        success, global_assignments = import_manager.initialize_all_imports()  # Run full deferred import cycle
+        import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
+        if global_assignments:  # Apply symbol assignments to module namespace if any returned
             for var_name, var_value in global_assignments.items():
-                globals()[var_name] = var_value
-                # Special handling for tqdm to ensure it overrides the fallback
-                if var_name == "tqdm" and var_value is not None:
-                    logging.info(f"Successfully imported real tqdm in deferred mode: {type(var_value)}")
-            logging.debug(f"Applied {len(global_assignments)} global variable assignments")
-
-            # Verify tqdm was properly imported
-            if "tqdm" in global_assignments:
-                logging.info(f"tqdm is available in global namespace: {type(globals().get('tqdm'))}")
+                globals()[var_name] = var_value  # Inject each imported symbol into module scope
+                if var_name == "tqdm" and var_value is not None:  # tqdm requires special override of the stub
+                    logging.info(
+                        "Successfully imported real tqdm in deferred mode: %s", type(var_value)
+                    )  # Log tqdm override  # noqa: E501
+            logging.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
+            if "tqdm" in global_assignments:  # Confirm tqdm landed in namespace
+                logging.info(
+                    "tqdm is available in global namespace: %s", type(globals().get("tqdm"))
+                )  # Log tqdm availability  # noqa: E501
             else:
-                logging.warning("tqdm was not found in global assignments - progress bars will not be functional")
-
-        if not success:
+                logging.warning(
+                    "tqdm was not found in global assignments - progress bars will not be functional"
+                )  # Warn if missing  # noqa: E501
+        if not success:  # Non-fatal warning: caller decides whether to abort
             logging.warning("Some required imports failed - functionality may be limited")
-    elif hasattr(import_manager, "_deferred_init_done"):
+    elif hasattr(import_manager, "_deferred_init_done"):  # Already initialized -- skip to avoid duplicate work
         logging.debug("Deferred imports already initialized, skipping duplicate initialization")
+    logging.debug("_initialize_deferred_imports: complete")  # Log exit
 
-    # Ensure tqdm is properly available
-    InputUtils.ensure_tqdm_available()
 
-    # --- CLI Argument Parsing ---
-    parser = argparse.ArgumentParser(description="MistHelper CLI Interface")
-    parser.add_argument("-O", "--org", help="Organization ID")
-    parser.add_argument("-M", "--menu", help="Menu option number to execute")
-    parser.add_argument("-S", "--site", help="Human-readable site name")
-    parser.add_argument("-D", "--device", help="Human-readable device name")
-    parser.add_argument("-P", "--port", help="Port ID")
+def _build_argument_parser() -> argparse.ArgumentParser:
+    """Build and return the CLI argument parser for MistHelper with all supported flags."""
+    logging.debug("_build_argument_parser: building argument parser")  # Log before parser creation
+    parser = argparse.ArgumentParser(description="MistHelper CLI Interface")  # Create base parser with description
+    parser.add_argument("-O", "--org", help="Organization ID")  # Short -O flag maps to --org for quick use
+    parser.add_argument("-M", "--menu", help="Menu option number to execute")  # Short -M for non-interactive dispatch
+    parser.add_argument("-S", "--site", help="Human-readable site name")  # Site name that gets resolved to site_id
+    parser.add_argument("-D", "--device", help="Human-readable device name")  # Device name resolved to device_id
+    parser.add_argument("-P", "--port", help="Port ID")  # Port identifier passed directly to menu functions
     parser.add_argument(
         "--debug", action="store_true", help="Enable debug output (includes detailed table data in logs)"
-    )
+    )  # Debug mode flag  # noqa: E501
     parser.add_argument(
         "--delay", type=int, help="Fixed delay between loop iterations (in seconds). If omitted, delay is dynamic."
-    )
+    )  # Rate limit override  # noqa: E501
     parser.add_argument(
         "--fast", action="store_true", help="Enable fast mode with multithreading (bypasses rate limiting)"
-    )
+    )  # Concurrency mode  # noqa: E501
     parser.add_argument(
         "--skip-deps", action="store_true", help="Skip dependency check on startup for faster script initialization"
-    )
+    )  # Skip dep check  # noqa: E501
     parser.add_argument(
         "--output-format",
         choices=["csv", "sqlite"],
         default="csv",
-        help="Output format: 'csv' for CSV files (default) or 'sqlite' for hybrid database with natural primary keys",
+        help="Output format: 'csv' for CSV files (default) or 'sqlite' for hybrid database with natural primary keys",  # Output backend selector  # noqa: E501
     )
     parser.add_argument(
         "--test",
@@ -31622,7 +31621,7 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
     parser.add_argument(
         "--address-check",
         action="store_true",
-        help="Enable external address validation using Nominatim API for address comparison operations",
+        help="Enable external address validation using Nominatim API for address comparison operations",  # Nominatim toggle  # noqa: E501
     )
     parser.add_argument(
         "--skip-ssl-verify",
@@ -31632,56 +31631,47 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
     parser.add_argument(
         "--no-env",
         action="store_true",
-        help="Disable .env file loading for SSH operations (require explicit command line parameters)",
+        help="Disable .env file loading for SSH operations (require explicit command line parameters)",  # SSH env override  # noqa: E501
     )
     parser.add_argument(
         "--tui",
         action="store_true",
-        help="Launch MistHelper in Terminal User Interface (TUI) mode for visual navigation of Mist API library",
+        help="Launch MistHelper in Terminal User Interface (TUI) mode for visual navigation of Mist API library",  # Rich TUI mode  # noqa: E501
     )
     parser.add_argument(
         "--login",
         action="store_true",
-        help="Use interactive login (email/password) instead of API token - enables MSP-level API access",
+        help="Use interactive login (email/password) instead of API token - enables MSP-level API access",  # Interactive auth  # noqa: E501
     )
     parser.add_argument(
         "--web-portal",
         action="store_true",
-        help="Launch the web portal interface on port 8055 (or WEB_PORT env var) instead of the CLI menu",
+        help="Launch the web portal interface on port 8055 (or WEB_PORT env var) instead of the CLI menu",  # Gunicorn web portal  # noqa: E501
     )
     parser.add_argument(
         "--standalone",
         action="store_true",
-        help="Force standalone/CSV-only mode, disabling ArangoDB and Redis connections",
+        help="Force standalone/CSV-only mode, disabling ArangoDB and Redis connections",  # Force CSV-only mode
     )
-    args = parser.parse_args()
+    logging.debug("_build_argument_parser: parser ready with all arguments configured")  # Log completion
+    return parser  # Return parser for caller to call parse_args() on
 
-    # Apply --standalone CLI flag to environment
-    if args.standalone:
-        os.environ["MISTHELPER_STANDALONE"] = "true"
 
-    # Store args globally for menu functions to access CLI flags
-    globals()["args"] = args
-
-    # ------------------------------------------------------------------------
-    # Establish global FAST_MODE_ENABLED flag for systematic test harness
-    # The harness inspects globals()['FAST_MODE_ENABLED']; previously this was
-    # never set, causing fast mode to be ignored inside run_systematic_test.
-    # SECURITY: Read-only flag derived solely from CLI input; no external input.
-    # ------------------------------------------------------------------------
+def _setup_runtime_flags(args: argparse.Namespace) -> None:
+    """Apply standalone env flag, register args globally, and configure FAST_MODE_ENABLED."""
+    logging.debug("_setup_runtime_flags: applying standalone and fast mode flags")  # Log entry
+    if args.standalone:  # --standalone flag disables ArangoDB/Redis connections org-wide
+        os.environ["MISTHELPER_STANDALONE"] = "true"  # Write env var so all components detect standalone mode
+        logging.info("Standalone mode enabled via --standalone flag: ArangoDB/Redis disabled")  # Log env write
+    globals()["args"] = args  # Register parsed args globally so menu functions can read CLI flags
+    logging.debug("CLI args registered in globals()['args'] for menu function access")  # Log global assignment
+    global FAST_MODE_ENABLED  # Declare intent to modify module-level flag used by test harness
     try:
-        global FAST_MODE_ENABLED
-        FAST_MODE_ENABLED = bool(args.fast)
+        FAST_MODE_ENABLED = bool(args.fast)  # Derive flag from --fast CLI argument (bool is safe cast)
     except Exception:
-        # Fail-safe: ensure symbol exists even if something unexpected happens
-        FAST_MODE_ENABLED = False
-
-    # ------------------------------------------------------------------------
-    # FAST MODE STARTUP BANNER (Feature A)
-    # Enumerate functions that currently accept fast= so operators know scope.
-    # This is intentionally static (no reflection over globals()) for safety & clarity.
-    # ------------------------------------------------------------------------
-    if args.fast:
+        FAST_MODE_ENABLED = False  # Fail-safe: ensure symbol exists even if args access fails
+    logging.debug("FAST_MODE_ENABLED set to %s", FAST_MODE_ENABLED)  # Log fast mode state
+    if args.fast:  # Print fast-capable function list so operators know the scope of fast mode
         fast_capable = [
             "export_gateway_synthetic_tests_to_csv",
             "get_gateway_devices_with_sites",
@@ -31693,365 +31683,396 @@ def main():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
             "APIFetchUtils.gateway_device_configs",
             "InventoryCSVComparator",
             "export_gateways_with_wan_overrides_to_csv",
-            # Newly added fast-capable stats exporters:
             "OrgDeviceStatsExporter.device_stats",
             "OrgDeviceStatsExporter.device_port_stats",
             "OrgDeviceStatsExporter.vpn_peer_stats",
             "OrgDeviceStatsExporter.switch_vc_stats",
         ]
-        logging.info("FAST MODE ACTIVE: Enabling caching/concurrency shortcuts for: " + ", ".join(fast_capable))
-        print("* Fast mode active (caching/concurrency). Functions optimized:")
+        logging.info(
+            "FAST MODE ACTIVE: Enabling caching/concurrency shortcuts for: %s", ", ".join(fast_capable)
+        )  # Log fast scope  # noqa: E501
+        print(
+            "* Fast mode active (caching/concurrency). Functions optimized:"
+        )  # Inform operator which functions benefit  # noqa: E501
         for name in fast_capable:
-            print(f"  - {name}")
+            print(f"  - {name}")  # Print each fast-capable function name for operator awareness
+    logging.debug("_setup_runtime_flags: complete")  # Log exit
 
-    # ============================================================================
-    # DEPENDENCY MANAGEMENT - Initialize imports if not already done
-    # ============================================================================
+
+def _initialize_dependencies(args: argparse.Namespace) -> None:  # noqa: C901
+    """Initialize deferred module imports based on --skip-deps flag, aborting on critical failure."""
+    global success, global_assignments  # Modify module-level import tracking state
+    logging.debug("_initialize_dependencies: checking if dependency initialization is needed")  # Log entry
     if not _initialize_imports_now and not hasattr(import_manager, "_deferred_init_done"):
-        # If imports were deferred, initialize them now with proper skip behavior
-        if not args.skip_deps:
-            logging.info("Initializing deferred dependencies with full checking...")
-            success, global_assignments = import_manager.initialize_all_imports(skip_deps=False)
-            import_manager._deferred_init_done = True  # Mark as completed
-
-            # Apply global assignments
-            if global_assignments:
+        if not args.skip_deps:  # Full dependency check when --skip-deps not provided
+            logging.info("Initializing deferred dependencies with full checking...")  # Log before full init
+            success, global_assignments = import_manager.initialize_all_imports(
+                skip_deps=False
+            )  # Run full import cycle  # noqa: E501
+            import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
+            if global_assignments:  # Apply symbol injections to module namespace
                 for var_name, var_value in global_assignments.items():
-                    globals()[var_name] = var_value
-                logging.debug(f"Applied {len(global_assignments)} global variable assignments")
-
-            if not success and not args.test:
-                logging.error("Critical dependencies missing. Exiting.")
-                print("!! Critical dependencies missing. Use --skip-deps to bypass or install missing packages.")
-                sys.exit(1)
-        else:
-            logging.info("Dependency initialization skipped due to --skip-deps flag")
-            # Still need to initialize the basic imports for core functionality
-            success, global_assignments = import_manager.initialize_all_imports(skip_deps=True)
-            import_manager._deferred_init_done = True  # Mark as completed
-
-            # Apply global assignments even in skip mode
-            if global_assignments:
+                    globals()[var_name] = var_value  # Inject each imported symbol into module scope
+                logging.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
+            if not success and not args.test:  # Abort on critical failure unless in test mode
+                logging.error("Critical dependencies missing. Exiting.")  # Log fatal dependency failure
+                print(
+                    "!! Critical dependencies missing. Use --skip-deps to bypass or install missing packages."
+                )  # Inform user  # noqa: E501
+                sys.exit(1)  # Exit with error code -- cannot continue without required modules
+        else:  # --skip-deps path: minimal initialization for core functionality only
+            logging.info("Dependency initialization skipped due to --skip-deps flag")  # Log skip reason
+            success, global_assignments = import_manager.initialize_all_imports(skip_deps=True)  # Minimal import cycle
+            import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
+            if global_assignments:  # Apply available symbol injections even in skip mode
                 for var_name, var_value in global_assignments.items():
-                    globals()[var_name] = var_value
-                logging.debug(f"Applied {len(global_assignments)} global variable assignments in skip mode")
-    elif hasattr(import_manager, "_deferred_init_done"):
+                    globals()[var_name] = var_value  # Inject each available symbol into module scope
+                logging.debug(
+                    "Applied %d global variable assignments in skip mode", len(global_assignments)
+                )  # Log skip-mode count  # noqa: E501
+    elif hasattr(import_manager, "_deferred_init_done"):  # Already initialized -- skip to avoid duplicate work
         logging.debug("Dependencies already initialized, skipping duplicate initialization")
+    logging.debug("_initialize_dependencies: complete")  # Log exit
 
-    # Initialize Mist API session after dependencies are available
-    # Use interactive login if --login flag is specified (enables MSP-level API access)
-    if args.login:
-        logging.info("Interactive login mode requested via --login flag")
-        if not initialize_mist_session_interactive():  # type: ignore[no-untyped-call]
-            logging.error("Failed to initialize Mist API session via interactive login")
-            print(" Failed to initialize Mist API session. Check your credentials.")
-            sys.exit(1)
-    else:
-        if not initialize_mist_session():  # type: ignore[no-untyped-call]
-            logging.error("Failed to initialize Mist API session")
-            print(" Failed to initialize Mist API session. Check your credentials.")
-            sys.exit(1)
-        # Detect MSP privileges even with token-based auth (in case token has MSP scope)
-        detect_msp_privileges()  # type: ignore[no-untyped-call]
 
-    # Set global output format based on CLI argument
-    global OUTPUT_FORMAT
-    OUTPUT_FORMAT = args.output_format
-    timestamp = datetime.now(UTC).isoformat()
-    logging.info(f"Output format set to: {OUTPUT_FORMAT} at {timestamp}")
+def _establish_mist_session(args: argparse.Namespace) -> None:
+    """Initialize Mist API session using interactive login or API token, then detect MSP privileges."""
+    logging.debug("_establish_mist_session: starting session initialization")  # Log entry
+    if args.login:  # Interactive login requested via --login flag
+        logging.info("Interactive login mode requested via --login flag")  # Log before interactive login
+        if not initialize_mist_session_interactive():  # type: ignore[no-untyped-call]  # Attempt email/password login
+            logging.error("Failed to initialize Mist API session via interactive login")  # Log auth failure
+            print(" Failed to initialize Mist API session. Check your credentials.")  # Inform user
+            sys.exit(1)  # Exit -- cannot proceed without authenticated session
+    else:  # Default path: use API token from .env or environment variables
+        if not initialize_mist_session():  # type: ignore[no-untyped-call]  # Attempt token-based session init
+            logging.error("Failed to initialize Mist API session")  # Log token auth failure
+            print(" Failed to initialize Mist API session. Check your credentials.")  # Inform user
+            sys.exit(1)  # Exit -- cannot proceed without authenticated session
+        detect_msp_privileges()  # type: ignore[no-untyped-call]  # Check if token has MSP-level scope
+    logging.debug("_establish_mist_session: session established successfully")  # Log successful auth
 
-    # Initialize global progress telemetry emitter (best-effort per FR-008)
-    global PROGRESS_EMITTER
+
+def _configure_runtime_options(args: argparse.Namespace) -> None:
+    """Set OUTPUT_FORMAT, initialize PROGRESS_EMITTER, and configure debug log level."""
+    global OUTPUT_FORMAT, PROGRESS_EMITTER  # Declare intent to modify module-level runtime config
+    logging.debug("_configure_runtime_options: applying runtime configuration")  # Log entry
+    OUTPUT_FORMAT = args.output_format  # Apply --output-format (csv or sqlite) to global used by all exporters
+    timestamp = datetime.now(UTC).isoformat()  # Capture current UTC time for audit trail
+    logging.info("Output format set to: %s at %s", OUTPUT_FORMAT, timestamp)  # Log format selection with timestamp
     try:
-        PROGRESS_EMITTER = TelemetryEmitter(os.path.join("data", "test_events.jsonl"))
-        logging.info("Progress telemetry emitter initialized: data/test_events.jsonl")
+        PROGRESS_EMITTER = TelemetryEmitter(
+            os.path.join("data", "test_events.jsonl")
+        )  # Initialize JSONL telemetry emitter  # noqa: E501
+        logging.info("Progress telemetry emitter initialized: data/test_events.jsonl")  # Log emitter ready
     except Exception as emitter_exc:
-        logging.warning(f"Progress telemetry emitter init failed (non-blocking): {emitter_exc}")
-        PROGRESS_EMITTER = None
-
-    # Enable debug logging if --debug flag is provided
-    if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-        # Set ONLY file handlers to DEBUG level, keep console at INFO
+        logging.warning(
+            "Progress telemetry emitter init failed (non-blocking): %s", emitter_exc
+        )  # Log non-fatal failure  # noqa: E501
+        PROGRESS_EMITTER = None  # Set to None so callers skip telemetry gracefully
+    if args.debug:  # Apply debug logging level to file handlers; keep console at INFO to avoid noise
+        logging.getLogger().setLevel(logging.DEBUG)  # Enable DEBUG on root logger
         for handler in logging.getLogger().handlers:
-            if isinstance(handler, logging.FileHandler):
+            if isinstance(handler, logging.FileHandler):  # File handlers get full DEBUG output
                 handler.setLevel(logging.DEBUG)
-            elif isinstance(handler, logging.StreamHandler):
+            elif isinstance(handler, logging.StreamHandler):  # Console stays at INFO to avoid noise
                 handler.setLevel(logging.INFO)
-        logging.debug("Debug logging enabled via --debug flag")
-        logging.debug(f"Command line arguments: {' '.join(sys.argv)}")
-        logging.debug("Performance monitoring will trigger circuit breakers for infinite loops")
+        logging.debug("Debug logging enabled via --debug flag")  # Confirm debug mode active in log file
+        logging.debug("Command line arguments: %s", " ".join(sys.argv))  # Log full command line for diagnostics
+        logging.debug(
+            "Performance monitoring will trigger circuit breakers for infinite loops"
+        )  # Remind about circuit breakers  # noqa: E501
+    logging.debug("_configure_runtime_options: complete")  # Log exit
 
-    # Handle systematic testing mode
-    if args.test:
-        logging.info("SYSTEMATIC_TEST: Starting systematic test mode")
-        print(">> Systematic test mode activated")
-        if args.skip_deps:
-            print(">> Dependency checks skipped due to --skip-deps flag")
-        else:
-            print(">> Running systematic test with full dependency verification")
-        success = run_systematic_test()  # type: ignore[no-untyped-call]
-        logging.info(f"SYSTEMATIC_TEST: Test mode completed with success={success}")
-        sys.exit(0 if success else 1)
 
-    # Handle interactive testing mode
-    if args.testinteractive:
-        logging.info("INTERACTIVE_TEST: Starting interactive test mode")
-        print(">> Interactive test mode activated")
-        if args.skip_deps:
-            print(">> Dependency checks skipped due to --skip-deps flag")
-        else:
-            print(">> Running interactive test with full dependency verification")
-        success = run_interactive_test()  # type: ignore[no-untyped-call]
-        logging.info(f"INTERACTIVE_TEST: Test mode completed with success={success}")
-        sys.exit(0 if success else 1)
+def _run_tui_mode(args: argparse.Namespace) -> None:
+    """Launch MistHelper Terminal User Interface (TUI) mode using the Rich library."""
+    logging.info("TUI_MODE: Starting Terminal User Interface mode")  # Log before TUI launch
+    print(">> Terminal User Interface mode activated")  # Inform user TUI is starting
+    if not apisession:  # TUI requires an active API session to execute library calls
+        print(">> Initializing Mist API session...")  # Inform user session is being set up
+        if not initialize_mist_session():  # type: ignore[no-untyped-call]  # Attempt session init for TUI
+            print("[ERROR] Failed to initialize Mist API session")  # Inform user of auth failure
+            logging.error("TUI_MODE: Could not initialize API session")  # Log auth failure
+            sys.exit(1)  # Exit -- TUI cannot function without a session
+        print(">> API session initialized successfully")  # Confirm session ready
+    root_logger = logging.getLogger()  # Access root logger to modify handlers
+    console_handlers = [  # Identify console handlers to suppress during TUI (Rich manages output)
+        h
+        for h in root_logger.handlers
+        if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+    ]
+    for handler in console_handlers:
+        root_logger.removeHandler(handler)  # Remove console handler so log messages don't disrupt Rich display
+        logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")  # Log handler removal
+    try:
+        from src.ui.tui import MistHelperTUI  # PLC0415: lazy import avoids loading Rich at startup
 
-    # Handle TUI mode
-    if args.tui:
-        logging.info("TUI_MODE: Starting Terminal User Interface mode")
-        print(">> Terminal User Interface mode activated")
-
-        # Initialize Mist API session for TUI mode
-        if not apisession:
-            print(">> Initializing Mist API session...")
-            if not initialize_mist_session():  # type: ignore[no-untyped-call]
-                print("[ERROR] Failed to initialize Mist API session")
-                logging.error("TUI_MODE: Could not initialize API session")
-                sys.exit(1)
-            print(">> API session initialized successfully")
-
-        # Remove console handler during TUI mode to prevent log messages from interfering with Rich display
-        root_logger = logging.getLogger()
-        console_handlers = [
-            h
-            for h in root_logger.handlers
-            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
-        ]
-        for handler in console_handlers:
-            root_logger.removeHandler(handler)
-            logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")
-
-        try:
-            from src.ui.tui import MistHelperTUI  # PLC0415: lazy import
-
-            tui = MistHelperTUI(debug_mode=args.debug)  # type: ignore[no-untyped-call]
-            # Pass the global apisession to TUI for API call execution
-            tui.apisession = apisession
-            if args.debug:
-                logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")
-            tui.run()  # type: ignore[no-untyped-call]
-        except KeyboardInterrupt:
-            if args.debug:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                logging.debug(f"TUI_DEBUG: [{timestamp}] KeyboardInterrupt caught - user pressed Ctrl+C")
-            logging.info("TUI_MODE: User interrupted with Ctrl+C")
-            print("\n[EXIT] TUI mode stopped by user")
-        except Exception as error:
-            if args.debug:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                logging.debug(f"TUI_DEBUG: [{timestamp}] Exception caught in TUI mode: {type(error).__name__}: {error}")
-            logging.error(f"TUI_MODE: Fatal error - {error}", exc_info=True)
-            print(f"\n[ERROR] TUI mode crashed: {error}")
-            sys.exit(1)
-
+        tui = MistHelperTUI(debug_mode=args.debug)  # type: ignore[no-untyped-call]  # Create TUI instance with debug flag  # noqa: E501
+        tui.apisession = apisession  # Pass global API session so TUI can execute live API calls
         if args.debug:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-            logging.debug(f"TUI_DEBUG: [{timestamp}] TUI mode completed successfully - about to exit")
-        logging.info("TUI_MODE: TUI mode completed successfully")
-        sys.exit(0)
+            logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Log debug state
+        tui.run()  # type: ignore[no-untyped-call]  # Launch TUI event loop (blocks until user exits)
+    except KeyboardInterrupt:
+        if args.debug:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp for debug log
+            logging.debug(
+                "TUI_DEBUG: [%s] KeyboardInterrupt caught - user pressed Ctrl+C", timestamp
+            )  # Log interrupt with time  # noqa: E501
+        logging.info("TUI_MODE: User interrupted with Ctrl+C")  # Log clean user exit
+        print("\n[EXIT] TUI mode stopped by user")  # Inform user TUI was stopped
+    except Exception as error:
+        if args.debug:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp for debug log
+            logging.debug(
+                "TUI_DEBUG: [%s] Exception caught in TUI mode: %s: %s", timestamp, type(error).__name__, error
+            )  # Log error  # noqa: E501
+        logging.error("TUI_MODE: Fatal error - %s", error, exc_info=True)  # Log full traceback to file
+        print(f"\n[ERROR] TUI mode crashed: {error}")  # Inform user of crash
+        sys.exit(1)  # Exit with error code after TUI crash
+    if args.debug:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp for debug log
+        logging.debug(
+            "TUI_DEBUG: [%s] TUI mode completed successfully - about to exit", timestamp
+        )  # Log successful completion  # noqa: E501
+    logging.info("TUI_MODE: TUI mode completed successfully")  # Log clean exit
 
-    # Handle Web Portal mode
-    if getattr(args, "web_portal", False):
-        logging.info("WEB_PORTAL: Starting web portal mode")
-        print(">> Web Portal mode activated")
-        _launch_web_portal(args)  # type: ignore[no-untyped-call]
-        sys.exit(0)
 
+def _run_cli_mode(args: argparse.Namespace) -> None:  # noqa: C901
+    """Resolve org/site/device IDs from CLI args, dispatch to the target menu function, and exit."""
+    global org_id  # Modify module-level org_id used by all menu functions
+    logging.info("CLI arguments detected, running in non-interactive mode.")  # Log before CLI dispatch
     logging.debug(
-        f"Parsed CLI arguments: org={args.org}, menu={args.menu}, site={args.site}, device={args.device}, port={args.port}, debug={args.debug}, delay={args.delay}, fast={args.fast}, skip_deps={args.skip_deps}, output_format={args.output_format}, test={args.test}, address_check={args.address_check}, tui={args.tui}"  # noqa: E501
+        "Parsed CLI arguments: org=%s, menu=%s, site=%s, device=%s, port=%s, debug=%s, delay=%s, fast=%s, skip_deps=%s, output_format=%s, test=%s, address_check=%s, tui=%s",  # noqa: E501
+        args.org,
+        args.menu,
+        args.site,
+        args.device,
+        args.port,
+        args.debug,
+        args.delay,
+        args.fast,
+        args.skip_deps,
+        args.output_format,
+        args.test,
+        args.address_check,
+        args.tui,
     )
-
-    global org_id
-    # Check if meaningful CLI arguments are provided (not just script name or flags-only)
-    meaningful_cli_args = args.menu or args.org or args.site or args.device or args.port or args.test
-    if meaningful_cli_args:
-        logging.info("CLI arguments detected, running in non-interactive mode.")
-        if args.org:
-            org_id = args.org
-            logging.info(f"Using org_id from CLI argument: {org_id}")
+    if args.org:  # Use org ID directly if provided on CLI
+        org_id = args.org  # Set module-level org_id from --org flag
+        logging.info("Using org_id from CLI argument: %s", org_id)  # Log CLI org ID
+    else:
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org ID from cache or interactive prompt
+    site_id = None  # Default to no site filter unless --site provided
+    if args.site:  # Resolve site name to site_id via API lookup
+        logging.info(
+            "Resolving site name '%s' to site_id using unified pagination limit %d...",
+            args.site,
+            DEFAULT_API_PAGE_LIMIT,
+        )  # Log before site resolution
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all org sites from Mist API
+        site_lookup = {
+            site.get("name"): site.get("id") for site in sites if site.get("name") and site.get("id")
+        }  # Build name->id map  # noqa: E501
+        site_id = site_lookup.get(args.site)  # Look up site ID by human-readable name
+        if not site_id:  # Site name not found in org -- abort with error
+            logging.error("! Site name '%s' not found.", args.site)  # Log resolution failure
+            print(f"! Site name '{args.site}' not found.")  # Inform user of bad site name
+            sys.exit(1)  # Exit -- cannot proceed with unknown site
         else:
-            org_id = ConfigUtils.get_cached_or_prompted_org_id()
-
-        site_id = None
-        if args.site:
+            logging.info("Resolved site name '%s' to site_id '%s'.", args.site, site_id)  # Log resolution success
+    device_id = None  # Default to no device filter unless --device provided
+    if args.device and site_id:  # Resolve device name to device_id (requires site context)
+        logging.info(
+            "Resolving device name '%s' at site_id '%s'...", args.device, site_id
+        )  # Log before device resolution  # noqa: E501
+        response = mistapi.api.v1.sites.devices.listSiteDevices(
+            apisession, site_id, type="all"
+        )  # Fetch all devices at site  # noqa: E501
+        devices = mistapi.get_all(response=response, mist_session=apisession)  # Page through all results
+        device_lookup = {dev["name"]: dev["id"] for dev in devices}  # Build name->id map from device list
+        device_id = device_lookup.get(args.device)  # Look up device ID by human-readable name
+        if not device_id:  # Device name not found at site -- abort with error
+            logging.error(
+                "! Device name '%s' not found at site '%s'.", args.device, args.site
+            )  # Log resolution failure  # noqa: E501
+            print(f"! Device name '{args.device}' not found at site '{args.site}'.")  # Inform user of bad device name
+            sys.exit(1)  # Exit -- cannot proceed with unknown device
+        else:
             logging.info(
-                f"Resolving site name '{args.site}' to site_id using unified pagination limit {DEFAULT_API_PAGE_LIMIT}..."  # noqa: E501
-            )
-            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-            site_lookup = {site.get("name"): site.get("id") for site in sites if site.get("name") and site.get("id")}
-            site_id = site_lookup.get(args.site)
-            if not site_id:
-                logging.error(f"! Site name '{args.site}' not found.")
-                print(f"! Site name '{args.site}' not found.")
-                sys.exit(1)
-            else:
-                logging.info(f"Resolved site name '{args.site}' to site_id '{site_id}'.")
+                "Resolved device name '%s' to device_id '%s'.", args.device, device_id
+            )  # Log resolution success  # noqa: E501
+    if args.menu in menu_actions:  # Dispatch to the requested menu function if it exists
+        func, _ = menu_actions[args.menu]  # Extract callable from menu_actions dispatch table
+        logging.info("Executing menu action '%s'.", args.menu)  # Log before function dispatch
+        func_args = {
+            "site_id": site_id,  # Pass resolved site ID (or None if not provided)
+            "device_id": device_id,  # Pass resolved device ID (or None if not provided)
+            "port": args.port,  # Pass port ID directly from CLI
+            "org_id": org_id,  # Pass resolved organization ID
+            "debug": args.debug,  # Pass debug mode flag to enable verbose logging
+            "delay": args.delay,  # Pass custom delay override (or None for dynamic)
+            "fast": args.fast,  # Pass fast mode flag to enable concurrency
+            "dry_run": args.dry_run,  # Pass dry-run flag to skip destructive actions
+            "address_check": args.address_check,  # Pass address validation toggle
+            "skip_ssl_verify": args.skip_ssl_verify,  # Pass SSL verification bypass flag
+        }
+        sig = inspect.signature(func)  # type: ignore[arg-type]  # Introspect function signature to accept only valid params  # noqa: E501
+        accepted_args = {
+            k: v for k, v in func_args.items() if k in sig.parameters and v is not None
+        }  # Filter to accepted params  # noqa: E501
+        func(**accepted_args)  # type: ignore[operator, no-untyped-call]  # Call menu function with resolved and filtered args  # noqa: E501
+    else:
+        logging.error("! Invalid menu option: %s", args.menu)  # Log invalid menu selection
+        print(f"! Invalid menu option: {args.menu}")  # Inform user of bad menu number
+        sys.exit(1)  # Exit with error code on invalid menu option
+    logging.info("CLI execution complete. Exiting.")  # Log successful CLI completion
+    logging.debug("EXIT: _run_cli_mode - CLI success")  # Log exit point
+    sys.exit(0)  # Clean exit after successful CLI execution
 
-        device_id = None
-        if args.device and site_id:
-            logging.info(f"Resolving device name '{args.device}' at site_id '{site_id}'...")
-            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
-            devices = mistapi.get_all(response=response, mist_session=apisession)
-            device_lookup = {dev["name"]: dev["id"] for dev in devices}
-            device_id = device_lookup.get(args.device)
-            if not device_id:
-                logging.error(f"! Device name '{args.device}' not found at site '{args.site}'.")
-                print(f"! Device name '{args.device}' not found at site '{args.site}'.")
-                sys.exit(1)
-            else:
-                logging.info(f"Resolved device name '{args.device}' to device_id '{device_id}'.")
 
-        if args.menu in menu_actions:
-            func, _ = menu_actions[args.menu]
-            logging.info(f"Executing menu action '{args.menu}'.")
-            func_args = {
-                "site_id": site_id,
-                "device_id": device_id,
-                "port": args.port,
-                "org_id": org_id,
-                "debug": args.debug,
-                "delay": args.delay,
-                "fast": args.fast,
-                "dry_run": args.dry_run,
-                "address_check": args.address_check,
-                "skip_ssl_verify": args.skip_ssl_verify,
-            }
-            sig = inspect.signature(func)  # type: ignore[arg-type]  # inspect.signature accepts any callable
-            accepted_args = {k: v for k, v in func_args.items() if k in sig.parameters and v is not None}
-            func(**accepted_args)  # type: ignore[operator, no-untyped-call]
-        else:
-            logging.error(f"! Invalid menu option: {args.menu}")
-            print(f"! Invalid menu option: {args.menu}")
-            sys.exit(1)
-
-        logging.info("CLI execution complete. Exiting.")
-        logging.debug("EXIT: main() - CLI success")
-        sys.exit(0)
-
-    # --- Interactive Menu Fallback ---
-    logging.info("No CLI arguments detected, running in interactive menu mode.")
-
-    # Initialize org_id for interactive mode
-    org_id = ConfigUtils.get_cached_or_prompted_org_id()
-    logging.info(f"Organization ID initialized for interactive mode: {org_id}")
-
-    # Check if running in container for different behavior
-    container_mode = EnvironmentUtils.is_running_in_container()
-    if container_mode:
-        logging.info("Container mode detected - enabling continuous menu loop")
-        print("[CONTAINER MODE] MistHelper will return to menu after each operation")
-        print("                 Use option 0 to exit the container")
-
-    # Container mode: continuous menu loop, Direct mode: single execution
-    while True:
-        print("\nAvailable Options:")
-        # Sort menu options numerically for proper presentation order
-        sorted_menu_keys = sorted(menu_actions.keys(), key=lambda x: float(x.replace("a", ".1")))
+def _run_interactive_mode(args: argparse.Namespace) -> None:  # noqa: C901, PLR0912
+    """Present the interactive menu loop, dispatching to functions until user exits."""
+    global org_id  # Modify module-level org_id for all menu functions
+    logging.info("No CLI arguments detected, running in interactive menu mode.")  # Log before interactive start
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org ID from cache or prompt
+    logging.info("Organization ID initialized for interactive mode: %s", org_id)  # Log org ID
+    container_mode = EnvironmentUtils.is_running_in_container()  # Check if running inside Podman/Docker container
+    if container_mode:  # Container mode: show banner, loop after each operation
+        logging.info("Container mode detected - enabling continuous menu loop")  # Log container detection
+        print(
+            "[CONTAINER MODE] MistHelper will return to menu after each operation"
+        )  # Inform user of container behavior  # noqa: E501
+        print("                 Use option 0 to exit the container")  # Show exit instruction
+    while True:  # Main menu loop -- runs until user selects exit or input stream closes
+        print("\nAvailable Options:")  # Print menu header before listing options
+        sorted_menu_keys = sorted(
+            menu_actions.keys(), key=lambda x: float(x.replace("a", ".1"))
+        )  # Sort numerically (not lexically)  # noqa: E501
         for key in sorted_menu_keys:
-            func, description = menu_actions[key]
-            print(f"{key}: {description}")
-
+            func, description = menu_actions[key]  # Unpack function and description from dispatch table
+            print(f"{key}: {description}")  # Print each menu option as key: description
         iwant = InputUtils.safe_input(
             "\nEnter your selection number now: ",
-            default_value="__EXIT__",
-            context="main_menu_selection",
-        ).strip()
-        if iwant == "__EXIT__":
-            # Handle EOF condition (Ctrl+D, broken pipe, SSH disconnection)
-            print("\n[EOF] Input stream closed. Exiting gracefully...")
-            logging.info("EOF encountered on input - user disconnected or input stream closed")
+            default_value="__EXIT__",  # EOF returns __EXIT__ sentinel to trigger clean shutdown
+            context="main_menu_selection",  # Context label for EOF logging
+        ).strip()  # Strip whitespace from user input
+        if iwant == "__EXIT__":  # __EXIT__ sentinel signals EOF (Ctrl+D, SSH disconnect, broken pipe)
+            print("\n[EOF] Input stream closed. Exiting gracefully...")  # Inform user of EOF
+            logging.info("EOF encountered on input - user disconnected or input stream closed")  # Log EOF event
             if container_mode:
-                print("[CONTAINER MODE] SSH session ended. Terminating MistHelper.")
-            break
-
-        # Graceful handling of empty input: simply redisplay menu without logging an error
-        if iwant == "":
-            if container_mode:
-                print("[CONTAINER MODE] No selection entered. Redisplaying menu...")
-                print("=" * 60)
-                continue
+                print("[CONTAINER MODE] SSH session ended. Terminating MistHelper.")  # Container-specific EOF message
+            break  # Exit the while loop cleanly
+        if iwant == "":  # Empty input: redisplay menu without logging an error
+            if container_mode:  # Container mode shows prompt to clarify nothing happened
+                print("[CONTAINER MODE] No selection entered. Redisplaying menu...")  # Container empty input message
+                print("=" * 60)  # Visual separator before menu redisplay
+                continue  # Loop back to show menu again
             else:
-                # In direct (non-container) interactive mode, just prompt again for clarity
-                print("No selection entered. Please enter a menu number.")
-                continue
-        selected = menu_actions.get(iwant)
-
-        if selected:
-            func, _ = selected
-            logging.info(f"User selected menu option '{iwant}'. Executing associated function.")
-
+                print("No selection entered. Please enter a menu number.")  # Direct mode empty input message
+                continue  # Loop back to prompt again
+        selected = menu_actions.get(iwant)  # Look up user selection in dispatch table
+        if selected:  # Valid menu option found
+            func, _ = selected  # Extract callable from menu_actions entry
+            logging.info(
+                "User selected menu option '%s'. Executing associated function.", iwant
+            )  # Log selection before dispatch  # noqa: E501
             try:
-                # Special handling for exit option
-                if iwant == "0":
-                    logging.info("Exit option selected by user.")
-                    logging.debug("EXIT: main() - user requested exit")
-                    sys.exit(0)
-
-                # Menu options that should return to menu even in direct mode
-                # (session management operations that change context)
-                session_management_options = {"115"}  # Switch to interactive login
-
-                func()  # type: ignore[operator, no-untyped-call]  # func is a callable from menu_actions
-                logging.info(f"Menu option '{iwant}' execution complete.")
-
-                # In container mode, return to menu. In direct mode, exit (unless session management)
-                if not container_mode:
-                    if iwant in session_management_options:
-                        # Session management completed - return to menu to use new context
-                        logging.info(f"Session management option '{iwant}' completed - returning to menu")
-                        print("\n[SESSION] Context updated. Returning to menu...")
-                        print("=" * 60)
-                        continue
+                if iwant == "0":  # Option 0 is the explicit exit shortcut
+                    logging.info("Exit option selected by user.")  # Log user-requested exit
+                    logging.debug("EXIT: _run_interactive_mode - user requested exit")  # Log exit point
+                    sys.exit(0)  # Exit cleanly on user selection of option 0
+                session_management_options = {"115"}  # Operations that change auth context require menu return
+                func()  # type: ignore[operator, no-untyped-call]  # Execute the selected menu function
+                logging.info("Menu option '%s' execution complete.", iwant)  # Log completion after function returns
+                if not container_mode:  # Direct mode: exit after each operation (unless session management)
+                    if iwant in session_management_options:  # Session management needs menu return to use new context
+                        logging.info(
+                            "Session management option '%s' completed - returning to menu", iwant
+                        )  # Log session update  # noqa: E501
+                        print("\n[SESSION] Context updated. Returning to menu...")  # Inform user of context change
+                        print("=" * 60)  # Visual separator
+                        continue  # Return to menu with updated session context
                     else:
-                        logging.debug("EXIT: main() - interactive success (direct mode)")
-                        sys.exit(0)
-                else:
-                    logging.debug(f"Container mode: option '{iwant}' completed successfully, returning to menu")
-                    print(f"\n[CONTAINER MODE] Operation '{iwant}' completed. Returning to menu...")
-                    print("=" * 60)
-
-            except KeyboardInterrupt:
-                logging.info("Operation interrupted by user (Ctrl+C)")
-                if container_mode:
-                    logging.debug(f"Container mode: option '{iwant}' interrupted, returning to menu")
-                    print("\n[CONTAINER MODE] Operation interrupted. Returning to menu...")
-                    print("=" * 60)
-                    continue
-                else:
-                    logging.debug("EXIT: main() - user interrupt")
-                    sys.exit(130)
-
-            except Exception as e:
-                logging.error(f"Error executing menu option '{iwant}': {e}")
-                if container_mode:
-                    logging.debug(f"Container mode: option '{iwant}' failed with error, returning to menu")
-                    print(f"\n[CONTAINER MODE] Error in operation '{iwant}': {e}")
-                    print("Returning to menu...")
-                    print("=" * 60)
-                    continue
-                else:
-                    logging.debug("EXIT: main() - interactive error (direct mode)")
-                    sys.exit(1)
-        else:
-            # Invalid (non-empty) entry
-            logging.error(f"Invalid selection '{iwant}' entered by user.")
-            print("Invalid selection. Please try again.")
-            if not container_mode:
-                logging.debug("EXIT: main() - invalid selection (direct mode)")
-                sys.exit(1)
+                        logging.debug(
+                            "EXIT: _run_interactive_mode - interactive success (direct mode)"
+                        )  # Log exit point  # noqa: E501
+                        sys.exit(0)  # Exit after single operation in direct mode
+                else:  # Container mode: always return to menu after each operation
+                    logging.debug(
+                        "Container mode: option '%s' completed successfully, returning to menu", iwant
+                    )  # Log container loop  # noqa: E501
+                    print(f"\n[CONTAINER MODE] Operation '{iwant}' completed. Returning to menu...")  # Inform user
+                    print("=" * 60)  # Visual separator before menu redisplay
+            except KeyboardInterrupt:  # User pressed Ctrl+C during operation
+                logging.info("Operation interrupted by user (Ctrl+C)")  # Log user interrupt
+                if container_mode:  # Container mode: return to menu after interrupt
+                    logging.debug(
+                        "Container mode: option '%s' interrupted, returning to menu", iwant
+                    )  # Log container interrupt  # noqa: E501
+                    print("\n[CONTAINER MODE] Operation interrupted. Returning to menu...")  # Inform user
+                    print("=" * 60)  # Visual separator
+                    continue  # Return to menu
+                else:  # Direct mode: exit with SIGINT code
+                    logging.debug("EXIT: _run_interactive_mode - user interrupt")  # Log exit point
+                    sys.exit(130)  # Exit 130 is standard exit code for SIGINT (Ctrl+C)
+            except Exception as e:  # Unexpected error during menu function execution
+                logging.error("Error executing menu option '%s': %s", iwant, e)  # Log error with context
+                if container_mode:  # Container mode: show error but return to menu
+                    logging.debug(
+                        "Container mode: option '%s' failed with error, returning to menu", iwant
+                    )  # Log container error  # noqa: E501
+                    print(f"\n[CONTAINER MODE] Error in operation '{iwant}': {e}")  # Show error to user
+                    print("Returning to menu...")  # Inform user we are continuing
+                    print("=" * 60)  # Visual separator
+                    continue  # Return to menu despite error
+                else:  # Direct mode: exit with error code
+                    logging.debug("EXIT: _run_interactive_mode - interactive error (direct mode)")  # Log exit point
+                    sys.exit(1)  # Exit with error code on unexpected exception in direct mode
+        else:  # Invalid (non-empty) selection entered
+            logging.error("Invalid selection '%s' entered by user.", iwant)  # Log invalid selection
+            print("Invalid selection. Please try again.")  # Inform user of invalid input
+            if not container_mode:  # Direct mode: exit on invalid selection
+                logging.debug("EXIT: _run_interactive_mode - invalid selection (direct mode)")  # Log exit point
+                sys.exit(1)  # Exit with error code on invalid selection in direct mode
             else:
-                logging.debug(f"Container mode: invalid selection '{iwant}', redisplaying menu")
+                logging.debug(
+                    "Container mode: invalid selection '%s', redisplaying menu", iwant
+                )  # Log container invalid  # noqa: E501
             # In container mode, continue loop for another attempt
+
+
+def main():  # type: ignore[no-untyped-def]
+    """Main entry point for MistHelper CLI application."""
+    logging.debug("ENTRY: main()")  # Log application entry point
+    _initialize_deferred_imports()  # Initialize deferred module imports if not already completed
+    InputUtils.ensure_tqdm_available()  # Ensure tqdm is accessible via InputUtils wrapper before use
+    parser = _build_argument_parser()  # Build argparse parser with all supported CLI flags
+    args = parser.parse_args()  # Parse command line arguments into typed Namespace object
+    _setup_runtime_flags(args)  # Apply --standalone env, register globals()["args"], set FAST_MODE_ENABLED
+    _initialize_dependencies(args)  # Initialize deferred dependencies (respects --skip-deps flag)
+    _establish_mist_session(args)  # Authenticate with Mist API (--login path or API token path)
+    _configure_runtime_options(args)  # Set OUTPUT_FORMAT, init PROGRESS_EMITTER, apply --debug level
+    if args.test:  # Systematic test mode: run all safe menu options and exit with result code
+        logging.info("SYSTEMATIC_TEST: Starting systematic test mode")  # Log before test dispatch
+        sys.exit(0 if run_systematic_test() else 1)  # type: ignore[no-untyped-call]  # Run test suite; exit 0 on pass, 1 on fail  # noqa: E501
+    if args.testinteractive:  # Interactive test mode: test read-only menus with site/device selection
+        logging.info("INTERACTIVE_TEST: Starting interactive test mode")  # Log before interactive test dispatch
+        sys.exit(0 if run_interactive_test() else 1)  # type: ignore[no-untyped-call]  # Run interactive tests; exit 0 on pass, 1 on fail  # noqa: E501
+    if args.tui:  # TUI mode: launch Rich Terminal User Interface (exits when user closes TUI)
+        _run_tui_mode(args)  # Launch TUI event loop (handles its own exception handling and exit)
+        sys.exit(0)  # Exit cleanly after TUI completes
+    if getattr(args, "web_portal", False):  # Web portal mode: launch Gunicorn server on port 8055
+        logging.info("WEB_PORTAL: Starting web portal mode")  # Log before web portal launch
+        _launch_web_portal(args)  # type: ignore[no-untyped-call]  # Start Gunicorn (blocks until shutdown)
+        sys.exit(0)  # Exit cleanly after web portal shuts down
+    meaningful_cli_args = (
+        args.menu or args.org or args.site or args.device or args.port or args.test
+    )  # Detect non-interactive invocation  # noqa: E501
+    if meaningful_cli_args:  # CLI dispatch mode: resolve IDs, call menu function, and exit
+        _run_cli_mode(args)  # Resolve org/site/device, dispatch to menu function, exit 0 on success
+    else:  # Interactive mode: present menu loop until user exits or EOF
+        _run_interactive_mode(args)  # Launch interactive menu (container=continuous, direct=exit-after-one)
 
 
 if __name__ == "__main__":
