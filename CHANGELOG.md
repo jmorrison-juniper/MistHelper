@@ -7,6 +7,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+## [26.05.20.16.57]
+
+### Refactored
+
+- `initialize_mist_session` decomposed into 14 focused private helper functions: `_load_mistapi_module`, `_parse_api_tokens`, `_check_token_rate_limit`, `_introspect_apisession_class`, `_build_session_attempts`, `_log_session_attempt_traceback`, `_execute_session_attempts`, `_filter_available_tokens`, `_create_session_with_available_tokens`, `_retry_with_filtered_tokens`, `_try_session_fallback`, `_ensure_mist_get_method`, `_log_session_auth_status`, `_validate_initialized_session`. Function reduced from 248 lines / CC 67 (Grade F) to 37 lines / CC 8 (Grade B). Behavior and global state management unchanged. Closes #351
+
 ## [26.05.20.16.29]
 
 ### Changed
