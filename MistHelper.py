@@ -3000,243 +3000,381 @@ def _select_org_from_session():  # type: ignore[no-untyped-def]
         logging.error(f"Failed to select org from session: {e}")  # nosec B608
 
 
-def initialize_mist_session():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-    """Initialize the Mist API session with authentication.
+def _load_mistapi_module(current_mistapi: Any) -> Any:
+    """Ensure mistapi is imported, falling back to direct import if the global is not yet set.
 
-    Strategy:
-      1. Try APISession with env_file (legacy behavior).
-      2. If that fails, normalize token(s) from MIST_APITOKEN / MIST_API_TOKEN
-         and try APISession with each via 'apitoken='.
-      3. Fallback to mistapi.Session() if available.
-      4. If all fail, return False (do NOT create placeholder that lacks required methods).
+    Args:
+        current_mistapi: The current value of the module-level mistapi global (may be None).
 
-    SECURITY: Tokens are only logged in redacted preview at DEBUG level.
+    Returns:
+        The mistapi module object, or None if import is unavailable.
     """
-    global apisession, mistapi
-    if apisession:
-        return True
+    if current_mistapi is not None:  # Already loaded -- return immediately without re-importing
+        return current_mistapi  # Pass through existing module reference
+    try:
+        import mistapi as mistapi_fallback  # Attempt direct import as fallback when global not yet set
 
-    # Ensure mistapi is available - fallback to direct import if global not set
-    if mistapi is None:
-        try:
-            import mistapi as mistapi_fallback
+        logging.debug("Loaded mistapi via fallback import in initialize_mist_session")  # Confirm load path
+        return mistapi_fallback  # Return newly imported module
+    except ImportError as import_err:
+        logging.error("Cannot import mistapi: %s", import_err)  # Log failure cause for operator visibility
+        return None  # Signal that mistapi is unavailable -- caller must abort
 
-            mistapi = mistapi_fallback
-            logging.debug("Loaded mistapi via fallback import in initialize_mist_session")
-        except ImportError as import_err:
-            logging.error(f"Cannot import mistapi: {import_err}")
-            return False
 
-    host = os.getenv("MIST_HOST", "api.mist.com")
-    raw_token_env = os.getenv("MIST_APITOKEN") or os.getenv("MIST_API_TOKEN")
-    if raw_token_env:
-        tokens = [t.strip() for t in re.split(r"[\n,]+", raw_token_env) if t.strip()]
+def _parse_api_tokens() -> tuple[str, list[str]]:
+    """Read API host and tokens from environment variables.
+
+    Reads MIST_HOST (default: api.mist.com) and MIST_APITOKEN or MIST_API_TOKEN.
+    Multiple tokens may be newline- or comma-separated in the env var value.
+
+    Returns:
+        A tuple of (host, tokens) where tokens is a list of stripped token strings.
+    """
+    host = os.getenv("MIST_HOST", "api.mist.com")  # Read host from env or use Mist cloud default
+    raw_token_env = os.getenv("MIST_APITOKEN") or os.getenv("MIST_API_TOKEN")  # Accept both env var names
+    if raw_token_env:  # At least one token env var is set -- parse and split
+        tokens = [t.strip() for t in re.split(r"[\n,]+", raw_token_env) if t.strip()]  # Split on newlines and commas
     else:
-        tokens = []
-    if tokens:
+        tokens = []  # No tokens found in environment -- will rely on env_file or Session fallback
+    if tokens:  # Log redacted preview so operators can confirm tokens are present without exposing secrets
         redacted_preview = ",".join([(t[:4] + "..." + t[-4:]) if len(t) >= 8 else "***" for t in tokens])
-        logging.debug(f"Token(s) discovered for initialization (redacted): {redacted_preview}")
+        logging.debug("Token(s) discovered for initialization (redacted): %s", redacted_preview)
     else:
         logging.debug("No tokens discovered in environment; will rely on env_file or mistapi.Session fallback")
+    return host, tokens  # Return host string and parsed token list to caller
 
-    # Helper function to test if a token is currently rate-limited
-    def is_token_rate_limited(token: str, test_host: str) -> bool:
-        """Test if a token is currently rate-limited by calling /api/v1/self"""
+
+def _check_token_rate_limit(token: str, test_host: str) -> bool:
+    """Test whether a single API token is currently rate-limited by the Mist API.
+
+    Sends a lightweight GET /api/v1/self request with the token.
+    HTTP 429 means rate-limited. HTTP 200 means available.
+    Any other status or connection exception is treated as unavailable (conservative).
+
+    Args:
+        token: The API token to probe.
+        test_host: The Mist API hostname (e.g. api.mist.com).
+
+    Returns:
+        True if the token appears rate-limited or unreachable, False if usable.
+    """
+    try:
+        import requests  # Import here -- only needed for this edge-case rate-limit probe path
+
+        url = f"https://{test_host}/api/v1/self"  # Lightweight endpoint requiring auth for rate-limit probe
+        headers = {"Authorization": f"Token {token}"}  # Standard Mist API bearer token header
+        response = requests.get(url, headers=headers, timeout=5)  # Short timeout -- probe, not full call
+        if response.status_code == 429:  # HTTP 429 = Too Many Requests = rate-limited
+            logging.debug("Token %s...%s is rate-limited (HTTP 429)", token[:4], token[-4:])
+            return True  # Confirmed rate-limited -- skip this token
+        elif response.status_code == 200:  # HTTP 200 = OK = token is functional
+            logging.debug("Token %s...%s is available (HTTP 200)", token[:4], token[-4:])
+            return False  # Token is usable -- include in available list
+        else:  # Any unexpected status treated as unavailable (defensive)
+            logging.warning("Token %s...%s returned unexpected status %d", token[:4], token[-4:], response.status_code)
+            return True  # Treat unexpected response as unavailable for safety
+    except Exception as test_err:
+        logging.warning("Failed to test token %s...%s: %s", token[:4], token[-4:], test_err)
+        return True  # Treat connection exception as unavailable to avoid broken tokens
+
+
+def _introspect_apisession_class(mistapi_module: Any) -> tuple[Any, list[str]]:
+    """Retrieve the APISession class and its constructor parameter names from mistapi.
+
+    Introspecting the signature avoids hard-coding parameter names that may change
+    across mistapi versions. Falls back to empty param list if introspection fails.
+
+    Args:
+        mistapi_module: The imported mistapi module.
+
+    Returns:
+        A tuple of (apisession_cls, sig_params). apisession_cls is None if absent.
+        sig_params is a list of accepted constructor parameter name strings.
+    """
+    apisession_cls = getattr(mistapi_module, "APISession", None)  # Get APISession class (None if not present)
+    if not apisession_cls:  # APISession class is absent in this mistapi version
+        logging.debug("mistapi.APISession not found -- will attempt mistapi.Session fallback only")
+        return None, []  # Return None class and empty param list to trigger fallback path
+    try:
+        sig_params = list(inspect.signature(apisession_cls).parameters.keys())  # Inspect constructor for param names
+        logging.debug("mistapi.APISession accepted parameters: %s", sig_params)
+        return apisession_cls, sig_params  # Return class and parameter name list
+    except Exception:  # Introspection failed (unusual but non-fatal -- proceed with empty params)
+        logging.debug("Failed to introspect APISession signature -- proceeding with empty param list")
+        return apisession_cls, []  # Return class but no param info -- attempts list will be minimal
+
+
+def _build_session_attempts(
+    apisession_cls: Any,
+    sig_params: list[str],
+    tokens: list[str],
+    host: str,
+) -> list[dict[str, str]]:
+    """Build a prioritized list of constructor kwargs dicts to attempt for APISession.
+
+    Priority order:
+      1. Direct token parameter (apitoken / api_token / token) -- preferred fastest path
+      2. env_file='.env' -- only when no env tokens exist to avoid duplicate token reads
+      3. host only (unauthenticated) -- last resort for logging/recording
+
+    Args:
+        apisession_cls: The APISession class (may be None if absent from mistapi).
+        sig_params: List of accepted constructor parameter names from introspection.
+        tokens: API tokens parsed from environment variables.
+        host: Mist API hostname string.
+
+    Returns:
+        Ordered list of kwargs dicts. Empty list if no class is available.
+    """
+    attempts: list[dict[str, str]] = []  # Start empty -- add attempts in priority order
+    if not apisession_cls:  # Cannot build attempts without an APISession class to call
+        return attempts  # Return empty list -- caller will skip to Session fallback
+    token_param_names = [n for n in ["apitoken", "api_token", "token"] if n in sig_params]  # Find accepted token params
+    if tokens and token_param_names:  # Have environment tokens AND a supported token parameter name
+        all_tokens_str = ",".join(tokens)  # Join as CSV -- mistapi rotates through them on HTTP 429
+        for pname in token_param_names:  # Try each supported token parameter name in priority order
+            base_kwargs: dict[str, str] = {pname: all_tokens_str}  # Build kwargs with this token param name
+            if "host" in sig_params:  # Include host if constructor accepts it
+                base_kwargs["host"] = host  # Set target API hostname
+            attempts.append(base_kwargs)  # Add to ordered attempt list
+    if "env_file" in sig_params and not tokens:  # env_file only when no env tokens (avoids double-read)
+        attempts.append({"env_file": ".env"})  # Read credentials from .env file
+    if "host" in sig_params and not tokens:  # Host-only as last resort (unauthenticated probe)
+        attempts.append({"host": host})  # Minimal connection -- API calls will fail without token
+    return attempts  # Return prioritized list for _execute_session_attempts to iterate
+
+
+def _log_session_attempt_traceback(exc: Exception) -> None:
+    """Log the full traceback of a failed session initialization attempt at INFO level.
+
+    Logs line-by-line so each line is a separate log entry, which works better
+    with log aggregation tools. Non-fatal -- failure to log traceback is warned but ignored.
+
+    Args:
+        exc: The exception whose traceback to capture and log.
+    """
+    try:
+        import traceback  # Import for traceback formatting -- deferred to avoid top-level overhead
+
+        tb_details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))  # Format full traceback
+        for line in tb_details.rstrip().splitlines():  # Split into individual lines for log aggregator
+            logging.info("  TRACE: %s", line)  # Prefix with TRACE so operators can filter
+    except Exception as trace_err:
+        logging.warning("Failed to log traceback: %s", trace_err)  # Non-fatal -- continue without trace
+
+
+def _execute_session_attempts(
+    apisession_cls: Any,
+    attempts: list[dict[str, str]],
+) -> tuple[Any, Any, bool, list[dict]]:
+    """Try each constructor kwargs dict in order until one creates a valid session.
+
+    Logs full traceback for each failure to aid operator debugging. Detects the
+    NoneType rate-limit signature so the caller can trigger per-token retry logic.
+
+    Args:
+        apisession_cls: The APISession class to instantiate with each kwargs dict.
+        attempts: Ordered list of kwargs dicts built by _build_session_attempts.
+
+    Returns:
+        Tuple of (session, successful_method, rate_limit_detected, tried_variants).
+        session is None if all attempts failed. successful_method records winning kwargs.
+    """
+    tried_variants: list[dict] = []  # Track all attempted kwargs for error reporting on total failure
+    successful_method: Any = None  # Will hold the kwargs dict that succeeded
+    rate_limit_detected = False  # Set True if NoneType rate-limit error signature is seen
+    session: Any = None  # Will hold the created APISession object on success
+    for i, kwargs in enumerate(attempts, start=1):  # Try each kwargs dict in priority order
+        tried_variants.append(kwargs)  # Record attempt for error log before trying (in case of exception)
         try:
-            import requests
-
-            url = f"https://{test_host}/api/v1/self"
-            headers = {"Authorization": f"Token {token}"}
-            response = requests.get(url, headers=headers, timeout=5)
-            if response.status_code == 429:
-                logging.debug(f"Token {token[:4]}...{token[-4:]} is rate-limited (HTTP 429)")
-                return True
-            elif response.status_code == 200:
-                logging.debug(f"Token {token[:4]}...{token[-4:]} is available (HTTP 200)")
-                return False
-            else:
-                logging.warning(f"Token {token[:4]}...{token[-4:]} returned unexpected status {response.status_code}")
-                return True  # Treat as unavailable
-        except Exception as test_err:
-            logging.warning(f"Failed to test token {token[:4]}...{token[-4:]}: {test_err}")
-            return True  # Treat as unavailable on error
-
-    # Dynamically interrogate APISession signature to avoid wrong parameter names
-    apisession_cls = getattr(mistapi, "APISession", None) if mistapi else None
-    tried_variants = []
-    if apisession_cls:
-        try:
-            sig_params = list(inspect.signature(apisession_cls).parameters.keys())
-            logging.debug(f"mistapi.APISession accepted parameters: {sig_params}")
-        except Exception:
-            sig_params = []
-    else:
-        sig_params = []
-
-    # Candidate constructors to attempt (ordered)
-    attempts = []
-    if apisession_cls:
-        # 1. Direct tokens with potential parameter names - try this FIRST
-        # IMPORTANT: mistapi expects a comma-separated string of ALL tokens, not individual tokens
-        # This allows mistapi to rotate through tokens when hitting rate limits (HTTP 429)
-        token_param_names = [n for n in ["apitoken", "api_token", "token"] if n in sig_params]
-        if tokens and token_param_names:
-            # Join all tokens into a comma-separated string as mistapi expects
-            all_tokens_str = ",".join(tokens)
-            for pname in token_param_names:
-                base_kwargs = {pname: all_tokens_str}
-                if "host" in sig_params:
-                    base_kwargs["host"] = host
-                attempts.append(base_kwargs)
-        # 2. env_file only if supported AND we don't already have tokens from environment
-        #    (env_file will read the same tokens again, causing duplicate validation failures)
-        if "env_file" in sig_params and not tokens:
-            attempts.append({"env_file": ".env"})
-        # 3. Host only (unauthenticated) if allowed (rare but safe to record)
-        if "host" in sig_params and not tokens:
-            attempts.append({"host": host})
-
-    # Execute attempts
-    successful_method = None
-    rate_limit_detected = False
-    for i, kwargs in enumerate(attempts, start=1):
-        try:
-            tried_variants.append(kwargs)
-            if apisession_cls is None:
+            if apisession_cls is None:  # Guard: class must be present if attempts list was built
                 raise AssertionError("apisession_cls should be set if attempts list is populated")
-            apisession = apisession_cls(**kwargs)
-            successful_method = kwargs
-            logging.info(f"Mist API session initialized with mistapi.APISession using kwargs={list(kwargs.keys())}")
-            break
+            session = apisession_cls(**kwargs)  # Attempt APISession constructor with these kwargs
+            successful_method = kwargs  # Record which kwargs succeeded for downstream auth validation
+            logging.info("Mist API session initialized with mistapi.APISession using kwargs=%s", list(kwargs.keys()))
+            break  # Success -- stop trying remaining attempts
         except Exception as e:
-            error_msg = str(e)
-            logging.warning(f"APISession attempt {i}/{len(attempts)} failed kwargs={kwargs}: {e}")
-
-            # Detect rate limiting during token validation
-            if "'NoneType' object is not iterable" in error_msg:
-                rate_limit_detected = True
+            session = None  # Ensure session is cleared so next iteration starts fresh
+            error_msg = str(e)  # Convert exception to string for rate-limit signature check
+            logging.warning("APISession attempt %d/%d failed kwargs=%s: %s", i, len(attempts), kwargs, e)
+            if "'NoneType' object is not iterable" in error_msg:  # Heuristic for rate-limit during token validation
+                rate_limit_detected = True  # Signal caller to try per-token retry path
                 logging.warning("Detected possible rate limiting during token validation - tokens may be throttled")
+            _log_session_attempt_traceback(e)  # Log full traceback for detailed debugging
+    return session, successful_method, rate_limit_detected, tried_variants  # Return all state to orchestrator
 
-            # Always log traceback for API session failures to aid debugging
-            try:
-                import traceback
 
-                tb_details = "".join(traceback.format_exception(type(e), e, e.__traceback__))
-                for line in tb_details.rstrip().splitlines():
-                    logging.info(f"  TRACE: {line}")
-            except Exception as trace_err:
-                logging.warning(f"Failed to log traceback: {trace_err}")
-            apisession = None
+def _filter_available_tokens(tokens: list[str], host: str) -> list[str]:
+    """Probe each token individually and return only those not currently rate-limited.
 
-    # If rate-limited with multiple tokens, try each token individually until one works
-    if not apisession and rate_limit_detected and tokens and len(tokens) > 1:
-        logging.warning(
-            f"Multi-token initialization failed due to rate limiting - testing {len(tokens)} tokens individually"
-        )
+    Iterates through all tokens, calling _check_token_rate_limit for each.
+    Logs availability status per token so operators can see which are throttled.
 
-        # Pre-filter tokens to find those not currently rate-limited
-        available_tokens = []
-        for token_index, individual_token in enumerate(tokens, start=1):
-            if not is_token_rate_limited(individual_token, host):
-                available_tokens.append(individual_token)
-                logging.info(
-                    f"Token {token_index}/{len(tokens)} ({individual_token[:4]}...{individual_token[-4:]}) is available"
-                )
-            else:
-                logging.warning(
-                    f"Token {token_index}/{len(tokens)} ({individual_token[:4]}...{individual_token[-4:]}) is rate-limited - skipping"  # noqa: E501
-                )
+    Args:
+        tokens: Full list of tokens from environment to probe.
+        host: Mist API hostname to use for probing via /api/v1/self.
 
-        if not available_tokens:
-            logging.error(f"All {len(tokens)} tokens are currently rate-limited - cannot initialize API session")
-        else:
-            logging.info(f"Found {len(available_tokens)} available token(s) out of {len(tokens)} total")
+    Returns:
+        Subset of tokens that responded successfully and are not rate-limited.
+    """
+    available: list[str] = []  # Accumulate tokens that pass the rate-limit probe
+    for index, token in enumerate(tokens, start=1):  # Probe each token with its 1-based position
+        if not _check_token_rate_limit(token, host):  # Probe via /api/v1/self -- False means available
+            available.append(token)  # This token is usable -- add to available list
+            logging.info("Token %d/%d (%s...%s) is available", index, len(tokens), token[:4], token[-4:])
+        else:  # Token is rate-limited or unreachable -- skip it
+            logging.warning(
+                "Token %d/%d (%s...%s) is rate-limited - skipping", index, len(tokens), token[:4], token[-4:]
+            )
+    return available  # Return only the usable tokens
 
-            # Use all available tokens (comma-separated) for rotation capability
-            available_tokens_str = ",".join(available_tokens)
 
-            # CRITICAL: Temporarily clear MIST_APITOKEN from environment to prevent mistapi
-            # from reading all tokens (including rate-limited ones) during _load_env() call
-            original_mist_token = os.environ.get("MIST_APITOKEN")
-            try:
-                if "MIST_APITOKEN" in os.environ:
-                    del os.environ["MIST_APITOKEN"]
-                    logging.debug(
-                        "Temporarily cleared MIST_APITOKEN from environment for filtered token initialization"
-                    )
+def _create_session_with_available_tokens(
+    apisession_cls: Any,
+    sig_params: list[str],
+    available_tokens: list[str],
+    host: str,
+) -> tuple[Any, Any]:
+    """Create an APISession using only the pre-filtered available (non-rate-limited) tokens.
 
-                try:
-                    filtered_kwargs = {}
-                    if "apitoken" in sig_params:
-                        filtered_kwargs["apitoken"] = available_tokens_str
-                    if "host" in sig_params:
-                        filtered_kwargs["host"] = host
+    Temporarily clears MIST_APITOKEN from the environment to prevent mistapi from
+    re-reading rate-limited tokens during its internal _load_env() call.
 
-                    logging.info(f"Initializing with {len(available_tokens)} available token(s)")
-                    assert apisession_cls is not None, "apisession_cls should be set for retry logic"  # nosec B101
-                    apisession = apisession_cls(**filtered_kwargs)
-                    successful_method = filtered_kwargs
-                    logging.info(f"SUCCESS: API session initialized with {len(available_tokens)} available token(s)")
-                    tried_variants.append(filtered_kwargs)
-                except Exception as filtered_err:
-                    logging.error(f"Failed to initialize with filtered tokens: {filtered_err}")
-                    apisession = None
-            finally:
-                # Restore original MIST_APITOKEN to environment
-                if original_mist_token:
-                    os.environ["MIST_APITOKEN"] = original_mist_token
-                    logging.debug("Restored MIST_APITOKEN to environment")
+    Args:
+        apisession_cls: The APISession class to instantiate.
+        sig_params: Accepted constructor parameter names from introspection.
+        available_tokens: Pre-filtered list of usable tokens (not rate-limited).
+        host: Mist API hostname.
 
-    # Fallback to mistapi.Session if APISession failed
-    if not apisession and mistapi and hasattr(mistapi, "Session"):
-        try:
-            apisession = mistapi.Session()
-            successful_method = {"fallback": "mistapi.Session"}
-            logging.info("Mist API session initialized with mistapi.Session fallback")
-        except Exception as e:
-            logging.error(f"mistapi.Session fallback failed: {e}")
-            apisession = None
+    Returns:
+        Tuple of (session, successful_method), both None on failure.
+    """
+    available_tokens_str = ",".join(available_tokens)  # Join as CSV for mistapi token rotation
+    original_mist_token = os.environ.get("MIST_APITOKEN")  # Save original env value for cleanup in finally
+    try:
+        if "MIST_APITOKEN" in os.environ:  # Clear env var to block mistapi from re-reading stale tokens
+            del os.environ["MIST_APITOKEN"]  # Temporarily remove -- restored in finally block
+            logging.debug("Temporarily cleared MIST_APITOKEN from environment for filtered token initialization")
+        filtered_kwargs: dict[str, str] = {}  # Build kwargs using only available tokens
+        if "apitoken" in sig_params:  # Include token param only if constructor accepts it
+            filtered_kwargs["apitoken"] = available_tokens_str  # Pass comma-joined available tokens
+        if "host" in sig_params:  # Include host if constructor accepts it
+            filtered_kwargs["host"] = host  # Set target API hostname
+        logging.info("Initializing with %d available token(s)", len(available_tokens))
+        assert apisession_cls is not None, "apisession_cls should be set for retry logic"  # nosec B101
+        session = apisession_cls(**filtered_kwargs)  # Create session with filtered token set
+        logging.info("SUCCESS: API session initialized with %d available token(s)", len(available_tokens))
+        return session, filtered_kwargs  # Return session and the kwargs used for auth validation
+    except Exception as filtered_err:
+        logging.error("Failed to initialize with filtered tokens: %s", filtered_err)  # Log failure reason
+        return None, None  # Filtered token retry also failed
+    finally:
+        if original_mist_token:  # Restore original env var regardless of success or failure
+            os.environ["MIST_APITOKEN"] = original_mist_token  # Restore to prevent side effects
+            logging.debug("Restored MIST_APITOKEN to environment")
 
-    if not apisession:
-        logging.error("All Mist API session initialization attempts failed. Variants tried:")
-        for variant in tried_variants:
-            logging.error(f"  - {variant}")
-        return False
 
-    # Configure read timeout on the underlying requests session
-    _configure_session_timeout(apisession)
+def _retry_with_filtered_tokens(
+    apisession_cls: Any,
+    sig_params: list[str],
+    tokens: list[str],
+    host: str,
+) -> tuple[Any, Any]:
+    """Retry session creation using only non-rate-limited tokens after a multi-token failure.
 
-    # Validate that required request method exists (mist_get is used by code)
-    if not hasattr(apisession, "mist_get"):
-        # Some versions expose 'get' instead; we can wrap it for compatibility
-        if hasattr(apisession, "get") and callable(apisession.get):
+    Called when _execute_session_attempts detects the rate-limit error signature.
+    Probes each token individually via _filter_available_tokens, then creates a
+    session using only the available tokens via _create_session_with_available_tokens.
 
-            def _mist_get_wrapper(*args, **kwargs):  # type: ignore[no-untyped-def]  # pragma: no cover (simple adapter)
-                return apisession.get(*args, **kwargs)
+    Args:
+        apisession_cls: The APISession class.
+        sig_params: Accepted constructor parameter names.
+        tokens: Full list of tokens from environment.
+        host: Mist API hostname.
 
-            apisession.mist_get = _mist_get_wrapper
-            logging.info("Added mist_get wrapper around underlying get() method for compatibility")
-        else:
-            logging.error("Initialized session lacks 'mist_get' or 'get' methods required for API calls")
-            return False
+    Returns:
+        Tuple of (session, successful_method), both None on failure or insufficient tokens.
+    """
+    if not (apisession_cls and tokens and len(tokens) > 1):  # Guard: need class and multiple tokens to retry
+        return None, None  # Cannot retry without multiple tokens and a class
+    logging.warning("Multi-token init failed due to rate limiting - testing %d tokens individually", len(tokens))
+    available_tokens = _filter_available_tokens(tokens, host)  # Probe each token for rate-limit status
+    if not available_tokens:  # All tokens are throttled -- cannot recover
+        logging.error("All %d tokens are currently rate-limited - cannot initialize API session", len(tokens))
+        return None, None  # No usable tokens -- caller will try Session fallback
+    logging.info("Found %d available token(s) out of %d total", len(available_tokens), len(tokens))
+    return _create_session_with_available_tokens(apisession_cls, sig_params, available_tokens, host)  # Create session
 
-    # Enhanced token validation - only warn if no authentication method was used
-    token_attr = next((a for a in ("apitoken", "api_token", "token") if hasattr(apisession, a)), None)
-    has_readable_token = token_attr and getattr(apisession, token_attr)
-    used_env_file = successful_method and "env_file" in successful_method
-    used_direct_token = successful_method and any(
-        param in successful_method for param in ["apitoken", "api_token", "token"]
-    )
-    used_fallback_session = successful_method and "fallback" in successful_method
 
-    # Only warn if no authentication method appears to be configured
-    if not (has_readable_token or used_env_file or used_direct_token or used_fallback_session):
-        logging.warning(
-            "Session established but no authentication method detected; API calls may fail if authentication required"
-        )
-        logging.warning(
-            "To fix this: 1) Copy documentation/sample.env to .env, 2) Set MIST_APITOKEN to your Mist API token"
-        )
+def _try_session_fallback(mistapi_module: Any) -> tuple[Any, Any]:
+    """Attempt legacy session creation via mistapi.Session() as last resort.
+
+    mistapi.Session reads credentials from environment directly without explicit
+    parameter passing. Used when all APISession constructor variants have failed.
+
+    Args:
+        mistapi_module: The imported mistapi module.
+
+    Returns:
+        Tuple of (session, successful_method), both None if Session class absent or fails.
+    """
+    if not (mistapi_module and hasattr(mistapi_module, "Session")):  # Guard: Session class must exist
+        return None, None  # Session class absent -- cannot use this fallback
+    try:
+        session = mistapi_module.Session()  # Attempt legacy Session() with no explicit params
+        logging.info("Mist API session initialized with mistapi.Session fallback")
+        return session, {"fallback": "mistapi.Session"}  # Return session and method label for auth validation
+    except Exception as e:
+        logging.error("mistapi.Session fallback failed: %s", e)  # Log why the last resort failed
+        return None, None  # Fallback also failed -- caller will report total failure
+
+
+def _ensure_mist_get_method(session: Any) -> bool:
+    """Ensure the session exposes a mist_get method, wrapping get() for compatibility if needed.
+
+    Some mistapi versions expose get() instead of mist_get(). This function
+    attaches a mist_get wrapper around get() so all callers can use mist_get uniformly.
+
+    Args:
+        session: The initialized APISession or Session object to check.
+
+    Returns:
+        True if mist_get is present or successfully wrapped, False if neither method exists.
+    """
+    if hasattr(session, "mist_get"):  # Preferred method already present -- nothing to do
+        return True  # Session is compatible as-is
+    if hasattr(session, "get") and callable(session.get):  # Alternate method found -- wrap it
+
+        def _mist_get_wrapper(*args, **kwargs):  # type: ignore[no-untyped-def]  # pragma: no cover (simple adapter)
+            return session.get(*args, **kwargs)  # Delegate to get() with all args forwarded
+
+        session.mist_get = _mist_get_wrapper  # Attach wrapper so callers using mist_get work transparently
+        logging.info("Added mist_get wrapper around underlying get() method for compatibility")
+        return True  # Session is now compatible via wrapper
+    logging.error("Initialized session lacks 'mist_get' or 'get' methods required for API calls")
+    return False  # Session is unusable -- hard failure
+
+
+def _log_session_auth_status(session: Any, successful_method: Any) -> None:
+    """Log the authentication status of an initialized session.
+
+    Warns if no authentication method is detectable, to help operators diagnose
+    API calls that fail due to missing credentials.
+
+    Args:
+        session: The initialized session object to inspect for auth attributes.
+        successful_method: Dict describing which constructor kwargs were used.
+    """
+    token_attr = next((a for a in ("apitoken", "api_token", "token") if hasattr(session, a)), None)  # Find auth attr
+    has_readable_token = bool(token_attr and getattr(session, token_attr))  # Check if token attribute has a value
+    used_env_file = bool(successful_method and "env_file" in successful_method)  # env_file auth path used
+    used_direct_token = bool(
+        successful_method and any(param in successful_method for param in ["apitoken", "api_token", "token"])
+    )  # Direct token parameter auth path used
+    used_fallback_session = bool(successful_method and "fallback" in successful_method)  # Legacy Session() path used
+    if not (has_readable_token or used_env_file or used_direct_token or used_fallback_session):  # No auth detected
+        logging.warning("Session established but no auth method detected; API calls may fail if auth required")
+        logging.warning("To fix: 1) Copy documentation/sample.env to .env, 2) Set MIST_APITOKEN to your token")
         logging.warning("Get your API token from: https://manage.mist.com/admin/apitoken")
     elif used_env_file:
         logging.debug("Session initialized using env_file - authentication configured via .env file")
@@ -3245,7 +3383,63 @@ def initialize_mist_session():  # type: ignore[no-untyped-def]  # noqa: C901, PL
     elif has_readable_token:
         logging.debug("Session has readable token attribute - authentication appears configured")
 
-    return True
+
+def _validate_initialized_session(session: Any, successful_method: Any) -> bool:
+    """Validate that an initialized session has required methods and detectable authentication.
+
+    Calls _ensure_mist_get_method to verify/add mist_get compatibility, then
+    calls _log_session_auth_status to warn if authentication cannot be confirmed.
+    Returns False only for hard failures (missing mist_get); auth warnings are non-fatal.
+
+    Args:
+        session: The initialized APISession or Session object.
+        successful_method: Dict describing which constructor kwargs were used.
+
+    Returns:
+        True if the session is usable, False if required mist_get method is absent.
+    """
+    if not _ensure_mist_get_method(session):  # Verify or patch mist_get -- hard failure if absent
+        return False  # Session is unusable without mist_get
+    _log_session_auth_status(session, successful_method)  # Warn if authentication method is unclear
+    return True  # Session passed all checks -- ready for API calls
+
+
+def initialize_mist_session() -> bool:
+    """Initialize the Mist API session with authentication.
+
+    Orchestrates the session initialization strategy using focused helper functions.
+    Strategy:
+      1. Try APISession with direct token(s) from environment (preferred).
+      2. Try APISession with env_file if no tokens in environment.
+      3. If rate-limited, filter tokens individually and retry with available tokens.
+      4. Fallback to mistapi.Session() as last resort.
+      5. Return False if all attempts fail.
+
+    SECURITY: Tokens are only logged in redacted preview at DEBUG level.
+    """
+    global apisession, mistapi  # Both module-level globals managed exclusively here
+    if apisession:  # Already initialized -- skip all setup and return immediately
+        return True
+    mistapi = _load_mistapi_module(mistapi)  # Ensure mistapi is available -- may perform fallback import
+    if not mistapi:  # mistapi unavailable -- cannot proceed with any initialization strategy
+        return False
+    host, tokens = _parse_api_tokens()  # Read MIST_HOST and MIST_APITOKEN/MIST_API_TOKEN from environment
+    apisession_cls, sig_params = _introspect_apisession_class(mistapi)  # Discover APISession and its params
+    attempts = _build_session_attempts(apisession_cls, sig_params, tokens, host)  # Build ordered kwargs list
+    apisession, successful_method, rate_limit_detected, tried_variants = _execute_session_attempts(  # Try each kwargs
+        apisession_cls, attempts
+    )
+    if not apisession and rate_limit_detected:  # Rate-limit signature detected -- try tokens individually
+        apisession, successful_method = _retry_with_filtered_tokens(apisession_cls, sig_params, tokens, host)
+    if not apisession:  # APISession failed -- try legacy mistapi.Session() as final fallback
+        apisession, successful_method = _try_session_fallback(mistapi)
+    if not apisession:  # All strategies exhausted -- log what was tried and return failure
+        logging.error("All Mist API session initialization attempts failed. Variants tried:")
+        for variant in tried_variants:  # Log each attempted kwargs dict for operator debugging
+            logging.error("  - %s", variant)
+        return False
+    _configure_session_timeout(apisession)  # Patch session with read timeout to prevent indefinite hangs
+    return _validate_initialized_session(apisession, successful_method)  # Verify mist_get and auth status
 
 
 def _configure_session_timeout(session_obj: Any) -> None:
