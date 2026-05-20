@@ -7,6 +7,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+## [26.05.20.16.29]
+
+### Changed
+
+- README: Update operation count from 184 to 185 entries and range from (1-185) to (1-186), reflecting Menu 186 added in PR #339
+
 ### Added
 
 - Menu 178: Export site aggregate health & capacity statistics (`getSiteStats`)
