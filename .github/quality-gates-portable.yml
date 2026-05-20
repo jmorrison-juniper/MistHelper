@@ -51,7 +51,7 @@ env:
   PYTHON_VERSION: ${{ inputs.python-version || '3.13' }}
   SRC_PATH: ${{ inputs.src-path || 'src/' }}
   REQUIREMENTS_FILE: ${{ inputs.requirements-file || 'requirements.txt' }}
-  COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '88' }}
+  COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '90' }}
   PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
   INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
   VULTURE_CONFIDENCE: ${{ inputs.vulture-confidence || '90' }}
