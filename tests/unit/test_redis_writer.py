@@ -180,3 +180,85 @@ class TestRedisTimeSeriesCompaction:
 
         writer._ensure_single_compaction("test:dev-1:cpu")
         assert len(mock_redis["ts"].createrule.call_args_list) == initial_calls
+
+
+class TestExtractAllAddsThreadPoolBranch:
+    """Tests for _extract_all_adds when data exceeds 1000 records (lines 143-173).
+
+    When the record count exceeds the 1000-record threshold, _extract_all_adds
+    must use a ThreadPoolExecutor to process chunks in parallel.
+    """
+
+    def test_over_1000_records_uses_thread_pool(self, config, mock_redis) -> None:
+        """Lines 143-173: Exactly 1001 records must trigger the thread pool branch."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
+
+        writer = RedisTimeSeriesWriter(config)  # Create writer with mocked redis
+        records = [{"id": str(i), "ts": float(i)} for i in range(1001)]  # 1001 exceeds 1000 threshold
+        with patch.object(writer, "_extract_chunk", return_value=([], {})) as mock_chunk:  # Mock worker
+            adds, keys = writer._extract_all_adds(  # Call method that routes to thread pool
+                records,
+                "testFunc",  # API function name for logging
+                ["id"],  # Primary keys
+                "id",  # Entity key field
+                None,  # No specific TS value fields
+            )
+        assert adds == []  # Thread pool collects empty adds from mocked chunks
+        assert keys == {}  # Thread pool collects empty keys from mocked chunks
+        assert mock_chunk.call_count >= 2  # Multiple chunks must be processed by the pool
+
+
+class TestCoverageGapTargets:
+    """Targeted tests to cover the final gap lines and reach 90% threshold.
+
+    Lines covered here: 56-57 (DNS failure), 189 (ts_value_fields path), 341 (key cache hit).
+    """
+
+    def test_init_dns_resolution_failure_raises_connection_error(self, config) -> None:
+        """Lines 56-57: ConnectionError must be raised when Redis host DNS fails."""
+        import socket  # Import for socket.gaierror exception type
+
+        from src.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
+
+        with patch(
+            "src.db.redis_writer.socket.getaddrinfo", side_effect=socket.gaierror("Name or service not known")
+        ):  # Patch only getaddrinfo
+            with pytest.raises(ConnectionError, match="not resolvable"):  # Must raise ConnectionError
+                RedisTimeSeriesWriter(config)  # Constructor must propagate DNS failure as ConnectionError
+
+    def test_extract_chunk_with_ts_value_fields_calls_listed_fields(self, config, mock_redis) -> None:
+        """Line 189: when ts_value_fields is provided, _extract_listed_fields is called instead of _extract_numeric."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
+
+        writer = RedisTimeSeriesWriter(config)  # Create writer with mocked redis
+        records = [{"entity_id": "dev-1", "cpu": 45.0}]  # Single record for testing
+        listed_return = {"cpu": 45.0}  # Fake return value from _extract_listed_fields (must be a dict)
+        with patch.object(writer, "_extract_listed_fields", return_value=listed_return) as mock_lf:  # Mock
+            writer._extract_chunk(  # Call with ts_value_fields to trigger line 189
+                records, "testFunc", ["entity_id"], "entity_id", ["cpu"]  # ts_value_fields=["cpu"]
+            )
+        mock_lf.assert_called_once()  # _extract_listed_fields must have been called via line 189
+
+    def test_create_single_key_skips_when_key_already_cached(self, config, mock_redis) -> None:
+        """Line 341: _create_single_key must return early when ts_key is already in _created_keys."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
+
+        writer = RedisTimeSeriesWriter(config)  # Create writer with mocked redis
+        writer._created_keys = {"existing:ts:key"}  # Pre-populate cache with the target key
+        writer._ensure_key_single(  # Call with a key that is already in the cache
+            "existing:ts:key", {"id": "dev-1"}, "testFunc"  # Key already cached → must return early
+        )
+        mock_redis["ts"].create.assert_not_called()  # Redis ts.create must NOT be called for cached key
+
+    def test_ensure_key_single_reraises_non_exists_response_error(self, config, mock_redis) -> None:
+        """Lines 350-352: ResponseError not containing 'already exists' must be re-raised by _ensure_key_single."""
+        import redis  # Import redis for redis.ResponseError exception class
+
+        from src.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
+
+        writer = RedisTimeSeriesWriter(config)  # Create writer with mocked redis (empty _created_keys)
+        mock_redis["ts"].create.side_effect = redis.ResponseError("permission denied")  # Non-exists error
+        with pytest.raises(redis.ResponseError, match="permission denied"):  # Must re-raise the non-exists error
+            writer._ensure_key_single(  # Key is NOT in cache, so ts.create will be called
+                "new:ts:key", {"id": "dev-1"}, "testFunc"  # Fresh key — triggers ts.create which raises
+            )

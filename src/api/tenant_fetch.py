@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from typing import Any
 
 import mistapi.api.v1.orgs.gatewaytemplates
 import mistapi.api.v1.orgs.networks
@@ -135,7 +136,7 @@ class APITenantFetchUtils:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _extract_tenants_from_networks(networks_data: list) -> set[str]:
+    def _extract_tenants_from_networks(networks_data: list[Any]) -> set[str]:
         """Extract tenant names from a list of Mist network objects.
 
         Each network contributes its name as a tenant identifier and may also
@@ -158,7 +159,7 @@ class APITenantFetchUtils:
         return tenant_names
 
     @staticmethod
-    def _extract_tenants_from_policy_item(policy: dict) -> set[str]:
+    def _extract_tenants_from_policy_item(policy: dict[str, Any]) -> set[str]:
         """Extract tenant names from a single Mist service policy dict.
 
         Handles three patterns: ``tenants`` list, ``tenant`` scalar, and
@@ -183,7 +184,7 @@ class APITenantFetchUtils:
         return tenant_names
 
     @staticmethod
-    def _extract_tenants_from_policies(policies_data: list) -> set[str]:
+    def _extract_tenants_from_policies(policies_data: list[Any]) -> set[str]:
         """Extract tenant names from a list of Mist service policy objects."""
         tenant_names: set[str] = set()  # Deduplicate across all policies
         for policy in policies_data:  # Iterate each service policy object
@@ -193,7 +194,7 @@ class APITenantFetchUtils:
         return tenant_names
 
     @staticmethod
-    def _extract_router_tenants(router: dict, tmpl_name: str) -> set[str]:
+    def _extract_router_tenants(router: dict[str, Any], tmpl_name: str) -> set[str]:
         """Extract tenant names from a gateway template router configuration dict."""
         tenant_names: set[str] = set()  # Collected from router.tenants and router.tenant_profiles
         for item in router.get("tenants", []):  # Named tenant objects in router config
@@ -209,7 +210,7 @@ class APITenantFetchUtils:
         return tenant_names
 
     @staticmethod
-    def _extract_network_tenants(networks: list, tmpl_name: str) -> set[str]:
+    def _extract_network_tenants(networks: list[Any], tmpl_name: str) -> set[str]:
         """Extract tenant names from gateway template network blocks."""
         tenant_names: set[str] = set()  # Collected from networks[].tenants dict keys
         for network in networks:  # Iterate each network block in the template
@@ -222,7 +223,7 @@ class APITenantFetchUtils:
         return tenant_names
 
     @staticmethod
-    def _extract_tenants_from_templates(templates_data: list) -> set[str]:
+    def _extract_tenants_from_templates(templates_data: list[Any]) -> set[str]:
         """Extract tenant names from a list of Mist gateway template objects.
 
         Handles: ``router.tenants[].name``, ``router.tenant_profiles`` keys,
