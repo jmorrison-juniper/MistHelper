@@ -1054,3 +1054,130 @@ class TestCollectAllSiteSettings:
             check_stop_fn=lambda: False,
         )
         assert result["s1"]["engagement"]["dwell_tags"] == {}
+
+
+# ===========================================================================
+# Display functions: >10 items paths (lines 760, 774, 809, 826, 888)
+# ===========================================================================
+
+
+class TestDisplayMoreThanTen:
+    """Tests that cover the '... and X more sites' paths in display functions."""
+
+    def test_display_missing_zones_more_than_ten(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Line 760: 11+ sites with missing zones → overflow count message printed."""
+        from src.analytics.zone_analyzer import _display_missing_zones  # private fn under test
+
+        missing = {  # build 11-item dict so len > 10 branch fires
+            f"site-{i}": {"site_name": f"Site {i}", "missing_zones": ["ZoneA"]} for i in range(11)
+        }
+        _display_missing_zones({"sites_missing_common_zones": missing})  # call with 11 items
+        assert "and 1 more" in capsys.readouterr().out  # overflow message expected
+
+    def test_display_zone_deviations_more_than_ten(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Line 774: 11+ deviating sites → overflow count message printed."""
+        from src.analytics.zone_analyzer import _display_zone_deviations  # private fn under test
+
+        devs = {  # build 11-item dict so len > 10 branch fires
+            f"site-{i}": {
+                "site_name": f"Site {i}",
+                "zone_count": 5,
+                "expected_range": "3-7",
+                "deviation_score": 1.2,
+            }
+            for i in range(11)
+        }
+        _display_zone_deviations({"zone_count_deviations": devs})  # call with 11 items
+        assert "and 1 more" in capsys.readouterr().out  # overflow message expected
+
+    def test_display_dwell_deviations_more_than_ten(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Line 809: 11+ dwell deviating sites → overflow count message printed."""
+        from src.analytics.zone_analyzer import _display_dwell_deviations  # private fn
+
+        devs = {  # build 11-item dict with required current_config fields
+            f"site-{i}": {
+                "site_name": f"Site {i}",
+                "current_config": {
+                    "passerby": "60",
+                    "bounce": "360",
+                    "engaged": "3600",
+                    "stationed": "14400",
+                },
+            }
+            for i in range(11)
+        }
+        _display_dwell_deviations({"sites_with_dwell_deviations": devs})  # call with 11 items
+        assert "and 1 more" in capsys.readouterr().out  # overflow message expected
+
+    def test_display_custom_names_more_than_ten(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Line 826: 11+ sites with custom names → overflow count message printed."""
+        from src.analytics.zone_analyzer import _display_custom_names  # private fn under test
+
+        custom = {  # build 11-item dict so len > 10 branch fires
+            f"site-{i}": {
+                "site_name": f"Site {i}",
+                "custom_names": {"passerby": "Visitor"},
+            }
+            for i in range(11)
+        }
+        _display_custom_names({"sites_with_custom_names": custom})  # call with 11 items
+        assert "and 1 more" in capsys.readouterr().out  # overflow message expected
+
+    def test_display_occupancy_deviations_more_than_ten(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Line 888: 11+ occupancy deviating sites → overflow count message printed."""
+        from src.analytics.zone_analyzer import _display_occupancy_deviations  # private fn
+
+        devs = {  # build 11-item dict with required current_config fields
+            f"site-{i}": {
+                "site_name": f"Site {i}",
+                "current_config": {
+                    "min_duration": 180,
+                    "clients_enabled": True,
+                    "unconnected_clients_enabled": False,
+                },
+            }
+            for i in range(11)
+        }
+        _display_occupancy_deviations({"sites_with_occupancy_deviations": devs})  # 11 items
+        assert "and 1 more" in capsys.readouterr().out  # overflow message expected
+
+
+# ===========================================================================
+# Export functions: early-return paths (lines 916, 1026, 1086, 1116)
+# ===========================================================================
+
+
+class TestExportEarlyReturns:
+    """Tests that cover early-return paths in export functions when inputs are empty."""
+
+    def test_export_summary_empty_rows(self) -> None:
+        """Line 916: _export_summary returns early when _build_summary_rows produces no rows."""
+        from src.analytics.zone_analyzer import _export_summary  # private fn under test
+
+        save_fn = MagicMock()  # spy on whether the save function is ever called
+        _export_summary({}, {}, {}, {}, {}, "20250101", save_fn)  # all-empty inputs
+        save_fn.assert_not_called()  # early return before save_data_fn reached
+
+    def test_export_all_zones_empty_input(self) -> None:
+        """Line 1026: _export_all_zones returns early when site_zones is empty."""
+        from src.analytics.zone_analyzer import _export_all_zones  # private fn under test
+
+        save_fn = MagicMock()  # spy on whether the save function is ever called
+        _export_all_zones({}, "20250101", save_fn)  # empty site_zones dict
+        save_fn.assert_not_called()  # early return before save reached
+
+    def test_export_dwell_configs_empty_input(self) -> None:
+        """Line 1086: _export_dwell_configs returns early when dwell_tag_configs absent."""
+        from src.analytics.zone_analyzer import _export_dwell_configs  # private fn under test
+
+        save_fn = MagicMock()  # spy on whether the save function is ever called
+        _export_dwell_configs({}, "20250101", save_fn)  # no dwell_tag_configs key in dict
+        save_fn.assert_not_called()  # early return before save reached
+
+    def test_export_occupancy_configs_empty_input(self) -> None:
+        """Line 1116: _export_occupancy_configs returns early when occupancy_configs absent."""
+        from src.analytics.zone_analyzer import _export_occupancy_configs  # private fn
+
+        save_fn = MagicMock()  # spy on whether the save function is ever called
+        _export_occupancy_configs({}, "20250101", save_fn)  # no occupancy_configs key in dict
+        save_fn.assert_not_called()  # early return before save reached

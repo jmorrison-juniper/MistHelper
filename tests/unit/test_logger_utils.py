@@ -134,3 +134,11 @@ class TestSensitiveFilter:
         record.msg = None  # Inject a None msg to trigger an internal exception in getMessage()
         result = flt.filter(record)  # Apply filter -- should not raise
         assert result is True  # Must still return True even when an exception occurs internally
+
+    def test_format_error_in_getmessage_is_caught(self):  # Lines 113-114: except Exception: pass
+        """Lines 113-114: TypeError during getMessage() formatting hits except block, returns True."""
+        flt = SensitiveFilter()  # Create filter instance
+        # Mismatched format args: msg has 2 placeholders but args only supplies 1 → TypeError
+        record = self._make_record("need %s and %s", args=("only_one",))  # Wrong arg count
+        result = flt.filter(record)  # getMessage() raises TypeError → except catches → True
+        assert result is True  # Filter always returns True; exception was silently swallowed

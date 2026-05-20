@@ -1254,3 +1254,150 @@ class TestSaveCheckpointOsError:
             side_effect=OSError("disk full"),
         ):
             E911BSSIDReportGenerator._save_checkpoint("org-1", {}, set(), {}, {})
+
+
+# ===========================================================================
+# Coverage gaps: lines 189, 359-361, 640
+# ===========================================================================
+
+
+class TestPreFetchSiteTemplatesNonDictWlans:
+    """Line 189: wlans in response is a list (not dict) → cache entry set to []."""
+
+    def test_template_wlans_list_sets_empty_cache(self):
+        """Line 189: response.data['wlans'] is a list → else branch → cache[id]=[]."""
+        mock_mistapi = MagicMock()  # mock the mistapi module for lazy import
+        mock_resp = MagicMock()  # mock API response object
+        mock_resp.status_code = 200  # simulate HTTP 200 OK
+        mock_resp.data = {"wlans": [{"id": "w1", "ssid": "TestSSID"}]}  # list, not dict
+        mock_mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate.return_value = mock_resp  # set mock
+
+        site_lookup = {"s1": {"sitetemplate_id": "tmpl-1", "name": "SiteA"}}  # one site with template
+        with patch.dict("sys.modules", {"mistapi": mock_mistapi}):  # inject mock mistapi
+            cache = E911BSSIDReportGenerator._prefetch_site_templates(
+                apisession=MagicMock(),  # apisession not used directly with mocked mistapi
+                org_id="org-1",
+                site_lookup=site_lookup,
+            )
+        assert cache["tmpl-1"] == []  # list wlans → else branch → empty list cached
+
+
+class TestResolveSiteSSIDsWithAssignedTemplates:
+    """Lines 359-361: org WLANs from WLAN templates added when assigned_template_ids non-empty."""
+
+    def test_org_wlans_via_templates_added_to_band_lookup(self):
+        """Lines 359-361: site has wlan_templates assigned → org wlans added to lookup."""
+        mock_mistapi = MagicMock()  # mock the mistapi module for lazy import
+        mock_resp = MagicMock()  # mock site WLANs API response
+        mock_resp.status_code = 200  # simulate HTTP 200 OK
+        mock_mistapi.api.v1.sites.wlans.listSiteWlans.return_value = mock_resp  # set mock
+        mock_mistapi.get_all.return_value = []  # no site-level WLANs to simplify test
+
+        wlan_band_lookup: dict = {}  # lookup dict to populate
+        site_info = {  # site info with no sitetemplate_id to skip that path
+            "sitetemplate_id": None,
+            "sitegroup_ids": [],
+        }
+        wlan_templates = [{"id": "tmpl-1", "applies": {"org_id": "org-1"}}]  # one template that applies to this org
+        org_wlans = [  # one org WLAN assigned via template
+            {"template_id": "tmpl-1", "enabled": True, "ssid": "OrgSSID", "band": ""}
+        ]
+        wlan_context = {  # full wlan context dict required by _resolve_site_ssids
+            "wlan_templates": wlan_templates,
+            "org_wlans": org_wlans,
+            "wlan_band_lookup": wlan_band_lookup,
+            "site_template_cache": {},
+        }
+        with patch.dict("sys.modules", {"mistapi": mock_mistapi}):  # inject mock mistapi
+            E911BSSIDReportGenerator._resolve_site_ssids(
+                apisession=MagicMock(),
+                site_id="site-1",
+                page_limit=1000,
+                site_info=site_info,
+                wlan_context=wlan_context,
+            )
+        # Lines 359-361: _add_wlans_to_band_lookup called + logging.debug → OrgSSID in lookup
+        assert any("OrgSSID" in v for v in wlan_band_lookup.values())  # org WLAN was added
+
+
+class TestProcessSiteBatchRateLimit:
+    """Line 640: _process_site_batch returns from _handle_rate_limit on E911_RATE_LIMIT error."""
+
+    def test_rate_limit_error_returns_false(self, tmp_path):
+        """Line 640: _fetch_site_maps raises RuntimeError(E911_RATE_LIMIT) → False returned."""
+        mock_apisession = MagicMock()  # mock apisession; not used directly
+        org_data = {  # minimal org_data structure required by _process_site_batch
+            "aps": {"aa:bb:cc:dd:ee:ff": {"site_id": "site-1"}},
+            "sites": {"site-1": {"name": "SiteA"}},
+            "wlan_templates": [],
+            "org_wlans": [],
+            "site_template_cache": {},
+        }
+        completed_sites: set = set()  # no sites completed yet
+        with patch.object(  # _fetch_site_maps raises E911_RATE_LIMIT on first site
+            E911BSSIDReportGenerator,
+            "_fetch_site_maps",
+            side_effect=RuntimeError("E911_RATE_LIMIT"),
+        ):
+            with patch.object(  # _handle_rate_limit returns False and saves checkpoint
+                E911BSSIDReportGenerator,
+                "_handle_rate_limit",
+                return_value=False,
+            ) as mock_handle:
+                result = E911BSSIDReportGenerator._process_site_batch(
+                    apisession=mock_apisession,
+                    org_id="org-1",
+                    page_limit=1000,
+                    org_data=org_data,
+                    remaining=["site-1"],
+                    completed_sites=completed_sites,
+                    map_lookup={},
+                    wlan_band_lookup={},
+                    wlan_context={
+                        "wlan_templates": [],
+                        "org_wlans": [],
+                        "wlan_band_lookup": {},
+                        "site_template_cache": {},
+                    },
+                    total_sites=1,
+                )
+        assert result is False  # line 640: returned from _handle_rate_limit call
+        mock_handle.assert_called_once()  # _handle_rate_limit was invoked at line 640
+
+    def test_non_rate_limit_runtime_error_reraises_line_640(self):
+        """Line 640: RuntimeError without E911_RATE_LIMIT in message → raise re-raises."""
+        import pytest  # imported inline for clarity in this test method
+
+        mock_apisession = MagicMock()  # mock apisession; not used directly
+        org_data = {  # minimal org_data structure required by _process_site_batch
+            "aps": {"aa:bb:cc:dd:ee:ff": {"site_id": "site-1"}},
+            "sites": {"site-1": {"name": "SiteA"}},
+            "wlan_templates": [],
+            "org_wlans": [],
+            "site_template_cache": {},
+        }
+        completed_sites: set = set()  # no sites completed yet
+        with patch.object(  # _fetch_site_maps raises non-RATE-LIMIT RuntimeError
+            E911BSSIDReportGenerator,
+            "_fetch_site_maps",
+            side_effect=RuntimeError("unexpected_api_error"),  # no E911_RATE_LIMIT in msg
+        ):
+            with pytest.raises(RuntimeError, match="unexpected_api_error"):  # expect re-raise
+                E911BSSIDReportGenerator._process_site_batch(  # call; should re-raise
+                    apisession=mock_apisession,
+                    org_id="org-1",
+                    page_limit=1000,
+                    org_data=org_data,
+                    remaining=["site-1"],
+                    completed_sites=completed_sites,
+                    map_lookup={},
+                    wlan_band_lookup={},
+                    wlan_context={
+                        "wlan_templates": [],
+                        "org_wlans": [],
+                        "wlan_band_lookup": {},
+                        "site_template_cache": {},
+                    },
+                    total_sites=1,
+                )
+        # Line 640 (raise) was executed: RuntimeError re-raised and caught by pytest.raises

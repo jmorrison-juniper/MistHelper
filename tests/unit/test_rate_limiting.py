@@ -672,3 +672,71 @@ class TestEdgeCases:
         with patch.object(RateLimitingUtils, "_calculate_std_dev", side_effect=ValueError("test")):
             alpha = RateLimitingUtils._compute_dynamic_alpha([1.0, 2.0, 3.0])
             assert alpha == 0.3
+
+
+# ---------------------------------------------------------------------------
+# Coverage gap tests: lines 27-28, 206-212, 302-303, 366
+# ---------------------------------------------------------------------------
+class TestCoverageGapTargets:
+    """Tests targeting specific uncovered lines in rate_limiting.py."""
+
+    def test_get_tuning_data_file_path_makedirs_fallback(self):  # Cover lines 27-28
+        """_get_tuning_data_file_path falls back to cwd when makedirs raises."""
+        import src.utils.rate_limiting as rl  # Import module to access the module-level function
+
+        with patch("src.utils.rate_limiting.os.makedirs", side_effect=OSError("no permission")):  # makedirs raises
+            result = rl._get_tuning_data_file_path()  # Call the module-level function directly
+        assert result.endswith("tuning_data.json")  # Fallback path still ends with correct filename
+        assert "data" not in result or not result.startswith(os.path.join(os.getcwd(), "data"))  # Not in data/ dir
+
+    def test_refresh_api_usage_success_path(self):  # Cover lines 206-212
+        """_refresh_api_usage populates cache dict when mistapi returns valid usage data."""
+        mock_mistapi = MagicMock()  # Create a deep mock for the mistapi module
+        mock_mistapi.api.v1.self.usage.getSelfApiUsage.return_value.data = {  # Mock the API response
+            "requests": 750,  # Current usage count
+            "request_limit": 5000,  # Rate limit
+        }
+        cache = {  # Minimal cache dict to be populated by the success path
+            "used": 0,  # Will be set to 750 on success
+            "limit": 5000,  # Will be set to 5000 on success
+            "last_updated": 0.0,  # Will be updated to current_time on success
+            "perceived_requests": 99,  # Will be reset to 0 on success
+            "initialized": False,  # Will be set to True on success
+        }
+        with patch.dict("sys.modules", {"mistapi": mock_mistapi}):  # Inject mock mistapi into import system
+            RateLimitingUtils._refresh_api_usage(MagicMock(), cache, 1700000000.0)  # Call with fake apisession and time
+        assert cache["used"] == 750  # Success path set 'used' from API response
+        assert cache["limit"] == 5000  # Success path set 'limit' from API response
+        assert cache["last_updated"] == 1700000000.0  # Success path updated last_updated timestamp
+        assert cache["perceived_requests"] == 0  # Success path reset perceived_requests to 0
+        assert cache["initialized"] is True  # Success path marked cache as initialized
+
+    def test_compute_smoothed_delay_invalid_alpha_fallback(self):  # Cover lines 302-303
+        """_compute_smoothed_delay resets to alpha=0.3 when _compute_dynamic_alpha returns NaN."""
+        with patch.object(  # Mock _compute_dynamic_alpha to return NaN -- triggers the invalid-alpha branch
+            RateLimitingUtils, "_compute_dynamic_alpha", return_value=float("nan")
+        ):
+            smoothed, delay, cleaned = RateLimitingUtils._compute_smoothed_delay(  # Call the method directly
+                sat_delay=0.5,  # Dummy saturation delay
+                error=0.1,  # Dummy error value
+                error_history=[],  # Empty history -- alpha fallback uses 0.3
+                smoothed_delay=None,  # None forces smoothed_delay = sat_delay path
+            )
+        assert delay >= 0.01  # Valid delay always returned even with NaN alpha
+        assert isinstance(smoothed, float)  # Smoothed delay is always a float
+
+    def test_get_rate_limited_delay_refresh_branch(self, api_cache):  # Cover line 366
+        """get_rate_limited_delay calls _refresh_api_usage when cache is not initialized."""
+        api_cache["initialized"] = False  # Force _needs_refresh to return True -- triggers the refresh branch
+        mock_mistapi = MagicMock()  # Mock mistapi so _refresh_api_usage succeeds
+        mock_mistapi.api.v1.self.usage.getSelfApiUsage.return_value.data = {  # Mock valid API response
+            "requests": 100,  # Usage count
+            "request_limit": 5000,  # Rate limit
+        }
+        with patch.dict("sys.modules", {"mistapi": mock_mistapi}):  # Inject mock mistapi
+            smoothed, delay = RateLimitingUtils.get_rate_limited_delay(  # Call with uninitialized cache
+                smoothed_delay=0.5,  # Prior smoothed delay
+                apisession=MagicMock(),  # Mock API session
+                api_usage_cache=api_cache,  # Cache with initialized=False triggers refresh
+            )
+        assert delay > 0  # A positive delay is always returned

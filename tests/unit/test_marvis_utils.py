@@ -203,3 +203,81 @@ class TestLegacyFallback:
         data = [{"mac": "aa:bb:cc:dd:ee:ff"}]  # Minimal valid input
         result = utils._legacy_fallback(data)  # Call fallback directly
         assert result == data  # Identity callables return input unchanged
+
+
+# ---------------------------------------------------------------------------
+# Exception path in format_for_csv (lines 141-150)
+# ---------------------------------------------------------------------------
+
+
+class TestFormatForCsvExceptionFallback:
+    """Tests that the except block in format_for_csv calls _legacy_fallback."""
+
+    def test_internal_error_triggers_except_block(self):  # Cover lines 141-150
+        """When format_for_csv raises internally, the except block runs and returns a list."""
+        call_count = [0]  # Counter to make escape_fn raise only on the first call
+
+        def escape_fn_raise_once(data):  # Custom escape_fn that raises once to trigger the except block
+            call_count[0] += 1  # Increment call counter on each invocation
+            if call_count[0] == 1:  # Only raise on the FIRST call (inside the try block)
+                raise RuntimeError("escape error on first call")  # Simulated escape failure
+            return data  # Second call (inside _legacy_fallback) succeeds and returns data unchanged
+
+        utils = MarvisDataUtils(  # Create instance with the raise-once escape_fn
+            escape_fn=escape_fn_raise_once,  # First call raises, second call succeeds
+            flatten_fn=_identity_flatten,  # Identity flatten for legacy fallback
+        )
+        data = [{"mac": "aa:bb:cc:dd:ee:ff"}]  # Minimal valid input -- will reach escape_fn
+        result = utils.format_for_csv(data, "generic")  # escape_fn raises -> except block -> _legacy_fallback
+        assert isinstance(result, list)  # _legacy_fallback returns a list via second escape_fn call
+
+
+# ---------------------------------------------------------------------------
+# Metadata copy in _expand_sites_rows (line 187)
+# ---------------------------------------------------------------------------
+
+
+class TestExpandSitesRowsMetadata:
+    """Tests that metadata keys from the parent item are copied into site rows."""
+
+    def test_metadata_keys_copied_into_site_rows(self):  # Cover line 187 (body of metadata copy loop)
+        """Metadata fields (start, end, limit, page, total) are copied into each site row."""
+        utils = _make_utils()  # Create instance
+        # Include metadata fields in the parent item so the copy branch (line 187) executes
+        sites_response = [  # Simulated SLE response with metadata and one site
+            {
+                "start": 1700000000,  # Epoch start -- should be copied into each site row
+                "end": 1700003600,  # Epoch end -- should be copied into each site row
+                "total": 1,  # Total count -- should be copied into each site row
+                "results": [{"site_id": "site-meta", "score": 0.99}],  # One site result
+            }
+        ]
+        result = utils.format_for_csv(sites_response, "sites")  # Process sites type
+        assert len(result) == 1  # One site in results
+        assert result[0]["start"] == 1700000000  # Metadata key 'start' was copied into site row
+        assert result[0]["end"] == 1700003600  # Metadata key 'end' was copied into site row
+        assert result[0]["total"] == 1  # Metadata key 'total' was copied into site row
+
+
+# ---------------------------------------------------------------------------
+# Non-dict result in _expand_result_columns (line 261)
+# ---------------------------------------------------------------------------
+
+
+class TestExpandResultColumnsNonDict:
+    """Tests that non-dict entries in results arrays are stored as stringified columns."""
+
+    def test_non_dict_result_stored_as_string_column(self):  # Cover line 261 (else branch)
+        """Non-dict items in results array are stored as result_N string columns."""
+        utils = _make_utils()  # Create instance
+        # Pass a results list containing a non-dict item (e.g. a plain string)
+        # This triggers the else branch in _expand_result_columns (line 261)
+        data = [  # Item with a mixed results array -- one non-dict entry
+            {
+                "mac": "aa:bb:cc:dd:ee:ff",  # Top-level field
+                "results": ["error_string_result"],  # Non-dict result -- triggers line 261
+            }
+        ]
+        result = utils.format_for_csv(data, "client")  # Process as client
+        assert len(result) == 1  # One row produced
+        assert result[0].get("result_0") == "error_string_result"  # Non-dict stored as string column

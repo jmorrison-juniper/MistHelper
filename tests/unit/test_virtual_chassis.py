@@ -999,3 +999,173 @@ class TestHandleMissingCsv:
         create_fn = MagicMock(side_effect=OSError("denied"))
         VirtualChassisManager._handle_missing_csv("path.csv", create_fn, safe_fn)
         assert "Failed to create" in capsys.readouterr().out
+
+
+# ===========================================================================
+# Coverage gaps: lines 102, 112 in convert_single
+# ===========================================================================
+
+
+class TestConvertSingleCoverageGaps:
+    """Tests targeting uncovered lines 102 and 112 in convert_single."""
+
+    def test_preflight_fails_returns_at_line_102(self, deps, tmp_path) -> None:
+        """Line 102: _preflight_check returns False → early return, no conversion."""
+        inv_path = str(tmp_path / "data" / "OrgInventory.csv")  # path for inventory csv
+        _write_inventory_csv(  # create inventory with one switch so selection works
+            inv_path,
+            [{"type": "switch", "id": "d1", "site_id": "site-1", "name": "sw1"}],
+        )
+        deps["get_csv_path_fn"].side_effect = lambda f: (  # return inventory path for Inventory requests
+            inv_path if "Inventory" in f else str(tmp_path / "data" / f)
+        )
+        deps["safe_input_fn"].return_value = "0"  # select first switch in menu
+        with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):  # inject mock mistapi
+            resp = MagicMock()  # mock site API response
+            resp.data = {"name": "TestSite"}  # set expected site name field
+            _mock_mistapi.api.v1.sites.getSite.return_value = resp  # return mock site
+            with patch.object(VirtualChassisManager, "_preflight_check", return_value=False):  # force fail
+                with patch.object(VirtualChassisManager, "_execute_conversion") as mock_exec:  # spy
+                    VirtualChassisManager.convert_single(  # call with preflight failing
+                        apisession=deps["apisession"],
+                        select_site_fn=deps["select_site_fn"],
+                        safe_input_fn=deps["safe_input_fn"],
+                        get_csv_path_fn=deps["get_csv_path_fn"],
+                        check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
+                        inventory_generator=deps["inventory_generator"],
+                    )
+                    mock_exec.assert_not_called()  # line 102 hit: returned before _execute_conversion
+
+    def test_execute_conversion_called_at_line_112(self, deps, tmp_path) -> None:
+        """Line 112: all guards pass + user confirms CONVERT → _execute_conversion called."""
+        inv_path = str(tmp_path / "data" / "OrgInventory.csv")  # path for inventory csv
+        _write_inventory_csv(  # create inventory with one switch for selection
+            inv_path,
+            [{"type": "switch", "id": "d1", "site_id": "site-1", "name": "sw1"}],
+        )
+        deps["get_csv_path_fn"].side_effect = lambda f: (  # return inventory path for Inventory requests
+            inv_path if "Inventory" in f else str(tmp_path / "data" / f)
+        )
+        deps["safe_input_fn"].side_effect = ["0", "CONVERT"]  # select switch then confirm
+        with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):  # inject mock mistapi
+            resp = MagicMock()  # mock site API response
+            resp.data = {"name": "TestSite"}  # expected site name field
+            _mock_mistapi.api.v1.sites.getSite.return_value = resp  # return mock site
+            with patch.object(VirtualChassisManager, "_preflight_check", return_value=True):  # pass check
+                with patch.object(VirtualChassisManager, "_execute_conversion") as mock_exec:  # spy
+                    VirtualChassisManager.convert_single(  # call with all guards passing
+                        apisession=deps["apisession"],
+                        select_site_fn=deps["select_site_fn"],
+                        safe_input_fn=deps["safe_input_fn"],
+                        get_csv_path_fn=deps["get_csv_path_fn"],
+                        check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
+                        inventory_generator=deps["inventory_generator"],
+                    )
+                    mock_exec.assert_called_once()  # line 112: _execute_conversion reached
+
+
+# ===========================================================================
+# Coverage gaps: lines 153, 169-171, 184 in convert_by_site_list
+# ===========================================================================
+
+
+class TestConvertBySiteListCoverageGaps:
+    """Tests targeting uncovered lines 153, 169-171, and 184 in convert_by_site_list."""
+
+    def test_empty_site_mapping_returns_at_line_153(self, deps, tmp_path, capsys) -> None:
+        """Line 153: SiteList.csv header-only → site_name_to_id empty → early return."""
+        vc_path = str(tmp_path / "data" / "VCConvert.CSV")  # path for VCConvert.CSV
+        _write_vc_csv(vc_path, ["SiteA"])  # write one site name to trigger non-empty path
+        site_list_path = str(tmp_path / "data" / "SiteList.csv")  # path for SiteList.csv
+        _write_site_list_csv(site_list_path, [])  # write header-only → empty mapping dict
+
+        def path_fn(f: str) -> str:
+            return str(tmp_path / "data" / f)  # return path for any filename in data dir
+
+        deps["get_csv_path_fn"].side_effect = path_fn  # return correct paths per filename
+        VirtualChassisManager.convert_by_site_list(  # call; should return early at line 153
+            apisession=deps["apisession"],
+            safe_input_fn=deps["safe_input_fn"],
+            get_csv_path_fn=deps["get_csv_path_fn"],
+            create_csv_template_fn=deps["create_csv_template_fn"],
+            check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
+            inventory_generator=deps["inventory_generator"],
+            sites_generator=deps["sites_generator"],
+        )
+        assert "SiteA" in capsys.readouterr().out  # site names printed before early return
+
+    def test_no_switches_in_target_sites_lines_169_171(self, deps, tmp_path, capsys) -> None:
+        """Lines 169-171: target sites found but no VC switches exist → early return."""
+        vc_path = str(tmp_path / "data" / "VCConvert.CSV")  # path for VCConvert.CSV
+        _write_vc_csv(vc_path, ["SiteA"])  # site name that maps to a valid site id
+        site_list_path = str(tmp_path / "data" / "SiteList.csv")  # path for SiteList.csv
+        _write_site_list_csv(site_list_path, [{"id": "s1", "name": "SiteA"}])  # SiteA → s1
+        inv_path = str(tmp_path / "data" / "OrgInventory.csv")  # path for OrgInventory.csv
+        _write_inventory_csv(inv_path, [])  # empty inventory → no switches for site s1
+
+        def path_fn(f: str) -> str:
+            return str(tmp_path / "data" / f)  # return path for any filename in data dir
+
+        deps["get_csv_path_fn"].side_effect = path_fn  # return correct paths per filename
+        VirtualChassisManager.convert_by_site_list(  # call; should hit lines 169-171
+            apisession=deps["apisession"],
+            safe_input_fn=deps["safe_input_fn"],
+            get_csv_path_fn=deps["get_csv_path_fn"],
+            create_csv_template_fn=deps["create_csv_template_fn"],
+            check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
+            inventory_generator=deps["inventory_generator"],
+            sites_generator=deps["sites_generator"],
+        )
+        out = capsys.readouterr().out  # capture printed output
+        assert "No virtual chassis switches" in out  # lines 169-171: message printed
+
+    def test_user_confirms_executes_bulk_conversion_line_184(self, deps, tmp_path) -> None:
+        """Line 184: switches found + user confirms CONVERT → _execute_bulk_conversion called."""
+        vc_path = str(tmp_path / "data" / "VCConvert.CSV")  # path for VCConvert.CSV
+        _write_vc_csv(vc_path, ["SiteA"])  # site name that maps to valid site
+        site_list_path = str(tmp_path / "data" / "SiteList.csv")  # path for SiteList.csv
+        _write_site_list_csv(site_list_path, [{"id": "s1", "name": "SiteA"}])  # SiteA → s1
+        inv_path = str(tmp_path / "data" / "OrgInventory.csv")  # path for OrgInventory.csv
+        _write_inventory_csv(  # create one switch for site s1 so target_ids resolves
+            inv_path,
+            [{"type": "switch", "id": "d1", "site_id": "s1", "name": "sw1"}],
+        )
+
+        def path_fn(f: str) -> str:
+            return str(tmp_path / "data" / f)  # return path for any filename in data dir
+
+        deps["get_csv_path_fn"].side_effect = path_fn  # return correct paths per filename
+        deps["safe_input_fn"].return_value = "CONVERT"  # user confirms bulk conversion
+        with patch.object(VirtualChassisManager, "_execute_bulk_conversion") as mock_exec:  # spy
+            VirtualChassisManager.convert_by_site_list(  # call; should reach line 184
+                apisession=deps["apisession"],
+                safe_input_fn=deps["safe_input_fn"],
+                get_csv_path_fn=deps["get_csv_path_fn"],
+                create_csv_template_fn=deps["create_csv_template_fn"],
+                check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
+                inventory_generator=deps["inventory_generator"],
+                sites_generator=deps["sites_generator"],
+            )
+        mock_exec.assert_called_once()  # line 184: _execute_bulk_conversion reached
+
+
+# ===========================================================================
+# Coverage gap: lines 408-411 in _load_site_names_from_csv
+# ===========================================================================
+
+
+class TestLoadSiteNamesFromCsvExceptBlock:
+    """Tests targeting uncovered lines 408-411 in _load_site_names_from_csv."""
+
+    def test_open_raises_when_path_is_directory(self, deps, tmp_path) -> None:
+        """Lines 408-411: open() raises PermissionError on directory → except → returns []."""
+        data_dir = str(tmp_path / "data")  # base directory for CSV files
+        csv_path = os.path.join(data_dir, "VCConvert.CSV")  # path that will be a directory
+        os.makedirs(csv_path, exist_ok=True)  # create DIRECTORY at csv_path (not a file)
+        deps["get_csv_path_fn"].side_effect = lambda f: os.path.join(data_dir, f)  # return paths
+        result = VirtualChassisManager._load_site_names_from_csv(  # call the method
+            deps["get_csv_path_fn"],
+            deps["create_csv_template_fn"],
+            deps["safe_input_fn"],
+        )
+        assert result == []  # except block catches PermissionError/IsADirectoryError → []
