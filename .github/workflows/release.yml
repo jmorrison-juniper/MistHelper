@@ -49,9 +49,9 @@ jobs:
           cp pyproject.toml "${BUNDLE_DIR}/"
           cp README.md "${BUNDLE_DIR}/"
           cp LICENSE "${BUNDLE_DIR}/"
-          cp maps_manager.py "${BUNDLE_DIR}/"
           cp wsgi.py "${BUNDLE_DIR}/"
           cp __init__.py "${BUNDLE_DIR}/"
+          cp -r src/ "${BUNDLE_DIR}/src/"
           cp -r web_portal/ "${BUNDLE_DIR}/web_portal/"
           zip -r "misthelper-${VERSION}.zip" "${BUNDLE_DIR}/"
 
