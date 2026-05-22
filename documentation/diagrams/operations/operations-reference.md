@@ -84,7 +84,7 @@ journey
 
 ## Destructive Operation Safety Requirements
 
-Requirements that MUST be met before any destructive operation (Menu 90-100) executes.
+Requirements that MUST be met before any destructive operation (Menu 154-187) executes.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -97,7 +97,7 @@ Requirements that MUST be met before any destructive operation (Menu 90-100) exe
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 flowchart TB
-    subgraph requirements["Safety Requirements - Menu 90-100"]
+    subgraph requirements["Safety Requirements - Menu 154-187"]
         SAF001["SAF-001: Explicit Confirmation<br/>Type exact word to proceed<br/>Risk: HIGH | Verify: test"]
         SAF002["SAF-002: EOF Handling<br/>All input calls handle EOFError<br/>Risk: HIGH | Verify: inspection"]
         SAF003["SAF-003: No Blind Automation<br/>--menu flag requires confirmation<br/>Risk: HIGH | Verify: test"]
