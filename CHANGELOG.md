@@ -7,6 +7,79 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+## [26.05.21.00.00] - Menu Regrouping
+
+### Changed (BREAKING)
+
+All 188 menu operations (0-187) renumbered into 30 logical contiguous groups. Any scripts or aliases that hard-code a `--menu N` number must be updated. The migration script `scripts/menu_regroup.py` was used to apply all 425 touch points (menu_actions keys, _REGISTRY keys, optimized_test_order values, WAVE1 baseline keys/values, and Menu #XX logging references).
+
+**New group structure:**
+
+| Range | Group | Safety |
+| - | - | - |
+| 0 | Exit | — |
+| 1–7 | Org Sites & Analysis | safe |
+| 8–14 | Org Device Inventory | safe |
+| 15–19 | Org Device Stats | safe / resource_intensive |
+| 20–26 | Org Events & Logs | safe |
+| 27–30 | Org Client Stats | safe |
+| 31–36 | Org Gateway Operations | safe |
+| 37–41 | Org Templates | safe |
+| 42–50 | Org Config & Admin | safe |
+| 51–55 | Org SLE & Insights | safe |
+| 56–59 | Org Misc Exports | safe / resource_intensive |
+| 60–72 | Site Device Exports | interactive_safe |
+| 73–79 | Site Insights & Anomalies | interactive_safe |
+| 80–91 | Site Stats & Metrics | interactive_safe |
+| 92–96 | Interactive Viewers | interactive_safe |
+| 97–101 | Long-Running Exports | resource_intensive |
+| 102–115 | WebSocket Show Commands | websocket |
+| 116–123 | WebSocket Diagnostics | websocket |
+| 124–127 | Device Diagnostics | interactive |
+| 128–133 | Device Management | interactive |
+| 134–135 | Packet Capture | interactive |
+| 136–147 | Interactive Tools | interactive |
+| 148–150 | Config Management | interactive |
+| 151–152 | Continuous Loops | continuous_loop |
+| 153 | Bulk | resource_intensive |
+| 154–157 | Destructive: Firmware | destructive |
+| 158–160 | Destructive: Reboot/Reprovision | destructive |
+| 161–162 | Destructive: Virtual Chassis | destructive |
+| 163–167 | Destructive: Template Changes | destructive |
+| 168–170 | Destructive: Site Config | destructive |
+| 171–174 | Destructive: Test Data | destructive |
+| 175–176 | Destructive: SSH Runners | destructive |
+| 177–187 | Destructive: Clear/Reset/Import | destructive |
+
+**Complete old→new mapping (for migration reference):**
+
+```text
+0→0   1→20  2→21  3→22  4→31  5→102 6→103 7→104 8→105 9→134 10→135
+11→1  12→8  13→15 14→19 15→16 16→33 17→9  18→59 19→34 20→2
+21→11 22→10 23→4  24→17 25→12 26→32 27→3  28→35 29→62 30→65
+31→60 32→61 33→63 34→64 35→37 36→38 37→39 38→40 39→41 40→27
+41→28 42→24 43→29 44→30 45→42 46→44 47→45 48→46 49→69 50→66
+51→67 52→68 53→73 54→47 55→48 56→136 57→49 58→43 59→50
+60→137 61→138 62→139 63→97 64→98 65→99 66→51 67→52 68→74
+69→75 70→92 71→93 72→94 73→95 74→96 75→151 76→152 77→100
+78→101 79→140 80→121 81→76 82→54 83→53 84→77 85→78 86→79
+87→118 88→119 89→120 90→154 91→158 92→161 93→162 94→14 95→18
+96→36 97→175 98→176 99→155 100→156 101→141 102→148 103→149
+104→163 105→150 106→164 107→171 108→172 109→173 110→174 111→165
+112→142 113→166 114→167 115→143 116→157 117→144 118→168 119→6
+120→169 121→7 122→170 123→123 124→106 125→107 126→108 127→109
+128→110 129→111 130→112 131→113 132→114 133→115 134→116 135→117
+136→124 137→125 138→128 139→129 140→159 141→122 142→160 143→130
+144→131 145→132 146→133 147→177 148→178 149→179 150→180 151→181
+152→182 153→183 154→184 155→185 156→126 157→127 158→26 159→145
+160→89 161→90 162→91 163→146 164→147 165→153 166→5 167→56
+168→57 169→55 170→70 171→71 172→72 173→88 174→25 175→186
+176→58 177→187 178→80 179→81 180→82 181→83 182→84 183→85
+184→86 185→23 186→87 187→13
+```
+
+Closes #368
+
 ## [26.05.20.17.31]
 
 ### Refactored

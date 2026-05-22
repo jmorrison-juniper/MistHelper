@@ -6462,7 +6462,7 @@ class PacketCaptureManager:
 
         Presents user with capture type options and guides through configuration.
         """
-        logging.info("Menu #9: Starting site packet capture manager")
+        logging.info("Menu #134: Starting site packet capture manager")
         logging.debug("ENTRY: PacketCaptureManager.start_site_packet_capture()")
 
         print("\n" + "=" * 80)
@@ -7951,7 +7951,7 @@ class PacketCaptureManager:
         NOTE: Organization-level captures are for Mist Edges only.
         Site-level Mist Edges should use site captures (option 9).
         """
-        logging.info("Menu #10: Starting organization packet capture manager")
+        logging.info("Menu #135: Starting organization packet capture manager")
         logging.debug("ENTRY: PacketCaptureManager.start_org_packet_capture()")
 
         print("\n" + "=" * 80)
@@ -7969,12 +7969,12 @@ class PacketCaptureManager:
 
             if not mxedges:
                 print("\n! No MxEdges found for this organization")
-                logging.warning("Menu #10: No MxEdges found")
+                logging.warning("Menu #135: No MxEdges found")
                 return
 
         except Exception as error:
             print(f"\n! Error fetching MxEdges: {error}")
-            logging.error(f"Menu #10: Failed to fetch MxEdges: {error}")
+            logging.error(f"Menu #135: Failed to fetch MxEdges: {error}")
             return
 
         # Fetch stats to get status information
@@ -7990,7 +7990,7 @@ class PacketCaptureManager:
                     if mxedge_id:
                         mxedge_stats_map[mxedge_id] = stat
         except Exception as error:
-            logging.warning(f"Menu #10: Failed to fetch MxEdge stats: {error}")
+            logging.warning(f"Menu #135: Failed to fetch MxEdge stats: {error}")
             # Continue without status information
 
         # Display indexed list of MxEdges with detailed status
@@ -8047,7 +8047,7 @@ class PacketCaptureManager:
             ).strip()
         except (EOFError, KeyboardInterrupt):
             print("\n! Operation cancelled")
-            logging.info("Menu #10: User cancelled MxEdge selection")
+            logging.info("Menu #135: User cancelled MxEdge selection")
             return
 
         # Parse selection (single MxEdge only)
@@ -8058,16 +8058,16 @@ class PacketCaptureManager:
                 selected_mxedges.append(index_to_mxedge[idx])
             else:
                 print(f"\n! Invalid index {idx}. Please select from 0-{len(mxedges) - 1}")  # nosec B608
-                logging.warning(f"Menu #10: Invalid MxEdge index: {idx}")
+                logging.warning(f"Menu #135: Invalid MxEdge index: {idx}")
                 return
         except ValueError:
             print("\n! Invalid input format. Please enter a single numeric index.")
-            logging.warning(f"Menu #10: Invalid selection input: {selection_input}")
+            logging.warning(f"Menu #135: Invalid selection input: {selection_input}")
             return
 
         if not selected_mxedges:
             print("\n! No valid MxEdge selected")
-            logging.warning("Menu #10: No valid MxEdge selected")
+            logging.warning("Menu #135: No valid MxEdge selected")
             return
 
         print("\n  Selected MxEdge:")
@@ -8119,7 +8119,7 @@ class PacketCaptureManager:
 
             except Exception as error:
                 print(f"\n  {mxedge_name} - Error fetching stats: {error}")
-                logging.error(f"Menu #10: Failed to fetch stats for {mxedge_name}: {error}")
+                logging.error(f"Menu #135: Failed to fetch stats for {mxedge_name}: {error}")
                 mxedge_interfaces[mxedge_id] = {"name": mxedge_name, "ports": {}}
                 all_ports_by_mxedge[mxedge_id] = {"name": mxedge_name, "ports": []}
 
@@ -8144,12 +8144,12 @@ class PacketCaptureManager:
                 ).strip()
             except (EOFError, KeyboardInterrupt):
                 print("\n! Operation cancelled")
-                logging.info("Menu #10: User cancelled port selection")
+                logging.info("Menu #135: User cancelled port selection")
                 return
 
             if not port_input:
                 print("\n! Port selection is required. Please select a port index.")
-                logging.warning("Menu #10: No port selected")
+                logging.warning("Menu #135: No port selected")
                 return
             else:
                 # Parse single port index
@@ -8161,11 +8161,11 @@ class PacketCaptureManager:
                         print(f"    -> Selected port: {selected_port}")
                     else:
                         print(f"\n! Invalid index {idx} (valid range: 0-{len(port_list) - 1})")
-                        logging.warning(f"Menu #10: Invalid port index: {idx}")
+                        logging.warning(f"Menu #135: Invalid port index: {idx}")
                         return
                 except ValueError:
                     print("\n! Invalid input format. Please enter a single numeric index.")
-                    logging.warning(f"Menu #10: Invalid port input: {port_input}")
+                    logging.warning(f"Menu #135: Invalid port input: {port_input}")
                     return
 
         # Tcpdump filter selection
@@ -11953,7 +11953,7 @@ class OrgAlarmEventExporter:
         """
         Export open organization alarms from the past 24 hours to OrgAlarms.csv.
         """
-        logging.info("Menu #1: Starting organization alarms export")
+        logging.info("Menu #20: Starting organization alarms export")
         logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
         TimeUtils.log_dynamic_lookback("open org alarms export", hours)
@@ -11999,7 +11999,7 @@ class OrgAlarmEventExporter:
         """
         Export all device events from the past 24 hours to OrgDeviceEvents.csv.
         """
-        logging.info("Menu #2: Starting device events export")
+        logging.info("Menu #21: Starting device events export")
         logging.info("Search Org Device Events:")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
@@ -12014,7 +12014,7 @@ class OrgAlarmEventExporter:
         DataExporter.save_data_to_output(events, "OrgDeviceEvents.csv")  # type: ignore[no-untyped-call]
         logging.info(f"Device events written to OrgDeviceEvents.csv ({len(events)} rows).")
         print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
-        logging.info(f"Menu #2: Device events export completed - {len(events)} events")
+        logging.info(f"Menu #21: Device events export completed - {len(events)} events")
         if events:
             logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
 
@@ -15995,7 +15995,7 @@ class OrgExportUtils:
         If False, pulls only the last 24 hours.
         If duration is provided, uses it as the duration parameter.
         """
-        logging.info("Menu #3: Starting audit logs export")
+        logging.info("Menu #22: Starting audit logs export")
         logging.debug(f"ENTRY: OrgExportUtils.audit_logs(full_history={full_history}, duration={duration})")
         try:
             org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -16023,7 +16023,7 @@ class OrgExportUtils:
             DataExporter.save_data_to_output(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
             print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")
             logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")
-            logging.info(f"Menu #3: Audit logs export completed - {len(data)} records")
+            logging.info(f"Menu #22: Audit logs export completed - {len(data)} records")
             logging.debug("EXIT: OrgExportUtils.audit_logs - success")
         except Exception as e:
             logging.error(f"Failed to export audit logs: {e}")
@@ -16215,7 +16215,7 @@ class OrgExportUtils:
 
     @staticmethod
     def ssid_template_consolidation() -> None:
-        """SSID template consolidation workflow (Menu #159). Delegates to src.ssid_consolidation."""
+        """SSID template consolidation workflow (Menu #145). Delegates to src.ssid_consolidation."""
         from src.ssid_consolidation.ssid_template_consolidation import (  # noqa: PLC0415
             SSIDTemplateConsolidationManager as _Impl,
         )
@@ -16230,7 +16230,7 @@ class OrgExportUtils:
 
     @staticmethod
     def e911_bssid_compliance_report() -> None:
-        """E911 BSSID compliance report (Menu #160). Delegates to src.reports.e911_bssid."""
+        """E911 BSSID compliance report (Menu #89). Delegates to src.reports.e911_bssid."""
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
         if not current_org_id:
             print("! No organization selected. Exiting.")
@@ -17961,7 +17961,7 @@ class SiteExportUtils:
 
     @staticmethod
     def zone_config_analysis() -> None:
-        """Zone, engagement, and occupancy config analysis (Menu #119). Delegates to src.analytics.zone_analyzer."""
+        """Zone, engagement, and occupancy config analysis (Menu #6). Delegates to src.analytics.zone_analyzer."""
         from src.analytics.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA  # noqa: PLC0415
 
         _ZCA.analyze(
@@ -17980,7 +17980,7 @@ class GatewayHaExporter:
     Collects per-site HA gateway stats and cluster node membership,
     then exports the combined dataset to the configured output backend.
 
-    Menu #186 -- Gateway HA Cluster Info.
+    Menu #87 -- Gateway HA Cluster Info.
     """
 
     # Field names preserved from the stats_gateway response that describe HA state
@@ -18003,7 +18003,7 @@ class GatewayHaExporter:
 
     @staticmethod
     def ha_cluster_info() -> None:
-        """Export HA gateway cluster info for a selected site (Menu #186).
+        """Export HA gateway cluster info for a selected site (Menu #87).
 
         Flow:
           1. Prompt for site selection.
@@ -18014,7 +18014,7 @@ class GatewayHaExporter:
           6. Print a summary table to the screen.
           7. Export the combined records to the configured output backend.
         """
-        logging.info("Starting Gateway HA Cluster Info export (Menu #186)")  # Log entry point
+        logging.info("Starting Gateway HA Cluster Info export (Menu #87)")  # Log entry point
         try:
             org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Retrieve or prompt for org ID
             site_id = PromptUtils.select_site(org_id)  # Prompt user to pick a site from the list
@@ -21314,7 +21314,7 @@ class GatewayExportUtils:
         Args:
             fast (bool): Enable fast mode for API calls
         """
-        logging.info("Menu #4: Starting gateway management IPs export")
+        logging.info("Menu #31: Starting gateway management IPs export")
         print("Gateway Management IP Export:")
         print("Collecting data from inventory, templates, and configurations...")
 
@@ -22015,7 +22015,7 @@ class GatewayExportUtils:
 
     @staticmethod
     def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:
-        """Update gateway templates WAN2 variable (Menu #104). Delegates to src.gateway.wan2_variable."""
+        """Update gateway templates WAN2 variable (Menu #163). Delegates to src.gateway.wan2_variable."""
         from src.gateway.wan2_variable import GatewayWan2VariableMigrator  # noqa: PLC0415
 
         migrator = GatewayWan2VariableMigrator(
@@ -23530,7 +23530,7 @@ class WAN2MigrationManager:
 
     def set_site_variable(self):  # type: ignore[no-untyped-def]
         """
-        Menu #103: Set WAN2 Interface Site Variable.
+        Menu #149: Set WAN2 Interface Site Variable.
 
         Creates and sets the {{wan2_interface}} site variable to 'ge-0/0/1' across selected sites.
         Reports sites with WAN2 port overrides requiring manual review.
@@ -23556,13 +23556,13 @@ class WAN2MigrationManager:
         self._generate_site_variable_report(results)
 
     def _display_site_variable_header(self):  # type: ignore[no-untyped-def]
-        """Display operation header for Menu #103."""
+        """Display operation header for Menu #149."""
         print("\n  Set WAN2 Interface Site Variable")
         print("=" * 70)
         print("  This operation will set the 'wan2_interface' site variable to 'ge-0/0/1'")
         print("  across selected sites, preparing them for template-based WAN migration.")
         print("=" * 70)
-        logging.info("Menu #103: Set WAN2 Interface Site Variable operation started")
+        logging.info("Menu #149: Set WAN2 Interface Site Variable operation started")
 
     def _load_required_data(self) -> bool:
         """Load site and gateway configuration data. Returns True on success."""
@@ -23615,7 +23615,7 @@ class WAN2MigrationManager:
             return all_sites
         else:
             print(" Operation cancelled.")
-            logging.info("Menu #103 cancelled by user")
+            logging.info("Menu #149 cancelled by user")
             logging.info(  # Exit envelope on cancel
                 "Exiting WAN2MigrationManager._get_site_selection: cancelled by user"
             )
@@ -23637,7 +23637,7 @@ class WAN2MigrationManager:
             return [self.sites[idx] for idx in selected_indices if 0 <= idx < len(self.sites)]
         except (ValueError, IndexError) as error:
             print(f" Invalid site selection: {error}")
-            logging.error(f"Invalid site selection in Menu #103: {error}")
+            logging.error(f"Invalid site selection in Menu #149: {error}")
             return []
 
     def _filter_excluded_sites(self, sites_to_configure: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -23654,13 +23654,13 @@ class WAN2MigrationManager:
         if filtered_count > 0:
             print(f"\n  !? SECURITY: Excluded {filtered_count} '{MIST_SITE_EXCLUDE_PREFIX}*' sites from configuration")
             logging.info(
-                f"Menu #103: Excluded {filtered_count} sites matching prefix '{MIST_SITE_EXCLUDE_PREFIX}' from WAN2 variable operation"  # noqa: E501
+                f"Menu #149: Excluded {filtered_count} sites matching prefix '{MIST_SITE_EXCLUDE_PREFIX}' from WAN2 variable operation"  # noqa: E501
             )
 
         if not filtered_sites:
             print(f" No sites remaining after filtering '{MIST_SITE_EXCLUDE_PREFIX}*' sites.")
             logging.warning(
-                f"Menu #103: All selected sites matched exclude prefix '{MIST_SITE_EXCLUDE_PREFIX}' - operation cancelled"  # noqa: E501
+                f"Menu #149: All selected sites matched exclude prefix '{MIST_SITE_EXCLUDE_PREFIX}' - operation cancelled"  # noqa: E501
             )
 
         return filtered_sites
@@ -23683,7 +23683,7 @@ class WAN2MigrationManager:
 
         if confirm not in ["yes", "y"]:
             print(" Operation cancelled.")
-            logging.info("Menu #103 cancelled by user at confirmation prompt")
+            logging.info("Menu #149 cancelled by user at confirmation prompt")
             logging.info(  # Exit envelope on cancel
                 "Exiting WAN2MigrationManager._confirm_site_variable_operation: result=cancelled"
             )
@@ -24078,7 +24078,7 @@ class WAN2MigrationManager:
 
         self._print_severity_warnings(critical_sites, warning_sites, info_sites)
 
-        logging.info(f"Menu #103 complete: {success_count}/{len(results)} sites configured")
+        logging.info(f"Menu #149 complete: {success_count}/{len(results)} sites configured")
         logging.info(f"Override breakdown - CRITICAL: {critical_sites}, WARNING: {warning_sites}, INFO: {info_sites}")
 
     def _print_severity_warnings(self, critical_sites: int, warning_sites: int, info_sites: int):  # type: ignore[no-untyped-def]
@@ -24086,7 +24086,7 @@ class WAN2MigrationManager:
         if critical_sites > 0:
             print(f"\n  !? CRITICAL ATTENTION: {critical_sites} sites have DHCP->Static IP conflicts")
             print("  Template specifies DHCP but devices use locally unique static IPs")
-            print("  These MUST be manually reviewed before template migration (Menu #104)")
+            print("  These MUST be manually reviewed before template migration (Menu #163)")
             print("  Static IPs will be lost if template DHCP is applied without device overrides")
             print("  Check 'override_details' column for device names and static IP addresses")
 
@@ -24746,7 +24746,7 @@ class WANProbeConfigManager:
     """
     Manages WAN interface ICMP probe configuration for gateway templates.
 
-    Menu #113: Configure WAN probe override settings (probe IPs and profile)
+    Menu #166: Configure WAN probe override settings (probe IPs and profile)
     for all WAN interfaces across selected gateway templates.
 
     Default Configuration:
@@ -24777,7 +24777,7 @@ class WANProbeConfigManager:
     @classmethod
     def configure(cls, dry_run: bool = False) -> None:
         """
-        Menu #113: Configure WAN Probe Override on Gateway Templates (DESTRUCTIVE)
+        Menu #166: Configure WAN Probe Override on Gateway Templates (DESTRUCTIVE)
 
         Updates wan_probe_override settings for all WAN interfaces in selected
         gateway templates. Replaces existing probe IPs with configured values.
@@ -24806,7 +24806,7 @@ class WANProbeConfigManager:
         if not templates_with_changes:
             print("\n  No WAN interfaces found in selected templates.")
             print("  No changes needed.")
-            logging.info("Menu #113: No WAN interfaces found in selected templates")
+            logging.info("Menu #166: No WAN interfaces found in selected templates")
             return
 
         self._show_preview(templates_with_changes, dry_run)
@@ -24833,14 +24833,14 @@ class WANProbeConfigManager:
         print(f"    Probe IPs: {self.probe_ips}")
         print(f"    Probe Profile: {self.probe_profile}")
         print("=" * 70)
-        logging.warning("Menu #113 DESTRUCTIVE: Configure WAN Probe Override operation started")
+        logging.warning("Menu #166 DESTRUCTIVE: Configure WAN Probe Override operation started")
 
     def _initialize(self) -> bool:
         """Initialize org_id. Returns True on success."""
         self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
         if not self.org_id:
             print(" Failed to get organization ID.")
-            logging.error("Menu #113: Could not obtain org_id")
+            logging.error("Menu #166: Could not obtain org_id")
             return False
         return True
 
@@ -24856,7 +24856,7 @@ class WANProbeConfigManager:
 
         if not self.templates:
             print(" No gateway templates found.")
-            logging.warning("Menu #113: No gateway templates available")
+            logging.warning("Menu #166: No gateway templates available")
             return False
 
         sites_path = FilePathUtils.get_csv_path("SiteList.csv")
@@ -24903,7 +24903,7 @@ class WANProbeConfigManager:
 
         if selection == "cancel":
             print(" Operation cancelled.")
-            logging.info("Menu #113 cancelled by user at template selection")
+            logging.info("Menu #166 cancelled by user at template selection")
             return []
 
         if selection == "all":
@@ -24918,7 +24918,7 @@ class WANProbeConfigManager:
             return selected
         except (ValueError, IndexError) as error:
             print(f" Invalid selection: {error}")
-            logging.error(f"Menu #113: Invalid template selection: {error}")
+            logging.error(f"Menu #166: Invalid template selection: {error}")
             return []
 
     def _analyze_templates(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -25030,7 +25030,7 @@ class WANProbeConfigManager:
         ).strip()
         if confirmation != "APPLY":
             print(" Operation cancelled.")
-            logging.info("Menu #113 cancelled by user at final confirmation")
+            logging.info("Menu #166 cancelled by user at final confirmation")
             return False
         return True
 
@@ -25168,7 +25168,7 @@ class WANProbeConfigManager:
         print("=" * 70)
 
         logging.warning(
-            f"Menu #113 DESTRUCTIVE operation complete: {sum(1 for r in results if r['status'] == 'SUCCESS')} templates updated"  # noqa: E501
+            f"Menu #166 DESTRUCTIVE operation complete: {sum(1 for r in results if r['status'] == 'SUCCESS')} templates updated"  # noqa: E501
         )
 
 
@@ -25179,8 +25179,8 @@ class WANProbeDeviceOverrideManager:
     """
     Manages WAN probe configuration for device-level port overrides.
 
-    Menu #114: Configure WAN probe override settings on gateway devices that
-    have device-level port overrides. This complements Menu #113 (template-level)
+    Menu #167: Configure WAN probe override settings on gateway devices that
+    have device-level port overrides. This complements Menu #166 (template-level)
     by targeting ONLY ports that have been overridden from their template.
 
     Workflow:
@@ -25216,7 +25216,7 @@ class WANProbeDeviceOverrideManager:
     @classmethod
     def configure(cls, dry_run: bool = False) -> None:
         """
-        Menu #114: Configure WAN Probe Override on Device Port Overrides (DESTRUCTIVE)
+        Menu #167: Configure WAN Probe Override on Device Port Overrides (DESTRUCTIVE)
 
         Updates wan_probe_override settings for WAN ports that have device-level
         overrides from their gateway template.
@@ -25271,14 +25271,14 @@ class WANProbeDeviceOverrideManager:
         print(f"    Probe IPs: {self.probe_ips}")
         print(f"    Probe Profile: {self.probe_profile}")
         print("=" * 70)
-        logging.warning("Menu #114 DESTRUCTIVE: Configure WAN Probe on Device Port Overrides started")
+        logging.warning("Menu #167 DESTRUCTIVE: Configure WAN Probe on Device Port Overrides started")
 
     def _initialize(self) -> bool:
         """Initialize org_id. Returns True on success."""
         self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
         if not self.org_id:
             print(" Failed to get organization ID.")
-            logging.error("Menu #114: Could not obtain org_id")
+            logging.error("Menu #167: Could not obtain org_id")
             return False
         return True
 
@@ -25294,7 +25294,7 @@ class WANProbeDeviceOverrideManager:
 
         if not self.templates:
             print(" No gateway templates found.")
-            logging.warning("Menu #114: No gateway templates available")
+            logging.warning("Menu #167: No gateway templates available")
             return False
 
         sites_path = FilePathUtils.get_csv_path("SiteList.csv")
@@ -25341,7 +25341,7 @@ class WANProbeDeviceOverrideManager:
 
         if selection == "cancel":
             print(" Operation cancelled.")
-            logging.info("Menu #114 cancelled by user at template selection")
+            logging.info("Menu #167 cancelled by user at template selection")
             return False
 
         try:
@@ -25351,14 +25351,14 @@ class WANProbeDeviceOverrideManager:
                 assert self.selected_template is not None  # Type narrowing for Pylance  # nosec B101
                 template_name = self.selected_template["name"]
                 print(f"\n  Selected template: {template_name}")
-                logging.info(f"Menu #114: Selected template {template_name}")
+                logging.info(f"Menu #167: Selected template {template_name}")
                 return True
             else:
                 print(" Invalid selection.")
                 return False
         except ValueError:
             print(f" Invalid selection: {selection}")
-            logging.error(f"Menu #114: Invalid template selection: {selection}")
+            logging.error(f"Menu #167: Invalid template selection: {selection}")
             return False
 
     def _find_template_sites(self) -> bool:  # nosec B101
@@ -25378,7 +25378,7 @@ class WANProbeDeviceOverrideManager:
 
         if not self.template_sites:
             print(f"\n  No sites found using template '{template_name}'.")
-            logging.warning(f"Menu #114: No sites using template {template_name}")
+            logging.warning(f"Menu #167: No sites using template {template_name}")
             return False
 
         print(f"\n  Found {len(self.template_sites)} sites using template '{template_name}'")
@@ -25412,7 +25412,7 @@ class WANProbeDeviceOverrideManager:
         if not all_gateways:
             print(f"\n  No gateway devices found in the {len(self.template_sites)} sites using this template.")
             print("  Gateways must be assigned to sites before checking for port overrides.")
-            logging.info("Menu #114: No gateway devices found in template sites")
+            logging.info("Menu #167: No gateway devices found in template sites")
             return []
 
         print(f"\n  Found {len(all_gateways)} gateway devices. Checking for WAN port overrides...")
@@ -25469,7 +25469,7 @@ class WANProbeDeviceOverrideManager:
         if not devices_with_overrides:
             print(f"\n  No WAN port overrides found on the {len(all_gateways)} gateway devices.")
             print("  All devices are using template-level WAN configuration.")
-            logging.info("Menu #114: No devices with WAN port overrides found")
+            logging.info("Menu #167: No devices with WAN port overrides found")
             return []
 
         total_ports = sum(len(d["overridden_wan_ports"]) for d in devices_with_overrides)
@@ -25517,7 +25517,7 @@ class WANProbeDeviceOverrideManager:
         ).strip()
         if confirmation != "APPLY":
             print(" Operation cancelled.")
-            logging.info("Menu #114 cancelled by user at final confirmation")
+            logging.info("Menu #167 cancelled by user at final confirmation")
             return False
         return True
 
@@ -25683,7 +25683,7 @@ class WANProbeDeviceOverrideManager:
         print("=" * 70)
 
         logging.warning(
-            f"Menu #114 DESTRUCTIVE operation complete: {sum(1 for r in results if r['status'] == 'SUCCESS')} devices updated"  # noqa: E501
+            f"Menu #167 DESTRUCTIVE operation complete: {sum(1 for r in results if r['status'] == 'SUCCESS')} devices updated"  # noqa: E501
         )
 
 
@@ -25770,7 +25770,7 @@ class SiteConfigManager:
         Create test sites from NorthAmericanTestSites.csv in the data directory.
         DESTRUCTIVE: Creates new sites in the organization.
         """
-        logging.warning("Menu #107 DESTRUCTIVE: Create test sites from CSV operation started")
+        logging.warning("Menu #171 DESTRUCTIVE: Create test sites from CSV operation started")
         SiteConfigManager._display_test_sites_header()
 
         if not SiteConfigManager._confirm_test_site_creation():
@@ -25788,7 +25788,7 @@ class SiteConfigManager:
 
         created, failed = SiteConfigManager._execute_site_creation(org_id, sites_data)
         SiteConfigManager._report_site_creation_results(sites_data, created, failed)
-        logging.warning(f"Menu #107 complete: {len(created)} sites created, {len(failed)} failed")
+        logging.warning(f"Menu #171 complete: {len(created)} sites created, {len(failed)} failed")
 
     @staticmethod
     def _display_test_sites_header() -> None:
@@ -25923,7 +25923,7 @@ class SiteConfigManager:
         Create country-specific RF templates and assign sites to matching templates.
         DESTRUCTIVE: Creates RF templates and modifies site assignments.
         """
-        logging.warning("Menu #108 DESTRUCTIVE: Create country RF templates operation started")
+        logging.warning("Menu #172 DESTRUCTIVE: Create country RF templates operation started")
         SiteConfigManager._display_rf_template_header()
 
         if not apisession:
@@ -25967,7 +25967,7 @@ class SiteConfigManager:
             templates_to_create, templates_to_update, update_mode, success, failed, sites_without_country
         )
         logging.warning(
-            f"Menu #108 complete: {len(templates_to_create)} templates created, {len(success)} sites assigned, {len(failed)} failed"  # noqa: E501
+            f"Menu #172 complete: {len(templates_to_create)} templates created, {len(success)} sites assigned, {len(failed)} failed"  # noqa: E501
         )
 
     @staticmethod
@@ -26219,7 +26219,7 @@ class SiteConfigManager:
         Create Device Profile for each unique AP model in the organization.
         DESTRUCTIVE: Creates new device profiles.
         """
-        logging.warning("Menu #109 DESTRUCTIVE: Create AP model device profiles operation started")
+        logging.warning("Menu #173 DESTRUCTIVE: Create AP model device profiles operation started")
         SiteConfigManager._display_device_profile_header()
 
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -26247,7 +26247,7 @@ class SiteConfigManager:
 
         created, failed = SiteConfigManager._execute_profile_creation(org_id, to_create)
         SiteConfigManager._report_profile_creation_results(created, failed, to_skip)
-        logging.warning(f"Menu #109 complete: {len(created)} profiles created, {len(failed)} failed")
+        logging.warning(f"Menu #173 complete: {len(created)} profiles created, {len(failed)} failed")
 
     @staticmethod
     def _display_device_profile_header() -> None:
@@ -26393,7 +26393,7 @@ class SiteConfigManager:
         Assign AP devices to Device Profiles matching their model type.
         DESTRUCTIVE: Modifies device assignments.
         """
-        logging.warning("Menu #110 DESTRUCTIVE: Assign APs to device profiles operation started")
+        logging.warning("Menu #174 DESTRUCTIVE: Assign APs to device profiles operation started")
         SiteConfigManager._display_profile_assignment_header()
 
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -26422,7 +26422,7 @@ class SiteConfigManager:
 
         success, failed = SiteConfigManager._execute_profile_assignment(org_id, with_profile)
         SiteConfigManager._report_profile_assignment_results(success, failed, without_profile, without_model)
-        logging.warning(f"Menu #110 complete: {len(success)} APs assigned, {len(failed)} failed")
+        logging.warning(f"Menu #174 complete: {len(success)} APs assigned, {len(failed)} failed")
 
     @staticmethod
     def _display_profile_assignment_header() -> None:
@@ -27990,7 +27990,7 @@ class MSPInventoryExporter:
 
     def _run(self) -> None:
         """Execute the MSP inventory export workflow."""
-        logging.info("Menu #117: Starting MSP-wide device inventory export")
+        logging.info("Menu #144: Starting MSP-wide device inventory export")
         self._print_header()  # type: ignore[no-untyped-call]
 
         if not self._ensure_msp_privileges():
@@ -27999,7 +27999,7 @@ class MSPInventoryExporter:
         self._process_all_msps()  # type: ignore[no-untyped-call]
         self._finalize_export()  # type: ignore[no-untyped-call]
         logging.info(
-            f"Menu #117 complete: {self.device_count} devices exported from {self.org_count} orgs across {self.msp_count} MSPs"  # noqa: E501
+            f"Menu #144 complete: {self.device_count} devices exported from {self.org_count} orgs across {self.msp_count} MSPs"  # noqa: E501
         )
 
     def _print_header(self):  # type: ignore[no-untyped-def]
@@ -30564,7 +30564,7 @@ def _ws_cmd_deps() -> WebSocketCmdDeps:
 
 
 class AuditAnalysisOps:
-    """Menu #174: Audit Log Analysis operations."""
+    """Menu #25: Audit Log Analysis operations."""
 
     @staticmethod
     def audit_log_analysis():
@@ -30637,190 +30637,190 @@ menu_actions = {
     # READ-ONLY OPERATIONS
     # ==============================
     # > Setup & Core Logs
-    "1": (OrgAlarmEventExporter.alarms, "Export all organization alarms from the past day"),
-    "2": (OrgAlarmEventExporter.device_events, "Export all device events from the past 24 hours"),
-    "3": (
+    "20": (OrgAlarmEventExporter.alarms, "Export all organization alarms from the past day"),
+    "21": (OrgAlarmEventExporter.device_events, "Export all device events from the past 24 hours"),
+    "22": (
         lambda: OrgExportUtils.audit_logs(full_history=False),
         "Export audit logs for the organization (last 24 hours)",
     ),
-    "4": (
+    "31": (
         lambda fast=False: GatewayExportUtils.management_ips(fast=fast),  # type: ignore[misc]
         "Export gateway management overlay IPs grouped by template association",
     ),
     # > WebSocket Device Commands
-    "5": (
+    "102": (
         lambda: WebSocketCommands.show_mac_table(_ws_cmd_deps()),  # type: ignore[misc]
         "Show MAC table on switch device via WebSocket (Layer 2 switching table)",
     ),
-    "6": (
+    "103": (
         RoutingUtils.execute_show_forwarding_table,
         "Show forwarding table on gateway device via WebSocket (Layer 3 routing table)",
     ),
-    "7": (
+    "104": (
         RoutingUtils.execute_show_routing_table,
         "Show routing table on switches via WebSocket (Switch L3 routing - BGP/OSPF/Static)",
     ),
-    "8": (
+    "105": (
         RoutingUtils.execute_show_ssr_routes,
         "Show SSR/SRX routing table via dedicated API (128T/SRX gateways - Advanced BGP analysis)",
     ),
     # > Packet Capture Operations
-    "9": (
+    "134": (
         lambda: PacketCaptureManager(  # type: ignore[no-untyped-call]
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).start_site_packet_capture(),
         "Start Site Packet Capture - Wireless/Wired/Gateway/Scan captures with WebSocket streaming",
     ),
-    "10": (
+    "135": (
         lambda: PacketCaptureManager(  # type: ignore[no-untyped-call]
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).start_org_packet_capture(),
         "Start Organization Packet Capture - MxEdge captures for org-level Mist Edges only",
     ),
     # Organization-Level Exports
-    "11": (OrgSiteExporter.sites, "Export a list of all sites in the organization"),
-    "12": (OrgInventoryExporter.inventory, "Export the full inventory of devices in the organization"),
-    "13": (OrgDeviceStatsExporter.device_stats, "Export statistics for all devices in the organization"),
-    "14": (OrgDeviceStatsExporter.device_port_stats, "Export port-level statistics for switches and gateways"),
-    "15": (OrgDeviceStatsExporter.vpn_peer_stats, "Export VPN peer path statistics for the organization"),
+    "1": (OrgSiteExporter.sites, "Export a list of all sites in the organization"),
+    "8": (OrgInventoryExporter.inventory, "Export the full inventory of devices in the organization"),
+    "15": (OrgDeviceStatsExporter.device_stats, "Export statistics for all devices in the organization"),
+    "19": (OrgDeviceStatsExporter.device_port_stats, "Export port-level statistics for switches and gateways"),
+    "16": (OrgDeviceStatsExporter.vpn_peer_stats, "Export VPN peer path statistics for the organization"),
     # Gateway & Site-Wide Exports
     # Direct reference (removed lambda) so systematic test harness can introspect 'fast' parameter
-    "16": (GatewayTestExporter.synthetic_tests, "Export synthetic test results for all gateways"),
-    "17": (OrgInventoryExporter.devices, "Export a list of all devices in the organization"),
-    "18": (SiteConfigExporter.settings, "Export configuration settings for all sites"),
-    "19": (
+    "33": (GatewayTestExporter.synthetic_tests, "Export synthetic test results for all gateways"),
+    "9": (OrgInventoryExporter.devices, "Export a list of all devices in the organization"),
+    "59": (SiteConfigExporter.settings, "Export configuration settings for all sites"),
+    "34": (
         GatewayTestExporter.test_results_by_site,
         "Export all synthetic test results (including speed tests) for gateways",
     ),
     # > Location-Enriched Exports
-    "20": (OrgSiteExporter.sites_with_location, "Export a list of sites with location and timezone info"),
-    "21": (
+    "2": (OrgSiteExporter.sites_with_location, "Export a list of sites with location and timezone info"),
+    "11": (
         OrgInventoryExporter.gateways_with_site_info,
         "Export a list of gateways with associated site and address info",
     ),
-    "22": (
+    "10": (
         OrgInventoryExporter.devices_with_site_info,
         "Export a list of all devices with associated site and address info",
     ),
-    "23": (
+    "4": (
         lambda: (OrgSiteExporter.current_guests(), OrgSiteExporter.historical_guests()),  # type: ignore[no-untyped-call]
         "Export all current guest users and last 7 days of historical guests to CSV",
     ),
-    "24": (OrgDeviceStatsExporter.switch_vc_stats, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
-    "25": (
+    "17": (OrgDeviceStatsExporter.switch_vc_stats, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
+    "12": (
         OrgInventoryExporter.combined_inventory_with_site_info,
         "Export combined inventory with site and address info by calendar week",
     ),
-    "26": (GatewayExportUtils.templates, "Export gateway templates from the organization"),
-    "27": (
+    "32": (GatewayExportUtils.templates, "Export gateway templates from the organization"),
+    "3": (
         OrgSiteExporter.sites_list_api,
         "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)",
     ),
-    "28": (
+    "35": (
         lambda fast=False: GatewayExportUtils.with_wan_overrides(fast=fast),  # type: ignore[misc]
         "Find gateway ports overridden from template (outliers for compliance correction)",
     ),
     # Site-Specific Data Exports
-    "29": (SiteDeviceExporter.port_stats, "Export port statistics for a selected site"),
-    "30": (SiteClientExporter.clients, "Export client statistics for a selected site"),
-    "31": (SiteDeviceExporter.devices, "Export device list for a selected site"),
-    "32": (SiteDeviceExporter.device_stats, "Export device statistics for a selected site"),
-    "33": (
+    "62": (SiteDeviceExporter.port_stats, "Export port statistics for a selected site"),
+    "65": (SiteClientExporter.clients, "Export client statistics for a selected site"),
+    "60": (SiteDeviceExporter.devices, "Export device list for a selected site"),
+    "61": (SiteDeviceExporter.device_stats, "Export device statistics for a selected site"),
+    "63": (
         SiteDeviceExporter.device_virtual_chassis,
         "Export virtual chassis information for a selected switch device",
     ),
-    "34": (
+    "64": (
         SiteClientExporter.wifi_clients,
         "Export currently connected WiFi clients and session data for a selected site to SiteWiFiClients.CSV",
     ),
     # Organization Template Exports
-    "35": (OrgTemplateExporter.all_templates, "Export all organization templates (gateway, network, RF, site, AP)"),
-    "36": (OrgTemplateExporter.network_templates, "Export network template information for the organization"),
-    "37": (OrgTemplateExporter.rf_templates, "Export RF template information for the organization"),
-    "38": (OrgTemplateExporter.ap_templates, "Export AP template information for the organization"),
-    "39": (OrgTemplateExporter.switch_templates, "Export switch template information for the organization"),
+    "37": (OrgTemplateExporter.all_templates, "Export all organization templates (gateway, network, RF, site, AP)"),
+    "38": (OrgTemplateExporter.network_templates, "Export network template information for the organization"),
+    "39": (OrgTemplateExporter.rf_templates, "Export RF template information for the organization"),
+    "40": (OrgTemplateExporter.ap_templates, "Export AP template information for the organization"),
+    "41": (OrgTemplateExporter.switch_templates, "Export switch template information for the organization"),
     # Organization Statistics & Analytics
-    "40": (OrgClientSecurityExporter.wireless_clients, "Export wireless client statistics for the organization"),
-    "41": (OrgClientSecurityExporter.wired_clients, "Export wired client statistics for the organization"),
+    "27": (OrgClientSecurityExporter.wireless_clients, "Export wireless client statistics for the organization"),
+    "28": (OrgClientSecurityExporter.wired_clients, "Export wired client statistics for the organization"),
     # Security & Monitoring
-    "42": (OrgClientSecurityExporter.security_events, "Export security events for the organization"),
-    "43": (OrgClientSecurityExporter.rogue_clients, "Export rogue client detections for the organization"),
-    "44": (OrgClientSecurityExporter.rogue_aps, "Export rogue AP detections for the organization"),
+    "24": (OrgClientSecurityExporter.security_events, "Export security events for the organization"),
+    "29": (OrgClientSecurityExporter.rogue_clients, "Export rogue client detections for the organization"),
+    "30": (OrgClientSecurityExporter.rogue_aps, "Export rogue AP detections for the organization"),
     # Configuration & Management (Read-Only)
-    "45": (OrgAdminExporter.licenses, "Export license information for the organization"),
-    "46": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
-    "47": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
-    "48": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
-    "49": (SiteConfigExporter.wlans, "Export WLAN configuration for a selected site"),
-    "50": (SiteClientExporter.beacons, "Export beacon information for a selected site"),
-    "51": (SiteConfigExporter.maps, "Export map information for a selected site"),
-    "52": (SiteConfigExporter.zones, "Export zone information for a selected site"),
-    "53": (SiteExportUtils.insights, "Export SLE (Service Level Experience) metrics insights for a selected site"),
+    "42": (OrgAdminExporter.licenses, "Export license information for the organization"),
+    "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
+    "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
+    "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
+    "69": (SiteConfigExporter.wlans, "Export WLAN configuration for a selected site"),
+    "66": (SiteClientExporter.beacons, "Export beacon information for a selected site"),
+    "67": (SiteConfigExporter.maps, "Export map information for a selected site"),
+    "68": (SiteConfigExporter.zones, "Export zone information for a selected site"),
+    "73": (SiteExportUtils.insights, "Export SLE (Service Level Experience) metrics insights for a selected site"),
     # ==============================
     # GATEWAY TEMPLATE VARIABLE OPERATIONS
     # ==============================
-    "103": (
+    "149": (
         lambda: WAN2MigrationManager().set_site_variable(),  # type: ignore[no-untyped-call]
         "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)",  # noqa: E501
     ),
-    "104": (
+    "163": (
         lambda fast=False, dry_run=False: GatewayExportUtils.wan2_variable_migration(fast=fast, dry_run=dry_run),  # type: ignore[misc]
         " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation, supports --dry-run)",  # noqa: E501
     ),
-    "105": (
+    "150": (
         GatewayTemplateConfigManager.extract,
         "Extract Gateway Template Configuration (DIA_Pico, Picocell) - Save specific configs to JSON for replication",
     ),
-    "106": (
+    "164": (
         GatewayTemplateConfigManager.apply,
         " DESTRUCTIVE: Apply Gateway Template Configuration - Replicate extracted configs to other templates (Requires uppercase 'APPLY' confirmation)",  # noqa: E501
     ),
-    "102": (
+    "148": (
         lambda: WLANRadiusTimerManager().manage(),
         "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, auth_server_selection, and fast_dot1x_timers for site or template WLANs",  # noqa: E501
     ),
     # Authentication Management
-    "115": (
+    "143": (
         switch_to_interactive_login,
         "Switch to interactive login (email/password) - Enables MSP-level API access for current session",
     ),
     # Organization Management (Read-Only)
-    "54": (OrgAdminExporter.api_tokens, "Export API token information for the organization"),
-    "55": (OrgAdminExporter.admins, "Export administrator information for the organization"),
-    "56": (
+    "47": (OrgAdminExporter.api_tokens, "Export API token information for the organization"),
+    "48": (OrgAdminExporter.admins, "Export administrator information for the organization"),
+    "136": (
         OrgConfigExporter.msp,
         "MSP (Managed Service Provider) info - Displays guidance only (MSP data requires MSP-level API access, not org-level)",  # noqa: E501
     ),
-    "57": (OrgAdminExporter.sso, "Export SSO (Single Sign-On) information for the organization"),
-    "58": (OrgAdminExporter.usage, "Export license usage information for the organization"),
-    "59": (OrgConfigExporter.mx_edges, "Export MX Edge information for the organization"),
+    "49": (OrgAdminExporter.sso, "Export SSO (Single Sign-On) information for the organization"),
+    "43": (OrgAdminExporter.usage, "Export license usage information for the organization"),
+    "50": (OrgConfigExporter.mx_edges, "Export MX Edge information for the organization"),
     # Status & Monitoring
-    "60": (
+    "137": (
         lambda: FirmwareManager(  # type: ignore[no-untyped-call]
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).check_firmware_upgrade_status(),
         "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV",
     ),
-    "61": (
+    "138": (
         lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: InventoryCSVComparator(  # type: ignore[misc]
             fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify
         ).execute(),
         "Compare inventory data with external CSV file using configurable address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)",  # noqa: E501
     ),
-    "62": (
+    "139": (
         TroubleshootUtils.launch_interactive,
         "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis",
     ),
     # Long-Running Export Operations (Read-Only)
-    "63": (
+    "97": (
         OrgAlarmEventExporter.device_events_52w,
         "Export all org device events from the last 52 weeks (streaming with checkpoint/resume)",
     ),
-    "64": (
+    "98": (
         lambda: OrgExportUtils.audit_logs(full_history=True, duration="52w"),
         "Export ALL audit logs for the organization (last 52 weeks)",
     ),
-    "65": (
+    "99": (
         GatewayExportUtils.device_configs,
         "Export configuration details for all gateway devices across all sites",
     ),
@@ -30828,102 +30828,102 @@ menu_actions = {
     # UNSAFE/INTERACTIVE OPERATIONS
     # ==============================
     # > Site Selection & Interactive Tools
-    "70": (PromptUtils.select_site_with_logging, "Select a site (used by other functions)"),
-    "71": (InteractiveDisplayUtils.site_inventory, "View device inventory for a selected site"),
-    "72": (InteractiveDisplayUtils.device_stats, "View statistics for a selected device at a site"),
-    "73": (InteractiveDisplayUtils.device_tests, "View synthetic test stats for a selected gateway device"),
-    "74": (InteractiveDisplayUtils.device_config, "View configuration details for a selected device"),
+    "92": (PromptUtils.select_site_with_logging, "Select a site (used by other functions)"),
+    "93": (InteractiveDisplayUtils.site_inventory, "View device inventory for a selected site"),
+    "94": (InteractiveDisplayUtils.device_stats, "View statistics for a selected device at a site"),
+    "95": (InteractiveDisplayUtils.device_tests, "View synthetic test stats for a selected gateway device"),
+    "96": (InteractiveDisplayUtils.device_config, "View configuration details for a selected device"),
     # > Continuous Operations & Monitoring
-    "75": (
+    "151": (
         DataCollectionManager.continuous_loop,
         "Loop refresh of core datasets (site list, inventory, stats, ports, VPN) Stop with CTRL+C or create 'stop_loop.txt'",  # noqa: E501
     ),
-    "76": (
+    "152": (
         DataCollectionManager.continuous_loop,
         "Run continuous data collection loop (5 core API calls with rate limiting)",
     ),
     # > File Processing & Support Operations
-    "77": (
+    "100": (
         SFPTransceiverDataProcessor.merge_transceiver_data,
         "Process and merge CSV files of SFP Module locations into a single CSV file",
     ),
-    "78": (DataCollectionManager.generate_support_packages, "Generate support package for each site"),
+    "101": (DataCollectionManager.generate_support_packages, "Generate support package for each site"),
     # > CLI & WebSocket Operations
-    "79": (CLIShellManager.launch, "Interactively execute a CLI command on a gateway or switch (exit with ~)"),
-    "80": (ARPCommandManager.execute, "Run ARP command on an AP and receive output via WebSocket"),
+    "140": (CLIShellManager.launch, "Interactively execute a CLI command on a gateway or switch (exit with ~)"),
+    "121": (ARPCommandManager.execute, "Run ARP command on an AP and receive output via WebSocket"),
     # ! DESTRUCTIVE OPERATIONS - USE WITH EXTREME CAUTION
-    "90": (
+    "154": (
         lambda: FirmwareManager(  # type: ignore[no-untyped-call]
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_firmware_upgrade_with_mode_selection(),
         " DESTRUCTIVE: Advanced AP firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment",  # noqa: E501
     ),
-    "91": (
+    "158": (
         DeviceRebootManager.by_gateway_template_list,
         " DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results",  # noqa: E501
     ),
-    "92": (
+    "161": (
         lambda dry_run=False: VirtualChassisManager.convert_single(dry_run=dry_run),  # type: ignore[misc]
         " DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive, supports --dry-run)",
     ),
-    "93": (
+    "162": (
         VirtualChassisManager.convert_by_site_list,
         " DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)",
     ),
-    "94": (
+    "14": (
         VirtualChassisManager.check_status,
         "Check virtual chassis to virtual MAC conversion status for all switches",
     ),
-    "95": (
+    "18": (
         lambda fast=False: GatewayStatsExporter.device_stats_with_freshness(fast=fast),  # type: ignore[misc]
         "Export detailed device statistics for all gateways (with freshness check)",
     ),
-    "96": (
+    "36": (
         GatewayStatsExporter.wan_port_conflicts,
         "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)",
     ),
-    "97": (
+    "175": (
         SSHRunnerManager.interactive,
         "Enhanced SSH Command Runner - Execute commands on remote network devices via SSH",
     ),
-    "98": (
+    "176": (
         SSHRunnerManager.by_gateway_template,
         "SSH Runner - Target gateways by template name (online gateways with management IPs only)",
     ),
     # ==============================
     # INSIGHTS API OPERATIONS - Organization & Site Analytics
     # ==============================
-    "66": (OrgExportUtils.sle_metrics, "Export Organization SLE Metrics (Service Level Experience)"),
-    "67": (OrgExportUtils.sites_sle_summary, "Export SLE summary metrics for all sites in the organization"),
-    "68": (SiteExportUtils.insight_metrics, "Export general insight metrics for a selected site"),
-    "69": (SiteClientExporter.client_insights, "Export client-specific insight metrics for a selected site"),
-    "81": (SiteExportUtils.device_insights, "Export device-specific insight metrics for a selected site"),
-    "82": (
+    "51": (OrgExportUtils.sle_metrics, "Export Organization SLE Metrics (Service Level Experience)"),
+    "52": (OrgExportUtils.sites_sle_summary, "Export SLE summary metrics for all sites in the organization"),
+    "74": (SiteExportUtils.insight_metrics, "Export general insight metrics for a selected site"),
+    "75": (SiteClientExporter.client_insights, "Export client-specific insight metrics for a selected site"),
+    "76": (SiteExportUtils.device_insights, "Export device-specific insight metrics for a selected site"),
+    "54": (
         lambda: ConstDefinitionsExporter(apisession).export_all(),  # type: ignore[no-untyped-call]
         "Export all available const definitions from the Mist API (comprehensive endpoint coverage)",
     ),
-    "83": (OrgExportUtils.insight_metrics, "Export Organization Insight Metrics (comprehensive operational insights)"),
-    "84": (
+    "53": (OrgExportUtils.insight_metrics, "Export Organization Insight Metrics (comprehensive operational insights)"),
+    "77": (
         SiteAnomalyExporter.anomaly_events,
         "Export Site Anomaly Events (dynamic discovery of all anomaly-related metrics from Mist API)",
     ),
-    "85": (
+    "78": (
         SiteAnomalyExporter.device_anomaly_events,
         "Export Site Device Anomaly Events (device-specific anomaly detection)",
     ),
-    "86": (
+    "79": (
         SiteAnomalyExporter.client_anomaly_events,
         "Export Site Client Anomaly Events (client-specific anomaly detection: connectivity, roaming, throughput)",
     ),
-    "87": (
+    "118": (
         lambda: WebSocketNetworkDiagCommands.ping_device(_ws_cmd_deps()),  # type: ignore[misc]
         "WebSocket Device Ping - Execute ping command on device via WebSocket stream (real-time output)",
     ),
-    "88": (
+    "119": (
         lambda: WebSocketNetworkDiagCommands.arp_device(_ws_cmd_deps()),  # type: ignore[misc]
         "WebSocket Device ARP - Execute ARP command on device via WebSocket stream (real-time output)",
     ),
-    "89": (
+    "120": (
         lambda: ServicePingManager().execute(),  # type: ignore[misc]
         "WebSocket Service Ping - Execute service-specific ping on SSR gateways via WebSocket stream (real-time output)",  # noqa: E501
     ),
@@ -30934,7 +30934,7 @@ menu_actions = {
     # ==============================
     # SWITCH FIRMWARE OPERATIONS
     # ==============================
-    "99": (
+    "155": (
         lambda: FirmwareManager(  # type: ignore[no-untyped-call]
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_switch_firmware_upgrade_with_mode_selection(),
@@ -30943,7 +30943,7 @@ menu_actions = {
     # ==============================
     # SSR FIRMWARE OPERATIONS
     # ==============================
-    "100": (
+    "156": (
         lambda: FirmwareManager(  # type: ignore[no-untyped-call]
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_ssr_firmware_upgrade_with_mode_selection(),
@@ -30952,94 +30952,94 @@ menu_actions = {
     # ==============================
     # TERMINAL USER INTERFACE MODE
     # ==============================
-    "101": (
+    "141": (
         lambda: TUILauncher().launch(),  # type: ignore[no-untyped-call]
         "Launch Terminal User Interface (TUI) mode - Visual navigation of Mist API library with interactive exploration",  # noqa: E501
     ),
     # ==============================
     # TEST DATA GENERATION
     # ==============================
-    "107": (
+    "171": (
         SiteConfigManager.create_test_sites_from_csv,
         " DESTRUCTIVE: Create 137 test sites from NorthAmericanTestSites.csv - Real landmarks across 13 North American countries (Requires uppercase 'CREATE' confirmation)",  # noqa: E501
     ),
-    "108": (
+    "172": (
         SiteConfigManager.create_country_rf_templates_and_assign,
         " DESTRUCTIVE: Create country-specific RF templates and assign sites to matching templates (Requires uppercase 'CREATE' confirmation)",  # noqa: E501
     ),
-    "109": (
+    "173": (
         SiteConfigManager.create_ap_model_device_profiles,
         " DESTRUCTIVE: Scan org for AP models and create Device Profile per model with inherit/auto settings (Requires uppercase 'CREATE' confirmation)",  # noqa: E501
     ),
-    "110": (
+    "174": (
         SiteConfigManager.assign_aps_to_matching_device_profiles,
         " DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles (Requires uppercase 'ASSIGN' confirmation)",  # noqa: E501
     ),
-    "111": (
+    "165": (
         GatewayTemplateConfigManager.clone_by_location,
         " DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites (Requires uppercase 'CLONE' confirmation)",  # noqa: E501
     ),
-    "113": (
+    "166": (
         lambda dry_run=False: WANProbeConfigManager.configure(dry_run=dry_run),  # type: ignore[misc]
         " DESTRUCTIVE: Configure WAN Probe Override on Gateway Templates - Set ICMP probe IPs and profile for all WAN interfaces (Requires uppercase 'APPLY' confirmation, supports --dry-run)",  # noqa: E501
     ),
-    "114": (
+    "167": (
         lambda dry_run=False: WANProbeDeviceOverrideManager.configure(dry_run=dry_run),  # type: ignore[misc]
         " DESTRUCTIVE: Configure WAN Probe on Device Port Overrides - Set ICMP probe on device-level WAN overrides only (Requires uppercase 'APPLY' confirmation, supports --dry-run)",  # noqa: E501
     ),
     # ==============================
     # ORG-LEVEL FIRMWARE OPERATIONS
     # ==============================
-    "116": (
+    "157": (
         OrgLevelAPFirmwareUpgrader.run,
         " DESTRUCTIVE: Org-Level AP Firmware Upgrade - Efficient multi-site upgrade using org-level API (1 call per version vs 1 per site), MSP multi-org support, supports --dry-run",  # noqa: E501
     ),
     # ==============================
     # MSP OPERATIONS
     # ==============================
-    "117": (
+    "144": (
         MSPInventoryExporter.execute,
         "MSP Inventory Export - Export device inventory across all MSPs and all organizations to CSV (requires MSP privileges via --login)",  # noqa: E501
     ),
     # ==============================
     # SITE AUTO-UPGRADE CONFIGURATION
     # ==============================
-    "118": (
+    "168": (
         SiteAutoUpgradeConfigurator.execute,
         "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings for sites with MSP multi-org support (supports --dry-run)",  # noqa: E501
     ),
     # ==============================
     # ZONE & ENGAGEMENT CONFIGURATION ANALYSIS
     # ==============================
-    "119": (
+    "6": (
         SiteExportUtils.zone_config_analysis,
         "Site Config Analysis - Scan all sites for zone, engagement dwell tag, and occupancy setting deviations",
     ),
     # ==============================
     # SITE ANALYTICS CONFIGURATION (DESTRUCTIVE)
     # ==============================
-    "120": (
+    "169": (
         SiteAnalyticsConfigurator.execute,
         " DESTRUCTIVE: Site Analytics Configuration - Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites",  # noqa: E501
     ),
     # ==============================
     # SITE INVENTORY HEALTH ANALYSIS
     # ==============================
-    "121": (
+    "7": (
         SiteInventoryHealthAnalyzer.analyze,
         "Site Inventory Health Analysis - Find sites with APs missing switches/gateways, or with offline infrastructure",  # noqa: E501
     ),
     # ==============================
     # BULK RADIUS WLAN CONFIGURATION
     # ==============================
-    "122": (
+    "170": (
         lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run),  # type: ignore[misc]
         "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers for org-level RADIUS WLANs",  # noqa: E501
     ),
     # ==============================
     # MAPS MANAGER (External Module)
     # ==============================
-    "112": (
+    "142": (
         lambda: MapsManagerLauncher().launch(),  # type: ignore[no-untyped-call]
         "Maps Manager - Interactive site floorplan and map operations (sub-menu)",
     ),
@@ -31048,65 +31048,65 @@ menu_actions = {
     # ==============================
     # > Diagnostic Commands
     "123": (DeviceUtilityCommands.traceroute, "Traceroute from device to destination host (AP/Switch/Gateway)"),
-    "124": (DeviceUtilityCommands.show_ospf_neighbors, "Show OSPF Neighbors on SSR/SRX Gateway"),
-    "125": (DeviceUtilityCommands.show_ospf_interfaces, "Show OSPF Interfaces on SSR/SRX Gateway"),
-    "126": (DeviceUtilityCommands.show_ospf_database, "Show OSPF Database on SSR/SRX Gateway"),
-    "127": (DeviceUtilityCommands.show_ospf_summary, "Show OSPF Summary on SSR/SRX Gateway"),
-    "135": (DeviceUtilityCommands.resolve_dns, "Test DNS Resolution on SSR Gateway"),
-    "136": (DeviceUtilityCommands.monitor_traffic, "Monitor Traffic on Switch/SRX Port (streaming, Ctrl+C to stop)"),
-    "137": (DeviceUtilityCommands.run_top, "Run Top Command on Switch/SRX (streaming, Ctrl+C to stop)"),
+    "106": (DeviceUtilityCommands.show_ospf_neighbors, "Show OSPF Neighbors on SSR/SRX Gateway"),
+    "107": (DeviceUtilityCommands.show_ospf_interfaces, "Show OSPF Interfaces on SSR/SRX Gateway"),
+    "108": (DeviceUtilityCommands.show_ospf_database, "Show OSPF Database on SSR/SRX Gateway"),
+    "109": (DeviceUtilityCommands.show_ospf_summary, "Show OSPF Summary on SSR/SRX Gateway"),
+    "117": (DeviceUtilityCommands.resolve_dns, "Test DNS Resolution on SSR Gateway"),
+    "124": (DeviceUtilityCommands.monitor_traffic, "Monitor Traffic on Switch/SRX Port (streaming, Ctrl+C to stop)"),
+    "125": (DeviceUtilityCommands.run_top, "Run Top Command on Switch/SRX (streaming, Ctrl+C to stop)"),
     # > Show Commands
-    "128": (DeviceUtilityCommands.show_session, "Show Sessions on SSR/SRX Gateway"),
-    "129": (DeviceUtilityCommands.show_service_path, "Show Service Path on SSR Gateway"),
-    "130": (DeviceUtilityCommands.show_bgp_summary, "Show BGP Summary on Switch or Gateway"),
-    "131": (DeviceUtilityCommands.show_arp_table, "Show ARP Table on Switch or Gateway"),
-    "132": (DeviceUtilityCommands.show_dhcp_leases, "Show DHCP Leases on Switch or Gateway"),
-    "133": (DeviceUtilityCommands.show_dot1x, "Show 802.1X Table on Switch"),
-    "134": (DeviceUtilityCommands.show_evpn_database, "Show EVPN Database on Switch or Gateway"),
+    "110": (DeviceUtilityCommands.show_session, "Show Sessions on SSR/SRX Gateway"),
+    "111": (DeviceUtilityCommands.show_service_path, "Show Service Path on SSR Gateway"),
+    "112": (DeviceUtilityCommands.show_bgp_summary, "Show BGP Summary on Switch or Gateway"),
+    "113": (DeviceUtilityCommands.show_arp_table, "Show ARP Table on Switch or Gateway"),
+    "114": (DeviceUtilityCommands.show_dhcp_leases, "Show DHCP Leases on Switch or Gateway"),
+    "115": (DeviceUtilityCommands.show_dot1x, "Show 802.1X Table on Switch"),
+    "116": (DeviceUtilityCommands.show_evpn_database, "Show EVPN Database on Switch or Gateway"),
     # > Management Commands
-    "138": (DeviceUtilityCommands.locate_device, "Locate Device - Blink LED on AP or Switch"),
-    "139": (DeviceUtilityCommands.unlocate_device, "Unlocate Device - Stop LED Blinking on AP or Switch"),
-    "140": (DeviceUtilityCommands.bounce_port, " Bounce Switch/Gateway Port (y/N confirmation)"),
-    "141": (DeviceUtilityCommands.cable_test, "Cable Test on Switch Port"),
-    "142": (DeviceUtilityCommands.reprovision_device, " Reprovision Switch/Gateway (y/N confirmation)"),
-    "143": (DeviceUtilityCommands.readopt_device, "Re-adopt Switch Device"),
-    "144": (DeviceUtilityCommands.get_ztp_password, "Get ZTP Password for Switch/Gateway (console only)"),
-    "145": (DeviceUtilityCommands.get_config_commands, "Get Config CLI Commands for Switch Adoption"),
-    "146": (DeviceUtilityCommands.upload_support_file, "Upload Support File from Switch/Gateway"),
+    "128": (DeviceUtilityCommands.locate_device, "Locate Device - Blink LED on AP or Switch"),
+    "129": (DeviceUtilityCommands.unlocate_device, "Unlocate Device - Stop LED Blinking on AP or Switch"),
+    "159": (DeviceUtilityCommands.bounce_port, " Bounce Switch/Gateway Port (y/N confirmation)"),
+    "122": (DeviceUtilityCommands.cable_test, "Cable Test on Switch Port"),
+    "160": (DeviceUtilityCommands.reprovision_device, " Reprovision Switch/Gateway (y/N confirmation)"),
+    "130": (DeviceUtilityCommands.readopt_device, "Re-adopt Switch Device"),
+    "131": (DeviceUtilityCommands.get_ztp_password, "Get ZTP Password for Switch/Gateway (console only)"),
+    "132": (DeviceUtilityCommands.get_config_commands, "Get Config CLI Commands for Switch Adoption"),
+    "133": (DeviceUtilityCommands.upload_support_file, "Upload Support File from Switch/Gateway"),
     # > Clear/Reset Commands
-    "147": (DeviceUtilityCommands.clear_arp_cache, " DESTRUCTIVE: Clear ARP Cache (type CLEAR)"),
-    "148": (DeviceUtilityCommands.clear_bgp_routes, " DESTRUCTIVE: Clear BGP Routes (type CLEAR)"),
-    "149": (DeviceUtilityCommands.clear_session, " DESTRUCTIVE: Clear Session on SSR/SRX (type CLEAR)"),
-    "150": (DeviceUtilityCommands.clear_mac_table, " DESTRUCTIVE: Clear MAC Table (type CLEAR)"),
-    "151": (DeviceUtilityCommands.clear_bpdu_error, " DESTRUCTIVE: Clear BPDU Errors on Switch (type CLEAR)"),
-    "152": (DeviceUtilityCommands.clear_learned_macs, " DESTRUCTIVE: Clear Learned MACs from Switch Port (type CLEAR)"),
-    "153": (DeviceUtilityCommands.clear_policy_hit_count, " DESTRUCTIVE: Clear Policy Hit Count on SSR (type CLEAR)"),
-    "154": (DeviceUtilityCommands.release_dhcp_lease, " Release DHCP Lease on Switch/Gateway (y/N)"),
-    "155": (DeviceUtilityCommands.release_dhcp_ssr, " Release DHCP Lease on SSR/SRX (y/N)"),
+    "177": (DeviceUtilityCommands.clear_arp_cache, " DESTRUCTIVE: Clear ARP Cache (type CLEAR)"),
+    "178": (DeviceUtilityCommands.clear_bgp_routes, " DESTRUCTIVE: Clear BGP Routes (type CLEAR)"),
+    "179": (DeviceUtilityCommands.clear_session, " DESTRUCTIVE: Clear Session on SSR/SRX (type CLEAR)"),
+    "180": (DeviceUtilityCommands.clear_mac_table, " DESTRUCTIVE: Clear MAC Table (type CLEAR)"),
+    "181": (DeviceUtilityCommands.clear_bpdu_error, " DESTRUCTIVE: Clear BPDU Errors on Switch (type CLEAR)"),
+    "182": (DeviceUtilityCommands.clear_learned_macs, " DESTRUCTIVE: Clear Learned MACs from Switch Port (type CLEAR)"),
+    "183": (DeviceUtilityCommands.clear_policy_hit_count, " DESTRUCTIVE: Clear Policy Hit Count on SSR (type CLEAR)"),
+    "184": (DeviceUtilityCommands.release_dhcp_lease, " Release DHCP Lease on Switch/Gateway (y/N)"),
+    "185": (DeviceUtilityCommands.release_dhcp_ssr, " Release DHCP Lease on SSR/SRX (y/N)"),
     # > Hardware Commands
-    "156": (DeviceUtilityCommands.poll_switch_stats, "Poll Fresh Statistics from Switch"),
-    "157": (DeviceUtilityCommands.create_device_snapshot, "Create Device Snapshot on Switch"),
+    "126": (DeviceUtilityCommands.poll_switch_stats, "Poll Fresh Statistics from Switch"),
+    "127": (DeviceUtilityCommands.create_device_snapshot, "Create Device Snapshot on Switch"),
     # > Offline / Reporting
-    "158": (OfflineDeviceReporter.execute, "Offline Device Report"),
-    "159": (OrgExportUtils.ssid_template_consolidation, "SSID Template Consolidation (5-Phase Guided Workflow)"),
-    "160": (OrgExportUtils.e911_bssid_compliance_report, "E911 BSSID Compliance Report"),
-    "161": (GlobalWiredClientReportGenerator.execute, "Global Wired Client Report (operator-based MAC/MFG filtering)"),
-    "162": (
+    "26": (OfflineDeviceReporter.execute, "Offline Device Report"),
+    "145": (OrgExportUtils.ssid_template_consolidation, "SSID Template Consolidation (5-Phase Guided Workflow)"),
+    "89": (OrgExportUtils.e911_bssid_compliance_report, "E911 BSSID Compliance Report"),
+    "90": (GlobalWiredClientReportGenerator.execute, "Global Wired Client Report (operator-based MAC/MFG filtering)"),
+    "91": (
         WiredClientManufacturerReportGenerator.execute,
         "Wired Client Manufacturer Report (browse & select)",
     ),
-    "163": (
+    "146": (
         lambda: WanHubGroupNumberManager.execute(
             apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ),
         "WAN Hub Group Number Manager",
     ),
-    "164": (
+    "147": (
         lambda: WanVpnBuilder.execute(apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input),
         "WAN Hub-Spoke VPN Builder",
     ),
     # > Bulk Data Collection
-    "165": (
+    "153": (
         lambda: OrgDataCollector.execute(
             OrgExportUtils.export_data, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ),
@@ -31115,23 +31115,23 @@ menu_actions = {
     # ==============================
     # MISTAPI 0.62.0 NEW ENDPOINTS
     # ==============================
-    "166": (OrgExportUtils.e911_report, "Export E911 report for the organization"),
-    "167": (OrgExportUtils.jsi_pbn, "Export JSI PBN (Product Bulletin Notifications) data"),
-    "168": (OrgExportUtils.jsi_sirt, "Export JSI SIRT (Security Incident Response) advisories"),
-    "169": (OrgExportUtils.ospf_stats, "Export OSPF adjacency statistics for the organization"),
-    "170": (SiteExportUtils.ospf_stats, "Export OSPF adjacency statistics for a selected site"),
-    "171": (SiteExportUtils.mxedge_upgrade_status, "Export MxEdge upgrade status for a selected site"),
-    "172": (SiteExportUtils.auto_map_assignment_status, "Export auto-map assignment status for a selected site"),
-    "173": (SitesByAPModelExporter.export_sites_by_ap_model, "Export sites by AP model with site address (CSV)"),
-    "174": (AuditAnalysisOps.audit_log_analysis, "Audit Log Analysis - Mermaid timeline + interactive HTML report"),
-    "175": (CacheUtils.clear_cache, "Clear CSV Cache Files (delete all generated cache CSVs)"),
-    "176": (
+    "5": (OrgExportUtils.e911_report, "Export E911 report for the organization"),
+    "56": (OrgExportUtils.jsi_pbn, "Export JSI PBN (Product Bulletin Notifications) data"),
+    "57": (OrgExportUtils.jsi_sirt, "Export JSI SIRT (Security Incident Response) advisories"),
+    "55": (OrgExportUtils.ospf_stats, "Export OSPF adjacency statistics for the organization"),
+    "70": (SiteExportUtils.ospf_stats, "Export OSPF adjacency statistics for a selected site"),
+    "71": (SiteExportUtils.mxedge_upgrade_status, "Export MxEdge upgrade status for a selected site"),
+    "72": (SiteExportUtils.auto_map_assignment_status, "Export auto-map assignment status for a selected site"),
+    "88": (SitesByAPModelExporter.export_sites_by_ap_model, "Export sites by AP model with site address (CSV)"),
+    "25": (AuditAnalysisOps.audit_log_analysis, "Audit Log Analysis - Mermaid timeline + interactive HTML report"),
+    "186": (CacheUtils.clear_cache, "Clear CSV Cache Files (delete all generated cache CSVs)"),
+    "58": (
         lambda: OrgConfigMigrationManager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ).export_config(),
         "Export Org WAN/Gateway Config (JSON bundle for cross-org migration)",
     ),
-    "177": (
+    "187": (
         lambda: OrgConfigMigrationManager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ).import_config(),
@@ -31140,16 +31140,16 @@ menu_actions = {
     # ==============================
     # SITE STATS, METRICS & CHANNEL PLANNING
     # ==============================
-    "178": (SiteExportUtils.site_stats, "Export site aggregate health & capacity statistics"),
-    "179": (SiteExportUtils.gateway_metrics, "Export site gateway performance metrics summary"),
-    "180": (SiteExportUtils.switches_metrics, "Export site switch performance metrics summary"),
-    "181": (SiteExportUtils.beacons_stats, "Export site BLE beacon statistics"),
-    "182": (SiteExportUtils.wxrules_usage, "Export site WxLAN rule usage statistics"),
-    "183": (SiteExportUtils.assets_stats, "Export site asset statistics"),
-    "184": (SiteExportUtils.current_channel_planning, "Export current RRM channel & power plan per AP radio"),
-    "185": (SelfExportUtils.audit_logs, "Export self (admin account) audit log"),
-    "186": (GatewayHaExporter.ha_cluster_info, "Export HA gateway cluster info, stats & node pair for a site"),
-    "187": (
+    "80": (SiteExportUtils.site_stats, "Export site aggregate health & capacity statistics"),
+    "81": (SiteExportUtils.gateway_metrics, "Export site gateway performance metrics summary"),
+    "82": (SiteExportUtils.switches_metrics, "Export site switch performance metrics summary"),
+    "83": (SiteExportUtils.beacons_stats, "Export site BLE beacon statistics"),
+    "84": (SiteExportUtils.wxrules_usage, "Export site WxLAN rule usage statistics"),
+    "85": (SiteExportUtils.assets_stats, "Export site asset statistics"),
+    "86": (SiteExportUtils.current_channel_planning, "Export current RRM channel & power plan per AP radio"),
+    "23": (SelfExportUtils.audit_logs, "Export self (admin account) audit log"),
+    "87": (GatewayHaExporter.ha_cluster_info, "Export HA gateway cluster info, stats & node pair for a site"),
+    "13": (
         OrgDeviceInventorySummary.dispatch,
         "Export org device model counts, firmware version distribution, and versions per model (MSP-aware)",
     ),
@@ -31176,13 +31176,13 @@ class MapsManagerLauncher:
 
     def launch(self) -> None:
         """Main entry point - orchestrates module import and execution."""
-        logging.info("Menu #112: Starting Maps Manager")
+        logging.info("Menu #142: Starting Maps Manager")
         if not self._import_module():
             return
         if not self._get_org_id():
             return
         self._run_interactive_menu()
-        logging.info("Menu #112: Maps Manager session completed")
+        logging.info("Menu #142: Maps Manager session completed")
 
     def _import_module(self) -> bool:
         """Import MapsManager from external module with error handling."""
@@ -31595,153 +31595,153 @@ class OperationRegistry:
         # --- control --------------------------------------------------------
         "0": {"category": "interactive", "skip_reason": "Exit option"},
         # --- resource intensive ---------------------------------------------
-        "14": {
+        "19": {
             "category": "resource_intensive",
             "skip_reason": "Port-level statistics - extremely resource intensive (8+ hours)",
         },
-        "18": {
+        "59": {
             "category": "resource_intensive",
             "skip_reason": "Site configurations - hits API rate limits after 7+ hours",
         },
         # --- websocket ------------------------------------------------------
-        "5": {
+        "102": {
             "category": "websocket",
             "skip_reason": "WebSocket ping - requires interactive site and device selection",
         },
-        "6": {
+        "103": {
             "category": "websocket",
             "skip_reason": "WebSocket traceroute - requires interactive site and device selection",
         },
-        "7": {
+        "104": {
             "category": "websocket",
             "skip_reason": "WebSocket release DHCP - requires interactive site and device selection",
         },
-        "8": {
+        "105": {
             "category": "websocket",
             "skip_reason": "WebSocket cable test - requires interactive site and device selection",
         },
-        "87": {
+        "118": {
             "category": "websocket",
             "skip_reason": "WebSocket bounce port - requires interactive site and device selection",
         },
-        "88": {
+        "119": {
             "category": "websocket",
             "skip_reason": "WebSocket ARP - requires interactive site and device selection",
         },
-        "89": {
+        "120": {
             "category": "websocket",
             "skip_reason": "WebSocket service ping - requires interactive site and device selection",
         },
-        "80": {
+        "121": {
             "category": "websocket",
             "skip_reason": "WebSocket ARP command - requires interactive site and device selection",
         },
         # --- interactive (needs user input, not automatable) -----------------
-        "9": {
+        "134": {
             "category": "interactive",
             "skip_reason": "Packet capture - requires interactive configuration and site selection",
         },
-        "10": {
+        "135": {
             "category": "interactive",
             "skip_reason": "Packet capture - requires interactive configuration and MxEdge ID",
         },
-        "56": {"category": "interactive", "skip_reason": "MSP export - requires interactive MSP selection"},
-        "60": {
+        "136": {"category": "interactive", "skip_reason": "MSP export - requires interactive MSP selection"},
+        "137": {
             "category": "interactive",
             "skip_reason": "Firmware upgrade status - requires interactive scope selection",
         },
-        "61": {"category": "interactive", "skip_reason": "CSV comparison - requires interactive file selection"},
-        "62": {
+        "138": {"category": "interactive", "skip_reason": "CSV comparison - requires interactive file selection"},
+        "139": {
             "category": "interactive",
             "skip_reason": "Marvis troubleshooting - requires interactive option selection",
         },
-        "70": {"category": "interactive_safe", "skip_reason": "Interactive site selection"},
-        "71": {"category": "interactive_safe", "skip_reason": "Interactive site inventory browser"},
-        "72": {"category": "interactive_safe", "skip_reason": "Interactive device stats viewer"},
-        "73": {"category": "interactive_safe", "skip_reason": "Interactive device tests viewer"},
-        "74": {"category": "interactive_safe", "skip_reason": "Interactive device config viewer"},
-        "79": {"category": "interactive", "skip_reason": "Interactive CLI shell session"},
-        "101": {"category": "interactive", "skip_reason": "Interactive TUI API browser - keyboard navigation required"},
-        "102": {
+        "92": {"category": "interactive_safe", "skip_reason": "Interactive site selection"},
+        "93": {"category": "interactive_safe", "skip_reason": "Interactive site inventory browser"},
+        "94": {"category": "interactive_safe", "skip_reason": "Interactive device stats viewer"},
+        "95": {"category": "interactive_safe", "skip_reason": "Interactive device tests viewer"},
+        "96": {"category": "interactive_safe", "skip_reason": "Interactive device config viewer"},
+        "140": {"category": "interactive", "skip_reason": "Interactive CLI shell session"},
+        "141": {"category": "interactive", "skip_reason": "Interactive TUI API browser - keyboard navigation required"},
+        "148": {
             "category": "interactive",
             "skip_reason": "WLAN RADIUS timer management - requires interactive site selection",
         },
-        "103": {
+        "149": {
             "category": "interactive",
             "skip_reason": "Requires interactive site selection for WAN2 variable configuration",
         },
-        "105": {
+        "150": {
             "category": "interactive",
             "skip_reason": "Requires interactive template selection for configuration extraction",
         },
-        "112": {
+        "142": {
             "category": "interactive",
             "skip_reason": "Maps Manager - requires interactive Dash web server and browser",
         },
-        "115": {"category": "interactive", "skip_reason": "Requires interactive login with email/password credentials"},
-        "117": {"category": "interactive", "skip_reason": "MSP Inventory Export - requires MSP privileges via --login"},
+        "143": {"category": "interactive", "skip_reason": "Requires interactive login with email/password credentials"},
+        "144": {"category": "interactive", "skip_reason": "MSP Inventory Export - requires MSP privileges via --login"},
         # --- interactive_safe (read-only, need site/device, automatable) -----
-        "29": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "30": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "31": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "32": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "33": {"category": "interactive_safe", "skip_reason": "Requires site and device selection"},
-        "34": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "49": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "50": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "51": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "52": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "53": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "68": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "62": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "65": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "60": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "61": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "63": {"category": "interactive_safe", "skip_reason": "Requires site and device selection"},
+        "64": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "69": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "81": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "84": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "85": {"category": "interactive_safe", "skip_reason": "Requires site and device selection"},
-        "86": {"category": "interactive_safe", "skip_reason": "Requires site and client selection"},
+        "66": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "67": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "68": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "73": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "74": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "75": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "76": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "77": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "78": {"category": "interactive_safe", "skip_reason": "Requires site and device selection"},
+        "79": {"category": "interactive_safe", "skip_reason": "Requires site and client selection"},
         # --- continuous loop ------------------------------------------------
-        "75": {"category": "continuous_loop", "skip_reason": "Continuous loop operation"},
-        "76": {"category": "continuous_loop", "skip_reason": "Continuous data collection loop"},
+        "151": {"category": "continuous_loop", "skip_reason": "Continuous loop operation"},
+        "152": {"category": "continuous_loop", "skip_reason": "Continuous data collection loop"},
         # --- resource intensive (file/support) ------------------------------
-        "77": {
+        "100": {
             "category": "resource_intensive",
             "skip_reason": "File processing operation - potentially resource intensive",
         },
-        "78": {
+        "101": {
             "category": "resource_intensive",
             "skip_reason": "Support package generation - potentially resource intensive",
         },
         # --- long-running exports (52-week time windows) --------------------
-        "63": {"category": "resource_intensive", "skip_reason": "52-week device events export - long-running"},
-        "64": {"category": "resource_intensive", "skip_reason": "52-week audit logs export - long-running"},
-        "65": {"category": "resource_intensive", "skip_reason": "All-site gateway configs export - long-running"},
+        "97": {"category": "resource_intensive", "skip_reason": "52-week device events export - long-running"},
+        "98": {"category": "resource_intensive", "skip_reason": "52-week audit logs export - long-running"},
+        "99": {"category": "resource_intensive", "skip_reason": "All-site gateway configs export - long-running"},
         # --- destructive ----------------------------------------------------
-        "90": {"category": "destructive", "skip_reason": "DESTRUCTIVE: AP firmware upgrade operation"},
-        "91": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Device reboot operation"},
-        "92": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Virtual chassis conversion"},
-        "93": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Virtual chassis conversion - bulk operation"},
-        "97": {
+        "154": {"category": "destructive", "skip_reason": "DESTRUCTIVE: AP firmware upgrade operation"},
+        "158": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Device reboot operation"},
+        "161": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Virtual chassis conversion"},
+        "162": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Virtual chassis conversion - bulk operation"},
+        "175": {
             "category": "destructive",
             "skip_reason": "Enhanced SSH Command Runner - requires interactive host and command input",
         },
-        "98": {
+        "176": {
             "category": "destructive",
             "skip_reason": "SSH Runner by gateway template - requires interactive template and command input",
         },
-        "99": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Switch firmware upgrade operation"},
-        "100": {"category": "destructive", "skip_reason": "DESTRUCTIVE: SSR firmware upgrade operation"},
-        "104": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Updates gateway templates with WAN2 variable"},
-        "106": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Applies gateway template configuration"},
-        "107": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates 137 test sites from CSV"},
-        "108": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates country-specific RF templates"},
-        "109": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates device profiles for AP models"},
-        "110": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Assigns APs to device profiles"},
-        "111": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Clones gateway templates by state/country"},
-        "113": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Configures WAN probe override on templates"},
-        "114": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Configures WAN probe on device port overrides"},
-        "116": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Org-level AP firmware upgrade"},
-        "118": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Site Auto-Upgrade Configuration"},
-        "120": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Site Analytics Configuration"},
-        "122": {
+        "155": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Switch firmware upgrade operation"},
+        "156": {"category": "destructive", "skip_reason": "DESTRUCTIVE: SSR firmware upgrade operation"},
+        "163": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Updates gateway templates with WAN2 variable"},
+        "164": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Applies gateway template configuration"},
+        "171": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates 137 test sites from CSV"},
+        "172": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates country-specific RF templates"},
+        "173": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates device profiles for AP models"},
+        "174": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Assigns APs to device profiles"},
+        "165": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Clones gateway templates by state/country"},
+        "166": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Configures WAN probe override on templates"},
+        "167": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Configures WAN probe on device port overrides"},
+        "157": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Org-level AP firmware upgrade"},
+        "168": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Site Auto-Upgrade Configuration"},
+        "169": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Site Analytics Configuration"},
+        "170": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Bulk RADIUS WLAN Configuration - modifies WLAN auth settings",
         },
@@ -31750,208 +31750,208 @@ class OperationRegistry:
             "category": "websocket",
             "skip_reason": "WebSocket traceroute - interactive site/device",
         },
-        "124": {
+        "106": {
             "category": "websocket",
             "skip_reason": "WebSocket OSPF neighbors - interactive gateway",
         },
-        "125": {
+        "107": {
             "category": "websocket",
             "skip_reason": "WebSocket OSPF interfaces - interactive gateway",
         },
-        "126": {
+        "108": {
             "category": "websocket",
             "skip_reason": "WebSocket OSPF database - interactive gateway",
         },
-        "127": {
+        "109": {
             "category": "websocket",
             "skip_reason": "WebSocket OSPF summary - interactive gateway",
         },
-        "128": {
+        "110": {
             "category": "websocket",
             "skip_reason": "WebSocket show sessions - interactive gateway",
         },
-        "129": {
+        "111": {
             "category": "websocket",
             "skip_reason": "WebSocket show service path - interactive gateway",
         },
-        "130": {
+        "112": {
             "category": "websocket",
             "skip_reason": "WebSocket BGP summary - interactive device",
         },
-        "131": {
+        "113": {
             "category": "websocket",
             "skip_reason": "WebSocket ARP table - interactive device",
         },
-        "132": {
+        "114": {
             "category": "websocket",
             "skip_reason": "WebSocket DHCP leases - interactive device",
         },
-        "133": {
+        "115": {
             "category": "websocket",
             "skip_reason": "WebSocket 802.1X table - interactive switch",
         },
-        "134": {
+        "116": {
             "category": "websocket",
             "skip_reason": "WebSocket EVPN database - interactive device",
         },
-        "135": {
+        "117": {
             "category": "websocket",
             "skip_reason": "WebSocket DNS resolution - interactive gateway",
         },
-        "136": {
+        "124": {
             "category": "interactive",
             "skip_reason": "Monitor traffic streaming - interactive port + Ctrl+C",
         },
-        "137": {
+        "125": {
             "category": "interactive",
             "skip_reason": "Run top streaming - interactive device + Ctrl+C",
         },
-        "138": {
+        "128": {
             "category": "interactive",
             "skip_reason": "Locate device - interactive device selection",
         },
-        "139": {
+        "129": {
             "category": "interactive",
             "skip_reason": "Unlocate device - interactive device selection",
         },
-        "140": {
+        "159": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Bounce port - disrupts traffic",
         },
-        "141": {
+        "122": {
             "category": "websocket",
             "skip_reason": "WebSocket cable test - interactive switch/port",
         },
-        "142": {
+        "160": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Reprovision - pushes fresh config",
         },
-        "143": {
+        "130": {
             "category": "interactive",
             "skip_reason": "Re-adopt device - interactive switch selection",
         },
-        "144": {
+        "131": {
             "category": "interactive",
             "skip_reason": "ZTP password - interactive device selection",
         },
-        "145": {
+        "132": {
             "category": "interactive",
             "skip_reason": "Config CLI commands - interactive switch",
         },
-        "146": {
+        "133": {
             "category": "interactive",
             "skip_reason": "Upload support file - interactive device/type",
         },
-        "147": {
+        "177": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Clear ARP cache",
         },
-        "148": {
+        "178": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Clear BGP routes",
         },
-        "149": {
+        "179": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Clear session",
         },
-        "150": {
+        "180": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Clear MAC table",
         },
-        "151": {
+        "181": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Clear BPDU errors",
         },
-        "152": {
+        "182": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Clear learned MACs from port",
         },
-        "153": {
+        "183": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Clear policy hit count",
         },
-        "154": {
+        "184": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Release DHCP lease",
         },
-        "155": {
+        "185": {
             "category": "destructive",
             "skip_reason": "DESTRUCTIVE: Release SSR DHCP lease",
         },
-        "156": {
+        "126": {
             "category": "interactive",
             "skip_reason": "Poll switch stats - interactive switch",
         },
-        "157": {
+        "127": {
             "category": "interactive",
             "skip_reason": "Create device snapshot - interactive switch",
         },
-        "158": {"category": "safe"},
-        "159": {
+        "26": {"category": "safe"},
+        "145": {
             "category": "interactive",
             "skip_reason": "Interactive multi-phase workflow with write-capable phases",
         },
-        "160": {"category": "interactive_safe"},
-        "161": {"category": "interactive_safe"},
-        "162": {"category": "interactive_safe"},
-        "163": {
+        "89": {"category": "interactive_safe"},
+        "90": {"category": "interactive_safe"},
+        "91": {"category": "interactive_safe"},
+        "146": {
             "category": "interactive",
             "skip_reason": "Interactive VPN pod management with API writes",
         },
-        "164": {
+        "147": {
             "category": "interactive",
             "skip_reason": "Interactive VPN builder with API writes",
         },
-        "165": {
+        "153": {
             "category": "resource_intensive",
             "skip_reason": "Bulk org data collection - runs 57 API calls, resource intensive",
         },
-        "170": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "171": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "172": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "173": {"category": "interactive_safe", "skip_reason": "Requires AP model selection"},
-        "174": {"category": "safe"},
-        "175": {"category": "destructive", "skip_reason": "DANGEROUS: Deletes all generated cache CSV files"},
-        "176": {"category": "safe"},
-        "177": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},
+        "70": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "71": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "72": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "88": {"category": "interactive_safe", "skip_reason": "Requires AP model selection"},
+        "25": {"category": "safe"},
+        "186": {"category": "destructive", "skip_reason": "DANGEROUS: Deletes all generated cache CSV files"},
+        "58": {"category": "safe"},
+        "187": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},
         # Site Stats, Metrics & Channel Planning (178-185)
-        "178": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "179": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "180": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "181": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "182": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "183": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "184": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
-        "185": {"category": "safe"},
+        "80": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "81": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "82": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "83": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "84": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "85": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "86": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "23": {"category": "safe"},
         # HA Gateway Cluster Info (186)
-        "186": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "87": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         # Org Device Inventory Summary (187) - fully automated, no user input required
-        "187": {"category": "safe"},
+        "13": {"category": "safe"},
     }
 
     # Wave 1 deterministic baseline map used by routing guardrail tests.
     # This remains intentionally small and representative for compliance checks.
     WAVE1_ENTRY_ROUTING_BASELINE: dict[str, str] = {
-        "5": "websocket",
-        "29": "interactive_safe",
-        "63": "resource_intensive",
-        "89": "websocket",
-        "90": "destructive",
-        "91": "destructive",
-        "100": "destructive",
-        "101": "interactive",
-        "158": "safe",
-        "176": "safe",
-        "177": "destructive",
+        "102": "websocket",
+        "62": "interactive_safe",
+        "97": "resource_intensive",
+        "120": "websocket",
+        "154": "destructive",
+        "158": "destructive",
+        "156": "destructive",
+        "141": "interactive",
+        "26": "safe",
+        "58": "safe",
+        "187": "destructive",
     }
 
     # Wave 1 deterministic safety-boundary baseline used by classification guardrails.
     WAVE1_SAFETY_CLASSIFICATION_BASELINE: dict[str, list[str]] = {
-        "safe_true": ["158", "176", "9999"],
-        "safe_false": ["89", "90", "91", "99", "100", "177"],
-        "interactive_safe_true": ["29"],
-        "interactive_safe_false": ["90", "101", "177"],
-        "destructive_markers": ["90", "91", "99", "100", "107", "140", "177"],
+        "safe_true": ["26", "58", "9999"],
+        "safe_false": ["120", "154", "158", "155", "156", "187"],
+        "interactive_safe_true": ["62"],
+        "interactive_safe_false": ["154", "141", "187"],
+        "destructive_markers": ["154", "158", "155", "156", "171", "159", "187"],
     }
 
     # Categories that are safe for --test (fully automated, no user input)
@@ -32066,20 +32066,20 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
     # This ordering minimizes total test time by running quick tests first
     optimized_test_order = [
         # Fast tests (~0.6-3.5 seconds)
-        "3",  # Audit Logs (~0.6s)
-        "17",  # All Devices List (~3s)
-        "11",  # All Sites List (~3.5s)
+        "22",  # Audit Logs (~0.6s)
+        "9",  # All Devices List (~3s)
+        "1",  # All Sites List (~3.5s)
         # Medium tests (~18-30 seconds)
-        "12",  # Device Inventory (~18s)
-        "66",  # Organization SLE Metrics (new)
-        "67",  # Organization Sites SLE Summary (new)
-        "1",  # Organization Alarms (~30s)
+        "8",  # Device Inventory (~18s)
+        "51",  # Organization SLE Metrics (new)
+        "52",  # Organization Sites SLE Summary (new)
+        "20",  # Organization Alarms (~30s)
         # Slower tests (~1-5 minutes)
-        "13",  # Device Stats (~97s)
-        "15",  # VPN Peer Stats (~257s)
+        "15",  # Device Stats (~97s)
+        "16",  # VPN Peer Stats (~257s)
         # Slow tests (~8+ minutes)
-        "2",  # Device Events (~485s)
-        "16",  # Gateway Synthetic Tests (~1115s)
+        "21",  # Device Events (~485s)
+        "33",  # Gateway Synthetic Tests (~1115s)
         # Note: Options 14 (Port-level Statistics) and 18 (Site Configurations)
         # have been moved to unsafe_options due to excessive resource consumption
     ]
