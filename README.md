@@ -4,7 +4,7 @@ Network Operations & Data Export Tool for Juniper Mist Cloud
 [![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
 [![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-**Operation Count:** The code currently defines 185 actionable menu entries (1-186) with some gaps for future expansion.
+**Operation Count:** The code currently defines 187 actionable menu entries (1-187), organized into 30 logical groups with no gaps. Exit is menu 0.
 
 MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to CSV files, a local SQLite database, or a polyglot backend (ArangoDB for documents, Redis for time-series and JSON caching) using natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -104,41 +104,47 @@ flowchart LR
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 mindmap
-   root((MistHelper<br/>186 Operations))
-    Safe (52)
-      Org Sites
-      Device Inventory
-      Licenses
-      Templates
-      Admin Users
-    Interactive Safe (25)
-      Site Configs
-      WLAN Settings
-      RF Templates
-      Webhooks
-    Interactive (27)
-      Packet Captures
-      SLE Metrics
-      Client Events
-      Alarms
+   root((MistHelper<br/>187 Operations))
+    Safe Org Exports (57)
+      Sites and Analysis 1-7
+      Device Inventory 8-14
+      Device Stats 15-19
+      Events and Logs 20-26
+      Client Stats 27-30
+      Gateway Ops 31-36
+      Templates 37-41
+      Config and Admin 42-50
+      SLE and Insights 51-55
+      Misc Exports 56-59
+    Interactive Safe (37)
+      Site Devices 60-72
+      Site Insights 73-79
+      Site Stats 80-91
+      Viewers 92-96
+    Resource Intensive (6)
+      Long-Running 97-101
+      Bulk 153
     WebSocket (22)
-      AP Commands
-      Switch Commands
-      Gateway Commands
-      Network Diag
-    Destructive (32)
-      ::icon(fa fa-warning)
-      AP Firmware
-      Switch Firmware
-      SSR Firmware
-      AP Reboots
-      VC Conversion
-    Resource Intensive (8)
-      Port Stats
-      Full Site Config
-      Bulk Org Data
+      Show Commands 102-115
+      Diagnostics 116-123
+    Interactive (27)
+      Device Diag 124-127
+      Device Mgmt 128-133
+      Packet Capture 134-135
+      Tools 136-147
+      Config Mgmt 148-150
     Continuous (2)
-      Monitoring Loops
+      Loops 151-152
+    Destructive (34)
+      ::icon(fa fa-warning)
+      Firmware 154-157
+      Reboot 158-160
+      Virtual Chassis 161-162
+      Templates 163-167
+      Site Config 168-170
+      Test Data 171-174
+      SSH Runners 175-176
+      Clear Reset 177-187
 ```
 
 > See [full operations reference](documentation/diagrams/operations/operations-reference.md) with lifecycle states, NOC engineer journey, and safety requirements.
