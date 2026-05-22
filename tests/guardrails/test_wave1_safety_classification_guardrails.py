@@ -29,9 +29,14 @@ class TestWave1SafetyClassificationGuardrails:
             assert "DESTRUCTIVE" in reason.upper(), f"Option {option} skip reason lost destructive marker"
 
     def test_adjacent_boundary_options_remain_stable(self):
-        assert MistHelper.OperationRegistry.skip_category("89") == "websocket"
-        assert MistHelper.OperationRegistry.skip_category("90") == "destructive"
-        assert MistHelper.OperationRegistry.skip_category("100") == "destructive"
-        assert MistHelper.OperationRegistry.skip_category("101") == "interactive"
-        assert MistHelper.OperationRegistry.skip_category("176") == "safe"
-        assert MistHelper.OperationRegistry.skip_category("177") == "destructive"
+        # Boundary: resource_intensive block ends at 101, websocket block starts at 102
+        assert MistHelper.OperationRegistry.skip_category("101") == "resource_intensive"
+        assert MistHelper.OperationRegistry.skip_category("102") == "websocket"
+        # Boundary: last websocket at 123, interactive block starts at 124
+        assert MistHelper.OperationRegistry.skip_category("123") == "websocket"
+        assert MistHelper.OperationRegistry.skip_category("124") == "interactive"
+        # Boundary: last non-destructive at 153 (resource_intensive), destructive block starts at 154
+        assert MistHelper.OperationRegistry.skip_category("153") == "resource_intensive"
+        assert MistHelper.OperationRegistry.skip_category("154") == "destructive"
+        # Boundary: last destructive at 187
+        assert MistHelper.OperationRegistry.skip_category("187") == "destructive"
