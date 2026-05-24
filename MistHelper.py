@@ -4971,6 +4971,34 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Ticket count aggregates",
     },
+    "getOrgTicket": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "status", "type"],
+        "unique_constraints": [],
+        "description": "Single organization support ticket detail",
+    },
+    "createOrgTicket": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "status", "type"],
+        "unique_constraints": [],
+        "description": "Newly created organization support ticket",
+    },
+    "updateOrgTicket": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "status", "type"],
+        "unique_constraints": [],
+        "description": "Updated organization support ticket",
+    },
+    "addOrgTicketComment": {
+        "type": "composite_pk",
+        "primary_key": ["ticket_id", "created_at"],
+        "indexes": ["ticket_id", "author"],
+        "unique_constraints": [],
+        "description": "Comment added to an organization support ticket",
+    },
     "countOrgTunnelsStats": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],
@@ -11900,6 +11928,274 @@ class DeviceUtils:
         if warn_on_missing:
             logging.warning("Device found with no name, serial, or id - using 'UNKNOWN'")
         return "UNKNOWN"
+
+
+# ============================================================================
+# ORGANIZATION TICKET MANAGER CLASS
+# ============================================================================
+class OrgTicketManager:
+    """
+    Full lifecycle management for Juniper Mist support tickets.
+
+    Provides 4 public operations (list, create, add comment, update) that
+    cover reading, creating, and modifying support tickets via the Mist API.
+    Attachment support is integrated into add_comment via multipart upload.
+    """
+
+    TICKET_TYPES = ["question", "problem", "incident", "feature_request"]  # Valid Mist ticket type values
+
+    # ------------------------------------------------------------------
+    # Public entry points (max 5 per class -- using 4)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def list_tickets() -> None:
+        """Menu 188: Export all organization support tickets to CSV/SQLite."""
+        logging.info("Menu 188: Starting organization ticket list export")  # Log operation entry
+        logging.debug("ENTRY: OrgTicketManager.list_tickets()")  # Debug trace
+        try:
+            APIDataFetcher(  # Delegate to standard fetch-export pipeline
+                title="Organization Support Tickets:",  # User-facing header
+                api_call=mistapi.api.v1.orgs.tickets.listOrgTickets,  # SDK function for ticket listing
+                filename="OrgTickets.csv",  # Output filename in data/ directory
+                sort_key="created_at",  # Sort tickets by creation timestamp
+                limit=1000,  # Page size for API pagination
+            ).execute()  # Run the full fetch-flatten-export workflow
+            logging.info("Completed org ticket list export")  # Log success
+            logging.debug("EXIT: OrgTicketManager.list_tickets - success")  # Debug trace
+        except Exception as error:  # Catch API or export failures
+            logging.error("Failed to export org tickets: %s", error)  # Log error with context
+            logging.debug("EXIT: OrgTicketManager.list_tickets - error")  # Debug trace
+            raise  # Re-raise so caller sees the failure
+
+    @staticmethod
+    def create_ticket() -> None:
+        """Menu 189: Create a new support ticket in the organization."""
+        logging.info("Menu 189: Starting support ticket creation")  # Log operation entry
+        logging.debug("ENTRY: OrgTicketManager.create_ticket()")  # Debug trace
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
+
+        subject = OrgTicketManager._prompt_subject()  # Prompt user for ticket subject line
+        if not subject:  # User left subject blank -- abort
+            print("  Ticket creation cancelled -- subject is required.")  # Inform user
+            logging.info("Ticket creation cancelled: blank subject")  # Log the cancellation
+            return  # Early exit without creating ticket
+
+        ticket_type = OrgTicketManager._prompt_ticket_type()  # Prompt user to select ticket type
+        comment = InputUtils.safe_input(  # Prompt for initial ticket description/comment
+            "  Enter initial comment/description: ",  # Prompt text shown to user
+            default_value="",  # Allow empty comment
+            allow_empty=True,  # Comment is optional at creation time
+            context="create_ticket_comment",  # Context label for EOF logging
+        )
+
+        body = {"subject": subject, "type": ticket_type}  # Build API request body with required fields
+        if comment:  # Only include comment field if user provided one
+            body["comment"] = comment  # Add optional comment to request body
+
+        logging.info("Creating ticket '%s' (type=%s) in org %s", subject, ticket_type, org_id)  # Log before API call
+        try:
+            response = mistapi.api.v1.orgs.tickets.createOrgTicket(  # Call Mist API to create the ticket
+                apisession, org_id, body  # Pass session, org, and ticket body
+            )
+            ticket_data = getattr(response, "data", {})  # Extract response data dict from APIResponse
+            ticket_id = ticket_data.get("id", "unknown")  # Get new ticket UUID from response
+            logging.debug("Ticket created: id=%s, status=%s", ticket_id, ticket_data.get("status"))  # Log result
+            print("\n  Ticket created successfully!")  # Confirm to user
+            print(f"  ID:      {ticket_id}")  # Display ticket ID for reference
+            print(f"  Subject: {subject}")  # Echo subject back to user
+            print(f"  Type:    {ticket_type}")  # Echo type back to user
+            print(f"  Status:  {ticket_data.get('status', 'open')}")  # Show initial status
+            logging.info("Menu 189: Ticket creation complete, id=%s", ticket_id)  # Log success
+        except Exception as error:  # Catch API errors during ticket creation
+            logging.error("Failed to create ticket: %s", error)  # Log error with context
+            print(f"\n  Error creating ticket: {error}")  # Show error to user
+            raise  # Re-raise for upstream error handling
+
+    @staticmethod
+    def add_comment() -> None:
+        """Menu 190: Add a comment (with optional attachment) to an existing ticket."""
+        logging.info("Menu 190: Starting add comment to ticket")  # Log operation entry
+        logging.debug("ENTRY: OrgTicketManager.add_comment()")  # Debug trace
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
+
+        ticket_id = OrgTicketManager._prompt_ticket_id()  # Prompt user for ticket UUID
+        if not ticket_id:  # User left ticket ID blank -- abort
+            print("  Operation cancelled -- ticket ID is required.")  # Inform user
+            logging.info("Add comment cancelled: blank ticket ID")  # Log the cancellation
+            return  # Early exit without adding comment
+
+        comment_text = InputUtils.safe_input(  # Prompt user for comment body text
+            "  Enter comment text: ",  # Prompt text shown to user
+            default_value="",  # Allow empty if attaching file only
+            allow_empty=True,  # Comment can be empty when attaching file
+            context="add_ticket_comment",  # Context label for EOF logging
+        )
+
+        file_path = InputUtils.safe_input(  # Prompt for optional file attachment path
+            "  Attach a file? Enter path (leave blank to skip): ",  # Prompt text shown to user
+            default_value="",  # No file by default
+            allow_empty=True,  # File attachment is optional
+            context="add_ticket_attachment",  # Context label for EOF logging
+        )
+
+        if not comment_text and not file_path:  # Neither comment nor file provided -- abort
+            print("  Operation cancelled -- provide a comment or file.")  # Inform user
+            logging.info("Add comment cancelled: no comment or file provided")  # Log cancellation
+            return  # Early exit
+
+        OrgTicketManager._submit_comment(  # Delegate to submission helper
+            org_id, ticket_id, comment_text, file_path  # Pass all user-provided values
+        )
+
+    @staticmethod
+    def update_ticket() -> None:
+        """Menu 191: Update fields on an existing support ticket."""
+        logging.info("Menu 191: Starting ticket update")  # Log operation entry
+        logging.debug("ENTRY: OrgTicketManager.update_ticket()")  # Debug trace
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
+
+        ticket_id = OrgTicketManager._prompt_ticket_id()  # Prompt user for ticket UUID
+        if not ticket_id:  # User left ticket ID blank -- abort
+            print("  Operation cancelled -- ticket ID is required.")  # Inform user
+            logging.info("Ticket update cancelled: blank ticket ID")  # Log the cancellation
+            return  # Early exit
+
+        body = OrgTicketManager._build_update_body()  # Collect changed fields from user
+        if not body:  # No fields were changed -- abort
+            print("  No changes specified -- update cancelled.")  # Inform user
+            logging.info("Ticket update cancelled: no fields changed")  # Log cancellation
+            return  # Early exit
+
+        logging.info("Updating ticket %s with fields: %s", ticket_id, list(body.keys()))  # Log before API call
+        try:
+            response = mistapi.api.v1.orgs.tickets.updateOrgTicket(  # Call Mist API to update ticket
+                apisession, org_id, ticket_id, body  # Pass session, org, ticket ID, and update body
+            )
+            ticket_data = getattr(response, "data", {})  # Extract response data dict from APIResponse
+            logging.debug("Ticket updated: %s", ticket_data)  # Log full response at debug level
+            print(f"\n  Ticket {ticket_id} updated successfully!")  # Confirm to user
+            for field, value in body.items():  # Show each changed field to user
+                print(f"  {field}: {value}")  # Display field name and new value
+            logging.info("Menu 191: Ticket update complete for %s", ticket_id)  # Log success
+        except Exception as error:  # Catch API errors during ticket update
+            logging.error("Failed to update ticket %s: %s", ticket_id, error)  # Log error with context
+            print(f"\n  Error updating ticket: {error}")  # Show error to user
+            raise  # Re-raise for upstream error handling
+
+    # ------------------------------------------------------------------
+    # Private helpers (max 5 per group)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _prompt_subject() -> str:
+        """Prompt user for ticket subject line."""
+        return InputUtils.safe_input(  # Use EOF-safe input wrapper
+            "  Enter ticket subject: ",  # Prompt text for ticket title
+            default_value="",  # No default -- user must provide subject
+            allow_empty=True,  # Allow blank to signal cancellation
+            context="create_ticket_subject",  # Context label for EOF logging
+        )
+
+    @staticmethod
+    def _prompt_ticket_type() -> str:
+        """Prompt user to select a ticket type from valid options."""
+        print("\n  Ticket types:")  # Section header for type selection
+        for index, ticket_type in enumerate(OrgTicketManager.TICKET_TYPES, 1):  # Number each type for selection
+            print(f"    {index}. {ticket_type}")  # Display numbered option
+        choice = InputUtils.safe_input(  # Prompt user to pick a type number
+            "  Select type [1]: ",  # Default to first option (question)
+            default_value="1",  # Default selection is 'question'
+            allow_empty=True,  # Allow enter for default
+            context="create_ticket_type",  # Context label for EOF logging
+        )
+        try:
+            index = int(choice) - 1  # Convert 1-based user input to 0-based index
+            if 0 <= index < len(OrgTicketManager.TICKET_TYPES):  # Validate index is within bounds
+                return OrgTicketManager.TICKET_TYPES[index]  # Return selected ticket type string
+        except ValueError:  # User entered non-numeric input
+            pass  # Fall through to default
+        return OrgTicketManager.TICKET_TYPES[0]  # Default to 'question' for invalid input
+
+    @staticmethod
+    def _prompt_ticket_id() -> str:
+        """Prompt user for ticket UUID."""
+        return InputUtils.safe_input(  # Use EOF-safe input wrapper
+            "  Enter ticket ID: ",  # Prompt text for ticket UUID
+            default_value="",  # No default -- user must provide ID
+            allow_empty=True,  # Allow blank to signal cancellation
+            context="ticket_id_prompt",  # Context label for EOF logging
+        )
+
+    @staticmethod
+    def _build_update_body() -> dict[str, str]:
+        """Collect fields to update from user prompts."""
+        body: dict[str, str] = {}  # Accumulate changed fields in a dict
+
+        subject = InputUtils.safe_input(  # Prompt for new subject (optional)
+            "  New subject (leave blank to skip): ",  # Prompt text
+            default_value="",  # No default -- blank means skip
+            allow_empty=True,  # Allow blank to skip this field
+            context="update_ticket_subject",  # Context label for EOF logging
+        )
+        if subject:  # Only include field if user provided a value
+            body["subject"] = subject  # Add subject to update body
+
+        status = InputUtils.safe_input(  # Prompt for new status (optional)
+            "  New status [open/closed] (leave blank to skip): ",  # Prompt text with valid values
+            default_value="",  # No default -- blank means skip
+            allow_empty=True,  # Allow blank to skip this field
+            context="update_ticket_status",  # Context label for EOF logging
+        )
+        if status:  # Only include field if user provided a value
+            body["status"] = status  # Add status to update body
+
+        ticket_type = InputUtils.safe_input(  # Prompt for new type (optional)
+            "  New type [question/problem/incident/feature_request] (leave blank to skip): ",  # Prompt text
+            default_value="",  # No default -- blank means skip
+            allow_empty=True,  # Allow blank to skip this field
+            context="update_ticket_type",  # Context label for EOF logging
+        )
+        if ticket_type:  # Only include field if user provided a value
+            body["type"] = ticket_type  # Add type to update body
+
+        return body  # Return dict of fields to update (may be empty)
+
+    @staticmethod
+    def _submit_comment(org_id: str, ticket_id: str, comment_text: str, file_path: str) -> None:
+        """Submit comment with optional file attachment to ticket."""
+        has_file = bool(file_path and os.path.isfile(file_path))  # Check if valid file was specified
+
+        if has_file:  # Use multipart upload API when file is attached
+            logging.info("Adding comment with attachment to ticket %s", ticket_id)  # Log before API call
+            mistapi.api.v1.orgs.tickets.addOrgTicketCommentFile(  # Multipart comment+file API
+                apisession,
+                org_id,
+                ticket_id,  # Session, org, and ticket identifiers
+                comment=comment_text or None,  # Comment text (None if empty)
+                file=file_path,  # Path to file for upload
+            )
+            logging.debug("Comment with file submitted to ticket %s", ticket_id)  # Log after API call
+            print(f"\n  Comment with attachment added to ticket {ticket_id}")  # Confirm to user
+        elif file_path:  # User specified a path but file doesn't exist
+            logging.warning(  # Warn about missing file path
+                "File not found: %s -- adding comment without attachment", file_path
+            )
+            print(f"  Warning: File not found at '{file_path}' -- adding comment only.")  # Alert user
+            OrgTicketManager._submit_text_comment(org_id, ticket_id, comment_text)  # Fall back to text-only
+        else:  # No file specified -- text-only comment
+            OrgTicketManager._submit_text_comment(org_id, ticket_id, comment_text)  # Submit text comment
+
+    @staticmethod
+    def _submit_text_comment(org_id: str, ticket_id: str, comment_text: str) -> None:
+        """Submit a text-only comment to a ticket."""
+        logging.info("Adding text comment to ticket %s", ticket_id)  # Log before API call
+        body = {"comment": comment_text}  # Build comment request body
+        mistapi.api.v1.orgs.tickets.addOrgTicketComment(  # Call Mist API to add comment
+            apisession, org_id, ticket_id, body  # Session, org, ticket ID, and comment body
+        )
+        logging.debug("Text comment submitted to ticket %s", ticket_id)  # Log after API call
+        print(f"\n  Comment added to ticket {ticket_id}")  # Confirm to user
 
 
 # ============================================================================
@@ -31153,6 +31449,13 @@ menu_actions = {
         OrgDeviceInventorySummary.dispatch,
         "Export org device model counts, firmware version distribution, and versions per model (MSP-aware)",
     ),
+    # ==============================
+    # SUPPORT TICKETS
+    # ==============================
+    "188": (OrgTicketManager.list_tickets, "Export all organization support tickets to CSV"),
+    "189": (OrgTicketManager.create_ticket, "Create a new organization support ticket"),
+    "190": (OrgTicketManager.add_comment, "Add a comment (with optional file attachment) to a support ticket"),
+    "191": (OrgTicketManager.update_ticket, "Update fields on an existing support ticket"),
 }
 
 

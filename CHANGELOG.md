@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+## [25.06.13.00.00] - Support Ticket Management
+
+### Added
+
+- **Menu 188**: List/export all organization support tickets to CSV/SQLite (`OrgTicketManager.list_tickets`)
+- **Menu 189**: Create a new support ticket with subject, type, and optional comment (`OrgTicketManager.create_ticket`)
+- **Menu 190**: Add a comment to an existing ticket with optional file attachment (`OrgTicketManager.add_comment`)
+- **Menu 191**: Update ticket fields (subject, status, type) on an existing ticket (`OrgTicketManager.update_ticket`)
+- New `OrgTicketManager` class with full ticket lifecycle management
+- Primary key strategies for `getOrgTicket`, `createOrgTicket`, `updateOrgTicket`, `addOrgTicketComment`
+- Attachment support via `addOrgTicketCommentFile` multipart API (integrated into Menu 190)
+- Comprehensive test suite: `tests/test_ticket_manager.py` (14 tests covering all 4 operations + edge cases)
+- Operation count updated: 187 → 191
+
 ## [26.05.21.00.00] - Menu Regrouping
 
 ### Changed (BREAKING)
