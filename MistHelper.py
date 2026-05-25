@@ -11959,7 +11959,6 @@ class OrgTicketManager:
                 api_call=mistapi.api.v1.orgs.tickets.listOrgTickets,  # SDK function for ticket listing
                 filename="OrgTickets.csv",  # Output filename in data/ directory
                 sort_key="created_at",  # Sort tickets by creation timestamp
-                limit=1000,  # Page size for API pagination
             ).execute()  # Run the full fetch-flatten-export workflow
             logging.info("Completed org ticket list export")  # Log success
             logging.debug("EXIT: OrgTicketManager.list_tickets - success")  # Debug trace
