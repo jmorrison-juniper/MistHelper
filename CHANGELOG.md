@@ -7,6 +7,23 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+## [25.05.25.05.29] - Ticket Viewer & Detail Export
+
+### Added
+
+- **Menu 192**: Interactive ticket detail viewer with comments (`OrgTicketManager.view_ticket`)
+- **Menu 193**: Export all tickets with full details and comments to CSV/SQLite (`OrgTicketManager.export_ticket_details`)
+- Primary key strategy for `getOrgTicket` endpoint (natural PK on `id`)
+- Private helpers: `_select_ticket`, `_fetch_ticket_detail`, `_display_ticket_detail`
+- 7 new tests for menus 192-193 and `_select_ticket` helper
+
+### Changed
+
+- **Menu 190** (Add Comment): Refactored to use interactive ticket selector instead of raw ID prompt
+- **Menu 191** (Update Ticket): Refactored to use interactive ticket selector instead of raw ID prompt
+- `OrgTicketManager` class expanded from 4 to 6 public operations (list, create, add comment, update, view, export)
+- Operation count updated: 191 → 193
+
 ## [25.06.13.00.00] - Support Ticket Management
 
 ### Added
