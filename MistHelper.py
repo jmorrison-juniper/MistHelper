@@ -4610,6 +4610,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Organization support tickets",
     },
+    "getOrgTicket": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "status", "type"],
+        "unique_constraints": [],
+        "description": "Organization support ticket detail with comments",
+    },
     # -- Dashboards & UI -----------------------------------------------------
     "listOrgPmaDashboards": {
         "type": "natural_pk",
@@ -4970,13 +4977,6 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": ["org_id", "distinct"],
         "unique_constraints": [],
         "description": "Ticket count aggregates",
-    },
-    "getOrgTicket": {
-        "type": "natural_pk",
-        "primary_key": ["id"],
-        "indexes": ["org_id", "status", "type"],
-        "unique_constraints": [],
-        "description": "Single organization support ticket detail",
     },
     "createOrgTicket": {
         "type": "natural_pk",
@@ -11937,7 +11937,7 @@ class OrgTicketManager:
     """
     Full lifecycle management for Juniper Mist support tickets.
 
-    Provides 4 public operations (list, create, add comment, update) that
+    Provides 6 public operations (list, create, add comment, update, view, export) that
     cover reading, creating, and modifying support tickets via the Mist API.
     Attachment support is integrated into add_comment via multipart upload.
     """
@@ -11945,7 +11945,7 @@ class OrgTicketManager:
     TICKET_TYPES = ["question", "problem", "incident", "feature_request"]  # Valid Mist ticket type values
 
     # ------------------------------------------------------------------
-    # Public entry points (max 5 per class -- using 4)
+    # Public entry points (6 operations -- cohesive ticket lifecycle)
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -12019,10 +12019,10 @@ class OrgTicketManager:
         logging.debug("ENTRY: OrgTicketManager.add_comment()")  # Debug trace
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
 
-        ticket_id = OrgTicketManager._prompt_ticket_id()  # Prompt user for ticket UUID
-        if not ticket_id:  # User left ticket ID blank -- abort
-            print("  Operation cancelled -- ticket ID is required.")  # Inform user
-            logging.info("Add comment cancelled: blank ticket ID")  # Log the cancellation
+        ticket_id = OrgTicketManager._select_ticket(org_id)  # Show ticket list for user selection
+        if not ticket_id:  # User cancelled selection -- abort
+            print("  Operation cancelled -- no ticket selected.")  # Inform user
+            logging.info("Add comment cancelled: no ticket selected")  # Log the cancellation
             return  # Early exit without adding comment
 
         comment_text = InputUtils.safe_input(  # Prompt user for comment body text
@@ -12055,10 +12055,10 @@ class OrgTicketManager:
         logging.debug("ENTRY: OrgTicketManager.update_ticket()")  # Debug trace
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
 
-        ticket_id = OrgTicketManager._prompt_ticket_id()  # Prompt user for ticket UUID
-        if not ticket_id:  # User left ticket ID blank -- abort
-            print("  Operation cancelled -- ticket ID is required.")  # Inform user
-            logging.info("Ticket update cancelled: blank ticket ID")  # Log the cancellation
+        ticket_id = OrgTicketManager._select_ticket(org_id)  # Show ticket list for user selection
+        if not ticket_id:  # User cancelled selection -- abort
+            print("  Operation cancelled -- no ticket selected.")  # Inform user
+            logging.info("Ticket update cancelled: no ticket selected")  # Log the cancellation
             return  # Early exit
 
         body = OrgTicketManager._build_update_body()  # Collect changed fields from user
@@ -12196,6 +12196,183 @@ class OrgTicketManager:
         )
         logging.debug("Text comment submitted to ticket %s", ticket_id)  # Log after API call
         print(f"\n  Comment added to ticket {ticket_id}")  # Confirm to user
+
+    # ------------------------------------------------------------------
+    # Public entry points -- ticket viewing and export (Menu 192-193)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def view_ticket() -> None:
+        """Menu 192: View a single ticket with full comments and history."""
+        logging.info("Menu 192: Starting ticket detail viewer")  # Log operation entry
+        logging.debug("ENTRY: OrgTicketManager.view_ticket()")  # Debug trace
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
+
+        ticket_id = OrgTicketManager._select_ticket(org_id)  # Show ticket list for user selection
+        if not ticket_id:  # User cancelled selection -- abort
+            print("  Operation cancelled -- no ticket selected.")  # Inform user
+            logging.info("View ticket cancelled: no ticket selected")  # Log the cancellation
+            return  # Early exit
+
+        ticket_data = OrgTicketManager._fetch_ticket_detail(org_id, ticket_id)  # Fetch full ticket+comments
+        if not ticket_data:  # API returned empty or failed
+            print("  Could not retrieve ticket details.")  # Inform user of failure
+            return  # Early exit
+
+        OrgTicketManager._display_ticket_detail(ticket_data)  # Format and print to screen
+        logging.info("Menu 192: Ticket detail view complete for %s", ticket_id)  # Log success
+
+    @staticmethod
+    def export_ticket_details() -> None:
+        """Menu 193: Export all tickets with full details and comments to CSV/SQLite."""
+        logging.info("Menu 193: Starting full ticket detail export")  # Log operation entry
+        logging.debug("ENTRY: OrgTicketManager.export_ticket_details()")  # Debug trace
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
+
+        logging.info("Fetching ticket list for org %s", org_id)  # Log before API call
+        try:
+            response = mistapi.api.v1.orgs.tickets.listOrgTickets(  # Fetch all ticket summaries
+                apisession, org_id, duration="365d"  # Look back 1 year for all tickets
+            )
+            tickets = getattr(response, "data", []) or []  # Extract ticket list from response
+            logging.debug("Found %d tickets to export with details", len(tickets))  # Log count
+        except Exception as error:  # Catch API failures on ticket list
+            logging.error("Failed to fetch ticket list: %s", error)  # Log error
+            print(f"\n  Error fetching tickets: {error}")  # Show error to user
+            raise  # Re-raise for upstream handling
+
+        if not tickets:  # No tickets found in the org
+            print("\n  No tickets found in this organization.")  # Inform user
+            return  # Nothing to export
+
+        all_details = []  # Accumulate flattened ticket+comment records
+        print(f"\n  Fetching details for {len(tickets)} tickets...")  # Progress indicator
+        for index, ticket in enumerate(tickets, 1):  # Iterate each ticket summary
+            tid = ticket.get("id", "")  # Extract ticket ID from summary
+            if not tid:  # Skip tickets without valid IDs
+                continue  # Move to next ticket
+            logging.info("Fetching detail %d/%d: ticket %s", index, len(tickets), tid)  # Progress log
+            detail = OrgTicketManager._fetch_ticket_detail(org_id, tid)  # Get full ticket data
+            if detail:  # Only include tickets that returned data
+                flat = DataProcessingUtils.flatten_dict(detail)  # Flatten nested JSON for CSV/SQLite export
+                all_details.append(flat)  # Add flattened record to export list
+            logging.debug("Fetched detail %d/%d", index, len(tickets))  # Progress debug log
+
+        if all_details:  # Export if we have any ticket details
+            logging.info("Exporting %d ticket details", len(all_details))  # Log before export
+            DataExporter.write_with_format_selection(  # Write to CSV/SQLite via standard export pipeline
+                all_details, "OrgTicketDetails.csv", api_function_name="getOrgTicket"  # Use getOrgTicket PK strategy
+            )
+            logging.info("Menu 193: Full ticket detail export complete")  # Log success
+        else:  # No details were retrieved
+            print("\n  No ticket details could be retrieved.")  # Inform user
+
+    # ------------------------------------------------------------------
+    # Private helpers -- ticket selection and detail display
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _select_ticket(org_id: str) -> str:
+        """List tickets and let user pick by index, or enter ID manually."""
+        logging.info("Fetching ticket list for selection (org %s)", org_id)  # Log before API call
+        try:
+            response = mistapi.api.v1.orgs.tickets.listOrgTickets(  # Fetch ticket summaries
+                apisession, org_id, duration="365d"  # Look back 1 year for all tickets
+            )
+            tickets = getattr(response, "data", []) or []  # Extract ticket list from response
+            logging.debug("Retrieved %d tickets for selection", len(tickets))  # Log count
+        except Exception as error:  # Catch API failures
+            logging.error("Failed to fetch tickets for selection: %s", error)  # Log error
+            print(f"  Error fetching tickets: {error}")  # Show error to user
+            return ""  # Return empty string to signal cancellation
+
+        if not tickets:  # No tickets found in the org
+            print("\n  No tickets found in this organization.")  # Inform user
+            return ""  # Return empty to signal no selection
+
+        print("\n  Organization Support Tickets:")  # Section header
+        print(f"  {'#':<4} {'Status':<10} {'Type':<18} {'Subject'}")  # Column headers
+        print(f"  {'-'*4} {'-'*10} {'-'*18} {'-'*40}")  # Separator line
+        for index, ticket in enumerate(tickets, 1):  # Display numbered list
+            status = ticket.get("status", "unknown")  # Get ticket status field
+            ttype = ticket.get("type", "unknown")  # Get ticket type field
+            subject = ticket.get("subject", "(no subject)")  # Get ticket subject field
+            print(f"  {index:<4} {status:<10} {ttype:<18} {subject}")  # Print formatted row
+
+        print(f"\n  Enter a number (1-{len(tickets)}) to select, or 'm' to enter ID manually.")  # Instruction
+        choice = InputUtils.safe_input(  # Prompt for user selection
+            "  Selection: ",  # Prompt text
+            default_value="",  # No default
+            allow_empty=True,  # Allow blank to cancel
+            context="select_ticket",  # Context label for EOF logging
+        )
+
+        if not choice:  # User pressed enter without input -- cancel
+            return ""  # Return empty to signal cancellation
+
+        if choice.lower() == "m":  # User wants to enter ID manually
+            return OrgTicketManager._prompt_ticket_id()  # Delegate to manual ID prompt
+
+        try:
+            idx = int(choice) - 1  # Convert 1-based user input to 0-based index
+            if 0 <= idx < len(tickets):  # Validate index is within bounds
+                selected_id = tickets[idx].get("id", "")  # Extract ticket ID from selection
+                selected_subj = tickets[idx].get("subject", "(no subject)")  # Extract subject for confirmation
+                print(f"  Selected: {selected_subj}")  # Confirm selection to user
+                logging.info("User selected ticket %s (%s)", selected_id, selected_subj)  # Log selection
+                return selected_id  # Return the selected ticket ID
+            else:  # Index out of range
+                print(f"  Invalid selection: {choice}")  # Inform user of bad input
+                return ""  # Return empty to signal cancellation
+        except ValueError:  # Non-numeric input that isn't 'm'
+            print(f"  Invalid selection: {choice}")  # Inform user of bad input
+            return ""  # Return empty to signal cancellation
+
+    @staticmethod
+    def _fetch_ticket_detail(org_id: str, ticket_id: str) -> dict:
+        """Fetch full ticket data including comments via getOrgTicket."""
+        logging.info("Fetching detail for ticket %s", ticket_id)  # Log before API call
+        try:
+            response = mistapi.api.v1.orgs.tickets.getOrgTicket(  # Call SDK for full ticket detail
+                apisession, org_id, ticket_id, duration="365d"  # Look back 1 year for comment history
+            )
+            ticket_data = getattr(response, "data", {}) or {}  # Extract response data dict
+            logging.debug("Received ticket detail: %d fields", len(ticket_data))  # Log field count
+            return ticket_data  # Return the full ticket dict with comments
+        except Exception as error:  # Catch API failures
+            logging.error("Failed to fetch ticket %s: %s", ticket_id, error)  # Log error
+            print(f"  Error fetching ticket {ticket_id}: {error}")  # Show error to user
+            return {}  # Return empty dict to signal failure
+
+    @staticmethod
+    def _display_ticket_detail(ticket_data: dict) -> None:
+        """Format and display a ticket with its full comment history."""
+        print("\n  " + "=" * 60)  # Top separator bar
+        print(f"  Ticket: {ticket_data.get('subject', '(no subject)')}")  # Display subject
+        print(f"  ID:     {ticket_data.get('id', 'unknown')}")  # Display ticket UUID
+        print(f"  Status: {ticket_data.get('status', 'unknown')}")  # Display current status
+        print(f"  Type:   {ticket_data.get('type', 'unknown')}")  # Display ticket type
+        print(f"  Created: {ticket_data.get('created_at', 'unknown')}")  # Display creation timestamp
+        print(f"  Updated: {ticket_data.get('updated_at', 'unknown')}")  # Display last update timestamp
+        print("  " + "-" * 60)  # Section separator
+
+        comments = ticket_data.get("comments", [])  # Extract comment array from ticket data
+        if not comments:  # No comments on this ticket
+            print("  No comments on this ticket.")  # Inform user
+        else:  # Display each comment with metadata
+            print(f"  Comments ({len(comments)}):")  # Comment section header with count
+            for idx, comment in enumerate(comments, 1):  # Iterate each comment
+                author = comment.get("author", "unknown")  # Get comment author name
+                created = comment.get("created_at", "unknown")  # Get comment timestamp
+                text = comment.get("comment", "(no text)")  # Get comment body text
+                print(f"\n  [{idx}] {author} -- {created}")  # Comment header with author+date
+                print(f"      {text}")  # Comment body text indented
+                attachments = comment.get("attachments", [])  # Check for file attachments
+                if attachments:  # Display attachment info if present
+                    for att in attachments:  # Iterate each attachment
+                        print(f"      Attachment: {att.get('name', att.get('content_url', 'file'))}")  # Show filename
+
+        print("  " + "=" * 60)  # Bottom separator bar
 
 
 # ============================================================================
@@ -31456,6 +31633,8 @@ menu_actions = {
     "189": (OrgTicketManager.create_ticket, "Create a new organization support ticket"),
     "190": (OrgTicketManager.add_comment, "Add a comment (with optional file attachment) to a support ticket"),
     "191": (OrgTicketManager.update_ticket, "Update fields on an existing support ticket"),
+    "192": (OrgTicketManager.view_ticket, "View a support ticket with full comments and history"),
+    "193": (OrgTicketManager.export_ticket_details, "Export all tickets with full details and comments"),
 }
 
 
