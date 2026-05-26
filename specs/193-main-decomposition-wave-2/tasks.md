@@ -112,12 +112,12 @@
 - [x] T039 [US1] Add or update tests in `tests/unit/export/test_site_export_utils.py` and `tests/unit/export/test_site_insights_exporter.py`
 - [x] T040 [US1] Run mandatory automated validation for Phase 5 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-5-gate.md`
 - [x] T040A [US1] Verify constitution compliance for Phase 5 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-5-gate.md`
-- [ ] T040B [US1] Execute full deployment pipeline for Phase 5 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-5-gate.md`
+- [x] T040B [US1] Execute full deployment pipeline for Phase 5 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-5-gate.md`
 - [x] T041 [US2] Execute menu behavior parity checks for operations `70-86` and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-5-menu-parity.md`
 - [x] T042 [US2] Execute API + backend parity checks (CSV/SQLite/polyglot) for Phase 5 affected outputs and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-5-output-parity.md`
 - [x] T043 [US1] Execute circular import checks for Phase 5 extracted modules using `tests/contract/test_import_graph.py` and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-5-gate.md`
 - [x] T044 [US1] Execute runtime coupling checks for Phase 5 using `tests/integration/test_runtime_coupling.py` with `phase_5` profile and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-5-gate.md`
-- [ ] T045 [US1] Verify hard gate pass and sign off Phase 5 in `specs/193-main-decomposition-wave-2/checklists/phase-5-gate.md` before starting Phase 6
+- [x] T045 [US1] Verify hard gate pass and sign off Phase 5 in `specs/193-main-decomposition-wave-2/checklists/phase-5-gate.md` before starting Phase 6
 
 ---
 

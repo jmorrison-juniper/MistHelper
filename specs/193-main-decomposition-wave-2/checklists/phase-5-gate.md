@@ -44,16 +44,36 @@ Scope: T037/T038/T039/T040/T040A/T040B/T043/T044/T045
 
 ## Full Deployment Pipeline Attempt (T040B)
 
-- Commit created on branch `193-main-decomposition-wave-2`:
+- Attempt 1 commit and push completed:
   - Commit: `c81b413`
   - Message: `version 26.05.26.20.49 - phase5 extract SiteExportUtils and insights exporter`
-- Push completed to `origin/193-main-decomposition-wave-2`.
-- Container build workflow manually triggered for current commit:
+- Attempt 1 workflow run completed with failure:
   - Run: `26474355220`
   - URL: `https://github.com/jmorrison-juniper/MistHelper/actions/runs/26474355220`
-  - Status at capture time: `in_progress`
-- Image pull + container runtime verification: pending final CI completion.
+  - Failure evidence: `test` job failed on `tests/unit/test_exports.py` because delegated `SiteExportUtils` wrapper did not expose helper methods `_classify_device_platform`, `_metric_compatible_with_platform`, `_normalize_device_mac_or_none`.
+- Remediation applied in `MistHelper.py` by restoring delegated wrapper methods for those helper entrypoints.
+- Attempt 2 commit and push completed:
+  - Commit: `4b03958`
+  - Message: `version 26.05.26.20.52 - phase5 gate evidence and compatibility fix`
+- Attempt 2 workflow run final status:
+  - Run: `26474512865`
+  - URL: `https://github.com/jmorrison-juniper/MistHelper/actions/runs/26474512865`
+  - Status: `completed`
+  - Conclusion: `success`
+  - Job status: `validate=success`, `test=success`, `build-and-push=success`
+
+### Image Pull
+
+- `podman pull ghcr.io/jmorrison-juniper/misthelper:latest` succeeded.
+
+### Container Runtime Verification
+
+- Started validation container successfully:
+  - Container: `misthelper-phase5`
+  - Ports: `2213->2200`, `8063->8055`
+  - `podman ps` confirms container is running.
 
 ## Phase 5 Signoff (T045)
 
-- Pending completion of T040B final CI state plus image pull and runtime verification.
+- Phase 5 extraction, validation, parity evidence, import/runtime gates, and deployment gate are complete.
+- No open blockers remain for Phase 5 closure.
