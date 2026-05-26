@@ -2,7 +2,7 @@
 
 The previous README was partially outdated compared to the current codebase. Key discrepancies that were corrected:
 
-1. **Operation Count**: MistHelper now has 164 actionable menu entries (0-163), with some gaps reserved for future expansion
+1. **Operation Count**: MistHelper now has 193 actionable menu entries (1-193)
 2. **File Naming**: Actual output files use names like `OrgApiTokens.csv`, `OrgPsks.csv`, etc. Weekly inventory is stored in `CombinedInventory_ByWeek/`
 3. **SSH Command Runner**: The Enhanced SSH Runner (option 97) uses a fallback CSV located at `data/SSH_COMMANDS.CSV`, not the root directory
 4. **Heavy Operations**: Options 14 (port stats for all sites) and 18 (site settings for all sites) are excluded from `--test` mode due to multi-hour runtime
