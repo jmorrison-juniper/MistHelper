@@ -84,6 +84,7 @@ from src.audit.analyzer import AuditLogAnalyzer  # Audit log analysis engine
 from src.audit.filter import AuditLogFilter  # Audit log filtering to remove noise
 from src.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering
 from src.audit.time_parser import TimeRangeParser  # Audit log time range parsing (7d, 4w, etc.)
+from src.capture.packet_capture import PacketCaptureManager as ExtractedPacketCaptureManager
 from src.export.site_export_utils import configure_site_export_utils_dependencies
 from src.gateway.gateway_export_utils import configure_gateway_export_utils_dependencies
 from src.org_data_collector import OrgDataCollector
@@ -6266,7 +6267,7 @@ class DeviceDataFetcher:
         DisplayUtils.dict_list_as_pretty_table(processed)
 
 
-class PacketCaptureManager:
+class _LegacyPacketCaptureManager:
     """
     Comprehensive packet capture management for Juniper Mist environments.
 
@@ -8899,6 +8900,11 @@ class PacketCaptureManager:
 
         except Exception as error:
             logging.error(f"Failed to export capture info: {error}", exc_info=True)
+
+
+# Phase 9 canonical ownership: runtime PacketCaptureManager now resolves to src.capture.packet_capture.
+# Legacy class above is intentionally retained temporarily for rollback safety within this wave branch.
+PacketCaptureManager = ExtractedPacketCaptureManager
 
 
 class SFPTransceiverDataProcessor:
