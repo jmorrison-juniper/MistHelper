@@ -30,7 +30,7 @@ When refactoring code, avoid using wrappers; actually restructure into classes a
 ---
 
 ## Project Overview
-MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud network operations. It provides 100+ menu-driven operations for data extraction, device management, and firmware upgrades with multi-backend output (CSV, SQLite, or polyglot ArangoDB/Redis) and containerized SSH access.
+MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud network operations. It provides 193 menu-driven operations for data extraction, device management, and firmware upgrades with multi-backend output (CSV, SQLite, or polyglot ArangoDB/Redis) and containerized SSH access.
 
 **Target Audience**: Junior NOC engineers. Use clear, professional language without jargon. Think Fred Rogers meets NASA/JPL safety standards.
 
@@ -327,34 +327,57 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 
 ## Menu System & Operations
 
-### Menu Categories (Full Range: 1-100)
-**Data Extraction (1-50)**:
-- 1-4: Core organization/site operations
-- 5-8: WebSocket real-time commands (wireless devices, switches, gateways)
-- 9-10: Packet captures (site-level, org-level with switch support)
-- 11-50: Device inventory, events, stats, licenses, templates, etc.
+### Menu Categories (Full Range: 1-193)
+**Safe Org Exports (1-59)**:
+- 1-7: Sites and analysis
+- 8-14: Device inventory
+- 15-19: Device stats
+- 20-26: Events and logs
+- 27-30: Client stats
+- 31-36: Gateway operations
+- 37-41: Templates
+- 42-50: Config and admin
+- 51-55: SLE and insights
+- 56-59: Misc exports
 
-**Advanced Operations (51-89)**:
-- 51-62: Maps, webhooks, SLE metrics, alarms
-- 63-65: WIP features (skip in tests)
-- 66-86: Client data, WLAN configs, RF templates, API tokens
-- 87-89: Additional WebSocket commands
+**Interactive Safe (60-96)**:
+- 60-72: Site devices
+- 73-79: Site insights
+- 80-91: Site stats
+- 92-96: Viewers
 
-**Destructive Operations (90-100)** - NEVER automate without explicit user confirmation:
-- 90: AP Firmware (Site or Template-based)
-- 91-93: AP Reboots (various strategies)
-- 94-96: VC Conversion (virtual chassis operations)
-- 97-98: SSH Runner (device command execution)
-- 99-100: Switch/SSR Firmware (advanced upgrade modes)
+**Resource Intensive (97-101, 153)**:
+- 97-101: Long-running operations
+- 153: Bulk operations
+
+**WebSocket (102-123)**:
+- 102-115: Show commands (wireless, switches, gateways)
+- 116-123: Diagnostics
+
+**Interactive (124-150)**:
+- 124-127: Device diagnostics
+- 128-133: Device management
+- 134-135: Packet captures (site-level, org-level with switch support)
+- 136-147: Tools
+- 148-150: Config management
+
+**Continuous (151-152)**:
+- 151-152: Continuous monitoring loops
+
+**Destructive Operations (154-193)** - NEVER automate without explicit user confirmation:
+- 154-157: Firmware upgrades
+- 158-160: AP reboots
+- 161-162: VC conversion (virtual chassis operations)
+- 163-167: Template operations
+- 168-170: Site config operations
+- 171-174: Test data operations
+- 175-176: SSH runners (device command execution)
+- 177-187: Clear/reset operations
+- 188-193: Support ticket operations
 
 ### Interactive vs Direct Invocation
 - **Interactive**: No args = menu-driven selection with safe navigation
 - **Direct**: `--menu 11` for automation
-- **Packet Captures** (Menu 9-10): 
-  - Site captures (Menu 9): Wireless client, wired client, gateway, **switch**, new association, scan radio
-  - Org captures (Menu 10): Similar capabilities at org level
-  - **Switch captures**: Full support for port-specific captures with tcpdump filtering
-- **WebSocket Commands** (Menu 5-8, 87-89): Real-time device commands with connection management
 
 ---
 

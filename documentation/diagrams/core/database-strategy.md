@@ -6,7 +6,7 @@ Hybrid primary key system and PK strategy decision flowchart for MistHelper's SQ
 
 ## Entity Relationship Diagram
 
-Representative tables showing the three PK strategies used across MistHelper's 187 operations.
+Representative tables showing the three PK strategies used across MistHelper's 193 operations.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {

@@ -105,7 +105,7 @@ flowchart LR
 }}}%%
 mindmap
    root((MistHelper<br/>193 Operations))
-    Safe Org Exports (57)
+    Safe Org Exports (59)
       Sites and Analysis 1-7
       Device Inventory 8-14
       Device Stats 15-19
@@ -135,7 +135,7 @@ mindmap
       Config Mgmt 148-150
     Continuous (2)
       Loops 151-152
-    Destructive (36)
+    Destructive (40)
       ::icon(fa fa-warning)
       Firmware 154-157
       Reboot 158-160
