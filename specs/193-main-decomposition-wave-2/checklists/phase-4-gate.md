@@ -36,7 +36,39 @@ Scope: T028/T029/T030/T031/T031A/T031B/T032/T033/T034/T035/T036
 
 ## Full Deployment Pipeline Attempt (T031B)
 
-- Status: **Pending update in this run section after commit/push + CI wait + image pull + runtime verification**.
+- Status: **Completed (with documented port constraint and successful fallback runtime verification)**.
+
+### Commit and Push
+
+- Branch: `193-main-decomposition-wave-2`
+- Commit: `9b6e854`
+- Push target: `origin/193-main-decomposition-wave-2`
+
+### CI Wait
+
+- Existing latest run before this change pointed to an older commit (`headSha` mismatch):
+  - Run: `26472184374`
+  - `headSha`: `ec84d7e26107cbc323dd941f7956842bf3e9e2f1`
+- Manually triggered workflow dispatch for current commit and captured completion:
+  - Run: `26473565710`
+  - Status: `completed`
+  - Conclusion: `success`
+  - URL: `https://github.com/jmorrison-juniper/MistHelper/actions/runs/26473565710`
+  - `headSha`: `9b6e854ed4f75e782c03b540f24e3433c8857326`
+
+### Image Pull
+
+- Image pull succeeded:
+  - `ghcr.io/jmorrison-juniper/misthelper:latest`
+
+### Container Runtime Verification
+
+- Standard port mapping attempt (`2200`, `8055`) failed because port `2200` is already in use:
+  - Error: `Failed to bind port 2200 (Address already in use)`
+- Fallback runtime verification succeeded on alternate ports:
+  - Container: `misthelper-phase4`
+  - Port mapping: `2212->2200`, `8062->8055`
+  - `podman ps` confirms container is running.
 
 ## Import Graph and Runtime Coupling Gates
 
@@ -45,4 +77,5 @@ Scope: T028/T029/T030/T031/T031A/T031B/T032/T033/T034/T035/T036
 
 ## Phase 4 Signoff (T036)
 
-- Pending final signoff update after deployment pipeline attempt (T031B) is recorded.
+- Phase 4 extraction, validation, parity evidence, import/runtime gates, and deployment-gate attempt are complete.
+- No blockers remain for Phase 4 closure.

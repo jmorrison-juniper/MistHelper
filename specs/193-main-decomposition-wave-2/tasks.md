@@ -88,17 +88,17 @@
 **Goal**: Extract site configuration manager with grouped destructive operations unchanged.
 **Independent Test**: Menu `171-174` parity and hard-gate criteria pass.
 
-- [ ] T028 [US1] Extract `SiteConfigManager` from `MistHelper.py` into `src/site/site_config_manager.py`
-- [ ] T029 [US1] Reduce `MistHelper.py` to orchestration/delegation for `SiteConfigManager` entrypoints and remove duplicated implementation blocks
-- [ ] T030 [US1] Add or update tests in `tests/unit/site/test_site_config_manager.py`
-- [ ] T031 [US1] Run mandatory automated validation for Phase 4 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md`
-- [ ] T031A [US1] Verify constitution compliance for Phase 4 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md`
-- [ ] T031B [US1] Execute full deployment pipeline for Phase 4 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md`
-- [ ] T032 [US2] Execute menu behavior parity checks for operations `171-174` and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-4-menu-parity.md`
-- [ ] T033 [US2] Execute API + backend parity checks (CSV/SQLite/polyglot) for Phase 4 affected outputs and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-4-output-parity.md`
-- [ ] T034 [US1] Execute circular import checks for Phase 4 extracted modules using `tests/contract/test_import_graph.py` and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md`
-- [ ] T035 [US1] Execute runtime coupling checks for Phase 4 using `tests/integration/test_runtime_coupling.py` with `phase_4` profile and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md`
-- [ ] T036 [US1] Verify hard gate pass and sign off Phase 4 in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md` before starting Phase 5
+- [x] T028 [US1] Extract `SiteConfigManager` from `MistHelper.py` into `src/site/site_config_manager.py`
+- [x] T029 [US1] Reduce `MistHelper.py` to orchestration/delegation for `SiteConfigManager` entrypoints and remove duplicated implementation blocks
+- [x] T030 [US1] Add or update tests in `tests/unit/site/test_site_config_manager.py`
+- [x] T031 [US1] Run mandatory automated validation for Phase 4 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md`
+- [x] T031A [US1] Verify constitution compliance for Phase 4 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md`
+- [x] T031B [US1] Execute full deployment pipeline for Phase 4 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md`
+- [x] T032 [US2] Execute menu behavior parity checks for operations `171-174` and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-4-menu-parity.md`
+- [x] T033 [US2] Execute API + backend parity checks (CSV/SQLite/polyglot) for Phase 4 affected outputs and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-4-output-parity.md`
+- [x] T034 [US1] Execute circular import checks for Phase 4 extracted modules using `tests/contract/test_import_graph.py` and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md`
+- [x] T035 [US1] Execute runtime coupling checks for Phase 4 using `tests/integration/test_runtime_coupling.py` with `phase_4` profile and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md`
+- [x] T036 [US1] Verify hard gate pass and sign off Phase 4 in `specs/193-main-decomposition-wave-2/checklists/phase-4-gate.md` before starting Phase 5
 
 ---
 
