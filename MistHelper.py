@@ -17951,6 +17951,24 @@ class SiteExportUtils:
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.zone_config_analysis()
 
+    @staticmethod
+    def _classify_device_platform(device_model: str) -> str:
+        """Delegate device platform classification helper."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._classify_device_platform(device_model)
+
+    @staticmethod
+    def _metric_compatible_with_platform(metric_name: str, device_platform: str) -> bool:
+        """Delegate metric compatibility helper."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._metric_compatible_with_platform(metric_name, device_platform)
+
+    @staticmethod
+    def _normalize_device_mac_or_none(device_mac: str) -> str | None:
+        """Delegate device MAC normalization helper."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._normalize_device_mac_or_none(device_mac)
+
 
 class GatewayHaExporter:
     """
