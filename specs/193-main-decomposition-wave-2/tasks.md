@@ -164,17 +164,17 @@
 **Goal**: Extract websocket service ping orchestration with transport contract parity.
 **Independent Test**: Menu `120` behavior, timeout handling, and outputs remain parity-aligned.
 
-- [ ] T064 [US1] Extract `ServicePingManager` from `MistHelper.py` into `src/websocket/service_ping_manager.py`
-- [ ] T065 [US1] Extract discovery and payload composition logic into `src/websocket/service_ping_discovery.py` and keep `MistHelper.py` orchestration only
-- [ ] T066 [US1] Add or update tests in `tests/unit/websocket/test_service_ping_manager.py` and `tests/unit/websocket/test_service_ping_discovery.py`
-- [ ] T067 [US1] Run mandatory automated validation for Phase 8 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
-- [ ] T067A [US1] Verify constitution compliance for Phase 8 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
-- [ ] T067B [US1] Execute full deployment pipeline for Phase 8 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
-- [ ] T068 [US2] Execute menu behavior parity checks for operation `120` and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-8-menu-parity.md`
-- [ ] T069 [US2] Execute API + backend parity checks (CSV/SQLite/polyglot) for Phase 8 affected outputs and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-8-output-parity.md`
-- [ ] T070 [US1] Execute circular import checks for Phase 8 extracted modules using `tests/contract/test_import_graph.py` and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
-- [ ] T071 [US1] Execute runtime coupling checks for Phase 8 using `tests/integration/test_runtime_coupling.py` with `phase_8` profile and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
-- [ ] T072 [US1] Verify hard gate pass and sign off Phase 8 in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md` before starting Phase 9
+- [x] T064 [US1] Extract `ServicePingManager` from `MistHelper.py` into `src/websocket/service_ping_manager.py`
+- [x] T065 [US1] Extract discovery and payload composition logic into `src/websocket/service_ping_discovery.py` and keep `MistHelper.py` orchestration only
+- [x] T066 [US1] Add or update tests in `tests/unit/websocket/test_service_ping_manager.py` and `tests/unit/websocket/test_service_ping_discovery.py`
+- [x] T067 [US1] Run mandatory automated validation for Phase 8 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
+- [x] T067A [US1] Verify constitution compliance for Phase 8 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
+- [x] T067B [US1] Execute full deployment pipeline for Phase 8 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
+- [x] T068 [US2] Execute menu behavior parity checks for operation `120` and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-8-menu-parity.md`
+- [x] T069 [US2] Execute API + backend parity checks (CSV/SQLite/polyglot) for Phase 8 affected outputs and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-8-output-parity.md`
+- [x] T070 [US1] Execute circular import checks for Phase 8 extracted modules using `tests/contract/test_import_graph.py` and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
+- [x] T071 [US1] Execute runtime coupling checks for Phase 8 using `tests/integration/test_runtime_coupling.py` with `phase_8` profile and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md`
+- [x] T072 [US1] Verify hard gate pass and sign off Phase 8 in `specs/193-main-decomposition-wave-2/checklists/phase-8-gate.md` before starting Phase 9
 
 ---
 
