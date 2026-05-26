@@ -14018,873 +14018,141 @@ class OfflineDeviceReporter:
 
 
 class OrgDeviceInventorySummary:
-    """
-    Org Device Inventory Summary (Menu 187)
+    """Delegation façade for extracted Org Device Inventory Summary modules."""
 
-    Fetches and displays two org-wide summary tables:
-      1. Device model counts - how many of each model are deployed
-      2. Firmware version distribution - how many devices run each code version, by device type
-
-    Uses countOrgDevices API with distinct=model and distinct=version per device type.
-    Exports both tables to separate CSV/SQLite outputs.
-    """
-
-    _DEVICE_TYPES: tuple[str, ...] = ("ap", "switch", "gateway")  # Device types to query - covers all managed devices
+    _DEVICE_TYPES: tuple[str, ...] = ("ap", "switch", "gateway")
 
     @staticmethod
-    def _fetch_switch_physical_inventory(org_id: str) -> list[dict]:
-        """
-        Fetch all switch devices for this org via searchOrgDevices, paginating completely.
-
-        Returns a flat list of raw API device records.  Each record includes `model`,
-        `version`, and `num_members` (number of physical switches in a VC stack;
-        1 for standalone switches).  This data enables accurate physical counts
-        because countOrgDevices treats an entire VC stack as a single logical device.
-
-        Args:
-            org_id: Organization UUID to query
-
-        Returns:
-            List of raw switch device dicts from the API
-        """
-        logging.info("Fetching switch physical inventory via searchOrgDevices, org=%s", org_id)  # Log start
-        all_records: list[dict] = []  # Accumulate records across all pages
-        next_url: str | None = None  # Full next-page URL path returned by the API in the 'next' field
-        page_num: int = 0  # Page counter for log messages
-        while True:  # Paginate until the API returns no 'next' field or results are empty
-            page_num += 1  # Increment before the call so page 1 is logged correctly
-            logging.info("Fetching switch inventory page %d org=%s", page_num, org_id)  # Log before each page
-            try:
-                if next_url:  # Pages 2+: follow the exact URL the API gave us in the 'next' field
-                    resp = apisession.mist_get(next_url)  # Call mist_get with the full path, not searchOrgDevices
-                else:  # First page: use SDK helper to build the initial request
-                    resp = mistapi.api.v1.orgs.devices.searchOrgDevices(apisession, org_id, type="switch", limit=1000)
-            except Exception as error:  # Non-fatal: return whatever we collected so far
-                logging.error("searchOrgDevices switch page %d failed: %s", page_num, error, exc_info=True)
-                break  # Exit loop and return partial results
-            page_data = getattr(resp, "data", None) if resp else None  # Safely unwrap response object
-            if not page_data or not isinstance(page_data, dict):  # Guard: empty or non-dict response
-                logging.debug("No dict data on switch inventory page %d - stopping", page_num)
-                break
-            results: list[dict] = page_data.get("results", [])  # Extract device records from page
-            if not results:  # Empty results page signals end of data
-                logging.debug("Empty results on switch inventory page %d - done", page_num)
-                break
-            all_records.extend(results)  # Accumulate records from this page into master list
-            logging.debug(  # Log page stats after processing
-                "Switch inventory page %d: %d records, total so far: %d / %d",
-                page_num,
-                len(results),
-                len(all_records),
-                page_data.get("total", "?"),  # Log total so we know how many pages to expect
-            )
-            next_url = page_data.get("next")  # API returns full path like /api/v1/.../search?...search_after=...
-            if not next_url:  # No 'next' field means this was the last page
-                break
-        logging.info(  # Log final count for observability
-            "Switch physical inventory complete: %d logical devices org=%s", len(all_records), org_id
+    def _get_summary_impl() -> Any:
+        """Configure and return extracted single-org summary implementation."""
+        from src.inventory.org_device_inventory_summary import (  # noqa: PLC0415
+            OrgDeviceInventorySummaryCore,
+            configure_org_device_inventory_summary_dependencies,
         )
-        return all_records  # Return all raw device records for downstream aggregation
+
+        configure_org_device_inventory_summary_dependencies(
+            apisession_dependency=apisession,
+            mistapi_dependency=mistapi,
+            data_exporter=DataExporter,
+            org_id_value=org_id,
+        )
+        return OrgDeviceInventorySummaryCore
+
+    @staticmethod
+    def _get_msp_impl() -> Any:
+        """Configure and return extracted MSP orchestration implementation."""
+        from src.inventory.org_device_inventory_msp import (  # noqa: PLC0415
+            OrgDeviceInventoryMSPOrchestrator,
+            configure_org_device_inventory_msp_dependencies,
+        )
+
+        configure_org_device_inventory_msp_dependencies(
+            apisession_dependency=apisession,
+            input_utils=InputUtils,
+            data_exporter=DataExporter,
+            msp_privileges_value=msp_privileges,
+        )
+        return OrgDeviceInventoryMSPOrchestrator
+
+    @staticmethod
+    def _fetch_switch_physical_inventory(current_org_id: str) -> list[dict]:
+        """Delegate switch physical inventory fetch to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._fetch_switch_physical_inventory(current_org_id)
 
     @staticmethod
     def _aggregate_switch_counts(switch_records: list[dict], distinct: str) -> list[dict]:
-        """
-        Aggregate physical switch counts from inventory records grouped by a distinct field.
-
-        Uses `num_members` (defaults to 1) from each record so that a 4-member VC stack
-        contributes 4 to the count instead of 1.  This corrects the undercounting that
-        occurs when using countOrgDevices, which treats each VC as one logical device.
-
-        Args:
-            switch_records: Raw records from _fetch_switch_physical_inventory
-            distinct: Field to group by - 'model' or 'version'
-
-        Returns:
-            Sorted list of dicts with keys: device_type='switch', <distinct>, count
-        """
-        logging.info(  # Log before aggregation loop
-            "Aggregating switch physical counts by %s from %d records", distinct, len(switch_records)
-        )
-        counts: dict[str, int] = {}  # Map of field_value -> total physical switch count
-        for record in switch_records:  # Each record is one logical switch or VC stack
-            value = record.get(distinct) or "unknown"  # Field value to group by; default to 'unknown'
-            num_members = int(record.get("num_members") or 1)  # Physical members; 1 for standalone switches
-            counts[value] = counts.get(value, 0) + num_members  # Add physical count to running total
-        rows = [  # Build output rows matching the format returned by countOrgDevices
-            {"device_type": "switch", distinct: value, "count": count}
-            for value, count in counts.items()  # One row per distinct field value
-        ]
-        rows.sort(key=lambda row: -int(row.get("count", 0)))  # Sort descending by count, matches countOrgDevices order
-        logging.debug("Switch %s aggregation: %d distinct values", distinct, len(rows))  # Log output size
-        return rows  # Return in same row format as countOrgDevices results
+        """Delegate switch aggregation to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._aggregate_switch_counts(switch_records, distinct)
 
     @staticmethod
-    def _fetch_gateway_physical_inventory(org_id: str) -> list[dict]:
-        """
-        Fetch all gateway devices for this org via getOrgInventory, paginating completely.
-
-        Each record represents one physical gateway device.  HA cluster members each
-        appear as separate records sharing the same 'vc_mac' but with their own 'mac'.
-        Passing vc=True ensures all physical cluster members are returned, not just the
-        primary.  Unlike switches, no 'num_members' field is needed -- each record IS one
-        physical device and is counted as exactly 1.
-
-        Args:
-            org_id: Organization UUID to query
-
-        Returns:
-            List of raw gateway device dicts from the inventory API
-        """
-        logging.info("Fetching gateway physical inventory via getOrgInventory, org=%s", org_id)  # Log start
-        try:  # Use mistapi.get_all to handle page-based pagination automatically
-            resp = mistapi.api.v1.orgs.inventory.getOrgInventory(  # First-page request; mistapi.get_all paginates
-                apisession, org_id, type="gateway", vc=True, limit=1000
-            )
-            all_records: list[dict] = mistapi.get_all(response=resp, mist_session=apisession)  # Fetch all pages
-        except Exception as error:  # Non-fatal: return empty list so caller can still report other device types
-            logging.error("getOrgInventory gateway failed: %s", error, exc_info=True)
-            all_records = []  # Return empty list so calling code can handle gracefully
-        logging.info(  # Log final count for observability
-            "Gateway physical inventory complete: %d physical devices org=%s", len(all_records), org_id
-        )
-        return all_records  # Return all raw device records for downstream aggregation
+    def _fetch_gateway_physical_inventory(current_org_id: str) -> list[dict]:
+        """Delegate gateway physical inventory fetch to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._fetch_gateway_physical_inventory(current_org_id)
 
     @staticmethod
     def _aggregate_gateway_counts(gateway_records: list[dict], distinct: str) -> list[dict]:
-        """
-        Aggregate physical gateway counts from inventory records grouped by a distinct field.
-
-        Unlike switches (which use num_members), each gateway inventory record represents
-        exactly one physical device.  HA cluster members each appear as separate records,
-        so a 2-node HA pair contributes 2 to the count instead of 1.  Larger HA stacks
-        with N members each contribute N.
-
-        Args:
-            gateway_records: Raw records from _fetch_gateway_physical_inventory
-            distinct: Field to group by - 'model' or 'version'
-
-        Returns:
-            Sorted list of dicts with keys: device_type='gateway', <distinct>, count
-        """
-        logging.info(  # Log before aggregation loop
-            "Aggregating gateway physical counts by %s from %d records", distinct, len(gateway_records)
-        )
-        counts: dict[str, int] = {}  # Map of field_value -> total physical gateway count
-        for record in gateway_records:  # Each record is exactly one physical gateway device
-            value = record.get(distinct) or "unknown"  # Field value to group by; default to 'unknown'
-            counts[value] = counts.get(value, 0) + 1  # Each record = 1 physical device (no num_members needed)
-        rows = [  # Build output rows matching the format returned by countOrgDevices
-            {"device_type": "gateway", distinct: value, "count": count}
-            for value, count in counts.items()  # One row per distinct field value
-        ]
-        rows.sort(key=lambda row: -int(row.get("count", 0)))  # Sort descending by count
-        logging.debug("Gateway %s aggregation: %d distinct values", distinct, len(rows))  # Log output size
-        return rows  # Return in same row format as countOrgDevices results
+        """Delegate gateway aggregation to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._aggregate_gateway_counts(gateway_records, distinct)
 
     @staticmethod
-    def _fetch_all_counts(org_id: str, distinct: str) -> list[dict]:
-        """
-        Fetch device counts grouped by `distinct` field for all device types.
-
-        For APs: calls countOrgDevices (no VC/HA stacking applies to APs).
-        For switches: calls searchOrgDevices and sums num_members per group so that
-        Virtual Chassis stack members are counted individually as physical devices.
-        For gateways: calls getOrgInventory (vc=True) so that HA cluster members each
-        appear as a separate record and are counted individually as physical devices.
-
-        Args:
-            org_id: Organization UUID to query
-            distinct: Field to group by - either 'model' or 'version'
-
-        Returns:
-            Sorted list of dicts with keys: device_type, <distinct>, count
-        """
-        logging.info("Fetching device %s counts for all types, org=%s", distinct, org_id)  # Multi-type fetch start
-        all_rows: list[dict] = []  # Accumulate results across all device types
-        for device_type in OrgDeviceInventorySummary._DEVICE_TYPES:  # Loop over ap, switch, gateway
-            if device_type == "switch":  # Switches need VC-aware counting via searchOrgDevices
-                logging.info("Fetching switch %s counts with VC-aware method, org=%s", distinct, org_id)
-                try:
-                    switch_records = OrgDeviceInventorySummary._fetch_switch_physical_inventory(org_id)  # Paginate all
-                    type_rows = OrgDeviceInventorySummary._aggregate_switch_counts(
-                        switch_records, distinct
-                    )  # Sum members
-                    all_rows.extend(type_rows)  # Add switch rows to combined result
-                    logging.debug("Switch %s rows (VC-accurate): %d", distinct, len(type_rows))  # Log row count
-                except Exception as error:  # Isolate switch failure so ap/gateway still process
-                    logging.error("Switch %s count (VC-aware) failed: %s", distinct, error, exc_info=True)
-                continue  # Skip the countOrgDevices path for switch
-            if device_type == "gateway":  # Gateways in HA clusters need inventory-based counting
-                logging.info("Fetching gateway %s counts with HA-aware method, org=%s", distinct, org_id)
-                try:  # Isolate gateway failure so APs still process
-                    gateway_records = OrgDeviceInventorySummary._fetch_gateway_physical_inventory(org_id)
-                    type_rows = OrgDeviceInventorySummary._aggregate_gateway_counts(
-                        gateway_records, distinct
-                    )  # Count 1 per record; HA members are separate records
-                    all_rows.extend(type_rows)  # Add gateway rows to combined result
-                    logging.debug("Gateway %s rows (HA-accurate): %d", distinct, len(type_rows))  # Log row count
-                except Exception as error:  # Isolate gateway failure so APs still process
-                    logging.error("Gateway %s count (HA-aware) failed: %s", distinct, error, exc_info=True)
-                continue  # Skip the countOrgDevices path for gateway
-            try:  # APs only: countOrgDevices is accurate (no VC/HA stacking applies)
-                logging.info(
-                    "Calling countOrgDevices distinct=%s type=%s", distinct, device_type
-                )  # Log before API call
-                resp = mistapi.api.v1.orgs.devices.countOrgDevices(  # Call Mist count API for this device type
-                    apisession,
-                    org_id,
-                    distinct=distinct,  # Group results by model or version
-                    type=device_type,  # Filter to ap or gateway
-                    limit=1000,  # Request up to 1000 distinct values per call
-                )
-                data = resp.data if resp and resp.data else {}  # Safely unwrap the response body dict
-                results = data.get("results", [])  # Extract the grouped results list from the response
-                logging.debug("Received %d %s rows for type=%s", len(results), distinct, device_type)  # Log row count
-                all_rows.extend(  # Add device_type column to each row so we know which type it belongs to
-                    {"device_type": device_type, distinct: item.get(distinct, "unknown"), "count": item.get("count", 0)}
-                    for item in results  # Build a flat dict for each count result item
-                )
-            except Exception as error:  # Catch per-type errors so remaining types still execute
-                logging.error(  # Log failure with full traceback for operator diagnosis
-                    "countOrgDevices distinct=%s type=%s failed: %s",
-                    distinct,
-                    device_type,
-                    error,
-                    exc_info=True,
-                )
-        all_rows.sort(key=lambda row: (row.get("device_type", ""), -int(row.get("count", 0))))  # Type asc, count desc
-        logging.info("Total %s count rows after fetch and sort: %d", distinct, len(all_rows))  # Log total row count
-        return all_rows  # Return merged and sorted list
+    def _fetch_all_counts(current_org_id: str, distinct: str) -> list[dict]:
+        """Delegate grouped count fetch to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._fetch_all_counts(current_org_id, distinct)
 
     @staticmethod
-    def _fetch_versions_per_model(org_id: str, model_rows: list[dict]) -> list[dict]:
-        """
-        Fetch firmware version counts for every distinct (device_type, model) pair.
-
-        Iterates over the model_rows returned by _fetch_all_counts and calls
-        countOrgDevices(distinct=version, type=<type>, model=<model>) once per pair.
-        Returns a flat list with keys: device_type, model, version, count.
-
-        Args:
-            org_id: Organization UUID to query
-            model_rows: Sorted rows from _fetch_all_counts with distinct='model'
-
-        Returns:
-            List of dicts with keys: device_type, model, version, count
-        """
-        logging.info("Fetching version distribution per model, org=%s", org_id)  # Log before outer loop
-        all_rows: list[dict] = []  # Accumulate results across all model/type combinations
-        # Pre-fetch switch inventory once for all switch models to avoid redundant paginated API calls
-        has_switches = any(r.get("device_type") == "switch" for r in model_rows)  # Check if any switch rows exist
-        switch_records: list[dict] = []  # Will hold all raw switch device records if needed
-        if has_switches:  # Only call the API if there are actually switch models to process
-            logging.info("Pre-fetching switch inventory for version-per-model aggregation, org=%s", org_id)
-            try:
-                switch_records = OrgDeviceInventorySummary._fetch_switch_physical_inventory(
-                    org_id
-                )  # One paginated call
-                logging.debug("Pre-fetched %d switch records for version-per-model pass", len(switch_records))
-            except Exception as error:  # Non-fatal: switch version-per-model rows will simply be absent
-                logging.error("Switch inventory pre-fetch failed: %s", error, exc_info=True)
-        has_gateways = any(r.get("device_type") == "gateway" for r in model_rows)  # Check if gateway models exist
-        gateway_records: list[dict] = []  # Will hold all raw gateway device records if needed
-        if has_gateways:  # Only call the API if there are actually gateway models to process
-            logging.info("Pre-fetching gateway inventory for version-per-model aggregation, org=%s", org_id)
-            try:  # One paginated fetch covers all gateway models - avoids N calls to countOrgDevices
-                gateway_records = OrgDeviceInventorySummary._fetch_gateway_physical_inventory(org_id)  # All pages
-                logging.debug("Pre-fetched %d gateway records for version-per-model pass", len(gateway_records))
-            except Exception as error:  # Non-fatal: gateway version-per-model rows will simply be absent
-                logging.error("Gateway inventory pre-fetch failed: %s", error, exc_info=True)
-        for model_row in model_rows:  # Iterate each (device_type, model) pair discovered earlier
-            device_type = model_row.get("device_type", "")  # Pull device type from the model row
-            model_name = model_row.get("model", "")  # Pull model name from the model row
-            if not model_name:  # Skip rows with no model name to avoid noisy API calls
-                continue
-            if device_type == "switch":  # Use pre-fetched inventory for VC-accurate physical counts
-                logging.info("Aggregating version-per-model from inventory type=switch model=%s", model_name)
-                version_counts: dict[str, int] = {}  # version -> physical count for this model
-                for record in switch_records:  # Scan all switch records for this model
-                    if record.get("model") != model_name:  # Skip records belonging to other models
-                        continue
-                    ver = record.get("version") or "unknown"  # Firmware version string from device record
-                    num_members = int(record.get("num_members") or 1)  # Physical count per VC stack
-                    version_counts[ver] = version_counts.get(ver, 0) + num_members  # Accumulate physical count
-                for ver, cnt in version_counts.items():  # Emit one row per (model, version) combination
-                    all_rows.append(  # Add row in same format as countOrgDevices-based rows
-                        {"device_type": "switch", "model": model_name, "version": ver, "count": cnt}
-                    )
-                logging.debug(  # Log output count for this switch model
-                    "version-per-model switch model=%s: %d distinct versions", model_name, len(version_counts)
-                )
-                continue  # Skip the countOrgDevices path for switch models
-            if device_type == "gateway":  # Use pre-fetched inventory for HA-accurate physical counts
-                logging.info("Aggregating version-per-model from inventory type=gateway model=%s", model_name)
-                gw_version_counts: dict[str, int] = {}  # version -> physical count for this gateway model
-                for record in gateway_records:  # Scan all gateway records for this specific model
-                    if record.get("model") != model_name:  # Skip records belonging to other gateway models
-                        continue
-                    ver = record.get("version") or "unknown"  # Firmware version string from device record
-                    gw_version_counts[ver] = gw_version_counts.get(ver, 0) + 1  # Each record = 1 physical device
-                for ver, cnt in gw_version_counts.items():  # Emit one row per (model, version) combination
-                    all_rows.append(  # Add row in same format as countOrgDevices-based rows
-                        {"device_type": "gateway", "model": model_name, "version": ver, "count": cnt}
-                    )
-                logging.debug(  # Log output count for this gateway model
-                    "version-per-model gateway model=%s: %d distinct versions", model_name, len(gw_version_counts)
-                )
-                continue  # Skip the countOrgDevices path for gateway models
-            try:  # AP models only: countOrgDevices is accurate (no VC/HA stacking applies)
-                logging.info(  # Log before API call with full context
-                    "Calling countOrgDevices distinct=version type=%s model=%s",
-                    device_type,
-                    model_name,
-                )
-                resp = mistapi.api.v1.orgs.devices.countOrgDevices(  # Call count API filtered to this model
-                    apisession,
-                    org_id,
-                    distinct="version",  # Group results by firmware version
-                    type=device_type,  # Filter to the device type this model belongs to
-                    model=model_name,  # Filter to just this specific model
-                    limit=1000,  # Request up to 1000 distinct version strings
-                )
-                data = resp.data if resp and resp.data else {}  # Safely unwrap the response body
-                results = data.get("results", [])  # Extract the version count list
-                logging.debug(  # Log result count after API call
-                    "Received %d version rows for type=%s model=%s",
-                    len(results),
-                    device_type,
-                    model_name,
-                )
-                all_rows.extend(  # Build one flat dict per version entry, tagging device_type and model
-                    {
-                        "device_type": device_type,
-                        "model": model_name,
-                        "version": item.get("version", "unknown"),  # Version string from API result
-                        "count": item.get("count", 0),  # Device count on this version
-                    }
-                    for item in results  # One dict per version result item
-                )
-            except Exception as error:  # Catch per-model errors so remaining models still execute
-                logging.error(  # Log failure with traceback for operator diagnosis
-                    "countOrgDevices distinct=version type=%s model=%s failed: %s",
-                    device_type,
-                    model_name,
-                    error,
-                    exc_info=True,
-                )
-        all_rows.sort(  # Sort by device_type asc, model asc, count desc for readability
-            key=lambda row: (row.get("device_type", ""), row.get("model", ""), -int(row.get("count", 0)))
-        )
-        logging.info("Total version-per-model rows after fetch and sort: %d", len(all_rows))  # Log total
-        return all_rows  # Return merged, annotated, sorted list
+    def _fetch_versions_per_model(current_org_id: str, model_rows: list[dict]) -> list[dict]:
+        """Delegate version-per-model fetch to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._fetch_versions_per_model(current_org_id, model_rows)
 
     @staticmethod
     def _display_pivot_and_export(rows: list[dict], filename: str) -> None:
-        """
-        Display a single combined pivot table: models as rows, firmware versions as columns.
-
-        All device types are combined into one table.  Cells are blank (0) where a model has
-        no devices on a particular version.  A 'Total' column sums each model row and a 'TOTAL'
-        footer row sums each version column plus the grand total.
-        Exports the pivoted data (one row per model, one column per version) using the given filename.
-
-        Args:
-            rows: Output of _fetch_versions_per_model with keys: device_type, model, version, count
-            filename: Output CSV filename / SQLite table name (without extension, already org-prefixed)
-        """
-        logging.info("Building combined version-per-model pivot table (%d rows)", len(rows))  # Log before pivot build
-        models = sorted({r["model"] for r in rows})  # All unique model names sorted A-Z for stable row order
-        versions = sorted({r["version"] for r in rows})  # All unique version strings sorted for stable column order
-        model_type: dict[str, str] = {r["model"]: r["device_type"] for r in rows}  # Map model -> device_type for export
-        pivot: dict[str, dict[str, int]] = {m: {} for m in models}  # pivot[model][version] = count
-        for row in rows:  # Populate pivot dict from flat row data
-            pivot[row["model"]][row["version"]] = row.get("count", 0)  # Store count at model/version intersection
-        logging.debug("Pivot dimensions: %d models x %d versions", len(models), len(versions))  # Log table size
-        table = PrettyTable()  # Create one combined PrettyTable for all device types
-        table.field_names = ["Model"] + versions + ["Total"]  # Dynamic columns: model | ver1 | ver2 | ... | Total
-        col_totals: dict[str, int] = {v: 0 for v in versions}  # Running column totals for the TOTAL footer row
-        export_rows: list[dict] = []  # Accumulate pivoted export rows for CSV/SQLite output
-        for model in models:  # One table row per model, sorted alphabetically
-            row_counts = [pivot[model].get(v, 0) for v in versions]  # Count for each version column (0 if absent)
-            row_total = sum(row_counts)  # Row total = sum of all version counts for this model
-            for ver, cnt in zip(versions, row_counts, strict=True):  # Accumulate each version column's running total
-                col_totals[ver] += cnt  # Add this model's count to the running column total
-            table.add_row([model] + row_counts + [row_total])  # Append model row: name | counts | row total
-            export_row: dict = {"Model": model, "Device Type": model_type.get(model, "")}  # Model first, then type
-            for ver in versions:  # One key per version column in the export row
-                export_row[ver] = pivot[model].get(ver, 0)  # Cell value (0 for absent model/version pairs)
-            export_row["Total"] = row_total  # Append row total to export dict
-            export_rows.append(export_row)  # Accumulate for final export call
-        col_total_values = [col_totals[v] for v in versions]  # Ordered column total values for TOTAL footer
-        grand_total = sum(col_total_values)  # Grand total = sum of all device counts across entire table
-        table.add_row(["TOTAL"] + col_total_values + [grand_total])  # Append TOTAL footer row
-        print(f"\n{'=' * 62}")
-        print("  Version Distribution per Model (All Device Types)")
-        print(f"{'=' * 62}")
-        print(table)  # Print the combined pivot table to console
-        ordered_fields = ["Model", "Device Type"] + versions + ["Total"]  # Explicit column order: Model first
-        logging.info("Exporting %d pivoted rows to %s", len(export_rows), filename)  # Log before export
-        DataExporter.write_with_format_selection(  # Write to CSV or SQLite per OUTPUT_FORMAT
-            export_rows,
-            filename,  # Org-prefixed filename passed in from execute()
-            api_function_name="orgDeviceVersionPerModel",  # Maps to PK strategy for SQLite upsert
-            fieldnames=ordered_fields,  # Preserve Model-first column order instead of alphabetizing
-        )
-        logging.info("Exported %d pivoted rows to %s", len(export_rows), filename)  # Log after export
+        """Delegate pivot display/export to extracted summary core."""
+        OrgDeviceInventorySummary._get_summary_impl()._display_pivot_and_export(rows, filename)
 
     @staticmethod
     def _display_and_export(rows: list[dict], distinct: str, filename: str, api_func: str) -> None:
-        """
-        Print a PrettyTable summary and export data to the configured output backend.
-
-        Args:
-            rows: Sorted list of count dicts (device_type, <distinct>, count)
-            distinct: Grouped field name - 'model' or 'version' - used for column heading
-            filename: Output CSV filename / SQLite table name (without extension, already org-prefixed)
-            api_func: Virtual API function name for SQLite PK strategy lookup
-        """
-        value_col = distinct.capitalize()  # Capitalize field name for display (Model or Version)
-        columns = ["Device Type", value_col, "Count"]  # Define table column headers for display
-        logging.info("Displaying and exporting %s summary (%d rows) to %s", distinct, len(rows), filename)  # Log export
-        table = PrettyTable()  # Create a new PrettyTable instance for console output
-        table.field_names = columns  # Set the column headers on the table
-        for row in rows:  # Add each data row to the display table
-            table.add_row([row.get("device_type", ""), row.get(distinct, ""), row.get("count", 0)])  # Map to columns
-        print(f"\n{'=' * 62}")
-        print(f"  {distinct.capitalize()} Distribution Summary")
-        print(f"{'=' * 62}")
-        print(table)  # Print the formatted table to console for operator visibility
-        export_rows = [  # Build export-friendly dicts with capitalized keys for CSV/SQLite headers
-            {"Device Type": row["device_type"], value_col: row.get(distinct, ""), "Count": row["count"]}
-            for row in rows  # One export dict per count row
-        ]
-        DataExporter.write_with_format_selection(  # Write to CSV or SQLite depending on OUTPUT_FORMAT
-            export_rows,
-            filename,
-            api_function_name=api_func,  # Maps to ENDPOINT_PRIMARY_KEY_STRATEGIES for SQLite upsert
-        )
-        logging.info("Exported %d %s rows to %s", len(export_rows), distinct, filename)  # Log after export completes
+        """Delegate tabular summary display/export to extracted summary core."""
+        OrgDeviceInventorySummary._get_summary_impl()._display_and_export(rows, distinct, filename, api_func)
 
     @staticmethod
     def _resolve_safe_org_name(current_org_id: str) -> str:
-        """
-        Resolve a filesystem-safe org name for use as a filename prefix.
-
-        Fetches the org name from the Mist API, falls back to the END_CUSTOMER_NAME
-        environment variable, then to the org_id itself if neither is available.
-        Non-alphanumeric characters (except hyphens and underscores) are replaced with '_'.
-
-        Args:
-            current_org_id: Organization UUID to look up
-
-        Returns:
-            Sanitized org name string safe for use in filenames
-        """
-        logging.info("Resolving org name for filename prefix, org=%s", current_org_id)  # Log before API call
-        raw_name: str | None = None  # Will hold the raw org name from API or env
-        try:
-            org_resp = mistapi.api.v1.orgs.orgs.getOrg(apisession, current_org_id)  # Fetch org details from Mist API
-            raw_name = getattr(org_resp, "data", {}).get("name")  # Extract name field from response
-            logging.debug("Resolved org name from API: %s", raw_name)  # Log resolved name
-        except Exception as error:  # Non-fatal — fall back to env var or org_id
-            logging.warning("Could not resolve org name from API: %s", error)  # Warn but continue
-        if not raw_name:  # Try END_CUSTOMER_NAME env var as secondary fallback
-            raw_name = os.getenv("END_CUSTOMER_NAME")  # Read from environment variable
-        if not raw_name:  # Last resort: use the org UUID itself
-            raw_name = current_org_id  # org_id is always available and unique
-        safe_name = "".join(  # Sanitize: keep alphanumeric, hyphens, underscores; replace everything else
-            char if char.isalnum() or char in "-_" else "_" for char in raw_name
-        )
-        logging.debug("Safe org name for filenames: %s", safe_name)  # Log the sanitized result
-        return safe_name  # Return sanitized name ready for filename prefixing
+        """Delegate safe org name resolution to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._resolve_safe_org_name(current_org_id)
 
     @staticmethod
     def _run_for_org(target_org_id: str) -> "tuple[list[dict], list[dict], list[dict], str]":
-        """
-        Core logic: run all three inventory summary tables for one specific org.
-
-        Fetches model counts, firmware version counts, and version-per-model pivot,
-        then displays and exports each.  All filenames are prefixed with the org name.
-        This method is the shared implementation called by both execute() and execute_msp().
-
-        Args:
-            target_org_id: Organization UUID to query (may differ from the global org_id)
-        """
-        logging.info("Starting org device inventory summary org=%s", target_org_id)  # Log operation start
-        start_time = time.time()  # Record start time for elapsed reporting
-        safe_org = OrgDeviceInventorySummary._resolve_safe_org_name(target_org_id)  # Resolve org name for file prefixes
-
-        model_rows = OrgDeviceInventorySummary._fetch_all_counts(target_org_id, "model")  # Fetch model counts
-        OrgDeviceInventorySummary._display_and_export(  # Print and export the model count table
-            model_rows, "model", f"{safe_org}_OrgDeviceModelCounts", "orgDeviceModelSummary"
-        )
-
-        version_rows = OrgDeviceInventorySummary._fetch_all_counts(target_org_id, "version")  # Fetch version counts
-        OrgDeviceInventorySummary._display_and_export(  # Print and export the firmware version count table
-            version_rows, "version", f"{safe_org}_OrgDeviceFirmwareSummary", "orgDeviceFirmwareSummary"
-        )
-
-        ver_per_model = OrgDeviceInventorySummary._fetch_versions_per_model(  # Versions per model
-            target_org_id, model_rows
-        )
-        logging.info("Displaying version-per-model pivot table (%d rows)", len(ver_per_model))  # Log before pivot
-        OrgDeviceInventorySummary._display_pivot_and_export(  # Pivot display + export with org prefix
-            ver_per_model, f"{safe_org}_OrgDeviceVersionPerModel"
-        )
-
-        elapsed = time.time() - start_time  # Calculate total elapsed time for this org
-        logging.info("Org device inventory summary for %s completed in %.1f seconds", target_org_id, elapsed)
-        print(f"\nSummary for {safe_org} completed in {elapsed:.1f} seconds")  # Display elapsed time to operator
-        return model_rows, version_rows, ver_per_model, safe_org  # Return data for MSP combined reports
+        """Delegate full single-org summary execution to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl().run_for_org(target_org_id)
 
     @staticmethod
     def execute() -> None:
-        """Single-org entry point: run inventory summary for the currently selected org."""
-        OrgDeviceInventorySummary._run_for_org(org_id)  # Delegate to shared core logic with global org_id
+        """Single-org entry point for menu operation 13."""
+        OrgDeviceInventorySummary._get_summary_impl().execute()
 
     @staticmethod
     def _resolve_active_msp() -> "dict[str, Any] | None":
-        """
-        Prompt the user to select an MSP when multiple are available.
-
-        Auto-selects when only one MSP exists.  Returns the chosen MSP dict
-        from msp_privileges, or None on invalid input or EOF.
-        """
-        if not msp_privileges:  # Guard: requires MSP-level account privileges
-            print("\nX No MSP privileges detected.  Connect with an MSP account to use this mode.")
-            logging.warning("_resolve_active_msp called with no MSP privileges")  # Warn operator
-            return None
-        if len(msp_privileges) == 1:  # Auto-select when exactly one MSP is available
-            active_msp = msp_privileges[0]  # Use the only available MSP without prompting
-            print(f"\n  Using MSP: {active_msp['msp_name']}")  # Confirm selection to operator
-            return active_msp  # Return the single MSP dict immediately
-        print("\n  Available MSPs:")  # Header for the MSP selection list
-        for idx, msp in enumerate(msp_privileges, start=1):  # List each MSP with a 1-based index
-            print(f"    {idx}. {msp['msp_name']} (role: {msp['role']})")
-        print()
-        try:
-            choice = InputUtils.safe_input("  Select MSP (number): ", context="msp_select").strip()
-            choice_idx = int(choice) - 1  # Convert 1-based user input to 0-based index
-            if 0 <= choice_idx < len(msp_privileges):  # Validate index is in range
-                return msp_privileges[choice_idx]  # Return the chosen MSP dict
-            print("X Invalid selection")  # Reject out-of-range input
-            logging.warning("MSP selection out of range: %s", choice)  # Log bad selection
-        except (ValueError, SystemExit):  # Handle non-numeric input or EOF gracefully
-            print("X Invalid input")
-            logging.warning("MSP selection input error")  # Log input failure
-        return None  # Signal aborted or failed selection to the caller
+        """Delegate MSP selection prompt to extracted MSP orchestrator."""
+        return OrgDeviceInventorySummary._get_msp_impl()._resolve_active_msp()
 
     @staticmethod
     def _fetch_org_list(active_msp: "dict[str, Any]") -> "list[dict[str, Any]]":
-        """
-        Retrieve all child orgs for the given MSP via listMspOrgs.
-
-        Returns a list of org dicts (each with 'id' and 'name'), or an empty
-        list on API failure or empty response.
-        """
-        if apisession is None:  # Guard: active session required for all API calls
-            print("X No active API session")
-            logging.error("_fetch_org_list: apisession is None")  # Log missing session
-            return []
-        msp_id = active_msp["msp_id"]  # Extract MSP UUID for the API call
-        msp_name = active_msp["msp_name"]  # Extract MSP display name for logging
-        logging.info("Fetching orgs for MSP %s (id=%s)", msp_name, msp_id)  # Log before API call
-        print(f"\n  Fetching organizations for MSP: {msp_name}...")
-        try:
-            import mistapi.api.v1.msps.orgs as msp_orgs_api  # Import MSP orgs module on demand
-
-            orgs_resp = msp_orgs_api.listMspOrgs(apisession, msp_id)  # Fetch all orgs under this MSP
-            orgs_data: list[dict[str, Any]] = (orgs_resp.data if orgs_resp and hasattr(orgs_resp, "data") else []) or []
-            if not isinstance(orgs_data, list):  # Normalize to list when API returns a single dict
-                orgs_data = [orgs_data]
-        except Exception as error:  # Catch API errors and surface a clear message
-            print(f"X Failed to retrieve organizations: {error}")
-            logging.error("listMspOrgs failed for msp_id=%s: %s", msp_id, error, exc_info=True)
-            return []  # Return empty list so callers can guard on falsy value
-        logging.debug("Received %d orgs from MSP %s", len(orgs_data), msp_name)  # Log org count
-        return orgs_data  # Return the raw list; caller is responsible for empty-list guard
+        """Delegate MSP org list retrieval to extracted MSP orchestrator."""
+        return OrgDeviceInventorySummary._get_msp_impl()._fetch_org_list(active_msp)
 
     @staticmethod
     def _run_single_msp_org() -> None:
-        """
-        Mode 2: display a numbered org list and let the user pick one, then run the
-        inventory summary for that single org.
-        """
-        active_msp = OrgDeviceInventorySummary._resolve_active_msp()  # Prompt for MSP selection
-        if active_msp is None:  # User aborted selection or no MSP available
-            return
-        orgs_data = OrgDeviceInventorySummary._fetch_org_list(active_msp)  # Retrieve child org list
-        if not orgs_data:  # Guard: nothing to display if the org list is empty
-            print("  No organizations found under this MSP")
-            logging.info("_run_single_msp_org: no orgs for MSP %s", active_msp["msp_id"])
-            return
-        print(f"\n  Found {len(orgs_data)} organizations:")  # Header for the numbered selection list
-        for idx, org in enumerate(orgs_data, start=1):  # Show each org with its 1-based index
-            print(f"    {idx}. {org.get('name', org.get('id', 'Unknown'))}")
-        print()
-        try:
-            choice = InputUtils.safe_input("  Select org (number): ", context="msp_org_select").strip()
-            choice_idx = int(choice) - 1  # Convert 1-based input to 0-based index
-            if not (0 <= choice_idx < len(orgs_data)):  # Validate index is in range
-                print("X Invalid selection")
-                logging.warning("Org selection out of range: %s", choice)  # Log bad input
-                return
-        except (ValueError, SystemExit):  # Handle non-numeric input or EOF gracefully
-            print("X Invalid input")
-            logging.warning("Org selection input error")  # Log input failure
-            return
-        chosen = orgs_data[choice_idx]  # Retrieve the org record at the chosen index
-        chosen_id = chosen.get("id", "")  # Extract org UUID from the record
-        if not chosen_id:  # Guard: skip records that have no usable ID
-            print("X Selected org has no ID")
-            logging.error("Selected org record missing 'id': %s", chosen)  # Log malformed record
-            return
-        logging.info("Running inventory for selected org: %s (%s)", chosen.get("name"), chosen_id)
-        OrgDeviceInventorySummary._run_for_org(chosen_id)  # Run all three tables for the chosen org
+        """Delegate single-org MSP flow to extracted MSP orchestrator."""
+        OrgDeviceInventorySummary._get_msp_impl().run_single_msp_org(OrgDeviceInventorySummary._run_for_org)
 
     @staticmethod
     def _display_combined_pivot_and_export(
         all_ver_data: "list[tuple[str, list[dict]]]",
         filename: str,
     ) -> None:
-        """
-        Build and export a combined version-per-model pivot table spanning all MSP orgs.
-
-        Rows represent (Org, Model) pairs; columns represent all unique firmware versions
-        found across every org.  Cells are 0 where a model has no devices on that version.
-        A 'Total' column sums each row and a 'TOTAL' footer row sums each version column.
-
-        Args:
-            all_ver_data: List of (safe_org_name, ver_per_model_rows) tuples — one entry per org
-            filename: Output filename/table name prefix (MSP-prefixed, no extension)
-        """
-        logging.info("Building combined MSP version-per-model pivot (%d orgs)", len(all_ver_data))  # Log before build
-        flat: list[dict] = []  # Flatten all orgs into one list, tagging each row with org name
-        for safe_org, ver_rows in all_ver_data:  # Iterate per-org data
-            for row in ver_rows:  # Each row: device_type, model, version, count
-                flat.append({**row, "org": safe_org})  # Tag each row with org name for pivot keying
-        if not flat:  # Guard: nothing to pivot if all orgs had no version-per-model data
-            print("  No version-per-model data available for combined pivot")
-            logging.warning("_display_combined_pivot_and_export: no data to pivot")
-            return
-        versions = sorted({r["version"] for r in flat})  # All unique version strings across all orgs, sorted
-        pivot: dict[tuple, dict] = {}  # pivot[(org, model)] = {version: count, device_type: str}
-        for row in flat:  # Populate pivot dict with (org, model) composite key
-            key = (row["org"], row["model"])  # Composite key: org + model uniquely identifies a pivot row
-            if key not in pivot:  # Initialize entry on first encounter of this (org, model) pair
-                pivot[key] = {"device_type": row.get("device_type", "")}  # Store device type for export column
-            pivot[key][row["version"]] = row.get("count", 0)  # Store count at this version cell
-        logging.debug("Combined pivot: %d (org, model) pairs x %d versions", len(pivot), len(versions))
-        table = PrettyTable()  # Create display table for combined pivot
-        table.field_names = ["Org", "Model", "Device Type"] + versions + ["Total"]  # Dynamic column headers
-        col_totals: dict[str, int] = {v: 0 for v in versions}  # Running column totals for footer row
-        export_rows: list[dict] = []  # Rows to write to CSV/SQLite
-        for (safe_org, model), ver_counts in sorted(pivot.items()):  # Iterate sorted (org, model) pairs
-            row_counts = [ver_counts.get(v, 0) for v in versions]  # Count for each version column (0 if absent)
-            row_total = sum(row_counts)  # Row total: all version counts for this (org, model)
-            for ver, cnt in zip(versions, row_counts, strict=True):  # Accumulate running column totals
-                col_totals[ver] += cnt  # Add this row's count to the column running total
-            table.add_row([safe_org, model, ver_counts.get("device_type", "")] + row_counts + [row_total])
-            export_row: dict = {  # Build export dict with explicit key order: Org, Model, Device Type first
-                "Org": safe_org,
-                "Model": model,
-                "Device Type": ver_counts.get("device_type", ""),
-            }
-            for ver in versions:  # One key per version column in the export row
-                export_row[ver] = ver_counts.get(ver, 0)  # Cell value (0 for absent (org, model)/version pairs)
-            export_row["Total"] = row_total  # Append row total to export dict
-            export_rows.append(export_row)  # Accumulate for final export call
-        col_total_values = [col_totals[v] for v in versions]  # Ordered column total values for TOTAL footer
-        grand_total = sum(col_total_values)  # Grand total of all devices across all orgs
-        table.add_row(["TOTAL", "", ""] + col_total_values + [grand_total])  # Append TOTAL footer row
-        print(f"\n{'=' * 62}")
-        print("  Combined MSP Version Distribution per Model (All Orgs)")
-        print(f"{'=' * 62}")
-        print(table)  # Print the combined multi-org pivot table to console
-        ordered_fields = ["Org", "Model", "Device Type"] + versions + ["Total"]  # Explicit column order
-        logging.info("Exporting %d combined pivot rows to %s", len(export_rows), filename)  # Log before export
-        DataExporter.write_with_format_selection(
-            export_rows,
-            filename,
-            api_function_name="orgDeviceVersionPerModel",  # Maps to PK strategy for SQLite upsert
-            fieldnames=ordered_fields,  # Preserve Org-first column order instead of alphabetizing
-        )
-        logging.info("Exported %d combined pivot rows to %s", len(export_rows), filename)  # Log after export
+        """Delegate combined MSP pivot export to extracted MSP orchestrator."""
+        OrgDeviceInventorySummary._get_msp_impl()._display_combined_pivot_and_export(all_ver_data, filename)
 
     @staticmethod
     def _build_combined_reports(
         msp_safe_name: str,
         collected: "list[dict[str, Any]]",
     ) -> None:
-        """
-        Generate three combined MSP-wide summary reports from per-org collected data.
-
-        Produces:
-          1. MSP_<name>_CombinedDeviceModelCounts      — all org model counts in one flat table
-          2. MSP_<name>_CombinedDeviceFirmwareSummary  — all org version counts in one flat table
-          3. MSP_<name>_CombinedDeviceVersionPerModel  — pivot: (Org, Model) rows x version columns
-
-        Args:
-            msp_safe_name: Sanitized MSP name for use in output filenames
-            collected: Per-org data dicts with keys: safe_org, model_rows, version_rows, ver_per_model
-        """
-        logging.info("Building combined MSP reports from %d orgs", len(collected))  # Log report generation start
-        prefix = f"MSP_{msp_safe_name}"  # Filename prefix distinguishes combined files from per-org files
-        print(f"\n{'=' * 62}")
-        print(f"  MSP COMBINED SUMMARY REPORTS  ({len(collected)} orgs)")
-        print(f"{'=' * 62}")
-        # --- Combined model count table ---
-        combined_model: list[dict] = []  # Accumulate model count rows across all orgs
-        for entry in collected:  # Each entry holds one org's fetched data dicts
-            safe_org = entry["safe_org"]  # Sanitized org display name from _resolve_safe_org_name
-            for row in entry["model_rows"]:  # Each row: device_type, model, count
-                combined_model.append(
-                    {  # Prepend Org column so rows are cross-org identifiable
-                        "Org": safe_org,
-                        "Device Type": row["device_type"],  # ap, switch, or gateway
-                        "Model": row.get("model", ""),  # Model name from count result
-                        "Count": row.get("count", 0),  # Device count for this model in this org
-                    }
-                )
-        model_table = PrettyTable()  # Build PrettyTable display for combined model counts
-        model_table.field_names = ["Org", "Device Type", "Model", "Count"]
-        for row in combined_model:  # Populate table rows from combined list
-            model_table.add_row([row["Org"], row["Device Type"], row["Model"], row["Count"]])
-        print(f"\n{'=' * 62}")
-        print("  Combined MSP Model Count Summary (All Orgs)")
-        print(f"{'=' * 62}")
-        print(model_table)  # Display combined model table to console
-        logging.info(
-            "Exporting %d combined model count rows to %s", len(combined_model), f"{prefix}_CombinedDeviceModelCounts"
-        )
-        DataExporter.write_with_format_selection(  # Export combined model counts to CSV/SQLite
-            combined_model, f"{prefix}_CombinedDeviceModelCounts", api_function_name="orgDeviceModelSummary"
-        )
-        logging.info("Exported combined model counts: %d rows", len(combined_model))  # Log after export
-        # --- Combined firmware version summary table ---
-        combined_version: list[dict] = []  # Accumulate version count rows across all orgs
-        for entry in collected:  # Each entry holds one org's fetched data dicts
-            safe_org = entry["safe_org"]  # Sanitized org display name
-            for row in entry["version_rows"]:  # Each row: device_type, version, count
-                combined_version.append(
-                    {  # Prepend Org column for cross-org identification
-                        "Org": safe_org,
-                        "Device Type": row["device_type"],  # ap, switch, or gateway
-                        "Version": row.get("version", ""),  # Firmware version string
-                        "Count": row.get("count", 0),  # Device count running this version in this org
-                    }
-                )
-        ver_table = PrettyTable()  # Build PrettyTable display for combined version summary
-        ver_table.field_names = ["Org", "Device Type", "Version", "Count"]
-        for row in combined_version:  # Populate table rows from combined list
-            ver_table.add_row([row["Org"], row["Device Type"], row["Version"], row["Count"]])
-        print(f"\n{'=' * 62}")
-        print("  Combined MSP Firmware Version Summary (All Orgs)")
-        print(f"{'=' * 62}")
-        print(ver_table)  # Display combined version table to console
-        logging.info(
-            "Exporting %d combined version rows to %s", len(combined_version), f"{prefix}_CombinedDeviceFirmwareSummary"
-        )
-        DataExporter.write_with_format_selection(  # Export combined version summary to CSV/SQLite
-            combined_version, f"{prefix}_CombinedDeviceFirmwareSummary", api_function_name="orgDeviceFirmwareSummary"
-        )
-        logging.info("Exported combined firmware version summary: %d rows", len(combined_version))  # Log after export
-        # --- Combined version-per-model pivot ---
-        all_ver_data = [  # Pair each org's sanitized name with its version-per-model rows
-            (entry["safe_org"], entry["ver_per_model"]) for entry in collected
-        ]
-        OrgDeviceInventorySummary._display_combined_pivot_and_export(  # Delegate pivot to dedicated method
-            all_ver_data, f"{prefix}_CombinedDeviceVersionPerModel"
-        )
-        logging.info("Combined MSP reports complete: prefix=%s, orgs=%d", prefix, len(collected))  # Log completion
-        print(f"\n  Combined MSP reports written with prefix: {prefix}_")  # Confirm file prefix to operator
+        """Delegate combined MSP report generation to extracted MSP orchestrator."""
+        OrgDeviceInventorySummary._get_msp_impl()._build_combined_reports(msp_safe_name, collected)
 
     @staticmethod
     def execute_msp() -> None:
-        """
-        MSP batch entry point: run inventory summary for all orgs under the selected MSP.
-
-        Delegates MSP selection to _resolve_active_msp() and org fetching to
-        _fetch_org_list().  Each org is processed independently so per-org failures
-        do not abort the batch.  After all orgs complete, generates three combined
-        MSP-wide summary reports aggregating data from all successfully processed orgs.
-        """
-        logging.info("Starting MSP device inventory summary")  # Log MSP mode entry
-        active_msp = OrgDeviceInventorySummary._resolve_active_msp()  # Prompt for MSP selection
-        if active_msp is None:  # User aborted selection or no MSP available
-            return
-        orgs_data = OrgDeviceInventorySummary._fetch_org_list(active_msp)  # Retrieve all child orgs
-        if not orgs_data:  # Guard: nothing to process if MSP has no orgs
-            print("  No organizations found under this MSP")
-            logging.info("execute_msp: no orgs found for MSP %s", active_msp["msp_id"])
-            return
-        print(f"  Found {len(orgs_data)} organizations.  Running inventory summary for each...\n")
-        collected: list[dict] = []  # Accumulate per-org data for combined MSP reports at the end
-        for idx, org_record in enumerate(orgs_data, start=1):  # Process each org in sequence
-            child_org_id = org_record.get("id", "")  # Extract org UUID from the org record
-            child_org_name = org_record.get("name", child_org_id)  # Display name, fall back to id
-            if not child_org_id:  # Skip records with no usable ID
-                logging.warning("Skipping org record with no id: %s", org_record)  # Log skip reason
-                continue
-            print(f"  [{idx}/{len(orgs_data)}] {child_org_name}")  # Show batch progress to operator
-            logging.info("Processing org %d/%d: %s (%s)", idx, len(orgs_data), child_org_name, child_org_id)
-            try:
-                model_rows, version_rows, ver_per_model, safe_org = OrgDeviceInventorySummary._run_for_org(
-                    child_org_id
-                )  # Run all three tables
-                collected.append(
-                    {  # Store this org's data for the combined MSP reports at the end
-                        "safe_org": safe_org,  # Sanitized org name for use in combined report rows
-                        "model_rows": model_rows,  # Model count rows for combined model table
-                        "version_rows": version_rows,  # Version count rows for combined version table
-                        "ver_per_model": ver_per_model,  # Version-per-model rows for combined pivot
-                    }
-                )
-            except Exception as error:  # Isolate per-org failures so the batch continues
-                print(f"    X Error processing {child_org_name}: {error}")
-                logging.error("_run_for_org failed for org %s: %s", child_org_id, error, exc_info=True)
-        logging.info("MSP inventory complete for %d orgs", len(orgs_data))  # Log batch completion
-        print(f"\nMSP inventory summary complete. Processed {len(orgs_data)} organizations.")
-        if len(collected) >= 2:  # Generate combined reports only when multiple orgs were successfully processed
-            msp_safe_name = "".join(  # Sanitize MSP name for use in output filenames (alphanumeric + _ -)
-                char if char.isalnum() or char in "-_" else "_" for char in active_msp.get("msp_name", "MSP")
-            )
-            OrgDeviceInventorySummary._build_combined_reports(msp_safe_name, collected)  # Build combined summary
-        else:
-            logging.info("Skipping combined reports: fewer than 2 orgs processed successfully")
+        """Delegate batch MSP execution to extracted MSP orchestrator."""
+        OrgDeviceInventorySummary._get_msp_impl().execute_msp(OrgDeviceInventorySummary._run_for_org)
 
     @staticmethod
     def dispatch() -> None:
-        """
-        Entry point registered in menu_actions.
-
-        If MSP privileges are available, presents three modes:
-          1. Current org only
-          2. Select a specific org from the MSP list
-          3. All orgs in MSP (batch mode)
-        Falls through to execute() when no MSP access is detected.
-        """
-        if not msp_privileges:  # No MSP access - run single-org mode silently
-            OrgDeviceInventorySummary.execute()  # Delegate to single-org entry point
-            return
-        print("\n" + "=" * 60)
-        print("  DEVICE INVENTORY SUMMARY")
-        print("=" * 60)
-        print("\n  Run mode:")
-        print("    1. Current org only")
-        print("    2. Select a specific org from MSP list")
-        print("    3. All orgs in MSP (batch mode)")
-        print()
-        try:
-            mode = InputUtils.safe_input("  Select mode (1/2/3): ", context="inventory_dispatch").strip()
-        except SystemExit:  # EOF / disconnect - abort gracefully
-            return
-        if mode == "3":  # Batch mode: run for every org under the MSP
-            OrgDeviceInventorySummary.execute_msp()  # Delegate to MSP batch entry point
-        elif mode == "2":  # Select mode: pick one org from the MSP list
-            OrgDeviceInventorySummary._run_single_msp_org()  # Delegate to single-org-from-MSP flow
-        else:  # Default to current org for "1" or any unrecognised input
-            OrgDeviceInventorySummary.execute()  # Delegate to single-org entry point
+        """Delegate menu operation 13 interactive dispatch to extracted MSP orchestrator."""
+        OrgDeviceInventorySummary._get_msp_impl().dispatch(
+            single_org_fn=OrgDeviceInventorySummary.execute,
+            select_org_fn=OrgDeviceInventorySummary._run_single_msp_org,
+            batch_fn=OrgDeviceInventorySummary.execute_msp,
+        )
 
 
 class OrgTemplateExporter:

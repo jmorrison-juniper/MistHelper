@@ -1,0 +1,35 @@
+# Version control
+.git/
+.gitignore
+
+# Editor and OS artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Secrets and kube material
+*.secret.yaml
+secrets/
+.kube/
+kubeconfig*
+*.key
+*.crt
+*.pem
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Build and temp artifacts
+build/
+dist/
+*.log
+*.tmp
+*.swp
+
+# Charts and package artifacts
+*.tgz
