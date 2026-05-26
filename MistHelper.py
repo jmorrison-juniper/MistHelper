@@ -23263,7 +23263,7 @@ class InventoryCSVComparator:
         self._impl.execute()
 
 
-class WAN2MigrationManager:
+class _LegacyWAN2MigrationManager:
     """
     Manages WAN2 interface variable migration for gateway templates and sites.
 
@@ -23856,6 +23856,35 @@ class WAN2MigrationManager:
             print(f"\n  INFO: {info_sites} sites have same-IP-type overrides (likely safe)")
             print("  Template and device use same IP configuration type (both DHCP or both Static)")
             print("  Overrides may be for description, usage, or other non-critical fields")
+
+
+# ============================================================================
+# WAN2 MIGRATION MANAGER CLASS (delegated)
+# ============================================================================
+class WAN2MigrationManager:
+    """Delegation wrapper for extracted WAN2 migration manager implementation."""
+
+    def __init__(self):  # type: ignore[no-untyped-def]
+        """Initialize delegated WAN2 manager with runtime dependencies."""
+        from src.gateway import wan2_migration_manager as wan2_module  # noqa: PLC0415,I001
+
+        wan2_module.configure_wan2_migration_dependencies(
+            apisession_dependency=apisession,
+            config_utils=ConfigUtils,
+            cache_utils=CacheUtils,
+            org_site_exporter=OrgSiteExporter,
+            gateway_export_utils=GatewayExportUtils,
+            file_path_utils=FilePathUtils,
+            input_utils=InputUtils,
+            data_exporter=DataExporter,
+            mistapi_dependency=mistapi,
+            site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
+        )
+        self._impl = wan2_module.WAN2MigrationManager()
+
+    def set_site_variable(self):  # type: ignore[no-untyped-def]
+        """Menu #149 delegated entrypoint."""
+        return self._impl.set_site_variable()
 
 
 # ============================================================================
@@ -24932,7 +24961,7 @@ class WANProbeConfigManager:
 # ============================================================================
 # WAN PROBE DEVICE OVERRIDE MANAGER CLASS
 # ============================================================================
-class WANProbeDeviceOverrideManager:
+class _LegacyWANProbeDeviceOverrideManager:
     """
     Manages WAN probe configuration for device-level port overrides.
 
@@ -25442,6 +25471,32 @@ class WANProbeDeviceOverrideManager:
         logging.warning(
             f"Menu #167 DESTRUCTIVE operation complete: {sum(1 for r in results if r['status'] == 'SUCCESS')} devices updated"  # noqa: E501
         )
+
+
+# ============================================================================
+# WAN PROBE DEVICE OVERRIDE MANAGER CLASS (delegated)
+# ============================================================================
+class WANProbeDeviceOverrideManager:
+    """Delegation wrapper for extracted WAN probe device override manager implementation."""
+
+    @classmethod
+    def configure(cls, dry_run: bool = False) -> None:
+        """Menu #167 delegated entrypoint."""
+        from src.gateway import wan_probe_device_override_manager as wan_probe_module  # noqa: PLC0415,I001
+
+        wan_probe_module.configure_wan_probe_device_override_dependencies(
+            apisession_dependency=apisession,
+            config_utils=ConfigUtils,
+            cache_utils=CacheUtils,
+            org_site_exporter=OrgSiteExporter,
+            gateway_export_utils=GatewayExportUtils,
+            file_path_utils=FilePathUtils,
+            input_utils=InputUtils,
+            data_exporter=DataExporter,
+            mistapi_dependency=mistapi,
+            site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
+        )
+        return wan_probe_module.WANProbeDeviceOverrideManager.configure(dry_run=dry_run)
 
 
 # ============================================================================

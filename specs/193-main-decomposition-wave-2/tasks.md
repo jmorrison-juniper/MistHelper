@@ -55,7 +55,7 @@
 - [x] T012 [US1] Add or update tests in `tests/unit/troubleshooting/test_marvis_troubleshoot_utils.py` and `tests/unit/ssh/test_ssh_runner_manager.py`
 - [x] T013 [US1] Run mandatory automated validation for Phase 2 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-2-gate.md`
 - [x] T013A [US1] Verify constitution compliance for Phase 2 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-2-gate.md`
-- [ ] T013B [US1] Execute full deployment pipeline for Phase 2 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-2-gate.md`
+- [x] T013B [US1] Execute full deployment pipeline for Phase 2 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-2-gate.md`
 - [x] T014 [US2] Execute menu behavior parity checks for operations `139`, `175`, `176` and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-2-menu-parity.md`
 - [x] T015 [US2] Execute API + backend parity checks (CSV/SQLite/polyglot) for Phase 2 affected outputs and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-2-output-parity.md`
 - [x] T016 [US1] Execute circular import checks for Phase 2 extracted modules using `tests/contract/test_import_graph.py` and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-2-gate.md`
