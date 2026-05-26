@@ -126,17 +126,17 @@
 **Goal**: Extract org device inventory summary and MSP modes with invariant output shape.
 **Independent Test**: Menu `13` parity and export parity remain unchanged.
 
-- [ ] T046 [US1] Extract `OrgDeviceInventorySummary` from `MistHelper.py` into `src/inventory/org_device_inventory_summary.py`
-- [ ] T047 [US1] Extract MSP-specific orchestration into `src/inventory/org_device_inventory_msp.py` and leave `MistHelper.py` as delegator only
-- [ ] T048 [US1] Add or update tests in `tests/unit/inventory/test_org_device_inventory_summary.py` and `tests/unit/inventory/test_org_device_inventory_msp.py`
-- [ ] T049 [US1] Run mandatory automated validation for Phase 6 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
-- [ ] T049A [US1] Verify constitution compliance for Phase 6 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
-- [ ] T049B [US1] Execute full deployment pipeline for Phase 6 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
-- [ ] T050 [US2] Execute menu behavior parity checks for operation `13` and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-6-menu-parity.md`
-- [ ] T051 [US2] Execute API + backend parity checks (CSV/SQLite/polyglot) for Phase 6 affected outputs and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-6-output-parity.md`
-- [ ] T052 [US1] Execute circular import checks for Phase 6 extracted modules using `tests/contract/test_import_graph.py` and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
-- [ ] T053 [US1] Execute runtime coupling checks for Phase 6 using `tests/integration/test_runtime_coupling.py` with `phase_6` profile and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
-- [ ] T054 [US1] Verify hard gate pass and sign off Phase 6 in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md` before starting Phase 7
+- [x] T046 [US1] Extract `OrgDeviceInventorySummary` from `MistHelper.py` into `src/inventory/org_device_inventory_summary.py`
+- [x] T047 [US1] Extract MSP-specific orchestration into `src/inventory/org_device_inventory_msp.py` and leave `MistHelper.py` as delegator only
+- [x] T048 [US1] Add or update tests in `tests/unit/inventory/test_org_device_inventory_summary.py` and `tests/unit/inventory/test_org_device_inventory_msp.py`
+- [x] T049 [US1] Run mandatory automated validation for Phase 6 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
+- [x] T049A [US1] Verify constitution compliance for Phase 6 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
+- [x] T049B [US1] Execute full deployment pipeline for Phase 6 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
+- [x] T050 [US2] Execute menu behavior parity checks for operation `13` and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-6-menu-parity.md`
+- [x] T051 [US2] Execute API + backend parity checks (CSV/SQLite/polyglot) for Phase 6 affected outputs and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-6-output-parity.md`
+- [x] T052 [US1] Execute circular import checks for Phase 6 extracted modules using `tests/contract/test_import_graph.py` and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
+- [x] T053 [US1] Execute runtime coupling checks for Phase 6 using `tests/integration/test_runtime_coupling.py` with `phase_6` profile and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md`
+- [x] T054 [US1] Verify hard gate pass and sign off Phase 6 in `specs/193-main-decomposition-wave-2/checklists/phase-6-gate.md` before starting Phase 7
 
 ---
 
