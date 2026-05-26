@@ -22,8 +22,13 @@ Date: 2026-05-26
 
 ## Test Gate Evidence
 
-- _PENDING_ (record pytest + gate outputs after execution).
+- Executed gate suite:
+  - `python -m py_compile MistHelper.py`
+  - `python -m ruff check MistHelper.py`
+  - `python -m black --check MistHelper.py`
+  - `python -m pytest tests/unit/gateway/test_gateway_export_utils.py tests/unit/gateway/test_gateway_stats_exporter.py tests/unit/gateway/test_gateway_override_analyzer.py tests/contract/test_import_graph.py tests/integration/test_runtime_coupling.py -q`
+- Final result: `22 passed, 1 warning in 0.48s`.
 
 ## Conclusion
 
-- _PENDING_ (complete once validation and parity evidence are green).
+- Phase 7 extracted gateway modules preserve output-generation and backend write contracts within automated validation scope.

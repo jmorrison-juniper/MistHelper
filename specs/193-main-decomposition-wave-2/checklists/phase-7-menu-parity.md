@@ -21,4 +21,4 @@ Date: 2026-05-26
 
 ## Conclusion
 
-- _PENDING_ (finalized after command/test and runtime evidence is captured in phase gate).
+- Phase 7 extraction preserves menu dispatch contracts and user-facing operation flow for operations `31-36`, `99`, and `163`.
