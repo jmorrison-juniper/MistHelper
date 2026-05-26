@@ -85,6 +85,7 @@ from src.audit.filter import AuditLogFilter  # Audit log filtering to remove noi
 from src.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering
 from src.audit.time_parser import TimeRangeParser  # Audit log time range parsing (7d, 4w, etc.)
 from src.export.site_export_utils import configure_site_export_utils_dependencies
+from src.gateway.gateway_export_utils import configure_gateway_export_utils_dependencies
 from src.org_data_collector import OrgDataCollector
 from src.ssh.ssh_runner import EnhancedSSHRunner
 from src.ssh.ssh_runner_manager import SSHRunnerManager as ExtractedSSHRunnerManager
@@ -20239,7 +20240,7 @@ class GatewayTestExporter:
             print("! No gateway test results found. CSV not created.")
 
 
-class GatewayStatsExporter:
+class _LegacyGatewayStatsExporter:
     """
     Gateway Device Statistics Exports
 
@@ -20438,7 +20439,7 @@ class GatewayStatsExporter:
         GatewayExportUtils._export_conflict_results(conflicts_found)  # type: ignore[no-untyped-call]
 
 
-class GatewayExportUtils:
+class _LegacyGatewayExportUtils:
     """
     Centralized gateway data export utilities.
     Groups all export_gateway_* functions for better code organization.
@@ -21296,6 +21297,130 @@ class GatewayExportUtils:
             connection_pool_fn=execute_with_connection_pool_management,
         )
         migrator.execute(fast=fast, dry_run=dry_run)
+
+
+class GatewayStatsExporter:
+    """Delegation wrapper for extracted gateway stats exporter implementation."""
+
+    @staticmethod
+    def _configure_module():  # type: ignore[no-untyped-def]
+        """Configure extracted gateway modules and return stats module handle."""
+        from src.gateway import gateway_stats_exporter as stats_module  # noqa: PLC0415,I001
+
+        GatewayExportUtils._configure_module()
+        return stats_module
+
+    @staticmethod
+    def device_stats(fast=False):  # type: ignore[no-untyped-def]
+        """Delegated gateway device stats export entrypoint."""
+        module = GatewayStatsExporter._configure_module()
+        return module.GatewayStatsExporter.device_stats(fast=fast)
+
+    @staticmethod
+    def device_stats_with_freshness(fast: bool = False) -> None:
+        """Delegated freshness-aware gateway device stats export entrypoint."""
+        module = GatewayStatsExporter._configure_module()
+        return module.GatewayStatsExporter.device_stats_with_freshness(fast=fast)
+
+    @staticmethod
+    def wan_port_conflicts():  # type: ignore[no-untyped-def]
+        """Delegated WAN port conflict analysis entrypoint."""
+        module = GatewayStatsExporter._configure_module()
+        return module.GatewayStatsExporter.wan_port_conflicts()
+
+
+class GatewayExportUtils:
+    """Delegation wrapper for extracted gateway export utility implementation."""
+
+    @staticmethod
+    def _configure_module():  # type: ignore[no-untyped-def]
+        """Configure extracted gateway modules and return gateway export module handle."""
+        from src.gateway import gateway_export_utils as gateway_export_module  # noqa: PLC0415,I001
+
+        configure_gateway_export_utils_dependencies(
+            apisession_dependency=apisession,
+            mistapi_dependency=mistapi,
+            config_utils=ConfigUtils,
+            cache_utils=CacheUtils,
+            file_path_utils=FilePathUtils,
+            data_exporter=DataExporter,
+            data_processing_utils=DataProcessingUtils,
+            api_fetch_utils=APIFetchUtils,
+            api_core_fetch_utils=APICoreFetchUtils,
+            org_inventory_exporter=OrgInventoryExporter,
+            org_site_exporter=OrgSiteExporter,
+            input_utils=InputUtils,
+            connection_pool_fn=execute_with_connection_pool_management,
+            validation_utils=ValidationUtils,
+            rate_limiting_utils=RateLimitingUtils,
+            mist_wan_target_ports=MIST_WAN_TARGET_PORTS,
+            mist_site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
+            fast_mode_max_retries=FAST_MODE_MAX_RETRIES,
+            fast_mode_retry_delay=FAST_MODE_RETRY_DELAY,
+            api_usage_cache=_api_usage_cache,
+            tqdm_module=tqdm,
+        )
+        return gateway_export_module
+
+    @staticmethod
+    def _with_site_info():  # type: ignore[no-untyped-def]
+        """Delegated gateways-with-site-info export entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils._with_site_info()
+
+    @staticmethod
+    def management_ips(fast: bool = False) -> None:
+        """Delegated gateway management IPs export entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils.management_ips(fast=fast)
+
+    @staticmethod
+    def device_configs(debug: bool = False, fast: bool = False) -> None:
+        """Delegated gateway device configs export entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils.device_configs(debug=debug, fast=fast)
+
+    @staticmethod
+    def templates():  # type: ignore[no-untyped-def]
+        """Delegated gateway template export entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils.templates()
+
+    @staticmethod
+    def with_wan_overrides(fast: bool = False) -> None:
+        """Delegated gateway WAN override analysis entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils.with_wan_overrides(fast=fast)
+
+    @staticmethod
+    def _get_devices_with_sites(org_id: str, fast: bool = False) -> list[tuple[str, str, str, str]]:
+        """Delegated gateway device+site inventory helper entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)
+
+    @staticmethod
+    def _get_devices_from_cache() -> list[tuple[str, str, str, str]]:
+        """Delegated cached gateway inventory helper entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils._get_devices_from_cache()
+
+    @staticmethod
+    def _get_devices_from_api(org_id: str) -> list[tuple[str, str, str, str]]:
+        """Delegated API-based gateway inventory helper entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils._get_devices_from_api(org_id)
+
+    @staticmethod
+    def _get_site_ids_with_devices(org_id: str) -> list[str]:
+        """Delegated site-ID-with-gateway helper entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils._get_site_ids_with_devices(org_id)
+
+    @staticmethod
+    def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:
+        """Delegated WAN2 variable migration entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils.wan2_variable_migration(fast=fast, dry_run=dry_run)
 
 
 # NOTE: generate_support_package moved to DataCollectionManager.generate_support_packages
