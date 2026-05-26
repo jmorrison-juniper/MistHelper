@@ -69,17 +69,17 @@
 **Goal**: Extract WAN migration/override managers with destructive safeguards unchanged.
 **Independent Test**: Menu `149` and `167` parity remains intact and hard-gate pass is recorded.
 
-- [ ] T019 [US1] Extract WAN2 migration logic from `MistHelper.py` into `src/gateway/wan2_migration_manager.py`
-- [ ] T020 [US1] Extract WAN probe device override logic from `MistHelper.py` into `src/gateway/wan_probe_device_override_manager.py` and preserve orchestration in `MistHelper.py`
-- [ ] T021 [US1] Add or update tests in `tests/unit/gateway/test_wan2_migration_manager.py` and `tests/unit/gateway/test_wan_probe_device_override_manager.py`
-- [ ] T022 [US1] Run mandatory automated validation for Phase 3 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
-- [ ] T022A [US1] Verify constitution compliance for Phase 3 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
-- [ ] T022B [US1] Execute full deployment pipeline for Phase 3 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
-- [ ] T023 [US2] Execute menu behavior parity checks for operations `149`, `167` and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-3-menu-parity.md`
-- [ ] T024 [US2] Execute API + backend parity checks (CSV/SQLite/polyglot) for Phase 3 affected outputs and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-3-output-parity.md`
-- [ ] T025 [US1] Execute circular import checks for Phase 3 extracted modules using `tests/contract/test_import_graph.py` and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
-- [ ] T026 [US1] Execute runtime coupling checks for Phase 3 using `tests/integration/test_runtime_coupling.py` with `phase_3` profile and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
-- [ ] T027 [US1] Verify hard gate pass and sign off Phase 3 in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md` before starting Phase 4
+- [x] T019 [US1] Extract WAN2 migration logic from `MistHelper.py` into `src/gateway/wan2_migration_manager.py`
+- [x] T020 [US1] Extract WAN probe device override logic from `MistHelper.py` into `src/gateway/wan_probe_device_override_manager.py` and preserve orchestration in `MistHelper.py`
+- [x] T021 [US1] Add or update tests in `tests/unit/gateway/test_wan2_migration_manager.py` and `tests/unit/gateway/test_wan_probe_device_override_manager.py`
+- [x] T022 [US1] Run mandatory automated validation for Phase 3 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
+- [x] T022A [US1] Verify constitution compliance for Phase 3 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
+- [x] T022B [US1] Execute full deployment pipeline for Phase 3 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
+- [x] T023 [US2] Execute menu behavior parity checks for operations `149`, `167` and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-3-menu-parity.md`
+- [x] T024 [US2] Execute API + backend parity checks (CSV/SQLite/polyglot) for Phase 3 affected outputs and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-3-output-parity.md`
+- [x] T025 [US1] Execute circular import checks for Phase 3 extracted modules using `tests/contract/test_import_graph.py` and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
+- [x] T026 [US1] Execute runtime coupling checks for Phase 3 using `tests/integration/test_runtime_coupling.py` with `phase_3` profile and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md`
+- [x] T027 [US1] Verify hard gate pass and sign off Phase 3 in `specs/193-main-decomposition-wave-2/checklists/phase-3-gate.md` before starting Phase 4
 
 ---
 
@@ -267,5 +267,4 @@ None by design. This wave intentionally forbids parallel decomposition execution
 - Final evidence must include `wiki-sync.md`, `final-doc-audit.md`, and `final-signoff.md`.
 <!-- End of tasks list -->
 <!-- EOF -->
-<!-- file-end -->
 
