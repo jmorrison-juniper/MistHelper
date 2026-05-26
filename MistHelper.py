@@ -84,6 +84,7 @@ from src.audit.analyzer import AuditLogAnalyzer  # Audit log analysis engine
 from src.audit.filter import AuditLogFilter  # Audit log filtering to remove noise
 from src.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering
 from src.audit.time_parser import TimeRangeParser  # Audit log time range parsing (7d, 4w, etc.)
+from src.export.site_export_utils import configure_site_export_utils_dependencies
 from src.org_data_collector import OrgDataCollector
 from src.ssh.ssh_runner import EnhancedSSHRunner
 from src.ssh.ssh_runner_manager import SSHRunnerManager as ExtractedSSHRunnerManager
@@ -17823,639 +17824,132 @@ class SitesByAPModelExporter:
 
 
 class SiteExportUtils:
-    """
-    Centralized site-level data export utilities.
-    Groups all export_site_* functions for better code organization.
-    All methods are static to avoid unnecessary object instantiation.
-    """
+    """Delegation wrapper for extracted site export implementation."""
 
     @staticmethod
-    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Generic function to export site-specific data to CSV.
+    def _configure_module():  # type: ignore[no-untyped-def]
+        """Configure extracted module dependencies and return module handle."""
+        from src.export import site_export_utils as site_export_module  # noqa: PLC0415,I001
 
-        Args:
-            api_call: The mistapi function to call
-            data_type: Description of the data type (e.g., "port stats", "clients")
-            sort_key: Field to sort results by
-            **api_kwargs: Additional arguments to pass to the API call
-
-        Returns:
-            None
-        """
-        logging.info(f"Starting export of site {data_type}...")
-
-        # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-
-        # Get site name for display
-        try:
-            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception as e:
-            logging.error(f"Error getting site name: {e}")
-            site_name = site_id
-
-        logging.info(f"Exporting {data_type} for site: {site_name}")
-
-        # Create filename from data_type
-        safe_data_type = data_type.replace(" ", "").replace("-", "").title()
-        safe_site_name = site_name.replace(" ", "_").replace("-", "_")
-        filename = f"Site{safe_data_type}_{safe_site_name}.csv"
-
-        # For site-specific API calls, we need to use a custom approach since
-        # APIDataFetcher expects org_id as the second parameter
-        try:
-            logging.debug(f"Making site-specific API call: {api_call.__name__} with site_id: {site_id}")
-
-            # Try to determine if the API function supports 'limit' parameter
-            # Use introspection to check function signature
-            try:
-                sig = inspect.signature(api_call)
-                supports_limit = "limit" in sig.parameters
-            except Exception:
-                # If introspection fails, assume limit is supported (safer default for most APIs)
-                supports_limit = True
-
-            # Call API with or without limit parameter based on support
-            if supports_limit:
-                response = api_call(apisession, site_id, limit=1000, **api_kwargs)
-            else:
-                logging.debug(f"API function {api_call.__name__} does not support 'limit' parameter")
-                response = api_call(apisession, site_id, **api_kwargs)
-
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)
-            if rawdata is None:
-                logging.warning(f"! No data returned from API for {data_type} at site {site_name}. Skipping.")
-                return
-
-            logging.info(f"Fetched {len(rawdata)} raw records for {data_type} from site {site_name}.")
-
-            # Sort data if a sort key is provided
-            if sort_key:
-                rawdata = sorted(rawdata, key=lambda x: x.get(sort_key, ""))
-
-            # Flatten nested fields for CSV compatibility
-            data = DataProcessingUtils.flatten_nested_fields(rawdata)
-
-            # Escape multiline strings for CSV
-            data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
-
-            # Write processed data to output
-            DataExporter.save_data_to_output(data, filename)  # type: ignore[no-untyped-call]
-
-            # Determine the full file path for console output (matches CSV writer logic)
-            if not os.path.dirname(filename):
-                full_file_path = os.path.join("data", filename)
-            else:
-                full_file_path = filename
-
-            print(f"! {len(data)} records exported to {full_file_path}")
-            logging.info(f"Site {data_type} data written to {filename} ({len(data)} rows).")
-
-            # Display the data in a table (only in debug mode, otherwise just log summary)
-            if is_debug_mode():  # type: ignore[no-untyped-call]
-                fields = DataProcessingUtils.get_unique_keys(data)  # type: ignore[no-untyped-call]
-                table = PrettyTable()
-                table.field_names = fields
-                table.valign = "t"
-                for item in tqdm(data, desc="Processing", unit="record"):  # type: ignore[no-untyped-call]
-                    row = [item.get(field, "") for field in table.field_names]
-                    table.add_row(row)
-                print(table)
-                logging.debug("Site data displayed in table format (debug mode).")
-            else:
-                logging.info(f"Site {data_type} export completed - {len(data)} records saved to {filename}.")
-
-        except Exception as e:
-            logging.error(f"! Error during site {data_type} export for {site_name}: {e}")
-            raise
+        configure_site_export_utils_dependencies(
+            apisession_dependency=apisession,
+            prompt_utils=PromptUtils,
+            config_utils=ConfigUtils,
+            data_processing_utils=DataProcessingUtils,
+            data_exporter=DataExporter,
+            time_utils=TimeUtils,
+            enhanced_ssh_runner=EnhancedSSHRunner,
+            insight_metrics_utils=InsightMetricsUtils,
+            packet_capture_manager=PacketCaptureManager,
+            api_core_fetch_utils=APICoreFetchUtils,
+            is_debug_mode_fn=is_debug_mode,
+            pretty_table_class=PrettyTable,
+            tqdm_module=tqdm,
+            mistapi_dependency=mistapi,
+        )
+        return site_export_module
 
     @staticmethod
-    def insight_metrics():  # type: ignore[no-untyped-def]  # noqa: PLR0915
-        """Export general insight metrics for a selected site to SiteInsightMetrics_[SiteName].csv."""
-        print("Export Site Insight Metrics:")
-        logging.info("Starting export of site insight metrics...")
-
-        # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-
-        # Get site name for filename
-        try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception:
-            site_name = site_id
-
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
-        filename = f"SiteInsightMetrics_{sanitized_site_name}.csv"
-
-        # First, refresh the available metrics from the API
-        print("! Refreshing available insight metrics from Mist API...")
-        InsightMetricsUtils.export_legacy()
-
-        # Get all metrics that support "site" scope
-        site_metrics = InsightMetricsUtils.get_by_scope("site")
-
-        if not site_metrics:
-            print("! No metrics found for site scope. Check ConstInsightMetrics.csv file.")
-            logging.error("No site-scope metrics found in const insight metrics")
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-            return
-
-        all_insight_data = []
-        metrics_retrieved = 0
-
-        print(f"! Retrieving {len(site_metrics)} different site insight metrics...")
-
-        try:
-            for metric in site_metrics:
-                try:
-                    response = mistapi.api.v1.sites.insights.getSiteInsightMetrics(apisession, site_id, metric)
-                    insight_data = getattr(response, "data", response) or {}
-
-                    if insight_data:
-                        # Add metric type identifier to each data point
-                        insight_data["metric_type"] = metric
-                        insight_data["site_id"] = site_id
-                        insight_data["site_name"] = site_name
-                        all_insight_data.append(insight_data)
-                        metrics_retrieved += 1
-                        logging.debug(f"Retrieved site insight data for metric: {metric}")
-                    else:
-                        logging.debug(f"No data available for metric: {metric}")
-                except Exception as exception:
-                    logging.debug(f"Failed to get site insight data for metric {metric}: {exception}")
-                    continue
-
-            if all_insight_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_insight_data)
-                processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} site insight metrics exported to {filename}")
-                logging.info(f"Exported {metrics_retrieved} site insight metrics for {site_name} to {filename}")
-            else:
-                print(f"! 0 insight metrics exported to {filename} (no data available)")
-                logging.warning(f"No insight data available for site {site_name}")
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-        except Exception as exception:
-            print(f"! Error exporting site insight metrics: {exception}")
-            logging.error(f"Failed to export site insight metrics for {site_name}: {exception}")
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # type: ignore[no-untyped-def]
+        """Delegate generic site export flow to extracted module."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._export_data(api_call, data_type, sort_key=sort_key, **api_kwargs)
 
     @staticmethod
-    def device_insights():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """Export device-specific insight metrics for a selected site to SiteDeviceInsights_[SiteName].csv."""
-        print("Export Site Device Insights:")
-        logging.info("Starting export of site device insights...")
-
-        # First, refresh the available metrics from the API
-        print("! Refreshing available insight metrics from Mist API...")
-        InsightMetricsUtils.export_legacy()
-
-        # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-
-        # Get device selection
-        device_id = PromptUtils.select_device(site_id)
-        if not device_id:
-            logging.error("No device selected. Exiting.")
-            return
-
-        # Get site and device names for filename
-        try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception:
-            site_name = site_id
-
-        try:
-            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
-            devices = mistapi.get_all(response=response, mist_session=apisession)
-            device = next((dev for dev in devices if dev["id"] == device_id), None)
-            device_name = device["name"] if device else device_id
-            device_mac = device["mac"] if device else None
-            device_model = device.get("model", "") if device else ""
-        except Exception:
-            device_name = device_id
-            device_mac = None
-            device_model = ""
-
-        if not device_mac:
-            print(f"! Error: Could not find MAC address for device {device_name}")
-            logging.error(f"Could not find MAC address for device {device_id}")
-            return
-        normalized_device_mac = SiteExportUtils._normalize_device_mac_or_none(device_mac)
-        if not normalized_device_mac:
-            print(f"! Invalid device MAC address format for {device_name}: {device_mac}")
-            logging.error(f"Invalid device MAC address format for device {device_id}: {device_mac}")
-            return
-
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
-        sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name or device_id)
-        filename = f"SiteDeviceInsights_{sanitized_site_name}_{sanitized_device_name}.csv"
-
-        # Get all metrics that support "device" scope
-        device_metrics = InsightMetricsUtils.get_by_scope("device")
-        device_platform = SiteExportUtils._classify_device_platform(device_model)
-        device_metrics = [
-            metric
-            for metric in device_metrics
-            if SiteExportUtils._metric_compatible_with_platform(metric, device_platform)
-        ]
-
-        if not device_metrics:
-            print("! No metrics found for device scope. Check ConstInsightMetrics.csv file.")
-            logging.error("No device-scope metrics found in const insight metrics")
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-            return
-
-        all_device_data = []
-        metrics_retrieved = 0
-
-        print(f"! Retrieving {len(device_metrics)} different device insight metrics for {device_name}...")
-
-        try:
-            for metric in device_metrics:
-                try:
-                    response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(
-                        apisession, site_id, metric, normalized_device_mac
-                    )
-                    device_insight_data = getattr(response, "data", response) or {}
-
-                    if device_insight_data:
-                        # Add metric type identifier to each data point
-                        device_insight_data["metric_type"] = metric
-                        device_insight_data["site_id"] = site_id
-                        device_insight_data["site_name"] = site_name
-                        device_insight_data["device_id"] = device_id
-                        device_insight_data["device_name"] = device_name
-                        device_insight_data["device_mac"] = normalized_device_mac
-                        all_device_data.append(device_insight_data)
-                        metrics_retrieved += 1
-                        logging.debug(f"Retrieved device insight data for metric: {metric}")
-                    else:
-                        logging.debug(f"No data available for device metric: {metric}")
-                except Exception as metric_error:
-                    logging.debug(f"Failed to get device insight data for metric {metric}: {metric_error}")
-                    continue
-
-            if all_device_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_device_data)
-                processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} device insight metrics exported to {filename}")
-                logging.info(
-                    "Exported %s device insight metrics for %s at %s to %s",
-                    metrics_retrieved,
-                    device_name,
-                    site_name,
-                    filename,
-                )
-            else:
-                print(f"! 0 device insights exported to {filename} (no data available)")
-                logging.warning(
-                    "No device insight data available for %s at %s",
-                    device_name,
-                    site_name,
-                )
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-        except Exception as exception:
-            print(f"! Error exporting device insights: {exception}")
-            logging.error(
-                "Failed to export device insights for %s at %s: %s",
-                device_name,
-                site_name,
-                exception,
-            )
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+    def insight_metrics():  # type: ignore[no-untyped-def]
+        """Menu #74 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.insight_metrics()
 
     @staticmethod
-    def _classify_device_platform(device_model: str) -> str:
-        """Classify Mist inventory model into ap/switch/gateway for metric filtering."""
-        model = (device_model or "").upper()
-        if model.startswith("AP"):
-            return "ap"
-        if model.startswith(("EX", "QFX")):
-            return "switch"
-        if model.startswith(("SRX", "SSR")):
-            return "gateway"
-        return "unknown"
-
-    @staticmethod
-    def _metric_compatible_with_platform(metric_name: str, device_platform: str) -> bool:
-        """Skip clearly incompatible device metrics to prevent avoidable API 400 responses."""
-        metric = (metric_name or "").lower()
-        if "switch" in metric:
-            return device_platform in {"switch", "unknown"}
-        if any(token in metric for token in ("gateway", "wan", "srx", "ssr")):
-            return device_platform in {"gateway", "unknown"}
-        if "ap" in metric or "wifi" in metric:
-            return device_platform in {"ap", "unknown"}
-        return True
-
-    @staticmethod
-    def _normalize_device_mac_or_none(device_mac: str) -> str | None:
-        """Validate and normalize device MAC for device insights endpoints."""
-        if not device_mac:
-            return None
-        if not PacketCaptureManager.validate_mac_address(device_mac):
-            return None
-        return PacketCaptureManager.normalize_mac_address(device_mac)
+    def device_insights():  # type: ignore[no-untyped-def]
+        """Menu #76 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.device_insights()
 
     @staticmethod
     def insights():  # type: ignore[no-untyped-def]
-        """Export SLE metric availability for a selected site."""
-        logging.info("Starting export of site SLE metric insights...")
-
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-
-        try:
-            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception as exception:
-            logging.error(f"Error getting site name: {exception}")
-            site_name = site_id
-
-        safe_site_name = site_name.replace(" ", "_").replace("-", "_")
-        filename = f"SiteSleMetricsInsights_{safe_site_name}.csv"
-
-        try:
-            # listSiteSlesMetrics requires explicit scope and scope_id.
-            response = mistapi.api.v1.sites.sle.listSiteSlesMetrics(
-                apisession,
-                site_id,
-                scope="site",
-                scope_id=site_id,
-            )
-            metrics_payload = getattr(response, "data", response) or {}
-
-            rows = []
-            enabled_metrics = metrics_payload.get("enabled", [])
-            supported_metrics = metrics_payload.get("supported", [])
-
-            for metric_name in sorted(set(enabled_metrics + supported_metrics)):
-                rows.append(
-                    {
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "metric_name": metric_name,
-                        "enabled": metric_name in enabled_metrics,
-                        "supported": metric_name in supported_metrics,
-                    }
-                )
-
-            if rows:
-                DataExporter.save_data_to_output(rows, filename)  # type: ignore[no-untyped-call]
-                print(f"! {len(rows)} records exported to data\\{filename}")
-                logging.info(f"Exported {len(rows)} site SLE metric insight records to {filename}")
-            else:
-                print(f"! 0 records exported to data\\{filename} (no metrics available)")
-                logging.warning(f"No site SLE metric insight data available for site {site_name}")
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-        except Exception as exception:
-            print(f"! Error exporting site SLE metric insights: {exception}")
-            logging.error(f"Failed to export site SLE metric insights for site {site_name}: {exception}")
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+        """Menu #73 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.insights()
 
     @staticmethod
     def _system_events():  # type: ignore[no-untyped-def]
-        """Export system events for a site to SiteSystemEvents.csv."""
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("site system events export", hours)
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.events.searchSiteSystemEvents,
-            data_type="system events",
-            sort_key="timestamp",
-            duration=f"{hours}h",
-        )
+        """Delegated site system events export."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._system_events()
 
     @staticmethod
     def _fast_roam_events():  # type: ignore[no-untyped-def]
-        """Export fast roam events for a site to SiteFastRoamEvents.csv."""
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("site fast roam events export", hours)
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.events.searchSiteFastRoamEvents,
-            data_type="fast roam events",
-            sort_key="timestamp",
-            duration=f"{hours}h",
-        )
+        """Delegated site fast-roam events export."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._fast_roam_events()
 
     @staticmethod
     def ospf_stats():  # type: ignore[no-untyped-def]
-        """Export OSPF adjacency statistics for a selected site to SiteOspfStats.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.stats.searchSiteOspfStats,
-            data_type="ospf stats",
-            sort_key="mac",
-        )
+        """Menu #70 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.ospf_stats()
 
     @staticmethod
     def mxedge_upgrade_status():  # type: ignore[no-untyped-def]
-        """Export MxEdge upgrade status for a selected site to SiteMxEdgeUpgrades.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.mxedges.listSiteMxEdgeUpgrades,
-            data_type="mxedge upgrade status",
-            sort_key="id",
-        )
+        """Menu #71 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.mxedge_upgrade_status()
 
     @staticmethod
     def auto_map_assignment_status():  # type: ignore[no-untyped-def]
-        """Export auto-map assignment status for a selected site to SiteAutoMapAssignmentStatus.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.auto_map_assignment.getSiteAutoMapAssignmentStatus,
-            data_type="auto map assignment status",
-            sort_key="id",
-        )
+        """Menu #72 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.auto_map_assignment_status()
 
     @staticmethod
     def site_stats() -> None:  # type: ignore[no-untyped-def]
-        """Export aggregate health and capacity statistics for a selected site to SiteSiteStats.csv."""
-        logging.info("Starting export of site statistics...")  # Log before operation
-        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
-        if not site_id:  # Exit early if no site was selected
-            logging.error("No site selected. Aborting site stats export.")  # Log failure
-            return
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteStats(
-                apisession, site_id
-            )  # Fetch site-level stats from Mist API
-            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope to get payload dict
-            rows = (
-                [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
-            )  # Normalize to list of dicts
-            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV compatibility
-            filename = "SiteSiteStats.csv"  # Output filename for site stats
-            DataExporter.save_data_to_output(
-                rows, filename, api_function_name="getSiteStats"
-            )  # Write results to configured backend
-            logging.info("Exported %d site stats records to %s", len(rows), filename)  # Log success with record count
-        except Exception as exception:  # Catch any API or processing error
-            logging.error(
-                "Failed to export site stats: %s", exception, exc_info=True
-            )  # Log full traceback for debugging
+        """Menu #80 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.site_stats()
 
     @staticmethod
     def gateway_metrics() -> None:  # type: ignore[no-untyped-def]
-        """Export gateway performance metrics summary for a selected site to SiteGatewayMetrics.csv."""
-        logging.info("Starting export of site gateway metrics...")  # Log before operation
-        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
-        if not site_id:  # Exit early if no site was selected
-            logging.error("No site selected. Aborting gateway metrics export.")  # Log failure
-            return
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteGatewayMetrics(
-                apisession, site_id
-            )  # Fetch gateway metrics from Mist API
-            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
-            rows = (
-                [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
-            )  # Normalize single object to list
-            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested metric dicts for CSV
-            filename = "SiteGatewayMetrics.csv"  # Output filename for gateway metrics
-            DataExporter.save_data_to_output(
-                rows, filename, api_function_name="getSiteGatewayMetrics"
-            )  # Write to configured backend
-            logging.info("Exported %d gateway metric records to %s", len(rows), filename)  # Log success
-        except Exception as exception:  # Catch any API or processing error
-            logging.error("Failed to export gateway metrics: %s", exception, exc_info=True)  # Log full traceback
+        """Menu #81 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.gateway_metrics()
 
     @staticmethod
     def switches_metrics() -> None:  # type: ignore[no-untyped-def]
-        """Export switch performance metrics summary for a selected site to SiteSwitchesMetrics.csv."""
-        logging.info("Starting export of site switches metrics...")  # Log before operation
-        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
-        if not site_id:  # Exit early if no site was selected
-            logging.error("No site selected. Aborting switches metrics export.")  # Log failure
-            return
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteSwitchesMetrics(
-                apisession, site_id
-            )  # Fetch switch metrics from Mist API
-            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
-            rows = [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])  # Normalize to list
-            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV
-            filename = "SiteSwitchesMetrics.csv"  # Output filename for switch metrics
-            DataExporter.save_data_to_output(
-                rows, filename, api_function_name="getSiteSwitchesMetrics"
-            )  # Write to configured backend
-            logging.info("Exported %d switches metric records to %s", len(rows), filename)  # Log success
-        except Exception as exception:  # Catch any API or processing error
-            logging.error("Failed to export switches metrics: %s", exception, exc_info=True)  # Log full traceback
+        """Menu #82 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.switches_metrics()
 
     @staticmethod
     def beacons_stats() -> None:  # type: ignore[no-untyped-def]
-        """Export BLE beacon statistics for a selected site to SiteBeaconsStats.csv."""
-        logging.info("Starting export of site BLE beacon statistics...")  # Log before operation
-        # Delegate to generic site export using paginated list endpoint
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.stats.listSiteBeaconsStats,  # BLE beacon stats list endpoint
-            data_type="beacons stats",  # Human-readable label for log messages and filename generation
-            sort_key="id",  # Sort beacons by their ID field for consistent output ordering
-        )
+        """Menu #83 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.beacons_stats()
 
     @staticmethod
     def wxrules_usage() -> None:  # type: ignore[no-untyped-def]
-        """Export WxLAN rule usage statistics for a selected site to SiteWxrulesUsage.csv."""
-        logging.info("Starting export of site WxLAN rules usage statistics...")  # Log before operation
-        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
-        if not site_id:  # Exit early if no site was selected
-            logging.error("No site selected. Aborting WxRules usage export.")  # Log failure
-            return
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteWxRulesUsage(apisession, site_id)  # Fetch WxRules usage stats
-            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
-            rows = [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])  # Normalize to list
-            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested policy stats for CSV
-            filename = "SiteWxrulesUsage.csv"  # Output filename for WxRules usage
-            DataExporter.save_data_to_output(
-                rows, filename, api_function_name="getSiteWxRulesUsage"
-            )  # Write to configured backend
-            logging.info("Exported %d WxRules usage records to %s", len(rows), filename)  # Log success
-        except Exception as exception:  # Catch any API or processing error
-            logging.error("Failed to export WxRules usage: %s", exception, exc_info=True)  # Log full traceback
+        """Menu #84 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.wxrules_usage()
 
     @staticmethod
     def assets_stats() -> None:  # type: ignore[no-untyped-def]
-        """Export asset statistics for a selected site to SiteAssetsStats.csv."""
-        logging.info("Starting export of site asset statistics...")  # Log before operation
-        # Delegate to generic site export using paginated list endpoint
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.stats.listSiteAssetsStats,  # Asset stats list endpoint
-            data_type="assets stats",  # Human-readable label used in log messages and filename generation
-            sort_key="mac",  # Sort assets by MAC address for consistent output ordering
-        )
+        """Menu #85 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.assets_stats()
 
     @staticmethod
     def current_channel_planning() -> None:  # type: ignore[no-untyped-def]
-        """Export current RRM channel and power plan per AP radio for a selected site."""
-        logging.info("Starting export of site current channel planning (RRM)...")  # Log before operation
-        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
-        if not site_id:  # Exit early if no site was selected
-            logging.error("No site selected. Aborting channel planning export.")  # Log failure
-            return
-        try:
-            response = mistapi.api.v1.sites.rrm.getSiteCurrentChannelPlanning(
-                apisession, site_id
-            )  # Fetch current RRM channel plan
-            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
-            # The channel planning response is a dict with AP MAC keys mapping to band channel assignments
-            if isinstance(raw, dict):  # Single dict response — flatten per-AP entries into rows
-                rows = []  # Accumulate one row per AP per band for tabular output
-                for ap_mac, bands in raw.items():  # Iterate APs and their band assignments
-                    if isinstance(bands, dict):  # Each AP has per-band channel/power assignments
-                        for band, assignment in bands.items():  # Iterate radio bands (2.4G, 5G, 6G)
-                            row = {"ap": ap_mac, "band": band, "site_id": site_id}  # Base row with identity fields
-                            row.update(
-                                assignment if isinstance(assignment, dict) else {"value": assignment}
-                            )  # Merge assignment fields
-                            rows.append(row)  # Add completed row to output list
-                    else:  # Unexpected structure — store raw value
-                        rows.append(
-                            {"ap": ap_mac, "site_id": site_id, "value": bands}
-                        )  # Fallback row for unknown structure
-            else:  # Response is already a list
-                rows = raw if isinstance(raw, list) else [raw]  # Wrap scalar in list for consistent processing
-            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten any remaining nested dicts for CSV
-            filename = "SiteCurrentChannelPlanning.csv"  # Output filename for channel planning
-            DataExporter.save_data_to_output(
-                rows, filename, api_function_name="getSiteCurrentChannelPlanning"
-            )  # Write to configured backend
-            logging.info(
-                "Exported %d channel planning records to %s", len(rows), filename
-            )  # Log success with record count
-        except Exception as exception:  # Catch any API or processing error
-            logging.error("Failed to export channel planning: %s", exception, exc_info=True)  # Log full traceback
+        """Menu #86 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.current_channel_planning()
 
     @staticmethod
     def zone_config_analysis() -> None:
-        """Zone, engagement, and occupancy config analysis (Menu #6). Delegates to src.analytics.zone_analyzer."""
-        from src.analytics.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA  # noqa: PLC0415
-
-        _ZCA.analyze(
-            apisession=apisession,
-            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
-            check_stop_fn=ConfigUtils.check_stop_signal,
-            all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-            save_data_fn=DataExporter.save_data_to_output,
-        )
+        """Menu #6 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.zone_config_analysis()
 
 
 class GatewayHaExporter:
