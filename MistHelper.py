@@ -72,12 +72,24 @@ try:
 except ImportError:
     DB_LAYER_AVAILABLE = False
 
+from src.analytics.site_analytics_configurator import (
+    SiteAnalyticsConfigurator as ExtractedSiteAnalyticsConfigurator,
+)
+from src.analytics.site_analytics_configurator import SiteAnalyticsConfiguratorDeps
+from src.analytics.site_inventory_health_analyzer import (
+    SiteInventoryHealthAnalyzer as ExtractedSiteInventoryHealthAnalyzer,
+)
+from src.analytics.site_inventory_health_analyzer import SiteInventoryHealthAnalyzerDeps
 from src.audit.analyzer import AuditLogAnalyzer  # Audit log analysis engine
 from src.audit.filter import AuditLogFilter  # Audit log filtering to remove noise
 from src.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering
 from src.audit.time_parser import TimeRangeParser  # Audit log time range parsing (7d, 4w, etc.)
 from src.org_data_collector import OrgDataCollector
 from src.ssh.ssh_runner import EnhancedSSHRunner
+from src.ssh.ssh_runner_manager import SSHRunnerManager as ExtractedSSHRunnerManager
+from src.ssh.ssh_runner_manager import SSHRunnerManagerDeps
+from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootDeps
+from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils
 from src.wan_hub_group_manager import WanHubGroupNumberManager
 from src.wan_vpn_builder import WanVpnBuilder
 from src.websocket.commands import WebSocketCommands
@@ -22515,346 +22527,36 @@ class GatewayExportUtils:
 
 
 class TroubleshootUtils:
-    """
-    Centralized troubleshooting utilities using Marvis AI.
-    Groups all troubleshooting functions for better code organization.
-    All methods are static to avoid unnecessary object instantiation.
-    """
+    """Delegation wrapper for extracted Marvis troubleshooting implementation."""
 
     @staticmethod
-    def client_connectivity():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Troubleshoot client connectivity issues using Marvis AI.
-        Uses guided client selection instead of manual MAC address entry.
-        """
-        print("\n  Client Connectivity Troubleshooting")
-        print("=" * 50)
-
-        # Use guided client selection
-        client_mac, client_type, site_id = PromptClientUtils.select_client()
-        if not client_mac:
-            print(" No client selected. Returning to main menu.")
-            return
-
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-
-        try:
-            print(f"! Running Marvis AI analysis for client {client_mac}...")
-            print(f"   Client Type: {client_type}")
-            if site_id:
-                print(f"   Site ID: {site_id}")
-
-            logging.info(
-                f"Starting Marvis client troubleshooting for MAC: {client_mac}, type: {client_type}, site: {site_id}"
-            )
-
-            # Prepare parameters for troubleshoot call
-            params = {"mac": client_mac}
-            if site_id:
-                params["site_id"] = site_id
-
-            # Add client type parameter for proper troubleshooting context
-            if client_type in ["wired", "wireless"]:
-                params["type"] = client_type
-                logging.debug(f"MARVIS DEBUG: Added type parameter: {client_type}")
-
-            logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with params: {params}")
-
-            # Call Marvis troubleshoot endpoint
-            response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, **params)
-
-            if response.data:
-                print(" Marvis AI analysis completed!")
-                print("! Analysis results available.")
-
-                # Save results to CSV with optimized formatting
-                data = marvis_data_utils.format_for_csv(response.data, "client")  # Format client response for CSV
-
-                filename = f"MarvisInsights_Client_{client_mac.replace(':', '')}_{client_type}.csv"
-                DataExporter.save_data_to_output(data, filename)  # type: ignore[no-untyped-call]
-                print(f"! Results saved to {filename}")
-
-                # Display summary
-                if isinstance(response.data, dict):
-                    if "results" in response.data:
-                        print("\n  Marvis Analysis Summary:")
-                        for result in response.data.get("results", []):
-                            print(f"  !? {result.get('description', 'Analysis result')}")
-                            if result.get("action"):
-                                print(f"    Recommended Action: {result['action']}")
-                    elif "insights" in response.data:
-                        print("\n  Marvis Insights:")
-                        insights = response.data.get("insights", [])
-                        for insight in insights:
-                            print(f"  !? {insight.get('description', insight)}")
-                    else:
-                        print(f"\n  Analysis Data: {len(data)} items processed")
-            else:
-                print(" No specific connectivity issues found for this client.")
-                print(" This could indicate the client is functioning normally.")
-
-        except Exception as e:
-            logging.error(f"Failed to troubleshoot client {client_mac}: {e}")
-            print(f"! Failed to troubleshoot client: {e}")
-            print(" This may indicate:")
-            print("   - Marvis (VNA) is not enabled for your organization")
-            print("   - The client is not currently active or found")
-            print("   - Insufficient permissions for Marvis troubleshooting")
-            print("   - API connectivity issues")
+    def _build_deps() -> MarvisTroubleshootDeps:
+        """Build dependency container for extracted troubleshooting logic."""
+        return MarvisTroubleshootDeps(
+            apisession=apisession,
+            mistapi=mistapi,
+            config_utils=ConfigUtils,
+            prompt_client_utils=PromptClientUtils,
+            prompt_utils=PromptUtils,
+            data_exporter=DataExporter,
+            marvis_data_utils=marvis_data_utils,
+            data_processing_utils=DataProcessingUtils,
+        )
 
     @staticmethod
-    def device_performance():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Troubleshoot device performance issues using Marvis AI.
-        Uses guided site and device selection workflow.
-        """
-        logging.debug("MARVIS DEBUG: Entering device_performance()")
-        print("\n  Device Performance Troubleshooting")
-        print("=" * 50)
-
-        # Get site selection first
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            print(" No site selected.")
-            logging.debug("MARVIS DEBUG: No site selected for device troubleshooting")
-            return
-
-        logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
-
-        # Get device selection
-        device_id = PromptUtils.select_device(site_id)
-        if not device_id:
-            print(" No device selected.")
-            logging.debug("MARVIS DEBUG: No device selected")
-            return
-
-        logging.debug(f"MARVIS DEBUG: Selected device_id: {device_id}")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
-
-        try:
-            # Get device MAC address from device ID
-            print("! Looking up device details...")
-            logging.debug(f"MARVIS DEBUG: About to get device details for device_id: {device_id} in site: {site_id}")
-
-            device_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-            logging.debug(
-                f"MARVIS DEBUG: Device lookup response status: {device_response.status if hasattr(device_response, 'status') else 'unknown'}"  # noqa: E501
-            )
-
-            if not device_response.data:
-                print(" Could not retrieve device details.")
-                logging.debug("MARVIS DEBUG: Device response data is None")
-                return
-
-            logging.debug(
-                f"MARVIS DEBUG: Device data keys: {list(device_response.data.keys()) if isinstance(device_response.data, dict) else 'not a dict'}"  # noqa: E501
-            )
-
-            device_mac = device_response.data.get("mac")
-            device_name = device_response.data.get("name", "Unknown Device")
-
-            logging.debug(f"MARVIS DEBUG: Device MAC: {device_mac}")
-            logging.debug(f"MARVIS DEBUG: Device name: {device_name}")
-
-            if not device_mac:
-                print(" Could not determine device MAC address.")
-                logging.debug("MARVIS DEBUG: Device MAC is None or empty")
-                return
-
-            print("! Running Marvis AI performance analysis...")
-            print(f"   Device: {device_name} ({device_mac})")
-            print(f"   Site ID: {site_id}")
-
-            logging.info(f"Starting Marvis device performance analysis for device: {device_name} (MAC: {device_mac})")
-            logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with mac={device_mac}, site_id={site_id}")
-
-            # Call Marvis troubleshoot endpoint for device using MAC address
-            response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(
-                apisession, org_id, mac=device_mac, site_id=site_id
-            )
-
-            logging.debug(
-                f"MARVIS DEBUG: Device troubleshoot response status: {response.status if hasattr(response, 'status') else 'unknown'}"  # noqa: E501
-            )
-            logging.debug(f"MARVIS DEBUG: Device response data type: {type(response.data)}")
-            logging.debug(f"MARVIS DEBUG: Device response data is None: {response.data is None}")
-
-            if response.data:
-                logging.debug(
-                    f"MARVIS DEBUG: Device response data keys: {list(response.data.keys()) if isinstance(response.data, dict) else 'not a dict'}"  # noqa: E501
-                )
-                logging.debug(f"MARVIS DEBUG: Device response data: {json.dumps(response.data, indent=2, default=str)}")
-
-                print(" Marvis AI device analysis completed!")
-
-                # Save results to CSV with optimized formatting
-                data = marvis_data_utils.format_for_csv(response.data, "device")  # Format device response for CSV
-                logging.debug(f"MARVIS DEBUG: Formatted device data length: {len(data) if data else 0}")
-
-                filename = f"MarvisInsights_Device_{device_mac.replace(':', '')}_{device_name.replace(' ', '_')}.csv"
-                DataExporter.save_data_to_output(data, filename)  # type: ignore[no-untyped-call]
-                print(f"! Results saved to {filename}")
-
-                # Display summary if available
-                if isinstance(response.data, dict):
-                    if "results" in response.data:
-                        results = response.data.get("results", [])
-                        logging.debug(f"MARVIS DEBUG: Found {len(results)} device results")
-                        print("\n  Device Performance Analysis:")
-                        for result in results:
-                            print(f"  !? {result.get('description', 'Analysis result')}")
-                            if result.get("action"):
-                                print(f"    Recommended Action: {result['action']}")
-                    elif "insights" in response.data:
-                        print("\n  Marvis Device Insights:")
-                        insights = response.data.get("insights", [])
-                        logging.debug(f"MARVIS DEBUG: Found {len(insights)} device insights")
-                        for insight in insights:
-                            print(f"  !? {insight.get('description', insight)}")
-                    else:
-                        logging.debug("MARVIS DEBUG: No results or insights in device response")
-                        print(f"\n  Analysis Data: {len(data)} items processed")
-
-            else:
-                logging.debug("MARVIS DEBUG: Device response data is None or empty")
-                print(" No performance issues detected for this device.")
-                print(" This could indicate the device is operating within normal parameters.")
-
-        except Exception as e:
-            logging.error(f"MARVIS DEBUG: Exception in device_performance: {e}")
-            logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
-            logging.error("MARVIS DEBUG: Exception traceback: ", exc_info=True)
-            print(f"! Failed to troubleshoot device: {e}")
-            print(" This may indicate:")
-            print("   - The device is not found or not supported by Marvis")
-            print("   - Marvis (VNA) is not enabled for your organization")
-            print("   - Insufficient permissions for device troubleshooting")
-
-        logging.debug("MARVIS DEBUG: Exiting device_performance()")
+    def client_connectivity() -> None:
+        """Delegated client connectivity troubleshooting implementation."""
+        ExtractedMarvisTroubleshootUtils.client_connectivity(TroubleshootUtils._build_deps())
 
     @staticmethod
-    def network_connectivity():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Troubleshoot general network connectivity issues using Marvis AI.
-        Provides site-level network analysis and insights.
-        """
-        logging.debug("MARVIS DEBUG: Entering network_connectivity()")
-        print("\n  Network Connectivity Troubleshooting")
-        print("=" * 50)
+    def device_performance() -> None:
+        """Delegated device performance troubleshooting implementation."""
+        ExtractedMarvisTroubleshootUtils.device_performance(TroubleshootUtils._build_deps())
 
-        # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            print(" No site selected.")
-            logging.debug("MARVIS DEBUG: No site selected, exiting network troubleshooting")
-            return
-
-        logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
-
-        try:
-            print("! Running Marvis AI network analysis...")
-            print("   Analyzing site-level connectivity")
-            print(f"   Site ID: {site_id}")
-
-            logging.info(f"Starting Marvis network connectivity analysis for site: {site_id}")
-            logging.debug(
-                f"MARVIS DEBUG: About to call mistapi.api.v1.orgs.troubleshoot.troubleshootOrg with org_id={org_id}, site_id={site_id}"  # noqa: E501
-            )
-
-            # Call Marvis troubleshoot endpoint for site
-            response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, site_id=site_id)
-
-            logging.debug(
-                f"MARVIS DEBUG: API response received. Status: {response.status if hasattr(response, 'status') else 'unknown'}"  # noqa: E501
-            )
-            logging.debug(f"MARVIS DEBUG: Response data type: {type(response.data)}")
-            logging.debug(f"MARVIS DEBUG: Response data is None: {response.data is None}")
-
-            if response.data:
-                logging.debug(
-                    f"MARVIS DEBUG: Response data keys: {list(response.data.keys()) if isinstance(response.data, dict) else 'not a dict'}"  # noqa: E501
-                )
-                logging.debug(
-                    f"MARVIS DEBUG: Response data length: {len(response.data) if hasattr(response.data, '__len__') else 'no length'}"  # noqa: E501
-                )
-                logging.debug(
-                    f"MARVIS DEBUG: Full response data structure: {json.dumps(response.data, indent=2, default=str) if response.data else 'None'}"  # noqa: E501
-                )
-
-                print(" Marvis AI network analysis completed!")
-
-                # Save results to CSV with optimized formatting
-                logging.debug("MARVIS DEBUG: About to format data for CSV")
-                data = marvis_data_utils.format_for_csv(response.data, "network")  # Format network response for CSV
-                logging.debug(f"MARVIS DEBUG: Formatted data length: {len(data) if data else 0}")
-                logging.debug(f"MARVIS DEBUG: Formatted data sample: {data[:1] if data else 'empty'}")
-
-                filename = f"MarvisInsights_Network_{site_id}.csv"
-                DataExporter.save_data_to_output(data, filename)  # type: ignore[no-untyped-call]
-                print(f"! Results saved to {filename}")
-                logging.debug(f"MARVIS DEBUG: Saved data to {filename}")
-
-                # Display summary if available
-                if isinstance(response.data, dict):
-                    logging.debug("MARVIS DEBUG: Response data is a dict, checking for results/insights")
-                    if "results" in response.data:
-                        results = response.data.get("results", [])
-                        logging.debug(f"MARVIS DEBUG: Found 'results' key with {len(results)} items")
-                        print("\n  Network Connectivity Analysis:")
-                        for idx, result in enumerate(results):
-                            logging.debug(f"MARVIS DEBUG: Processing result {idx}: {result}")
-                            description = (
-                                result.get("description", "Analysis result")
-                                if isinstance(result, dict)
-                                else str(result)
-                            )
-                            print(f"  !? {description}")
-                            if isinstance(result, dict) and result.get("action"):
-                                print(f"    Recommended Action: {result['action']}")
-                    elif "insights" in response.data:
-                        insights = response.data.get("insights", [])
-                        logging.debug(f"MARVIS DEBUG: Found 'insights' key with {len(insights)} items")
-                        print("\n  Marvis Network Insights:")
-                        for idx, insight in enumerate(insights):
-                            logging.debug(f"MARVIS DEBUG: Processing insight {idx}: {insight}")
-                            description = (
-                                insight.get("description", insight) if isinstance(insight, dict) else str(insight)
-                            )
-                            print(f"  !? {description}")
-                    else:
-                        logging.debug("MARVIS DEBUG: No 'results' or 'insights' keys found in response data")
-                        logging.debug(f"MARVIS DEBUG: Available keys in response: {list(response.data.keys())}")
-                        print(f"\n  Analysis Data: {len(data)} items processed")
-                        if response.data:
-                            print(f"! Raw response keys: {list(response.data.keys())}")
-                            # Show some raw data for debugging
-                            for key, value in list(response.data.items())[:5]:
-                                print(f"   {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
-                else:
-                    logging.debug(f"MARVIS DEBUG: Response data is not a dict, type: {type(response.data)}")
-                    print(
-                        f"\n  Raw response: {str(response.data)[:200]}{'...' if len(str(response.data)) > 200 else ''}"
-                    )
-
-            else:
-                logging.debug("MARVIS DEBUG: Response data is None or empty")
-                print(" No network connectivity issues detected for this site.")
-                print(" This indicates the network is operating within normal parameters.")
-
-        except Exception as e:
-            logging.error(f"MARVIS DEBUG: Exception in network_connectivity: {e}")
-            logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
-            logging.error("MARVIS DEBUG: Exception traceback: ", exc_info=True)
-            print(f"! Failed to troubleshoot network: {e}")
-            print(" This may indicate:")
-            print("   - Marvis (VNA) is not enabled for your organization")
-            print("   - The site has no devices or insufficient data for analysis")
-            print("   - Insufficient permissions for network troubleshooting")
-
-        logging.debug("MARVIS DEBUG: Exiting network_connectivity()")
+    @staticmethod
+    def network_connectivity() -> None:
+        """Delegated network connectivity troubleshooting implementation."""
+        ExtractedMarvisTroubleshootUtils.network_connectivity(TroubleshootUtils._build_deps())
 
     @staticmethod
     def launch_interactive() -> None:
@@ -22913,148 +22615,37 @@ class TroubleshootUtils:
 
     @staticmethod
     def view_insights() -> None:
-        """
-        View available Marvis (VNA) insights and capabilities.
-
-        Retrieves organization info, checks Marvis features, and displays
-        available insights and usage guidance.
-        """
-        print("\n  Marvis (VNA) Insights & Capabilities")
-        print("=" * 50)
-
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-
-        try:
-            print(" Checking Marvis availability and organizational insights...")
-
-            org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)
-
-            if org_response.data:
-                org_info = org_response.data
-                print(f"! Organization: {org_info.get('name', 'Unknown')}")
-
-                features = org_info.get("features", [])
-                marvis_features = [
-                    f for f in features if any(keyword in f.lower() for keyword in ["marvis", "vna", "insight"])
-                ]
-
-                if marvis_features:
-                    print("\n  Marvis/VNA Features Available:")
-                    for feature in marvis_features:
-                        print(f"  !? {feature}")
-                else:
-                    print("\n  No specific Marvis/VNA features detected in organization settings.")
-
-                TroubleshootUtils._fetch_org_insights(org_id)
-                TroubleshootUtils._display_usage_guide()
-            else:
-                print(" Could not retrieve organization information.")
-
-        except Exception as exception:
-            TroubleshootUtils._handle_insights_error(exception)
+        """Delegated Marvis insights and capabilities view implementation."""
+        ExtractedMarvisTroubleshootUtils.view_insights(TroubleshootUtils._build_deps())
 
     @staticmethod
     def _fetch_org_insights(org_id: str) -> None:
-        """Fetch and display organization-level insights."""
-        try:
-            print("\n Attempting to retrieve organization-level insights...")
-
-            insight_endpoints = [
-                ("Organization Sites SLE", lambda: mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id)),
-            ]
-
-            insights_found = False
-            for endpoint_name, endpoint_func in insight_endpoints:
-                try:
-                    logging.debug(f"MARVIS DEBUG: Testing endpoint: {endpoint_name}")
-                    response = endpoint_func()  # type: ignore[no-untyped-call]
-
-                    if response.data:
-                        insights_found = TroubleshootUtils._process_insight_response(endpoint_name, response.data)
-                except Exception as endpoint_exception:
-                    TroubleshootUtils._log_endpoint_error(endpoint_name, endpoint_exception)
-                    continue
-
-            if not insights_found:
-                print("\n  No organization-level insights currently available.")
-
-        except Exception as exception:
-            logging.warning(f"Could not retrieve organization insights: {exception}")
-            print(f"! Could not retrieve insights: {exception}")
+        """Delegated helper for organization-level insights retrieval."""
+        ExtractedMarvisTroubleshootUtils._fetch_org_insights(org_id, TroubleshootUtils._build_deps())
 
     @staticmethod
     def _process_insight_response(endpoint_name: str, data: Any) -> bool:
-        """Process and display insight response data."""
-        insights_data = data if isinstance(data, list) else [data]
-        logging.debug(f"MARVIS DEBUG: {endpoint_name} insights data length: {len(insights_data)}")
-
-        if not insights_data:
-            return False
-
-        print(f"\n  {endpoint_name}:")
-        for insight in insights_data[:5]:
-            description = insight.get("description", insight.get("type", insight.get("name", str(insight))))
-            print(f"  !? {description}")
-
-        if len(insights_data) > 5:
-            print(f"  ... and {len(insights_data) - 5} more insights")
-
-        if "Sites SLE" in endpoint_name:
-            formatted_insights = marvis_data_utils.format_for_csv(data, "sites")  # Format sites SLE response for CSV
-        else:
-            formatted_insights = DataProcessingUtils.flatten_nested_fields(insights_data)
-            formatted_insights = DataProcessingUtils.escape_multiline(formatted_insights)  # type: ignore[no-untyped-call]
-
-        filename = f"MarvisInsights_{endpoint_name.replace(' ', '_')}.csv"
-        DataExporter.save_data_to_output(formatted_insights, filename)  # type: ignore[no-untyped-call]
-        print(f"  Full insights saved to {filename}")
-        return True
+        """Delegated helper for insight response processing."""
+        return ExtractedMarvisTroubleshootUtils._process_insight_response(
+            endpoint_name,
+            data,
+            TroubleshootUtils._build_deps(),
+        )
 
     @staticmethod
     def _log_endpoint_error(endpoint_name: str, exception: Exception) -> None:
-        """Log endpoint access errors."""
-        error_message = str(exception)
-        if "404" in error_message:
-            logging.debug(f"Endpoint {endpoint_name} not available for this organization (404): {exception}")
-        elif "403" in error_message:
-            logging.debug(f"Access denied to {endpoint_name} (403): {exception}")
-        else:
-            logging.debug(f"Could not fetch {endpoint_name}: {exception}")
+        """Delegated helper for endpoint error logging."""
+        ExtractedMarvisTroubleshootUtils._log_endpoint_error(endpoint_name, exception)
 
     @staticmethod
     def _display_usage_guide() -> None:
-        """Display Marvis usage guidance."""
-        print("\n  Marvis (VNA - Virtual Network Assistant) Usage Guide:")
-        print("   Targeted Troubleshooting:")
-        print("     !? Use client troubleshooting for specific device connectivity issues")
-        print("     !? Use device troubleshooting for AP, switch, or gateway performance")
-        print("     !? Use network troubleshooting for site-wide connectivity analysis")
-        print()
-        print("   Requirements:")
-        print("     !? Marvis must be enabled for your organization")
-        print("     !? Devices must be actively managed and reporting data")
-        print("     !? Sufficient data history for meaningful analysis")
-        print()
-        print("   Best Practices:")
-        print("     !? Run troubleshooting when issues are actively occurring")
-        print("     !? Provide specific timeframes when prompted")
-        print("     !? Review saved CSV files for detailed analysis results")
+        """Delegated helper for usage guide display."""
+        ExtractedMarvisTroubleshootUtils._display_usage_guide()
 
     @staticmethod
     def _handle_insights_error(exception: Exception) -> None:
-        """Handle and display insight retrieval errors."""
-        logging.error(f"Failed to get Marvis insights: {exception}")
-        print(f"! Failed to get Marvis insights: {exception}")
-        print(" This may indicate:")
-        print("   - Marvis (VNA) is not enabled for your organization")
-        print("   - Insufficient permissions to view organization details")
-        print("   - API connectivity issues")
-        print("   - Organization may not have Marvis licensing")
-        print()
-        print(" Contact your Mist administrator to:")
-        print("   !? Verify Marvis/VNA licensing and enablement")
-        print("   !? Confirm user permissions for AI troubleshooting")
-        print("   !? Check organization feature settings")
+        """Delegated helper for Marvis insights error handling."""
+        ExtractedMarvisTroubleshootUtils._handle_insights_error(exception)
 
 
 # ============================================================================
@@ -23123,390 +22714,83 @@ class GatewayTemplateConfigManager:
 # SSH RUNNER MANAGER CLASS
 # ============================================================================
 class SSHRunnerManager:
-    """
-    Manages SSH command execution across network devices.
+    """Delegation wrapper for extracted SSH runner manager implementation."""
 
-    Consolidates SSH runner operations:
-    - interactive(): Menu 97 - Run SSH commands interactively
-    - by_gateway_template(): Menu 98 - Target gateways by template
-
-    All methods are static to avoid unnecessary object instantiation.
-    """
+    @staticmethod
+    def _build_deps() -> SSHRunnerManagerDeps:
+        """Build dependency container for extracted SSH runner logic."""
+        cli_args = globals().get("args") if "args" in globals() else None
+        return SSHRunnerManagerDeps(
+            args=cli_args,
+            progress_emitter=PROGRESS_EMITTER,
+            enhanced_ssh_runner=EnhancedSSHRunner,
+            input_utils=InputUtils,
+            cache_utils=CacheUtils,
+            gateway_export_utils=GatewayExportUtils,
+            file_path_utils=FilePathUtils,
+        )
 
     @staticmethod
     def interactive():  # type: ignore[no-untyped-def]
-        """
-        SSH Runner wrapper for menu system integration.
-        Runs with auto-detection and interactive prompts.
-        """
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("97", "ssh_runner", 1)
-        op_start = time.time()
-        try:
-            print("\n>> Enhanced SSH Command Runner")
-            print("=" * 60)
-
-            cli_args = globals().get("args") if "args" in globals() else None
-            no_env_flag = cli_args.no_env if cli_args and hasattr(cli_args, "no_env") else False
-
-            env_config: dict[str, Any] = {}
-            if not no_env_flag:
-                env_config = EnhancedSSHRunner.load_ssh_config_from_env()
-
-            hosts = env_config.get("hosts", [])
-            username = env_config.get("username")
-            password = env_config.get("password")
-            commands = env_config.get("commands", [])
-
-            # Collect missing data interactively
-            hosts, username, password, commands = SSHRunnerManager._collect_missing_data(  # type: ignore[no-untyped-call]
-                hosts, username, password, commands
-            )
-
-            if not hosts or not username or not password:
-                if emitter:
-                    emitter.emit_progress_complete("97", "ssh_runner", 0, 0, True, time.time() - op_start)
-                return False
-
-            # Show summary
-            print(f"!? Target hosts: {', '.join(hosts)}")
-            print(f"!? Username: {username}")
-            print(f"!? Commands: {len(commands) if commands else 0} command(s)")
-
-            # Execute
-            result = SSHRunnerManager._execute_ssh(hosts, username, password, commands)  # type: ignore[no-untyped-call]
-            if emitter:
-                emitter.emit_progress_complete(
-                    "97", "ssh_runner", len(hosts), len(hosts), False, time.time() - op_start
-                )
-            return result
-
-        except KeyboardInterrupt:
-            print("\n[INTERRUPT] Operation cancelled by user")
-            if emitter:
-                emitter.emit_progress_complete("97", "ssh_runner", 0, 0, True, time.time() - op_start)
-            return False
-        except Exception as error:
-            print(f"[ERROR] Fatal error: {error}")
-            logging.error(f"SSH Runner error: {error}", exc_info=True)
-            if emitter:
-                emitter.emit_progress_complete("97", "ssh_runner", 0, 0, False, time.time() - op_start)
-            return False
+        """Delegated interactive SSH runner entrypoint."""
+        return ExtractedSSHRunnerManager.interactive(SSHRunnerManager._build_deps())
 
     @staticmethod
     def by_gateway_template(fast=False):  # type: ignore[no-untyped-def]
-        """
-        SSH runner that targets gateways by template name and online status.
-
-        Args:
-            fast (bool): Enable fast mode for data collection
-        """
-        logging.info("Starting SSH runner targeting gateways by template...")
-        print("SSH Runner - Gateway Template Targeting:")
-        print("=" * 60)
-
-        # Ensure gateway data is current
-        print("  1. Ensuring gateway management IP data is current...")
-        CacheUtils.check_and_generate_csv(
-            "GatewayManagementIPs.csv",
-            lambda: GatewayExportUtils.management_ips(fast=fast),
-        )
-
-        # Load gateway data
-        gateways = SSHRunnerManager._load_gateway_data()  # type: ignore[no-untyped-call]
-        if not gateways:
-            return
-
-        # Get template selection
-        selected_template = SSHRunnerManager._select_gateway_template(gateways)  # type: ignore[no-untyped-call]
-        if not selected_template:
-            return
-
-        # Filter gateways
-        filtered = SSHRunnerManager._filter_gateways(gateways, selected_template)  # type: ignore[no-untyped-call]
-        if not filtered:
-            print(f"! No online gateways with management IPs found for '{selected_template}'")
-            return
-
-        # Display and confirm
-        management_ips = [gw.get("Management IP") for gw in filtered]
-        SSHRunnerManager._display_filtered_gateways(filtered)  # type: ignore[no-untyped-call]
-
-        if not SSHRunnerManager._confirm_execution(len(management_ips)):  # type: ignore[no-untyped-call]
-            return
-
-        # Execute SSH commands
-        SSHRunnerManager._execute_by_template(management_ips, selected_template)  # type: ignore[no-untyped-call]
+        """Delegated SSH runner by gateway template entrypoint."""
+        ExtractedSSHRunnerManager.by_gateway_template(SSHRunnerManager._build_deps(), fast=fast)
 
     @staticmethod
-    def _collect_missing_data(hosts, username, password, commands):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912
-        """Interactively collect missing SSH configuration data."""
-        logging.info(  # Entry envelope — log what data is already known before prompting
-            "Entering SSHRunnerManager._collect_missing_data: hosts=%s username=%s commands=%s",
-            len(hosts) if hosts else 0,
-            "provided" if username else "missing",
-            len(commands) if commands else 0,
+    def _collect_missing_data(hosts, username, password, commands):  # type: ignore[no-untyped-def]
+        """Delegated helper to collect missing SSH configuration data."""
+        return ExtractedSSHRunnerManager._collect_missing_data(
+            SSHRunnerManager._build_deps(),
+            hosts,
+            username,
+            password,
+            commands,
         )
-        if not hosts:
-            host_input = InputUtils.safe_input(
-                "Enter SSH host(s) (comma-separated): ",
-                context="ssh_runner_hosts",
-            ).strip()
-            if host_input:
-                hosts = [h.strip() for h in host_input.split(",") if h.strip()]
-            else:
-                print("X  SSH host is required")
-                logging.info(  # Exit envelope on cancel (no hosts)
-                    "Exiting SSHRunnerManager._collect_missing_data: cancelled (no hosts provided)"
-                )
-                return None, None, None, None
-
-        if not username:
-            username = InputUtils.safe_input("Enter SSH username: ", context="ssh_runner_username").strip()
-            if not username:
-                print("X  SSH username is required")
-                logging.info(  # Exit envelope on cancel (no username)
-                    "Exiting SSHRunnerManager._collect_missing_data: cancelled (no username provided)"
-                )
-                return None, None, None, None
-
-        if not password:
-            try:
-                import getpass
-
-                password = getpass.getpass("Enter SSH password: ")
-                if not password:
-                    print("X  SSH password is required")
-                    logging.info(  # Exit envelope on cancel (no password)
-                        "Exiting SSHRunnerManager._collect_missing_data: cancelled (no password provided)"
-                    )
-                    return None, None, None, None
-            except (EOFError, KeyboardInterrupt):
-                print("\n[CANCELLED] Operation cancelled")
-                logging.info(  # Exit envelope on cancel (EOF/interrupt)
-                    "Exiting SSHRunnerManager._collect_missing_data: cancelled (EOF/interrupt on password prompt)"
-                )
-                return None, None, None, None
-
-        if not commands:
-            print("\nNo commands configured. Enter command or press Enter for CSV fallback:")
-            choice = InputUtils.safe_input("Command: ", context="ssh_runner_command_prompt").strip()
-            if choice:
-                commands = [choice]
-
-        logging.debug(  # Exit envelope — log result summary without exposing password
-            "Exiting SSHRunnerManager._collect_missing_data: hosts=%s commands=%s password=***REDACTED***",
-            len(hosts) if hosts else 0,
-            len(commands) if commands else 0,
-        )
-        return hosts, username, password, commands
 
     @staticmethod
     def _execute_ssh(hosts, username, password, commands):  # type: ignore[no-untyped-def]
-        """Execute SSH commands on specified hosts."""
-        original_load = EnhancedSSHRunner.load_ssh_config_from_env
-
-        def mock_load(env_file: str = ".env"):  # type: ignore[no-untyped-def]
-            return {"hosts": hosts, "username": username, "password": password, "commands": commands}
-
-        try:
-            EnhancedSSHRunner.load_ssh_config_from_env = mock_load  # type: ignore[method-assign]  # monkey-patching for interactive SSH
-
-            if len(hosts) > 1 or len(commands) > 1:
-                print(f"\n!? Executing {len(commands)} command(s) on {len(hosts)} host(s)")
-
-                summary = EnhancedSSHRunner.run_ssh_commands_multi_host(
-                    hosts=hosts,
-                    username=username,
-                    password=password,
-                    commands=commands,
-                    port=22,
-                    timeout=30,
-                    use_shell=True,
-                    max_threads=min(len(hosts), 4),
-                )
-
-                successful = sum(1 for r in summary.values() if r.get("success", False))
-                print(f"\n!? Execution Summary: {successful}/{len(summary)} hosts successful")
-                return successful > 0
-            else:
-
-                class MockArgs:
-                    def __init__(self):  # type: ignore[no-untyped-def]
-                        self.interactive = False
-                        self.hostname = hosts[0]
-                        self.username = username
-                        self.password = None
-                        self.command = commands[0] if commands else None
-                        self.port = 22
-                        self.timeout = 30
-                        self.shell = True
-                        self.no_shell = False
-                        self.no_env = False
-                        self.log_level = "INFO"
-                        self.debug = False
-                        self.max_threads = None
-                        self.secure = False
-
-                return EnhancedSSHRunner.run_application(MockArgs())  # type: ignore[no-untyped-call]
-        finally:
-            EnhancedSSHRunner.load_ssh_config_from_env = original_load  # type: ignore[method-assign]  # restoring original method
+        """Delegated helper to execute SSH commands."""
+        return ExtractedSSHRunnerManager._execute_ssh(
+            SSHRunnerManager._build_deps(),
+            hosts,
+            username,
+            password,
+            commands,
+        )
 
     @staticmethod
     def _load_gateway_data():  # type: ignore[no-untyped-def]
-        """Load gateway management IP data from CSV."""
-        try:
-            with open(FilePathUtils.get_csv_path("GatewayManagementIPs.csv"), encoding="utf-8") as f:
-                gateways = list(csv.DictReader(f))
-            if not gateways:
-                print("! No gateway data found.")
-                return None
-            return gateways
-        except FileNotFoundError:
-            print("! Error: Gateway management IP data not found.")
-            return None
+        """Delegated helper to load gateway management data."""
+        return ExtractedSSHRunnerManager._load_gateway_data(SSHRunnerManager._build_deps())
 
     @staticmethod
     def _select_gateway_template(gateways):  # type: ignore[no-untyped-def]
-        """Display templates and get user selection."""
-        templates = sorted(
-            set(
-                gw.get("Gateway Template", "Unknown")
-                for gw in gateways
-                if gw.get("Gateway Template") and gw.get("Gateway Template") != "Unknown"
-            )
-        )
-
-        if not templates:
-            print("! No gateway templates found.")
-            return None
-
-        print("\n  2. Available gateway templates:")
-        for i, name in enumerate(templates, 1):
-            total = sum(1 for gw in gateways if gw.get("Gateway Template") == name)
-            online = sum(
-                1 for gw in gateways if gw.get("Gateway Template") == name and gw.get("Online Status") == "Online"
-            )
-            print(f"     {i:2}. {name} ({total} total, {online} online)")
-
-        selection = InputUtils.safe_input(
-            f"\n  Enter template number (1-{len(templates)}) or name: ",
-            context="ssh_runner_template_selection",
-        ).strip()
-        if not selection:
-            print("\n! Operation cancelled.")
-            logging.info("Template selection cancelled (empty/EOF/interrupt) - SSH/container safe exit")
-            return None
-
-        try:
-            idx = int(selection) - 1
-            if 0 <= idx < len(templates):
-                return templates[idx]
-            print("! Invalid selection.")
-            return None
-        except ValueError:
-            matches = [t for t in templates if selection.lower() in t.lower()]
-            if len(matches) == 1:
-                return matches[0]
-            elif len(matches) > 1:
-                print(f"! Ambiguous: {', '.join(matches)}")
-            else:
-                print(f"! Template '{selection}' not found.")
-            return None
+        """Delegated helper to choose gateway template."""
+        return ExtractedSSHRunnerManager._select_gateway_template(SSHRunnerManager._build_deps(), gateways)
 
     @staticmethod
     def _filter_gateways(gateways, template_name):  # type: ignore[no-untyped-def]
-        """Filter gateways by template and online status."""
-        return [
-            gw
-            for gw in gateways
-            if gw.get("Gateway Template") == template_name
-            and gw.get("Online Status") == "Online"
-            and gw.get("Management IP") != "Not Configured"
-            and gw.get("Management IP", "").strip()
-        ]
+        """Delegated helper to filter gateways by template and status."""
+        return ExtractedSSHRunnerManager._filter_gateways(gateways, template_name)
 
     @staticmethod
     def _display_filtered_gateways(gateways):  # type: ignore[no-untyped-def]
-        """Display filtered gateway information."""
-        print(f"\n  3. Found {len(gateways)} online gateways with management IPs:")
-        for gw in gateways:
-            name = gw.get("Gateway Name", "Unknown")
-            ip = gw.get("Management IP")
-            site = gw.get("Site Name", "Unknown")
-            print(f"     - {name:15} | {ip:15} | {site}")
+        """Delegated helper to display filtered gateways."""
+        ExtractedSSHRunnerManager._display_filtered_gateways(gateways)
 
     @staticmethod
     def _confirm_execution(count):  # type: ignore[no-untyped-def]
-        """Get user confirmation before SSH execution."""
-        logging.info(  # Entry envelope — log scope before confirmation prompt
-            "Entering SSHRunnerManager._confirm_execution: requesting confirmation for %s gateways",
-            count,
-        )
-        confirm = (
-            InputUtils.safe_input(
-                f"\n  Execute SSH commands on {count} gateways? (y/N): ",
-                context="ssh_runner_confirm_execution",
-            )
-            .strip()
-            .lower()
-        )
-        if not confirm:
-            print("\n! Operation cancelled.")
-            logging.info("SSH execution confirmation cancelled (empty/EOF/interrupt) - SSH/container safe exit")
-            logging.info("Exiting SSHRunnerManager._confirm_execution: result=cancelled")  # Exit envelope on cancel
-            return False
-        result = confirm in ["y", "yes"]  # Evaluate confirmation response as boolean
-        logging.info("Exiting SSHRunnerManager._confirm_execution: result=%s", result)  # Exit envelope with result
-        return result
+        """Delegated helper to confirm SSH execution."""
+        return ExtractedSSHRunnerManager._confirm_execution(SSHRunnerManager._build_deps(), count)
 
     @staticmethod
     def _execute_by_template(management_ips, template_name):  # type: ignore[no-untyped-def]
-        """Execute SSH commands on filtered gateways."""
-        print("\n  4. Loading SSH configuration...")
-
-        try:
-            ssh_config = EnhancedSSHRunner.load_ssh_config_from_env()
-
-            if not ssh_config.get("username") or not ssh_config.get("password"):
-                print("! SSH credentials not found in .env file.")
-                return
-
-            commands = ssh_config.get("commands", [])
-            if not commands:
-                commands = EnhancedSSHRunner.load_commands_from_csv()
-                if not commands:
-                    print("! No SSH commands found.")
-                    return
-
-            print(f"  - Target hosts: {len(management_ips)} gateways")
-            print(f"  - Commands: {len(commands)}")
-
-            results = EnhancedSSHRunner.run_ssh_commands_multi_host(
-                hosts=management_ips,
-                username=ssh_config["username"],
-                password=ssh_config["password"],
-                commands=commands,
-                port=22,
-                timeout=30,
-                use_shell=True,
-                max_threads=5,
-            )
-
-            successful = results.get("successful", 0)
-            print("\n! SSH execution completed:")
-            print(f"  - Template: {template_name}")
-            print(f"  - Successful: {successful}")
-            print(f"  - Failed: {results.get('failed', 0)}")
-
-            logging.info(
-                f"SSH by template: {template_name}, {successful}/{results.get('total', len(management_ips))} successful"
-            )
-
-        except Exception as error:
-            print(f"! Error: {error}")
-            logging.error(f"SSH by template error: {error}", exc_info=True)
+        """Delegated helper to execute SSH by selected template."""
+        ExtractedSSHRunnerManager._execute_by_template(SSHRunnerManager._build_deps(), management_ips, template_name)
 
 
 # ============================================================================
@@ -30152,874 +29436,9 @@ class BulkRadiusWLANConfigManager:
 # have been refactored into GatewayTemplateConfigManager class methods.
 
 
-class SiteAnalyticsConfigurator:
-    """
-    Configures site analytics settings to standard values across all sites.
-
-    Scans all sites and updates any that deviate from the standard configuration for:
-    - RTSA (Real-Time Statistics & Analytics)
-    - Rogue AP detection
-    - Engagement dwell tags
-    - Occupancy settings
-    - Analytics enabled status
-
-    SECURITY: DESTRUCTIVE - Modifies site settings. Requires explicit confirmation.
-
-    Usage:
-        SiteAnalyticsConfigurator.execute()
-    """
-
-    # Standard configuration values (T-Mobile standard)
-    STANDARD_RTSA = {"enabled": True, "track_asset": True, "app_waking": True}
-
-    STANDARD_ROGUE = {
-        "min_rssi": -80,
-        "min_duration": 10,
-        "enabled": True,
-        "honeypot_enabled": True,
-        "whitelisted_bssids": [],
-        "whitelisted_ssids": [],
-    }
-
-    STANDARD_ENGAGEMENT = {
-        "dwell_tags": {
-            "passerby": "1-300",
-            "bounce": "301-14400",
-            "engaged": "14401-36000",
-            "stationed": "36001-86400",
-        },
-        "dwell_tag_names": {"passerby": "", "bounce": "", "engaged": "", "stationed": ""},
-        "hours": {"sun": "", "mon": "", "tue": "", "wed": "", "thu": "", "fri": "", "sat": ""},
-    }
-
-    STANDARD_ANALYTIC = {"enabled": True}
-
-    STANDARD_OCCUPANCY = {
-        "min_duration": 300,
-        "clients_enabled": True,
-        "sdkclients_enabled": True,
-        "assets_enabled": True,
-        "unconnected_clients_enabled": False,
-    }
-
-    STANDARD_WIFI = {"enabled": True, "locate_connected": True, "locate_unconnected": False}
-
-    @staticmethod
-    def execute():  # type: ignore[no-untyped-def]
-        """
-        Main entry point for site analytics configuration.
-
-        Scans all sites, identifies deviations, and applies standard configuration.
-        """
-        print("Site Analytics Configurator:")
-        print("=" * 60)
-        print("! DESTRUCTIVE OPERATION - This will modify site settings")
-        print("=" * 60)
-        logging.info("Starting site analytics configuration scan...")
-
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            print("! No organization selected. Exiting.")
-            return
-
-        # Collect current settings and identify deviations
-        deviations = SiteAnalyticsConfigurator._scan_for_deviations(current_org_id)
-
-        if not deviations:
-            print("\n[OK] All sites are configured with standard analytics settings.")
-            return
-
-        # Display deviations summary
-        SiteAnalyticsConfigurator._display_deviation_summary(deviations)
-
-        # Export preview report
-        SiteAnalyticsConfigurator._export_deviation_report(deviations)
-
-        # Confirm before applying changes
-        print("\n" + "=" * 60)
-        print(f"! {len(deviations)} sites will be updated to standard configuration")
-        print("=" * 60)
-
-        try:
-            confirmation = InputUtils.safe_input(
-                "Type 'CONFIGURE' to apply standard settings to all deviating sites: ", context="site_analytics_config"
-            )
-        except SystemExit:
-            logging.info("Site analytics configuration cancelled - session disconnected")
-            return
-
-        if confirmation != "CONFIGURE":
-            print("! Operation cancelled - confirmation not provided")
-            logging.warning("Site analytics configuration cancelled by user")
-            return
-
-        # Apply standard configuration
-        results = SiteAnalyticsConfigurator._apply_standard_configuration(deviations)
-
-        # Export results
-        SiteAnalyticsConfigurator._export_results(results)
-
-    @staticmethod
-    def _scan_for_deviations(org_id: str) -> list:  # type: ignore[type-arg]
-        """
-        Scan all sites and identify those deviating from standard configuration.
-
-        Returns:
-            List of deviation records with site info and specific deviations
-        """
-        logging.info("Fetching all sites for analytics configuration scan...")
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-
-        if not sites:
-            logging.warning("No sites found in organization.")
-            return []
-
-        print(f"! Scanning {len(sites)} sites for configuration deviations...")
-
-        deviations = []
-
-        for site in tqdm(sites, desc="Scanning sites", unit="site"):  # type: ignore[no-untyped-call]
-            site_id = site.get("id")
-            site_name = site.get("name", "Unnamed Site")
-
-            if not site_id or not isinstance(site_id, str):
-                logging.warning(f"Invalid site_id for {site_name}")
-                continue
-
-            if ConfigUtils.check_stop_signal():
-                break
-
-            try:
-                response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)
-
-                if response.status_code != 200:
-                    logging.warning(f"Failed to fetch settings for {site_name}: HTTP {response.status_code}")
-                    continue
-
-                settings = response.data if isinstance(response.data, dict) else {}
-
-                # Check each configuration area for deviations
-                site_deviations = SiteAnalyticsConfigurator._check_deviations(settings, site_id, site_name)
-
-                if site_deviations["has_deviations"]:
-                    deviations.append(site_deviations)
-
-            except Exception as error:
-                logging.warning(f"Error scanning {site_name}: {error}")
-
-        print(f"! Found {len(deviations)} sites with configuration deviations")
-        return deviations
-
-    @staticmethod
-    def _check_rtsa_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check RTSA settings for deviations."""
-        current_rtsa = settings.get("rtsa", {})
-        rtsa_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_rtsa, SiteAnalyticsConfigurator.STANDARD_RTSA, "rtsa"
-        )
-        if rtsa_deviations:
-            deviation_record["rtsa_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["rtsa"] = current_rtsa
-            deviation_record["deviation_details"].extend(rtsa_deviations)
-
-    @staticmethod
-    def _check_rogue_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check Rogue settings for deviations."""
-        current_rogue = settings.get("rogue", {})
-        rogue_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_rogue, SiteAnalyticsConfigurator.STANDARD_ROGUE, "rogue"
-        )
-        if rogue_deviations:
-            deviation_record["rogue_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["rogue"] = current_rogue
-            deviation_record["deviation_details"].extend(rogue_deviations)
-
-    @staticmethod
-    def _check_engagement_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check Engagement settings for deviations."""
-        current_engagement = settings.get("engagement", {})
-        engagement_deviations = SiteAnalyticsConfigurator._compare_engagement(current_engagement)
-        if engagement_deviations:
-            deviation_record["engagement_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["engagement"] = current_engagement
-            deviation_record["deviation_details"].extend(engagement_deviations)
-
-    @staticmethod
-    def _check_analytic_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check Analytic settings for deviations."""
-        current_analytic = settings.get("analytic", {})
-        analytic_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_analytic, SiteAnalyticsConfigurator.STANDARD_ANALYTIC, "analytic"
-        )
-        if analytic_deviations:
-            deviation_record["analytic_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["analytic"] = current_analytic
-            deviation_record["deviation_details"].extend(analytic_deviations)
-
-    @staticmethod
-    def _check_occupancy_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check Occupancy settings for deviations."""
-        current_occupancy = settings.get("occupancy", {})
-        occupancy_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_occupancy, SiteAnalyticsConfigurator.STANDARD_OCCUPANCY, "occupancy"
-        )
-        if occupancy_deviations:
-            deviation_record["occupancy_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["occupancy"] = current_occupancy
-            deviation_record["deviation_details"].extend(occupancy_deviations)
-
-    @staticmethod
-    def _check_wifi_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check WiFi settings for deviations."""
-        current_wifi = settings.get("wifi", {})
-        wifi_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_wifi, SiteAnalyticsConfigurator.STANDARD_WIFI, "wifi"
-        )
-        if wifi_deviations:
-            deviation_record["wifi_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["wifi"] = current_wifi
-            deviation_record["deviation_details"].extend(wifi_deviations)
-
-    @staticmethod
-    def _check_deviations(settings: dict, site_id: str, site_name: str) -> dict:  # type: ignore[type-arg]
-        """Check a single site's settings for deviations from standard."""
-        deviation_record = {
-            "site_id": site_id,
-            "site_name": site_name,
-            "has_deviations": False,
-            "rtsa_deviation": False,
-            "rogue_deviation": False,
-            "engagement_deviation": False,
-            "analytic_deviation": False,
-            "occupancy_deviation": False,
-            "wifi_deviation": False,
-            "current_settings": {},
-            "deviation_details": [],
-        }
-
-        SiteAnalyticsConfigurator._check_rtsa_deviations(deviation_record, settings)
-        SiteAnalyticsConfigurator._check_rogue_deviations(deviation_record, settings)
-        SiteAnalyticsConfigurator._check_engagement_deviations(deviation_record, settings)
-        SiteAnalyticsConfigurator._check_analytic_deviations(deviation_record, settings)
-        SiteAnalyticsConfigurator._check_occupancy_deviations(deviation_record, settings)
-        SiteAnalyticsConfigurator._check_wifi_deviations(deviation_record, settings)
-
-        return deviation_record
-
-    @staticmethod
-    def _compare_settings(current: dict, standard: dict, section: str) -> list:  # type: ignore[type-arg]
-        """Compare current settings with standard and return list of deviations."""
-        deviations = []
-
-        for key, expected_value in standard.items():
-            current_value = current.get(key)
-
-            # Handle None/missing values
-            if current_value is None:
-                deviations.append({"section": section, "key": key, "current": "NOT SET", "expected": expected_value})
-            elif current_value != expected_value:
-                deviations.append(
-                    {"section": section, "key": key, "current": current_value, "expected": expected_value}
-                )
-
-        return deviations
-
-    @staticmethod
-    def _compare_engagement(current: dict) -> list:  # type: ignore[type-arg]
-        """Compare engagement settings including nested dwell_tags."""
-        deviations = []
-        standard = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT
-
-        # Check dwell_tags
-        current_dwell_tags = current.get("dwell_tags", {})
-        for tag_name, expected_range in standard["dwell_tags"].items():
-            current_range = current_dwell_tags.get(tag_name)
-            if current_range is None:
-                deviations.append(
-                    {
-                        "section": "engagement.dwell_tags",
-                        "key": tag_name,
-                        "current": "NOT SET",
-                        "expected": expected_range,
-                    }
-                )
-            elif current_range != expected_range:
-                deviations.append(
-                    {
-                        "section": "engagement.dwell_tags",
-                        "key": tag_name,
-                        "current": current_range,
-                        "expected": expected_range,
-                    }
-                )
-
-        # Check dwell_tag_names (should all be empty strings)
-        current_dwell_names = current.get("dwell_tag_names", {})
-        for tag_name, expected_name in standard["dwell_tag_names"].items():
-            current_name = current_dwell_names.get(tag_name)
-            if current_name is not None and current_name != expected_name:
-                deviations.append(
-                    {
-                        "section": "engagement.dwell_tag_names",
-                        "key": tag_name,
-                        "current": current_name,
-                        "expected": expected_name,
-                    }
-                )
-
-        # Check hours (should all be empty strings - no custom operating hours)
-        current_hours = current.get("hours", {})
-        for day_name, expected_hours in standard["hours"].items():
-            current_day_hours = current_hours.get(day_name)
-            # Deviation if hours are set (non-empty) when they should be empty
-            if current_day_hours is not None and current_day_hours != expected_hours:
-                deviations.append(
-                    {
-                        "section": "engagement.hours",
-                        "key": day_name,
-                        "current": current_day_hours,
-                        "expected": expected_hours if expected_hours else "(empty)",
-                    }
-                )
-
-        return deviations
-
-    @staticmethod
-    @staticmethod
-    def _get_deviation_types(site: dict) -> list:  # type: ignore[type-arg]
-        """Get list of deviation type names for a site."""
-        deviation_types = []
-        if site["rtsa_deviation"]:
-            deviation_types.append("RTSA")
-        if site["rogue_deviation"]:
-            deviation_types.append("Rogue")
-        if site["engagement_deviation"]:
-            deviation_types.append("Engagement")
-        if site["analytic_deviation"]:
-            deviation_types.append("Analytic")
-        if site["occupancy_deviation"]:
-            deviation_types.append("Occupancy")
-        if site["wifi_deviation"]:
-            deviation_types.append("WiFi")
-        return deviation_types
-
-    @staticmethod
-    def _print_standard_config() -> None:
-        """Print the standard configuration to be applied."""
-        print("\n[STANDARD CONFIGURATION TO BE APPLIED]")
-        print(
-            f"  RTSA: enabled={SiteAnalyticsConfigurator.STANDARD_RTSA['enabled']}, track_asset={SiteAnalyticsConfigurator.STANDARD_RTSA['track_asset']}, app_waking={SiteAnalyticsConfigurator.STANDARD_RTSA['app_waking']}"  # noqa: E501
-        )
-        print(
-            f"  Rogue: enabled={SiteAnalyticsConfigurator.STANDARD_ROGUE['enabled']}, min_rssi={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_rssi']}, min_duration={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_duration']}"  # noqa: E501
-        )
-        print("  Engagement dwell_tags: passerby=1-300, bounce=301-14400, engaged=14401-36000, stationed=36001-86400")
-        print(f"  Analytic: enabled={SiteAnalyticsConfigurator.STANDARD_ANALYTIC['enabled']}")
-        print(
-            f"  Occupancy: min_duration={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['min_duration']}, clients_enabled={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['clients_enabled']}"  # noqa: E501
-        )
-        print(
-            f"  WiFi: enabled={SiteAnalyticsConfigurator.STANDARD_WIFI['enabled']}, locate_connected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_connected']}, locate_unconnected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_unconnected']}"  # noqa: E501
-        )
-
-    @staticmethod
-    def _display_deviation_summary(deviations: list):  # type: ignore[no-untyped-def, type-arg]
-        """Display summary of deviations found."""
-        print("\n" + "=" * 60)
-        print("SITE ANALYTICS CONFIGURATION DEVIATIONS")
-        print("=" * 60)
-
-        rtsa_count = sum(1 for site in deviations if site["rtsa_deviation"])
-        rogue_count = sum(1 for site in deviations if site["rogue_deviation"])
-        engagement_count = sum(1 for site in deviations if site["engagement_deviation"])
-        analytic_count = sum(1 for site in deviations if site["analytic_deviation"])
-        occupancy_count = sum(1 for site in deviations if site["occupancy_deviation"])
-        wifi_count = sum(1 for site in deviations if site["wifi_deviation"])
-
-        print("\n[DEVIATION SUMMARY]")
-        print(f"  Total sites with deviations: {len(deviations)}")
-        print(f"  - RTSA: {rtsa_count}  - Rogue: {rogue_count}  - Engagement: {engagement_count}")
-        print(f"  - Analytic: {analytic_count}  - Occupancy: {occupancy_count}  - WiFi: {wifi_count}")
-
-        print("\n[SITES WITH DEVIATIONS] (showing first 10)")
-        for site in deviations[:10]:
-            deviation_types = SiteAnalyticsConfigurator._get_deviation_types(site)
-            print(f"  - {site['site_name']}: {', '.join(deviation_types)}")
-        if len(deviations) > 10:
-            print(f"  ... and {len(deviations) - 10} more sites")
-
-        SiteAnalyticsConfigurator._print_standard_config()
-
-    @staticmethod
-    def _export_deviation_report(deviations: list):  # type: ignore[no-untyped-def, type-arg]
-        """Export deviation report before applying changes."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        rows = []
-        for site in deviations:
-            rows.append(
-                {
-                    "site_id": site["site_id"],
-                    "site_name": site["site_name"],
-                    "rtsa_deviation": "Yes" if site["rtsa_deviation"] else "No",
-                    "rogue_deviation": "Yes" if site["rogue_deviation"] else "No",
-                    "engagement_deviation": "Yes" if site["engagement_deviation"] else "No",
-                    "analytic_deviation": "Yes" if site["analytic_deviation"] else "No",
-                    "occupancy_deviation": "Yes" if site["occupancy_deviation"] else "No",
-                    "wifi_deviation": "Yes" if site["wifi_deviation"] else "No",
-                    "deviation_count": len(site["deviation_details"]),
-                    "deviation_details": "; ".join(
-                        [
-                            f"{detail['section']}.{detail['key']}: {detail['current']} -> {detail['expected']}"
-                            for detail in site["deviation_details"][:5]
-                        ]
-                    ),
-                }
-            )
-
-        filename = f"SiteAnalytics_Deviations_PREVIEW_{timestamp}.csv"
-        DataExporter.save_data_to_output(rows, filename, api_function_name="site_analytics_deviations")  # type: ignore[no-untyped-call]
-        print(f"\n! Preview report exported to {filename}")
-
-    @staticmethod
-    @staticmethod
-    def _apply_standard_sections(site: dict, current_settings: dict, result: dict) -> None:  # type: ignore[type-arg]
-        """Apply standard configuration for each deviating section."""
-        if site["rtsa_deviation"]:
-            current_settings["rtsa"] = SiteAnalyticsConfigurator.STANDARD_RTSA.copy()
-            result["sections_updated"].append("rtsa")
-        if site["rogue_deviation"]:
-            current_settings["rogue"] = SiteAnalyticsConfigurator.STANDARD_ROGUE.copy()
-            result["sections_updated"].append("rogue")
-        if site["engagement_deviation"]:
-            if "engagement" not in current_settings:
-                current_settings["engagement"] = {}
-            current_settings["engagement"]["dwell_tags"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT[
-                "dwell_tags"
-            ].copy()
-            current_settings["engagement"]["dwell_tag_names"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT[
-                "dwell_tag_names"
-            ].copy()
-            current_settings["engagement"]["hours"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["hours"].copy()
-            result["sections_updated"].append("engagement")
-        if site["analytic_deviation"]:
-            current_settings["analytic"] = SiteAnalyticsConfigurator.STANDARD_ANALYTIC.copy()
-            result["sections_updated"].append("analytic")
-        if site["occupancy_deviation"]:
-            current_settings["occupancy"] = SiteAnalyticsConfigurator.STANDARD_OCCUPANCY.copy()
-            result["sections_updated"].append("occupancy")
-        if site["wifi_deviation"]:
-            current_settings["wifi"] = SiteAnalyticsConfigurator.STANDARD_WIFI.copy()
-            result["sections_updated"].append("wifi")
-
-    @staticmethod
-    def _apply_site_config(site: dict) -> dict:  # type: ignore[type-arg]
-        """Apply standard configuration to a single site."""
-        site_id = site["site_id"]
-        site_name = site["site_name"]
-        result = {
-            "site_id": site_id,
-            "site_name": site_name,
-            "status": "PENDING",
-            "sections_updated": [],
-            "error": None,
-        }
-
-        try:
-            response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)
-            if response.status_code != 200:
-                result["status"] = "FAILED"
-                result["error"] = f"Failed to fetch current settings: HTTP {response.status_code}"
-                return result
-
-            current_settings = response.data if isinstance(response.data, dict) else {}
-            SiteAnalyticsConfigurator._apply_standard_sections(site, current_settings, result)
-
-            update_response = mistapi.api.v1.sites.setting.updateSiteSettings(
-                apisession, site_id, body=current_settings
-            )
-            if update_response.status_code == 200:
-                result["status"] = "SUCCESS"
-                logging.info(f"Updated {site_name}: {', '.join(result['sections_updated'])}")
-            else:
-                result["status"] = "FAILED"
-                result["error"] = f"API returned {update_response.status_code}"
-                logging.error(f"Failed to update {site_name}: HTTP {update_response.status_code}")
-        except Exception as error:
-            result["status"] = "ERROR"
-            result["error"] = str(error)
-            logging.error(f"Error updating {site_name}: {error}")
-
-        return result
-
-    @staticmethod
-    def _apply_standard_configuration(deviations: list) -> list:  # type: ignore[type-arg]
-        """Apply standard configuration to all deviating sites."""
-        print(f"\nApplying standard configuration to {len(deviations)} sites...")
-
-        results = []
-        for site in tqdm(deviations, desc="Configuring sites", unit="site"):  # type: ignore[no-untyped-call]
-            if ConfigUtils.check_stop_signal():
-                break
-            result = SiteAnalyticsConfigurator._apply_site_config(site)
-            results.append(result)
-
-        success_count = sum(1 for r in results if r["status"] == "SUCCESS")
-        failure_count = len(results) - success_count
-        print("\n[CONFIGURATION COMPLETE]")
-        print(f"  SUCCESS: {success_count} sites")
-        print(f"  FAILED: {failure_count} sites")
-
-        return results
-
-    @staticmethod
-    def _export_results(results: list):  # type: ignore[no-untyped-def, type-arg]
-        """Export configuration results."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        rows = []
-        for result in results:
-            rows.append(
-                {
-                    "site_id": result["site_id"],
-                    "site_name": result["site_name"],
-                    "status": result["status"],
-                    "sections_updated": ", ".join(result["sections_updated"]),
-                    "error": result["error"] or "",
-                }
-            )
-
-        filename = f"SiteAnalytics_Configuration_Results_{timestamp}.csv"
-        DataExporter.save_data_to_output(rows, filename, api_function_name="site_analytics_results")  # type: ignore[no-untyped-call]
-        print(f"! Results exported to {filename}")
-
-        logging.info(
-            f"Site analytics configuration complete. {len([r for r in results if r['status'] == 'SUCCESS'])} sites updated."  # noqa: E501
-        )
-
-
-class SiteInventoryHealthAnalyzer:
-    """
-    Analyzes site inventory health to identify gaps and offline devices.
-
-    Generates two reports for sites that have APs in inventory:
-    1. Sites Missing Infrastructure - Sites with APs but no switch or gateway
-    2. Sites With Offline Infrastructure - Sites with APs where switch/gateway is offline
-
-    SECURITY: Read-only analysis, no configuration changes
-
-    Usage:
-        SiteInventoryHealthAnalyzer.analyze()
-    """
-
-    @staticmethod
-    def analyze():  # type: ignore[no-untyped-def]
-        """
-        Main entry point for site inventory health analysis.
-
-        Produces two CSV reports:
-        - SitesMissingInfrastructure_[timestamp].csv
-        - SitesWithOfflineInfrastructure_[timestamp].csv
-        """
-        print("Site Inventory Health Analyzer:")
-        print("=" * 60)
-        logging.info("Starting site inventory health analysis...")
-
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            print("! No organization selected. Exiting.")
-            return
-
-        # Fetch all required data
-        sites_data = SiteInventoryHealthAnalyzer._fetch_sites(current_org_id)
-        devices_data = SiteInventoryHealthAnalyzer._fetch_devices(current_org_id)
-
-        if not sites_data or not devices_data:
-            print("! Failed to fetch required data. Please verify API access.")
-            return
-
-        # Build lookup structures
-        site_lookup = {site.get("id"): site.get("name", "Unnamed Site") for site in sites_data}
-
-        # Analyze inventory by site (uses connected field from inventory)
-        site_inventory = SiteInventoryHealthAnalyzer._group_devices_by_site(devices_data)
-
-        # Generate reports
-        missing_report = SiteInventoryHealthAnalyzer._find_sites_missing_infrastructure(site_inventory, site_lookup)
-        offline_report = SiteInventoryHealthAnalyzer._find_sites_with_offline_infrastructure(
-            site_inventory, site_lookup
-        )
-
-        # Display and export results
-        SiteInventoryHealthAnalyzer._display_results(missing_report, offline_report)
-        SiteInventoryHealthAnalyzer._export_results(missing_report, offline_report)
-
-        logging.info("Site inventory health analysis complete.")
-
-    @staticmethod
-    def _fetch_sites(org_id: str) -> list:  # type: ignore[type-arg]
-        """Fetch all sites in the organization."""
-        print("! Fetching sites...")
-        logging.info("Fetching all organization sites...")
-
-        try:
-            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-            print(f"  Found {len(sites)} sites")
-            return sites
-        except Exception as error:
-            logging.error(f"Failed to fetch sites: {error}")
-            return []
-
-    @staticmethod
-    def _fetch_devices(org_id: str) -> list:  # type: ignore[type-arg]
-        """Fetch all devices (inventory) in the organization."""
-        print("! Fetching device inventory...")
-        logging.info("Fetching all organization devices from inventory...")
-
-        try:
-            response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
-            devices = mistapi.get_all(response=response, mist_session=apisession) or []
-
-            ap_count = sum(1 for d in devices if d.get("type") == "ap")
-            switch_count = sum(1 for d in devices if d.get("type") == "switch")
-            gateway_count = sum(1 for d in devices if d.get("type") == "gateway")
-
-            # Count connected devices
-            connected_count = sum(1 for d in devices if d.get("connected") is True)
-
-            print(
-                f"  Found {len(devices)} devices: {ap_count} APs, {switch_count} switches, {gateway_count} gateways ({connected_count} connected)"  # noqa: E501
-            )
-            logging.info(f"Fetched {len(devices)} devices from organization inventory")
-            return devices
-        except Exception as error:
-            logging.error(f"Failed to fetch devices: {error}")
-            return []
-
-    @staticmethod
-    def _group_devices_by_site(devices: list) -> dict:  # type: ignore[type-arg]
-        """
-        Group devices by site_id and categorize by type.
-        Uses 'connected' field from inventory for status.
-
-        Returns:
-            Dictionary mapping site_id to device categorization:
-            {
-                site_id: {
-                    "aps": [{"name": str, "status": str, ...}, ...],
-                    "switches": [...],
-                    "gateways": [...]
-                }
-            }
-        """
-        site_inventory: dict[str, dict[str, Any]] = {}
-
-        for device in devices:
-            site_id = device.get("site_id", "")
-            if not site_id:
-                continue
-
-            if site_id not in site_inventory:
-                site_inventory[site_id] = {"aps": [], "switches": [], "gateways": []}
-
-            device_type = device.get("type", "")
-            device_id = device.get("id", "")
-            device_mac = device.get("mac", "")
-            device_name = device.get("name", device_mac or device_id or "Unknown")
-            device_model = device.get("model", "Unknown")
-            device_serial = device.get("serial", "Unknown")
-
-            # Get status directly from inventory 'connected' field
-            connected = device.get("connected")
-            if connected is True:
-                status = "connected"
-            elif connected is False:
-                status = "disconnected"
-            else:
-                status = "unknown"
-
-            device_info = {
-                "id": device_id,
-                "mac": device_mac,
-                "name": device_name,
-                "model": device_model,
-                "serial": device_serial,
-                "status": status,
-            }
-
-            if device_type == "ap":
-                site_inventory[site_id]["aps"].append(device_info)
-            elif device_type == "switch":
-                site_inventory[site_id]["switches"].append(device_info)
-            elif device_type == "gateway":
-                site_inventory[site_id]["gateways"].append(device_info)
-
-        return site_inventory
-
-    @staticmethod
-    def _find_sites_missing_infrastructure(site_inventory: dict, site_lookup: dict) -> list:  # type: ignore[type-arg]
-        """
-        Find sites that have APs but are missing switches or gateways.
-
-        Returns:
-            List of dictionaries with site details and missing infrastructure info
-        """
-        missing_sites = []
-
-        for site_id, inventory in site_inventory.items():
-            ap_count = len(inventory["aps"])
-            switch_count = len(inventory["switches"])
-            gateway_count = len(inventory["gateways"])
-
-            # Only consider sites with APs
-            if ap_count == 0:
-                continue
-
-            # Check if missing switch OR gateway
-            missing_switch = switch_count == 0
-            missing_gateway = gateway_count == 0
-
-            if missing_switch or missing_gateway:
-                site_name = site_lookup.get(site_id, "Unknown Site")
-                missing_types = []
-                if missing_switch:
-                    missing_types.append("switch")
-                if missing_gateway:
-                    missing_types.append("gateway")
-
-                missing_sites.append(
-                    {
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "ap_count": ap_count,
-                        "switch_count": switch_count,
-                        "gateway_count": gateway_count,
-                        "missing_types": ", ".join(missing_types),
-                        "ap_names": ", ".join([ap["name"] for ap in inventory["aps"][:5]])
-                        + ("..." if ap_count > 5 else ""),
-                    }
-                )
-
-        return sorted(missing_sites, key=lambda x: x["site_name"])
-
-    @staticmethod
-    def _find_sites_with_offline_infrastructure(site_inventory: dict, site_lookup: dict) -> list:  # type: ignore[type-arg]
-        """
-        Find sites with APs where switch or gateway is offline.
-
-        Returns:
-            List of dictionaries with site details and offline device info
-        """
-        offline_sites = []
-
-        for site_id, inventory in site_inventory.items():
-            ap_count = len(inventory["aps"])
-
-            # Only consider sites with APs
-            if ap_count == 0:
-                continue
-
-            # Check for offline switches or gateways
-            offline_switches = [s for s in inventory["switches"] if s["status"] == "disconnected"]
-            offline_gateways = [g for g in inventory["gateways"] if g["status"] == "disconnected"]
-
-            if offline_switches or offline_gateways:
-                site_name = site_lookup.get(site_id, "Unknown Site")
-
-                offline_device_details = []
-                for switch in offline_switches:
-                    offline_device_details.append(f"Switch: {switch['name']} ({switch['model']})")
-                for gateway in offline_gateways:
-                    offline_device_details.append(f"Gateway: {gateway['name']} ({gateway['model']})")
-
-                offline_sites.append(
-                    {
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "ap_count": ap_count,
-                        "total_switches": len(inventory["switches"]),
-                        "offline_switches": len(offline_switches),
-                        "total_gateways": len(inventory["gateways"]),
-                        "offline_gateways": len(offline_gateways),
-                        "offline_devices": "; ".join(offline_device_details),
-                        "offline_switch_names": ", ".join([s["name"] for s in offline_switches]),
-                        "offline_gateway_names": ", ".join([g["name"] for g in offline_gateways]),
-                    }
-                )
-
-        return sorted(offline_sites, key=lambda x: x["site_name"])
-
-    @staticmethod
-    def _display_results(missing_report: list, offline_report: list):  # type: ignore[no-untyped-def, type-arg]
-        """Display analysis results to console."""
-        print("\n" + "=" * 60)
-        print("ANALYSIS RESULTS")
-        print("=" * 60)
-
-        # Missing infrastructure summary
-        print("\n[SITES MISSING INFRASTRUCTURE]")
-        print(f"  Sites with APs but missing switch/gateway: {len(missing_report)}")
-        if missing_report:
-            missing_switches = sum(1 for r in missing_report if "switch" in r["missing_types"])
-            missing_gateways = sum(1 for r in missing_report if "gateway" in r["missing_types"])
-            print(f"    - Missing switches: {missing_switches}")
-            print(f"    - Missing gateways: {missing_gateways}")
-
-            # Show first few examples
-            print("\n  Sample sites (first 5):")
-            for site in missing_report[:5]:
-                print(f"    - {site['site_name']}: {site['ap_count']} APs, missing {site['missing_types']}")
-
-        # Offline infrastructure summary
-        print("\n[SITES WITH OFFLINE INFRASTRUCTURE]")
-        print(f"  Sites with APs and offline switch/gateway: {len(offline_report)}")
-        if offline_report:
-            total_offline_switches = sum(r["offline_switches"] for r in offline_report)
-            total_offline_gateways = sum(r["offline_gateways"] for r in offline_report)
-            print(f"    - Total offline switches: {total_offline_switches}")
-            print(f"    - Total offline gateways: {total_offline_gateways}")
-
-            # Show first few examples
-            print("\n  Sample sites (first 5):")
-            for site in offline_report[:5]:
-                print(
-                    f"    - {site['site_name']}: {site['ap_count']} APs, offline: {site['offline_devices'][:80]}{'...' if len(site['offline_devices']) > 80 else ''}"  # noqa: E501
-                )
-
-        print("\n" + "=" * 60)
-
-    @staticmethod
-    def _export_results(missing_report: list, offline_report: list):  # type: ignore[no-untyped-def, type-arg]
-        """Export analysis results to CSV files."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # Export sites missing infrastructure
-        if missing_report:
-            missing_filename = f"SitesMissingInfrastructure_{timestamp}.csv"
-            DataExporter.save_data_to_output(  # type: ignore[no-untyped-call]
-                missing_report, missing_filename, api_function_name="sitesMissingInfrastructure"
-            )
-            print(f"! Missing infrastructure report exported to {missing_filename}")
-            logging.info(f"Exported {len(missing_report)} sites to {missing_filename}")
-        else:
-            print("! No sites found with missing infrastructure (all sites with APs have switches and gateways)")
-
-        # Export sites with offline infrastructure
-        if offline_report:
-            offline_filename = f"SitesWithOfflineInfrastructure_{timestamp}.csv"
-            DataExporter.save_data_to_output(  # type: ignore[no-untyped-call]
-                offline_report, offline_filename, api_function_name="sitesWithOfflineInfrastructure"
-            )
-            print(f"! Offline infrastructure report exported to {offline_filename}")
-            logging.info(f"Exported {len(offline_report)} sites to {offline_filename}")
-        else:
-            print("! No sites found with offline infrastructure (all switches and gateways are online)")
+# SiteAnalyticsConfigurator and SiteInventoryHealthAnalyzer were extracted to
+# src/analytics/site_analytics_configurator.py and
+# src/analytics/site_inventory_health_analyzer.py for phase-1 decomposition.
 
 
 def _ws_cmd_deps() -> WebSocketCmdDeps:
@@ -31492,14 +29911,33 @@ menu_actions = {
     # SITE ANALYTICS CONFIGURATION (DESTRUCTIVE)
     # ==============================
     "169": (
-        SiteAnalyticsConfigurator.execute,
+        lambda: ExtractedSiteAnalyticsConfigurator.execute(
+            SiteAnalyticsConfiguratorDeps(
+                apisession=apisession,
+                mistapi=mistapi,
+                get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
+                check_stop_fn=ConfigUtils.check_stop_signal,
+                safe_input_fn=InputUtils.safe_input,
+                all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
+                save_data_fn=DataExporter.save_data_to_output,
+                tqdm_fn=tqdm,
+            )
+        ),
         " DESTRUCTIVE: Site Analytics Configuration - Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites",  # noqa: E501
     ),
     # ==============================
     # SITE INVENTORY HEALTH ANALYSIS
     # ==============================
     "7": (
-        SiteInventoryHealthAnalyzer.analyze,
+        lambda: ExtractedSiteInventoryHealthAnalyzer.analyze(
+            SiteInventoryHealthAnalyzerDeps(
+                apisession=apisession,
+                mistapi=mistapi,
+                get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
+                all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
+                save_data_fn=DataExporter.save_data_to_output,
+            )
+        ),
         "Site Inventory Health Analysis - Find sites with APs missing switches/gateways, or with offline infrastructure",  # noqa: E501
     ),
     # ==============================
