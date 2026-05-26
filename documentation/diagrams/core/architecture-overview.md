@@ -23,7 +23,7 @@ flowchart TB
     ci_system(["CI/CD System<br/>GitHub Actions"])
 
     subgraph misthelper["MistHelper"]
-        mh["Python CLI tool<br/>187 operations"]
+        mh["Python CLI tool<br/>193 operations"]
     end
 
     mist_cloud["Juniper Mist Cloud<br/>REST API + WebSocket"]
@@ -98,7 +98,7 @@ flowchart LR
 
 | Subsystem | Primary Classes | Purpose |
 |-----------|----------------|---------|
-| Menu System | `OperationRegistry`, `MistHelperTUI` | 164-operation interactive/CLI menu |
+| Menu System | `OperationRegistry`, `MistHelperTUI` | 193-operation interactive/CLI menu |
 | API Layer | `APIFetchUtils`, `RateLimitingUtils` | Paginated API calls with adaptive rate limiting |
 | Data Exporters | `DataExporter`, `SQLiteDatabaseWriter`, `DatabaseRouter` | Multi-backend output (CSV/SQLite/ArangoDB/Redis) with business keys |
 | WebSocket | `WebSocketManager`, `WebSocketCommands` | Real-time device commands |
