@@ -1539,6 +1539,7 @@ class PacketCaptureManager:
         Returns:
             List of completed PCAP records with download URLs.
         """
+
         def list_fn() -> Any:
             return mistapi.api.v1.sites.pcaps.listSitePacketCaptures(
                 self.mist_session,
