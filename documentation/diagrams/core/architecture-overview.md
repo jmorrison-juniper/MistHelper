@@ -101,9 +101,9 @@ flowchart LR
 | Menu System | `OperationRegistry`, `MistHelperTUI` | 193-operation interactive/CLI menu |
 | API Layer | `APIFetchUtils`, `RateLimitingUtils` | Paginated API calls with adaptive rate limiting |
 | Data Exporters | `DataExporter`, `SQLiteDatabaseWriter`, `DatabaseRouter` | Multi-backend output (CSV/SQLite/ArangoDB/Redis) with business keys |
-| WebSocket | `WebSocketManager`, `WebSocketCommands` | Real-time device commands |
+| WebSocket | `WebSocketManager`, `WebSocketCommands`, `ServicePingManager` | Real-time device commands plus extracted service-ping orchestration |
 | SSH Runner | `EnhancedSSHRunner`, `SSHRunnerManager` | Paramiko-based device command execution |
-| Packet Capture | `PacketCaptureManager` | Site and org-level packet captures |
+| Packet Capture | `PacketCaptureManager`, `PacketCaptureDownloadManager` | Site/org packet captures with extracted poll/download handling |
 | Container | Non-root user, ForceCommand SSH | Isolated session management |
 | Web Portal | Gunicorn on port 8055 | Browser-based UI for operations |
 

@@ -7,6 +7,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Changed
+
+- Completed decomposition wave `193-main-decomposition-wave-2` through Phase 9 with hard-gate closure for extraction, parity, import graph, runtime coupling, and deployment verification.
+- Finalized packet capture ownership in `src/capture/packet_capture.py` and `src/capture/packet_capture_download.py` while preserving `MistHelper.py` orchestration compatibility.
+
+### Fixed
+
+- Restored packet capture legacy test compatibility by keeping wrapper hook behavior for `_poll_and_download_pcap`, `_poll_for_pcap_url`, and `_save_pcap_file` with module-level patch targets (`requests`, `time.sleep`).
+- Prevented CI `exit code 2` interruption by restoring graceful `KeyboardInterrupt`/exception handling in packet capture poll-download wrapper flow.
+
 ## [25.05.25.05.29] - Ticket Viewer & Detail Export
 
 ### Added

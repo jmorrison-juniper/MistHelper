@@ -71,7 +71,7 @@ Trigger evidence:
 
 ## Full Deployment Pipeline Attempt (T076B)
 
-Deployment gate was attempted end-to-end in this run.
+Deployment gate is now completed end-to-end.
 
 ### Commit + Push
 - Commit: `5c2ec2a`
@@ -80,27 +80,34 @@ Deployment gate was attempted end-to-end in this run.
 - Push: success
 
 ### CI Run Tracking
-- Push-triggered run did not appear immediately, so manual dispatch was executed.
-- Workflow dispatch created run:
+- Initial run on phase-9 extraction commit:
   - Run ID: `26478214620`
   - URL: `https://github.com/jmorrison-juniper/MistHelper/actions/runs/26478214620`
-  - Head SHA: `5c2ec2a9db971a0f436695c1f9c7f2de03a5cdd4`
-- Status at end of this implementation run: `in_progress`.
+  - Status: `cancelled` (superseded by follow-up runs)
+- First rerun on same SHA:
+  - Run ID: `26478483042`
+  - URL: `https://github.com/jmorrison-juniper/MistHelper/actions/runs/26478483042`
+  - Status: `failure` (test job)
+- Compatibility remediation and formatting were applied, then run on latest SHA (`d9045234a52d132f21c7bf86a6f6bd2c674f37ee`):
+  - Run ID: `26492376309`
+  - URL: `https://github.com/jmorrison-juniper/MistHelper/actions/runs/26492376309`
+  - Status: `completed`
+  - Conclusion: `success`
 
 ### Image Pull + Runtime Verify
 - `podman pull ghcr.io/jmorrison-juniper/misthelper:latest`: success
-- Pulled image config digest: `80967e8d89f9b00724b6ae437d735ef543a0548ef14c1b7e6a24b1a45ca49dab`
+- Latest pulled image config digest: `aa2f59f7ad31d099d3811609fe1da3e1cdcdbf245f489d1991da05f7dbaba41d`
 - Validation container launched:
-  - Name: `misthelper-phase9`
-  - Container ID: `95a8efb7d514ea08a6c5bdc034bcc613d63b30292198d46e1599ad8d69d15c63`
-  - Ports: `2217->2200`, `8067->8055`
+  - Name: `misthelper-phase9b`
+  - Container ID: `f2070c29d90eff5cdf911ed11bfab83de0dc3ed85693cf62f66057886e16a458`
+  - Ports: `2218->2200`, `8068->8055`
   - `podman ps` state: running
 
 ### T076B Status
-- **In progress / blocked on CI completion** at reporting time.
-- Blocker type: pending CI completion (not external outage and not query failure).
+- **Completed**.
+- No remaining deployment blocker.
 
 ## Phase 9 Signoff (T081)
 
-- Not signed off in this run because T076B is still pending CI completion.
-- All other implemented Phase 9 checks in scope are complete and passing.
+- Phase 9 is **signed off**.
+- T073 through T081 are complete with local validation, parity checks, import/runtime gates, and successful deployment pipeline evidence.

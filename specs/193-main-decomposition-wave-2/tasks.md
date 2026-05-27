@@ -188,12 +188,12 @@
 - [x] T075 [US1] Add or update tests in `tests/unit/capture/test_packet_capture_manager.py` and `tests/unit/capture/test_packet_capture_download.py`
 - [x] T076 [US1] Run mandatory automated validation for Phase 9 and record output in `specs/193-main-decomposition-wave-2/checklists/phase-9-gate.md`
 - [x] T076A [US1] Verify constitution compliance for Phase 9 changed code (inline comments + before/after action logging) and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-9-gate.md`
-- [ ] T076B [US1] Execute full deployment pipeline for Phase 9 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-9-gate.md`
+- [x] T076B [US1] Execute full deployment pipeline for Phase 9 changes and record run IDs/status in `specs/193-main-decomposition-wave-2/checklists/phase-9-gate.md`
 - [x] T077 [US2] Execute menu behavior parity checks for operations `134`, `135` and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-9-menu-parity.md`
 - [x] T078 [US2] Execute API + backend parity checks (CSV/SQLite/polyglot) for Phase 9 affected outputs and capture evidence in `specs/193-main-decomposition-wave-2/checklists/phase-9-output-parity.md`
 - [x] T079 [US1] Execute circular import checks for Phase 9 extracted modules using `tests/contract/test_import_graph.py` and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-9-gate.md`
 - [x] T080 [US1] Execute runtime coupling checks for Phase 9 using `tests/integration/test_runtime_coupling.py` with `phase_9` profile and record evidence in `specs/193-main-decomposition-wave-2/checklists/phase-9-gate.md`
-- [ ] T081 [US1] Verify hard gate pass and sign off Phase 9 in `specs/193-main-decomposition-wave-2/checklists/phase-9-gate.md` before starting final documentation sync
+- [x] T081 [US1] Verify hard gate pass and sign off Phase 9 in `specs/193-main-decomposition-wave-2/checklists/phase-9-gate.md` before starting final documentation sync
 
 ---
 
@@ -202,12 +202,12 @@
 **Goal**: Synchronize documentation and confirm completeness/accuracy.
 **Independent Test**: Required docs and wiki are updated, verified, and signed off with zero stale references.
 
-- [ ] T082 [US3] Update decomposition outcomes in `README.md` and verify all phase/module references are current
-- [ ] T083 [US3] Update release notes and decomposition traceability in `CHANGELOG.md`
-- [ ] T084 [US3] Update Mermaid/architecture documentation in `documentation/diagrams/core/architecture-overview.md`, `documentation/diagrams/infrastructure/container-architecture.md`, and `mist-ops-platform/docs/architecture.md`
-- [ ] T085 [US3] Synchronize GitHub wiki pages in `../MistHelper.wiki/` with repository documentation updates and record changed wiki page list in `specs/193-main-decomposition-wave-2/checklists/wiki-sync.md`
-- [ ] T086 [US3] Execute completeness + accuracy audit checklist in `specs/193-main-decomposition-wave-2/checklists/final-doc-audit.md` (README + CHANGELOG + Mermaid/architecture docs + wiki + link validation + stale-reference scan + module ownership note verification for all 9 phases)
-- [ ] T087 [US3] Record final signoff for wave completion in `specs/193-main-decomposition-wave-2/checklists/final-signoff.md`
+- [x] T082 [US3] Update decomposition outcomes in `README.md` and verify all phase/module references are current
+- [x] T083 [US3] Update release notes and decomposition traceability in `CHANGELOG.md`
+- [x] T084 [US3] Update Mermaid/architecture documentation in `documentation/diagrams/core/architecture-overview.md`, `documentation/diagrams/infrastructure/container-architecture.md`, and `mist-ops-platform/docs/architecture.md`
+- [x] T085 [US3] Synchronize GitHub wiki pages in `../MistHelper.wiki/` with repository documentation updates and record changed wiki page list in `specs/193-main-decomposition-wave-2/checklists/wiki-sync.md`
+- [x] T086 [US3] Execute completeness + accuracy audit checklist in `specs/193-main-decomposition-wave-2/checklists/final-doc-audit.md` (README + CHANGELOG + Mermaid/architecture docs + wiki + link validation + stale-reference scan + module ownership note verification for all 9 phases)
+- [x] T087 [US3] Record final signoff for wave completion in `specs/193-main-decomposition-wave-2/checklists/final-signoff.md`
 
 ---
 

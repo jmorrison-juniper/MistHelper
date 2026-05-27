@@ -121,6 +121,11 @@ flowchart LR
 
 Each SSH connection gets its own isolated session directory.
 
+Phase-9 decomposition note: packet capture runtime ownership is split between
+`src/capture/packet_capture.py` (orchestration) and
+`src/capture/packet_capture_download.py` (poll/download helpers), while
+container entrypoint behavior remains unchanged.
+
 | Component | Path | Purpose |
 |-----------|------|---------|
 | Session Directory | `/app/sessions/session_{id}/` | Per-connection isolation |

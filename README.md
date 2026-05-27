@@ -228,12 +228,25 @@ src/
 | `src/output/` | **Done** | Output writer |
 | `src/constants.py` | **Done** | Shared constants |
 | `src/wan_*.py` | **Done** | WAN hub group manager, VPN builder |
-| `src/api/orgs/` | Planned | Org-scoped data extraction operations |
-| `src/api/sites/` | Planned | Site-scoped data extraction operations |
-| `src/websockets/` | Planned | WebSocket manager extraction |
-| `src/device_utils/` | Planned | SSH runner, packet capture |
-| `src/auth/` | Planned | Authentication flows |
-| `src/ui/` | Planned | Web portal extraction |
+| `src/site/` | **Done (Wave 2)** | Site analytics, inventory health, and site config extraction modules |
+| `src/troubleshooting/` | **Done (Wave 2)** | Marvis troubleshooting helpers and presentation split from entrypoint |
+| `src/ssh/` | **Done (Wave 2)** | SSH runner manager split with orchestration retained in entrypoint |
+| `src/wan/` | **Done (Wave 2)** | WAN2 migration and WAN probe device-override extraction modules |
+| `src/gateway/` | **Done (Wave 2)** | Gateway export utility split including stats and override analyzers |
+| `src/websocket/` | **Done (Wave 2)** | Service ping manager + discovery extraction and command helpers |
+| `src/capture/` | **Done (Wave 2)** | Canonical packet capture manager + download/poll helper extraction |
+| `src/api/orgs/` | In Progress | Org-scoped data extraction operations (continuing incremental migration) |
+| `src/api/sites/` | In Progress | Site-scoped data extraction operations (continuing incremental migration) |
+| `src/auth/` | In Progress | Authentication/session flows |
+| `src/ui/` | In Progress | Web portal extraction |
+
+### Decomposition Wave 2 (Phases 1-9) Completion Summary
+
+The `193-main-decomposition-wave-2` effort is complete through Phase 9 and finalized with hard-gate evidence.
+
+- Completed extractions include: `SiteAnalyticsConfigurator`, `SiteInventoryHealthAnalyzer`, `TroubleshootUtils`, `SSHRunnerManager`, `WAN2MigrationManager`, `WANProbeDeviceOverrideManager`, `SiteConfigManager`, `OrgDeviceInventorySummary`, `GatewayExportUtils`, `ServicePingManager`, and `PacketCaptureManager` orchestration/download split.
+- Compatibility surface preserved: `MistHelper.py` remains the runtime entrypoint with delegated ownership in `src/`.
+- Hard-gate validations passed for menu/API/output parity, import graph, runtime coupling, and deployment pipeline.
 
 ### Guiding Principles
 

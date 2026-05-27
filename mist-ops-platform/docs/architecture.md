@@ -113,3 +113,10 @@ mist-ops-platform/
 - HMAC-SHA256 webhook signature validation
 - Maker-checker for golden image approvals (FR-033)
 - Destructive operations require explicit `confirm: true`
+
+## Integration Note (MistHelper Decomposition)
+
+- Documentation aligned with MistHelper decomposition wave `193-main-decomposition-wave-2`
+  through Phase 9, including extracted packet capture and service-ping modules.
+- No Mist Ops Platform runtime behavior changed by this documentation sync; this is
+  traceability alignment only.
