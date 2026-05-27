@@ -193,31 +193,40 @@ All export CSVs are now written inside `data/` (the code enforces a data directo
 
 MistHelper started as a single-file script (`MistHelper.py`) and is being incrementally decomposed into a modular `src/` package. The target structure mirrors both the **Mist Cloud API hierarchy** (from the OpenAPI spec) and **Thomas Munzer's mistapi library** (`tmunzer/mistapi_python`), so that MistHelper's internal organization matches the APIs it consumes.
 
-### Target `src/` Layout
+### Current `src/` Layout
 
 ```text
 src/
-├── api/                    # Mirrors mistapi.api.v1 -- operation modules
-│   ├── orgs/               # Org-scoped operations (80 resources in Mist API)
-│   │   ├── devices.py
-│   │   ├── clients.py
-│   │   ├── inventory.py
-│   │   └── ...
-│   ├── sites/              # Site-scoped operations (61 resources in Mist API)
-│   │   ├── devices.py
-│   │   ├── wlans.py
-│   │   ├── stats.py
-│   │   └── ...
-│   └── const/              # Constants and enums (27 resources)
-├── db/                     # Database backends (DONE: arango_writer, redis_writer, retention, router)
-├── output/                 # Output formatting (DONE: writer)
-├── websockets/             # Real-time WebSocket operations
-├── device_utils/           # SSH runner, device diagnostics
+├── analytics/              # Site inventory health analysis and zone configuration
+├── api/                    # API operation modules (orgs, sites, const)
+├── audit/                  # Audit log operations
 ├── auth/                   # Authentication and session management
+├── cache/                  # Caching utilities
+├── capture/                # Packet capture workflows and download management
+├── db/                     # Database backends (ArangoDB, Redis, retention, routing)
+├── device/                 # Device utility operations
+├── export/                 # Site data export and insights extraction
+├── firmware/               # Firmware management operations
+├── gateway/                # Gateway exports, stats, overrides, WAN migration
+├── input/                  # Input handling utilities
+├── inventory/              # Device inventory summary, MSP orchestration, CSV comparison
+├── maps/                   # Maps manager operations
+├── marvis/                 # Marvis AI integration
+├── network/                # Network configuration operations
+├── org_data_collector.py   # Org-level data collection
+├── output/                 # Output formatting (writer)
+├── reports/                # Report generation
+├── site/                   # Site configuration management (test sites, RF, profiles)
+├── ssh/                    # SSH runner and execution management
+├── ssid_consolidation/     # SSID consolidation operations
+├── troubleshooting/        # Marvis troubleshooting workflows
 ├── ui/                     # Web portal components
-├── constants.py            # DONE: Shared constants
-├── wan_hub_group_manager.py  # DONE: WAN hub/group operations
-└── wan_vpn_builder.py      # DONE: WAN VPN builder
+├── utils/                  # Shared utility functions
+├── wan_hub_group_manager.py  # WAN hub/group operations
+├── wan_vpn_builder.py      # WAN VPN builder
+├── websocket/              # WebSocket commands, diagnostics, service ping
+├── constants.py            # Shared constants
+└── __init__.py
 ```
 
 ### Decomposition Status
@@ -228,31 +237,42 @@ src/
 | `src/output/` | **Done** | Output writer |
 | `src/constants.py` | **Done** | Shared constants |
 | `src/wan_*.py` | **Done** | WAN hub group manager, VPN builder |
-| `src/site/` | **Done (Wave 2)** | Site analytics, inventory health, and site config extraction modules |
-| `src/troubleshooting/` | **Done (Wave 2)** | Marvis troubleshooting helpers and presentation split from entrypoint |
-| `src/ssh/` | **Done (Wave 2)** | SSH runner manager split with orchestration retained in entrypoint |
-| `src/wan/` | **Done (Wave 2)** | WAN2 migration and WAN probe device-override extraction modules |
-| `src/gateway/` | **Done (Wave 2)** | Gateway export utility split including stats and override analyzers |
-| `src/websocket/` | **Done (Wave 2)** | Service ping manager + discovery extraction and command helpers |
+| `src/analytics/` | **Done (Wave 2)** | Site inventory health analyzer, site analytics configurator, zone analyzer |
 | `src/capture/` | **Done (Wave 2)** | Canonical packet capture manager + download/poll helper extraction |
-| `src/api/orgs/` | In Progress | Org-scoped data extraction operations (continuing incremental migration) |
-| `src/api/sites/` | In Progress | Site-scoped data extraction operations (continuing incremental migration) |
+| `src/export/` | **Done (Wave 2)** | Site export utilities and site insights exporter |
+| `src/gateway/` | **Done (Wave 2)** | Gateway exports, stats exporter, override analyzer, WAN2 migration, probe overrides |
+| `src/inventory/` | **Done (Wave 2)** | Org device inventory summary, MSP orchestrator, CSV comparator |
+| `src/site/` | **Done (Wave 2)** | Site config manager (test sites, RF templates, device profiles) |
+| `src/ssh/` | **Done (Wave 2)** | SSH runner + SSH runner manager (orchestration retained in entrypoint) |
+| `src/troubleshooting/` | **Done (Wave 2)** | Marvis troubleshooting helpers split from entrypoint |
+| `src/websocket/` | **Done (Wave 2)** | WebSocket manager, commands, diagnostics, service ping manager + discovery |
+| `src/api/` | In Progress | API operation modules (continuing incremental migration) |
 | `src/auth/` | In Progress | Authentication/session flows |
 | `src/ui/` | In Progress | Web portal extraction |
 
-### Decomposition Wave 2 (Phases 1-9) Completion Summary
+### Wave 2 Module Ownership (Phases 1-9)
 
-The `193-main-decomposition-wave-2` effort is complete through Phase 9 and finalized with hard-gate evidence.
+All 9 phases completed with hard-gate evidence. Each phase passed: extraction, tests, quality gates, menu/API/output parity, import graph, runtime coupling, and sign-off.
 
-- Completed extractions include: `SiteAnalyticsConfigurator`, `SiteInventoryHealthAnalyzer`, `TroubleshootUtils`, `SSHRunnerManager`, `WAN2MigrationManager`, `WANProbeDeviceOverrideManager`, `SiteConfigManager`, `OrgDeviceInventorySummary`, `GatewayExportUtils`, `ServicePingManager`, and `PacketCaptureManager` orchestration/download split.
-- Compatibility surface preserved: `MistHelper.py` remains the runtime entrypoint with delegated ownership in `src/`.
-- Hard-gate validations passed for menu/API/output parity, import graph, runtime coupling, and deployment pipeline.
+| Phase | Package | Key Classes | Menu Operations |
+|-------|---------|-------------|-----------------|
+| 1 | `src/analytics/` | `SiteInventoryHealthAnalyzer`, `SiteAnalyticsConfigurator` | 7, 169 |
+| 2 | `src/troubleshooting/`, `src/ssh/` | `MarvisTroubleshootUtils`, `SSHRunnerManager` | 124-127, 139, 175-176 |
+| 3 | `src/gateway/` | `WAN2MigrationManager`, `WanProbeDeviceOverrideManager` | 149, 167 |
+| 4 | `src/site/` | `SiteConfigManager` | 171-174 |
+| 5 | `src/export/` | `SiteExportUtils`, `SiteInsightsExporter` | 60-96 |
+| 6 | `src/inventory/` | `OrgDeviceInventorySummaryCore`, `OrgDeviceInventoryMSPOrchestrator` | 8-9, 13-14 |
+| 7 | `src/gateway/` | `GatewayExportUtils`, `GatewayStatsExporter`, `GatewayOverrideAnalyzer` | 31-50, 99, 163 |
+| 8 | `src/websocket/` | `ServicePingManager`, `ServicePingDiscoveryMixin` | 120-121 |
+| 9 | `src/capture/` | `PacketCaptureManager`, `PacketCaptureDownloadManager` | 134-135 |
+
+Compatibility surface preserved: `MistHelper.py` remains the runtime entrypoint with delegated ownership in `src/`. Hard-gate validations passed for all phases including menu/API/output parity, import graph cycle detection, runtime coupling isolation, and deployment pipeline.
 
 ### Guiding Principles
 
 - **New features go in `src/`**, not `MistHelper.py`
-- **One module per API resource** (e.g., `src/api/orgs/devices.py` handles org device operations)
 - **MistHelper.py remains the entrypoint** but delegates to `src/` modules
+- **Feature-domain packages** -- modules are organized by functional domain (analytics, capture, gateway, etc.)
 - **Incremental migration** -- extract one class/feature at a time, keep tests green
 
 ---
