@@ -36,11 +36,14 @@ def test_download_pending_pcaps_delegates_to_download_manager(manager: PacketCap
     manager._download_manager.download_pending_pcaps.assert_called_once()
 
 
-def test_poll_and_download_delegates_to_download_manager(manager: PacketCaptureManager) -> None:
-    """Manager should delegate poll/download loop orchestration to helper."""
-    manager._download_manager = MagicMock()
-    manager._poll_and_download_pcap(lambda: MagicMock(), "cap-9", 60, "org_")
-    manager._download_manager.poll_and_download_pcap.assert_called_once()
+def test_poll_and_download_uses_local_poll_and_save_hooks(manager: PacketCaptureManager) -> None:
+    """Manager should preserve compatibility wrapper flow via local poll/save hooks."""
+    with patch.object(manager, "_poll_for_pcap_url", return_value="https://example/cap-9.pcap") as mock_poll:
+        with patch.object(manager, "_save_pcap_file") as mock_save:
+            manager._poll_and_download_pcap(lambda: MagicMock(), "cap-9", 60, "org_")
+
+    mock_poll.assert_called_once()
+    mock_save.assert_called_once_with("https://example/cap-9.pcap", "cap-9", "org_")
 
 
 def test_poll_for_url_delegates_to_download_manager(manager: PacketCaptureManager) -> None:
