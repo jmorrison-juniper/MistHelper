@@ -58,6 +58,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - N/A (API-only, no local persistence) (187-wan-vpn-builder)
 - Python 3.13+ + `requests` (present), `subprocess` (stdlib), (189-quality-gate-remediation)
 - N/A -- no data model or schema changes (189-quality-gate-remediation)
+- Python 3.13+ + mistapi 0.59+, pytest/pytest-cov, ruff, black, mypy, tqdm, PrettyTable (main)
+- CSV/SQLite/ArangoDB/Redis outputs via existing exporter flows, JSON report artifacts under `data/` (main)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -77,7 +79,7 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
-- 189-quality-gate-remediation: Added Python 3.13+ + `requests` (present), `subprocess` (stdlib),
+- main: Added Python 3.13+ + mistapi 0.59+, pytest/pytest-cov, ruff, black, mypy, tqdm, PrettyTable
 - 189-quality-gate-remediation: Added Python 3.13+ + `requests` (present), `subprocess` (stdlib),
 - 189-quality-gate-remediation: Added Python 3.13+ + `requests` (present), `subprocess` (stdlib),
 

@@ -72,12 +72,27 @@ try:
 except ImportError:
     DB_LAYER_AVAILABLE = False
 
+from src.analytics.site_analytics_configurator import (
+    SiteAnalyticsConfigurator as ExtractedSiteAnalyticsConfigurator,
+)
+from src.analytics.site_analytics_configurator import SiteAnalyticsConfiguratorDeps
+from src.analytics.site_inventory_health_analyzer import (
+    SiteInventoryHealthAnalyzer as ExtractedSiteInventoryHealthAnalyzer,
+)
+from src.analytics.site_inventory_health_analyzer import SiteInventoryHealthAnalyzerDeps
 from src.audit.analyzer import AuditLogAnalyzer  # Audit log analysis engine
 from src.audit.filter import AuditLogFilter  # Audit log filtering to remove noise
 from src.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering
 from src.audit.time_parser import TimeRangeParser  # Audit log time range parsing (7d, 4w, etc.)
+from src.capture.packet_capture import PacketCaptureManager as ExtractedPacketCaptureManager
+from src.export.site_export_utils import configure_site_export_utils_dependencies
+from src.gateway.gateway_export_utils import configure_gateway_export_utils_dependencies
 from src.org_data_collector import OrgDataCollector
 from src.ssh.ssh_runner import EnhancedSSHRunner
+from src.ssh.ssh_runner_manager import SSHRunnerManager as ExtractedSSHRunnerManager
+from src.ssh.ssh_runner_manager import SSHRunnerManagerDeps
+from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootDeps
+from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils
 from src.wan_hub_group_manager import WanHubGroupNumberManager
 from src.wan_vpn_builder import WanVpnBuilder
 from src.websocket.commands import WebSocketCommands
@@ -6252,7 +6267,7 @@ class DeviceDataFetcher:
         DisplayUtils.dict_list_as_pretty_table(processed)
 
 
-class PacketCaptureManager:
+class _LegacyPacketCaptureManager:
     """
     Comprehensive packet capture management for Juniper Mist environments.
 
@@ -8885,6 +8900,11 @@ class PacketCaptureManager:
 
         except Exception as error:
             logging.error(f"Failed to export capture info: {error}", exc_info=True)
+
+
+# Phase 9 canonical ownership: runtime PacketCaptureManager now resolves to src.capture.packet_capture.
+# Legacy class above is intentionally retained temporarily for rollback safety within this wave branch.
+PacketCaptureManager = ExtractedPacketCaptureManager
 
 
 class SFPTransceiverDataProcessor:
@@ -14005,873 +14025,141 @@ class OfflineDeviceReporter:
 
 
 class OrgDeviceInventorySummary:
-    """
-    Org Device Inventory Summary (Menu 187)
+    """Delegation façade for extracted Org Device Inventory Summary modules."""
 
-    Fetches and displays two org-wide summary tables:
-      1. Device model counts - how many of each model are deployed
-      2. Firmware version distribution - how many devices run each code version, by device type
-
-    Uses countOrgDevices API with distinct=model and distinct=version per device type.
-    Exports both tables to separate CSV/SQLite outputs.
-    """
-
-    _DEVICE_TYPES: tuple[str, ...] = ("ap", "switch", "gateway")  # Device types to query - covers all managed devices
+    _DEVICE_TYPES: tuple[str, ...] = ("ap", "switch", "gateway")
 
     @staticmethod
-    def _fetch_switch_physical_inventory(org_id: str) -> list[dict]:
-        """
-        Fetch all switch devices for this org via searchOrgDevices, paginating completely.
-
-        Returns a flat list of raw API device records.  Each record includes `model`,
-        `version`, and `num_members` (number of physical switches in a VC stack;
-        1 for standalone switches).  This data enables accurate physical counts
-        because countOrgDevices treats an entire VC stack as a single logical device.
-
-        Args:
-            org_id: Organization UUID to query
-
-        Returns:
-            List of raw switch device dicts from the API
-        """
-        logging.info("Fetching switch physical inventory via searchOrgDevices, org=%s", org_id)  # Log start
-        all_records: list[dict] = []  # Accumulate records across all pages
-        next_url: str | None = None  # Full next-page URL path returned by the API in the 'next' field
-        page_num: int = 0  # Page counter for log messages
-        while True:  # Paginate until the API returns no 'next' field or results are empty
-            page_num += 1  # Increment before the call so page 1 is logged correctly
-            logging.info("Fetching switch inventory page %d org=%s", page_num, org_id)  # Log before each page
-            try:
-                if next_url:  # Pages 2+: follow the exact URL the API gave us in the 'next' field
-                    resp = apisession.mist_get(next_url)  # Call mist_get with the full path, not searchOrgDevices
-                else:  # First page: use SDK helper to build the initial request
-                    resp = mistapi.api.v1.orgs.devices.searchOrgDevices(apisession, org_id, type="switch", limit=1000)
-            except Exception as error:  # Non-fatal: return whatever we collected so far
-                logging.error("searchOrgDevices switch page %d failed: %s", page_num, error, exc_info=True)
-                break  # Exit loop and return partial results
-            page_data = getattr(resp, "data", None) if resp else None  # Safely unwrap response object
-            if not page_data or not isinstance(page_data, dict):  # Guard: empty or non-dict response
-                logging.debug("No dict data on switch inventory page %d - stopping", page_num)
-                break
-            results: list[dict] = page_data.get("results", [])  # Extract device records from page
-            if not results:  # Empty results page signals end of data
-                logging.debug("Empty results on switch inventory page %d - done", page_num)
-                break
-            all_records.extend(results)  # Accumulate records from this page into master list
-            logging.debug(  # Log page stats after processing
-                "Switch inventory page %d: %d records, total so far: %d / %d",
-                page_num,
-                len(results),
-                len(all_records),
-                page_data.get("total", "?"),  # Log total so we know how many pages to expect
-            )
-            next_url = page_data.get("next")  # API returns full path like /api/v1/.../search?...search_after=...
-            if not next_url:  # No 'next' field means this was the last page
-                break
-        logging.info(  # Log final count for observability
-            "Switch physical inventory complete: %d logical devices org=%s", len(all_records), org_id
+    def _get_summary_impl() -> Any:
+        """Configure and return extracted single-org summary implementation."""
+        from src.inventory.org_device_inventory_summary import (  # noqa: PLC0415
+            OrgDeviceInventorySummaryCore,
+            configure_org_device_inventory_summary_dependencies,
         )
-        return all_records  # Return all raw device records for downstream aggregation
+
+        configure_org_device_inventory_summary_dependencies(
+            apisession_dependency=apisession,
+            mistapi_dependency=mistapi,
+            data_exporter=DataExporter,
+            org_id_value=org_id,
+        )
+        return OrgDeviceInventorySummaryCore
+
+    @staticmethod
+    def _get_msp_impl() -> Any:
+        """Configure and return extracted MSP orchestration implementation."""
+        from src.inventory.org_device_inventory_msp import (  # noqa: PLC0415
+            OrgDeviceInventoryMSPOrchestrator,
+            configure_org_device_inventory_msp_dependencies,
+        )
+
+        configure_org_device_inventory_msp_dependencies(
+            apisession_dependency=apisession,
+            input_utils=InputUtils,
+            data_exporter=DataExporter,
+            msp_privileges_value=msp_privileges,
+        )
+        return OrgDeviceInventoryMSPOrchestrator
+
+    @staticmethod
+    def _fetch_switch_physical_inventory(current_org_id: str) -> list[dict]:
+        """Delegate switch physical inventory fetch to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._fetch_switch_physical_inventory(current_org_id)
 
     @staticmethod
     def _aggregate_switch_counts(switch_records: list[dict], distinct: str) -> list[dict]:
-        """
-        Aggregate physical switch counts from inventory records grouped by a distinct field.
-
-        Uses `num_members` (defaults to 1) from each record so that a 4-member VC stack
-        contributes 4 to the count instead of 1.  This corrects the undercounting that
-        occurs when using countOrgDevices, which treats each VC as one logical device.
-
-        Args:
-            switch_records: Raw records from _fetch_switch_physical_inventory
-            distinct: Field to group by - 'model' or 'version'
-
-        Returns:
-            Sorted list of dicts with keys: device_type='switch', <distinct>, count
-        """
-        logging.info(  # Log before aggregation loop
-            "Aggregating switch physical counts by %s from %d records", distinct, len(switch_records)
-        )
-        counts: dict[str, int] = {}  # Map of field_value -> total physical switch count
-        for record in switch_records:  # Each record is one logical switch or VC stack
-            value = record.get(distinct) or "unknown"  # Field value to group by; default to 'unknown'
-            num_members = int(record.get("num_members") or 1)  # Physical members; 1 for standalone switches
-            counts[value] = counts.get(value, 0) + num_members  # Add physical count to running total
-        rows = [  # Build output rows matching the format returned by countOrgDevices
-            {"device_type": "switch", distinct: value, "count": count}
-            for value, count in counts.items()  # One row per distinct field value
-        ]
-        rows.sort(key=lambda row: -int(row.get("count", 0)))  # Sort descending by count, matches countOrgDevices order
-        logging.debug("Switch %s aggregation: %d distinct values", distinct, len(rows))  # Log output size
-        return rows  # Return in same row format as countOrgDevices results
+        """Delegate switch aggregation to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._aggregate_switch_counts(switch_records, distinct)
 
     @staticmethod
-    def _fetch_gateway_physical_inventory(org_id: str) -> list[dict]:
-        """
-        Fetch all gateway devices for this org via getOrgInventory, paginating completely.
-
-        Each record represents one physical gateway device.  HA cluster members each
-        appear as separate records sharing the same 'vc_mac' but with their own 'mac'.
-        Passing vc=True ensures all physical cluster members are returned, not just the
-        primary.  Unlike switches, no 'num_members' field is needed -- each record IS one
-        physical device and is counted as exactly 1.
-
-        Args:
-            org_id: Organization UUID to query
-
-        Returns:
-            List of raw gateway device dicts from the inventory API
-        """
-        logging.info("Fetching gateway physical inventory via getOrgInventory, org=%s", org_id)  # Log start
-        try:  # Use mistapi.get_all to handle page-based pagination automatically
-            resp = mistapi.api.v1.orgs.inventory.getOrgInventory(  # First-page request; mistapi.get_all paginates
-                apisession, org_id, type="gateway", vc=True, limit=1000
-            )
-            all_records: list[dict] = mistapi.get_all(response=resp, mist_session=apisession)  # Fetch all pages
-        except Exception as error:  # Non-fatal: return empty list so caller can still report other device types
-            logging.error("getOrgInventory gateway failed: %s", error, exc_info=True)
-            all_records = []  # Return empty list so calling code can handle gracefully
-        logging.info(  # Log final count for observability
-            "Gateway physical inventory complete: %d physical devices org=%s", len(all_records), org_id
-        )
-        return all_records  # Return all raw device records for downstream aggregation
+    def _fetch_gateway_physical_inventory(current_org_id: str) -> list[dict]:
+        """Delegate gateway physical inventory fetch to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._fetch_gateway_physical_inventory(current_org_id)
 
     @staticmethod
     def _aggregate_gateway_counts(gateway_records: list[dict], distinct: str) -> list[dict]:
-        """
-        Aggregate physical gateway counts from inventory records grouped by a distinct field.
-
-        Unlike switches (which use num_members), each gateway inventory record represents
-        exactly one physical device.  HA cluster members each appear as separate records,
-        so a 2-node HA pair contributes 2 to the count instead of 1.  Larger HA stacks
-        with N members each contribute N.
-
-        Args:
-            gateway_records: Raw records from _fetch_gateway_physical_inventory
-            distinct: Field to group by - 'model' or 'version'
-
-        Returns:
-            Sorted list of dicts with keys: device_type='gateway', <distinct>, count
-        """
-        logging.info(  # Log before aggregation loop
-            "Aggregating gateway physical counts by %s from %d records", distinct, len(gateway_records)
-        )
-        counts: dict[str, int] = {}  # Map of field_value -> total physical gateway count
-        for record in gateway_records:  # Each record is exactly one physical gateway device
-            value = record.get(distinct) or "unknown"  # Field value to group by; default to 'unknown'
-            counts[value] = counts.get(value, 0) + 1  # Each record = 1 physical device (no num_members needed)
-        rows = [  # Build output rows matching the format returned by countOrgDevices
-            {"device_type": "gateway", distinct: value, "count": count}
-            for value, count in counts.items()  # One row per distinct field value
-        ]
-        rows.sort(key=lambda row: -int(row.get("count", 0)))  # Sort descending by count
-        logging.debug("Gateway %s aggregation: %d distinct values", distinct, len(rows))  # Log output size
-        return rows  # Return in same row format as countOrgDevices results
+        """Delegate gateway aggregation to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._aggregate_gateway_counts(gateway_records, distinct)
 
     @staticmethod
-    def _fetch_all_counts(org_id: str, distinct: str) -> list[dict]:
-        """
-        Fetch device counts grouped by `distinct` field for all device types.
-
-        For APs: calls countOrgDevices (no VC/HA stacking applies to APs).
-        For switches: calls searchOrgDevices and sums num_members per group so that
-        Virtual Chassis stack members are counted individually as physical devices.
-        For gateways: calls getOrgInventory (vc=True) so that HA cluster members each
-        appear as a separate record and are counted individually as physical devices.
-
-        Args:
-            org_id: Organization UUID to query
-            distinct: Field to group by - either 'model' or 'version'
-
-        Returns:
-            Sorted list of dicts with keys: device_type, <distinct>, count
-        """
-        logging.info("Fetching device %s counts for all types, org=%s", distinct, org_id)  # Multi-type fetch start
-        all_rows: list[dict] = []  # Accumulate results across all device types
-        for device_type in OrgDeviceInventorySummary._DEVICE_TYPES:  # Loop over ap, switch, gateway
-            if device_type == "switch":  # Switches need VC-aware counting via searchOrgDevices
-                logging.info("Fetching switch %s counts with VC-aware method, org=%s", distinct, org_id)
-                try:
-                    switch_records = OrgDeviceInventorySummary._fetch_switch_physical_inventory(org_id)  # Paginate all
-                    type_rows = OrgDeviceInventorySummary._aggregate_switch_counts(
-                        switch_records, distinct
-                    )  # Sum members
-                    all_rows.extend(type_rows)  # Add switch rows to combined result
-                    logging.debug("Switch %s rows (VC-accurate): %d", distinct, len(type_rows))  # Log row count
-                except Exception as error:  # Isolate switch failure so ap/gateway still process
-                    logging.error("Switch %s count (VC-aware) failed: %s", distinct, error, exc_info=True)
-                continue  # Skip the countOrgDevices path for switch
-            if device_type == "gateway":  # Gateways in HA clusters need inventory-based counting
-                logging.info("Fetching gateway %s counts with HA-aware method, org=%s", distinct, org_id)
-                try:  # Isolate gateway failure so APs still process
-                    gateway_records = OrgDeviceInventorySummary._fetch_gateway_physical_inventory(org_id)
-                    type_rows = OrgDeviceInventorySummary._aggregate_gateway_counts(
-                        gateway_records, distinct
-                    )  # Count 1 per record; HA members are separate records
-                    all_rows.extend(type_rows)  # Add gateway rows to combined result
-                    logging.debug("Gateway %s rows (HA-accurate): %d", distinct, len(type_rows))  # Log row count
-                except Exception as error:  # Isolate gateway failure so APs still process
-                    logging.error("Gateway %s count (HA-aware) failed: %s", distinct, error, exc_info=True)
-                continue  # Skip the countOrgDevices path for gateway
-            try:  # APs only: countOrgDevices is accurate (no VC/HA stacking applies)
-                logging.info(
-                    "Calling countOrgDevices distinct=%s type=%s", distinct, device_type
-                )  # Log before API call
-                resp = mistapi.api.v1.orgs.devices.countOrgDevices(  # Call Mist count API for this device type
-                    apisession,
-                    org_id,
-                    distinct=distinct,  # Group results by model or version
-                    type=device_type,  # Filter to ap or gateway
-                    limit=1000,  # Request up to 1000 distinct values per call
-                )
-                data = resp.data if resp and resp.data else {}  # Safely unwrap the response body dict
-                results = data.get("results", [])  # Extract the grouped results list from the response
-                logging.debug("Received %d %s rows for type=%s", len(results), distinct, device_type)  # Log row count
-                all_rows.extend(  # Add device_type column to each row so we know which type it belongs to
-                    {"device_type": device_type, distinct: item.get(distinct, "unknown"), "count": item.get("count", 0)}
-                    for item in results  # Build a flat dict for each count result item
-                )
-            except Exception as error:  # Catch per-type errors so remaining types still execute
-                logging.error(  # Log failure with full traceback for operator diagnosis
-                    "countOrgDevices distinct=%s type=%s failed: %s",
-                    distinct,
-                    device_type,
-                    error,
-                    exc_info=True,
-                )
-        all_rows.sort(key=lambda row: (row.get("device_type", ""), -int(row.get("count", 0))))  # Type asc, count desc
-        logging.info("Total %s count rows after fetch and sort: %d", distinct, len(all_rows))  # Log total row count
-        return all_rows  # Return merged and sorted list
+    def _fetch_all_counts(current_org_id: str, distinct: str) -> list[dict]:
+        """Delegate grouped count fetch to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._fetch_all_counts(current_org_id, distinct)
 
     @staticmethod
-    def _fetch_versions_per_model(org_id: str, model_rows: list[dict]) -> list[dict]:
-        """
-        Fetch firmware version counts for every distinct (device_type, model) pair.
-
-        Iterates over the model_rows returned by _fetch_all_counts and calls
-        countOrgDevices(distinct=version, type=<type>, model=<model>) once per pair.
-        Returns a flat list with keys: device_type, model, version, count.
-
-        Args:
-            org_id: Organization UUID to query
-            model_rows: Sorted rows from _fetch_all_counts with distinct='model'
-
-        Returns:
-            List of dicts with keys: device_type, model, version, count
-        """
-        logging.info("Fetching version distribution per model, org=%s", org_id)  # Log before outer loop
-        all_rows: list[dict] = []  # Accumulate results across all model/type combinations
-        # Pre-fetch switch inventory once for all switch models to avoid redundant paginated API calls
-        has_switches = any(r.get("device_type") == "switch" for r in model_rows)  # Check if any switch rows exist
-        switch_records: list[dict] = []  # Will hold all raw switch device records if needed
-        if has_switches:  # Only call the API if there are actually switch models to process
-            logging.info("Pre-fetching switch inventory for version-per-model aggregation, org=%s", org_id)
-            try:
-                switch_records = OrgDeviceInventorySummary._fetch_switch_physical_inventory(
-                    org_id
-                )  # One paginated call
-                logging.debug("Pre-fetched %d switch records for version-per-model pass", len(switch_records))
-            except Exception as error:  # Non-fatal: switch version-per-model rows will simply be absent
-                logging.error("Switch inventory pre-fetch failed: %s", error, exc_info=True)
-        has_gateways = any(r.get("device_type") == "gateway" for r in model_rows)  # Check if gateway models exist
-        gateway_records: list[dict] = []  # Will hold all raw gateway device records if needed
-        if has_gateways:  # Only call the API if there are actually gateway models to process
-            logging.info("Pre-fetching gateway inventory for version-per-model aggregation, org=%s", org_id)
-            try:  # One paginated fetch covers all gateway models - avoids N calls to countOrgDevices
-                gateway_records = OrgDeviceInventorySummary._fetch_gateway_physical_inventory(org_id)  # All pages
-                logging.debug("Pre-fetched %d gateway records for version-per-model pass", len(gateway_records))
-            except Exception as error:  # Non-fatal: gateway version-per-model rows will simply be absent
-                logging.error("Gateway inventory pre-fetch failed: %s", error, exc_info=True)
-        for model_row in model_rows:  # Iterate each (device_type, model) pair discovered earlier
-            device_type = model_row.get("device_type", "")  # Pull device type from the model row
-            model_name = model_row.get("model", "")  # Pull model name from the model row
-            if not model_name:  # Skip rows with no model name to avoid noisy API calls
-                continue
-            if device_type == "switch":  # Use pre-fetched inventory for VC-accurate physical counts
-                logging.info("Aggregating version-per-model from inventory type=switch model=%s", model_name)
-                version_counts: dict[str, int] = {}  # version -> physical count for this model
-                for record in switch_records:  # Scan all switch records for this model
-                    if record.get("model") != model_name:  # Skip records belonging to other models
-                        continue
-                    ver = record.get("version") or "unknown"  # Firmware version string from device record
-                    num_members = int(record.get("num_members") or 1)  # Physical count per VC stack
-                    version_counts[ver] = version_counts.get(ver, 0) + num_members  # Accumulate physical count
-                for ver, cnt in version_counts.items():  # Emit one row per (model, version) combination
-                    all_rows.append(  # Add row in same format as countOrgDevices-based rows
-                        {"device_type": "switch", "model": model_name, "version": ver, "count": cnt}
-                    )
-                logging.debug(  # Log output count for this switch model
-                    "version-per-model switch model=%s: %d distinct versions", model_name, len(version_counts)
-                )
-                continue  # Skip the countOrgDevices path for switch models
-            if device_type == "gateway":  # Use pre-fetched inventory for HA-accurate physical counts
-                logging.info("Aggregating version-per-model from inventory type=gateway model=%s", model_name)
-                gw_version_counts: dict[str, int] = {}  # version -> physical count for this gateway model
-                for record in gateway_records:  # Scan all gateway records for this specific model
-                    if record.get("model") != model_name:  # Skip records belonging to other gateway models
-                        continue
-                    ver = record.get("version") or "unknown"  # Firmware version string from device record
-                    gw_version_counts[ver] = gw_version_counts.get(ver, 0) + 1  # Each record = 1 physical device
-                for ver, cnt in gw_version_counts.items():  # Emit one row per (model, version) combination
-                    all_rows.append(  # Add row in same format as countOrgDevices-based rows
-                        {"device_type": "gateway", "model": model_name, "version": ver, "count": cnt}
-                    )
-                logging.debug(  # Log output count for this gateway model
-                    "version-per-model gateway model=%s: %d distinct versions", model_name, len(gw_version_counts)
-                )
-                continue  # Skip the countOrgDevices path for gateway models
-            try:  # AP models only: countOrgDevices is accurate (no VC/HA stacking applies)
-                logging.info(  # Log before API call with full context
-                    "Calling countOrgDevices distinct=version type=%s model=%s",
-                    device_type,
-                    model_name,
-                )
-                resp = mistapi.api.v1.orgs.devices.countOrgDevices(  # Call count API filtered to this model
-                    apisession,
-                    org_id,
-                    distinct="version",  # Group results by firmware version
-                    type=device_type,  # Filter to the device type this model belongs to
-                    model=model_name,  # Filter to just this specific model
-                    limit=1000,  # Request up to 1000 distinct version strings
-                )
-                data = resp.data if resp and resp.data else {}  # Safely unwrap the response body
-                results = data.get("results", [])  # Extract the version count list
-                logging.debug(  # Log result count after API call
-                    "Received %d version rows for type=%s model=%s",
-                    len(results),
-                    device_type,
-                    model_name,
-                )
-                all_rows.extend(  # Build one flat dict per version entry, tagging device_type and model
-                    {
-                        "device_type": device_type,
-                        "model": model_name,
-                        "version": item.get("version", "unknown"),  # Version string from API result
-                        "count": item.get("count", 0),  # Device count on this version
-                    }
-                    for item in results  # One dict per version result item
-                )
-            except Exception as error:  # Catch per-model errors so remaining models still execute
-                logging.error(  # Log failure with traceback for operator diagnosis
-                    "countOrgDevices distinct=version type=%s model=%s failed: %s",
-                    device_type,
-                    model_name,
-                    error,
-                    exc_info=True,
-                )
-        all_rows.sort(  # Sort by device_type asc, model asc, count desc for readability
-            key=lambda row: (row.get("device_type", ""), row.get("model", ""), -int(row.get("count", 0)))
-        )
-        logging.info("Total version-per-model rows after fetch and sort: %d", len(all_rows))  # Log total
-        return all_rows  # Return merged, annotated, sorted list
+    def _fetch_versions_per_model(current_org_id: str, model_rows: list[dict]) -> list[dict]:
+        """Delegate version-per-model fetch to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._fetch_versions_per_model(current_org_id, model_rows)
 
     @staticmethod
     def _display_pivot_and_export(rows: list[dict], filename: str) -> None:
-        """
-        Display a single combined pivot table: models as rows, firmware versions as columns.
-
-        All device types are combined into one table.  Cells are blank (0) where a model has
-        no devices on a particular version.  A 'Total' column sums each model row and a 'TOTAL'
-        footer row sums each version column plus the grand total.
-        Exports the pivoted data (one row per model, one column per version) using the given filename.
-
-        Args:
-            rows: Output of _fetch_versions_per_model with keys: device_type, model, version, count
-            filename: Output CSV filename / SQLite table name (without extension, already org-prefixed)
-        """
-        logging.info("Building combined version-per-model pivot table (%d rows)", len(rows))  # Log before pivot build
-        models = sorted({r["model"] for r in rows})  # All unique model names sorted A-Z for stable row order
-        versions = sorted({r["version"] for r in rows})  # All unique version strings sorted for stable column order
-        model_type: dict[str, str] = {r["model"]: r["device_type"] for r in rows}  # Map model -> device_type for export
-        pivot: dict[str, dict[str, int]] = {m: {} for m in models}  # pivot[model][version] = count
-        for row in rows:  # Populate pivot dict from flat row data
-            pivot[row["model"]][row["version"]] = row.get("count", 0)  # Store count at model/version intersection
-        logging.debug("Pivot dimensions: %d models x %d versions", len(models), len(versions))  # Log table size
-        table = PrettyTable()  # Create one combined PrettyTable for all device types
-        table.field_names = ["Model"] + versions + ["Total"]  # Dynamic columns: model | ver1 | ver2 | ... | Total
-        col_totals: dict[str, int] = {v: 0 for v in versions}  # Running column totals for the TOTAL footer row
-        export_rows: list[dict] = []  # Accumulate pivoted export rows for CSV/SQLite output
-        for model in models:  # One table row per model, sorted alphabetically
-            row_counts = [pivot[model].get(v, 0) for v in versions]  # Count for each version column (0 if absent)
-            row_total = sum(row_counts)  # Row total = sum of all version counts for this model
-            for ver, cnt in zip(versions, row_counts, strict=True):  # Accumulate each version column's running total
-                col_totals[ver] += cnt  # Add this model's count to the running column total
-            table.add_row([model] + row_counts + [row_total])  # Append model row: name | counts | row total
-            export_row: dict = {"Model": model, "Device Type": model_type.get(model, "")}  # Model first, then type
-            for ver in versions:  # One key per version column in the export row
-                export_row[ver] = pivot[model].get(ver, 0)  # Cell value (0 for absent model/version pairs)
-            export_row["Total"] = row_total  # Append row total to export dict
-            export_rows.append(export_row)  # Accumulate for final export call
-        col_total_values = [col_totals[v] for v in versions]  # Ordered column total values for TOTAL footer
-        grand_total = sum(col_total_values)  # Grand total = sum of all device counts across entire table
-        table.add_row(["TOTAL"] + col_total_values + [grand_total])  # Append TOTAL footer row
-        print(f"\n{'=' * 62}")
-        print("  Version Distribution per Model (All Device Types)")
-        print(f"{'=' * 62}")
-        print(table)  # Print the combined pivot table to console
-        ordered_fields = ["Model", "Device Type"] + versions + ["Total"]  # Explicit column order: Model first
-        logging.info("Exporting %d pivoted rows to %s", len(export_rows), filename)  # Log before export
-        DataExporter.write_with_format_selection(  # Write to CSV or SQLite per OUTPUT_FORMAT
-            export_rows,
-            filename,  # Org-prefixed filename passed in from execute()
-            api_function_name="orgDeviceVersionPerModel",  # Maps to PK strategy for SQLite upsert
-            fieldnames=ordered_fields,  # Preserve Model-first column order instead of alphabetizing
-        )
-        logging.info("Exported %d pivoted rows to %s", len(export_rows), filename)  # Log after export
+        """Delegate pivot display/export to extracted summary core."""
+        OrgDeviceInventorySummary._get_summary_impl()._display_pivot_and_export(rows, filename)
 
     @staticmethod
     def _display_and_export(rows: list[dict], distinct: str, filename: str, api_func: str) -> None:
-        """
-        Print a PrettyTable summary and export data to the configured output backend.
-
-        Args:
-            rows: Sorted list of count dicts (device_type, <distinct>, count)
-            distinct: Grouped field name - 'model' or 'version' - used for column heading
-            filename: Output CSV filename / SQLite table name (without extension, already org-prefixed)
-            api_func: Virtual API function name for SQLite PK strategy lookup
-        """
-        value_col = distinct.capitalize()  # Capitalize field name for display (Model or Version)
-        columns = ["Device Type", value_col, "Count"]  # Define table column headers for display
-        logging.info("Displaying and exporting %s summary (%d rows) to %s", distinct, len(rows), filename)  # Log export
-        table = PrettyTable()  # Create a new PrettyTable instance for console output
-        table.field_names = columns  # Set the column headers on the table
-        for row in rows:  # Add each data row to the display table
-            table.add_row([row.get("device_type", ""), row.get(distinct, ""), row.get("count", 0)])  # Map to columns
-        print(f"\n{'=' * 62}")
-        print(f"  {distinct.capitalize()} Distribution Summary")
-        print(f"{'=' * 62}")
-        print(table)  # Print the formatted table to console for operator visibility
-        export_rows = [  # Build export-friendly dicts with capitalized keys for CSV/SQLite headers
-            {"Device Type": row["device_type"], value_col: row.get(distinct, ""), "Count": row["count"]}
-            for row in rows  # One export dict per count row
-        ]
-        DataExporter.write_with_format_selection(  # Write to CSV or SQLite depending on OUTPUT_FORMAT
-            export_rows,
-            filename,
-            api_function_name=api_func,  # Maps to ENDPOINT_PRIMARY_KEY_STRATEGIES for SQLite upsert
-        )
-        logging.info("Exported %d %s rows to %s", len(export_rows), distinct, filename)  # Log after export completes
+        """Delegate tabular summary display/export to extracted summary core."""
+        OrgDeviceInventorySummary._get_summary_impl()._display_and_export(rows, distinct, filename, api_func)
 
     @staticmethod
     def _resolve_safe_org_name(current_org_id: str) -> str:
-        """
-        Resolve a filesystem-safe org name for use as a filename prefix.
-
-        Fetches the org name from the Mist API, falls back to the END_CUSTOMER_NAME
-        environment variable, then to the org_id itself if neither is available.
-        Non-alphanumeric characters (except hyphens and underscores) are replaced with '_'.
-
-        Args:
-            current_org_id: Organization UUID to look up
-
-        Returns:
-            Sanitized org name string safe for use in filenames
-        """
-        logging.info("Resolving org name for filename prefix, org=%s", current_org_id)  # Log before API call
-        raw_name: str | None = None  # Will hold the raw org name from API or env
-        try:
-            org_resp = mistapi.api.v1.orgs.orgs.getOrg(apisession, current_org_id)  # Fetch org details from Mist API
-            raw_name = getattr(org_resp, "data", {}).get("name")  # Extract name field from response
-            logging.debug("Resolved org name from API: %s", raw_name)  # Log resolved name
-        except Exception as error:  # Non-fatal — fall back to env var or org_id
-            logging.warning("Could not resolve org name from API: %s", error)  # Warn but continue
-        if not raw_name:  # Try END_CUSTOMER_NAME env var as secondary fallback
-            raw_name = os.getenv("END_CUSTOMER_NAME")  # Read from environment variable
-        if not raw_name:  # Last resort: use the org UUID itself
-            raw_name = current_org_id  # org_id is always available and unique
-        safe_name = "".join(  # Sanitize: keep alphanumeric, hyphens, underscores; replace everything else
-            char if char.isalnum() or char in "-_" else "_" for char in raw_name
-        )
-        logging.debug("Safe org name for filenames: %s", safe_name)  # Log the sanitized result
-        return safe_name  # Return sanitized name ready for filename prefixing
+        """Delegate safe org name resolution to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl()._resolve_safe_org_name(current_org_id)
 
     @staticmethod
     def _run_for_org(target_org_id: str) -> "tuple[list[dict], list[dict], list[dict], str]":
-        """
-        Core logic: run all three inventory summary tables for one specific org.
-
-        Fetches model counts, firmware version counts, and version-per-model pivot,
-        then displays and exports each.  All filenames are prefixed with the org name.
-        This method is the shared implementation called by both execute() and execute_msp().
-
-        Args:
-            target_org_id: Organization UUID to query (may differ from the global org_id)
-        """
-        logging.info("Starting org device inventory summary org=%s", target_org_id)  # Log operation start
-        start_time = time.time()  # Record start time for elapsed reporting
-        safe_org = OrgDeviceInventorySummary._resolve_safe_org_name(target_org_id)  # Resolve org name for file prefixes
-
-        model_rows = OrgDeviceInventorySummary._fetch_all_counts(target_org_id, "model")  # Fetch model counts
-        OrgDeviceInventorySummary._display_and_export(  # Print and export the model count table
-            model_rows, "model", f"{safe_org}_OrgDeviceModelCounts", "orgDeviceModelSummary"
-        )
-
-        version_rows = OrgDeviceInventorySummary._fetch_all_counts(target_org_id, "version")  # Fetch version counts
-        OrgDeviceInventorySummary._display_and_export(  # Print and export the firmware version count table
-            version_rows, "version", f"{safe_org}_OrgDeviceFirmwareSummary", "orgDeviceFirmwareSummary"
-        )
-
-        ver_per_model = OrgDeviceInventorySummary._fetch_versions_per_model(  # Versions per model
-            target_org_id, model_rows
-        )
-        logging.info("Displaying version-per-model pivot table (%d rows)", len(ver_per_model))  # Log before pivot
-        OrgDeviceInventorySummary._display_pivot_and_export(  # Pivot display + export with org prefix
-            ver_per_model, f"{safe_org}_OrgDeviceVersionPerModel"
-        )
-
-        elapsed = time.time() - start_time  # Calculate total elapsed time for this org
-        logging.info("Org device inventory summary for %s completed in %.1f seconds", target_org_id, elapsed)
-        print(f"\nSummary for {safe_org} completed in {elapsed:.1f} seconds")  # Display elapsed time to operator
-        return model_rows, version_rows, ver_per_model, safe_org  # Return data for MSP combined reports
+        """Delegate full single-org summary execution to extracted summary core."""
+        return OrgDeviceInventorySummary._get_summary_impl().run_for_org(target_org_id)
 
     @staticmethod
     def execute() -> None:
-        """Single-org entry point: run inventory summary for the currently selected org."""
-        OrgDeviceInventorySummary._run_for_org(org_id)  # Delegate to shared core logic with global org_id
+        """Single-org entry point for menu operation 13."""
+        OrgDeviceInventorySummary._get_summary_impl().execute()
 
     @staticmethod
     def _resolve_active_msp() -> "dict[str, Any] | None":
-        """
-        Prompt the user to select an MSP when multiple are available.
-
-        Auto-selects when only one MSP exists.  Returns the chosen MSP dict
-        from msp_privileges, or None on invalid input or EOF.
-        """
-        if not msp_privileges:  # Guard: requires MSP-level account privileges
-            print("\nX No MSP privileges detected.  Connect with an MSP account to use this mode.")
-            logging.warning("_resolve_active_msp called with no MSP privileges")  # Warn operator
-            return None
-        if len(msp_privileges) == 1:  # Auto-select when exactly one MSP is available
-            active_msp = msp_privileges[0]  # Use the only available MSP without prompting
-            print(f"\n  Using MSP: {active_msp['msp_name']}")  # Confirm selection to operator
-            return active_msp  # Return the single MSP dict immediately
-        print("\n  Available MSPs:")  # Header for the MSP selection list
-        for idx, msp in enumerate(msp_privileges, start=1):  # List each MSP with a 1-based index
-            print(f"    {idx}. {msp['msp_name']} (role: {msp['role']})")
-        print()
-        try:
-            choice = InputUtils.safe_input("  Select MSP (number): ", context="msp_select").strip()
-            choice_idx = int(choice) - 1  # Convert 1-based user input to 0-based index
-            if 0 <= choice_idx < len(msp_privileges):  # Validate index is in range
-                return msp_privileges[choice_idx]  # Return the chosen MSP dict
-            print("X Invalid selection")  # Reject out-of-range input
-            logging.warning("MSP selection out of range: %s", choice)  # Log bad selection
-        except (ValueError, SystemExit):  # Handle non-numeric input or EOF gracefully
-            print("X Invalid input")
-            logging.warning("MSP selection input error")  # Log input failure
-        return None  # Signal aborted or failed selection to the caller
+        """Delegate MSP selection prompt to extracted MSP orchestrator."""
+        return OrgDeviceInventorySummary._get_msp_impl()._resolve_active_msp()
 
     @staticmethod
     def _fetch_org_list(active_msp: "dict[str, Any]") -> "list[dict[str, Any]]":
-        """
-        Retrieve all child orgs for the given MSP via listMspOrgs.
-
-        Returns a list of org dicts (each with 'id' and 'name'), or an empty
-        list on API failure or empty response.
-        """
-        if apisession is None:  # Guard: active session required for all API calls
-            print("X No active API session")
-            logging.error("_fetch_org_list: apisession is None")  # Log missing session
-            return []
-        msp_id = active_msp["msp_id"]  # Extract MSP UUID for the API call
-        msp_name = active_msp["msp_name"]  # Extract MSP display name for logging
-        logging.info("Fetching orgs for MSP %s (id=%s)", msp_name, msp_id)  # Log before API call
-        print(f"\n  Fetching organizations for MSP: {msp_name}...")
-        try:
-            import mistapi.api.v1.msps.orgs as msp_orgs_api  # Import MSP orgs module on demand
-
-            orgs_resp = msp_orgs_api.listMspOrgs(apisession, msp_id)  # Fetch all orgs under this MSP
-            orgs_data: list[dict[str, Any]] = (orgs_resp.data if orgs_resp and hasattr(orgs_resp, "data") else []) or []
-            if not isinstance(orgs_data, list):  # Normalize to list when API returns a single dict
-                orgs_data = [orgs_data]
-        except Exception as error:  # Catch API errors and surface a clear message
-            print(f"X Failed to retrieve organizations: {error}")
-            logging.error("listMspOrgs failed for msp_id=%s: %s", msp_id, error, exc_info=True)
-            return []  # Return empty list so callers can guard on falsy value
-        logging.debug("Received %d orgs from MSP %s", len(orgs_data), msp_name)  # Log org count
-        return orgs_data  # Return the raw list; caller is responsible for empty-list guard
+        """Delegate MSP org list retrieval to extracted MSP orchestrator."""
+        return OrgDeviceInventorySummary._get_msp_impl()._fetch_org_list(active_msp)
 
     @staticmethod
     def _run_single_msp_org() -> None:
-        """
-        Mode 2: display a numbered org list and let the user pick one, then run the
-        inventory summary for that single org.
-        """
-        active_msp = OrgDeviceInventorySummary._resolve_active_msp()  # Prompt for MSP selection
-        if active_msp is None:  # User aborted selection or no MSP available
-            return
-        orgs_data = OrgDeviceInventorySummary._fetch_org_list(active_msp)  # Retrieve child org list
-        if not orgs_data:  # Guard: nothing to display if the org list is empty
-            print("  No organizations found under this MSP")
-            logging.info("_run_single_msp_org: no orgs for MSP %s", active_msp["msp_id"])
-            return
-        print(f"\n  Found {len(orgs_data)} organizations:")  # Header for the numbered selection list
-        for idx, org in enumerate(orgs_data, start=1):  # Show each org with its 1-based index
-            print(f"    {idx}. {org.get('name', org.get('id', 'Unknown'))}")
-        print()
-        try:
-            choice = InputUtils.safe_input("  Select org (number): ", context="msp_org_select").strip()
-            choice_idx = int(choice) - 1  # Convert 1-based input to 0-based index
-            if not (0 <= choice_idx < len(orgs_data)):  # Validate index is in range
-                print("X Invalid selection")
-                logging.warning("Org selection out of range: %s", choice)  # Log bad input
-                return
-        except (ValueError, SystemExit):  # Handle non-numeric input or EOF gracefully
-            print("X Invalid input")
-            logging.warning("Org selection input error")  # Log input failure
-            return
-        chosen = orgs_data[choice_idx]  # Retrieve the org record at the chosen index
-        chosen_id = chosen.get("id", "")  # Extract org UUID from the record
-        if not chosen_id:  # Guard: skip records that have no usable ID
-            print("X Selected org has no ID")
-            logging.error("Selected org record missing 'id': %s", chosen)  # Log malformed record
-            return
-        logging.info("Running inventory for selected org: %s (%s)", chosen.get("name"), chosen_id)
-        OrgDeviceInventorySummary._run_for_org(chosen_id)  # Run all three tables for the chosen org
+        """Delegate single-org MSP flow to extracted MSP orchestrator."""
+        OrgDeviceInventorySummary._get_msp_impl().run_single_msp_org(OrgDeviceInventorySummary._run_for_org)
 
     @staticmethod
     def _display_combined_pivot_and_export(
         all_ver_data: "list[tuple[str, list[dict]]]",
         filename: str,
     ) -> None:
-        """
-        Build and export a combined version-per-model pivot table spanning all MSP orgs.
-
-        Rows represent (Org, Model) pairs; columns represent all unique firmware versions
-        found across every org.  Cells are 0 where a model has no devices on that version.
-        A 'Total' column sums each row and a 'TOTAL' footer row sums each version column.
-
-        Args:
-            all_ver_data: List of (safe_org_name, ver_per_model_rows) tuples — one entry per org
-            filename: Output filename/table name prefix (MSP-prefixed, no extension)
-        """
-        logging.info("Building combined MSP version-per-model pivot (%d orgs)", len(all_ver_data))  # Log before build
-        flat: list[dict] = []  # Flatten all orgs into one list, tagging each row with org name
-        for safe_org, ver_rows in all_ver_data:  # Iterate per-org data
-            for row in ver_rows:  # Each row: device_type, model, version, count
-                flat.append({**row, "org": safe_org})  # Tag each row with org name for pivot keying
-        if not flat:  # Guard: nothing to pivot if all orgs had no version-per-model data
-            print("  No version-per-model data available for combined pivot")
-            logging.warning("_display_combined_pivot_and_export: no data to pivot")
-            return
-        versions = sorted({r["version"] for r in flat})  # All unique version strings across all orgs, sorted
-        pivot: dict[tuple, dict] = {}  # pivot[(org, model)] = {version: count, device_type: str}
-        for row in flat:  # Populate pivot dict with (org, model) composite key
-            key = (row["org"], row["model"])  # Composite key: org + model uniquely identifies a pivot row
-            if key not in pivot:  # Initialize entry on first encounter of this (org, model) pair
-                pivot[key] = {"device_type": row.get("device_type", "")}  # Store device type for export column
-            pivot[key][row["version"]] = row.get("count", 0)  # Store count at this version cell
-        logging.debug("Combined pivot: %d (org, model) pairs x %d versions", len(pivot), len(versions))
-        table = PrettyTable()  # Create display table for combined pivot
-        table.field_names = ["Org", "Model", "Device Type"] + versions + ["Total"]  # Dynamic column headers
-        col_totals: dict[str, int] = {v: 0 for v in versions}  # Running column totals for footer row
-        export_rows: list[dict] = []  # Rows to write to CSV/SQLite
-        for (safe_org, model), ver_counts in sorted(pivot.items()):  # Iterate sorted (org, model) pairs
-            row_counts = [ver_counts.get(v, 0) for v in versions]  # Count for each version column (0 if absent)
-            row_total = sum(row_counts)  # Row total: all version counts for this (org, model)
-            for ver, cnt in zip(versions, row_counts, strict=True):  # Accumulate running column totals
-                col_totals[ver] += cnt  # Add this row's count to the column running total
-            table.add_row([safe_org, model, ver_counts.get("device_type", "")] + row_counts + [row_total])
-            export_row: dict = {  # Build export dict with explicit key order: Org, Model, Device Type first
-                "Org": safe_org,
-                "Model": model,
-                "Device Type": ver_counts.get("device_type", ""),
-            }
-            for ver in versions:  # One key per version column in the export row
-                export_row[ver] = ver_counts.get(ver, 0)  # Cell value (0 for absent (org, model)/version pairs)
-            export_row["Total"] = row_total  # Append row total to export dict
-            export_rows.append(export_row)  # Accumulate for final export call
-        col_total_values = [col_totals[v] for v in versions]  # Ordered column total values for TOTAL footer
-        grand_total = sum(col_total_values)  # Grand total of all devices across all orgs
-        table.add_row(["TOTAL", "", ""] + col_total_values + [grand_total])  # Append TOTAL footer row
-        print(f"\n{'=' * 62}")
-        print("  Combined MSP Version Distribution per Model (All Orgs)")
-        print(f"{'=' * 62}")
-        print(table)  # Print the combined multi-org pivot table to console
-        ordered_fields = ["Org", "Model", "Device Type"] + versions + ["Total"]  # Explicit column order
-        logging.info("Exporting %d combined pivot rows to %s", len(export_rows), filename)  # Log before export
-        DataExporter.write_with_format_selection(
-            export_rows,
-            filename,
-            api_function_name="orgDeviceVersionPerModel",  # Maps to PK strategy for SQLite upsert
-            fieldnames=ordered_fields,  # Preserve Org-first column order instead of alphabetizing
-        )
-        logging.info("Exported %d combined pivot rows to %s", len(export_rows), filename)  # Log after export
+        """Delegate combined MSP pivot export to extracted MSP orchestrator."""
+        OrgDeviceInventorySummary._get_msp_impl()._display_combined_pivot_and_export(all_ver_data, filename)
 
     @staticmethod
     def _build_combined_reports(
         msp_safe_name: str,
         collected: "list[dict[str, Any]]",
     ) -> None:
-        """
-        Generate three combined MSP-wide summary reports from per-org collected data.
-
-        Produces:
-          1. MSP_<name>_CombinedDeviceModelCounts      — all org model counts in one flat table
-          2. MSP_<name>_CombinedDeviceFirmwareSummary  — all org version counts in one flat table
-          3. MSP_<name>_CombinedDeviceVersionPerModel  — pivot: (Org, Model) rows x version columns
-
-        Args:
-            msp_safe_name: Sanitized MSP name for use in output filenames
-            collected: Per-org data dicts with keys: safe_org, model_rows, version_rows, ver_per_model
-        """
-        logging.info("Building combined MSP reports from %d orgs", len(collected))  # Log report generation start
-        prefix = f"MSP_{msp_safe_name}"  # Filename prefix distinguishes combined files from per-org files
-        print(f"\n{'=' * 62}")
-        print(f"  MSP COMBINED SUMMARY REPORTS  ({len(collected)} orgs)")
-        print(f"{'=' * 62}")
-        # --- Combined model count table ---
-        combined_model: list[dict] = []  # Accumulate model count rows across all orgs
-        for entry in collected:  # Each entry holds one org's fetched data dicts
-            safe_org = entry["safe_org"]  # Sanitized org display name from _resolve_safe_org_name
-            for row in entry["model_rows"]:  # Each row: device_type, model, count
-                combined_model.append(
-                    {  # Prepend Org column so rows are cross-org identifiable
-                        "Org": safe_org,
-                        "Device Type": row["device_type"],  # ap, switch, or gateway
-                        "Model": row.get("model", ""),  # Model name from count result
-                        "Count": row.get("count", 0),  # Device count for this model in this org
-                    }
-                )
-        model_table = PrettyTable()  # Build PrettyTable display for combined model counts
-        model_table.field_names = ["Org", "Device Type", "Model", "Count"]
-        for row in combined_model:  # Populate table rows from combined list
-            model_table.add_row([row["Org"], row["Device Type"], row["Model"], row["Count"]])
-        print(f"\n{'=' * 62}")
-        print("  Combined MSP Model Count Summary (All Orgs)")
-        print(f"{'=' * 62}")
-        print(model_table)  # Display combined model table to console
-        logging.info(
-            "Exporting %d combined model count rows to %s", len(combined_model), f"{prefix}_CombinedDeviceModelCounts"
-        )
-        DataExporter.write_with_format_selection(  # Export combined model counts to CSV/SQLite
-            combined_model, f"{prefix}_CombinedDeviceModelCounts", api_function_name="orgDeviceModelSummary"
-        )
-        logging.info("Exported combined model counts: %d rows", len(combined_model))  # Log after export
-        # --- Combined firmware version summary table ---
-        combined_version: list[dict] = []  # Accumulate version count rows across all orgs
-        for entry in collected:  # Each entry holds one org's fetched data dicts
-            safe_org = entry["safe_org"]  # Sanitized org display name
-            for row in entry["version_rows"]:  # Each row: device_type, version, count
-                combined_version.append(
-                    {  # Prepend Org column for cross-org identification
-                        "Org": safe_org,
-                        "Device Type": row["device_type"],  # ap, switch, or gateway
-                        "Version": row.get("version", ""),  # Firmware version string
-                        "Count": row.get("count", 0),  # Device count running this version in this org
-                    }
-                )
-        ver_table = PrettyTable()  # Build PrettyTable display for combined version summary
-        ver_table.field_names = ["Org", "Device Type", "Version", "Count"]
-        for row in combined_version:  # Populate table rows from combined list
-            ver_table.add_row([row["Org"], row["Device Type"], row["Version"], row["Count"]])
-        print(f"\n{'=' * 62}")
-        print("  Combined MSP Firmware Version Summary (All Orgs)")
-        print(f"{'=' * 62}")
-        print(ver_table)  # Display combined version table to console
-        logging.info(
-            "Exporting %d combined version rows to %s", len(combined_version), f"{prefix}_CombinedDeviceFirmwareSummary"
-        )
-        DataExporter.write_with_format_selection(  # Export combined version summary to CSV/SQLite
-            combined_version, f"{prefix}_CombinedDeviceFirmwareSummary", api_function_name="orgDeviceFirmwareSummary"
-        )
-        logging.info("Exported combined firmware version summary: %d rows", len(combined_version))  # Log after export
-        # --- Combined version-per-model pivot ---
-        all_ver_data = [  # Pair each org's sanitized name with its version-per-model rows
-            (entry["safe_org"], entry["ver_per_model"]) for entry in collected
-        ]
-        OrgDeviceInventorySummary._display_combined_pivot_and_export(  # Delegate pivot to dedicated method
-            all_ver_data, f"{prefix}_CombinedDeviceVersionPerModel"
-        )
-        logging.info("Combined MSP reports complete: prefix=%s, orgs=%d", prefix, len(collected))  # Log completion
-        print(f"\n  Combined MSP reports written with prefix: {prefix}_")  # Confirm file prefix to operator
+        """Delegate combined MSP report generation to extracted MSP orchestrator."""
+        OrgDeviceInventorySummary._get_msp_impl()._build_combined_reports(msp_safe_name, collected)
 
     @staticmethod
     def execute_msp() -> None:
-        """
-        MSP batch entry point: run inventory summary for all orgs under the selected MSP.
-
-        Delegates MSP selection to _resolve_active_msp() and org fetching to
-        _fetch_org_list().  Each org is processed independently so per-org failures
-        do not abort the batch.  After all orgs complete, generates three combined
-        MSP-wide summary reports aggregating data from all successfully processed orgs.
-        """
-        logging.info("Starting MSP device inventory summary")  # Log MSP mode entry
-        active_msp = OrgDeviceInventorySummary._resolve_active_msp()  # Prompt for MSP selection
-        if active_msp is None:  # User aborted selection or no MSP available
-            return
-        orgs_data = OrgDeviceInventorySummary._fetch_org_list(active_msp)  # Retrieve all child orgs
-        if not orgs_data:  # Guard: nothing to process if MSP has no orgs
-            print("  No organizations found under this MSP")
-            logging.info("execute_msp: no orgs found for MSP %s", active_msp["msp_id"])
-            return
-        print(f"  Found {len(orgs_data)} organizations.  Running inventory summary for each...\n")
-        collected: list[dict] = []  # Accumulate per-org data for combined MSP reports at the end
-        for idx, org_record in enumerate(orgs_data, start=1):  # Process each org in sequence
-            child_org_id = org_record.get("id", "")  # Extract org UUID from the org record
-            child_org_name = org_record.get("name", child_org_id)  # Display name, fall back to id
-            if not child_org_id:  # Skip records with no usable ID
-                logging.warning("Skipping org record with no id: %s", org_record)  # Log skip reason
-                continue
-            print(f"  [{idx}/{len(orgs_data)}] {child_org_name}")  # Show batch progress to operator
-            logging.info("Processing org %d/%d: %s (%s)", idx, len(orgs_data), child_org_name, child_org_id)
-            try:
-                model_rows, version_rows, ver_per_model, safe_org = OrgDeviceInventorySummary._run_for_org(
-                    child_org_id
-                )  # Run all three tables
-                collected.append(
-                    {  # Store this org's data for the combined MSP reports at the end
-                        "safe_org": safe_org,  # Sanitized org name for use in combined report rows
-                        "model_rows": model_rows,  # Model count rows for combined model table
-                        "version_rows": version_rows,  # Version count rows for combined version table
-                        "ver_per_model": ver_per_model,  # Version-per-model rows for combined pivot
-                    }
-                )
-            except Exception as error:  # Isolate per-org failures so the batch continues
-                print(f"    X Error processing {child_org_name}: {error}")
-                logging.error("_run_for_org failed for org %s: %s", child_org_id, error, exc_info=True)
-        logging.info("MSP inventory complete for %d orgs", len(orgs_data))  # Log batch completion
-        print(f"\nMSP inventory summary complete. Processed {len(orgs_data)} organizations.")
-        if len(collected) >= 2:  # Generate combined reports only when multiple orgs were successfully processed
-            msp_safe_name = "".join(  # Sanitize MSP name for use in output filenames (alphanumeric + _ -)
-                char if char.isalnum() or char in "-_" else "_" for char in active_msp.get("msp_name", "MSP")
-            )
-            OrgDeviceInventorySummary._build_combined_reports(msp_safe_name, collected)  # Build combined summary
-        else:
-            logging.info("Skipping combined reports: fewer than 2 orgs processed successfully")
+        """Delegate batch MSP execution to extracted MSP orchestrator."""
+        OrgDeviceInventorySummary._get_msp_impl().execute_msp(OrgDeviceInventorySummary._run_for_org)
 
     @staticmethod
     def dispatch() -> None:
-        """
-        Entry point registered in menu_actions.
-
-        If MSP privileges are available, presents three modes:
-          1. Current org only
-          2. Select a specific org from the MSP list
-          3. All orgs in MSP (batch mode)
-        Falls through to execute() when no MSP access is detected.
-        """
-        if not msp_privileges:  # No MSP access - run single-org mode silently
-            OrgDeviceInventorySummary.execute()  # Delegate to single-org entry point
-            return
-        print("\n" + "=" * 60)
-        print("  DEVICE INVENTORY SUMMARY")
-        print("=" * 60)
-        print("\n  Run mode:")
-        print("    1. Current org only")
-        print("    2. Select a specific org from MSP list")
-        print("    3. All orgs in MSP (batch mode)")
-        print()
-        try:
-            mode = InputUtils.safe_input("  Select mode (1/2/3): ", context="inventory_dispatch").strip()
-        except SystemExit:  # EOF / disconnect - abort gracefully
-            return
-        if mode == "3":  # Batch mode: run for every org under the MSP
-            OrgDeviceInventorySummary.execute_msp()  # Delegate to MSP batch entry point
-        elif mode == "2":  # Select mode: pick one org from the MSP list
-            OrgDeviceInventorySummary._run_single_msp_org()  # Delegate to single-org-from-MSP flow
-        else:  # Default to current org for "1" or any unrecognised input
-            OrgDeviceInventorySummary.execute()  # Delegate to single-org entry point
+        """Delegate menu operation 13 interactive dispatch to extracted MSP orchestrator."""
+        OrgDeviceInventorySummary._get_msp_impl().dispatch(
+            single_org_fn=OrgDeviceInventorySummary.execute,
+            select_org_fn=OrgDeviceInventorySummary._run_single_msp_org,
+            batch_fn=OrgDeviceInventorySummary.execute_msp,
+        )
 
 
 class OrgTemplateExporter:
@@ -17811,639 +17099,150 @@ class SitesByAPModelExporter:
 
 
 class SiteExportUtils:
-    """
-    Centralized site-level data export utilities.
-    Groups all export_site_* functions for better code organization.
-    All methods are static to avoid unnecessary object instantiation.
-    """
+    """Delegation wrapper for extracted site export implementation."""
 
     @staticmethod
-    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Generic function to export site-specific data to CSV.
+    def _configure_module():  # type: ignore[no-untyped-def]
+        """Configure extracted module dependencies and return module handle."""
+        from src.export import site_export_utils as site_export_module  # noqa: PLC0415,I001
 
-        Args:
-            api_call: The mistapi function to call
-            data_type: Description of the data type (e.g., "port stats", "clients")
-            sort_key: Field to sort results by
-            **api_kwargs: Additional arguments to pass to the API call
-
-        Returns:
-            None
-        """
-        logging.info(f"Starting export of site {data_type}...")
-
-        # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-
-        # Get site name for display
-        try:
-            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception as e:
-            logging.error(f"Error getting site name: {e}")
-            site_name = site_id
-
-        logging.info(f"Exporting {data_type} for site: {site_name}")
-
-        # Create filename from data_type
-        safe_data_type = data_type.replace(" ", "").replace("-", "").title()
-        safe_site_name = site_name.replace(" ", "_").replace("-", "_")
-        filename = f"Site{safe_data_type}_{safe_site_name}.csv"
-
-        # For site-specific API calls, we need to use a custom approach since
-        # APIDataFetcher expects org_id as the second parameter
-        try:
-            logging.debug(f"Making site-specific API call: {api_call.__name__} with site_id: {site_id}")
-
-            # Try to determine if the API function supports 'limit' parameter
-            # Use introspection to check function signature
-            try:
-                sig = inspect.signature(api_call)
-                supports_limit = "limit" in sig.parameters
-            except Exception:
-                # If introspection fails, assume limit is supported (safer default for most APIs)
-                supports_limit = True
-
-            # Call API with or without limit parameter based on support
-            if supports_limit:
-                response = api_call(apisession, site_id, limit=1000, **api_kwargs)
-            else:
-                logging.debug(f"API function {api_call.__name__} does not support 'limit' parameter")
-                response = api_call(apisession, site_id, **api_kwargs)
-
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)
-            if rawdata is None:
-                logging.warning(f"! No data returned from API for {data_type} at site {site_name}. Skipping.")
-                return
-
-            logging.info(f"Fetched {len(rawdata)} raw records for {data_type} from site {site_name}.")
-
-            # Sort data if a sort key is provided
-            if sort_key:
-                rawdata = sorted(rawdata, key=lambda x: x.get(sort_key, ""))
-
-            # Flatten nested fields for CSV compatibility
-            data = DataProcessingUtils.flatten_nested_fields(rawdata)
-
-            # Escape multiline strings for CSV
-            data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
-
-            # Write processed data to output
-            DataExporter.save_data_to_output(data, filename)  # type: ignore[no-untyped-call]
-
-            # Determine the full file path for console output (matches CSV writer logic)
-            if not os.path.dirname(filename):
-                full_file_path = os.path.join("data", filename)
-            else:
-                full_file_path = filename
-
-            print(f"! {len(data)} records exported to {full_file_path}")
-            logging.info(f"Site {data_type} data written to {filename} ({len(data)} rows).")
-
-            # Display the data in a table (only in debug mode, otherwise just log summary)
-            if is_debug_mode():  # type: ignore[no-untyped-call]
-                fields = DataProcessingUtils.get_unique_keys(data)  # type: ignore[no-untyped-call]
-                table = PrettyTable()
-                table.field_names = fields
-                table.valign = "t"
-                for item in tqdm(data, desc="Processing", unit="record"):  # type: ignore[no-untyped-call]
-                    row = [item.get(field, "") for field in table.field_names]
-                    table.add_row(row)
-                print(table)
-                logging.debug("Site data displayed in table format (debug mode).")
-            else:
-                logging.info(f"Site {data_type} export completed - {len(data)} records saved to {filename}.")
-
-        except Exception as e:
-            logging.error(f"! Error during site {data_type} export for {site_name}: {e}")
-            raise
+        configure_site_export_utils_dependencies(
+            apisession_dependency=apisession,
+            prompt_utils=PromptUtils,
+            config_utils=ConfigUtils,
+            data_processing_utils=DataProcessingUtils,
+            data_exporter=DataExporter,
+            time_utils=TimeUtils,
+            enhanced_ssh_runner=EnhancedSSHRunner,
+            insight_metrics_utils=InsightMetricsUtils,
+            packet_capture_manager=PacketCaptureManager,
+            api_core_fetch_utils=APICoreFetchUtils,
+            is_debug_mode_fn=is_debug_mode,
+            pretty_table_class=PrettyTable,
+            tqdm_module=tqdm,
+            mistapi_dependency=mistapi,
+        )
+        return site_export_module
 
     @staticmethod
-    def insight_metrics():  # type: ignore[no-untyped-def]  # noqa: PLR0915
-        """Export general insight metrics for a selected site to SiteInsightMetrics_[SiteName].csv."""
-        print("Export Site Insight Metrics:")
-        logging.info("Starting export of site insight metrics...")
-
-        # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-
-        # Get site name for filename
-        try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception:
-            site_name = site_id
-
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
-        filename = f"SiteInsightMetrics_{sanitized_site_name}.csv"
-
-        # First, refresh the available metrics from the API
-        print("! Refreshing available insight metrics from Mist API...")
-        InsightMetricsUtils.export_legacy()
-
-        # Get all metrics that support "site" scope
-        site_metrics = InsightMetricsUtils.get_by_scope("site")
-
-        if not site_metrics:
-            print("! No metrics found for site scope. Check ConstInsightMetrics.csv file.")
-            logging.error("No site-scope metrics found in const insight metrics")
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-            return
-
-        all_insight_data = []
-        metrics_retrieved = 0
-
-        print(f"! Retrieving {len(site_metrics)} different site insight metrics...")
-
-        try:
-            for metric in site_metrics:
-                try:
-                    response = mistapi.api.v1.sites.insights.getSiteInsightMetrics(apisession, site_id, metric)
-                    insight_data = getattr(response, "data", response) or {}
-
-                    if insight_data:
-                        # Add metric type identifier to each data point
-                        insight_data["metric_type"] = metric
-                        insight_data["site_id"] = site_id
-                        insight_data["site_name"] = site_name
-                        all_insight_data.append(insight_data)
-                        metrics_retrieved += 1
-                        logging.debug(f"Retrieved site insight data for metric: {metric}")
-                    else:
-                        logging.debug(f"No data available for metric: {metric}")
-                except Exception as exception:
-                    logging.debug(f"Failed to get site insight data for metric {metric}: {exception}")
-                    continue
-
-            if all_insight_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_insight_data)
-                processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} site insight metrics exported to {filename}")
-                logging.info(f"Exported {metrics_retrieved} site insight metrics for {site_name} to {filename}")
-            else:
-                print(f"! 0 insight metrics exported to {filename} (no data available)")
-                logging.warning(f"No insight data available for site {site_name}")
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-        except Exception as exception:
-            print(f"! Error exporting site insight metrics: {exception}")
-            logging.error(f"Failed to export site insight metrics for {site_name}: {exception}")
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # type: ignore[no-untyped-def]
+        """Delegate generic site export flow to extracted module."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._export_data(api_call, data_type, sort_key=sort_key, **api_kwargs)
 
     @staticmethod
-    def device_insights():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """Export device-specific insight metrics for a selected site to SiteDeviceInsights_[SiteName].csv."""
-        print("Export Site Device Insights:")
-        logging.info("Starting export of site device insights...")
-
-        # First, refresh the available metrics from the API
-        print("! Refreshing available insight metrics from Mist API...")
-        InsightMetricsUtils.export_legacy()
-
-        # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-
-        # Get device selection
-        device_id = PromptUtils.select_device(site_id)
-        if not device_id:
-            logging.error("No device selected. Exiting.")
-            return
-
-        # Get site and device names for filename
-        try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception:
-            site_name = site_id
-
-        try:
-            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
-            devices = mistapi.get_all(response=response, mist_session=apisession)
-            device = next((dev for dev in devices if dev["id"] == device_id), None)
-            device_name = device["name"] if device else device_id
-            device_mac = device["mac"] if device else None
-            device_model = device.get("model", "") if device else ""
-        except Exception:
-            device_name = device_id
-            device_mac = None
-            device_model = ""
-
-        if not device_mac:
-            print(f"! Error: Could not find MAC address for device {device_name}")
-            logging.error(f"Could not find MAC address for device {device_id}")
-            return
-        normalized_device_mac = SiteExportUtils._normalize_device_mac_or_none(device_mac)
-        if not normalized_device_mac:
-            print(f"! Invalid device MAC address format for {device_name}: {device_mac}")
-            logging.error(f"Invalid device MAC address format for device {device_id}: {device_mac}")
-            return
-
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
-        sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name or device_id)
-        filename = f"SiteDeviceInsights_{sanitized_site_name}_{sanitized_device_name}.csv"
-
-        # Get all metrics that support "device" scope
-        device_metrics = InsightMetricsUtils.get_by_scope("device")
-        device_platform = SiteExportUtils._classify_device_platform(device_model)
-        device_metrics = [
-            metric
-            for metric in device_metrics
-            if SiteExportUtils._metric_compatible_with_platform(metric, device_platform)
-        ]
-
-        if not device_metrics:
-            print("! No metrics found for device scope. Check ConstInsightMetrics.csv file.")
-            logging.error("No device-scope metrics found in const insight metrics")
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-            return
-
-        all_device_data = []
-        metrics_retrieved = 0
-
-        print(f"! Retrieving {len(device_metrics)} different device insight metrics for {device_name}...")
-
-        try:
-            for metric in device_metrics:
-                try:
-                    response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(
-                        apisession, site_id, metric, normalized_device_mac
-                    )
-                    device_insight_data = getattr(response, "data", response) or {}
-
-                    if device_insight_data:
-                        # Add metric type identifier to each data point
-                        device_insight_data["metric_type"] = metric
-                        device_insight_data["site_id"] = site_id
-                        device_insight_data["site_name"] = site_name
-                        device_insight_data["device_id"] = device_id
-                        device_insight_data["device_name"] = device_name
-                        device_insight_data["device_mac"] = normalized_device_mac
-                        all_device_data.append(device_insight_data)
-                        metrics_retrieved += 1
-                        logging.debug(f"Retrieved device insight data for metric: {metric}")
-                    else:
-                        logging.debug(f"No data available for device metric: {metric}")
-                except Exception as metric_error:
-                    logging.debug(f"Failed to get device insight data for metric {metric}: {metric_error}")
-                    continue
-
-            if all_device_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_device_data)
-                processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} device insight metrics exported to {filename}")
-                logging.info(
-                    "Exported %s device insight metrics for %s at %s to %s",
-                    metrics_retrieved,
-                    device_name,
-                    site_name,
-                    filename,
-                )
-            else:
-                print(f"! 0 device insights exported to {filename} (no data available)")
-                logging.warning(
-                    "No device insight data available for %s at %s",
-                    device_name,
-                    site_name,
-                )
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-        except Exception as exception:
-            print(f"! Error exporting device insights: {exception}")
-            logging.error(
-                "Failed to export device insights for %s at %s: %s",
-                device_name,
-                site_name,
-                exception,
-            )
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+    def insight_metrics():  # type: ignore[no-untyped-def]
+        """Menu #74 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.insight_metrics()
 
     @staticmethod
-    def _classify_device_platform(device_model: str) -> str:
-        """Classify Mist inventory model into ap/switch/gateway for metric filtering."""
-        model = (device_model or "").upper()
-        if model.startswith("AP"):
-            return "ap"
-        if model.startswith(("EX", "QFX")):
-            return "switch"
-        if model.startswith(("SRX", "SSR")):
-            return "gateway"
-        return "unknown"
-
-    @staticmethod
-    def _metric_compatible_with_platform(metric_name: str, device_platform: str) -> bool:
-        """Skip clearly incompatible device metrics to prevent avoidable API 400 responses."""
-        metric = (metric_name or "").lower()
-        if "switch" in metric:
-            return device_platform in {"switch", "unknown"}
-        if any(token in metric for token in ("gateway", "wan", "srx", "ssr")):
-            return device_platform in {"gateway", "unknown"}
-        if "ap" in metric or "wifi" in metric:
-            return device_platform in {"ap", "unknown"}
-        return True
-
-    @staticmethod
-    def _normalize_device_mac_or_none(device_mac: str) -> str | None:
-        """Validate and normalize device MAC for device insights endpoints."""
-        if not device_mac:
-            return None
-        if not PacketCaptureManager.validate_mac_address(device_mac):
-            return None
-        return PacketCaptureManager.normalize_mac_address(device_mac)
+    def device_insights():  # type: ignore[no-untyped-def]
+        """Menu #76 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.device_insights()
 
     @staticmethod
     def insights():  # type: ignore[no-untyped-def]
-        """Export SLE metric availability for a selected site."""
-        logging.info("Starting export of site SLE metric insights...")
-
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-
-        try:
-            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception as exception:
-            logging.error(f"Error getting site name: {exception}")
-            site_name = site_id
-
-        safe_site_name = site_name.replace(" ", "_").replace("-", "_")
-        filename = f"SiteSleMetricsInsights_{safe_site_name}.csv"
-
-        try:
-            # listSiteSlesMetrics requires explicit scope and scope_id.
-            response = mistapi.api.v1.sites.sle.listSiteSlesMetrics(
-                apisession,
-                site_id,
-                scope="site",
-                scope_id=site_id,
-            )
-            metrics_payload = getattr(response, "data", response) or {}
-
-            rows = []
-            enabled_metrics = metrics_payload.get("enabled", [])
-            supported_metrics = metrics_payload.get("supported", [])
-
-            for metric_name in sorted(set(enabled_metrics + supported_metrics)):
-                rows.append(
-                    {
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "metric_name": metric_name,
-                        "enabled": metric_name in enabled_metrics,
-                        "supported": metric_name in supported_metrics,
-                    }
-                )
-
-            if rows:
-                DataExporter.save_data_to_output(rows, filename)  # type: ignore[no-untyped-call]
-                print(f"! {len(rows)} records exported to data\\{filename}")
-                logging.info(f"Exported {len(rows)} site SLE metric insight records to {filename}")
-            else:
-                print(f"! 0 records exported to data\\{filename} (no metrics available)")
-                logging.warning(f"No site SLE metric insight data available for site {site_name}")
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-        except Exception as exception:
-            print(f"! Error exporting site SLE metric insights: {exception}")
-            logging.error(f"Failed to export site SLE metric insights for site {site_name}: {exception}")
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+        """Menu #73 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.insights()
 
     @staticmethod
     def _system_events():  # type: ignore[no-untyped-def]
-        """Export system events for a site to SiteSystemEvents.csv."""
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("site system events export", hours)
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.events.searchSiteSystemEvents,
-            data_type="system events",
-            sort_key="timestamp",
-            duration=f"{hours}h",
-        )
+        """Delegated site system events export."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._system_events()
 
     @staticmethod
     def _fast_roam_events():  # type: ignore[no-untyped-def]
-        """Export fast roam events for a site to SiteFastRoamEvents.csv."""
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("site fast roam events export", hours)
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.events.searchSiteFastRoamEvents,
-            data_type="fast roam events",
-            sort_key="timestamp",
-            duration=f"{hours}h",
-        )
+        """Delegated site fast-roam events export."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._fast_roam_events()
 
     @staticmethod
     def ospf_stats():  # type: ignore[no-untyped-def]
-        """Export OSPF adjacency statistics for a selected site to SiteOspfStats.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.stats.searchSiteOspfStats,
-            data_type="ospf stats",
-            sort_key="mac",
-        )
+        """Menu #70 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.ospf_stats()
 
     @staticmethod
     def mxedge_upgrade_status():  # type: ignore[no-untyped-def]
-        """Export MxEdge upgrade status for a selected site to SiteMxEdgeUpgrades.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.mxedges.listSiteMxEdgeUpgrades,
-            data_type="mxedge upgrade status",
-            sort_key="id",
-        )
+        """Menu #71 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.mxedge_upgrade_status()
 
     @staticmethod
     def auto_map_assignment_status():  # type: ignore[no-untyped-def]
-        """Export auto-map assignment status for a selected site to SiteAutoMapAssignmentStatus.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.auto_map_assignment.getSiteAutoMapAssignmentStatus,
-            data_type="auto map assignment status",
-            sort_key="id",
-        )
+        """Menu #72 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.auto_map_assignment_status()
 
     @staticmethod
     def site_stats() -> None:  # type: ignore[no-untyped-def]
-        """Export aggregate health and capacity statistics for a selected site to SiteSiteStats.csv."""
-        logging.info("Starting export of site statistics...")  # Log before operation
-        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
-        if not site_id:  # Exit early if no site was selected
-            logging.error("No site selected. Aborting site stats export.")  # Log failure
-            return
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteStats(
-                apisession, site_id
-            )  # Fetch site-level stats from Mist API
-            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope to get payload dict
-            rows = (
-                [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
-            )  # Normalize to list of dicts
-            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV compatibility
-            filename = "SiteSiteStats.csv"  # Output filename for site stats
-            DataExporter.save_data_to_output(
-                rows, filename, api_function_name="getSiteStats"
-            )  # Write results to configured backend
-            logging.info("Exported %d site stats records to %s", len(rows), filename)  # Log success with record count
-        except Exception as exception:  # Catch any API or processing error
-            logging.error(
-                "Failed to export site stats: %s", exception, exc_info=True
-            )  # Log full traceback for debugging
+        """Menu #80 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.site_stats()
 
     @staticmethod
     def gateway_metrics() -> None:  # type: ignore[no-untyped-def]
-        """Export gateway performance metrics summary for a selected site to SiteGatewayMetrics.csv."""
-        logging.info("Starting export of site gateway metrics...")  # Log before operation
-        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
-        if not site_id:  # Exit early if no site was selected
-            logging.error("No site selected. Aborting gateway metrics export.")  # Log failure
-            return
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteGatewayMetrics(
-                apisession, site_id
-            )  # Fetch gateway metrics from Mist API
-            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
-            rows = (
-                [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
-            )  # Normalize single object to list
-            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested metric dicts for CSV
-            filename = "SiteGatewayMetrics.csv"  # Output filename for gateway metrics
-            DataExporter.save_data_to_output(
-                rows, filename, api_function_name="getSiteGatewayMetrics"
-            )  # Write to configured backend
-            logging.info("Exported %d gateway metric records to %s", len(rows), filename)  # Log success
-        except Exception as exception:  # Catch any API or processing error
-            logging.error("Failed to export gateway metrics: %s", exception, exc_info=True)  # Log full traceback
+        """Menu #81 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.gateway_metrics()
 
     @staticmethod
     def switches_metrics() -> None:  # type: ignore[no-untyped-def]
-        """Export switch performance metrics summary for a selected site to SiteSwitchesMetrics.csv."""
-        logging.info("Starting export of site switches metrics...")  # Log before operation
-        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
-        if not site_id:  # Exit early if no site was selected
-            logging.error("No site selected. Aborting switches metrics export.")  # Log failure
-            return
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteSwitchesMetrics(
-                apisession, site_id
-            )  # Fetch switch metrics from Mist API
-            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
-            rows = [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])  # Normalize to list
-            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV
-            filename = "SiteSwitchesMetrics.csv"  # Output filename for switch metrics
-            DataExporter.save_data_to_output(
-                rows, filename, api_function_name="getSiteSwitchesMetrics"
-            )  # Write to configured backend
-            logging.info("Exported %d switches metric records to %s", len(rows), filename)  # Log success
-        except Exception as exception:  # Catch any API or processing error
-            logging.error("Failed to export switches metrics: %s", exception, exc_info=True)  # Log full traceback
+        """Menu #82 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.switches_metrics()
 
     @staticmethod
     def beacons_stats() -> None:  # type: ignore[no-untyped-def]
-        """Export BLE beacon statistics for a selected site to SiteBeaconsStats.csv."""
-        logging.info("Starting export of site BLE beacon statistics...")  # Log before operation
-        # Delegate to generic site export using paginated list endpoint
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.stats.listSiteBeaconsStats,  # BLE beacon stats list endpoint
-            data_type="beacons stats",  # Human-readable label for log messages and filename generation
-            sort_key="id",  # Sort beacons by their ID field for consistent output ordering
-        )
+        """Menu #83 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.beacons_stats()
 
     @staticmethod
     def wxrules_usage() -> None:  # type: ignore[no-untyped-def]
-        """Export WxLAN rule usage statistics for a selected site to SiteWxrulesUsage.csv."""
-        logging.info("Starting export of site WxLAN rules usage statistics...")  # Log before operation
-        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
-        if not site_id:  # Exit early if no site was selected
-            logging.error("No site selected. Aborting WxRules usage export.")  # Log failure
-            return
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteWxRulesUsage(apisession, site_id)  # Fetch WxRules usage stats
-            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
-            rows = [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])  # Normalize to list
-            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested policy stats for CSV
-            filename = "SiteWxrulesUsage.csv"  # Output filename for WxRules usage
-            DataExporter.save_data_to_output(
-                rows, filename, api_function_name="getSiteWxRulesUsage"
-            )  # Write to configured backend
-            logging.info("Exported %d WxRules usage records to %s", len(rows), filename)  # Log success
-        except Exception as exception:  # Catch any API or processing error
-            logging.error("Failed to export WxRules usage: %s", exception, exc_info=True)  # Log full traceback
+        """Menu #84 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.wxrules_usage()
 
     @staticmethod
     def assets_stats() -> None:  # type: ignore[no-untyped-def]
-        """Export asset statistics for a selected site to SiteAssetsStats.csv."""
-        logging.info("Starting export of site asset statistics...")  # Log before operation
-        # Delegate to generic site export using paginated list endpoint
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.stats.listSiteAssetsStats,  # Asset stats list endpoint
-            data_type="assets stats",  # Human-readable label used in log messages and filename generation
-            sort_key="mac",  # Sort assets by MAC address for consistent output ordering
-        )
+        """Menu #85 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.assets_stats()
 
     @staticmethod
     def current_channel_planning() -> None:  # type: ignore[no-untyped-def]
-        """Export current RRM channel and power plan per AP radio for a selected site."""
-        logging.info("Starting export of site current channel planning (RRM)...")  # Log before operation
-        site_id = PromptUtils.select_site()  # Prompt operator to choose a site
-        if not site_id:  # Exit early if no site was selected
-            logging.error("No site selected. Aborting channel planning export.")  # Log failure
-            return
-        try:
-            response = mistapi.api.v1.sites.rrm.getSiteCurrentChannelPlanning(
-                apisession, site_id
-            )  # Fetch current RRM channel plan
-            raw = getattr(response, "data", response) or {}  # Unwrap APIResponse envelope
-            # The channel planning response is a dict with AP MAC keys mapping to band channel assignments
-            if isinstance(raw, dict):  # Single dict response — flatten per-AP entries into rows
-                rows = []  # Accumulate one row per AP per band for tabular output
-                for ap_mac, bands in raw.items():  # Iterate APs and their band assignments
-                    if isinstance(bands, dict):  # Each AP has per-band channel/power assignments
-                        for band, assignment in bands.items():  # Iterate radio bands (2.4G, 5G, 6G)
-                            row = {"ap": ap_mac, "band": band, "site_id": site_id}  # Base row with identity fields
-                            row.update(
-                                assignment if isinstance(assignment, dict) else {"value": assignment}
-                            )  # Merge assignment fields
-                            rows.append(row)  # Add completed row to output list
-                    else:  # Unexpected structure — store raw value
-                        rows.append(
-                            {"ap": ap_mac, "site_id": site_id, "value": bands}
-                        )  # Fallback row for unknown structure
-            else:  # Response is already a list
-                rows = raw if isinstance(raw, list) else [raw]  # Wrap scalar in list for consistent processing
-            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten any remaining nested dicts for CSV
-            filename = "SiteCurrentChannelPlanning.csv"  # Output filename for channel planning
-            DataExporter.save_data_to_output(
-                rows, filename, api_function_name="getSiteCurrentChannelPlanning"
-            )  # Write to configured backend
-            logging.info(
-                "Exported %d channel planning records to %s", len(rows), filename
-            )  # Log success with record count
-        except Exception as exception:  # Catch any API or processing error
-            logging.error("Failed to export channel planning: %s", exception, exc_info=True)  # Log full traceback
+        """Menu #86 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.current_channel_planning()
 
     @staticmethod
     def zone_config_analysis() -> None:
-        """Zone, engagement, and occupancy config analysis (Menu #6). Delegates to src.analytics.zone_analyzer."""
-        from src.analytics.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA  # noqa: PLC0415
+        """Menu #6 delegated entrypoint."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils.zone_config_analysis()
 
-        _ZCA.analyze(
-            apisession=apisession,
-            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
-            check_stop_fn=ConfigUtils.check_stop_signal,
-            all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-            save_data_fn=DataExporter.save_data_to_output,
-        )
+    @staticmethod
+    def _classify_device_platform(device_model: str) -> str:
+        """Delegate device platform classification helper."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._classify_device_platform(device_model)
+
+    @staticmethod
+    def _metric_compatible_with_platform(metric_name: str, device_platform: str) -> bool:
+        """Delegate metric compatibility helper."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._metric_compatible_with_platform(metric_name, device_platform)
+
+    @staticmethod
+    def _normalize_device_mac_or_none(device_mac: str) -> str | None:
+        """Delegate device MAC normalization helper."""
+        module = SiteExportUtils._configure_module()
+        return module.SiteExportUtils._normalize_device_mac_or_none(device_mac)
 
 
 class GatewayHaExporter:
@@ -18592,1061 +17391,57 @@ class GatewayHaExporter:
         print()  # Blank line after table for readability
 
 
+def _get_service_ping_manager_instance():  # type: ignore[no-untyped-def]
+    """Create extracted ServicePingManager instance with MistHelper runtime dependencies."""
+    from src.websocket.service_ping_manager import ServicePingManager as _SPM
+    from src.websocket.service_ping_manager import configure_service_ping_manager_dependencies as _configure_spm
+
+    _configure_spm(
+        apisession_dependency=apisession,
+        mistapi_dependency=mistapi,
+        prompt_utils=PromptUtils,
+        input_utils=InputUtils,
+        websocket_manager_class=WebSocketManager,
+        is_debug_mode=is_debug_mode,
+        api_tenant_fetch_utils=APITenantFetchUtils,
+        config_utils=ConfigUtils,
+        api_fetch_utils=APIFetchUtils,
+    )
+
+    return _SPM()
+
+
 class ServicePingManager:
-    """
-    Manager class for SSR Service Ping operations via WebSocket.
+    """Service ping manager (Menu 120).
 
-    Handles tenant/service discovery, user interaction, and WebSocket execution
-    for service-specific ping operations on SSR gateways.
+    Implementation extracted to `src/websocket/service_ping_manager.py` and
+    `src/websocket/service_ping_discovery.py`. This wrapper preserves
+    MistHelper menu orchestration and delegation only.
     """
 
-    # Default values for service ping operations
-    DEFAULT_HOST = "8.8.8.8"
-    DEFAULT_COUNT = 4
-    DEFAULT_SIZE = 56
-    MIN_SIZE = 56
-    MAX_SIZE = 65535
-    DEFAULT_TENANT = "testing-tools"
-    DEFAULT_SERVICE = "web-session"
+    from src.websocket.service_ping_manager import ServicePingManager as _Extracted
+
+    DEFAULT_HOST = _Extracted.DEFAULT_HOST
+    DEFAULT_COUNT = _Extracted.DEFAULT_COUNT
+    DEFAULT_SIZE = _Extracted.DEFAULT_SIZE
+    MIN_SIZE = _Extracted.MIN_SIZE
+    MAX_SIZE = _Extracted.MAX_SIZE
+    DEFAULT_TENANT = _Extracted.DEFAULT_TENANT
+    DEFAULT_SERVICE = _Extracted.DEFAULT_SERVICE
 
     def __init__(self):  # type: ignore[no-untyped-def]
-        """Initialize ServicePingManager with debug mode detection."""
-        self.debug_mode = is_debug_mode()  # type: ignore[no-untyped-call]
-        self.site_id: str | None = None
-        self.device_id: str | None = None
-        self.device_info: dict | None = None  # type: ignore[type-arg]
-        self.websocket_manager: WebSocketManager | None = None
-
-        # Tenant sources (in precedence order)
-        self.org_tenants: list[str] = []
-        self.site_tenants: list[str] = []
-        self.policy_tenants: list[str] = []
-        self.template_tenants: list[str] = []
-        self.device_tenants: list[str] = []
-
-        # Service sources
-        self.org_services: list[dict] = []  # type: ignore[type-arg]
-        self.org_service_names: list[str] = []
-        self.device_services: list[str] = []
-
-    def _debug_print(self, message: str) -> None:
-        """Print debug message if debug mode is enabled."""
-        if self.debug_mode:
-            print(f"[DEBUG] {message}")
-
-    def _select_site_and_device(self) -> bool:
-        """
-        Prompt user to select site and gateway device.
-
-        Returns:
-            bool: True if selection successful, False otherwise
-        """
-        self.site_id = PromptUtils.select_site_id_from_csv()
-        if not self.site_id:
-            print("! No site selected. Operation cancelled.")
-            return False
-
-        self._debug_print(f"Selected site_id = {self.site_id}")
-
-        self.device_id = PromptUtils.select_device_id_from_inventory(self.site_id, device_type="gateway")
-        if not self.device_id:
-            print("! No gateway devices found or selected. Service Ping requires an SSR gateway.")
-            return False
-
-        self._debug_print(f"Selected device_id = {self.device_id}")
-        return True
-
-    def _fetch_device_info(self) -> bool:
-        """
-        Fetch and validate device information.
-
-        Returns:
-            bool: True if device is valid for service ping, False otherwise
-        """
-        try:
-            logging.info("Fetching gateway device details for site %s and device %s", self.site_id, self.device_id)
-            rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, self.site_id, type="gateway").data
-            logging.debug("Retrieved %d gateway devices for site %s", len(rawdata or []), self.site_id)
-            self.device_info = next((device for device in rawdata if device.get("id") == self.device_id), None)
-            logging.debug("Device lookup complete for %s, found=%s", self.device_id, self.device_info is not None)
-        except Exception as error:
-            logging.warning(f"Could not retrieve device details: {error}")
-            self._debug_print(f"Device details error: {error}")
-            return self._confirm_unknown_device()
-
-        if not self.device_info:
-            return self._confirm_unknown_device()
-
-        return self._validate_device_type()
-
-    def _validate_device_type(self) -> bool:
-        """Validate device type and prompt for confirmation if not a gateway."""
-        if self.device_info is None:
-            return self._confirm_unknown_device()
-
-        device_type = self.device_info.get("type", "unknown")
-        device_model = self.device_info.get("model", "unknown")
-
-        self._debug_print(f"Device type: {device_type}, model: {device_model}")
-
-        if device_type == "gateway":
-            print(f"!? SSR Gateway detected (Model: {device_model})")
-            print("   -> Service Ping allows ping packets to follow service-specific paths")
-            return True
-
-        # Non-gateway device - warn and confirm
-        type_messages = {"ap": "Access Point", "switch": "Switch"}
-        device_label = type_messages.get(device_type, "Unknown device type")
-        print(f"!? WARNING: {device_label} detected (Model: {device_model})")
-        print("   -> Service Ping is designed for SSR gateways")
-
-        return self._confirm_proceed()
-
-    def _confirm_unknown_device(self) -> bool:
-        """Confirm proceeding with unknown device type."""
-        print("!? Cannot determine device type - proceeding with caution")
-        print("   -> Service Ping is designed for SSR gateways")
-        return self._confirm_proceed()
-
-    def _confirm_proceed(self) -> bool:
-        """Prompt user to confirm proceeding with non-optimal device."""
-        choice = (
-            InputUtils.safe_input(
-                "   -> Continue anyway? (y/N): ",
-                context="service_ping_continue",
-            )
-            .strip()
-            .lower()
-        )
-        if choice != "y":
-            print("Operation cancelled.")
-            return False
-        return True
-
-    def _fetch_all_tenants(self) -> None:
-        """Fetch tenants from all sources."""
-        print("\n-> Fetching organization tenants...")
-        self._fetch_org_tenants()
-
-        print("-> Fetching site tenants...")
-        self._fetch_site_tenants()
-
-        print("-> Fetching service policy tenants...")
-        self._fetch_policy_tenants()
-
-        print("-> Fetching gateway template tenants...")
-        self._fetch_template_tenants()
-
-    def _fetch_org_tenants(self) -> None:
-        """Fetch organization-level tenants."""
-        _tenant_utils = APITenantFetchUtils(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id
-        )  # Create instance with runtime session and org ID resolver
-        tenants = _tenant_utils.organization_tenants()  # Fetch org-level tenants via injected session
-        if tenants:
-            self.org_tenants = tenants
-            print(f"   -> Found {len(self.org_tenants)} organization-level tenants")
-            self._debug_print(f"Organization tenants: {self.org_tenants}")
-        else:
-            print("   -> No organization-level tenants found")
-
-    def _fetch_site_tenants(self) -> None:
-        """Fetch site-level tenants."""
-        if self.site_id is None:
-            return
-        _tenant_utils = APITenantFetchUtils(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id
-        )  # Create instance with runtime session and org ID resolver
-        tenants = _tenant_utils.site_tenants(self.site_id)  # Fetch site-level tenants via injected session
-        if tenants:
-            self.site_tenants = tenants
-            print(f"   -> Found {len(self.site_tenants)} site-level tenants")
-            self._debug_print(f"Site tenants: {self.site_tenants}")
-        else:
-            print("   -> No site-level tenants found")
-
-    def _fetch_policy_tenants(self) -> None:
-        """Fetch service policy tenants."""
-        _tenant_utils = APITenantFetchUtils(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id
-        )  # Create instance with runtime session and org ID resolver
-        tenants = _tenant_utils.service_policy_tenants(
-            self.site_id
-        )  # Fetch service policy tenants via injected session
-        if tenants:
-            self.policy_tenants = tenants
-            print(f"   -> Found {len(self.policy_tenants)} service policy tenants")
-            self._debug_print(f"Service policy tenants: {self.policy_tenants}")
-        else:
-            print("   -> No service policy tenants found")
-
-    def _fetch_template_tenants(self) -> None:
-        """Fetch gateway template tenants."""
-        _tenant_utils = APITenantFetchUtils(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id
-        )  # Create instance with runtime session and org ID resolver
-        tenants = _tenant_utils.gateway_template_tenants(
-            self.site_id
-        )  # Fetch gateway template tenants via injected session
-        if tenants:
-            self.template_tenants = tenants
-            print(f"   -> Found {len(self.template_tenants)} gateway template tenants")
-            self._debug_print(f"Gateway template tenants: {self.template_tenants}")
-        else:
-            print("   -> No gateway template tenants found")
-
-    def _fetch_all_services(self) -> None:
-        """Fetch services from organization and device configuration."""
-        print("\n-> Fetching organization services...")
-        self._fetch_org_services()
-
-        print("-> Fetching device configuration for additional options...")
-        self._fetch_device_config()
-
-    def _fetch_org_services(self) -> None:
-        """Fetch organization-level services."""
-        services = APIFetchUtils.organization_services()
-        if services:
-            self.org_services = services
-            self.org_service_names = [svc["name"] for svc in services if svc.get("name")]
-            print(f"   -> Found {len(self.org_service_names)} organization-level services")
-            self._debug_print(f"Organization services: {self.org_service_names}")
-        else:
-            print("   -> No organization-level services found")
-
-    def _fetch_device_config(self) -> None:
-        """Fetch device configuration for tenants and services."""
-        try:
-            logging.info("Fetching device configuration for site %s device %s", self.site_id, self.device_id)
-            config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, self.site_id, self.device_id)
-            device_config = getattr(config_response, "data", {})
-            logging.debug("Device configuration retrieved with %d top-level keys", len(device_config.keys()))
-            self._debug_print(f"Device config keys: {list(device_config.keys())}")
-
-            self._extract_from_device_config(device_config)
-            self._extract_from_device_stats()
-
-        except Exception as error:
-            logging.warning(f"Could not fetch device configuration: {error}")
-            self._debug_print(f"Config error: {error}")
-            print("!? Cannot retrieve device configuration")
-
-    def _extract_from_device_config(self, config: dict) -> None:  # type: ignore[type-arg]
-        """Extract tenants and services from device configuration."""
-        tenants_set: set = set()  # type: ignore[type-arg]
-        services_set: set = set()  # type: ignore[type-arg]
-
-        # Extract from service_policies
-        for policy in config.get("service_policies", []):
-            if isinstance(policy, dict):
-                if tenant := policy.get("tenant"):
-                    tenants_set.add(tenant)
-                self._extract_services_from_policy(policy, services_set)
-
-        # Extract from routing_instances
-        for instance in config.get("routing_instances", []):
-            if isinstance(instance, dict):
-                if name := instance.get("name"):
-                    if not name.startswith("_"):
-                        tenants_set.add(name)
-
-        # Extract from router configuration
-        self._extract_from_router_config(config.get("router", {}), tenants_set, services_set)
-
-        # Filter and store results
-        self.device_tenants = sorted([t for t in tenants_set if t and not t.startswith("_")])
-        self.device_services = sorted([s for s in services_set if s and not s.startswith("_")])
-
-        self._report_device_config_results()
-
-    def _extract_services_from_policy(self, policy: dict, services_set: set) -> None:  # type: ignore[type-arg]
-        """Extract services from a service policy."""
-        services = policy.get("services", [])
-        if not isinstance(services, list):
-            return
-
-        for service_item in services:
-            if isinstance(service_item, dict):
-                if name := service_item.get("name"):
-                    services_set.add(name)
-            elif isinstance(service_item, str):
-                services_set.add(service_item)
-
-    def _extract_from_router_config(self, router: dict, tenants: set, services: set) -> None:  # type: ignore[type-arg]
-        """Extract tenants and services from router configuration."""
-        if not isinstance(router, dict):
-            return
-
-        for tenant_item in router.get("tenants", []):
-            if isinstance(tenant_item, dict):
-                if name := tenant_item.get("name"):
-                    tenants.add(name)
-
-        for service_item in router.get("services", []):
-            if isinstance(service_item, dict):
-                if name := service_item.get("name"):
-                    services.add(name)
-
-    def _extract_from_device_stats(self) -> None:
-        """Extract additional services from device stats."""
-        try:
-            logging.info(
-                "Fetching device stats for service discovery on site %s device %s",
-                self.site_id,
-                self.device_id,
-            )
-            stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, self.site_id, self.device_id)
-            stats_data = getattr(stats_response, "data", {})
-            logging.debug("Device stats retrieved with %d top-level keys", len(stats_data.keys()))
-            self._debug_print(f"Stats keys: {list(stats_data.keys())}")
-
-            for service_stat in stats_data.get("service_stat", []):
-                if isinstance(service_stat, dict):
-                    if name := service_stat.get("name"):
-                        if not name.startswith("_") and name not in self.device_services:
-                            self.device_services.append(name)
-                            self.device_services.sort()
-
-        except Exception as error:
-            logging.debug(
-                "Device stats retrieval failed for site %s device %s: %s",
-                self.site_id,
-                self.device_id,
-                error,
-            )
-            self._debug_print(f"Could not fetch stats: {error}")
-
-    def _report_device_config_results(self) -> None:
-        """Report device configuration extraction results."""
-        self._debug_print(f"Found tenants from device: {self.device_tenants}")
-        self._debug_print(f"Found services from device: {self.device_services}")
-
-        if self.device_tenants:
-            print(f"   -> Found {len(self.device_tenants)} tenants from device configuration")
-        else:
-            print("   -> No tenants found in device configuration")
-
-        if self.device_services:
-            print(f"   -> Found {len(self.device_services)} additional services from device configuration")
-        else:
-            print("   -> No additional services found in device configuration")
-
-    def _build_combined_tenants(self) -> list[str]:
-        """Combine tenants from all sources with deduplication."""
-        combined = list(self.org_tenants)
-
-        # Add from each source if not already present
-        for source in [self.site_tenants, self.policy_tenants, self.template_tenants, self.device_tenants]:
-            for tenant in source:
-                if tenant not in combined:
-                    combined.append(tenant)
-
-        # Ensure default tenant exists
-        if self.DEFAULT_TENANT not in combined:
-            combined.append(self.DEFAULT_TENANT)
-            self._debug_print(f"Added default tenant: {self.DEFAULT_TENANT}")
-
-        self._debug_print(f"Combined tenant list: {combined}")
-        return combined
-
-    def _build_combined_services(self) -> list[str]:
-        """Combine services from all sources with deduplication."""
-        combined = list(self.org_service_names)
-
-        for service in self.device_services:
-            if service not in combined:
-                combined.append(service)
-
-        # Ensure default service exists
-        if self.DEFAULT_SERVICE not in combined:
-            combined.append(self.DEFAULT_SERVICE)
-            self._debug_print(f"Added default service: {self.DEFAULT_SERVICE}")
-
-        self._debug_print(f"Combined service list: {combined}")
-        return combined
-
-    def _prompt_for_tenant(self, available_tenants: list[str]) -> str | None:
-        """Prompt user to select a tenant."""
-        if not available_tenants:
-            return self._prompt_manual_tenant()
-
-        print("\nAvailable Tenants:")
-        self._display_tenant_categories(available_tenants)
-
-        default_index = None
-        if self.DEFAULT_TENANT in available_tenants:
-            default_index = available_tenants.index(self.DEFAULT_TENANT)
-
-        print(f"  [{len(available_tenants)}] Skip tenant selection")
-
-        return self._get_tenant_selection(available_tenants, default_index)
-
-    def _display_tenant_categories(self, all_tenants: list[str]) -> None:  # noqa: C901
-        """Display tenants organized by source category."""
-        index = 0
-
-        # Organization tenants
-        if self.org_tenants:
-            print(f"  Organization Tenants ({len(self.org_tenants)}):")
-            for name in self.org_tenants:
-                print(f"    [{index}] {name} (org networks)")
-                index += 1
-
-        # Site-only tenants
-        site_only = [t for t in self.site_tenants if t not in self.org_tenants]
-        if site_only:
-            print(f"  Site Tenants ({len(site_only)}):")
-            for name in site_only:
-                print(f"    [{index}] {name} (site networks)")
-                index += 1
-
-        # Policy-only tenants
-        policy_only = [t for t in self.policy_tenants if t not in self.org_tenants and t not in self.site_tenants]
-        if policy_only:
-            print(f"  Service Policy Tenants ({len(policy_only)}):")
-            for name in policy_only:
-                print(f"    [{index}] {name} (service policies)")
-                index += 1
-
-        # Template-only tenants
-        template_only = [
-            t
-            for t in self.template_tenants
-            if t not in self.org_tenants and t not in self.site_tenants and t not in self.policy_tenants
-        ]
-        if template_only:
-            print(f"  Gateway Template Tenants ({len(template_only)}):")
-            for name in template_only:
-                print(f"    [{index}] {name} (gateway templates)")
-                index += 1
-
-        # Device-only tenants
-        device_only = [
-            t
-            for t in self.device_tenants
-            if t not in self.org_tenants
-            and t not in self.site_tenants
-            and t not in self.policy_tenants
-            and t not in self.template_tenants
-        ]
-        if device_only:
-            print(f"  Device Configuration Tenants ({len(device_only)}):")
-            for name in device_only:
-                print(f"    [{index}] {name} (device config)")
-                index += 1
-
-        # Remaining (defaults)
-        remaining = [
-            t
-            for t in all_tenants
-            if t not in self.org_tenants
-            and t not in self.site_tenants
-            and t not in self.policy_tenants
-            and t not in self.template_tenants
-            and t not in self.device_tenants
-        ]
-        if remaining:
-            print(f"  Additional Tenants ({len(remaining)}):")
-            for name in remaining:
-                print(f"    [{index}] {name} (default/custom)")
-                index += 1
-
-    def _get_tenant_selection(self, tenants: list[str], default_index: int | None) -> str | None:
-        """Get tenant selection from user input."""
-        while True:
-            try:
-                prompt = f"\nSelect tenant index (0-{len(tenants)})"
-                if default_index is not None:
-                    prompt += f" [default: {default_index} ({self.DEFAULT_TENANT})]: "
-                else:
-                    prompt += " [default: skip]: "
-
-                selection = InputUtils.safe_input(prompt, context="service_ping_tenant_selection").strip()
-
-                if not selection:
-                    if default_index is not None:
-                        tenant = tenants[default_index]
-                        print(f"!? Using default tenant: {tenant}")
-                        return tenant
-                    return None
-
-                idx = int(selection)
-                if idx == len(tenants):
-                    print("!? Skipping tenant selection")
-                    return None
-
-                if 0 <= idx < len(tenants):
-                    tenant = tenants[idx]
-                    self._print_tenant_source(tenant)
-                    return tenant
-
-                print(f"Please enter a number between 0 and {len(tenants)}")
-
-            except ValueError:
-                print("Please enter a valid number")
-            except KeyboardInterrupt:
-                print("\nOperation cancelled")
-                raise
-
-    def _print_tenant_source(self, tenant: str) -> None:
-        """Print the source of a selected tenant."""
-        if tenant in self.org_tenants:
-            print(f"!? Selected organization tenant: {tenant}")
-        elif tenant in self.site_tenants:
-            print(f"!? Selected site tenant: {tenant}")
-        elif tenant in self.policy_tenants:
-            print(f"!? Selected service policy tenant: {tenant}")
-        elif tenant in self.template_tenants:
-            print(f"!? Selected gateway template tenant: {tenant}")
-        elif tenant in self.device_tenants:
-            print(f"!? Selected device configuration tenant: {tenant}")
-        else:
-            print(f"!? Selected default/custom tenant: {tenant}")
-
-    def _prompt_manual_tenant(self) -> str | None:
-        """Prompt for manual tenant entry when none available."""
-        print("\n-> No tenants found in any configuration source")
-        manual = InputUtils.safe_input(
-            "-> Enter tenant name manually (or press Enter to skip): ",
-            context="service_ping_tenant_manual",
-        ).strip()
-        if manual:
-            print(f"!? Manual tenant: {manual}")
-            return manual
-        print("-> Proceeding without tenant (may cause service ping to fail)")
-        return None
-
-    def _prompt_for_service(self, available_services: list[str]) -> str:
-        """Prompt user to select a service."""
-        if not available_services:
-            return self._prompt_required_service()
-
-        print("\nAvailable Services:")
-        self._display_service_categories(available_services)
-
-        default_index = None
-        if self.DEFAULT_SERVICE in available_services:
-            default_index = available_services.index(self.DEFAULT_SERVICE)
-
-        print(f"  [{len(available_services)}] Enter custom service name")
-
-        return self._get_service_selection(available_services, default_index)
-
-    def _display_service_categories(self, all_services: list[str]) -> None:
-        """Display services organized by source category."""
-        index = 0
-
-        # Organization services
-        if self.org_service_names:
-            print(f"  Organization Services ({len(self.org_service_names)}):")
-            for name in self.org_service_names:
-                details = next((s for s in self.org_services if s["name"] == name), {})
-                svc_type = details.get("type", "custom")
-                desc = details.get("description", "")
-                if desc:
-                    print(f"    [{index}] {name} ({svc_type}) - {desc}")
-                else:
-                    print(f"    [{index}] {name} ({svc_type})")
-                index += 1
-
-        # Device-only services
-        device_only = [s for s in self.device_services if s not in self.org_service_names]
-        if device_only:
-            print(f"  Device Configuration Services ({len(device_only)}):")
-            for name in device_only:
-                print(f"    [{index}] {name} (device config)")
-                index += 1
-
-        # Remaining (defaults)
-        remaining = [s for s in all_services if s not in self.org_service_names and s not in self.device_services]
-        if remaining:
-            print(f"  Additional Services ({len(remaining)}):")
-            for name in remaining:
-                print(f"    [{index}] {name} (default/custom)")
-                index += 1
-
-    def _get_service_selection(self, services: list[str], default_index: int | None) -> str:
-        """Get service selection from user input."""
-        while True:
-            try:
-                prompt = f"\nSelect service index (0-{len(services)}) or enter custom"
-                if default_index is not None:
-                    prompt += f" [default: {default_index} ({self.DEFAULT_SERVICE})]: "
-                else:
-                    prompt += ": "
-
-                selection = InputUtils.safe_input(prompt, context="service_ping_service_selection").strip()
-
-                if not selection:
-                    if default_index is not None:
-                        service = services[default_index]
-                        print(f"!? Using default service: {service}")
-                        return service
-                    print("Please enter a service name or select from the list")
-                    continue
-
-                try:
-                    idx = int(selection)
-                    if idx == len(services):
-                        return self._prompt_custom_service()
-
-                    if 0 <= idx < len(services):
-                        service = services[idx]
-                        self._print_service_source(service)
-                        return service
-
-                    print(f"Please enter a number between 0 and {len(services)}")
-
-                except ValueError:
-                    # Treat as custom service name
-                    print(f"!? Custom service: {selection}")
-                    return selection
-
-            except KeyboardInterrupt:
-                print("\nOperation cancelled")
-                raise
-
-    def _print_service_source(self, service: str) -> None:
-        """Print the source of a selected service with details if available."""
-        if service in self.org_service_names:
-            print(f"!? Selected organization service: {service}")
-            details = next((s for s in self.org_services if s["name"] == service), {})
-            if details.get("description"):
-                print(f"  Description: {details['description']}")
-            if details.get("type"):
-                print(f"  Type: {details['type']}")
-        elif service in self.device_services:
-            print(f"!? Selected device configuration service: {service}")
-        else:
-            print(f"!? Selected default/custom service: {service}")
-
-    def _prompt_custom_service(self) -> str:
-        """Prompt for custom service name."""
-        while True:
-            service = InputUtils.safe_input(
-                "Enter custom service name: ",
-                context="service_ping_custom_service",
-            ).strip()
-            if service:
-                print(f"!? Custom service: {service}")
-                return service
-            print("Service name cannot be empty")
-
-    def _prompt_required_service(self) -> str:
-        """Prompt for required service when none available."""
-        print("\n-> No services found in organization or device configuration")
-        while True:
-            service = InputUtils.safe_input(
-                "Enter service name: ",
-                context="service_ping_required_service",
-            ).strip()
-            if service:
-                print(f"!? Custom service: {service}")
-                return service
-            print("Service is required. Please enter a service name.")
-
-    def _prompt_for_ping_parameters(self) -> dict:  # type: ignore[type-arg]
-        """Prompt for ping parameters and build payload."""
-        # Host
-        host = InputUtils.safe_input(
-            "\nEnter target host/IP to ping [default: 8.8.8.8]: ",
-            context="service_ping_host",
-        ).strip()
-        if not host:
-            host = self.DEFAULT_HOST
-            print(f"!? Using default destination: {host}")
-
-        # Count
-        count = self._prompt_for_count()
-
-        # Size
-        size = self._prompt_for_size()
-
-        # HA Node
-        node = self._prompt_for_node()
-
-        return {"host": host, "count": count, "size": size, "node": node}
-
-    def _prompt_for_count(self) -> int:
-        """Prompt for ping count."""
-        count_input = InputUtils.safe_input(
-            "Enter ping count [default: 4]: ",
-            context="service_ping_count",
-        ).strip()
-        try:
-            count = int(count_input) if count_input else self.DEFAULT_COUNT
-            return max(1, count)
-        except ValueError:
-            return self.DEFAULT_COUNT
-
-    def _prompt_for_size(self) -> int:
-        """Prompt for packet size."""
-        size_input = InputUtils.safe_input(
-            "Enter packet size in bytes [default: 56]: ",
-            context="service_ping_size",
-        ).strip()
-        try:
-            size = int(size_input) if size_input else self.DEFAULT_SIZE
-            return max(self.MIN_SIZE, min(size, self.MAX_SIZE))
-        except ValueError:
-            return self.DEFAULT_SIZE
-
-    def _prompt_for_node(self) -> str | None:
-        """Prompt for HA node selection."""
-        node_input = (
-            InputUtils.safe_input(
-                "Enter HA node (node0/node1) [optional]: ",
-                context="service_ping_node",
-            )
-            .strip()
-            .lower()
-        )
-        return node_input if node_input in ["node0", "node1"] else None
-
-    def _build_payload(self, service: str, tenant: str | None, params: dict) -> dict:  # type: ignore[type-arg]
-        """Build service ping API payload."""
-        payload = {"host": params["host"], "service": service, "count": params["count"], "size": params["size"]}
-
-        if tenant:
-            payload["tenant"] = tenant
-        if params["node"]:
-            payload["node"] = params["node"]
-
-        return payload
-
-    def _display_configuration(self, payload: dict) -> None:  # type: ignore[type-arg]
-        """Display service ping configuration summary."""
-        print("\n" + "-" * 50)
-        print("Service Ping Configuration:")
-        print(f"  Host: {payload['host']}")
-        print(f"  Service: {payload['service']}")
-        print(f"  Count: {payload['count']}")
-        print(f"  Size: {payload['size']} bytes")
-        if payload.get("tenant"):
-            print(f"  Tenant: {payload['tenant']}")
-        if payload.get("node"):
-            print(f"  HA Node: {payload['node']}")
-        print("-" * 50)
-
-        self._debug_validate_service(payload["service"])
-
-    def _debug_validate_service(self, service: str) -> None:
-        """Log debug information about service validation."""
-        if not self.debug_mode:
-            return
-
-        known_services = ["web-session", "LANS", "RBO_SSH"]
-        if service in known_services:
-            print(f"[DEBUG] Using known valid service: {service}")
-        else:
-            print(f"[DEBUG] Using custom service: {service} (may not exist on device)")
-
-    def _setup_websocket(self) -> bool:
-        """Initialize and connect WebSocket."""
-        self.websocket_manager = WebSocketManager(apisession)
-
-        if not self.websocket_manager.connect():
-            print("! Failed to establish WebSocket connection")
-            return False
-
-        self._debug_print("WebSocket connection established")
-
-        command_channel = f"/sites/{self.site_id}/devices/{self.device_id}/cmd"
-        if not self.websocket_manager.subscribe_to_channel(command_channel):
-            print("! Failed to subscribe to device command channel")
-            return False
-
-        self._debug_print(f"Subscribed to channel: {command_channel}")
-        print("-> WebSocket connected and subscribed")
-
-        print("-> Waiting for subscription confirmation...")
-        if not self.websocket_manager.wait_for_subscription_confirmation(command_channel, timeout_seconds=15):  # type: ignore[no-untyped-call]
-            print("! Subscription confirmation not received within timeout")
-            print("! Proceeding anyway, but results may not be received")
-        else:
-            print("-> Subscription confirmed")
-
-        return True
-
-    def _execute_service_ping(self, payload: dict) -> str | None:  # type: ignore[type-arg]
-        """Execute service ping API call and return session ID."""
-        print("-> Issuing Service Ping command...")
-
-        self._debug_print(f"Service ping payload being sent: {payload}")
-        logging.info(f"Sending service ping via mistapi to device: {self.device_id}")
-        logging.info(f"Service ping payload: {payload}")
-
-        try:
-            response = mistapi.api.v1.sites.devices.servicePingFromSsr(
-                apisession, self.site_id, self.device_id, payload
-            )
-
-            logging.info(f"Service ping mistapi response status: {response.status_code}")
-            logging.info(f"Service ping mistapi response data: {response.data}")
-
-            self._debug_print(f"mistapi Response Status = {response.status_code}")
-            self._debug_print(f"mistapi Response Data = {response.data}")
-
-            if response.status_code != 200:
-                print(f"Failed to issue Service Ping command. Status {response.status_code}: {response.data}")
-                logging.error(f"Service ping failed - status {response.status_code}: {response.data}")
-                return None
-
-            session_id = response.data.get("session", "")
-            if session_id:
-                short_id = session_id[:8] + "..." if len(session_id) > 8 else session_id
-                print(f"-> Service Ping command issued (session: {short_id})")
-                self._debug_print(f"Full session ID: {session_id}")
-            else:
-                print("-> Service Ping command issued (no session ID returned)")
-
-            return session_id or None
-
-        except Exception as error:
-            print(f"Error issuing Service Ping command via mistapi: {error}")
-            logging.error(f"Service ping error: {error}")
-            self._debug_print(f"mistapi exception details: {type(error).__name__}: {error}")
-            return None
-
-    def _wait_for_results(self, session_id: str) -> dict | None:  # type: ignore[type-arg]
-        """Wait for WebSocket results."""
-        print("-> Waiting for Service Ping results...")
-
-        self._debug_print(f"Full session ID = {session_id}")
-        self._debug_print("Starting to wait for WebSocket results...")
-
-        if self.websocket_manager is None:
-            return None
-
-        # Determine timeout based on device type
-        if self.device_info and self.device_info.get("type") == "gateway":
-            timeout_seconds = 45
-            activity_timeout = 5
-            print("   -> Using extended timeout for SSR gateway (45s total, 5s activity)")
-        else:
-            timeout_seconds = 30
-            activity_timeout = 3
-
-        result = self.websocket_manager.wait_for_command_result(
-            session_id, timeout_seconds=timeout_seconds, activity_timeout_seconds=activity_timeout
-        )
-
-        self._debug_print(f"wait_for_command_result returned: {result is not None}")
-        if result:
-            self._debug_print(f"Result keys: {list(result.keys())}")
-
-        return result
-
-    def _display_results(self, result: dict | None, payload: dict) -> None:  # type: ignore[type-arg]
-        """Display service ping results."""
-        if result:
-            self._display_success_results(result, payload)
-        else:
-            self._display_timeout_results(payload)
-
-    def _display_success_results(self, result: dict, payload: dict) -> None:  # type: ignore[type-arg]
-        """Display successful ping results."""
-        print("\n" + "=" * 60)
-        print("SERVICE PING RESULTS:")
-        print("=" * 60)
-
-        if self.device_info is not None:
-            self._display_device_context(payload)
-
-        raw_output = result.get("raw", "")
-        if raw_output:
-            print("PING OUTPUT:")
-            print("-" * 40)
-            print(raw_output)
-
-        parsed_output = result.get("Output", "")
-        if parsed_output and parsed_output != raw_output:
-            print("\nPARSED OUTPUT:")
-            print("-" * 40)
-            print(parsed_output)
-
-        if not raw_output and not parsed_output:
-            print("No output data received")
-            if self.device_info and self.device_info.get("type") != "gateway":
-                self._display_non_gateway_troubleshooting()
-
-        print("=" * 60)
-        self._log_success(payload)
-
-    def _display_device_context(self, payload: dict) -> None:  # type: ignore[type-arg]
-        """Display device context in results."""
-        if self.device_info is None:
-            return
-        device_type = self.device_info.get("type", "unknown")
-        device_model = self.device_info.get("model", "unknown")
-        device_name = self.device_info.get("name", "Unknown Device")
-
-        print(f"Device: {device_name} ({device_type.upper()}: {device_model})")
-        print(f"Service: {payload['service']} -> Host: {payload['host']}")
-
-        if device_type == "gateway":
-            print("Note: Service-specific routing path used for ping packets")
-        else:
-            print("Note: Device may not fully support service ping functionality")
-
-        print("-" * 60)
-
-    def _display_non_gateway_troubleshooting(self) -> None:
-        """Display troubleshooting for non-gateway devices."""
-        print("\nTroubleshooting for non-gateway devices:")
-        print("-> Service Ping is designed specifically for SSR gateways")
-        print("-> Try using regular ping (Menu 87) instead")
-        print("-> Verify device supports service ping functionality")
-
-    def _log_success(self, payload: dict) -> None:  # type: ignore[type-arg]
-        """Log successful operation."""
-        if self.device_info:
-            name = self.device_info.get("name", "Unknown Device")
-            dtype = self.device_info.get("type", "unknown")
-            logging.info(
-                "Service ping completed for %s (%s) - Service: %s, Host: %s",
-                name,
-                dtype,
-                payload["service"],
-                payload["host"],
-            )
-        else:
-            logging.info(
-                "Service ping completed for device %s - Service: %s, Host: %s",
-                self.device_id,
-                payload["service"],
-                payload["host"],
-            )
-
-    def _display_timeout_results(self, payload: dict) -> None:  # type: ignore[type-arg]
-        """Display timeout/no results message with troubleshooting."""
-        print("\nNo Service Ping results received within timeout period.")
-
-        if not self.device_info:
-            logging.warning(f"Service ping timeout - no results received for device {self.device_id}")
-            return
-
-        device_type = self.device_info.get("type", "unknown")
-        device_name = self.device_info.get("name", "Unknown Device")
-        print(f"Device: {device_name} ({device_type})")
-
-        troubleshooting = {
-            "gateway": [
-                "Verify service name is valid for this SSR",
-                "Check if host is reachable through the specified service",
-                "Confirm SSR routing configuration for the service",
-                "Try with a different service name",
-            ],
-            "switch": [
-                "Switches typically do not support service ping",
-                "Try using regular ping (Menu 87) for basic connectivity",
-                "Service ping is an SSR-specific feature",
-            ],
-            "ap": [
-                "Access Points do not support service ping",
-                "Try using regular ping (Menu 87) for basic connectivity",
-                "Service ping is an SSR-specific feature",
-            ],
-        }
-
-        tips = troubleshooting.get(
-            device_type,
-            ["Service ping is designed for SSR gateways", "Try using regular ping (Menu 87) for basic connectivity"],
-        )
-
-        if device_type == "gateway":
-            print("\nTroubleshooting for SSR gateways:")
-        else:
-            print(f"\nNote: {tips[0]}")
-            tips = tips[1:]
-
-        for tip in tips:
-            print(f"-> {tip}")
-
-        logging.warning(f"Service ping timeout - no results received for device {self.device_id}")
-
-    def _cleanup(self) -> None:
-        """Clean up WebSocket connection."""
-        try:
-            if self.websocket_manager is not None:
-                self.websocket_manager.disconnect()
-                print("-> WebSocket connection closed")
-        except Exception as error:
-            logging.warning(f"WebSocket cleanup error: {error}")
+        """Initialize wrapper by mirroring extracted manager state for test compatibility."""
+        extracted = _get_service_ping_manager_instance()
+        self.__dict__.update(extracted.__dict__)
+        self._delegate = extracted
+
+    def __getattr__(self, name):  # type: ignore[no-untyped-def]
+        """Delegate unknown attributes and methods to extracted implementation."""
+        return getattr(self._delegate, name)
 
     def execute(self) -> None:
-        """
-        Main execution method for service ping operation.
-
-        Orchestrates the complete service ping workflow:
-        1. Site and device selection
-        2. Device validation
-        3. Tenant and service discovery
-        4. User configuration prompts
-        5. WebSocket setup and execution
-        6. Results display and cleanup
-        """
-        logging.debug("ENTER: ServicePingManager.execute")
-
-        if self.debug_mode:
-            print("[DEBUG] Starting Service Ping via WebSocket operation...")
-            print(f"[DEBUG] Command line args: {sys.argv}")
-
-        try:
-            # Phase 1: Selection and validation
-            if not self._select_site_and_device():
-                return
-
-            if not self._fetch_device_info():
-                return
-
-            # Phase 2: Discovery
-            self._fetch_all_tenants()
-            self._fetch_all_services()
-
-            # Phase 3: Build combined lists
-            all_tenants = self._build_combined_tenants()
-            all_services = self._build_combined_services()
-
-            # Phase 4: User configuration
-            print("\n" + "=" * 50)
-            print("SERVICE PING CONFIGURATION")
-            print("=" * 50)
-
-            tenant = self._prompt_for_tenant(all_tenants)
-            service = self._prompt_for_service(all_services)
-            params = self._prompt_for_ping_parameters()
-
-            # Phase 5: Build and display payload
-            payload = self._build_payload(service, tenant, params)
-            self._display_configuration(payload)
-
-            # Phase 6: Execute
-            print(f"\n-> Executing Service Ping on device {self.device_id}...")
-
-            if not self._setup_websocket():
-                return
-
-            session_id = self._execute_service_ping(payload)
-            if not session_id:
-                print("! No session ID received - cannot wait for results")
-                return
-
-            # Phase 7: Wait and display results
-            result = self._wait_for_results(session_id)
-            self._display_results(result, payload)
-
-        except KeyboardInterrupt:
-            print("\nOperation cancelled by user")
-            logging.info("Service ping operation cancelled by user")
-
-        except Exception as error:
-            print(f"Error during Service Ping operation: {error}")
-            logging.error(f"Service ping error: {error}")
-
-        finally:
-            self._cleanup()
-            logging.debug("EXIT: ServicePingManager.execute")
+        """Execute menu 120 via the extracted service ping manager."""
+        self._delegate.execute()
 
 
 # ============================================================================
@@ -21447,7 +19242,7 @@ class GatewayTestExporter:
             print("! No gateway test results found. CSV not created.")
 
 
-class GatewayStatsExporter:
+class _LegacyGatewayStatsExporter:
     """
     Gateway Device Statistics Exports
 
@@ -21646,7 +19441,7 @@ class GatewayStatsExporter:
         GatewayExportUtils._export_conflict_results(conflicts_found)  # type: ignore[no-untyped-call]
 
 
-class GatewayExportUtils:
+class _LegacyGatewayExportUtils:
     """
     Centralized gateway data export utilities.
     Groups all export_gateway_* functions for better code organization.
@@ -22506,6 +20301,130 @@ class GatewayExportUtils:
         migrator.execute(fast=fast, dry_run=dry_run)
 
 
+class GatewayStatsExporter:
+    """Delegation wrapper for extracted gateway stats exporter implementation."""
+
+    @staticmethod
+    def _configure_module():  # type: ignore[no-untyped-def]
+        """Configure extracted gateway modules and return stats module handle."""
+        from src.gateway import gateway_stats_exporter as stats_module  # noqa: PLC0415,I001
+
+        GatewayExportUtils._configure_module()
+        return stats_module
+
+    @staticmethod
+    def device_stats(fast=False):  # type: ignore[no-untyped-def]
+        """Delegated gateway device stats export entrypoint."""
+        module = GatewayStatsExporter._configure_module()
+        return module.GatewayStatsExporter.device_stats(fast=fast)
+
+    @staticmethod
+    def device_stats_with_freshness(fast: bool = False) -> None:
+        """Delegated freshness-aware gateway device stats export entrypoint."""
+        module = GatewayStatsExporter._configure_module()
+        return module.GatewayStatsExporter.device_stats_with_freshness(fast=fast)
+
+    @staticmethod
+    def wan_port_conflicts():  # type: ignore[no-untyped-def]
+        """Delegated WAN port conflict analysis entrypoint."""
+        module = GatewayStatsExporter._configure_module()
+        return module.GatewayStatsExporter.wan_port_conflicts()
+
+
+class GatewayExportUtils:
+    """Delegation wrapper for extracted gateway export utility implementation."""
+
+    @staticmethod
+    def _configure_module():  # type: ignore[no-untyped-def]
+        """Configure extracted gateway modules and return gateway export module handle."""
+        from src.gateway import gateway_export_utils as gateway_export_module  # noqa: PLC0415,I001
+
+        configure_gateway_export_utils_dependencies(
+            apisession_dependency=apisession,
+            mistapi_dependency=mistapi,
+            config_utils=ConfigUtils,
+            cache_utils=CacheUtils,
+            file_path_utils=FilePathUtils,
+            data_exporter=DataExporter,
+            data_processing_utils=DataProcessingUtils,
+            api_fetch_utils=APIFetchUtils,
+            api_core_fetch_utils=APICoreFetchUtils,
+            org_inventory_exporter=OrgInventoryExporter,
+            org_site_exporter=OrgSiteExporter,
+            input_utils=InputUtils,
+            connection_pool_fn=execute_with_connection_pool_management,
+            validation_utils=ValidationUtils,
+            rate_limiting_utils=RateLimitingUtils,
+            mist_wan_target_ports=MIST_WAN_TARGET_PORTS,
+            mist_site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
+            fast_mode_max_retries=FAST_MODE_MAX_RETRIES,
+            fast_mode_retry_delay=FAST_MODE_RETRY_DELAY,
+            api_usage_cache=_api_usage_cache,
+            tqdm_module=tqdm,
+        )
+        return gateway_export_module
+
+    @staticmethod
+    def _with_site_info():  # type: ignore[no-untyped-def]
+        """Delegated gateways-with-site-info export entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils._with_site_info()
+
+    @staticmethod
+    def management_ips(fast: bool = False) -> None:
+        """Delegated gateway management IPs export entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils.management_ips(fast=fast)
+
+    @staticmethod
+    def device_configs(debug: bool = False, fast: bool = False) -> None:
+        """Delegated gateway device configs export entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils.device_configs(debug=debug, fast=fast)
+
+    @staticmethod
+    def templates():  # type: ignore[no-untyped-def]
+        """Delegated gateway template export entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils.templates()
+
+    @staticmethod
+    def with_wan_overrides(fast: bool = False) -> None:
+        """Delegated gateway WAN override analysis entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils.with_wan_overrides(fast=fast)
+
+    @staticmethod
+    def _get_devices_with_sites(org_id: str, fast: bool = False) -> list[tuple[str, str, str, str]]:
+        """Delegated gateway device+site inventory helper entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)
+
+    @staticmethod
+    def _get_devices_from_cache() -> list[tuple[str, str, str, str]]:
+        """Delegated cached gateway inventory helper entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils._get_devices_from_cache()
+
+    @staticmethod
+    def _get_devices_from_api(org_id: str) -> list[tuple[str, str, str, str]]:
+        """Delegated API-based gateway inventory helper entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils._get_devices_from_api(org_id)
+
+    @staticmethod
+    def _get_site_ids_with_devices(org_id: str) -> list[str]:
+        """Delegated site-ID-with-gateway helper entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils._get_site_ids_with_devices(org_id)
+
+    @staticmethod
+    def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:
+        """Delegated WAN2 variable migration entrypoint."""
+        module = GatewayExportUtils._configure_module()
+        return module.GatewayExportUtils.wan2_variable_migration(fast=fast, dry_run=dry_run)
+
+
 # NOTE: generate_support_package moved to DataCollectionManager.generate_support_packages
 
 
@@ -22515,346 +20434,36 @@ class GatewayExportUtils:
 
 
 class TroubleshootUtils:
-    """
-    Centralized troubleshooting utilities using Marvis AI.
-    Groups all troubleshooting functions for better code organization.
-    All methods are static to avoid unnecessary object instantiation.
-    """
+    """Delegation wrapper for extracted Marvis troubleshooting implementation."""
 
     @staticmethod
-    def client_connectivity():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Troubleshoot client connectivity issues using Marvis AI.
-        Uses guided client selection instead of manual MAC address entry.
-        """
-        print("\n  Client Connectivity Troubleshooting")
-        print("=" * 50)
-
-        # Use guided client selection
-        client_mac, client_type, site_id = PromptClientUtils.select_client()
-        if not client_mac:
-            print(" No client selected. Returning to main menu.")
-            return
-
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-
-        try:
-            print(f"! Running Marvis AI analysis for client {client_mac}...")
-            print(f"   Client Type: {client_type}")
-            if site_id:
-                print(f"   Site ID: {site_id}")
-
-            logging.info(
-                f"Starting Marvis client troubleshooting for MAC: {client_mac}, type: {client_type}, site: {site_id}"
-            )
-
-            # Prepare parameters for troubleshoot call
-            params = {"mac": client_mac}
-            if site_id:
-                params["site_id"] = site_id
-
-            # Add client type parameter for proper troubleshooting context
-            if client_type in ["wired", "wireless"]:
-                params["type"] = client_type
-                logging.debug(f"MARVIS DEBUG: Added type parameter: {client_type}")
-
-            logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with params: {params}")
-
-            # Call Marvis troubleshoot endpoint
-            response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, **params)
-
-            if response.data:
-                print(" Marvis AI analysis completed!")
-                print("! Analysis results available.")
-
-                # Save results to CSV with optimized formatting
-                data = marvis_data_utils.format_for_csv(response.data, "client")  # Format client response for CSV
-
-                filename = f"MarvisInsights_Client_{client_mac.replace(':', '')}_{client_type}.csv"
-                DataExporter.save_data_to_output(data, filename)  # type: ignore[no-untyped-call]
-                print(f"! Results saved to {filename}")
-
-                # Display summary
-                if isinstance(response.data, dict):
-                    if "results" in response.data:
-                        print("\n  Marvis Analysis Summary:")
-                        for result in response.data.get("results", []):
-                            print(f"  !? {result.get('description', 'Analysis result')}")
-                            if result.get("action"):
-                                print(f"    Recommended Action: {result['action']}")
-                    elif "insights" in response.data:
-                        print("\n  Marvis Insights:")
-                        insights = response.data.get("insights", [])
-                        for insight in insights:
-                            print(f"  !? {insight.get('description', insight)}")
-                    else:
-                        print(f"\n  Analysis Data: {len(data)} items processed")
-            else:
-                print(" No specific connectivity issues found for this client.")
-                print(" This could indicate the client is functioning normally.")
-
-        except Exception as e:
-            logging.error(f"Failed to troubleshoot client {client_mac}: {e}")
-            print(f"! Failed to troubleshoot client: {e}")
-            print(" This may indicate:")
-            print("   - Marvis (VNA) is not enabled for your organization")
-            print("   - The client is not currently active or found")
-            print("   - Insufficient permissions for Marvis troubleshooting")
-            print("   - API connectivity issues")
+    def _build_deps() -> MarvisTroubleshootDeps:
+        """Build dependency container for extracted troubleshooting logic."""
+        return MarvisTroubleshootDeps(
+            apisession=apisession,
+            mistapi=mistapi,
+            config_utils=ConfigUtils,
+            prompt_client_utils=PromptClientUtils,
+            prompt_utils=PromptUtils,
+            data_exporter=DataExporter,
+            marvis_data_utils=marvis_data_utils,
+            data_processing_utils=DataProcessingUtils,
+        )
 
     @staticmethod
-    def device_performance():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Troubleshoot device performance issues using Marvis AI.
-        Uses guided site and device selection workflow.
-        """
-        logging.debug("MARVIS DEBUG: Entering device_performance()")
-        print("\n  Device Performance Troubleshooting")
-        print("=" * 50)
-
-        # Get site selection first
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            print(" No site selected.")
-            logging.debug("MARVIS DEBUG: No site selected for device troubleshooting")
-            return
-
-        logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
-
-        # Get device selection
-        device_id = PromptUtils.select_device(site_id)
-        if not device_id:
-            print(" No device selected.")
-            logging.debug("MARVIS DEBUG: No device selected")
-            return
-
-        logging.debug(f"MARVIS DEBUG: Selected device_id: {device_id}")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
-
-        try:
-            # Get device MAC address from device ID
-            print("! Looking up device details...")
-            logging.debug(f"MARVIS DEBUG: About to get device details for device_id: {device_id} in site: {site_id}")
-
-            device_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-            logging.debug(
-                f"MARVIS DEBUG: Device lookup response status: {device_response.status if hasattr(device_response, 'status') else 'unknown'}"  # noqa: E501
-            )
-
-            if not device_response.data:
-                print(" Could not retrieve device details.")
-                logging.debug("MARVIS DEBUG: Device response data is None")
-                return
-
-            logging.debug(
-                f"MARVIS DEBUG: Device data keys: {list(device_response.data.keys()) if isinstance(device_response.data, dict) else 'not a dict'}"  # noqa: E501
-            )
-
-            device_mac = device_response.data.get("mac")
-            device_name = device_response.data.get("name", "Unknown Device")
-
-            logging.debug(f"MARVIS DEBUG: Device MAC: {device_mac}")
-            logging.debug(f"MARVIS DEBUG: Device name: {device_name}")
-
-            if not device_mac:
-                print(" Could not determine device MAC address.")
-                logging.debug("MARVIS DEBUG: Device MAC is None or empty")
-                return
-
-            print("! Running Marvis AI performance analysis...")
-            print(f"   Device: {device_name} ({device_mac})")
-            print(f"   Site ID: {site_id}")
-
-            logging.info(f"Starting Marvis device performance analysis for device: {device_name} (MAC: {device_mac})")
-            logging.debug(f"MARVIS DEBUG: About to call troubleshootOrg with mac={device_mac}, site_id={site_id}")
-
-            # Call Marvis troubleshoot endpoint for device using MAC address
-            response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(
-                apisession, org_id, mac=device_mac, site_id=site_id
-            )
-
-            logging.debug(
-                f"MARVIS DEBUG: Device troubleshoot response status: {response.status if hasattr(response, 'status') else 'unknown'}"  # noqa: E501
-            )
-            logging.debug(f"MARVIS DEBUG: Device response data type: {type(response.data)}")
-            logging.debug(f"MARVIS DEBUG: Device response data is None: {response.data is None}")
-
-            if response.data:
-                logging.debug(
-                    f"MARVIS DEBUG: Device response data keys: {list(response.data.keys()) if isinstance(response.data, dict) else 'not a dict'}"  # noqa: E501
-                )
-                logging.debug(f"MARVIS DEBUG: Device response data: {json.dumps(response.data, indent=2, default=str)}")
-
-                print(" Marvis AI device analysis completed!")
-
-                # Save results to CSV with optimized formatting
-                data = marvis_data_utils.format_for_csv(response.data, "device")  # Format device response for CSV
-                logging.debug(f"MARVIS DEBUG: Formatted device data length: {len(data) if data else 0}")
-
-                filename = f"MarvisInsights_Device_{device_mac.replace(':', '')}_{device_name.replace(' ', '_')}.csv"
-                DataExporter.save_data_to_output(data, filename)  # type: ignore[no-untyped-call]
-                print(f"! Results saved to {filename}")
-
-                # Display summary if available
-                if isinstance(response.data, dict):
-                    if "results" in response.data:
-                        results = response.data.get("results", [])
-                        logging.debug(f"MARVIS DEBUG: Found {len(results)} device results")
-                        print("\n  Device Performance Analysis:")
-                        for result in results:
-                            print(f"  !? {result.get('description', 'Analysis result')}")
-                            if result.get("action"):
-                                print(f"    Recommended Action: {result['action']}")
-                    elif "insights" in response.data:
-                        print("\n  Marvis Device Insights:")
-                        insights = response.data.get("insights", [])
-                        logging.debug(f"MARVIS DEBUG: Found {len(insights)} device insights")
-                        for insight in insights:
-                            print(f"  !? {insight.get('description', insight)}")
-                    else:
-                        logging.debug("MARVIS DEBUG: No results or insights in device response")
-                        print(f"\n  Analysis Data: {len(data)} items processed")
-
-            else:
-                logging.debug("MARVIS DEBUG: Device response data is None or empty")
-                print(" No performance issues detected for this device.")
-                print(" This could indicate the device is operating within normal parameters.")
-
-        except Exception as e:
-            logging.error(f"MARVIS DEBUG: Exception in device_performance: {e}")
-            logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
-            logging.error("MARVIS DEBUG: Exception traceback: ", exc_info=True)
-            print(f"! Failed to troubleshoot device: {e}")
-            print(" This may indicate:")
-            print("   - The device is not found or not supported by Marvis")
-            print("   - Marvis (VNA) is not enabled for your organization")
-            print("   - Insufficient permissions for device troubleshooting")
-
-        logging.debug("MARVIS DEBUG: Exiting device_performance()")
+    def client_connectivity() -> None:
+        """Delegated client connectivity troubleshooting implementation."""
+        ExtractedMarvisTroubleshootUtils.client_connectivity(TroubleshootUtils._build_deps())
 
     @staticmethod
-    def network_connectivity():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Troubleshoot general network connectivity issues using Marvis AI.
-        Provides site-level network analysis and insights.
-        """
-        logging.debug("MARVIS DEBUG: Entering network_connectivity()")
-        print("\n  Network Connectivity Troubleshooting")
-        print("=" * 50)
+    def device_performance() -> None:
+        """Delegated device performance troubleshooting implementation."""
+        ExtractedMarvisTroubleshootUtils.device_performance(TroubleshootUtils._build_deps())
 
-        # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            print(" No site selected.")
-            logging.debug("MARVIS DEBUG: No site selected, exiting network troubleshooting")
-            return
-
-        logging.debug(f"MARVIS DEBUG: Selected site_id: {site_id}")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug(f"MARVIS DEBUG: Using org_id: {org_id}")
-
-        try:
-            print("! Running Marvis AI network analysis...")
-            print("   Analyzing site-level connectivity")
-            print(f"   Site ID: {site_id}")
-
-            logging.info(f"Starting Marvis network connectivity analysis for site: {site_id}")
-            logging.debug(
-                f"MARVIS DEBUG: About to call mistapi.api.v1.orgs.troubleshoot.troubleshootOrg with org_id={org_id}, site_id={site_id}"  # noqa: E501
-            )
-
-            # Call Marvis troubleshoot endpoint for site
-            response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, site_id=site_id)
-
-            logging.debug(
-                f"MARVIS DEBUG: API response received. Status: {response.status if hasattr(response, 'status') else 'unknown'}"  # noqa: E501
-            )
-            logging.debug(f"MARVIS DEBUG: Response data type: {type(response.data)}")
-            logging.debug(f"MARVIS DEBUG: Response data is None: {response.data is None}")
-
-            if response.data:
-                logging.debug(
-                    f"MARVIS DEBUG: Response data keys: {list(response.data.keys()) if isinstance(response.data, dict) else 'not a dict'}"  # noqa: E501
-                )
-                logging.debug(
-                    f"MARVIS DEBUG: Response data length: {len(response.data) if hasattr(response.data, '__len__') else 'no length'}"  # noqa: E501
-                )
-                logging.debug(
-                    f"MARVIS DEBUG: Full response data structure: {json.dumps(response.data, indent=2, default=str) if response.data else 'None'}"  # noqa: E501
-                )
-
-                print(" Marvis AI network analysis completed!")
-
-                # Save results to CSV with optimized formatting
-                logging.debug("MARVIS DEBUG: About to format data for CSV")
-                data = marvis_data_utils.format_for_csv(response.data, "network")  # Format network response for CSV
-                logging.debug(f"MARVIS DEBUG: Formatted data length: {len(data) if data else 0}")
-                logging.debug(f"MARVIS DEBUG: Formatted data sample: {data[:1] if data else 'empty'}")
-
-                filename = f"MarvisInsights_Network_{site_id}.csv"
-                DataExporter.save_data_to_output(data, filename)  # type: ignore[no-untyped-call]
-                print(f"! Results saved to {filename}")
-                logging.debug(f"MARVIS DEBUG: Saved data to {filename}")
-
-                # Display summary if available
-                if isinstance(response.data, dict):
-                    logging.debug("MARVIS DEBUG: Response data is a dict, checking for results/insights")
-                    if "results" in response.data:
-                        results = response.data.get("results", [])
-                        logging.debug(f"MARVIS DEBUG: Found 'results' key with {len(results)} items")
-                        print("\n  Network Connectivity Analysis:")
-                        for idx, result in enumerate(results):
-                            logging.debug(f"MARVIS DEBUG: Processing result {idx}: {result}")
-                            description = (
-                                result.get("description", "Analysis result")
-                                if isinstance(result, dict)
-                                else str(result)
-                            )
-                            print(f"  !? {description}")
-                            if isinstance(result, dict) and result.get("action"):
-                                print(f"    Recommended Action: {result['action']}")
-                    elif "insights" in response.data:
-                        insights = response.data.get("insights", [])
-                        logging.debug(f"MARVIS DEBUG: Found 'insights' key with {len(insights)} items")
-                        print("\n  Marvis Network Insights:")
-                        for idx, insight in enumerate(insights):
-                            logging.debug(f"MARVIS DEBUG: Processing insight {idx}: {insight}")
-                            description = (
-                                insight.get("description", insight) if isinstance(insight, dict) else str(insight)
-                            )
-                            print(f"  !? {description}")
-                    else:
-                        logging.debug("MARVIS DEBUG: No 'results' or 'insights' keys found in response data")
-                        logging.debug(f"MARVIS DEBUG: Available keys in response: {list(response.data.keys())}")
-                        print(f"\n  Analysis Data: {len(data)} items processed")
-                        if response.data:
-                            print(f"! Raw response keys: {list(response.data.keys())}")
-                            # Show some raw data for debugging
-                            for key, value in list(response.data.items())[:5]:
-                                print(f"   {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
-                else:
-                    logging.debug(f"MARVIS DEBUG: Response data is not a dict, type: {type(response.data)}")
-                    print(
-                        f"\n  Raw response: {str(response.data)[:200]}{'...' if len(str(response.data)) > 200 else ''}"
-                    )
-
-            else:
-                logging.debug("MARVIS DEBUG: Response data is None or empty")
-                print(" No network connectivity issues detected for this site.")
-                print(" This indicates the network is operating within normal parameters.")
-
-        except Exception as e:
-            logging.error(f"MARVIS DEBUG: Exception in network_connectivity: {e}")
-            logging.error(f"MARVIS DEBUG: Exception type: {type(e)}")
-            logging.error("MARVIS DEBUG: Exception traceback: ", exc_info=True)
-            print(f"! Failed to troubleshoot network: {e}")
-            print(" This may indicate:")
-            print("   - Marvis (VNA) is not enabled for your organization")
-            print("   - The site has no devices or insufficient data for analysis")
-            print("   - Insufficient permissions for network troubleshooting")
-
-        logging.debug("MARVIS DEBUG: Exiting network_connectivity()")
+    @staticmethod
+    def network_connectivity() -> None:
+        """Delegated network connectivity troubleshooting implementation."""
+        ExtractedMarvisTroubleshootUtils.network_connectivity(TroubleshootUtils._build_deps())
 
     @staticmethod
     def launch_interactive() -> None:
@@ -22913,148 +20522,37 @@ class TroubleshootUtils:
 
     @staticmethod
     def view_insights() -> None:
-        """
-        View available Marvis (VNA) insights and capabilities.
-
-        Retrieves organization info, checks Marvis features, and displays
-        available insights and usage guidance.
-        """
-        print("\n  Marvis (VNA) Insights & Capabilities")
-        print("=" * 50)
-
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-
-        try:
-            print(" Checking Marvis availability and organizational insights...")
-
-            org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)
-
-            if org_response.data:
-                org_info = org_response.data
-                print(f"! Organization: {org_info.get('name', 'Unknown')}")
-
-                features = org_info.get("features", [])
-                marvis_features = [
-                    f for f in features if any(keyword in f.lower() for keyword in ["marvis", "vna", "insight"])
-                ]
-
-                if marvis_features:
-                    print("\n  Marvis/VNA Features Available:")
-                    for feature in marvis_features:
-                        print(f"  !? {feature}")
-                else:
-                    print("\n  No specific Marvis/VNA features detected in organization settings.")
-
-                TroubleshootUtils._fetch_org_insights(org_id)
-                TroubleshootUtils._display_usage_guide()
-            else:
-                print(" Could not retrieve organization information.")
-
-        except Exception as exception:
-            TroubleshootUtils._handle_insights_error(exception)
+        """Delegated Marvis insights and capabilities view implementation."""
+        ExtractedMarvisTroubleshootUtils.view_insights(TroubleshootUtils._build_deps())
 
     @staticmethod
     def _fetch_org_insights(org_id: str) -> None:
-        """Fetch and display organization-level insights."""
-        try:
-            print("\n Attempting to retrieve organization-level insights...")
-
-            insight_endpoints = [
-                ("Organization Sites SLE", lambda: mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id)),
-            ]
-
-            insights_found = False
-            for endpoint_name, endpoint_func in insight_endpoints:
-                try:
-                    logging.debug(f"MARVIS DEBUG: Testing endpoint: {endpoint_name}")
-                    response = endpoint_func()  # type: ignore[no-untyped-call]
-
-                    if response.data:
-                        insights_found = TroubleshootUtils._process_insight_response(endpoint_name, response.data)
-                except Exception as endpoint_exception:
-                    TroubleshootUtils._log_endpoint_error(endpoint_name, endpoint_exception)
-                    continue
-
-            if not insights_found:
-                print("\n  No organization-level insights currently available.")
-
-        except Exception as exception:
-            logging.warning(f"Could not retrieve organization insights: {exception}")
-            print(f"! Could not retrieve insights: {exception}")
+        """Delegated helper for organization-level insights retrieval."""
+        ExtractedMarvisTroubleshootUtils._fetch_org_insights(org_id, TroubleshootUtils._build_deps())
 
     @staticmethod
     def _process_insight_response(endpoint_name: str, data: Any) -> bool:
-        """Process and display insight response data."""
-        insights_data = data if isinstance(data, list) else [data]
-        logging.debug(f"MARVIS DEBUG: {endpoint_name} insights data length: {len(insights_data)}")
-
-        if not insights_data:
-            return False
-
-        print(f"\n  {endpoint_name}:")
-        for insight in insights_data[:5]:
-            description = insight.get("description", insight.get("type", insight.get("name", str(insight))))
-            print(f"  !? {description}")
-
-        if len(insights_data) > 5:
-            print(f"  ... and {len(insights_data) - 5} more insights")
-
-        if "Sites SLE" in endpoint_name:
-            formatted_insights = marvis_data_utils.format_for_csv(data, "sites")  # Format sites SLE response for CSV
-        else:
-            formatted_insights = DataProcessingUtils.flatten_nested_fields(insights_data)
-            formatted_insights = DataProcessingUtils.escape_multiline(formatted_insights)  # type: ignore[no-untyped-call]
-
-        filename = f"MarvisInsights_{endpoint_name.replace(' ', '_')}.csv"
-        DataExporter.save_data_to_output(formatted_insights, filename)  # type: ignore[no-untyped-call]
-        print(f"  Full insights saved to {filename}")
-        return True
+        """Delegated helper for insight response processing."""
+        return ExtractedMarvisTroubleshootUtils._process_insight_response(
+            endpoint_name,
+            data,
+            TroubleshootUtils._build_deps(),
+        )
 
     @staticmethod
     def _log_endpoint_error(endpoint_name: str, exception: Exception) -> None:
-        """Log endpoint access errors."""
-        error_message = str(exception)
-        if "404" in error_message:
-            logging.debug(f"Endpoint {endpoint_name} not available for this organization (404): {exception}")
-        elif "403" in error_message:
-            logging.debug(f"Access denied to {endpoint_name} (403): {exception}")
-        else:
-            logging.debug(f"Could not fetch {endpoint_name}: {exception}")
+        """Delegated helper for endpoint error logging."""
+        ExtractedMarvisTroubleshootUtils._log_endpoint_error(endpoint_name, exception)
 
     @staticmethod
     def _display_usage_guide() -> None:
-        """Display Marvis usage guidance."""
-        print("\n  Marvis (VNA - Virtual Network Assistant) Usage Guide:")
-        print("   Targeted Troubleshooting:")
-        print("     !? Use client troubleshooting for specific device connectivity issues")
-        print("     !? Use device troubleshooting for AP, switch, or gateway performance")
-        print("     !? Use network troubleshooting for site-wide connectivity analysis")
-        print()
-        print("   Requirements:")
-        print("     !? Marvis must be enabled for your organization")
-        print("     !? Devices must be actively managed and reporting data")
-        print("     !? Sufficient data history for meaningful analysis")
-        print()
-        print("   Best Practices:")
-        print("     !? Run troubleshooting when issues are actively occurring")
-        print("     !? Provide specific timeframes when prompted")
-        print("     !? Review saved CSV files for detailed analysis results")
+        """Delegated helper for usage guide display."""
+        ExtractedMarvisTroubleshootUtils._display_usage_guide()
 
     @staticmethod
     def _handle_insights_error(exception: Exception) -> None:
-        """Handle and display insight retrieval errors."""
-        logging.error(f"Failed to get Marvis insights: {exception}")
-        print(f"! Failed to get Marvis insights: {exception}")
-        print(" This may indicate:")
-        print("   - Marvis (VNA) is not enabled for your organization")
-        print("   - Insufficient permissions to view organization details")
-        print("   - API connectivity issues")
-        print("   - Organization may not have Marvis licensing")
-        print()
-        print(" Contact your Mist administrator to:")
-        print("   !? Verify Marvis/VNA licensing and enablement")
-        print("   !? Confirm user permissions for AI troubleshooting")
-        print("   !? Check organization feature settings")
+        """Delegated helper for Marvis insights error handling."""
+        ExtractedMarvisTroubleshootUtils._handle_insights_error(exception)
 
 
 # ============================================================================
@@ -23123,390 +20621,83 @@ class GatewayTemplateConfigManager:
 # SSH RUNNER MANAGER CLASS
 # ============================================================================
 class SSHRunnerManager:
-    """
-    Manages SSH command execution across network devices.
+    """Delegation wrapper for extracted SSH runner manager implementation."""
 
-    Consolidates SSH runner operations:
-    - interactive(): Menu 97 - Run SSH commands interactively
-    - by_gateway_template(): Menu 98 - Target gateways by template
-
-    All methods are static to avoid unnecessary object instantiation.
-    """
+    @staticmethod
+    def _build_deps() -> SSHRunnerManagerDeps:
+        """Build dependency container for extracted SSH runner logic."""
+        cli_args = globals().get("args") if "args" in globals() else None
+        return SSHRunnerManagerDeps(
+            args=cli_args,
+            progress_emitter=PROGRESS_EMITTER,
+            enhanced_ssh_runner=EnhancedSSHRunner,
+            input_utils=InputUtils,
+            cache_utils=CacheUtils,
+            gateway_export_utils=GatewayExportUtils,
+            file_path_utils=FilePathUtils,
+        )
 
     @staticmethod
     def interactive():  # type: ignore[no-untyped-def]
-        """
-        SSH Runner wrapper for menu system integration.
-        Runs with auto-detection and interactive prompts.
-        """
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("97", "ssh_runner", 1)
-        op_start = time.time()
-        try:
-            print("\n>> Enhanced SSH Command Runner")
-            print("=" * 60)
-
-            cli_args = globals().get("args") if "args" in globals() else None
-            no_env_flag = cli_args.no_env if cli_args and hasattr(cli_args, "no_env") else False
-
-            env_config: dict[str, Any] = {}
-            if not no_env_flag:
-                env_config = EnhancedSSHRunner.load_ssh_config_from_env()
-
-            hosts = env_config.get("hosts", [])
-            username = env_config.get("username")
-            password = env_config.get("password")
-            commands = env_config.get("commands", [])
-
-            # Collect missing data interactively
-            hosts, username, password, commands = SSHRunnerManager._collect_missing_data(  # type: ignore[no-untyped-call]
-                hosts, username, password, commands
-            )
-
-            if not hosts or not username or not password:
-                if emitter:
-                    emitter.emit_progress_complete("97", "ssh_runner", 0, 0, True, time.time() - op_start)
-                return False
-
-            # Show summary
-            print(f"!? Target hosts: {', '.join(hosts)}")
-            print(f"!? Username: {username}")
-            print(f"!? Commands: {len(commands) if commands else 0} command(s)")
-
-            # Execute
-            result = SSHRunnerManager._execute_ssh(hosts, username, password, commands)  # type: ignore[no-untyped-call]
-            if emitter:
-                emitter.emit_progress_complete(
-                    "97", "ssh_runner", len(hosts), len(hosts), False, time.time() - op_start
-                )
-            return result
-
-        except KeyboardInterrupt:
-            print("\n[INTERRUPT] Operation cancelled by user")
-            if emitter:
-                emitter.emit_progress_complete("97", "ssh_runner", 0, 0, True, time.time() - op_start)
-            return False
-        except Exception as error:
-            print(f"[ERROR] Fatal error: {error}")
-            logging.error(f"SSH Runner error: {error}", exc_info=True)
-            if emitter:
-                emitter.emit_progress_complete("97", "ssh_runner", 0, 0, False, time.time() - op_start)
-            return False
+        """Delegated interactive SSH runner entrypoint."""
+        return ExtractedSSHRunnerManager.interactive(SSHRunnerManager._build_deps())
 
     @staticmethod
     def by_gateway_template(fast=False):  # type: ignore[no-untyped-def]
-        """
-        SSH runner that targets gateways by template name and online status.
-
-        Args:
-            fast (bool): Enable fast mode for data collection
-        """
-        logging.info("Starting SSH runner targeting gateways by template...")
-        print("SSH Runner - Gateway Template Targeting:")
-        print("=" * 60)
-
-        # Ensure gateway data is current
-        print("  1. Ensuring gateway management IP data is current...")
-        CacheUtils.check_and_generate_csv(
-            "GatewayManagementIPs.csv",
-            lambda: GatewayExportUtils.management_ips(fast=fast),
-        )
-
-        # Load gateway data
-        gateways = SSHRunnerManager._load_gateway_data()  # type: ignore[no-untyped-call]
-        if not gateways:
-            return
-
-        # Get template selection
-        selected_template = SSHRunnerManager._select_gateway_template(gateways)  # type: ignore[no-untyped-call]
-        if not selected_template:
-            return
-
-        # Filter gateways
-        filtered = SSHRunnerManager._filter_gateways(gateways, selected_template)  # type: ignore[no-untyped-call]
-        if not filtered:
-            print(f"! No online gateways with management IPs found for '{selected_template}'")
-            return
-
-        # Display and confirm
-        management_ips = [gw.get("Management IP") for gw in filtered]
-        SSHRunnerManager._display_filtered_gateways(filtered)  # type: ignore[no-untyped-call]
-
-        if not SSHRunnerManager._confirm_execution(len(management_ips)):  # type: ignore[no-untyped-call]
-            return
-
-        # Execute SSH commands
-        SSHRunnerManager._execute_by_template(management_ips, selected_template)  # type: ignore[no-untyped-call]
+        """Delegated SSH runner by gateway template entrypoint."""
+        ExtractedSSHRunnerManager.by_gateway_template(SSHRunnerManager._build_deps(), fast=fast)
 
     @staticmethod
-    def _collect_missing_data(hosts, username, password, commands):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912
-        """Interactively collect missing SSH configuration data."""
-        logging.info(  # Entry envelope — log what data is already known before prompting
-            "Entering SSHRunnerManager._collect_missing_data: hosts=%s username=%s commands=%s",
-            len(hosts) if hosts else 0,
-            "provided" if username else "missing",
-            len(commands) if commands else 0,
+    def _collect_missing_data(hosts, username, password, commands):  # type: ignore[no-untyped-def]
+        """Delegated helper to collect missing SSH configuration data."""
+        return ExtractedSSHRunnerManager._collect_missing_data(
+            SSHRunnerManager._build_deps(),
+            hosts,
+            username,
+            password,
+            commands,
         )
-        if not hosts:
-            host_input = InputUtils.safe_input(
-                "Enter SSH host(s) (comma-separated): ",
-                context="ssh_runner_hosts",
-            ).strip()
-            if host_input:
-                hosts = [h.strip() for h in host_input.split(",") if h.strip()]
-            else:
-                print("X  SSH host is required")
-                logging.info(  # Exit envelope on cancel (no hosts)
-                    "Exiting SSHRunnerManager._collect_missing_data: cancelled (no hosts provided)"
-                )
-                return None, None, None, None
-
-        if not username:
-            username = InputUtils.safe_input("Enter SSH username: ", context="ssh_runner_username").strip()
-            if not username:
-                print("X  SSH username is required")
-                logging.info(  # Exit envelope on cancel (no username)
-                    "Exiting SSHRunnerManager._collect_missing_data: cancelled (no username provided)"
-                )
-                return None, None, None, None
-
-        if not password:
-            try:
-                import getpass
-
-                password = getpass.getpass("Enter SSH password: ")
-                if not password:
-                    print("X  SSH password is required")
-                    logging.info(  # Exit envelope on cancel (no password)
-                        "Exiting SSHRunnerManager._collect_missing_data: cancelled (no password provided)"
-                    )
-                    return None, None, None, None
-            except (EOFError, KeyboardInterrupt):
-                print("\n[CANCELLED] Operation cancelled")
-                logging.info(  # Exit envelope on cancel (EOF/interrupt)
-                    "Exiting SSHRunnerManager._collect_missing_data: cancelled (EOF/interrupt on password prompt)"
-                )
-                return None, None, None, None
-
-        if not commands:
-            print("\nNo commands configured. Enter command or press Enter for CSV fallback:")
-            choice = InputUtils.safe_input("Command: ", context="ssh_runner_command_prompt").strip()
-            if choice:
-                commands = [choice]
-
-        logging.debug(  # Exit envelope — log result summary without exposing password
-            "Exiting SSHRunnerManager._collect_missing_data: hosts=%s commands=%s password=***REDACTED***",
-            len(hosts) if hosts else 0,
-            len(commands) if commands else 0,
-        )
-        return hosts, username, password, commands
 
     @staticmethod
     def _execute_ssh(hosts, username, password, commands):  # type: ignore[no-untyped-def]
-        """Execute SSH commands on specified hosts."""
-        original_load = EnhancedSSHRunner.load_ssh_config_from_env
-
-        def mock_load(env_file: str = ".env"):  # type: ignore[no-untyped-def]
-            return {"hosts": hosts, "username": username, "password": password, "commands": commands}
-
-        try:
-            EnhancedSSHRunner.load_ssh_config_from_env = mock_load  # type: ignore[method-assign]  # monkey-patching for interactive SSH
-
-            if len(hosts) > 1 or len(commands) > 1:
-                print(f"\n!? Executing {len(commands)} command(s) on {len(hosts)} host(s)")
-
-                summary = EnhancedSSHRunner.run_ssh_commands_multi_host(
-                    hosts=hosts,
-                    username=username,
-                    password=password,
-                    commands=commands,
-                    port=22,
-                    timeout=30,
-                    use_shell=True,
-                    max_threads=min(len(hosts), 4),
-                )
-
-                successful = sum(1 for r in summary.values() if r.get("success", False))
-                print(f"\n!? Execution Summary: {successful}/{len(summary)} hosts successful")
-                return successful > 0
-            else:
-
-                class MockArgs:
-                    def __init__(self):  # type: ignore[no-untyped-def]
-                        self.interactive = False
-                        self.hostname = hosts[0]
-                        self.username = username
-                        self.password = None
-                        self.command = commands[0] if commands else None
-                        self.port = 22
-                        self.timeout = 30
-                        self.shell = True
-                        self.no_shell = False
-                        self.no_env = False
-                        self.log_level = "INFO"
-                        self.debug = False
-                        self.max_threads = None
-                        self.secure = False
-
-                return EnhancedSSHRunner.run_application(MockArgs())  # type: ignore[no-untyped-call]
-        finally:
-            EnhancedSSHRunner.load_ssh_config_from_env = original_load  # type: ignore[method-assign]  # restoring original method
+        """Delegated helper to execute SSH commands."""
+        return ExtractedSSHRunnerManager._execute_ssh(
+            SSHRunnerManager._build_deps(),
+            hosts,
+            username,
+            password,
+            commands,
+        )
 
     @staticmethod
     def _load_gateway_data():  # type: ignore[no-untyped-def]
-        """Load gateway management IP data from CSV."""
-        try:
-            with open(FilePathUtils.get_csv_path("GatewayManagementIPs.csv"), encoding="utf-8") as f:
-                gateways = list(csv.DictReader(f))
-            if not gateways:
-                print("! No gateway data found.")
-                return None
-            return gateways
-        except FileNotFoundError:
-            print("! Error: Gateway management IP data not found.")
-            return None
+        """Delegated helper to load gateway management data."""
+        return ExtractedSSHRunnerManager._load_gateway_data(SSHRunnerManager._build_deps())
 
     @staticmethod
     def _select_gateway_template(gateways):  # type: ignore[no-untyped-def]
-        """Display templates and get user selection."""
-        templates = sorted(
-            set(
-                gw.get("Gateway Template", "Unknown")
-                for gw in gateways
-                if gw.get("Gateway Template") and gw.get("Gateway Template") != "Unknown"
-            )
-        )
-
-        if not templates:
-            print("! No gateway templates found.")
-            return None
-
-        print("\n  2. Available gateway templates:")
-        for i, name in enumerate(templates, 1):
-            total = sum(1 for gw in gateways if gw.get("Gateway Template") == name)
-            online = sum(
-                1 for gw in gateways if gw.get("Gateway Template") == name and gw.get("Online Status") == "Online"
-            )
-            print(f"     {i:2}. {name} ({total} total, {online} online)")
-
-        selection = InputUtils.safe_input(
-            f"\n  Enter template number (1-{len(templates)}) or name: ",
-            context="ssh_runner_template_selection",
-        ).strip()
-        if not selection:
-            print("\n! Operation cancelled.")
-            logging.info("Template selection cancelled (empty/EOF/interrupt) - SSH/container safe exit")
-            return None
-
-        try:
-            idx = int(selection) - 1
-            if 0 <= idx < len(templates):
-                return templates[idx]
-            print("! Invalid selection.")
-            return None
-        except ValueError:
-            matches = [t for t in templates if selection.lower() in t.lower()]
-            if len(matches) == 1:
-                return matches[0]
-            elif len(matches) > 1:
-                print(f"! Ambiguous: {', '.join(matches)}")
-            else:
-                print(f"! Template '{selection}' not found.")
-            return None
+        """Delegated helper to choose gateway template."""
+        return ExtractedSSHRunnerManager._select_gateway_template(SSHRunnerManager._build_deps(), gateways)
 
     @staticmethod
     def _filter_gateways(gateways, template_name):  # type: ignore[no-untyped-def]
-        """Filter gateways by template and online status."""
-        return [
-            gw
-            for gw in gateways
-            if gw.get("Gateway Template") == template_name
-            and gw.get("Online Status") == "Online"
-            and gw.get("Management IP") != "Not Configured"
-            and gw.get("Management IP", "").strip()
-        ]
+        """Delegated helper to filter gateways by template and status."""
+        return ExtractedSSHRunnerManager._filter_gateways(gateways, template_name)
 
     @staticmethod
     def _display_filtered_gateways(gateways):  # type: ignore[no-untyped-def]
-        """Display filtered gateway information."""
-        print(f"\n  3. Found {len(gateways)} online gateways with management IPs:")
-        for gw in gateways:
-            name = gw.get("Gateway Name", "Unknown")
-            ip = gw.get("Management IP")
-            site = gw.get("Site Name", "Unknown")
-            print(f"     - {name:15} | {ip:15} | {site}")
+        """Delegated helper to display filtered gateways."""
+        ExtractedSSHRunnerManager._display_filtered_gateways(gateways)
 
     @staticmethod
     def _confirm_execution(count):  # type: ignore[no-untyped-def]
-        """Get user confirmation before SSH execution."""
-        logging.info(  # Entry envelope — log scope before confirmation prompt
-            "Entering SSHRunnerManager._confirm_execution: requesting confirmation for %s gateways",
-            count,
-        )
-        confirm = (
-            InputUtils.safe_input(
-                f"\n  Execute SSH commands on {count} gateways? (y/N): ",
-                context="ssh_runner_confirm_execution",
-            )
-            .strip()
-            .lower()
-        )
-        if not confirm:
-            print("\n! Operation cancelled.")
-            logging.info("SSH execution confirmation cancelled (empty/EOF/interrupt) - SSH/container safe exit")
-            logging.info("Exiting SSHRunnerManager._confirm_execution: result=cancelled")  # Exit envelope on cancel
-            return False
-        result = confirm in ["y", "yes"]  # Evaluate confirmation response as boolean
-        logging.info("Exiting SSHRunnerManager._confirm_execution: result=%s", result)  # Exit envelope with result
-        return result
+        """Delegated helper to confirm SSH execution."""
+        return ExtractedSSHRunnerManager._confirm_execution(SSHRunnerManager._build_deps(), count)
 
     @staticmethod
     def _execute_by_template(management_ips, template_name):  # type: ignore[no-untyped-def]
-        """Execute SSH commands on filtered gateways."""
-        print("\n  4. Loading SSH configuration...")
-
-        try:
-            ssh_config = EnhancedSSHRunner.load_ssh_config_from_env()
-
-            if not ssh_config.get("username") or not ssh_config.get("password"):
-                print("! SSH credentials not found in .env file.")
-                return
-
-            commands = ssh_config.get("commands", [])
-            if not commands:
-                commands = EnhancedSSHRunner.load_commands_from_csv()
-                if not commands:
-                    print("! No SSH commands found.")
-                    return
-
-            print(f"  - Target hosts: {len(management_ips)} gateways")
-            print(f"  - Commands: {len(commands)}")
-
-            results = EnhancedSSHRunner.run_ssh_commands_multi_host(
-                hosts=management_ips,
-                username=ssh_config["username"],
-                password=ssh_config["password"],
-                commands=commands,
-                port=22,
-                timeout=30,
-                use_shell=True,
-                max_threads=5,
-            )
-
-            successful = results.get("successful", 0)
-            print("\n! SSH execution completed:")
-            print(f"  - Template: {template_name}")
-            print(f"  - Successful: {successful}")
-            print(f"  - Failed: {results.get('failed', 0)}")
-
-            logging.info(
-                f"SSH by template: {template_name}, {successful}/{results.get('total', len(management_ips))} successful"
-            )
-
-        except Exception as error:
-            print(f"! Error: {error}")
-            logging.error(f"SSH by template error: {error}", exc_info=True)
+        """Delegated helper to execute SSH by selected template."""
+        ExtractedSSHRunnerManager._execute_by_template(SSHRunnerManager._build_deps(), management_ips, template_name)
 
 
 # ============================================================================
@@ -23979,7 +21170,7 @@ class InventoryCSVComparator:
         self._impl.execute()
 
 
-class WAN2MigrationManager:
+class _LegacyWAN2MigrationManager:
     """
     Manages WAN2 interface variable migration for gateway templates and sites.
 
@@ -24572,6 +21763,39 @@ class WAN2MigrationManager:
             print(f"\n  INFO: {info_sites} sites have same-IP-type overrides (likely safe)")
             print("  Template and device use same IP configuration type (both DHCP or both Static)")
             print("  Overrides may be for description, usage, or other non-critical fields")
+
+
+# ============================================================================
+# WAN2 MIGRATION MANAGER CLASS (delegated)
+# ============================================================================
+class WAN2MigrationManager:
+    """Delegation wrapper for extracted WAN2 migration manager implementation."""
+
+    def __init__(self):  # type: ignore[no-untyped-def]
+        """Initialize delegated WAN2 manager with runtime dependencies."""
+        from src.gateway import wan2_migration_manager as wan2_module  # noqa: PLC0415,I001
+
+        wan2_module.configure_wan2_migration_dependencies(
+            apisession_dependency=apisession,
+            config_utils=ConfigUtils,
+            cache_utils=CacheUtils,
+            org_site_exporter=OrgSiteExporter,
+            gateway_export_utils=GatewayExportUtils,
+            file_path_utils=FilePathUtils,
+            input_utils=InputUtils,
+            data_exporter=DataExporter,
+            mistapi_dependency=mistapi,
+            site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
+        )
+        self._impl = wan2_module.WAN2MigrationManager()
+
+    def set_site_variable(self):  # type: ignore[no-untyped-def]
+        """Menu #149 delegated entrypoint."""
+        return self._impl.set_site_variable()
+
+    def __getattr__(self, name):  # type: ignore[no-untyped-def]
+        """Proxy attribute access to the extracted implementation."""
+        return getattr(self._impl, name)  # Delegate to real impl for test compat
 
 
 # ============================================================================
@@ -25648,7 +22872,7 @@ class WANProbeConfigManager:
 # ============================================================================
 # WAN PROBE DEVICE OVERRIDE MANAGER CLASS
 # ============================================================================
-class WANProbeDeviceOverrideManager:
+class _LegacyWANProbeDeviceOverrideManager:
     """
     Manages WAN probe configuration for device-level port overrides.
 
@@ -26161,6 +23385,32 @@ class WANProbeDeviceOverrideManager:
 
 
 # ============================================================================
+# WAN PROBE DEVICE OVERRIDE MANAGER CLASS (delegated)
+# ============================================================================
+class WANProbeDeviceOverrideManager:
+    """Delegation wrapper for extracted WAN probe device override manager implementation."""
+
+    @classmethod
+    def configure(cls, dry_run: bool = False) -> None:
+        """Menu #167 delegated entrypoint."""
+        from src.gateway import wan_probe_device_override_manager as wan_probe_module  # noqa: PLC0415,I001
+
+        wan_probe_module.configure_wan_probe_device_override_dependencies(
+            apisession_dependency=apisession,
+            config_utils=ConfigUtils,
+            cache_utils=CacheUtils,
+            org_site_exporter=OrgSiteExporter,
+            gateway_export_utils=GatewayExportUtils,
+            file_path_utils=FilePathUtils,
+            input_utils=InputUtils,
+            data_exporter=DataExporter,
+            mistapi_dependency=mistapi,
+            site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
+        )
+        return wan_probe_module.WANProbeDeviceOverrideManager.configure(dry_run=dry_run)
+
+
+# ============================================================================
 # VIRTUAL CHASSIS MANAGER CLASS
 # ============================================================================
 class VirtualChassisManager:
@@ -26227,835 +23477,47 @@ class VirtualChassisManager:
 # SITE CONFIGURATION MANAGER CLASS
 # ============================================================================
 class SiteConfigManager:
-    """
-    Manages bulk site configuration operations including test site creation,
-    RF template management, and device profile operations.
+    """Delegation wrapper for extracted site configuration implementation."""
 
-    All destructive operations require explicit user confirmation.
-    """
+    @staticmethod
+    def _configure_module():  # type: ignore[no-untyped-def]
+        """Configure extracted module dependencies and return the module handle."""
+        from src.site import site_config_manager as site_config_module  # noqa: PLC0415,I001
 
-    # -------------------------------------------------------------------------
-    # Test Site Creation (Menu 107)
-    # -------------------------------------------------------------------------
+        site_config_module.configure_site_config_manager_dependencies(
+            apisession_dependency=apisession,
+            config_utils=ConfigUtils,
+            file_path_utils=FilePathUtils,
+            input_utils=InputUtils,
+            data_exporter=DataExporter,
+            mistapi_dependency=mistapi,
+            default_api_page_limit=DEFAULT_API_PAGE_LIMIT,
+        )
+        return site_config_module
+
     @staticmethod
     def create_test_sites_from_csv():  # type: ignore[no-untyped-def]
-        """
-        Create test sites from NorthAmericanTestSites.csv in the data directory.
-        DESTRUCTIVE: Creates new sites in the organization.
-        """
-        logging.warning("Menu #171 DESTRUCTIVE: Create test sites from CSV operation started")
-        SiteConfigManager._display_test_sites_header()
+        """Menu #171 delegated entrypoint."""
+        module = SiteConfigManager._configure_module()
+        return module.SiteConfigManager.create_test_sites_from_csv()
 
-        if not SiteConfigManager._confirm_test_site_creation():
-            return
-
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not org_id:
-            logging.error("No organization ID provided - cannot create sites")
-            print(" ERROR: No organization ID provided")
-            return
-
-        sites_data = SiteConfigManager._load_test_sites_csv()
-        if not sites_data:
-            return
-
-        created, failed = SiteConfigManager._execute_site_creation(org_id, sites_data)
-        SiteConfigManager._report_site_creation_results(sites_data, created, failed)
-        logging.warning(f"Menu #171 complete: {len(created)} sites created, {len(failed)} failed")
-
-    @staticmethod
-    def _display_test_sites_header() -> None:
-        """Display test site creation warning header."""
-        print("\n========================================")
-        print(" DESTRUCTIVE OPERATION WARNING")
-        print("========================================")
-        print(" This will CREATE 137 new test sites in your organization")
-        print(" Sites span 13 North American countries:")
-        print(" US, Canada, Mexico, Guatemala, Costa Rica, Panama,")
-        print(" Honduras, Belize, Bahamas, Cuba, Jamaica,")
-        print(" Dominican Republic, and Haiti")
-        print("========================================\n")
-
-    @staticmethod
-    def _confirm_test_site_creation() -> bool:
-        """Get user confirmation for test site creation."""
-        confirmation = InputUtils.safe_input(
-            "Type 'CREATE' (uppercase) to proceed with site creation: ", context="site creation confirmation"
-        )
-        if confirmation != "CREATE":
-            print(" Site creation cancelled - confirmation phrase not matched")
-            logging.info("Site creation cancelled by user")
-            return False
-        return True
-
-    @staticmethod
-    def _load_test_sites_csv() -> list[dict] | None:  # type: ignore[type-arg]
-        """Load test sites from CSV file."""
-        csv_file_path = FilePathUtils.get_csv_path("NorthAmericanTestSites.csv")
-
-        if not os.path.exists(csv_file_path):
-            logging.error(f"CSV file not found: {csv_file_path}")
-            print(f" ERROR: CSV file not found: {csv_file_path}")
-            return None
-
-        try:
-            with open(csv_file_path, encoding="utf-8") as csv_file:
-                sites_data = list(csv.DictReader(csv_file))
-            logging.info(f"Loaded {len(sites_data)} sites from CSV file")
-            print(f"\n Loaded {len(sites_data)} sites from CSV file")
-            return sites_data
-        except Exception as read_error:
-            logging.error(f"Failed to read CSV file: {read_error}")
-            print(f" ERROR: Failed to read CSV file: {read_error}")
-            return None
-
-    @staticmethod
-    def _build_site_payload(site_data: dict) -> dict | None:  # type: ignore[type-arg]
-        """Build API payload from site CSV row data."""
-        site_name = site_data.get("name", "").strip()
-        if not site_name:
-            return None
-
-        payload = {"name": site_name}
-
-        if site_data.get("address"):
-            payload["address"] = site_data["address"].strip()
-        if site_data.get("country_code"):
-            payload["country_code"] = site_data["country_code"].strip()
-        if site_data.get("timezone"):
-            payload["timezone"] = site_data["timezone"].strip()
-        if site_data.get("notes"):
-            payload["notes"] = site_data["notes"].strip()
-
-        # Add lat/lng if both are present
-        lat_str = site_data.get("lat", "").strip()
-        lng_str = site_data.get("lng", "").strip()
-        if lat_str and lng_str:
-            try:
-                payload["latlng"] = {"lat": float(lat_str), "lng": float(lng_str)}
-            except ValueError:
-                pass  # Skip invalid coordinates
-
-        return payload
-
-    @staticmethod
-    def _execute_site_creation(org_id: str, sites_data: list[dict]) -> tuple[list, list]:  # type: ignore[type-arg]
-        """Execute site creation API calls. Returns (created, failed) lists."""
-        created_sites = []
-        failed_sites = []
-
-        print(f"\n Creating sites in organization {org_id}...")
-
-        for index, site_data in enumerate(sites_data, start=1):
-            site_payload = SiteConfigManager._build_site_payload(site_data)
-            if not site_payload:
-                failed_sites.append({"row": index, "name": "MISSING", "error": "No site name"})
-                continue
-
-            site_name = site_payload["name"]
-            try:
-                response = mistapi.api.v1.orgs.sites.createOrgSite(apisession, org_id, body=site_payload)
-                if hasattr(response, "data") and response.data:
-                    created_site_id = response.data.get("id", "unknown")
-                    created_sites.append({"name": site_name, "id": created_site_id, "row": index})
-                    print(f" [{index}/{len(sites_data)}] Created: {site_name}")
-                else:
-                    failed_sites.append({"row": index, "name": site_name, "error": "No data"})
-            except Exception as create_error:
-                failed_sites.append({"row": index, "name": site_name, "error": str(create_error)})
-                logging.error(f"Failed to create site {site_name}: {create_error}")
-
-            time.sleep(0.5)  # Rate limiting
-
-        return created_sites, failed_sites
-
-    @staticmethod
-    def _report_site_creation_results(sites_data: list, created: list, failed: list) -> None:  # type: ignore[type-arg]
-        """Report and export site creation results."""
-        print("\n========================================")
-        print(" SITE CREATION SUMMARY")
-        print("========================================")
-        print(f" Total sites in CSV: {len(sites_data)}")
-        print(f" Successfully created: {len(created)}")
-        print(f" Failed: {len(failed)}")
-        print("========================================\n")
-
-        if created:
-            DataExporter.save_data_to_output(created, "CreatedTestSites.csv")  # type: ignore[no-untyped-call]
-            print(" Created sites exported to CreatedTestSites.csv")
-        if failed:
-            DataExporter.save_data_to_output(failed, "FailedTestSites.csv")  # type: ignore[no-untyped-call]
-            print(" Failed sites exported to FailedTestSites.csv")
-
-    # -------------------------------------------------------------------------
-    # RF Template Creation (Menu 108)
-    # -------------------------------------------------------------------------
     @staticmethod
     def create_country_rf_templates_and_assign():  # type: ignore[no-untyped-def]
-        """
-        Create country-specific RF templates and assign sites to matching templates.
-        DESTRUCTIVE: Creates RF templates and modifies site assignments.
-        """
-        logging.warning("Menu #172 DESTRUCTIVE: Create country RF templates operation started")
-        SiteConfigManager._display_rf_template_header()
+        """Menu #172 delegated entrypoint."""
+        module = SiteConfigManager._configure_module()
+        return module.SiteConfigManager.create_country_rf_templates_and_assign()
 
-        if not apisession:
-            logging.error("API session not initialized")
-            print(" ERROR: Mist API session not initialized")
-            return
-
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not org_id:
-            return
-
-        # Analyze sites and templates
-        analysis = SiteConfigManager._analyze_sites_for_rf_templates(org_id)
-        if not analysis:
-            return
-
-        sites_by_country, sites_without_country, existing_templates = analysis
-
-        # Plan template operations
-        plan = SiteConfigManager._plan_rf_template_operations(sites_by_country, existing_templates)
-        if not plan:
-            return
-
-        templates_to_create, templates_to_update, update_mode = plan
-
-        # Confirm and execute
-        if not SiteConfigManager._confirm_rf_template_operation(
-            templates_to_create, templates_to_update, sites_by_country, update_mode
-        ):
-            return
-
-        # Execute template creation/updates
-        template_mapping = SiteConfigManager._execute_rf_template_operations(
-            org_id, templates_to_create, templates_to_update, update_mode
-        )
-
-        # Assign sites to templates
-        success, failed = SiteConfigManager._assign_sites_to_rf_templates(sites_by_country, template_mapping)
-
-        SiteConfigManager._report_rf_template_results(
-            templates_to_create, templates_to_update, update_mode, success, failed, sites_without_country
-        )
-        logging.warning(
-            f"Menu #172 complete: {len(templates_to_create)} templates created, {len(success)} sites assigned, {len(failed)} failed"  # noqa: E501
-        )
-
-    @staticmethod
-    def _display_rf_template_header() -> None:
-        """Display RF template operation header."""
-        print("\n" + "=" * 70)
-        print(" Menu 108: Create Country-Specific RF Templates and Assign")
-        print("=" * 70)
-
-    @staticmethod
-    def _analyze_sites_for_rf_templates(org_id: str) -> tuple | None:  # type: ignore[type-arg]
-        """Analyze organization sites and existing RF templates."""
-        print("\n  Step 1: Scanning organization sites for unique country codes...")
-
-        try:
-            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
-            sites = mistapi.get_all(response=sites_response, mist_session=apisession)
-
-            if not sites:
-                print(" No sites found in organization.")
-                return None
-
-            print(f" Found {len(sites)} sites in organization")
-        except Exception as error:
-            logging.error(f"Failed to fetch sites: {error}")
-            print(f" ERROR: Failed to fetch sites - {error}")
-            return None
-
-        # Extract unique country codes
-        sites_by_country: dict[str, list[dict[str, Any]]] = {}
-        sites_without_country: list[dict[str, Any]] = []
-
-        for site in sites:
-            country_code = site.get("country_code", "").strip().upper()
-            site_info = {"id": site.get("id"), "name": site.get("name", "Unknown")}
-
-            if country_code:
-                if country_code not in sites_by_country:
-                    sites_by_country[country_code] = []
-                sites_by_country[country_code].append(site_info)
-            else:
-                sites_without_country.append(site_info)
-
-        if not sites_by_country:
-            print(" WARNING: No sites have country codes assigned.")
-            return None
-
-        # Display country breakdown
-        print(f"\n  Found {len(sites_by_country)} unique countries:")
-        for country in sorted(sites_by_country.keys()):
-            print(f"   - {country}: {len(sites_by_country[country])} sites")
-
-        if sites_without_country:
-            print(f"\n  WARNING: {len(sites_without_country)} sites have no country code")
-
-        # Check existing RF templates
-        print("\n  Step 2: Checking for existing RF templates...")
-        try:
-            templates_response = mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates(
-                apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT
-            )
-            existing = mistapi.get_all(response=templates_response, mist_session=apisession) or []
-            existing_templates = {t.get("name"): t.get("id") for t in existing}
-        except Exception as error:
-            logging.error(f"Failed to fetch RF templates: {error}")
-            return None
-
-        return sites_by_country, sites_without_country, existing_templates
-
-    @staticmethod
-    def _plan_rf_template_operations(sites_by_country: dict, existing_templates: dict) -> tuple | None:  # type: ignore[type-arg]
-        """Plan which RF templates to create vs update."""
-        templates_to_create = []
-        templates_to_update = []
-
-        for country in sorted(sites_by_country.keys()):
-            template_name = f"RF-{country}"
-            if template_name in existing_templates:
-                templates_to_update.append(
-                    {"country": country, "name": template_name, "id": existing_templates[template_name]}
-                )
-            else:
-                templates_to_create.append({"country": country, "name": template_name})
-
-        update_mode = "skip"
-        if templates_to_update:
-            print(f"\n  Found {len(templates_to_update)} existing RF templates:")
-            for t in templates_to_update[:5]:
-                print(f"   - {t['name']}")
-
-            print("\n  How should existing templates be handled?")
-            print("   1. SKIP - Keep existing templates as-is (recommended)")
-            print("   2. UPDATE - Update existing templates (DESTRUCTIVE)")
-
-            while True:
-                choice = InputUtils.safe_input("\n  Enter choice (1 or 2): ", "rf_update_mode").strip()
-                if choice == "1":
-                    update_mode = "skip"
-                    break
-                elif choice == "2":
-                    update_mode = "update"
-                    break
-                print("  Invalid choice.")
-
-        return templates_to_create, templates_to_update, update_mode
-
-    @staticmethod
-    def _confirm_rf_template_operation(
-        to_create: list,  # type: ignore[type-arg]
-        to_update: list,  # type: ignore[type-arg]
-        sites_by_country: dict,  # type: ignore[type-arg]
-        update_mode: str,
-    ) -> bool:
-        """Confirm RF template operation with user."""
-        print("\n  " + "!" * 66)
-        print("  WARNING: DESTRUCTIVE OPERATION")
-        print("  " + "!" * 66)
-
-        if to_create:
-            print(f"  - CREATE {len(to_create)} new RF templates")
-        if update_mode == "update" and to_update:
-            print(f"  - UPDATE {len(to_update)} existing RF templates")
-
-        total_sites = sum(len(sites) for sites in sites_by_country.values())
-        print(f"  - ASSIGN {total_sites} sites to country templates")
-        print("  " + "!" * 66)
-
-        confirmation = InputUtils.safe_input("\n  Type 'CREATE' to proceed: ", "rf_template_confirm")
-        return confirmation == "CREATE"
-
-    @staticmethod
-    def _build_rf_template_payload(country: str, template_name: str) -> dict:  # type: ignore[type-arg]
-        """Build RF template API payload with auto settings."""
-        return {
-            "name": template_name,
-            "country_code": country,
-            "band_24": {"disabled": False, "bandwidth": 20, "preamble": "short"},
-            "band_5": {"disabled": False, "bandwidth": 40, "preamble": "short"},
-            "band_6": {"disabled": False, "bandwidth": 80, "preamble": "short"},
-            "band_24_usage": "auto",
-        }
-
-    @staticmethod
-    def _execute_rf_template_operations(org_id: str, to_create: list, to_update: list, update_mode: str) -> dict:  # type: ignore[type-arg]
-        """Execute RF template create/update operations. Returns country->template mapping."""
-        template_mapping = {}
-
-        # Handle existing templates based on mode
-        if update_mode == "update":
-            for template_info in to_update:
-                country = template_info["country"]
-                payload = SiteConfigManager._build_rf_template_payload(country, template_info["name"])
-                try:
-                    response = mistapi.api.v1.orgs.rftemplates.updateOrgRfTemplate(
-                        apisession, org_id, template_info["id"], body=payload
-                    )
-                    if response.status_code == 200:
-                        template_mapping[country] = {"id": template_info["id"], "name": template_info["name"]}
-                        print(f"  Updated: {template_info['name']}")
-                    time.sleep(0.5)
-                except Exception as error:
-                    logging.error(f"Failed to update template {template_info['name']}: {error}")
-        else:
-            # Skip mode - use existing templates as-is
-            for template_info in to_update:
-                template_mapping[template_info["country"]] = {"id": template_info["id"], "name": template_info["name"]}
-
-        # Create new templates
-        for template_info in to_create:
-            country = template_info["country"]
-            payload = SiteConfigManager._build_rf_template_payload(country, template_info["name"])
-            try:
-                response = mistapi.api.v1.orgs.rftemplates.createOrgRfTemplate(apisession, org_id, payload)
-                if response.status_code == 200:
-                    created_id = response.data.get("id")
-                    template_mapping[country] = {"id": created_id, "name": template_info["name"]}
-                    print(f" Created: {template_info['name']}")
-                time.sleep(0.5)
-            except Exception as error:
-                logging.error(f"Failed to create template {template_info['name']}: {error}")
-
-        return template_mapping
-
-    @staticmethod
-    def _assign_sites_to_rf_templates(sites_by_country: dict, template_mapping: dict) -> tuple[list, list]:  # type: ignore[type-arg]
-        """Assign sites to their country RF templates."""
-        success: list[dict[str, Any]] = []
-        failed: list[dict[str, Any]] = []
-
-        for country, sites in sites_by_country.items():
-            if country not in template_mapping:
-                continue
-
-            template_id = template_mapping[country]["id"]
-            template_name = template_mapping[country]["name"]
-
-            for site_info in sites:
-                if ConfigUtils.check_stop_signal():
-                    return success, failed
-                try:
-                    response = mistapi.api.v1.sites.sites.updateSiteInfo(
-                        apisession, site_info["id"], body={"rftemplate_id": template_id}
-                    )
-                    if response.status_code == 200:
-                        success.append(
-                            {"site_name": site_info["name"], "country": country, "template_name": template_name}
-                        )
-                    else:
-                        failed.append({"site_name": site_info["name"], "error": f"HTTP {response.status_code}"})
-                    time.sleep(0.3)
-                except Exception as error:
-                    failed.append({"site_name": site_info["name"], "error": str(error)})
-
-        return success, failed
-
-    @staticmethod
-    def _report_rf_template_results(  # noqa: PLR0913
-        created: list,  # type: ignore[type-arg]
-        updated: list,  # type: ignore[type-arg]
-        update_mode: str,
-        success: list,  # type: ignore[type-arg]
-        failed: list,  # type: ignore[type-arg]
-        skipped: list,  # type: ignore[type-arg]
-    ) -> None:
-        """Report RF template operation results."""
-        print("\n" + "=" * 70)
-        print(" OPERATION COMPLETE")
-        print("=" * 70)
-        print(f"  RF Templates Created: {len(created)}")
-        if update_mode == "update":
-            print(f"  RF Templates Updated: {len(updated)}")
-        else:
-            print(f"  RF Templates Existing: {len(updated)}")
-        print(f"  Sites Successfully Assigned: {len(success)}")
-        print(f"  Sites Failed: {len(failed)}")
-        print(f"  Sites Skipped (no country): {len(skipped)}")
-
-        if success:
-            DataExporter.save_data_to_output(success, "SuccessfulRFTemplateAssignments.csv")  # type: ignore[no-untyped-call]
-        if failed:
-            DataExporter.save_data_to_output(failed, "FailedRFTemplateAssignments.csv")  # type: ignore[no-untyped-call]
-
-    # -------------------------------------------------------------------------
-    # Device Profile Creation (Menu 109)
-    # -------------------------------------------------------------------------
     @staticmethod
     def create_ap_model_device_profiles():  # type: ignore[no-untyped-def]
-        """
-        Create Device Profile for each unique AP model in the organization.
-        DESTRUCTIVE: Creates new device profiles.
-        """
-        logging.warning("Menu #173 DESTRUCTIVE: Create AP model device profiles operation started")
-        SiteConfigManager._display_device_profile_header()
+        """Menu #173 delegated entrypoint."""
+        module = SiteConfigManager._configure_module()
+        return module.SiteConfigManager.create_ap_model_device_profiles()
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-
-        # Analyze AP models
-        ap_models, models_without_info = SiteConfigManager._analyze_ap_models(org_id)
-        if not ap_models:
-            return
-
-        # Check existing profiles
-        existing_profiles = SiteConfigManager._get_existing_device_profiles(org_id)
-        if existing_profiles is None:
-            return
-
-        # Plan profile creation
-        to_create, to_skip = SiteConfigManager._plan_profile_creation(ap_models, existing_profiles)
-
-        if not to_create:
-            print("\n  All AP model Device Profiles already exist.")
-            return
-
-        # Confirm and execute
-        if not SiteConfigManager._confirm_profile_creation(to_create, to_skip):
-            return
-
-        created, failed = SiteConfigManager._execute_profile_creation(org_id, to_create)
-        SiteConfigManager._report_profile_creation_results(created, failed, to_skip)
-        logging.warning(f"Menu #173 complete: {len(created)} profiles created, {len(failed)} failed")
-
-    @staticmethod
-    def _display_device_profile_header() -> None:
-        """Display device profile creation header."""
-        print("\n" + "=" * 70)
-        print(" CREATE AP MODEL DEVICE PROFILES")
-        print("=" * 70)
-
-    @staticmethod
-    def _analyze_ap_models(org_id: str) -> tuple[set, list]:  # type: ignore[type-arg]
-        """Analyze organization inventory for unique AP models."""
-        print("\n  Step 1: Scanning organization for AP device models...")
-
-        try:
-            inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
-                apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
-            )
-            all_devices = mistapi.get_all(response=inventory_response, mist_session=apisession) or []
-        except Exception as error:
-            logging.error(f"Failed to fetch inventory: {error}")
-            print(f" ERROR: Failed to fetch inventory - {error}")
-            return set(), []
-
-        if not all_devices:
-            print(" No AP devices found in organization.")
-            return set(), []
-
-        ap_models = set()
-        models_without_info = []
-
-        for device in all_devices:
-            model = device.get("model")
-            if model:
-                ap_models.add(model)
-            else:
-                models_without_info.append(device.get("name", device.get("mac", "unknown")))
-
-        print(f"\n  Found {len(ap_models)} unique AP models:")
-        for model in sorted(ap_models):
-            print(f"   - {model}")
-
-        return ap_models, models_without_info
-
-    @staticmethod
-    def _get_existing_device_profiles(org_id: str) -> dict | None:  # type: ignore[type-arg]
-        """Get existing device profiles from organization."""
-        print("\n  Step 2: Checking for existing Device Profiles...")
-
-        try:
-            profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
-                apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
-            )
-            existing = mistapi.get_all(response=profiles_response, mist_session=apisession) or []
-            return {p.get("name"): p.get("id") for p in existing}
-        except Exception as error:
-            logging.error(f"Failed to fetch device profiles: {error}")
-            print(f" ERROR: Failed to fetch device profiles - {error}")
-            return None
-
-    @staticmethod
-    def _plan_profile_creation(ap_models: set, existing_profiles: dict) -> tuple[list, list]:  # type: ignore[type-arg]
-        """Plan which profiles to create vs skip."""
-        to_create = []
-        to_skip = []
-
-        for model in sorted(ap_models):
-            profile_name = f"AP-{model}"
-            if profile_name in existing_profiles:
-                to_skip.append({"model": model, "name": profile_name, "id": existing_profiles[profile_name]})
-            else:
-                to_create.append({"model": model, "name": profile_name})
-
-        if to_skip:
-            print(f"\n  Found {len(to_skip)} existing Device Profiles (will skip)")
-        if to_create:
-            print(f"\n  Will create {len(to_create)} new Device Profiles")
-
-        return to_create, to_skip
-
-    @staticmethod
-    def _confirm_profile_creation(to_create: list, to_skip: list) -> bool:  # type: ignore[type-arg]
-        """Confirm device profile creation with user."""
-        print("\n  " + "!" * 66)
-        print("  WARNING: DESTRUCTIVE OPERATION")
-        print("  " + "!" * 66)
-        print(f"  This will CREATE {len(to_create)} new Device Profiles")
-        print("  " + "!" * 66)
-
-        confirmation = InputUtils.safe_input("\n  Type 'CREATE' to proceed: ", "profile_creation")
-        return confirmation == "CREATE"
-
-    @staticmethod
-    def _execute_profile_creation(org_id: str, to_create: list) -> tuple[list, list]:  # type: ignore[type-arg]
-        """Execute device profile creation. Returns (created, failed) lists."""
-        created: list[dict[str, Any]] = []
-        failed: list[dict[str, Any]] = []
-
-        print(f"\n  Step 3: Creating {len(to_create)} new Device Profiles...")
-
-        for profile_info in to_create:
-            payload = {"name": profile_info["name"], "type": "ap"}
-            try:
-                response = mistapi.api.v1.orgs.deviceprofiles.createOrgDeviceProfile(apisession, org_id, body=payload)
-                if response.status_code == 200:
-                    created_id = response.data.get("id")
-                    created.append({"model": profile_info["model"], "name": profile_info["name"], "id": created_id})
-                    print(f"  Created: {profile_info['name']}")
-                else:
-                    failed.append(
-                        {
-                            "model": profile_info["model"],
-                            "name": profile_info["name"],
-                            "error": f"HTTP {response.status_code}",
-                        }
-                    )
-                time.sleep(0.5)
-            except Exception as error:
-                failed.append({"model": profile_info["model"], "name": profile_info["name"], "error": str(error)})
-
-        return created, failed
-
-    @staticmethod
-    def _report_profile_creation_results(created: list, failed: list, skipped: list) -> None:  # type: ignore[type-arg]
-        """Report device profile creation results."""
-        print("\n" + "=" * 70)
-        print(" OPERATION COMPLETE")
-        print("=" * 70)
-        print(f"  Device Profiles Created: {len(created)}")
-        print(f"  Device Profiles Failed: {len(failed)}")
-        print(f"  Device Profiles Skipped: {len(skipped)}")
-
-        if created:
-            DataExporter.save_data_to_output(created, "CreatedAPModelDeviceProfiles.csv")  # type: ignore[no-untyped-call]
-        if failed:
-            DataExporter.save_data_to_output(failed, "FailedAPModelDeviceProfiles.csv")  # type: ignore[no-untyped-call]
-
-    # -------------------------------------------------------------------------
-    # Device Profile Assignment (Menu 110)
-    # -------------------------------------------------------------------------
     @staticmethod
     def assign_aps_to_matching_device_profiles():  # type: ignore[no-untyped-def]
-        """
-        Assign AP devices to Device Profiles matching their model type.
-        DESTRUCTIVE: Modifies device assignments.
-        """
-        logging.warning("Menu #174 DESTRUCTIVE: Assign APs to device profiles operation started")
-        SiteConfigManager._display_profile_assignment_header()
-
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-
-        # Fetch APs and profiles
-        all_aps = SiteConfigManager._fetch_ap_inventory(org_id)
-        if not all_aps:
-            return
-
-        profile_map = SiteConfigManager._fetch_profile_map(org_id)
-        if not profile_map:
-            return
-
-        # Analyze matching
-        with_profile, without_profile, without_model = SiteConfigManager._analyze_ap_profile_matching(
-            all_aps, profile_map
-        )
-
-        if not with_profile:
-            print("\n  No APs have matching Device Profiles to assign.")
-            return
-
-        # Confirm and execute
-        if not SiteConfigManager._confirm_profile_assignment(with_profile, without_profile):
-            return
-
-        success, failed = SiteConfigManager._execute_profile_assignment(org_id, with_profile)
-        SiteConfigManager._report_profile_assignment_results(success, failed, without_profile, without_model)
-        logging.warning(f"Menu #174 complete: {len(success)} APs assigned, {len(failed)} failed")
-
-    @staticmethod
-    def _display_profile_assignment_header() -> None:
-        """Display profile assignment header."""
-        print("\n" + "=" * 70)
-        print(" ASSIGN APS TO MATCHING DEVICE PROFILES")
-        print("=" * 70)
-
-    @staticmethod
-    def _fetch_ap_inventory(org_id: str) -> list | None:  # type: ignore[type-arg]
-        """Fetch AP inventory from organization."""
-        print("\n  Step 1: Fetching AP inventory from organization...")
-
-        try:
-            inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory(
-                apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
-            )
-            all_aps = mistapi.get_all(response=inventory_response, mist_session=apisession) or []
-
-            if not all_aps:
-                print(" No APs found in organization inventory.")
-                return None
-
-            print(f"  Found {len(all_aps)} APs in organization")
-            return all_aps
-        except Exception as error:
-            logging.error(f"Failed to fetch AP inventory: {error}")
-            print(f" ERROR: Failed to fetch AP inventory - {error}")
-            return None
-
-    @staticmethod
-    def _fetch_profile_map(org_id: str) -> dict | None:  # type: ignore[type-arg]
-        """Fetch device profiles and return name->id mapping."""
-        print("\n  Step 2: Fetching existing Device Profiles...")
-
-        try:
-            profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
-                apisession, org_id, type="ap", limit=DEFAULT_API_PAGE_LIMIT
-            )
-            existing = mistapi.get_all(response=profiles_response, mist_session=apisession) or []
-
-            profile_map = {p.get("name"): p.get("id") for p in existing if p.get("name") and p.get("id")}
-
-            if not profile_map:
-                print(" No Device Profiles found in organization.")
-                return None
-
-            print(f"  Found {len(profile_map)} Device Profiles")
-            return profile_map
-        except Exception as error:
-            logging.error(f"Failed to fetch Device Profiles: {error}")
-            print(f" ERROR: Failed to fetch Device Profiles - {error}")
-            return None
-
-    @staticmethod
-    def _analyze_ap_profile_matching(all_aps: list, profile_map: dict) -> tuple[list, list, list]:  # type: ignore[type-arg]
-        """Analyze which APs can be assigned to profiles."""
-        with_profile = []
-        without_profile = []
-        without_model = []
-
-        for access_point in all_aps:
-            ap_mac = access_point.get("mac", "unknown")
-            ap_name = access_point.get("name", ap_mac)
-            ap_model = access_point.get("model")
-
-            if not ap_model:
-                without_model.append({"mac": ap_mac, "name": ap_name})
-                continue
-
-            expected_profile = f"AP-{ap_model}"
-            if expected_profile in profile_map:
-                with_profile.append(
-                    {
-                        "mac": ap_mac,
-                        "name": ap_name,
-                        "model": ap_model,
-                        "profile_name": expected_profile,
-                        "profile_id": profile_map[expected_profile],
-                    }
-                )
-            else:
-                without_profile.append(
-                    {"mac": ap_mac, "name": ap_name, "model": ap_model, "expected_profile": expected_profile}
-                )
-
-        print("\n  Analysis:")
-        print(f"   APs with matching profiles: {len(with_profile)}")
-        print(f"   APs without matching profiles: {len(without_profile)}")
-        print(f"   APs without model info: {len(without_model)}")
-
-        return with_profile, without_profile, without_model
-
-    @staticmethod
-    def _confirm_profile_assignment(with_profile: list, without_profile: list) -> bool:  # type: ignore[type-arg]
-        """Confirm profile assignment with user."""
-        print("\n  " + "!" * 66)
-        print("  WARNING: DESTRUCTIVE OPERATION")
-        print("  " + "!" * 66)
-        print(f"  This will ASSIGN {len(with_profile)} APs to their matching Device Profiles")
-        print(f"  APs without matching profiles will be SKIPPED: {len(without_profile)}")
-        print("  " + "!" * 66)
-
-        confirmation = InputUtils.safe_input("\n  Type 'ASSIGN' to proceed: ", "profile_assignment")
-        return confirmation == "ASSIGN"
-
-    @staticmethod
-    def _execute_profile_assignment(org_id: str, with_profile: list) -> tuple[list, list]:  # type: ignore[type-arg]
-        """Execute profile assignment API calls."""
-        success: list[dict[str, Any]] = []
-        failed: list[dict[str, Any]] = []
-
-        print(f"\n  Step 3: Assigning {len(with_profile)} APs to Device Profiles...")
-
-        for ap_info in with_profile:
-            try:
-                response = mistapi.api.v1.orgs.deviceprofiles.assignOrgDeviceProfile(
-                    apisession, org_id, ap_info["profile_id"], body={"macs": [ap_info["mac"]]}
-                )
-                if response.status_code == 200:
-                    success.append(
-                        {
-                            "mac": ap_info["mac"],
-                            "name": ap_info["name"],
-                            "model": ap_info["model"],
-                            "profile_name": ap_info["profile_name"],
-                        }
-                    )
-                else:
-                    failed.append(
-                        {"mac": ap_info["mac"], "name": ap_info["name"], "error": f"HTTP {response.status_code}"}
-                    )
-                time.sleep(0.3)
-            except Exception as error:
-                failed.append({"mac": ap_info["mac"], "name": ap_info["name"], "error": str(error)})
-
-        return success, failed
-
-    @staticmethod
-    def _report_profile_assignment_results(
-        success: list,  # type: ignore[type-arg]
-        failed: list,  # type: ignore[type-arg]
-        without_profile: list,  # type: ignore[type-arg]
-        without_model: list,  # type: ignore[type-arg]
-    ) -> None:
-        """Report profile assignment results."""
-        print("\n" + "=" * 70)
-        print(" OPERATION COMPLETE")
-        print("=" * 70)
-        print(f"  APs Successfully Assigned: {len(success)}")
-        print(f"  APs Failed: {len(failed)}")
-        print(f"  APs Skipped (no matching profile): {len(without_profile)}")
-        print(f"  APs Skipped (no model info): {len(without_model)}")
-
-        if success:
-            DataExporter.save_data_to_output(success, "SuccessfulAPProfileAssignments.csv")  # type: ignore[no-untyped-call]
-        if failed:
-            DataExporter.save_data_to_output(failed, "FailedAPProfileAssignments.csv")  # type: ignore[no-untyped-call]
-        if without_profile:
-            DataExporter.save_data_to_output(without_profile, "SkippedAPsNoMatchingProfile.csv")  # type: ignore[no-untyped-call]
+        """Menu #174 delegated entrypoint."""
+        module = SiteConfigManager._configure_module()
+        return module.SiteConfigManager.assign_aps_to_matching_device_profiles()
 
 
 # ============================================================================
@@ -30152,874 +26614,9 @@ class BulkRadiusWLANConfigManager:
 # have been refactored into GatewayTemplateConfigManager class methods.
 
 
-class SiteAnalyticsConfigurator:
-    """
-    Configures site analytics settings to standard values across all sites.
-
-    Scans all sites and updates any that deviate from the standard configuration for:
-    - RTSA (Real-Time Statistics & Analytics)
-    - Rogue AP detection
-    - Engagement dwell tags
-    - Occupancy settings
-    - Analytics enabled status
-
-    SECURITY: DESTRUCTIVE - Modifies site settings. Requires explicit confirmation.
-
-    Usage:
-        SiteAnalyticsConfigurator.execute()
-    """
-
-    # Standard configuration values (T-Mobile standard)
-    STANDARD_RTSA = {"enabled": True, "track_asset": True, "app_waking": True}
-
-    STANDARD_ROGUE = {
-        "min_rssi": -80,
-        "min_duration": 10,
-        "enabled": True,
-        "honeypot_enabled": True,
-        "whitelisted_bssids": [],
-        "whitelisted_ssids": [],
-    }
-
-    STANDARD_ENGAGEMENT = {
-        "dwell_tags": {
-            "passerby": "1-300",
-            "bounce": "301-14400",
-            "engaged": "14401-36000",
-            "stationed": "36001-86400",
-        },
-        "dwell_tag_names": {"passerby": "", "bounce": "", "engaged": "", "stationed": ""},
-        "hours": {"sun": "", "mon": "", "tue": "", "wed": "", "thu": "", "fri": "", "sat": ""},
-    }
-
-    STANDARD_ANALYTIC = {"enabled": True}
-
-    STANDARD_OCCUPANCY = {
-        "min_duration": 300,
-        "clients_enabled": True,
-        "sdkclients_enabled": True,
-        "assets_enabled": True,
-        "unconnected_clients_enabled": False,
-    }
-
-    STANDARD_WIFI = {"enabled": True, "locate_connected": True, "locate_unconnected": False}
-
-    @staticmethod
-    def execute():  # type: ignore[no-untyped-def]
-        """
-        Main entry point for site analytics configuration.
-
-        Scans all sites, identifies deviations, and applies standard configuration.
-        """
-        print("Site Analytics Configurator:")
-        print("=" * 60)
-        print("! DESTRUCTIVE OPERATION - This will modify site settings")
-        print("=" * 60)
-        logging.info("Starting site analytics configuration scan...")
-
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            print("! No organization selected. Exiting.")
-            return
-
-        # Collect current settings and identify deviations
-        deviations = SiteAnalyticsConfigurator._scan_for_deviations(current_org_id)
-
-        if not deviations:
-            print("\n[OK] All sites are configured with standard analytics settings.")
-            return
-
-        # Display deviations summary
-        SiteAnalyticsConfigurator._display_deviation_summary(deviations)
-
-        # Export preview report
-        SiteAnalyticsConfigurator._export_deviation_report(deviations)
-
-        # Confirm before applying changes
-        print("\n" + "=" * 60)
-        print(f"! {len(deviations)} sites will be updated to standard configuration")
-        print("=" * 60)
-
-        try:
-            confirmation = InputUtils.safe_input(
-                "Type 'CONFIGURE' to apply standard settings to all deviating sites: ", context="site_analytics_config"
-            )
-        except SystemExit:
-            logging.info("Site analytics configuration cancelled - session disconnected")
-            return
-
-        if confirmation != "CONFIGURE":
-            print("! Operation cancelled - confirmation not provided")
-            logging.warning("Site analytics configuration cancelled by user")
-            return
-
-        # Apply standard configuration
-        results = SiteAnalyticsConfigurator._apply_standard_configuration(deviations)
-
-        # Export results
-        SiteAnalyticsConfigurator._export_results(results)
-
-    @staticmethod
-    def _scan_for_deviations(org_id: str) -> list:  # type: ignore[type-arg]
-        """
-        Scan all sites and identify those deviating from standard configuration.
-
-        Returns:
-            List of deviation records with site info and specific deviations
-        """
-        logging.info("Fetching all sites for analytics configuration scan...")
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-
-        if not sites:
-            logging.warning("No sites found in organization.")
-            return []
-
-        print(f"! Scanning {len(sites)} sites for configuration deviations...")
-
-        deviations = []
-
-        for site in tqdm(sites, desc="Scanning sites", unit="site"):  # type: ignore[no-untyped-call]
-            site_id = site.get("id")
-            site_name = site.get("name", "Unnamed Site")
-
-            if not site_id or not isinstance(site_id, str):
-                logging.warning(f"Invalid site_id for {site_name}")
-                continue
-
-            if ConfigUtils.check_stop_signal():
-                break
-
-            try:
-                response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)
-
-                if response.status_code != 200:
-                    logging.warning(f"Failed to fetch settings for {site_name}: HTTP {response.status_code}")
-                    continue
-
-                settings = response.data if isinstance(response.data, dict) else {}
-
-                # Check each configuration area for deviations
-                site_deviations = SiteAnalyticsConfigurator._check_deviations(settings, site_id, site_name)
-
-                if site_deviations["has_deviations"]:
-                    deviations.append(site_deviations)
-
-            except Exception as error:
-                logging.warning(f"Error scanning {site_name}: {error}")
-
-        print(f"! Found {len(deviations)} sites with configuration deviations")
-        return deviations
-
-    @staticmethod
-    def _check_rtsa_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check RTSA settings for deviations."""
-        current_rtsa = settings.get("rtsa", {})
-        rtsa_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_rtsa, SiteAnalyticsConfigurator.STANDARD_RTSA, "rtsa"
-        )
-        if rtsa_deviations:
-            deviation_record["rtsa_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["rtsa"] = current_rtsa
-            deviation_record["deviation_details"].extend(rtsa_deviations)
-
-    @staticmethod
-    def _check_rogue_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check Rogue settings for deviations."""
-        current_rogue = settings.get("rogue", {})
-        rogue_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_rogue, SiteAnalyticsConfigurator.STANDARD_ROGUE, "rogue"
-        )
-        if rogue_deviations:
-            deviation_record["rogue_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["rogue"] = current_rogue
-            deviation_record["deviation_details"].extend(rogue_deviations)
-
-    @staticmethod
-    def _check_engagement_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check Engagement settings for deviations."""
-        current_engagement = settings.get("engagement", {})
-        engagement_deviations = SiteAnalyticsConfigurator._compare_engagement(current_engagement)
-        if engagement_deviations:
-            deviation_record["engagement_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["engagement"] = current_engagement
-            deviation_record["deviation_details"].extend(engagement_deviations)
-
-    @staticmethod
-    def _check_analytic_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check Analytic settings for deviations."""
-        current_analytic = settings.get("analytic", {})
-        analytic_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_analytic, SiteAnalyticsConfigurator.STANDARD_ANALYTIC, "analytic"
-        )
-        if analytic_deviations:
-            deviation_record["analytic_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["analytic"] = current_analytic
-            deviation_record["deviation_details"].extend(analytic_deviations)
-
-    @staticmethod
-    def _check_occupancy_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check Occupancy settings for deviations."""
-        current_occupancy = settings.get("occupancy", {})
-        occupancy_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_occupancy, SiteAnalyticsConfigurator.STANDARD_OCCUPANCY, "occupancy"
-        )
-        if occupancy_deviations:
-            deviation_record["occupancy_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["occupancy"] = current_occupancy
-            deviation_record["deviation_details"].extend(occupancy_deviations)
-
-    @staticmethod
-    def _check_wifi_deviations(deviation_record: dict, settings: dict) -> None:  # type: ignore[type-arg]
-        """Check WiFi settings for deviations."""
-        current_wifi = settings.get("wifi", {})
-        wifi_deviations = SiteAnalyticsConfigurator._compare_settings(
-            current_wifi, SiteAnalyticsConfigurator.STANDARD_WIFI, "wifi"
-        )
-        if wifi_deviations:
-            deviation_record["wifi_deviation"] = True
-            deviation_record["has_deviations"] = True
-            deviation_record["current_settings"]["wifi"] = current_wifi
-            deviation_record["deviation_details"].extend(wifi_deviations)
-
-    @staticmethod
-    def _check_deviations(settings: dict, site_id: str, site_name: str) -> dict:  # type: ignore[type-arg]
-        """Check a single site's settings for deviations from standard."""
-        deviation_record = {
-            "site_id": site_id,
-            "site_name": site_name,
-            "has_deviations": False,
-            "rtsa_deviation": False,
-            "rogue_deviation": False,
-            "engagement_deviation": False,
-            "analytic_deviation": False,
-            "occupancy_deviation": False,
-            "wifi_deviation": False,
-            "current_settings": {},
-            "deviation_details": [],
-        }
-
-        SiteAnalyticsConfigurator._check_rtsa_deviations(deviation_record, settings)
-        SiteAnalyticsConfigurator._check_rogue_deviations(deviation_record, settings)
-        SiteAnalyticsConfigurator._check_engagement_deviations(deviation_record, settings)
-        SiteAnalyticsConfigurator._check_analytic_deviations(deviation_record, settings)
-        SiteAnalyticsConfigurator._check_occupancy_deviations(deviation_record, settings)
-        SiteAnalyticsConfigurator._check_wifi_deviations(deviation_record, settings)
-
-        return deviation_record
-
-    @staticmethod
-    def _compare_settings(current: dict, standard: dict, section: str) -> list:  # type: ignore[type-arg]
-        """Compare current settings with standard and return list of deviations."""
-        deviations = []
-
-        for key, expected_value in standard.items():
-            current_value = current.get(key)
-
-            # Handle None/missing values
-            if current_value is None:
-                deviations.append({"section": section, "key": key, "current": "NOT SET", "expected": expected_value})
-            elif current_value != expected_value:
-                deviations.append(
-                    {"section": section, "key": key, "current": current_value, "expected": expected_value}
-                )
-
-        return deviations
-
-    @staticmethod
-    def _compare_engagement(current: dict) -> list:  # type: ignore[type-arg]
-        """Compare engagement settings including nested dwell_tags."""
-        deviations = []
-        standard = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT
-
-        # Check dwell_tags
-        current_dwell_tags = current.get("dwell_tags", {})
-        for tag_name, expected_range in standard["dwell_tags"].items():
-            current_range = current_dwell_tags.get(tag_name)
-            if current_range is None:
-                deviations.append(
-                    {
-                        "section": "engagement.dwell_tags",
-                        "key": tag_name,
-                        "current": "NOT SET",
-                        "expected": expected_range,
-                    }
-                )
-            elif current_range != expected_range:
-                deviations.append(
-                    {
-                        "section": "engagement.dwell_tags",
-                        "key": tag_name,
-                        "current": current_range,
-                        "expected": expected_range,
-                    }
-                )
-
-        # Check dwell_tag_names (should all be empty strings)
-        current_dwell_names = current.get("dwell_tag_names", {})
-        for tag_name, expected_name in standard["dwell_tag_names"].items():
-            current_name = current_dwell_names.get(tag_name)
-            if current_name is not None and current_name != expected_name:
-                deviations.append(
-                    {
-                        "section": "engagement.dwell_tag_names",
-                        "key": tag_name,
-                        "current": current_name,
-                        "expected": expected_name,
-                    }
-                )
-
-        # Check hours (should all be empty strings - no custom operating hours)
-        current_hours = current.get("hours", {})
-        for day_name, expected_hours in standard["hours"].items():
-            current_day_hours = current_hours.get(day_name)
-            # Deviation if hours are set (non-empty) when they should be empty
-            if current_day_hours is not None and current_day_hours != expected_hours:
-                deviations.append(
-                    {
-                        "section": "engagement.hours",
-                        "key": day_name,
-                        "current": current_day_hours,
-                        "expected": expected_hours if expected_hours else "(empty)",
-                    }
-                )
-
-        return deviations
-
-    @staticmethod
-    @staticmethod
-    def _get_deviation_types(site: dict) -> list:  # type: ignore[type-arg]
-        """Get list of deviation type names for a site."""
-        deviation_types = []
-        if site["rtsa_deviation"]:
-            deviation_types.append("RTSA")
-        if site["rogue_deviation"]:
-            deviation_types.append("Rogue")
-        if site["engagement_deviation"]:
-            deviation_types.append("Engagement")
-        if site["analytic_deviation"]:
-            deviation_types.append("Analytic")
-        if site["occupancy_deviation"]:
-            deviation_types.append("Occupancy")
-        if site["wifi_deviation"]:
-            deviation_types.append("WiFi")
-        return deviation_types
-
-    @staticmethod
-    def _print_standard_config() -> None:
-        """Print the standard configuration to be applied."""
-        print("\n[STANDARD CONFIGURATION TO BE APPLIED]")
-        print(
-            f"  RTSA: enabled={SiteAnalyticsConfigurator.STANDARD_RTSA['enabled']}, track_asset={SiteAnalyticsConfigurator.STANDARD_RTSA['track_asset']}, app_waking={SiteAnalyticsConfigurator.STANDARD_RTSA['app_waking']}"  # noqa: E501
-        )
-        print(
-            f"  Rogue: enabled={SiteAnalyticsConfigurator.STANDARD_ROGUE['enabled']}, min_rssi={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_rssi']}, min_duration={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_duration']}"  # noqa: E501
-        )
-        print("  Engagement dwell_tags: passerby=1-300, bounce=301-14400, engaged=14401-36000, stationed=36001-86400")
-        print(f"  Analytic: enabled={SiteAnalyticsConfigurator.STANDARD_ANALYTIC['enabled']}")
-        print(
-            f"  Occupancy: min_duration={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['min_duration']}, clients_enabled={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['clients_enabled']}"  # noqa: E501
-        )
-        print(
-            f"  WiFi: enabled={SiteAnalyticsConfigurator.STANDARD_WIFI['enabled']}, locate_connected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_connected']}, locate_unconnected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_unconnected']}"  # noqa: E501
-        )
-
-    @staticmethod
-    def _display_deviation_summary(deviations: list):  # type: ignore[no-untyped-def, type-arg]
-        """Display summary of deviations found."""
-        print("\n" + "=" * 60)
-        print("SITE ANALYTICS CONFIGURATION DEVIATIONS")
-        print("=" * 60)
-
-        rtsa_count = sum(1 for site in deviations if site["rtsa_deviation"])
-        rogue_count = sum(1 for site in deviations if site["rogue_deviation"])
-        engagement_count = sum(1 for site in deviations if site["engagement_deviation"])
-        analytic_count = sum(1 for site in deviations if site["analytic_deviation"])
-        occupancy_count = sum(1 for site in deviations if site["occupancy_deviation"])
-        wifi_count = sum(1 for site in deviations if site["wifi_deviation"])
-
-        print("\n[DEVIATION SUMMARY]")
-        print(f"  Total sites with deviations: {len(deviations)}")
-        print(f"  - RTSA: {rtsa_count}  - Rogue: {rogue_count}  - Engagement: {engagement_count}")
-        print(f"  - Analytic: {analytic_count}  - Occupancy: {occupancy_count}  - WiFi: {wifi_count}")
-
-        print("\n[SITES WITH DEVIATIONS] (showing first 10)")
-        for site in deviations[:10]:
-            deviation_types = SiteAnalyticsConfigurator._get_deviation_types(site)
-            print(f"  - {site['site_name']}: {', '.join(deviation_types)}")
-        if len(deviations) > 10:
-            print(f"  ... and {len(deviations) - 10} more sites")
-
-        SiteAnalyticsConfigurator._print_standard_config()
-
-    @staticmethod
-    def _export_deviation_report(deviations: list):  # type: ignore[no-untyped-def, type-arg]
-        """Export deviation report before applying changes."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        rows = []
-        for site in deviations:
-            rows.append(
-                {
-                    "site_id": site["site_id"],
-                    "site_name": site["site_name"],
-                    "rtsa_deviation": "Yes" if site["rtsa_deviation"] else "No",
-                    "rogue_deviation": "Yes" if site["rogue_deviation"] else "No",
-                    "engagement_deviation": "Yes" if site["engagement_deviation"] else "No",
-                    "analytic_deviation": "Yes" if site["analytic_deviation"] else "No",
-                    "occupancy_deviation": "Yes" if site["occupancy_deviation"] else "No",
-                    "wifi_deviation": "Yes" if site["wifi_deviation"] else "No",
-                    "deviation_count": len(site["deviation_details"]),
-                    "deviation_details": "; ".join(
-                        [
-                            f"{detail['section']}.{detail['key']}: {detail['current']} -> {detail['expected']}"
-                            for detail in site["deviation_details"][:5]
-                        ]
-                    ),
-                }
-            )
-
-        filename = f"SiteAnalytics_Deviations_PREVIEW_{timestamp}.csv"
-        DataExporter.save_data_to_output(rows, filename, api_function_name="site_analytics_deviations")  # type: ignore[no-untyped-call]
-        print(f"\n! Preview report exported to {filename}")
-
-    @staticmethod
-    @staticmethod
-    def _apply_standard_sections(site: dict, current_settings: dict, result: dict) -> None:  # type: ignore[type-arg]
-        """Apply standard configuration for each deviating section."""
-        if site["rtsa_deviation"]:
-            current_settings["rtsa"] = SiteAnalyticsConfigurator.STANDARD_RTSA.copy()
-            result["sections_updated"].append("rtsa")
-        if site["rogue_deviation"]:
-            current_settings["rogue"] = SiteAnalyticsConfigurator.STANDARD_ROGUE.copy()
-            result["sections_updated"].append("rogue")
-        if site["engagement_deviation"]:
-            if "engagement" not in current_settings:
-                current_settings["engagement"] = {}
-            current_settings["engagement"]["dwell_tags"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT[
-                "dwell_tags"
-            ].copy()
-            current_settings["engagement"]["dwell_tag_names"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT[
-                "dwell_tag_names"
-            ].copy()
-            current_settings["engagement"]["hours"] = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT["hours"].copy()
-            result["sections_updated"].append("engagement")
-        if site["analytic_deviation"]:
-            current_settings["analytic"] = SiteAnalyticsConfigurator.STANDARD_ANALYTIC.copy()
-            result["sections_updated"].append("analytic")
-        if site["occupancy_deviation"]:
-            current_settings["occupancy"] = SiteAnalyticsConfigurator.STANDARD_OCCUPANCY.copy()
-            result["sections_updated"].append("occupancy")
-        if site["wifi_deviation"]:
-            current_settings["wifi"] = SiteAnalyticsConfigurator.STANDARD_WIFI.copy()
-            result["sections_updated"].append("wifi")
-
-    @staticmethod
-    def _apply_site_config(site: dict) -> dict:  # type: ignore[type-arg]
-        """Apply standard configuration to a single site."""
-        site_id = site["site_id"]
-        site_name = site["site_name"]
-        result = {
-            "site_id": site_id,
-            "site_name": site_name,
-            "status": "PENDING",
-            "sections_updated": [],
-            "error": None,
-        }
-
-        try:
-            response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)
-            if response.status_code != 200:
-                result["status"] = "FAILED"
-                result["error"] = f"Failed to fetch current settings: HTTP {response.status_code}"
-                return result
-
-            current_settings = response.data if isinstance(response.data, dict) else {}
-            SiteAnalyticsConfigurator._apply_standard_sections(site, current_settings, result)
-
-            update_response = mistapi.api.v1.sites.setting.updateSiteSettings(
-                apisession, site_id, body=current_settings
-            )
-            if update_response.status_code == 200:
-                result["status"] = "SUCCESS"
-                logging.info(f"Updated {site_name}: {', '.join(result['sections_updated'])}")
-            else:
-                result["status"] = "FAILED"
-                result["error"] = f"API returned {update_response.status_code}"
-                logging.error(f"Failed to update {site_name}: HTTP {update_response.status_code}")
-        except Exception as error:
-            result["status"] = "ERROR"
-            result["error"] = str(error)
-            logging.error(f"Error updating {site_name}: {error}")
-
-        return result
-
-    @staticmethod
-    def _apply_standard_configuration(deviations: list) -> list:  # type: ignore[type-arg]
-        """Apply standard configuration to all deviating sites."""
-        print(f"\nApplying standard configuration to {len(deviations)} sites...")
-
-        results = []
-        for site in tqdm(deviations, desc="Configuring sites", unit="site"):  # type: ignore[no-untyped-call]
-            if ConfigUtils.check_stop_signal():
-                break
-            result = SiteAnalyticsConfigurator._apply_site_config(site)
-            results.append(result)
-
-        success_count = sum(1 for r in results if r["status"] == "SUCCESS")
-        failure_count = len(results) - success_count
-        print("\n[CONFIGURATION COMPLETE]")
-        print(f"  SUCCESS: {success_count} sites")
-        print(f"  FAILED: {failure_count} sites")
-
-        return results
-
-    @staticmethod
-    def _export_results(results: list):  # type: ignore[no-untyped-def, type-arg]
-        """Export configuration results."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        rows = []
-        for result in results:
-            rows.append(
-                {
-                    "site_id": result["site_id"],
-                    "site_name": result["site_name"],
-                    "status": result["status"],
-                    "sections_updated": ", ".join(result["sections_updated"]),
-                    "error": result["error"] or "",
-                }
-            )
-
-        filename = f"SiteAnalytics_Configuration_Results_{timestamp}.csv"
-        DataExporter.save_data_to_output(rows, filename, api_function_name="site_analytics_results")  # type: ignore[no-untyped-call]
-        print(f"! Results exported to {filename}")
-
-        logging.info(
-            f"Site analytics configuration complete. {len([r for r in results if r['status'] == 'SUCCESS'])} sites updated."  # noqa: E501
-        )
-
-
-class SiteInventoryHealthAnalyzer:
-    """
-    Analyzes site inventory health to identify gaps and offline devices.
-
-    Generates two reports for sites that have APs in inventory:
-    1. Sites Missing Infrastructure - Sites with APs but no switch or gateway
-    2. Sites With Offline Infrastructure - Sites with APs where switch/gateway is offline
-
-    SECURITY: Read-only analysis, no configuration changes
-
-    Usage:
-        SiteInventoryHealthAnalyzer.analyze()
-    """
-
-    @staticmethod
-    def analyze():  # type: ignore[no-untyped-def]
-        """
-        Main entry point for site inventory health analysis.
-
-        Produces two CSV reports:
-        - SitesMissingInfrastructure_[timestamp].csv
-        - SitesWithOfflineInfrastructure_[timestamp].csv
-        """
-        print("Site Inventory Health Analyzer:")
-        print("=" * 60)
-        logging.info("Starting site inventory health analysis...")
-
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            print("! No organization selected. Exiting.")
-            return
-
-        # Fetch all required data
-        sites_data = SiteInventoryHealthAnalyzer._fetch_sites(current_org_id)
-        devices_data = SiteInventoryHealthAnalyzer._fetch_devices(current_org_id)
-
-        if not sites_data or not devices_data:
-            print("! Failed to fetch required data. Please verify API access.")
-            return
-
-        # Build lookup structures
-        site_lookup = {site.get("id"): site.get("name", "Unnamed Site") for site in sites_data}
-
-        # Analyze inventory by site (uses connected field from inventory)
-        site_inventory = SiteInventoryHealthAnalyzer._group_devices_by_site(devices_data)
-
-        # Generate reports
-        missing_report = SiteInventoryHealthAnalyzer._find_sites_missing_infrastructure(site_inventory, site_lookup)
-        offline_report = SiteInventoryHealthAnalyzer._find_sites_with_offline_infrastructure(
-            site_inventory, site_lookup
-        )
-
-        # Display and export results
-        SiteInventoryHealthAnalyzer._display_results(missing_report, offline_report)
-        SiteInventoryHealthAnalyzer._export_results(missing_report, offline_report)
-
-        logging.info("Site inventory health analysis complete.")
-
-    @staticmethod
-    def _fetch_sites(org_id: str) -> list:  # type: ignore[type-arg]
-        """Fetch all sites in the organization."""
-        print("! Fetching sites...")
-        logging.info("Fetching all organization sites...")
-
-        try:
-            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-            print(f"  Found {len(sites)} sites")
-            return sites
-        except Exception as error:
-            logging.error(f"Failed to fetch sites: {error}")
-            return []
-
-    @staticmethod
-    def _fetch_devices(org_id: str) -> list:  # type: ignore[type-arg]
-        """Fetch all devices (inventory) in the organization."""
-        print("! Fetching device inventory...")
-        logging.info("Fetching all organization devices from inventory...")
-
-        try:
-            response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
-            devices = mistapi.get_all(response=response, mist_session=apisession) or []
-
-            ap_count = sum(1 for d in devices if d.get("type") == "ap")
-            switch_count = sum(1 for d in devices if d.get("type") == "switch")
-            gateway_count = sum(1 for d in devices if d.get("type") == "gateway")
-
-            # Count connected devices
-            connected_count = sum(1 for d in devices if d.get("connected") is True)
-
-            print(
-                f"  Found {len(devices)} devices: {ap_count} APs, {switch_count} switches, {gateway_count} gateways ({connected_count} connected)"  # noqa: E501
-            )
-            logging.info(f"Fetched {len(devices)} devices from organization inventory")
-            return devices
-        except Exception as error:
-            logging.error(f"Failed to fetch devices: {error}")
-            return []
-
-    @staticmethod
-    def _group_devices_by_site(devices: list) -> dict:  # type: ignore[type-arg]
-        """
-        Group devices by site_id and categorize by type.
-        Uses 'connected' field from inventory for status.
-
-        Returns:
-            Dictionary mapping site_id to device categorization:
-            {
-                site_id: {
-                    "aps": [{"name": str, "status": str, ...}, ...],
-                    "switches": [...],
-                    "gateways": [...]
-                }
-            }
-        """
-        site_inventory: dict[str, dict[str, Any]] = {}
-
-        for device in devices:
-            site_id = device.get("site_id", "")
-            if not site_id:
-                continue
-
-            if site_id not in site_inventory:
-                site_inventory[site_id] = {"aps": [], "switches": [], "gateways": []}
-
-            device_type = device.get("type", "")
-            device_id = device.get("id", "")
-            device_mac = device.get("mac", "")
-            device_name = device.get("name", device_mac or device_id or "Unknown")
-            device_model = device.get("model", "Unknown")
-            device_serial = device.get("serial", "Unknown")
-
-            # Get status directly from inventory 'connected' field
-            connected = device.get("connected")
-            if connected is True:
-                status = "connected"
-            elif connected is False:
-                status = "disconnected"
-            else:
-                status = "unknown"
-
-            device_info = {
-                "id": device_id,
-                "mac": device_mac,
-                "name": device_name,
-                "model": device_model,
-                "serial": device_serial,
-                "status": status,
-            }
-
-            if device_type == "ap":
-                site_inventory[site_id]["aps"].append(device_info)
-            elif device_type == "switch":
-                site_inventory[site_id]["switches"].append(device_info)
-            elif device_type == "gateway":
-                site_inventory[site_id]["gateways"].append(device_info)
-
-        return site_inventory
-
-    @staticmethod
-    def _find_sites_missing_infrastructure(site_inventory: dict, site_lookup: dict) -> list:  # type: ignore[type-arg]
-        """
-        Find sites that have APs but are missing switches or gateways.
-
-        Returns:
-            List of dictionaries with site details and missing infrastructure info
-        """
-        missing_sites = []
-
-        for site_id, inventory in site_inventory.items():
-            ap_count = len(inventory["aps"])
-            switch_count = len(inventory["switches"])
-            gateway_count = len(inventory["gateways"])
-
-            # Only consider sites with APs
-            if ap_count == 0:
-                continue
-
-            # Check if missing switch OR gateway
-            missing_switch = switch_count == 0
-            missing_gateway = gateway_count == 0
-
-            if missing_switch or missing_gateway:
-                site_name = site_lookup.get(site_id, "Unknown Site")
-                missing_types = []
-                if missing_switch:
-                    missing_types.append("switch")
-                if missing_gateway:
-                    missing_types.append("gateway")
-
-                missing_sites.append(
-                    {
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "ap_count": ap_count,
-                        "switch_count": switch_count,
-                        "gateway_count": gateway_count,
-                        "missing_types": ", ".join(missing_types),
-                        "ap_names": ", ".join([ap["name"] for ap in inventory["aps"][:5]])
-                        + ("..." if ap_count > 5 else ""),
-                    }
-                )
-
-        return sorted(missing_sites, key=lambda x: x["site_name"])
-
-    @staticmethod
-    def _find_sites_with_offline_infrastructure(site_inventory: dict, site_lookup: dict) -> list:  # type: ignore[type-arg]
-        """
-        Find sites with APs where switch or gateway is offline.
-
-        Returns:
-            List of dictionaries with site details and offline device info
-        """
-        offline_sites = []
-
-        for site_id, inventory in site_inventory.items():
-            ap_count = len(inventory["aps"])
-
-            # Only consider sites with APs
-            if ap_count == 0:
-                continue
-
-            # Check for offline switches or gateways
-            offline_switches = [s for s in inventory["switches"] if s["status"] == "disconnected"]
-            offline_gateways = [g for g in inventory["gateways"] if g["status"] == "disconnected"]
-
-            if offline_switches or offline_gateways:
-                site_name = site_lookup.get(site_id, "Unknown Site")
-
-                offline_device_details = []
-                for switch in offline_switches:
-                    offline_device_details.append(f"Switch: {switch['name']} ({switch['model']})")
-                for gateway in offline_gateways:
-                    offline_device_details.append(f"Gateway: {gateway['name']} ({gateway['model']})")
-
-                offline_sites.append(
-                    {
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "ap_count": ap_count,
-                        "total_switches": len(inventory["switches"]),
-                        "offline_switches": len(offline_switches),
-                        "total_gateways": len(inventory["gateways"]),
-                        "offline_gateways": len(offline_gateways),
-                        "offline_devices": "; ".join(offline_device_details),
-                        "offline_switch_names": ", ".join([s["name"] for s in offline_switches]),
-                        "offline_gateway_names": ", ".join([g["name"] for g in offline_gateways]),
-                    }
-                )
-
-        return sorted(offline_sites, key=lambda x: x["site_name"])
-
-    @staticmethod
-    def _display_results(missing_report: list, offline_report: list):  # type: ignore[no-untyped-def, type-arg]
-        """Display analysis results to console."""
-        print("\n" + "=" * 60)
-        print("ANALYSIS RESULTS")
-        print("=" * 60)
-
-        # Missing infrastructure summary
-        print("\n[SITES MISSING INFRASTRUCTURE]")
-        print(f"  Sites with APs but missing switch/gateway: {len(missing_report)}")
-        if missing_report:
-            missing_switches = sum(1 for r in missing_report if "switch" in r["missing_types"])
-            missing_gateways = sum(1 for r in missing_report if "gateway" in r["missing_types"])
-            print(f"    - Missing switches: {missing_switches}")
-            print(f"    - Missing gateways: {missing_gateways}")
-
-            # Show first few examples
-            print("\n  Sample sites (first 5):")
-            for site in missing_report[:5]:
-                print(f"    - {site['site_name']}: {site['ap_count']} APs, missing {site['missing_types']}")
-
-        # Offline infrastructure summary
-        print("\n[SITES WITH OFFLINE INFRASTRUCTURE]")
-        print(f"  Sites with APs and offline switch/gateway: {len(offline_report)}")
-        if offline_report:
-            total_offline_switches = sum(r["offline_switches"] for r in offline_report)
-            total_offline_gateways = sum(r["offline_gateways"] for r in offline_report)
-            print(f"    - Total offline switches: {total_offline_switches}")
-            print(f"    - Total offline gateways: {total_offline_gateways}")
-
-            # Show first few examples
-            print("\n  Sample sites (first 5):")
-            for site in offline_report[:5]:
-                print(
-                    f"    - {site['site_name']}: {site['ap_count']} APs, offline: {site['offline_devices'][:80]}{'...' if len(site['offline_devices']) > 80 else ''}"  # noqa: E501
-                )
-
-        print("\n" + "=" * 60)
-
-    @staticmethod
-    def _export_results(missing_report: list, offline_report: list):  # type: ignore[no-untyped-def, type-arg]
-        """Export analysis results to CSV files."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # Export sites missing infrastructure
-        if missing_report:
-            missing_filename = f"SitesMissingInfrastructure_{timestamp}.csv"
-            DataExporter.save_data_to_output(  # type: ignore[no-untyped-call]
-                missing_report, missing_filename, api_function_name="sitesMissingInfrastructure"
-            )
-            print(f"! Missing infrastructure report exported to {missing_filename}")
-            logging.info(f"Exported {len(missing_report)} sites to {missing_filename}")
-        else:
-            print("! No sites found with missing infrastructure (all sites with APs have switches and gateways)")
-
-        # Export sites with offline infrastructure
-        if offline_report:
-            offline_filename = f"SitesWithOfflineInfrastructure_{timestamp}.csv"
-            DataExporter.save_data_to_output(  # type: ignore[no-untyped-call]
-                offline_report, offline_filename, api_function_name="sitesWithOfflineInfrastructure"
-            )
-            print(f"! Offline infrastructure report exported to {offline_filename}")
-            logging.info(f"Exported {len(offline_report)} sites to {offline_filename}")
-        else:
-            print("! No sites found with offline infrastructure (all switches and gateways are online)")
+# SiteAnalyticsConfigurator and SiteInventoryHealthAnalyzer were extracted to
+# src/analytics/site_analytics_configurator.py and
+# src/analytics/site_inventory_health_analyzer.py for phase-1 decomposition.
 
 
 def _ws_cmd_deps() -> WebSocketCmdDeps:
@@ -31492,14 +27089,33 @@ menu_actions = {
     # SITE ANALYTICS CONFIGURATION (DESTRUCTIVE)
     # ==============================
     "169": (
-        SiteAnalyticsConfigurator.execute,
+        lambda: ExtractedSiteAnalyticsConfigurator.execute(
+            SiteAnalyticsConfiguratorDeps(
+                apisession=apisession,
+                mistapi=mistapi,
+                get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
+                check_stop_fn=ConfigUtils.check_stop_signal,
+                safe_input_fn=InputUtils.safe_input,
+                all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
+                save_data_fn=DataExporter.save_data_to_output,
+                tqdm_fn=tqdm,
+            )
+        ),
         " DESTRUCTIVE: Site Analytics Configuration - Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites",  # noqa: E501
     ),
     # ==============================
     # SITE INVENTORY HEALTH ANALYSIS
     # ==============================
     "7": (
-        SiteInventoryHealthAnalyzer.analyze,
+        lambda: ExtractedSiteInventoryHealthAnalyzer.analyze(
+            SiteInventoryHealthAnalyzerDeps(
+                apisession=apisession,
+                mistapi=mistapi,
+                get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
+                all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
+                save_data_fn=DataExporter.save_data_to_output,
+            )
+        ),
         "Site Inventory Health Analysis - Find sites with APs missing switches/gateways, or with offline infrastructure",  # noqa: E501
     ),
     # ==============================

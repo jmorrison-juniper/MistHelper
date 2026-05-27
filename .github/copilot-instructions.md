@@ -1048,5 +1048,5 @@ When implementing a Feature Spec, AI agents must follow this protocol:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/191-org-config-export-import/plan.md
+at specs/193-main-decomposition-wave-2/plan.md
 <!-- SPECKIT END -->

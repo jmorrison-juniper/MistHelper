@@ -7,6 +7,35 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+## [26.05.27.05.29] - Decomposition Wave 2 Complete (Phases 1-9)
+
+### Added
+
+- **9 feature-domain packages** extracted from `MistHelper.py` into `src/`:
+  - `src/analytics/` — `SiteInventoryHealthAnalyzer`, `SiteAnalyticsConfigurator`, `ZoneConfigurationAnalyzer`
+  - `src/capture/` — `PacketCaptureManager`, `PacketCaptureDownloadManager`
+  - `src/export/` — `SiteExportUtils`, `SiteInsightsExporter`
+  - `src/gateway/` — `GatewayExportUtils`, `GatewayStatsExporter`, `GatewayOverrideAnalyzer`, `WAN2MigrationManager`, `WanProbeDeviceOverrideManager`
+  - `src/inventory/` — `OrgDeviceInventorySummaryCore`, `OrgDeviceInventoryMSPOrchestrator`, `InventoryCSVComparator`
+  - `src/site/` — `SiteConfigManager`
+  - `src/ssh/` — `EnhancedSSHRunner`, `SSHRunnerManager`
+  - `src/troubleshooting/` — `MarvisTroubleshootUtils`
+  - `src/websocket/` — `ServicePingManager`, `ServicePingDiscoveryMixin`
+- Hard-gate evidence checklists for all 9 phases in `specs/193-main-decomposition-wave-2/checklists/`
+- Wave 2 Module Ownership table in README.md documenting phase-to-package-to-menu mapping
+- Updated `src/` directory layout in README.md reflecting actual feature-domain structure
+
+### Changed
+
+- `MistHelper.py` entrypoint now delegates to `src/` modules while preserving compatibility surface
+- README Architecture Evolution section updated with current `src/` layout and decomposition status
+- Packet capture ownership moved to `src/capture/` with `MistHelper.py` orchestration compatibility
+
+### Fixed
+
+- Restored packet capture legacy test compatibility by keeping wrapper hook behavior for `_poll_and_download_pcap`, `_poll_for_pcap_url`, and `_save_pcap_file`
+- Prevented CI `exit code 2` by replacing `MagicMock(side_effect=KeyboardInterrupt)` with plain function in `TestPollAndDownloadPcap::test_keyboard_interrupt`
+
 ## [25.05.25.05.29] - Ticket Viewer & Detail Export
 
 ### Added

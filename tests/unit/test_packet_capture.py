@@ -1841,7 +1841,12 @@ class TestPollAndDownloadPcap:
 
     def test_keyboard_interrupt(self, manager, capsys):
         """KeyboardInterrupt prints URL and exits cleanly."""
-        manager._poll_for_pcap_url = MagicMock(side_effect=KeyboardInterrupt)
+
+        def raise_keyboard_interrupt(*_args, **_kwargs):
+            """Avoids Mock machinery leaking KeyboardInterrupt to pytest."""
+            raise KeyboardInterrupt()
+
+        manager._poll_for_pcap_url = raise_keyboard_interrupt
         manager._poll_and_download_pcap(MagicMock(), "cap-1", 60)
         captured = capsys.readouterr()
         assert "cancelled" in captured.out.lower() or "cap-1" in captured.out

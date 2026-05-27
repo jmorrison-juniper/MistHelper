@@ -19,7 +19,7 @@ _MENU_ACTIONS_BASELINE_COUNT = 178
 
 # Expected filenames in src/capture/ at Wave 1 baseline — no new ones should appear
 # Wave 1 exclusion: no packet-capture architecture decomposition
-_CAPTURE_MODULE_BASELINE = {"packet_capture.py", "__init__.py"}
+_CAPTURE_MODULE_BASELINE = {"packet_capture.py", "packet_capture_download.py", "__init__.py"}
 
 # Absolute path to src/capture/ for packet-capture decomposition scan
 _SRC_CAPTURE_PATH = Path(__file__).resolve().parents[2] / "src" / "capture"

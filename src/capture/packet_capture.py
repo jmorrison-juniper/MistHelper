@@ -7,10 +7,11 @@ import os
 import re
 import time
 from collections.abc import Callable
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import requests
+
+from src.capture.packet_capture_download import PacketCaptureDownloadManager
 
 if TYPE_CHECKING:
     pass
@@ -113,6 +114,7 @@ class PacketCaptureManager:
         self.mist_session = mist_session
         self.org_id = org_id or _get_config_utils().get_cached_or_prompted_org_id()
         self.websocket_manager: Any = None
+        self._download_manager = PacketCaptureDownloadManager()
         logging.debug("PacketCaptureManager initialized for org_id: %s", self.org_id)
 
     @staticmethod
@@ -1537,33 +1539,16 @@ class PacketCaptureManager:
         Returns:
             List of completed PCAP records with download URLs.
         """
-        print("\n[Step 1/3] Checking for completed PCAPs in last 24 hours...")
-        logging.info("Loop iteration %s: Fetching PCAP list from API", iteration)
 
-        try:
-            pcaps_response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(
-                self.mist_session, site_id, duration="1d", limit=100
+        def list_fn() -> Any:
+            return mistapi.api.v1.sites.pcaps.listSitePacketCaptures(
+                self.mist_session,
+                site_id,
+                duration="1d",
+                limit=100,
             )
-        except Exception as list_error:  # pylint: disable=broad-exception-caught
-            print(f"  Error fetching PCAP list: {list_error}")
-            logging.error("Exception listing PCAPs: %s", list_error, exc_info=True)
-            return []
 
-        if pcaps_response.status_code != 200:
-            print(f"  Warning: Could not fetch PCAP list (HTTP {pcaps_response.status_code})")
-            logging.warning("Failed to list PCAPs: %s", pcaps_response.status_code)
-            return []
-
-        pcaps_data = pcaps_response.data
-        if isinstance(pcaps_data, dict) and "results" in pcaps_data:
-            pcap_list = pcaps_data.get("results", [])
-        else:
-            pcap_list = pcaps_data if isinstance(pcaps_data, list) else []
-
-        completed = [p for p in pcap_list if p.get("pcap_url") and p.get("format") == "pcap"]
-        print(f"  Found {len(completed)} completed PCAP(s) with download URLs")
-        logging.info("Loop iteration %s: Found %s completed PCAPs", iteration, len(completed))
-        return completed
+        return self._download_manager.fetch_completed_pcaps(list_fn, iteration)
 
     def _download_pending_pcaps(self, completed_pcaps: list[dict[str, Any]], download_folder: str) -> int:
         """Download PCAPs that are not already saved locally.
@@ -1575,31 +1560,11 @@ class PacketCaptureManager:
         Returns:
             Number of newly downloaded files.
         """
-        if not completed_pcaps:
-            print("\n[Step 2/3] No completed PCAPs available for download")
-            return 0
-
-        print("\n[Step 2/3] Checking for new PCAPs to download...")
-        downloads = 0
-
-        for pcap in completed_pcaps:
-            capture_id = str(pcap.get("id", ""))
-            pcap_url = str(pcap.get("pcap_url", ""))
-            expected_filename = f"PacketCapture_{capture_id}.pcap"
-            local_path = os.path.join(download_folder, expected_filename)
-
-            if os.path.exists(local_path):
-                logging.debug("  Skipping %s - already downloaded", capture_id)
-                continue
-
-            print(f"\n  --> Downloading PCAP: {capture_id}")
-            downloads += self._download_single_pcap(pcap_url, local_path, expected_filename, capture_id)
-
-        if downloads > 0:
-            print(f"\n  Downloaded {downloads} new PCAP file(s) this round")
-        else:
-            print("\n  No new PCAPs to download (all already exist locally)")
-        return downloads
+        return self._download_manager.download_pending_pcaps(
+            completed_pcaps,
+            download_folder,
+            self._download_single_pcap,
+        )
 
     def _download_single_pcap(self, url: str, local_path: str, filename: str, capture_id: str) -> int:
         """Download a single PCAP file from a URL.
@@ -1613,26 +1578,13 @@ class PacketCaptureManager:
         Returns:
             1 if downloaded successfully, 0 otherwise.
         """
-        try:
-            response = requests.get(url, stream=True, timeout=300)
-            if response.status_code != 200:
-                print(f"      Failed to download: HTTP {response.status_code}")
-                logging.error("Download failed for %s: %s", capture_id, response.status_code)
-                return 0
-
-            with open(local_path, "wb") as pcap_file:
-                for chunk in response.iter_content(chunk_size=8192):
-                    pcap_file.write(chunk)
-
-            file_size_mb = os.path.getsize(local_path) / (1024 * 1024)
-            print(f"      Downloaded: {filename} ({file_size_mb:.2f} MB)")
-            logging.info("Downloaded PCAP %s: %.2f MB", capture_id, file_size_mb)
-            return 1
-
-        except Exception as download_error:  # pylint: disable=broad-exception-caught
-            print(f"      Error downloading: {download_error}")
-            logging.error("Download exception for %s: %s", capture_id, download_error, exc_info=True)
-            return 0
+        return self._download_manager.download_single_pcap(
+            url,
+            local_path,
+            filename,
+            capture_id,
+            requests_module=requests,
+        )
 
     def _attempt_loop_capture(self, site_id: str, payload: dict[str, Any], iteration: int) -> float | None:
         """Attempt to start a new capture and return the capture start time.
@@ -2477,29 +2429,30 @@ class PacketCaptureManager:
             duration: Expected capture duration in seconds
             prefix: Filename prefix (e.g. 'org_' for org-level captures)
         """
-        pcap_url = None
+        print(f"\n* Capture initiated (ID: {capture_id})")
+        print(f"  Duration: {duration} seconds (plus processing time)")
+        print("  Polling for PCAP file availability...")
+        print("  Press Ctrl+C to cancel wait and check portal manually")
+        logging.info("Polling for PCAP availability for capture %s", capture_id)
+
+        pcap_url: str | None = None
         try:
-            print(f"\n* Capture initiated (ID: {capture_id})")
-            print(f"  Duration: {duration} seconds (plus processing time)")
-            print("  Polling for PCAP file availability...")
-            print("  Press Ctrl+C to cancel wait and check portal manually")
-
             pcap_url = self._poll_for_pcap_url(list_captures_fn, capture_id, duration)
-
             if not pcap_url:
+                logging.debug("Polling finished for %s without a downloadable URL", capture_id)
                 return
 
+            logging.info("PCAP URL resolved for %s; starting file save", capture_id)
             self._save_pcap_file(pcap_url, capture_id, prefix)
-
+            logging.debug("PCAP save callback completed for %s", capture_id)
         except KeyboardInterrupt:
             print("\n\n! Download cancelled by user")
             print(f"  Capture ID: {capture_id}")
             if pcap_url:
                 print(f"  Download manually from: {pcap_url}")
-
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"\n! Error downloading PCAP file: {error}")
-            logging.error("Exception in _poll_and_download_pcap: %s", error, exc_info=True)
+            logging.error("Exception in poll_and_download_pcap for %s: %s", capture_id, error, exc_info=True)
             if pcap_url:
                 print(f"  Try downloading manually from: {pcap_url}")
 
@@ -2519,44 +2472,12 @@ class PacketCaptureManager:
         Returns:
             PCAP download URL if found, None if timed out.
         """
-        max_wait = duration + 120
-        poll_interval = 5
-        max_polls = max_wait // poll_interval
-        start_time = time.time()
-
-        for poll_attempt in range(1, max_polls + 1):
-            try:
-                elapsed = int(time.time() - start_time)
-                response = list_captures_fn()
-
-                if response.status_code != 200:
-                    logging.warning("Poll attempt %s: API returned status %s", poll_attempt, response.status_code)
-                    time.sleep(poll_interval)
-                    continue
-
-                captures = self._parse_captures_response(response.data, poll_attempt)
-                pcap_url = self._find_capture_url(captures, capture_id, poll_attempt)
-
-                if pcap_url:
-                    print(f"\r* PCAP file ready for download (after {elapsed}s)                    ")
-                    logging.info("PCAP URL available after %ss: %s", elapsed, pcap_url)
-                    return pcap_url
-
-                if poll_attempt < max_polls:
-                    print(
-                        f"  Waiting for PCAP file... {elapsed}s elapsed (checking every {poll_interval}s)    ",
-                        end="\r",
-                    )
-                    time.sleep(poll_interval)
-
-            except Exception as poll_error:  # pylint: disable=broad-exception-caught
-                logging.error("Poll attempt %s exception: %s", poll_attempt, poll_error, exc_info=True)
-                time.sleep(poll_interval)
-
-        elapsed_total = int(time.time() - start_time)
-        print(f"\r! PCAP file URL not available after waiting {elapsed_total} seconds                    ")
-        print(f"  The capture may still be processing. Check the Mist portal for capture ID: {capture_id}")
-        return None
+        return self._download_manager.poll_for_pcap_url(
+            list_captures_fn,
+            capture_id,
+            duration,
+            sleep_fn=time.sleep,
+        )
 
     @staticmethod
     def _parse_captures_response(raw_data: Any, poll_attempt: int) -> list[dict[str, Any]]:
@@ -2569,15 +2490,7 @@ class PacketCaptureManager:
         Returns:
             List of capture records.
         """
-        if isinstance(raw_data, dict) and "results" in raw_data:
-            captures = raw_data["results"]
-            logging.debug("Poll attempt %s: Extracted 'results' with %s items", poll_attempt, len(captures))
-            return list(captures)
-        if isinstance(raw_data, list):
-            logging.debug("Poll attempt %s: Data is list with %s items", poll_attempt, len(raw_data))
-            return raw_data
-        logging.warning("Poll attempt %s: Unexpected data structure: %s", poll_attempt, type(raw_data))
-        return []
+        return PacketCaptureDownloadManager.parse_captures_response(raw_data, poll_attempt)
 
     @staticmethod
     def _find_capture_url(captures: list[dict[str, Any]], capture_id: str, poll_attempt: int) -> str | None:
@@ -2591,27 +2504,7 @@ class PacketCaptureManager:
         Returns:
             PCAP download URL if found and ready, None otherwise.
         """
-        found = False
-        for capture in captures:
-            if not isinstance(capture, dict):
-                continue
-            if capture.get("id") != capture_id:
-                continue
-            found = True
-            pcap_url = capture.get("pcap_url")
-            logging.debug("Poll attempt %s: Found capture %s", poll_attempt, capture_id)
-            logging.debug("  - pcap_url: %s", pcap_url if pcap_url else "NOT SET YET")
-            if pcap_url:
-                return str(pcap_url)
-
-        if not found:
-            logging.debug(
-                "Poll attempt %s: Capture %s not found in %s captures",
-                poll_attempt,
-                capture_id,
-                len(captures),
-            )
-        return None
+        return PacketCaptureDownloadManager.find_capture_url(captures, capture_id, poll_attempt)
 
     @staticmethod
     def _save_pcap_file(pcap_url: str, capture_id: str, prefix: str = "") -> None:
@@ -2622,29 +2515,12 @@ class PacketCaptureManager:
             capture_id: Capture ID for filename
             prefix: Filename prefix (e.g. 'org_')
         """
-        print("\n* Downloading PCAP file...")
-        download_response = requests.get(pcap_url, timeout=300)
-
-        if download_response.status_code != 200:
-            print("\n! Failed to download PCAP file")
-            print(f"  HTTP Status: {download_response.status_code}")
-            print(f"  You can try downloading manually from: {pcap_url}")
-            logging.error("PCAP download failed: HTTP %s", download_response.status_code)
-            return
-
-        output_dir = Path("data")
-        output_dir.mkdir(exist_ok=True)
-        output_filename = output_dir / f"PacketCapture_{prefix}{capture_id}.pcap"
-
-        with open(output_filename, "wb") as pcap_file:
-            pcap_file.write(download_response.content)
-
-        file_size_mb = len(download_response.content) / (1024 * 1024)
-        print("\n* PCAP file downloaded successfully")
-        print(f"  Location: {output_filename}")
-        print(f"  Size: {file_size_mb:.2f} MB")
-        print("\n  Open with Wireshark or other PCAP analysis tools")
-        logging.info("PCAP file downloaded: %s (%.2f MB)", output_filename, file_size_mb)
+        PacketCaptureDownloadManager.save_pcap_file(
+            pcap_url,
+            capture_id,
+            prefix,
+            requests_module=requests,
+        )
 
     def _export_capture_info_to_csv(self, capture_data: dict[str, Any], scope: str, scope_id: str) -> None:
         """Export capture session information to CSV.
