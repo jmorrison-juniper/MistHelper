@@ -2435,14 +2435,26 @@ class PacketCaptureManager:
         print("  Press Ctrl+C to cancel wait and check portal manually")
         logging.info("Polling for PCAP availability for capture %s", capture_id)
 
-        pcap_url = self._poll_for_pcap_url(list_captures_fn, capture_id, duration)
-        if not pcap_url:
-            logging.debug("Polling finished for %s without a downloadable URL", capture_id)
-            return
+        pcap_url: str | None = None
+        try:
+            pcap_url = self._poll_for_pcap_url(list_captures_fn, capture_id, duration)
+            if not pcap_url:
+                logging.debug("Polling finished for %s without a downloadable URL", capture_id)
+                return
 
-        logging.info("PCAP URL resolved for %s; starting file save", capture_id)
-        self._save_pcap_file(pcap_url, capture_id, prefix)
-        logging.debug("PCAP save callback completed for %s", capture_id)
+            logging.info("PCAP URL resolved for %s; starting file save", capture_id)
+            self._save_pcap_file(pcap_url, capture_id, prefix)
+            logging.debug("PCAP save callback completed for %s", capture_id)
+        except KeyboardInterrupt:
+            print("\n\n! Download cancelled by user")
+            print(f"  Capture ID: {capture_id}")
+            if pcap_url:
+                print(f"  Download manually from: {pcap_url}")
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            print(f"\n! Error downloading PCAP file: {error}")
+            logging.error("Exception in poll_and_download_pcap for %s: %s", capture_id, error, exc_info=True)
+            if pcap_url:
+                print(f"  Try downloading manually from: {pcap_url}")
 
     def _poll_for_pcap_url(
         self,
