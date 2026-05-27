@@ -5,8 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.analytics.site_inventory_health_analyzer import SiteInventoryHealthAnalyzer
-from src.analytics.site_inventory_health_analyzer import SiteInventoryHealthAnalyzerDeps
+from src.analytics.site_inventory_health_analyzer import SiteInventoryHealthAnalyzer, SiteInventoryHealthAnalyzerDeps
 
 
 def _build_mistapi_stub() -> SimpleNamespace:

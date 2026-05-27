@@ -5,11 +5,9 @@ from __future__ import annotations
 import inspect
 import logging
 import os
-import re
 from typing import Any
 
-from src.export.site_insights_exporter import SiteInsightsExporter
-from src.export.site_insights_exporter import configure_site_insights_exporter_dependencies
+from src.export.site_insights_exporter import SiteInsightsExporter, configure_site_insights_exporter_dependencies
 
 apisession: Any = None
 PromptUtils: Any = None

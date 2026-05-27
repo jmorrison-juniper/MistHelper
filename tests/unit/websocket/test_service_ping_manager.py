@@ -6,9 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import MistHelper
-
-from src.websocket.service_ping_manager import ServicePingManager
-from src.websocket.service_ping_manager import configure_service_ping_manager_dependencies
+from src.websocket.service_ping_manager import ServicePingManager, configure_service_ping_manager_dependencies
 
 
 class _FakeWebSocketManager:
@@ -149,7 +147,9 @@ def test_execute_runs_end_to_end_until_display_results() -> None:
     manager._build_combined_services = MagicMock(return_value=["svc-a"])
     manager._prompt_for_tenant = MagicMock(return_value="tenant-a")
     manager._prompt_for_service = MagicMock(return_value="svc-a")
-    manager._prompt_for_ping_parameters = MagicMock(return_value={"host": "8.8.8.8", "count": 4, "size": 56, "node": None})
+    manager._prompt_for_ping_parameters = MagicMock(
+        return_value={"host": "8.8.8.8", "count": 4, "size": 56, "node": None}
+    )
     manager._display_configuration = MagicMock()
     manager._setup_websocket = MagicMock(return_value=True)
     manager._execute_service_ping = MagicMock(return_value="session-abc")

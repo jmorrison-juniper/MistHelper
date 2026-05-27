@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
-from typing import Callable
 
 from prettytable import PrettyTable
 
@@ -304,7 +304,9 @@ class OrgDeviceInventoryMSPOrchestrator:
             logging.info("Skipping combined reports: fewer than 2 orgs processed successfully")
 
     @staticmethod
-    def dispatch(single_org_fn: Callable[[], None], select_org_fn: Callable[[], None], batch_fn: Callable[[], None]) -> None:
+    def dispatch(
+        single_org_fn: Callable[[], None], select_org_fn: Callable[[], None], batch_fn: Callable[[], None]
+    ) -> None:
         """Interactive dispatcher for menu operation 13 MSP modes."""
         if not msp_privileges:
             single_org_fn()

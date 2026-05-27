@@ -5,8 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.ssh.ssh_runner_manager import SSHRunnerManager
-from src.ssh.ssh_runner_manager import SSHRunnerManagerDeps
+from src.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps
 
 
 class _Args:

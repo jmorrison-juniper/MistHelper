@@ -5,8 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.gateway.gateway_export_utils import GatewayExportUtils
-from src.gateway.gateway_export_utils import configure_gateway_export_utils_dependencies
+from src.gateway.gateway_export_utils import GatewayExportUtils, configure_gateway_export_utils_dependencies
 
 
 def _configure_dependencies() -> None:
@@ -18,7 +17,10 @@ def _configure_dependencies() -> None:
         cache_utils=SimpleNamespace(check_and_generate_csv=MagicMock()),
         file_path_utils=SimpleNamespace(get_csv_path=MagicMock(return_value="test.csv")),
         data_exporter=SimpleNamespace(save_data_to_output=MagicMock()),
-        data_processing_utils=SimpleNamespace(flatten_nested_fields=MagicMock(side_effect=lambda rows: rows), escape_multiline=MagicMock(side_effect=lambda rows: rows)),
+        data_processing_utils=SimpleNamespace(
+            flatten_nested_fields=MagicMock(side_effect=lambda rows: rows),
+            escape_multiline=MagicMock(side_effect=lambda rows: rows),
+        ),
         api_fetch_utils=SimpleNamespace(gateway_device_configs=MagicMock(return_value=[])),
         api_core_fetch_utils=SimpleNamespace(all_inventory_with_limit=MagicMock(return_value=[])),
         org_inventory_exporter=SimpleNamespace(inventory=MagicMock(), gateways_with_site_info=MagicMock()),

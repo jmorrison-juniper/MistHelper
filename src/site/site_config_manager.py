@@ -17,7 +17,16 @@ mistapi: Any = None
 DEFAULT_API_PAGE_LIMIT = 1000
 
 
-def configure_site_config_manager_dependencies(*, apisession_dependency: Any, config_utils: Any, file_path_utils: Any, input_utils: Any, data_exporter: Any, mistapi_dependency: Any, default_api_page_limit: int) -> None:
+def configure_site_config_manager_dependencies(
+    *,
+    apisession_dependency: Any,
+    config_utils: Any,
+    file_path_utils: Any,
+    input_utils: Any,
+    data_exporter: Any,
+    mistapi_dependency: Any,
+    default_api_page_limit: int,
+) -> None:
     """Configure runtime dependencies from MistHelper orchestration layer."""
     global apisession
     global ConfigUtils
@@ -351,7 +360,12 @@ class SiteConfigManager:
         return templates_to_create, templates_to_update, update_mode
 
     @staticmethod
-    def _confirm_rf_template_operation(to_create: list, to_update: list, sites_by_country: dict, update_mode: str) -> bool:  # type: ignore[type-arg]
+    def _confirm_rf_template_operation(  # type: ignore[type-arg]
+        to_create: list,
+        to_update: list,
+        sites_by_country: dict,
+        update_mode: str,
+    ) -> bool:
         """Confirm RF template operation with user."""
         print("\n  " + "!" * 66)
         print("  WARNING: DESTRUCTIVE OPERATION")
@@ -455,7 +469,14 @@ class SiteConfigManager:
         return success, failed
 
     @staticmethod
-    def _report_rf_template_results(created: list, updated: list, update_mode: str, success: list, failed: list, skipped: list) -> None:  # type: ignore[type-arg]
+    def _report_rf_template_results(  # type: ignore[type-arg]
+        created: list,
+        updated: list,
+        update_mode: str,
+        success: list,
+        failed: list,
+        skipped: list,
+    ) -> None:
         """Report RF template operation results."""
         print("\n" + "=" * 70)
         print(" OPERATION COMPLETE")
@@ -823,7 +844,12 @@ class SiteConfigManager:
         return success, failed
 
     @staticmethod
-    def _report_profile_assignment_results(success: list, failed: list, without_profile: list, without_model: list) -> None:  # type: ignore[type-arg]
+    def _report_profile_assignment_results(  # type: ignore[type-arg]
+        success: list,
+        failed: list,
+        without_profile: list,
+        without_model: list,
+    ) -> None:
         """Report profile assignment results."""
         print("\n" + "=" * 70)
         print(" OPERATION COMPLETE")

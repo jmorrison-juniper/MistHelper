@@ -5,14 +5,15 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootDeps
-from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootUtils
+from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootDeps, MarvisTroubleshootUtils
 
 
 def _make_deps() -> MarvisTroubleshootDeps:
     """Build minimal dependency container with mocks for unit tests."""
     mock_prompt_client_utils = SimpleNamespace(select_client=MagicMock(return_value=(None, None, None)))
-    mock_prompt_utils = SimpleNamespace(select_site=MagicMock(return_value=None), select_device=MagicMock(return_value=None))
+    mock_prompt_utils = SimpleNamespace(
+        select_site=MagicMock(return_value=None), select_device=MagicMock(return_value=None)
+    )
     mock_config_utils = SimpleNamespace(get_cached_or_prompted_org_id=MagicMock(return_value="org-1"))
     mock_data_exporter = SimpleNamespace(save_data_to_output=MagicMock())
     mock_marvis_data_utils = SimpleNamespace(format_for_csv=MagicMock(return_value=[{"site_id": "site-1"}]))

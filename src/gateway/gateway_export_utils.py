@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import csv
-import json
 import logging
 import re
 from typing import Any
 
-from src.gateway.gateway_override_analyzer import GatewayOverrideAnalyzer
-from src.gateway.gateway_override_analyzer import configure_gateway_override_analyzer_dependencies
+from src.gateway.gateway_override_analyzer import (
+    GatewayOverrideAnalyzer,
+    configure_gateway_override_analyzer_dependencies,
+)
 from src.gateway.gateway_stats_exporter import configure_gateway_stats_exporter_dependencies
 
 apisession: Any = None
@@ -256,7 +257,9 @@ class GatewayExportUtils:
         print("  - Output CSV: GatewayManagementIPs.csv")
 
         logging.info(
-            f"Gateway management IP export completed. {gateways_processed} gateways processed, {gateways_with_mgmt_ip} with management IPs."
+            "Gateway management IP export completed. %d gateways processed, %d with management IPs.",
+            gateways_processed,
+            gateways_with_mgmt_ip,
         )
 
     @staticmethod

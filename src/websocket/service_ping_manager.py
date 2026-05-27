@@ -6,8 +6,10 @@ import logging
 import sys
 from typing import Any
 
-from src.websocket.service_ping_discovery import ServicePingDiscoveryMixin
-from src.websocket.service_ping_discovery import configure_service_ping_discovery_dependencies
+from src.websocket.service_ping_discovery import (
+    ServicePingDiscoveryMixin,
+    configure_service_ping_discovery_dependencies,
+)
 
 apisession: Any = None
 mistapi: Any = None
@@ -161,10 +163,14 @@ class ServicePingManager(ServicePingDiscoveryMixin):
 
     def _confirm_proceed(self) -> bool:
         """Prompt user to confirm proceeding on non-optimal device types."""
-        choice = InputUtils.safe_input(
-            "   -> Continue anyway? (y/N): ",
-            context="service_ping_continue",
-        ).strip().lower()
+        choice = (
+            InputUtils.safe_input(
+                "   -> Continue anyway? (y/N): ",
+                context="service_ping_continue",
+            )
+            .strip()
+            .lower()
+        )
         if choice != "y":
             print("Operation cancelled.")
             return False

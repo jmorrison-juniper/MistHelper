@@ -334,8 +334,7 @@ class OrgDeviceInventorySummaryCore:
         print(table)
 
         export_rows = [
-            {"Device Type": row["device_type"], value_col: row.get(distinct, ""), "Count": row["count"]}
-            for row in rows
+            {"Device Type": row["device_type"], value_col: row.get(distinct, ""), "Count": row["count"]} for row in rows
         ]
         DataExporter.write_with_format_selection(
             export_rows,

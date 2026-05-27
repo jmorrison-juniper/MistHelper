@@ -68,7 +68,9 @@ class SSHRunnerManager:
 
             result = SSHRunnerManager._execute_ssh(deps, hosts, username, password, commands)
             if emitter:
-                emitter.emit_progress_complete("97", "ssh_runner", len(hosts), len(hosts), False, time.time() - op_start)
+                emitter.emit_progress_complete(
+                    "97", "ssh_runner", len(hosts), len(hosts), False, time.time() - op_start
+                )
             return result
 
         except KeyboardInterrupt:
@@ -205,7 +207,9 @@ class SSHRunnerManager:
                     max_threads=min(len(hosts), 4),
                 )
 
-                successful = sum(1 for result in summary.values() if isinstance(result, dict) and result.get("success", False))
+                successful = sum(
+                    1 for result in summary.values() if isinstance(result, dict) and result.get("success", False)
+                )
                 print(f"\n!? Execution Summary: {successful}/{len(summary)} hosts successful")
                 return successful > 0
 

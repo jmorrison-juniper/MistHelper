@@ -5,8 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.gateway.gateway_stats_exporter import GatewayStatsExporter
-from src.gateway.gateway_stats_exporter import configure_gateway_stats_exporter_dependencies
+from src.gateway.gateway_stats_exporter import GatewayStatsExporter, configure_gateway_stats_exporter_dependencies
 
 
 def _configure_dependencies() -> None:

@@ -440,7 +440,9 @@ class SiteAnalyticsConfigurator:
         print(f"\n! Preview report exported to {filename}")
 
     @staticmethod
-    def _apply_standard_sections(site: dict[str, Any], current_settings: dict[str, Any], result: dict[str, Any]) -> None:
+    def _apply_standard_sections(
+        site: dict[str, Any], current_settings: dict[str, Any], result: dict[str, Any]
+    ) -> None:
         """Apply standard configuration for each deviating section."""
         if site["rtsa_deviation"]:
             current_settings["rtsa"] = SiteAnalyticsConfigurator.STANDARD_RTSA.copy()

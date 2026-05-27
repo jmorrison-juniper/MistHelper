@@ -5,8 +5,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.gateway.wan_probe_device_override_manager import WANProbeDeviceOverrideManager
-from src.gateway.wan_probe_device_override_manager import configure_wan_probe_device_override_dependencies
+from src.gateway.wan_probe_device_override_manager import (
+    WANProbeDeviceOverrideManager,
+    configure_wan_probe_device_override_dependencies,
+)
 
 
 def _configure_dependencies(*, site_exclude_prefix: str = "") -> None:

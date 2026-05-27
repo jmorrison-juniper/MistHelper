@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MISTHELPER_PATH = REPO_ROOT / "MistHelper.py"
 SRC_PATH = REPO_ROOT / "src"
@@ -39,8 +38,7 @@ def test_no_src_module_imports_globalimportmanager_directly() -> None:
         if "GlobalImportManager" in source_text:
             violating_files.append(str(py_file.relative_to(REPO_ROOT)))
     assert not violating_files, (
-        "GlobalImportManager references are out-of-scope for wave 2; "
-        f"remove from: {violating_files}"
+        "GlobalImportManager references are out-of-scope for wave 2; " f"remove from: {violating_files}"
     )
 
 
@@ -72,6 +70,5 @@ def test_extracted_modules_do_not_import_forbidden_wave2_symbols() -> None:
                 forbidden_references[str(py_file.relative_to(REPO_ROOT))] = matched_tokens
 
     assert not forbidden_references, (
-        "Found forbidden wave-2 scope symbols in extracted module paths: "
-        f"{forbidden_references}"
+        "Found forbidden wave-2 scope symbols in extracted module paths: " f"{forbidden_references}"
     )

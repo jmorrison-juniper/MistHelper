@@ -5,8 +5,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.websocket.service_ping_discovery import ServicePingDiscoveryMixin
-from src.websocket.service_ping_discovery import configure_service_ping_discovery_dependencies
+from src.websocket.service_ping_discovery import (
+    ServicePingDiscoveryMixin,
+    configure_service_ping_discovery_dependencies,
+)
 
 
 class _DiscoveryHarness(ServicePingDiscoveryMixin):
@@ -107,7 +109,12 @@ def test_prompt_for_ping_parameters_uses_defaults_for_blank_values() -> None:
 
     params = harness._prompt_for_ping_parameters()
 
-    assert params == {"host": harness.DEFAULT_HOST, "count": harness.DEFAULT_COUNT, "size": harness.DEFAULT_SIZE, "node": None}
+    assert params == {
+        "host": harness.DEFAULT_HOST,
+        "count": harness.DEFAULT_COUNT,
+        "size": harness.DEFAULT_SIZE,
+        "node": None,
+    }
 
 
 def test_build_payload_includes_optional_fields_when_present() -> None:

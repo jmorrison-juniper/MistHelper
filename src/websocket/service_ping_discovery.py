@@ -208,7 +208,11 @@ class ServicePingDiscoveryMixin:
             for service_stat in stats_data.get("service_stat", []):
                 if isinstance(service_stat, dict):
                     service_name = service_stat.get("name")
-                    if service_name and not str(service_name).startswith("_") and service_name not in self.device_services:
+                    if (
+                        service_name
+                        and not str(service_name).startswith("_")
+                        and service_name not in self.device_services
+                    ):
                         self.device_services.append(str(service_name))
                         self.device_services.sort()
         except Exception as error:
@@ -450,7 +454,9 @@ class ServicePingDiscoveryMixin:
                 index += 1
 
         remaining = [
-            service for service in all_services if service not in self.org_service_names and service not in self.device_services
+            service
+            for service in all_services
+            if service not in self.org_service_names and service not in self.device_services
         ]
         if remaining:
             print(f"  Additional Services ({len(remaining)}):")

@@ -5,8 +5,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.inventory.org_device_inventory_msp import OrgDeviceInventoryMSPOrchestrator
-from src.inventory.org_device_inventory_msp import configure_org_device_inventory_msp_dependencies
+from src.inventory.org_device_inventory_msp import (
+    OrgDeviceInventoryMSPOrchestrator,
+    configure_org_device_inventory_msp_dependencies,
+)
 
 
 def _configure_msp(*, privileges: list[dict] | None = None, safe_input_return: str = "1") -> MagicMock:
@@ -70,7 +72,12 @@ def test_execute_msp_builds_combined_reports_for_multiple_orgs(monkeypatch) -> N
     monkeypatch.setattr(OrgDeviceInventoryMSPOrchestrator, "_build_combined_reports", staticmethod(combined_mock))
 
     def _run_for_org(org_id: str) -> tuple[list[dict], list[dict], list[dict], str]:
-        return ([{"device_type": "ap", "model": "A", "count": 1}], [{"device_type": "ap", "version": "1", "count": 1}], [{"device_type": "ap", "model": "A", "version": "1", "count": 1}], org_id)
+        return (
+            [{"device_type": "ap", "model": "A", "count": 1}],
+            [{"device_type": "ap", "version": "1", "count": 1}],
+            [{"device_type": "ap", "model": "A", "version": "1", "count": 1}],
+            org_id,
+        )
 
     OrgDeviceInventoryMSPOrchestrator.execute_msp(_run_for_org)
 

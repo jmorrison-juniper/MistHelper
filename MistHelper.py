@@ -21793,6 +21793,10 @@ class WAN2MigrationManager:
         """Menu #149 delegated entrypoint."""
         return self._impl.set_site_variable()
 
+    def __getattr__(self, name):  # type: ignore[no-untyped-def]  # Delegate all unresolved attribute access to the real implementation for test compatibility
+        """Proxy attribute access to the extracted implementation."""
+        return getattr(self._impl, name)  # Forward private methods like _get_site_selection to src.gateway implementation
+
 
 # ============================================================================
 # ORG CONFIG MIGRATION MANAGER CLASS

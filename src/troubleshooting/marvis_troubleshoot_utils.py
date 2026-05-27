@@ -184,7 +184,9 @@ class MarvisTroubleshootUtils:
                     "MARVIS DEBUG: Device response data keys: %s",
                     list(response.data.keys()) if isinstance(response.data, dict) else "not a dict",
                 )
-                logging.debug("MARVIS DEBUG: Device response data: %s", json.dumps(response.data, indent=2, default=str))
+                logging.debug(
+                    "MARVIS DEBUG: Device response data: %s", json.dumps(response.data, indent=2, default=str)
+                )
 
                 print(" Marvis AI device analysis completed!")
 
@@ -306,7 +308,11 @@ class MarvisTroubleshootUtils:
                         print("\n  Network Connectivity Analysis:")
                         for idx, result in enumerate(results):
                             logging.debug("MARVIS DEBUG: Processing result %s: %s", idx, result)
-                            description = result.get("description", "Analysis result") if isinstance(result, dict) else str(result)
+                            description = (
+                                result.get("description", "Analysis result")
+                                if isinstance(result, dict)
+                                else str(result)
+                            )
                             print(f"  !? {description}")
                             if isinstance(result, dict) and result.get("action"):
                                 print(f"    Recommended Action: {result['action']}")
@@ -316,7 +322,9 @@ class MarvisTroubleshootUtils:
                         print("\n  Marvis Network Insights:")
                         for idx, insight in enumerate(insights):
                             logging.debug("MARVIS DEBUG: Processing insight %s: %s", idx, insight)
-                            description = insight.get("description", insight) if isinstance(insight, dict) else str(insight)
+                            description = (
+                                insight.get("description", insight) if isinstance(insight, dict) else str(insight)
+                            )
                             print(f"  !? {description}")
                     else:
                         logging.debug("MARVIS DEBUG: No 'results' or 'insights' keys found in response data")
@@ -328,7 +336,9 @@ class MarvisTroubleshootUtils:
                                 print(f"   {key}: {str(value)[:100]}{'...' if len(str(value)) > 100 else ''}")
                 else:
                     logging.debug("MARVIS DEBUG: Response data is not a dict, type: %s", type(response.data))
-                    print(f"\n  Raw response: {str(response.data)[:200]}{'...' if len(str(response.data)) > 200 else ''}")
+                    print(
+                        f"\n  Raw response: {str(response.data)[:200]}{'...' if len(str(response.data)) > 200 else ''}"
+                    )
             else:
                 logging.debug("MARVIS DEBUG: Response data is None or empty")
                 print(" No network connectivity issues detected for this site.")

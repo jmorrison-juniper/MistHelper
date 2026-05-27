@@ -132,7 +132,7 @@ class TestGetSiteSelectionEnvelopes:
             MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-test"
         )
         manager = MistHelper.WAN2MigrationManager()  # Construct with mocked org
-        manager.sites = [  # Inject fake sites for selection prompts
+        manager._impl.sites = [  # Inject fake sites on the real implementation (wrapper delegates via __getattr__)
             {"id": "s1", "name": "Site Alpha"},
             {"id": "s2", "name": "Site Beta"},
         ]

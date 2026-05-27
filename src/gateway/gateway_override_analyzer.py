@@ -128,7 +128,9 @@ class GatewayOverrideAnalyzer:
                 }
 
         logging.info(
-            f"! Found {len(devices_with_overrides)} devices with port overrides out of {len(configs)} total gateway devices"
+            "! Found %d devices with port overrides out of %d total gateway devices",
+            len(devices_with_overrides),
+            len(configs),
         )
 
         if not devices_with_overrides:
@@ -162,7 +164,8 @@ class GatewayOverrideAnalyzer:
             return
 
         logging.info(
-            f"! Second pass: Fetching device configs and stats for {len(devices_with_overrides)} devices with overrides..."
+            "! Second pass: Fetching device configs and stats for %d devices with overrides...",
+            len(devices_with_overrides),
         )
 
         if fast and len(devices_with_overrides) > 5:
@@ -184,7 +187,10 @@ class GatewayOverrideAnalyzer:
                         port_configs = device_config_data.get("port_config", {})
                     except Exception as exception:
                         logging.warning(
-                            f"[WARN] Could not fetch device config for {device_name_inner} ({device_id_inner}): {exception}"
+                            "[WARN] Could not fetch device config for %s (%s): %s",
+                            device_name_inner,
+                            device_id_inner,
+                            exception,
                         )
                         port_configs = {}
 
@@ -197,11 +203,16 @@ class GatewayOverrideAnalyzer:
                     except Exception as exception:
                         if "403" in str(exception) or "Forbidden" in str(exception):
                             logging.warning(
-                                f"[WARN] Insufficient permissions to fetch device stats for {device_name_inner} ({device_id_inner}): 403 Forbidden"
+                                "[WARN] Insufficient permissions to fetch device stats for %s (%s): 403 Forbidden",
+                                device_name_inner,
+                                device_id_inner,
                             )
                         else:
                             logging.warning(
-                                f"[WARN] Could not fetch device stats for {device_name_inner} ({device_id_inner}): {exception}"
+                                "[WARN] Could not fetch device stats for %s (%s): %s",
+                                device_name_inner,
+                                device_id_inner,
+                                exception,
                             )
                         interface_stats = {}
 
@@ -224,7 +235,9 @@ class GatewayOverrideAnalyzer:
                 device_data_cache[device_id_failed] = ({}, {})
 
             logging.info(
-                f"! Fast mode: Fetched data for {len(successful_results)}/{len(work_items)} devices with connection pool protection"
+                "! Fast mode: Fetched data for %d/%d devices with connection pool protection",
+                len(successful_results),
+                len(work_items),
             )
 
         else:
@@ -238,7 +251,9 @@ class GatewayOverrideAnalyzer:
                     device_data = getattr(resp, "data", {})
                     port_configs = device_data.get("port_config", {})
                 except Exception as exception:
-                    logging.warning(f"[WARN] Could not fetch device config for {device_name} ({device_id}): {exception}")
+                    logging.warning(
+                        f"[WARN] Could not fetch device config for {device_name} ({device_id}): {exception}"
+                    )
                     port_configs = {}
 
                 try:
@@ -248,7 +263,9 @@ class GatewayOverrideAnalyzer:
                 except Exception as exception:
                     if "403" in str(exception) or "Forbidden" in str(exception):
                         logging.warning(
-                            f"[WARN] Insufficient permissions to fetch device stats for {device_name} ({device_id}): 403 Forbidden"
+                            "[WARN] Insufficient permissions to fetch device stats for %s (%s): 403 Forbidden",
+                            device_name,
+                            device_id,
                         )
                     else:
                         logging.warning(
@@ -329,17 +346,26 @@ class GatewayOverrideAnalyzer:
         total_overridden_ports = len(overridden_port_info)
 
         logging.info(
-            f"! Gateway override report written to {output_file} with {total_overridden_ports} overridden ports from {gateways_with_overrides} gateway devices."
+            "! Gateway override report written to %s with %d overridden ports from %d gateway devices.",
+            output_file,
+            total_overridden_ports,
+            gateways_with_overrides,
         )
         logging.info(
-            f"! API Optimization: Made device config/stats calls for only {devices_with_overrides_count} devices instead of all {total_gateways_processed} devices"
+            "! API Optimization: Made device config/stats calls for only %d devices instead of all %d devices",
+            devices_with_overrides_count,
+            total_gateways_processed,
         )
         print(f"! Gateway override report written to {output_file}")
         print(
-            f"! Found {total_overridden_ports} overridden ports across {gateways_with_overrides} of {total_gateways_processed} gateway devices"
+            f"! Found {total_overridden_ports} overridden ports across"
+            f" {gateways_with_overrides} of {total_gateways_processed} gateway devices"
         )
+        # Calculate saved API calls for readability
+        saved_calls = total_gateways_processed - devices_with_overrides_count
         print(
-            f"! API Optimization: Only fetched live data for {devices_with_overrides_count} devices with overrides (saved {total_gateways_processed - devices_with_overrides_count} unnecessary API calls)"
+            f"! API Optimization: Only fetched live data for {devices_with_overrides_count}"
+            f" devices with overrides (saved {saved_calls} unnecessary API calls)"
         )
         print(f"! Target ports analyzed: {', '.join(target_ports)}")
         print("! These are outliers that may need correction to match template configuration")

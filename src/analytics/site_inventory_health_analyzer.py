@@ -45,7 +45,9 @@ class SiteInventoryHealthAnalyzer:
         site_inventory = SiteInventoryHealthAnalyzer._group_devices_by_site(devices_data)
 
         missing_report = SiteInventoryHealthAnalyzer._find_sites_missing_infrastructure(site_inventory, site_lookup)
-        offline_report = SiteInventoryHealthAnalyzer._find_sites_with_offline_infrastructure(site_inventory, site_lookup)
+        offline_report = SiteInventoryHealthAnalyzer._find_sites_with_offline_infrastructure(
+            site_inventory, site_lookup
+        )
 
         SiteInventoryHealthAnalyzer._display_results(missing_report, offline_report)
         SiteInventoryHealthAnalyzer._export_results(missing_report, offline_report, deps)
@@ -255,7 +257,9 @@ class SiteInventoryHealthAnalyzer:
 
     @staticmethod
     def _export_results(
-        missing_report: list[dict[str, Any]], offline_report: list[dict[str, Any]], deps: SiteInventoryHealthAnalyzerDeps
+        missing_report: list[dict[str, Any]],
+        offline_report: list[dict[str, Any]],
+        deps: SiteInventoryHealthAnalyzerDeps,
     ) -> None:
         """Export analysis results to CSV files."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

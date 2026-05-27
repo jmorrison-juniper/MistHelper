@@ -5,8 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.export.site_export_utils import SiteExportUtils
-from src.export.site_export_utils import configure_site_export_utils_dependencies
+from src.export.site_export_utils import SiteExportUtils, configure_site_export_utils_dependencies
 
 
 class _ApiCallWithLimit:
@@ -44,17 +43,27 @@ def _configure_dependencies(select_site_return: str | None = "site-1") -> tuple[
     configure_site_export_utils_dependencies(
         apisession_dependency=object(),
         prompt_utils=SimpleNamespace(select_site=MagicMock(return_value=select_site_return)),
-        config_utils=SimpleNamespace(get_cached_or_prompted_org_id=MagicMock(return_value="org-1"), check_stop_signal=MagicMock(return_value=False)),
+        config_utils=SimpleNamespace(
+            get_cached_or_prompted_org_id=MagicMock(return_value="org-1"),
+            check_stop_signal=MagicMock(return_value=False),
+        ),
         data_processing_utils=SimpleNamespace(
             flatten_nested_fields=MagicMock(side_effect=lambda rows: rows),
             escape_multiline=MagicMock(side_effect=lambda rows: rows),
             get_unique_keys=MagicMock(return_value=["name"]),
         ),
         data_exporter=SimpleNamespace(save_data_to_output=exporter_mock),
-        time_utils=SimpleNamespace(get_dynamic_lookback_hours=MagicMock(return_value=24), log_dynamic_lookback=MagicMock()),
-        enhanced_ssh_runner=SimpleNamespace(sanitize_filename=MagicMock(side_effect=lambda value: value.replace(" ", "_"))),
+        time_utils=SimpleNamespace(
+            get_dynamic_lookback_hours=MagicMock(return_value=24), log_dynamic_lookback=MagicMock()
+        ),
+        enhanced_ssh_runner=SimpleNamespace(
+            sanitize_filename=MagicMock(side_effect=lambda value: value.replace(" ", "_"))
+        ),
         insight_metrics_utils=SimpleNamespace(export_legacy=MagicMock(), get_by_scope=MagicMock(return_value=[])),
-        packet_capture_manager=SimpleNamespace(validate_mac_address=MagicMock(return_value=True), normalize_mac_address=MagicMock(return_value="aa:bb:cc:dd:ee:ff")),
+        packet_capture_manager=SimpleNamespace(
+            validate_mac_address=MagicMock(return_value=True),
+            normalize_mac_address=MagicMock(return_value="aa:bb:cc:dd:ee:ff"),
+        ),
         api_core_fetch_utils=SimpleNamespace(all_sites_with_limit=MagicMock(return_value=[])),
         is_debug_mode_fn=MagicMock(return_value=False),
         pretty_table_class=SimpleNamespace,

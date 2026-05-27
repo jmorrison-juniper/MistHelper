@@ -6,8 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from src.site import site_config_manager as module
-from src.site.site_config_manager import SiteConfigManager
-from src.site.site_config_manager import configure_site_config_manager_dependencies
+from src.site.site_config_manager import SiteConfigManager, configure_site_config_manager_dependencies
 
 
 def _configure_dependencies() -> None:

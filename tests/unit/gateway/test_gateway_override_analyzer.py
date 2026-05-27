@@ -7,8 +7,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.gateway.gateway_override_analyzer import GatewayOverrideAnalyzer
-from src.gateway.gateway_override_analyzer import configure_gateway_override_analyzer_dependencies
+from src.gateway.gateway_override_analyzer import (
+    GatewayOverrideAnalyzer,
+    configure_gateway_override_analyzer_dependencies,
+)
 
 
 class _PathResolver:

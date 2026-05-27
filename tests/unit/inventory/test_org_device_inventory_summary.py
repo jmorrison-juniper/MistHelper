@@ -5,8 +5,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.inventory.org_device_inventory_summary import OrgDeviceInventorySummaryCore
-from src.inventory.org_device_inventory_summary import configure_org_device_inventory_summary_dependencies
+from src.inventory.org_device_inventory_summary import (
+    OrgDeviceInventorySummaryCore,
+    configure_org_device_inventory_summary_dependencies,
+)
 
 
 def _configure_dependencies() -> MagicMock:
@@ -32,7 +34,9 @@ def _configure_dependencies() -> MagicMock:
         get_all=MagicMock(return_value=[]),
     )
     configure_org_device_inventory_summary_dependencies(
-        apisession_dependency=SimpleNamespace(mist_get=MagicMock(return_value=SimpleNamespace(data={"results": [], "next": None}))),
+        apisession_dependency=SimpleNamespace(
+            mist_get=MagicMock(return_value=SimpleNamespace(data={"results": [], "next": None}))
+        ),
         mistapi_dependency=mistapi_dependency,
         data_exporter=SimpleNamespace(write_with_format_selection=exporter),
         org_id_value="org-1",
@@ -90,7 +94,9 @@ def test_run_for_org_calls_all_export_steps(monkeypatch) -> None:
     monkeypatch.setattr(
         OrgDeviceInventorySummaryCore,
         "_fetch_versions_per_model",
-        staticmethod(lambda target_org_id, model_rows: [{"device_type": "ap", "model": "A", "version": "1", "count": 1}]),
+        staticmethod(
+            lambda target_org_id, model_rows: [{"device_type": "ap", "model": "A", "version": "1", "count": 1}]
+        ),
     )
     display_mock = MagicMock()
     pivot_mock = MagicMock()

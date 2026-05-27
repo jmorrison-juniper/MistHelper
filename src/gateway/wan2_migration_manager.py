@@ -169,9 +169,7 @@ class WAN2MigrationManager:
 
         print(" Operation cancelled.")
         logging.info("Menu #149 cancelled by user")
-        logging.info(
-            "Exiting WAN2MigrationManager._get_site_selection: cancelled by user"
-        )
+        logging.info("Exiting WAN2MigrationManager._get_site_selection: cancelled by user")
         return []
 
     def _select_individual_sites(self) -> list[dict[str, Any]]:
@@ -240,9 +238,7 @@ class WAN2MigrationManager:
         if confirm not in ["yes", "y"]:
             print(" Operation cancelled.")
             logging.info("Menu #149 cancelled by user at confirmation prompt")
-            logging.info(
-                "Exiting WAN2MigrationManager._confirm_site_variable_operation: result=cancelled"
-            )
+            logging.info("Exiting WAN2MigrationManager._confirm_site_variable_operation: result=cancelled")
             return False
         logging.info(
             "Exiting WAN2MigrationManager._confirm_site_variable_operation: result=confirmed for %s sites",
@@ -635,7 +631,9 @@ class WAN2MigrationManager:
         self._print_severity_warnings(critical_sites, warning_sites, info_sites)
 
         logging.info("Menu #149 complete: %s/%s sites configured", success_count, len(results))
-        logging.info("Override breakdown - CRITICAL: %s, WARNING: %s, INFO: %s", critical_sites, warning_sites, info_sites)
+        logging.info(
+            "Override breakdown - CRITICAL: %s, WARNING: %s, INFO: %s", critical_sites, warning_sites, info_sites
+        )
 
     def _print_severity_warnings(self, critical_sites: int, warning_sites: int, info_sites: int):  # type: ignore[no-untyped-def]
         """Print severity-specific warnings."""
