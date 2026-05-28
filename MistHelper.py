@@ -84,6 +84,7 @@ from src.audit.analyzer import AuditLogAnalyzer  # Audit log analysis engine
 from src.audit.filter import AuditLogFilter  # Audit log filtering to remove noise
 from src.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering
 from src.audit.time_parser import TimeRangeParser  # Audit log time range parsing (7d, 4w, etc.)
+from src.auth.interactive_session import InteractiveSessionManager
 from src.capture.packet_capture import PacketCaptureManager as ExtractedPacketCaptureManager
 from src.export.site_export_utils import configure_site_export_utils_dependencies
 from src.gateway.gateway_export_utils import configure_gateway_export_utils_dependencies
@@ -2480,246 +2481,32 @@ def _fetch_msp_name(msp_id: str) -> str | None:
     return None
 
 
-def initialize_mist_session_interactive():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-    """Initialize Mist API session using interactive login (username/password).
+def initialize_mist_session_interactive():  # type: ignore[no-untyped-def]
+    """Initialize Mist API session via extracted interactive session manager."""
+    global apisession, mistapi, msp_privileges, selected_msp, org_id
 
-    This method prompts for email and password, handles 2FA if required,
-    and establishes a session-based authentication that can access MSP-level APIs
-    (unlike org-scoped API tokens).
-
-    Returns:
-        bool: True if login successful, False otherwise.
-    """
-    global apisession, mistapi
-
-    # Ensure mistapi is available
-    if mistapi is None:
-        try:
-            import mistapi as mistapi_fallback
-
-            mistapi = mistapi_fallback
-        except ImportError as import_err:
-            logging.error(f"Cannot import mistapi: {import_err}")
-            print("X Failed to import mistapi library")
-            return False
-
-    print("")
-    print("=" * 60)
-    print("  INTERACTIVE MIST API LOGIN")
-    print("=" * 60)
-    print("")
-    print("  This authentication method uses session/cookie-based login,")
-    print("  which can access MSP-level APIs (unlike org-scoped API tokens).")
-    print("")
-
-    # Show available Mist clouds (from mistapi documentation)
-    MIST_CLOUDS = {
-        "1": ("Global 01", "api.mist.com"),
-        "2": ("Global 02", "api.gc1.mist.com"),
-        "3": ("Global 03", "api.ac2.mist.com"),
-        "4": ("Global 04", "api.gc2.mist.com"),
-        "5": ("Global 05", "api.gc4.mist.com"),
-        "6": ("EMEA 01", "api.eu.mist.com"),
-        "7": ("EMEA 02", "api.gc3.mist.com"),
-        "8": ("EMEA 03", "api.ac6.mist.com"),
-        "9": ("EMEA 04", "api.gc6.mist.com"),
-        "10": ("APAC 01", "api.ac5.mist.com"),
-        "11": ("APAC 03", "api.gc7.mist.com"),
+    state = {
+        "apisession": apisession,
+        "mistapi": mistapi,
+        "msp_privileges": msp_privileges,
+        "selected_msp": selected_msp,
+        "org_id": org_id,
     }
 
-    print("  Available Mist Clouds:")
-    for key, (name, host) in MIST_CLOUDS.items():
-        print(f"    {key:>2}. {name:<12} ({host})")
-    print("")
+    session_manager = InteractiveSessionManager(
+        state=state,
+        safe_input=InputUtils.safe_input,
+        detect_msp_privileges=detect_msp_privileges,
+        select_org_from_session=_select_org_from_session,
+    )
+    login_success = session_manager.initialize_mist_session_interactive()
 
-    try:
-        cloud_choice = InputUtils.safe_input(
-            "  Select cloud (1-11, or press Enter for Global 01): ", context="interactive_login"
-        ).strip()
-    except SystemExit:
-        return False
-
-    if cloud_choice == "" or cloud_choice not in MIST_CLOUDS:
-        cloud_choice = "1"  # Default to Global 01
-
-    cloud_name, host = MIST_CLOUDS[cloud_choice]
-    print(f"  Using cloud: {cloud_name} ({host})")
-    print("")
-
-    # Get credentials
-    try:
-        email = InputUtils.safe_input("  Email: ", context="interactive_login").strip()
-    except SystemExit:
-        return False
-
-    if not email:
-        print("X Email is required")
-        return False
-
-    try:
-        import getpass
-
-        password = getpass.getpass("  Password: ")
-    except EOFError:
-        logging.info("EOF during password entry - session disconnected")
-        return False
-    except Exception as e:
-        logging.error(f"Failed to read password: {e}")
-        print(f"X Failed to read password: {e}")
-        return False
-
-    if not password:
-        print("X Password is required")
-        return False
-
-    print("")
-    print("  Authenticating...")
-
-    try:
-        # DEBUG: Log credential info (redacted)
-        logging.debug(f"Interactive login - host: {host}")
-        logging.debug(f"Interactive login - email: {email}")
-        logging.debug(f"Interactive login - password length: {len(password) if password else 0}")
-
-        # Create session with credentials in constructor
-        # The mistapi library stores these and uses them in login_with_return
-        print("  Creating API session...")
-        apisession = mistapi.APISession(
-            email=email,
-            password=password,
-            host=host,
-            console_log_level=20,  # INFO level to see what's happening
-            show_cli_notif=False,
-        )
-
-        # Type guard: APISession constructor should always return valid session
-        if apisession is None:
-            print("  X Failed to create API session")
-            logging.error("APISession constructor returned None")
-            return False
-
-        # CRITICAL: Clear any API token loaded from environment!
-        # The _load_env() in __init__ may have loaded MIST_APITOKEN from .env,
-        # which causes login_with_return() to use token auth instead of email/password.
-        # We must clear it to force the email/password login path.
-        if apisession._apitoken:
-            logging.debug(
-                f"Clearing API token to force email/password login (had {len(apisession._apitoken)} token(s))"
-            )
-            apisession._apitoken = []
-            apisession._apitoken_index = -1
-
-        # DEBUG: Check if credentials were stored
-        logging.debug(f"APISession created - email stored: {apisession.email}")
-        logging.debug(f"APISession created - password stored: {apisession._password is not None}")
-        logging.debug(f"APISession created - cloud_uri: {apisession._cloud_uri}")
-        logging.debug(f"APISession created - apitoken count: {len(apisession._apitoken)}")
-
-        # Attempt login using login_with_return()
-        # Don't pass credentials again - they're already stored in the session
-        # Returns: {'authenticated': bool, 'error': str|dict}
-        # When 2FA required: error contains dict with two_factor_required=True
-        print("  Sending login request...")
-        login_result = apisession.login_with_return()
-
-        logging.debug(f"login_with_return result: {login_result}")
-
-        # Check if 2FA is required - the error field contains resp.data dict
-        # when auth fails due to 2FA requirement
-        error_data = login_result.get("error", {}) if login_result else {}
-        two_factor_required = False
-
-        if isinstance(error_data, dict) and error_data.get("two_factor_required"):
-            two_factor_required = True
-        elif login_result and login_result.get("two_factor_required"):
-            # Fallback check at top level
-            two_factor_required = True
-
-        if two_factor_required:
-            print("")
-            print("  Two-factor authentication required.")
-            try:
-                two_factor_code = InputUtils.safe_input("  Enter 2FA code: ", context="interactive_login").strip()
-            except SystemExit:
-                apisession = None
-                return False
-
-            if not two_factor_code:
-                print("  X 2FA code is required")
-                apisession = None
-                return False
-
-            # Retry login with 2FA code - pass it as parameter
-            print("  Sending 2FA verification...")
-            login_result = apisession.login_with_return(two_factor=two_factor_code)
-            logging.debug(f"login_with_return (2FA) result: {login_result}")
-
-        # Check the actual 'authenticated' field from login_with_return
-        # Note: mistapi returns {'authenticated': bool, 'error': str|dict}
-        if not login_result or not login_result.get("authenticated", False):
-            error_field = login_result.get("error", "Unknown error") if login_result else "No response"
-            # Format error message - handle both string and dict error responses
-            if isinstance(error_field, dict):
-                error_message = error_field.get("detail", str(error_field))
-            else:
-                error_message = str(error_field)
-            print(f"  X Authentication failed: {error_message}")
-            logging.error(f"Interactive login failed: {error_message}")
-            apisession = None
-            return False
-
-        # Login succeeded - verify with a test API call
-        print("")
-        print("  + Login successful!")
-        logging.info(f"Interactive login successful for {email} to {host}")
-
-        # Configure read timeout on the underlying requests session
-        _configure_session_timeout(apisession)
-
-        # Detect MSP privileges
-        print("  Checking for MSP privileges...")
-        detected = detect_msp_privileges()  # type: ignore[no-untyped-call]
-        if detected:
-            print(f"  + MSP access detected: {len(detected)} MSP(s) available")
-            for msp in detected:
-                print(f"    - {msp['msp_name']} (role: {msp['role']})")
-        else:
-            print("  - No MSP privileges detected (org-level access only)")
-
-        print("")
-        return True
-
-    except ConnectionError as conn_err:
-        # mistapi 0.59.5+: Raised for proxy/network errors instead of sys.exit()
-        print(f"  X Connection failed: {conn_err}")
-        logging.error(f"Interactive login connection error: {conn_err}")
-        apisession = None
-        return False
-
-    except ValueError as val_err:
-        # mistapi 0.59.5+: Raised for invalid API token or auth failure instead of sys.exit()
-        error_msg = str(val_err).lower()
-        if "token" in error_msg or "401" in error_msg:
-            print("  X Invalid API token or credentials")
-        else:
-            print(f"  X Authentication error: {val_err}")
-        logging.error(f"Interactive login value error: {val_err}")
-        apisession = None
-        return False
-
-    except Exception as e:
-        error_msg = str(e)
-        if "invalid" in error_msg.lower() or "credential" in error_msg.lower():
-            print("  X Invalid email or password")
-        elif "two_factor" in error_msg.lower() or "2fa" in error_msg.lower():
-            print("  X Two-factor authentication failed")
-        elif "401" in error_msg:
-            print("  X Invalid email or password (authentication failed)")
-        else:
-            print(f"  X Login failed: {e}")
-        logging.error(f"Interactive login failed: {e}")
-        apisession = None
-        return False
+    apisession = state.get("apisession")
+    mistapi = state.get("mistapi")
+    msp_privileges = state.get("msp_privileges", msp_privileges)
+    selected_msp = state.get("selected_msp", selected_msp)
+    org_id = state.get("org_id", org_id)
+    return login_success
 
 
 def _print_switch_login_header():  # type: ignore[no-untyped-def]
@@ -2827,162 +2614,31 @@ def switch_to_interactive_login():  # type: ignore[no-untyped-def]
     return True
 
 
-def _select_msp_and_org():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-    """Helper to select MSP and then an organization within that MSP.
+def _select_msp_and_org():  # type: ignore[no-untyped-def]
+    """Select MSP and organization via extracted interactive session manager."""
+    global apisession, mistapi, msp_privileges, selected_msp, org_id
 
-    Updates global org_id and selected_msp based on user selection.
-    """
-    global org_id, msp_privileges, selected_msp
+    state = {
+        "apisession": apisession,
+        "mistapi": mistapi,
+        "msp_privileges": msp_privileges,
+        "selected_msp": selected_msp,
+        "org_id": org_id,
+    }
 
-    logging.debug(f"Entering _select_msp_and_org() - {len(msp_privileges)} MSP(s) available")
+    session_manager = InteractiveSessionManager(
+        state=state,
+        safe_input=InputUtils.safe_input,
+        detect_msp_privileges=detect_msp_privileges,
+        select_org_from_session=_select_org_from_session,
+    )
+    session_manager.select_msp_and_org()
 
-    print("")
-    print("=" * 60)
-    print("  SELECT MSP AND ORGANIZATION")
-    print("=" * 60)
-    print("")
-
-    # Step 1: Select MSP
-    chosen_msp = None
-    if len(msp_privileges) == 1:
-        chosen_msp = msp_privileges[0]
-        print(f"  Using MSP: {chosen_msp['msp_name']} (only one available)")
-        logging.debug(f"Single MSP auto-selected: {chosen_msp['msp_name']}")
-    else:
-        print("  Available MSPs:")
-        for idx, msp in enumerate(msp_privileges, start=1):
-            msp_name = msp.get("msp_name", "Unknown")
-            msp_role = msp.get("role", "unknown")
-            print(f"    {idx}. {msp_name} (role: {msp_role})")
-        print("")
-        choice = ""
-        try:
-            choice = InputUtils.safe_input("  Select MSP (number, or Enter to skip): ", context="msp_select").strip()
-            logging.debug(f"User MSP selection input: '{choice}'")
-            if choice == "":
-                print("  Skipping MSP selection - using direct org access")
-                logging.info("User skipped MSP selection - using direct org access")
-                _select_org_from_session()  # type: ignore[no-untyped-call]
-                return
-            choice_idx = int(choice) - 1
-            if 0 <= choice_idx < len(msp_privileges):
-                chosen_msp = msp_privileges[choice_idx]
-                logging.info(f"User selected MSP: {chosen_msp.get('msp_name', 'Unknown')} (index {choice_idx + 1})")
-            else:
-                print("  X Invalid selection - skipping MSP selection")
-                logging.warning(f"Invalid MSP selection: index {choice_idx + 1} out of range (1-{len(msp_privileges)})")
-                _select_org_from_session()  # type: ignore[no-untyped-call]
-                return
-        except ValueError:
-            print("  X Invalid input - skipping MSP selection")
-            logging.warning(f"ValueError during MSP selection - invalid input: '{choice}'")
-            _select_org_from_session()  # type: ignore[no-untyped-call]
-            return
-        except SystemExit:
-            logging.debug("SystemExit during MSP selection")
-            _select_org_from_session()  # type: ignore[no-untyped-call]
-            return
-
-    # Save selected MSP globally for reuse by other menus (e.g., menu 116)
-    selected_msp = chosen_msp
-
-    msp_id = chosen_msp["msp_id"]
-    msp_name = chosen_msp.get("msp_name", "Unknown")
-    print(f"  + Selected MSP: {msp_name}")
-
-    # Step 2: Fetch organizations under this MSP
-    print(f"  Fetching organizations under {msp_name}...")
-    logging.info(f"Fetching organizations from MSP: {msp_name} (msp_id: {msp_id})")
-
-    if apisession is None:
-        print("  X API session not initialized")
-        logging.error("API session not initialized when selecting MSP org")
-        return
-
-    try:
-        import mistapi.api.v1.msps.orgs as msp_orgs_api
-
-        logging.debug(f"listMspOrgs API call for msp_id: {msp_id}")
-        response = msp_orgs_api.listMspOrgs(apisession, msp_id)
-
-        if not response or not hasattr(response, "data"):
-            print("  X Failed to retrieve MSP organizations")
-            logging.error(f"listMspOrgs returned no data for MSP: {msp_name}")
-            return
-
-        orgs_data = response.data
-        if not isinstance(orgs_data, list):
-            orgs_data = [orgs_data] if orgs_data else []
-
-        logging.debug(f"Retrieved {len(orgs_data)} organizations from MSP {msp_name}")
-
-        if not orgs_data:
-            print("  No organizations found under this MSP")
-            logging.warning(f"No organizations found under MSP: {msp_name}")
-            return
-
-        # Sort orgs by name for easier selection
-        orgs_data = sorted(orgs_data, key=lambda x: x.get("name", "").lower())
-
-        print(f"  Found {len(orgs_data)} organization(s):")
-        print("")
-
-        # Show all orgs with pagination if many
-        page_size = 20
-        current_page = 0
-        total_pages = (len(orgs_data) + page_size - 1) // page_size
-
-        while True:
-            start_idx = current_page * page_size
-            end_idx = min(start_idx + page_size, len(orgs_data))
-
-            for idx in range(start_idx, end_idx):
-                org = orgs_data[idx]
-                org_name = org.get("name", "Unknown")
-                org_id_preview = org.get("id", "N/A")[:8]
-                print(f"    {idx + 1:>3}. {org_name} ({org_id_preview}...)")
-
-            print("")
-            if total_pages > 1:
-                print(f"  Page {current_page + 1}/{total_pages}")
-                print("  Enter number to select, 'n' for next page, 'p' for previous, 'q' to skip")
-            else:
-                print("  Enter number to select, or 'q' to skip")
-
-            try:
-                choice = InputUtils.safe_input("  Selection: ", context="org_select").strip().lower()
-            except SystemExit:
-                return
-
-            if choice == "q" or choice == "":
-                print("  Skipping org selection")
-                return
-            elif choice == "n" and current_page < total_pages - 1:
-                current_page += 1
-                continue
-            elif choice == "p" and current_page > 0:
-                current_page -= 1
-                continue
-            else:
-                try:
-                    choice_idx = int(choice) - 1
-                    if 0 <= choice_idx < len(orgs_data):
-                        selected_org = orgs_data[choice_idx]
-                        org_id = selected_org.get("id")
-                        org_name = selected_org.get("name", "Unknown")
-                        print("")
-                        print(f"  + Selected organization: {org_name}")
-                        print(f"  + Organization ID: {org_id}")
-                        logging.info(f"User selected org: {org_name} ({org_id}) under MSP: {msp_name}")
-                        return
-                    else:
-                        print("  X Invalid number - try again")
-                except ValueError:
-                    print("  X Invalid input - try again")
-
-    except Exception as e:
-        print(f"  X Error fetching MSP organizations: {e}")
-        logging.error(f"Failed to fetch MSP organizations: {e}")
+    apisession = state.get("apisession")
+    mistapi = state.get("mistapi")
+    msp_privileges = state.get("msp_privileges", msp_privileges)
+    selected_msp = state.get("selected_msp", selected_msp)
+    org_id = state.get("org_id", org_id)
 
 
 def _select_org_from_session():  # type: ignore[no-untyped-def]

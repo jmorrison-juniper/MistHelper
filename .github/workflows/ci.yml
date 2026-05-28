@@ -293,10 +293,8 @@ jobs:
       - run: pip install radon
       - name: Check cyclomatic complexity
         run: |
-          # Excluded paths: Wave 1 (maps,ssh,ui,websocket) + Wave 2 extracted modules (legacy complexity, tracked for future refactor)
-          RADON_EXCLUDE="src/maps/*,src/ssh/*,src/ui/tui.py,src/websocket/*,src/analytics/*,src/export/*,src/gateway/*,src/inventory/*,src/site/*,src/troubleshooting/*"
-          radon cc ${{ env.SRC_PATH }} -a -nb --exclude "$RADON_EXCLUDE"
-          radon cc ${{ env.SRC_PATH }} -j --exclude "$RADON_EXCLUDE" | python3 -c "
+          radon cc ${{ env.SRC_PATH }} -a -nb
+          radon cc ${{ env.SRC_PATH }} -j | python3 -c "
           import json, sys
           data = json.load(sys.stdin)
           bad = []
