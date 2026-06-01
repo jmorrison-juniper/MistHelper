@@ -1,31 +1,8 @@
 # MistHelper - AI Agent Instructions
-You are an elite autonomous software engineer with mastery in architecture, algorithms, testing, and deployment simulation.  
-Your mission: take my high-level request and independently deliver a complete, production-ready, and fully tested solution — without requiring my intervention unless a critical ambiguity blocks progress.  
+
+Global coding standards (autonomous workflow, 5-item rule, inline comments, action logging, quality gates) are in `coding-standards.instructions.md` and apply automatically. This file adds MistHelper-specific guidance only.
 
 When refactoring code, avoid using wrappers; actually restructure into classes as per project conventions.
-
-### Autonomous Workflow
-1. **Requirement Analysis** -- Parse the request, infer missing details, make reasonable assumptions.
-2. **Architecture & Design** -- Decide on structure, algorithms, and libraries.
-3. **Implementation** -- Write complete, functional, well-documented code.
-4. **Self-Instrumentation** -- Embed test points, logging hooks, assertions for critical logic paths.
-5. **Self-Testing** -- Write unit, integration, and edge-case tests. Run them. Debug until all pass.
-6. **Final Output** -- Present only the final, improved, fully tested version.
-
-### Output Format:
-1. **High-Level Plan** – Bullet points of architecture, reasoning, and assumptions.  
-2. **Final Code** – Fully functional, with inline comments explaining logic, trade-offs, and test points.  
-3. **Embedded Test Points** – Assertions, logging, and checkpoints inside the code.  
-4. **Automated Test Suite** – Unit, integration, and edge-case tests.  
-5. **Self-Prod Simulation Report** – Summary of simulated deployment results and optimizations made.  
-6. **Post-Mortem Summary** – Key design decisions, optimizations, and potential future improvements.  
-
-### Rules:
-- Assume autonomy — do not ask me for clarifications unless absolutely necessary.  
-- Always produce runnable, tested code in the requested language.  
-- Prefer clarity and maintainability over cleverness, but optimize where it matters.  
-- Use stable, well-supported libraries and explain why they were chosen.  
-- If a feature is ambiguous, make a reasonable assumption and document it.  
 
 ---
 
@@ -39,26 +16,10 @@ MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud
 ## Core Architecture
 
 ### Python Project Hierarchy (5-Item Rule)
-Python project hierarchy levels from largest to smallest:
-1. **Project Root** - the top-level project folder
-2. **Packages/Directories** - folders that organize code (src/, tests/, docs/)
-3. **Module Files** - individual .py files
-4. **Classes/Functions/Constants** - top-level code constructs in modules
-5. **Methods/Attributes/Expressions** - class members and function bodies
+See `coding-standards.instructions.md` § Structural Discipline for limits (max 5 params, 5 blocks, 25 lines).
 
-**Enforce the 5-item rule**: each level should have no more than 5 children. If exceeded, refactor:
-- Too many files in a directory: split into subdirectories or subpackages
-- Too many classes in a module: split into multiple module files
-- Too many methods in a class: extract methods to helper classes or separate functions
-- Too many statements in a function: extract into smaller helper functions
-
-**Function/Method Definition Limits**:
-- **Max 5 parameters** per function. If more are needed, use a config object/dataclass or split into multiple functions
-- **Max 5 logical blocks** per function body (if/else counts as 1 block, for loop counts as 1 block, etc.). If exceeded, extract blocks into separate helper functions
-- **Max 5 operations** per statement block. Complex expressions should be broken into intermediate variables
-- **Max 25 lines** per function (reconciles 5 blocks × ~5 lines per block). If longer, extract logical sections into helper functions
-
-This rule keeps code organized, manageable, and easy to navigate. Apply this hierarchy thinking to all Python code organization and refactoring suggestions.
+Python hierarchy levels:
+1. **Project Root** → 2. **Packages/Directories** → 3. **Module Files** → 4. **Classes/Functions/Constants** → 5. **Methods/Attributes/Expressions**
 
 ### Design Pattern
 - **Classes**: `GlobalImportManager`, `WebSocketManager`, `PacketCaptureManager`, `FirmwareManager`, `EnhancedSSHRunner`, `SFPTransceiverDataProcessor`
@@ -186,19 +147,6 @@ python MistHelper.py --test
 
 ```python
 def safe_input(prompt: str, context: str = "unknown") -> str:
-    """
-    Universal input wrapper with EOF handling and validation.
-    
-    Args:
-        prompt: User-facing prompt text
-        context: Operation context for logging (e.g., "firmware_upgrade", "ssh_session")
-    
-    Returns:
-        User input string
-        
-    Raises:
-        SystemExit: On EOF (clean session termination)
-    """
     try:
         return input(prompt)
     except EOFError:
@@ -212,39 +160,18 @@ if confirmation != "UPGRADE":
     return  # Early return on validation failure
 ```
 
-**Use this pattern for**:
-- All `input()` calls in SSH/container contexts
-- Destructive operation confirmations (firmware, reboots, VC conversions)
-- Interactive menu selections
-- Any user input that could encounter EOF
+Use for all `input()` calls, destructive confirmations, menu selections, and any context that could encounter EOF.
 
 ### Inline Comments (NON-NEGOTIABLE)
-Every line of AI-generated code MUST have an inline comment on the same line explaining what it does and why. This is not optional. Junior NOC engineers maintain this codebase -- every line must be self-explanatory.
-
-**Rules**:
-- Every executable line gets an inline comment (same line, after code).
-- Comments explain *why* and *what for*, not just *what* (no restating the code).
-- Blank lines, closing braces/parens, and decorators are exempt.
-- If existing code is being modified, add inline comments to the changed lines AND to any adjacent uncommented lines in the same block.
-- If existing code is found lacking inline comments during any edit, add them to the entire function or block being touched.
+See `coding-standards.instructions.md` § Inline Comments for full rules. Python example:
 
 ```python
-# WRONG: No comments or restating the code
-result = api.get_sites(org_id)  # get sites
-
-# CORRECT: Explaining intent and context
 result = api.get_sites(org_id)  # Fetch all sites for this org from Mist API
+sites = [s for s in result if s.get("name")]  # Exclude unnamed/placeholder sites
 ```
 
 ### Action Logging (NON-NEGOTIABLE)
-Every meaningful action MUST have a logging statement BEFORE and AFTER execution. This enables operators to trace exactly what happened during any run.
-
-**Rules**:
-- Log an `info` message BEFORE every action (API call, file write, database operation, data transformation, user prompt).
-- Log a `debug` message AFTER every action with the result summary (count, status, size -- never secrets).
-- Log `error` with full context on any exception.
-- If existing code is found lacking action logging during any edit, add logging to the entire function or block being touched.
-- Use `%s` style formatting in logging calls (not f-strings) for performance and security.
+See `coding-standards.instructions.md` § Action Logging for full rules. Python example:
 
 ```python
 logging.info("Fetching device list for site %s", site_id)  # Log before API call
@@ -253,19 +180,8 @@ logging.debug("Received %d devices from API", len(result))  # Log result count a
 ```
 
 ### Logging Standards
-- **Debug**: Internal state changes, API responses
-- **Info**: User-facing progress messages
-- **Error**: Exception context with full traceback
-- **Never log secrets**: Redact tokens/passwords
-- **ASCII Only**: Replace Unicode with ASCII equivalents (emoji map in agents.md line ~212). No Unicode characters in logs - use ASCII substitutions for cross-platform compatibility.
-
-### Input Validation
-```python
-def validate_hostname(hostname: str) -> bool:
-    """All external inputs validated before use"""
-    # Reject path traversal, special chars, etc.
-    # Pattern: validate early, return early (NASA/JPL defensive programming)
-```
+See `coding-standards.instructions.md` § Logging Standards.
+- **ASCII Only**: Replace Unicode with ASCII equivalents (emoji map in agents.md). No Unicode in logs.
 
 ### File Path Management
 - **All outputs**: `data/` directory (enforced at runtime)
@@ -328,52 +244,16 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 ## Menu System & Operations
 
 ### Menu Categories (Full Range: 1-193)
-**Safe Org Exports (1-59)**:
-- 1-7: Sites and analysis
-- 8-14: Device inventory
-- 15-19: Device stats
-- 20-26: Events and logs
-- 27-30: Client stats
-- 31-36: Gateway operations
-- 37-41: Templates
-- 42-50: Config and admin
-- 51-55: SLE and insights
-- 56-59: Misc exports
 
-**Interactive Safe (60-96)**:
-- 60-72: Site devices
-- 73-79: Site insights
-- 80-91: Site stats
-- 92-96: Viewers
-
-**Resource Intensive (97-101, 153)**:
-- 97-101: Long-running operations
-- 153: Bulk operations
-
-**WebSocket (102-123)**:
-- 102-115: Show commands (wireless, switches, gateways)
-- 116-123: Diagnostics
-
-**Interactive (124-150)**:
-- 124-127: Device diagnostics
-- 128-133: Device management
-- 134-135: Packet captures (site-level, org-level with switch support)
-- 136-147: Tools
-- 148-150: Config management
-
-**Continuous (151-152)**:
-- 151-152: Continuous monitoring loops
-
-**Destructive Operations (154-193)** - NEVER automate without explicit user confirmation:
-- 154-157: Firmware upgrades
-- 158-160: AP reboots
-- 161-162: VC conversion (virtual chassis operations)
-- 163-167: Template operations
-- 168-170: Site config operations
-- 171-174: Test data operations
-- 175-176: SSH runners (device command execution)
-- 177-187: Clear/reset operations
-- 188-193: Support ticket operations
+| Range | Category | Notes |
+| - | - | - |
+| 1-59 | Safe Org Exports | Sites (1-7), Inventory (8-14), Device stats (15-19), Events (20-26), Clients (27-30), Gateways (31-36), Templates (37-41), Config/Admin (42-50), SLE (51-55), Misc (56-59) |
+| 60-96 | Interactive Safe | Site devices (60-72), Insights (73-79), Stats (80-91), Viewers (92-96) |
+| 97-101, 153 | Resource Intensive | Long-running operations, bulk operations |
+| 102-123 | WebSocket | Show commands (102-115), Diagnostics (116-123) |
+| 124-150 | Interactive | Diagnostics (124-127), Management (128-133), Packet captures (134-135), Tools (136-147), Config (148-150) |
+| 151-152 | Continuous | Monitoring loops |
+| 154-193 | **Destructive** | Firmware (154-157), Reboots (158-160), VC (161-162), Templates (163-167), Site config (168-170), Test data (171-174), SSH runners (175-176), Clear/reset (177-187), Support tickets (188-193). **NEVER automate without explicit user confirmation.** |
 
 ### Interactive vs Direct Invocation
 - **Interactive**: No args = menu-driven selection with safe navigation
@@ -409,17 +289,8 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 
 ## Project-Specific Conventions
 
-### Naming Standards
-- **No abbreviations**: `for device in devices` NOT `for d in devices`
-- **No AI markers**: Never use `...existing code...` or double ellipses
-- **Class-based**: All features organized under semantic class names
-
-### Code Readability Requirements (NON-NEGOTIABLE)
-All AI-generated code MUST include:
-1. **Inline comments on every line** -- Same-line comments explaining intent (see Critical Patterns > Inline Comments)
-2. **Action logging before/after every operation** -- `logging.info()` before, `logging.debug()` after (see Critical Patterns > Action Logging)
-
-Code that lacks either of these is considered incomplete and MUST NOT be committed. When touching existing code that lacks inline comments or action logging, add them to the entire function or block being modified.
+See `coding-standards.instructions.md` for naming standards and code readability rules.
+- **Class-based**: All features organized under semantic class names, no wrapper functions
 
 ---
 
@@ -439,28 +310,12 @@ Code that lacks either of these is considered incomplete and MUST NOT be committ
 
 ---
 
-## When in Doubt
-1. **Read agents.md first** (attached context) - comprehensive safety patterns
-2. **Check existing patterns** - grep for similar operations
-3. **Validate early, return early** - NASA/JPL defensive programming
-4. **Test in venv** - Windows 11 local development standard environment
-5. **Update docs** - CHANGELOG.md + README operation tables
-6. **Execute full pipeline** - Don't skip deployment steps
-
----
-
 ## Multi-Agent Git Workflow
 
-Global workflow rules are defined in
-`%APPDATA%/Code/User/prompts/coding-standards.instructions.md`.
-This section adds MistHelper-specific enforcement.
+Global workflow rules are in `git-workflow.instructions.md` (applied via `applyTo: "**"`).
+This section adds MistHelper-specific overrides only.
 
-### Issue-First Development
-
-Every code change starts with an issue. No branch without an issue.
-
-When any error is detected during development (lint, test, type, runtime, security, CI),
-create a GitHub issue **before** attempting a fix:
+### MistHelper-Specific Error-to-Issue Triggers
 
 | Trigger | Label(s) | Issue Title Pattern |
 |---------|----------|---------------------|
@@ -471,45 +326,8 @@ create a GitHub issue **before** attempting a fix:
 | Security finding | `security` | `Security: <tool> -- <finding>` |
 | CI pipeline failure | `ci` | `CI: <workflow> -- <failure>` |
 
-Use `gh issue create --title "..." --label "..." --body "..."` to create issues
-programmatically. Include the full error output in the issue body for traceability.
-
-### Branch Strategy (No Stacking)
-
-```
-main (always deployable)
-  |-- fix/<issue-number>-<slug>      # bug fixes
-  |-- feat/<issue-number>-<slug>     # features
-  |-- chore/<issue-number>-<slug>    # maintenance / lint / docs
-```
-
-**Critical rules**:
-- Every branch targets `main` directly. Never branch from another feature branch.
-- Branch name must include the issue number: `fix/42-clear-session`.
-- One branch per issue. One PR per branch. One concern per PR.
-- Keep branches short-lived: merge or close within days, not weeks.
-
 **Lesson learned**: PRs 12-15 were stacked (branched from each other instead of main),
-causing cascading merge conflicts that required manual resolution. This rule prevents that.
-
-### Commit Messages
-
-Use Conventional Commits format:
-```
-<type>(<scope>): <description>
-
-Closes #<issue-number>
-```
-Types: `fix`, `feat`, `chore`, `refactor`, `test`, `docs`, `ci`.
-Include `Closes #N` in the body so the issue auto-closes on merge.
-
-### Merge Strategy
-
-- **Squash merge** to `main` (one clean commit per PR).
-- **Rebase before merging** if the branch is behind `main`.
-- **Delete branch** after merge (automatic via GitHub settings).
-- **`Closes #N` in PR body** -- squash merge only reads the PR body for auto-close keywords, not individual commit messages.
-- **Never force-push** to a shared branch or `main`.
+causing cascading merge conflicts. Never branch from feature branches.
 
 ### Required Labels
 
@@ -518,56 +336,21 @@ Every issue and PR MUST have at least:
 2. A **scope** label: `MistHelper.py`, `tests`, `ci`, `container`, `docs`, `web-portal`
 3. A **status** label when in progress: `in-progress`
 
-### Fleet Coordination (Multi-Agent)
+### Fleet Coordination (MistHelper-Specific)
 
-When multiple AI agents work on MistHelper simultaneously:
+See `git-workflow.instructions.md` § Agent Coordination for general rules. MistHelper additions:
 
-1. **Claim before starting**: Assign the issue to yourself and add `in-progress` label
-   before creating a branch. If already claimed, pick a different issue.
-2. **Check for file overlap**: Run
-   `gh pr list --json files --jq '.[].files[].path'`
-   to see what files other open PRs touch. Avoid overlapping files.
-3. **MistHelper.py is a hot file**: Since most changes touch this single file, only one
-   agent should have an open PR modifying it at a time. Others should wait or work on
-   non-overlapping files (tests, docs, CI, web portal).
-4. **Rebase frequently**: If your PR takes more than one session,
-   `git rebase main` before pushing updates.
-5. **Auto-merge label**: Add `auto-merge` label only after all CI checks pass,
-   **including CodeQL** (takes 2-3 minutes). Use `gh pr checks <pr> --watch` to confirm.
+- **MistHelper.py is a hot file**: Only one agent should have an open PR modifying it at a time.
+  Others should wait or work on non-overlapping files (tests, docs, CI, web portal).
+- **Auto-merge label**: Wait for **CodeQL** (~2-3 min) before adding. Use `gh pr checks <pr> --watch`.
 
-### Agent Isolation (One Agent = One Worktree = One Branch = One PR)
-
-Every concurrent AI agent MUST operate in its own isolated worktree. This prevents
-file-lock collisions, avoids cross-agent contamination, and ensures each agent has
-a clean working directory.
-
-**The isolation rule**: One agent, one worktree, one branch, one PR, one concern.
+### Agent Worktree Examples
 
 ```
 MistHelper/                    # main checkout (human or merge agent only)
 ../MistHelper-agent-1/         # worktree for Agent 1 (feat/101-new-menu)
 ../MistHelper-agent-2/         # worktree for Agent 2 (fix/102-rate-limit)
-../MistHelper-agent-3/         # worktree for Agent 3 (chore/103-docs)
 ```
-
-**Setup per agent**:
-```powershell
-# Agent claims issue #101, creates its isolated worktree
-git worktree add ../MistHelper-agent-1 -b feat/101-new-menu main
-cd ../MistHelper-agent-1
-```
-
-**Teardown after merge**:
-```powershell
-cd ../MistHelper
-git worktree remove ../MistHelper-agent-1
-git branch -D feat/101-new-menu
-git pull origin main
-```
-
-**Why worktrees over branches**: On Windows, VS Code and OneDrive hold file locks that
-block `git checkout`. Worktrees sidestep this entirely -- each agent has its own directory,
-its own index, and its own working tree. No lock contention, no stale file handles.
 
 ### Copilot Coding Agent, Spaces & Scratchpads
 
@@ -589,9 +372,6 @@ Follows `.github/copilot-instructions.md` automatically. Cannot run `--test` (no
 **Scratchpads**: Throwaway exploration. No git. Discard after use.
 
 ### Conflict Resolution Playbook
-
-When multiple agents produce PRs that conflict (especially on `MistHelper.py`),
-do NOT fight merge conflicts. Follow this playbook:
 
 **Strategy 1 -- Sequential Merge (preferred)**:
 1. Merge the cleanest PR first (fewest files, best coverage, most isolated).
@@ -616,8 +396,6 @@ across all future multi-agent work.
 - Let Copilot propose conflict resolutions -- paste both versions into chat.
 
 ### Agent Observability & Efficiency
-
-Every AI agent interaction must be observable and cost-accountable.
 
 **Logging Requirements**:
 - Log every agent call: timestamp, model, prompt hash, token counts (input/output), latency
@@ -652,112 +430,13 @@ Every AI agent interaction must be observable and cost-accountable.
 | Token count > 100K in single call | Split task into smaller subtasks; review context window usage |
 | Same error repeated 3x | Stop retrying; log the failure pattern and try alternative approach |
 
-### Windows Branch Switching (File Locking)
+### Copilot Token Efficiency
 
-VS Code and OneDrive hold file locks that block `git checkout` on Windows.
-**Preferred approach**: Use git worktrees instead of switching branches:
+See `copilot-token-efficiency.instructions.md` (applied globally via `applyTo: "**"`).
 
-```powershell
-# Create a worktree for the feature branch (separate directory, no locks)
-git worktree add ../MistHelper-feat-42 feat/42-my-feature
+### Windows Branch Switching & Post-Merge Fix Timing
 
-# Work in the worktree directory
-cd ../MistHelper-feat-42
-
-# When done, remove the worktree
-cd ../MistHelper
-git worktree remove ../MistHelper-feat-42
-git branch -D feat/42-my-feature
-```
-
-**Fallback** (if worktrees are not practical):
-```powershell
-# Kill orphaned git processes holding the index lock
-Get-Process git -ErrorAction SilentlyContinue | Stop-Process -Force
-Remove-Item .git/index.lock -ErrorAction SilentlyContinue
-git checkout main
-```
-
-### Post-Merge Fix Timing
-
-**Never push to a branch after its PR has been squash-merged.**
-The branch's history diverges from `main` after squash merge, so cherry-picks
-and pushes to the dead branch will fail or create orphaned commits.
-
-If a fix is needed after merge:
-1. Pull `main` to get the squash-merged commit.
-2. Create a **new issue** for the fix.
-3. Create a **new branch** from `main`.
-4. Fix, push, and open a **new PR**.
-
-### Feature Development Workflow (Step-by-Step)
-
-This is the canonical workflow for every code change. No shortcuts.
-
-**Step 1 -- Create an Issue**:
-```powershell
-gh issue create --title "<type>: <description>" --label "<type>,<scope>"
-# Note the issue number from the output URL
-```
-
-**Step 2 -- Create a Worktree or Branch**:
-```powershell
-# Worktree (preferred on Windows -- avoids file lock conflicts)
-git worktree add ../MistHelper-<slug> <type>/<issue>-<slug>
-cd ../MistHelper-<slug>
-
-# OR branch (if worktrees not practical)
-git checkout -b <type>/<issue>-<slug> main
-```
-
-**Step 3 -- Develop and Test**:
-```powershell
-# Make changes, then validate
-python -m py_compile MistHelper.py          # Syntax check
-python -m ruff check MistHelper.py          # Lint check
-python -m black MistHelper.py              # Auto-format (fixes style in place)
-python MistHelper.py --test                 # Run test suite (skip 14,18,63-65,90-100)
-```
-
-**Step 4 -- Commit with Conventional Commits**:
-```powershell
-git add <files>
-git commit -m "<type>(<scope>): <description>
-
-Closes #<issue>"
-```
-
-**Step 5 -- Push and Create PR**:
-```powershell
-git push origin <type>/<issue>-<slug>
-gh pr create --title "<type>(<scope>): <description>" --body "Closes #<issue>" --base main
-```
-
-**Step 6 -- Wait for ALL CI Checks (Including CodeQL)**:
-```powershell
-gh pr checks <pr-number> --watch
-# Do NOT proceed until every check shows a green checkmark
-# CodeQL takes 2-3 minutes -- do not skip it
-```
-
-**Step 7 -- Add Auto-Merge Label**:
-```powershell
-# Only after ALL checks (including CodeQL) are green
-gh pr edit <pr-number> --add-label "auto-merge"
-```
-
-**Step 8 -- Clean Up After Merge**:
-```powershell
-# Worktree cleanup
-cd ../MistHelper
-git worktree remove ../MistHelper-<slug>
-git checkout main && git pull origin main
-git branch -D <type>/<issue>-<slug>
-
-# OR branch cleanup
-git checkout main && git pull origin main
-git branch -D <type>/<issue>-<slug>
-```
+See `git-workflow.instructions.md` § Windows Branch Switching and § Post-Merge Fix Timing.
 
 ### NEVER Do These
 
@@ -779,8 +458,6 @@ git branch -D <type>/<issue>-<slug>
 
 ## Autonomous AI Pipeline (End-to-End)
 
-This section defines the complete AI-driven development, testing, and deployment pipeline. The goal: an AI agent (GitHub Copilot, Copilot Workspace, or VS Code Copilot Chat) can independently implement features, run quality gates, merge PRs, and publish deliverables -- all without human intervention once a Feature Spec is approved.
-
 ### Scope & Operating Modes
 
 **Run Mode A -- Standalone**: `MistHelper.py` executed directly on a host under systemd.
@@ -789,15 +466,10 @@ This section defines the complete AI-driven development, testing, and deployment
 
 **Run Mode B -- Containerized**: Podman/Docker image managed by systemd Quadlet (preferred for single-node).
 - Quadlet unit: `deploy/misthelper.container`
-- Tokens/config loaded via `EnvironmentFile=./.env` or Docker Compose `env_file:`
 - Registry: `ghcr.io/jmorrison-juniper/misthelper`
 - Podman Quadlet is the recommended systemd integration; `podman generate systemd` is deprecated.
 
-**Configuration & Secrets (both modes)**:
-- All tokens and org IDs live in `.env`, never in code or image layers.
-- Python loads via `python-dotenv` (`from dotenv import load_dotenv; load_dotenv()`).
-- Containers use Compose `env_file:` / `--env-file .env` / Quadlet `EnvironmentFile=`.
-- Committed template: `deploy/.env.example`. Real `.env` is git-ignored.
+All tokens and org IDs live in `.env` (git-ignored), never in code or image layers. Committed template: `deploy/.env.example`.
 
 ### Specifying Integration
 
@@ -844,31 +516,7 @@ All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot au
 
 ### Security Findings: Fix Over Suppress
 
-Security tool findings (bandit, pip-audit, CodeQL) must be **resolved**, not suppressed:
-
-1. **Fix the root cause** -- Rewrite code to eliminate the vulnerability.
-2. **Refactor to avoid the pattern** -- Restructure so the flagged pattern isn't needed.
-3. **`#nosec` only for verified false positives** -- When the tool misidentifies safe code
-   (e.g., logging f-string flagged as SQL, intentional `0.0.0.0` bind gated by container
-   detection). The annotation MUST include a justification comment.
-
-Never suppress legitimate findings. If a finding requires more than a trivial fix,
-create a GitHub issue and track it.
-
-### Toolchain Reference
-
-| Category | Tools |
-| - | - |
-| Editor & AI | VS Code + Copilot Chat, Copilot Workspace, VS Code Browser Agent Tools |
-| Lint + Format | `ruff` (replaces flake8/isort/black) |
-| Type Safety | `mypy` (strict optional) |
-| Tests + Coverage | `pytest` + `pytest-cov`, `hypothesis` (property-based) |
-| Security | `bandit` (AST rules), `pip-audit` (dependency CVEs) |
-| Code Scanning | GitHub CodeQL, Dependabot (weekly pip updates) |
-| CI Setup | `actions/setup-python` (caching) |
-| Container | `docker/build-push-action` + `docker/login-action` → GHCR |
-| Release | `softprops/action-gh-release` (wheel, zip artifacts) |
-| Runtime | `python-dotenv`, Docker Compose `env_file:`, Podman + Quadlet |
+See `coding-standards.instructions.md` § Security Findings. Project-specific tools: bandit, pip-audit, CodeQL.
 
 ### Delivery Artifacts (Per Release Tag)
 
@@ -889,138 +537,42 @@ Triggered by tag push (`v*.*.*`) via `.github/workflows/release.yml`:
   Use `gh pr checks <pr-number> --watch` to confirm all checks are green.
 - Destructive operations (menu 90-100) require explicit human review regardless of AI authorship.
 
-### Full Pipeline Loop (End-to-End)
-
-1. **Spec** -- Write a Feature Spec Issue using the template. Define problem, behavior, tests, UI expectations.
-2. **AI Implements** -- Copilot Chat/Workspace reads the Spec, implements across files, creates tests, updates `.env.example` if needed.
-3. **AI Opens PR** -- Links to Spec, fills conformance checklist, pushes branch.
-4. **CI Runs** -- Ruff, mypy, pytest+cov, Hypothesis, Bandit, pip-audit, CodeQL, Playwright E2E.
-5. **Auto-Merge** -- If all gates green + labeled `auto-merge`, PR squash-merges to `main`.
-6. **Container Build** -- Push to `main` triggers container-build workflow: validate syntax -> run tests -> build multi-arch image -> push to GHCR.
-7. **Release** -- Tag push triggers release workflow: build wheel/zip, attach to GitHub Release, push container image.
-8. **Ops Pull** -- Operators pull new artifact:
-   - Host mode: download zip, restart systemd service.
-   - Container mode: `podman pull ghcr.io/jmorrison-juniper/misthelper:latest`, restart Quadlet service.
-
 ---
 
 ## Web UI Autonomy (AI-Driven Browser Interaction)
 
-MistHelper launches a Gunicorn-served web UI (port 8055) that humans use to interact with the script and kick off activities. This section enables AI agents in VS Code to **see**, **interact with**, and **test** these pages autonomously -- no human screenshots required.
+MistHelper serves a Gunicorn web UI (port 8055). AI agents use VS Code browser tools to interact autonomously.
 
-### VS Code Browser Agent Tools
+**Enable**: Setting `workbench.browser.enableChatTools` must be on.
 
-VS Code ships built-in browser automation tools for AI agents. These allow Copilot to launch a browser, read the DOM, click buttons, type into forms, take screenshots, and run Playwright code -- all without leaving the editor.
+**Workflow**: Open page (`-p 8055:8055`) → inspect DOM with `readPage` → execute user journeys (`clickElement`, `typeInPage`, etc.) → validate DOM state → generate Playwright tests (`runPlaywrightCode`) → save to `tests/e2e/`. The `gunicorn_server` fixture in `tests/e2e/conftest.py` handles server lifecycle.
 
-**Enable in VS Code**:
-1. Turn on setting: `workbench.browser.enableChatTools`
-2. Open Chat (Ctrl+Alt+I) -> Agent mode -> enable Built-in -> Browser tools
+### UI Section in Feature Specs
 
-**Available Agent Capabilities**:
+When a Spec involves web UI changes, include:
+1. **Target URL(s)** (e.g., `/`, `/dashboard`, `/jobs`)
+2. **Critical user journeys**: buttons, forms, dialogs, expected state transitions
+3. **Assertions**: DOM changes, text presence, attribute/state updates
+4. **Stability contracts**: `data-testid` attributes (prefer over brittle CSS/XPath)
+5. **Artifacts**: screenshots and Playwright traces for failures
 
-| Capability | Agent Tool | What It Does |
-|------------|-----------|--------------|
-| Open page | `openBrowserPage` | Launch URL in VS Code integrated browser |
-| Navigate | `navigatePage` | Go to a different URL |
-| Read content | `readPage` | Extract DOM text/structure for analysis |
-| Screenshot | `screenshotPage` | AI captures its own screenshots (no human needed) |
-| Click | `clickElement` | Click buttons, links, menu items |
-| Type | `typeInPage` | Enter text into forms/inputs |
-| Hover | `hoverElement` | Trigger hover states, tooltips |
-| Drag | `dragElement` | Drag-and-drop interactions |
-| Dialogs | `handleDialog` | Accept/dismiss browser dialogs |
-| Run tests | `runPlaywrightCode` | Execute Playwright automation inline |
+### PR Conformance: UI Testing
 
-**DOM Locator Extraction**: VS Code Simple Browser integration enables point-and-click element selection with automatic locator extraction and test script generation.
-
-### How the AI Operates on the Web UI
-
-**Open & Inspect**: Start MistHelper locally or in container (`-p 8055:8055`). Agent uses
-`openBrowserPage`/`navigatePage` to open the URL, `readPage` to extract DOM structure, and
-`screenshotPage` for context or failure evidence.
-
-**Interact & Validate**: Agent executes user journeys from the Spec using `clickElement`,
-`typeInPage`, `hoverElement`, `dragElement`, `handleDialog`. Inspects DOM state and console
-errors to verify expected behavior (new rows, status messages, button transitions).
-
-**Codify as Playwright Tests**: Agent generates Playwright tests via `runPlaywrightCode`,
-uses Trace Viewer for debugging, saves tests to `tests/e2e/`. The `gunicorn_server` fixture
-in `tests/e2e/conftest.py` handles server lifecycle (starts on random port, tears down after).
-
-### Autonomous Testing Scenarios
-
-Without human presence, the agent can: load and validate page structure, click workflow
-triggers, fill forms with test data, inspect network responses, detect JS/console errors,
-capture screenshots for failure evidence, generate Playwright regression tests (saved to
-`tests/e2e/`), run them in CI (`playwright` job), and auto-repair failing tests using
-Copilot + Playwright integration.
-
-### Specifying: UI Section in Feature Specs
-
-When a Spec involves web UI changes, the **"UI Behavior & Automated Testing Expectations"** section in the Issue template must include:
-
-1. **Target URL(s)** the agent must open (e.g., `/`, `/dashboard`, `/jobs`).
-2. **Critical user journeys**: buttons to click, forms to fill, dialogs to handle, expected state transitions and messages.
-3. **Assertions**: DOM changes, text presence, attribute/state updates, network-visible effects.
-4. **Stability contracts**: testable `data-testid` attributes (to keep selectors robust -- prefer these over brittle CSS/XPath).
-5. **Artifacts**: request screenshots and Playwright traces for failures.
-6. **Non-goals**: flows intentionally out of scope for the feature.
-
-This upfront structure gives the agent precise goals and reduces brittle selectors or ambiguous UI outcomes.
-
-### PR Conformance: UI Testing Additions
-
-In addition to the standard checklist, PRs that touch web UI must include:
-- **UI E2E present**: PR includes/updates Playwright tests for changed UI flows.
-- **Selectors stabilized**: Stable `data-testid` attributes added where needed; agent verified selectors by interacting with the integrated browser.
-- **Agent execution proof**: Screenshots and/or Playwright traces for main flows (stored as CI artifacts on failures or in PR comments when green).
-
-### Best Practices for UI Autonomy
-
-Use `data-testid` attributes for stable selectors (not brittle CSS/XPath). Capture screenshots
-and Playwright traces on failures as first-class debug artifacts. Describe interactions and
-expected states in the Spec; the agent converts those into executable steps. The Gunicorn fixture
-(`tests/e2e/conftest.py`) starts a single-worker server on a random port -- tests should clean
-up after themselves.
+PRs touching web UI must include:
+- Playwright tests for changed UI flows (saved to `tests/e2e/`)
+- Stable `data-testid` attributes where needed
+- Screenshots/traces as CI artifacts on failures
 
 ---
 
 ## Complexity-Driven SpecKit Escalation
 
-Not every task needs full ceremony. Use this decision tree to determine whether
-to implement directly or escalate to the SpecKit workflow
-(specify -> plan -> tasks -> implement):
+See `git-workflow.instructions.md` § SpecKit Escalation for the full decision tree.
 
-**Implement directly** (no spec needed):
-- Single-file edits with obvious intent (typo, log message, config value)
-- Lint/format fixes with auto-fix available
-- Documentation-only changes
-- Adding a test for existing, well-understood behavior
-
-**Escalate to SpecKit** (spec required before coding):
-- Changes touching 3+ files or 2+ classes
-- New menu operations or API integrations
-- Architectural changes (new classes, module splits, data flow changes)
-- Bug fixes where root cause is unclear or spans multiple components
+**MistHelper-specific escalation triggers**:
 - Any change to destructive operations (menu 90-100)
-- Performance or concurrency work
 - Database schema or primary key strategy changes
-
-**Why**: Smaller models (e.g., GPT-5 Mini) lose track of multi-step
-implementations without structured artifacts. The spec anchors intent, the plan
-decomposes complexity, and tasks provide checkpoint-by-checkpoint execution that
-any model can follow.
-
-**Workflow when escalating**:
-1. `speckit.specify` -- Create/update the spec from the issue
-2. `speckit.clarify` -- Surface underspecified areas (recommended)
-3. `speckit.plan` -- Generate the implementation plan
-4. `speckit.tasks` -- Break the plan into ordered tasks
-5. `speckit.implement` -- Execute the tasks
-6. `speckit.analyze` -- Cross-check spec/plan/tasks consistency
-
-If in doubt, escalate. A spec that turns out unnecessary costs minutes.
-A botched multi-file change without a spec costs hours.
+- Changes touching 3+ files or 2+ classes
 
 ---
 
@@ -1048,5 +600,5 @@ When implementing a Feature Spec, AI agents must follow this protocol:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/193-main-decomposition-wave-2/plan.md
+at specs/196-decompose-next5-functions/plan.md
 <!-- SPECKIT END -->

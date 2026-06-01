@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 import time
 from collections.abc import Callable
@@ -11,7 +10,9 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from src.capture.org_capture_workflow import OrgCaptureWorkflow
 from src.capture.packet_capture_download import PacketCaptureDownloadManager
+from src.capture.site_capture_loop import SiteCaptureLoopRunner
 
 if TYPE_CHECKING:
     pass
@@ -1636,39 +1637,9 @@ class PacketCaptureManager:
             site_id: Site UUID
             payload: Capture configuration payload (reused each iteration)
         """
-        iteration = 0
-        last_capture_time: float | None = None
-        min_interval = payload.get("duration", 60)
-        download_folder = os.path.join(os.getcwd(), "data")
-
-        self._print_loop_banner(payload)
-
+        runner = SiteCaptureLoopRunner(manager=self)
         try:
-            while True:
-                iteration += 1
-                loop_start = time.time()
-                print(f"\n{'=' * 60}\nLoop Iteration #{iteration}\n{'=' * 60}")
-
-                completed = self._fetch_completed_pcaps(site_id, iteration)
-                self._download_pending_pcaps(completed, download_folder)
-
-                wait_time = self._check_capture_readiness(last_capture_time, min_interval)
-                if wait_time == 0:
-                    capture_time = self._attempt_loop_capture(site_id, payload, iteration)
-                    if capture_time is not None:
-                        last_capture_time = capture_time
-
-                sleep_time = self._calc_loop_sleep(wait_time, time.time() - loop_start)
-                print(f"\n{'=' * 60}\nLoop iteration #{iteration} complete")
-                print(f"Waiting {sleep_time:.0f} seconds before next check...\n{'=' * 60}\n")
-                time.sleep(sleep_time)
-
-        except KeyboardInterrupt:
-            print(f"\n\n{'=' * 80}\n LOOP MODE INTERRUPTED BY USER\n{'=' * 80}")
-            print(f"  Completed {iteration} loop iteration(s)")
-            print("  All available PCAPs have been downloaded\n  Exiting gracefully...")
-            logging.info("Capture loop stopped by user after %s iterations", iteration)
-
+            runner.run(site_id, payload)
         except Exception as loop_error:  # pylint: disable=broad-exception-caught
             print(f"\n! Unexpected error in capture loop: {loop_error}")
             logging.error("Exception in capture loop: %s", loop_error, exc_info=True)
@@ -2126,49 +2097,22 @@ class PacketCaptureManager:
         print("\n! NOTE: Org-level captures are for organization-level Mist Edges ONLY")
         print("  For site-level Mist Edges, use Site Packet Capture (option 9)")
         print("\n" + "=" * 80)
+        workflow = OrgCaptureWorkflow(manager=self)
+        workflow.run()
 
-        result = self._fetch_org_mxedges()
-        if result is None:
-            return
-        mxedges, stats_map = result
-
-        selected = self._display_and_select_mxedge(mxedges, stats_map)
-        if selected is None:
-            return
-
-        selected_ports = self._fetch_and_select_mxedge_port(selected)
-        if selected_ports is None:
-            return
-
-        tcpdump_expr = self._get_tcpdump_expression_selection()
-
-        params = self._gather_org_capture_params()
-        if params is None:
-            return
-
-        capture_config = {
-            "duration": params[0],
-            "num_packets": params[1],
-            "max_pkt_len": params[2],
-            "format": params[3],
-            "tzsp_host": params[4],
-            "tzsp_port": params[5],
-        }
-
-        payload = self._build_org_payload(
-            selected,
-            selected_ports,
-            tcpdump_expr,
-            capture_config,
-        )
-
-        self._display_org_capture_summary(payload, selected, selected_ports, tcpdump_expr)
-
+    def _confirm_and_execute_org_capture(self, payload: dict[str, Any]) -> None:
+        """Prompt for confirmation and execute org capture payload."""
         _get_input_utils().safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
+            "\nPress Enter to start capture (Ctrl+C to cancel): ",
+            context="confirmation",
+            allow_empty=True,
         )
-
         self._execute_org_capture(payload)
+
+    @staticmethod
+    def _log_loop_stop(iteration: int) -> None:
+        """Log loop-stop summary after keyboard interrupt in loop mode."""
+        logging.info("Capture loop stopped by user after %s iterations", iteration)
 
     def _build_org_payload(
         self,

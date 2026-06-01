@@ -65,6 +65,10 @@ git checkout main && git pull origin main
   every action, `logging.debug()` after with result summary. Code without logging is code
   without observability. When editing existing code, add logging to the entire block being
   touched.
+- **Token efficiency** (Effective June 2026): Use Auto mode by default. Share only relevant
+  files/functions -- never entire repos. Start only needed MCP servers. Use agent mode for
+  multi-step tasks, standard chat for quick questions. Ask for a plan before large changes.
+  See `copilot-token-efficiency.instructions.md` for full details.
 
 ## External Resources
 

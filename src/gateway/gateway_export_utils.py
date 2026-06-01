@@ -7,7 +7,7 @@ import logging
 import re
 from typing import Any
 
-from src.gateway.gateway_override_analyzer import (
+from src.gateway.gateway_override_analysis import (
     GatewayOverrideAnalyzer,
     configure_gateway_override_analyzer_dependencies,
 )

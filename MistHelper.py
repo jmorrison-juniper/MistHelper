@@ -85,13 +85,21 @@ from src.audit.filter import AuditLogFilter  # Audit log filtering to remove noi
 from src.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering
 from src.audit.time_parser import TimeRangeParser  # Audit log time range parsing (7d, 4w, etc.)
 from src.auth.interactive_session import InteractiveSessionManager
+from src.bootstrap.dependency_check import DependencyCheckOrchestrator
+from src.bootstrap.package_installer import PackageInstaller
+from src.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow
+from src.capture.org_pcap_wait_download_workflow import OrgPcapWaitDownloadWorkflow
 from src.capture.packet_capture import PacketCaptureManager as ExtractedPacketCaptureManager
+from src.capture.site_pcap_wait_download_workflow import SitePcapWaitDownloadWorkflow
+from src.export.device_events_52w_exporter import DeviceEvents52wExporter
 from src.export.site_export_utils import configure_site_export_utils_dependencies
+from src.export.wifi_clients_exporter import WifiClientsExporter
 from src.gateway.gateway_export_utils import configure_gateway_export_utils_dependencies
 from src.org_data_collector import OrgDataCollector
 from src.ssh.ssh_runner import EnhancedSSHRunner
 from src.ssh.ssh_runner_manager import SSHRunnerManager as ExtractedSSHRunnerManager
 from src.ssh.ssh_runner_manager import SSHRunnerManagerDeps
+from src.troubleshooting.interactive_test_runner import InteractiveTestRunner
 from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootDeps
 from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils
 from src.wan_hub_group_manager import WanHubGroupNumberManager
@@ -525,7 +533,7 @@ def _parse_requirements_file(filepath="requirements.txt"):  # type: ignore[no-un
         return []
 
 
-def _early_dependency_check():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
+def _early_dependency_check_legacy_impl():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
     """
     Check and auto-install critical dependencies before they're imported.
 
@@ -837,6 +845,30 @@ def _early_dependency_check():  # type: ignore[no-untyped-def]  # noqa: C901, PL
         summary_parts.append(f"{failure_count + upgrade_failure_count} failed")
 
     logging.info(f"Early dependency check completed: {', '.join(summary_parts) if summary_parts else 'all up-to-date'}")
+
+
+# Simplified facade delegating dependency bootstrap logic to extracted src/bootstrap modules.
+def _early_dependency_check():  # type: ignore[no-untyped-def]
+    """Run early dependency checks through the extracted bootstrap orchestrator."""
+    installer = PackageInstaller(
+        os_module=os,
+        subprocess_module=subprocess,
+        sys_module=sys,
+        logging_module=logging,
+    )
+    orchestrator = DependencyCheckOrchestrator(
+        os_module=os,
+        logging_module=logging,
+        sys_module=sys,
+        package_import_map=PACKAGE_IMPORT_MAP,
+        parse_requirements_file_fn=_parse_requirements_file,
+        get_installed_version_fn=_get_installed_version,
+        version_satisfies_fn=_version_satisfies,
+        get_latest_pypi_version_fn=_get_latest_pypi_version,
+        parse_version_fn=_parse_version,
+        installer=installer,
+    )
+    orchestrator.run()
 
 
 # Run early dependency check (will be skipped if DISABLE_AUTO_INSTALL=true)
@@ -7064,214 +7096,24 @@ class _LegacyPacketCaptureManager:
         else:
             self._execute_site_capture(site_id, payload)
 
-    def _start_site_scan_capture_all_aps(self, site_id: str):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Start scan radio packet captures for ALL APs at a site simultaneously.
-
-        Args:
-            site_id (str): Site UUID
-        """
-        logging.info(f"Starting multi-AP scan capture for site: {site_id}")
-
-        # Get all AP MACs from site
-        ap_macs = DeviceUtils.get_all_ap_macs_from_site(site_id)
-        if not ap_macs:
-            print("\n! No APs found at site")
-            return
-
-        print(f"\n* Found {len(ap_macs)} APs at site")
-
-        # Check for existing captures at this site
-        print("  Checking for existing captures...")
-        try:
-            response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(self.mist_session, site_id)
-
-            if response.status_code == 200:
-                existing_captures = response.data or []
-                # Silently log existing captures but don't warn user
-                if existing_captures:
-                    logging.debug(f"{len(existing_captures)} capture(s) already in progress or recently completed")
-        except Exception as check_error:
-            logging.debug(f"Could not check for existing captures: {check_error}")
-
-        print(f"  Preparing to launch {len(ap_macs)} simultaneous captures...")
-
-        # Get common capture parameters for all APs
-        print("\n" + "-" * 80)
-        print(" SCAN RADIO CAPTURE CONFIGURATION (All APs)")
-        print("-" * 80)
-
-        # Band selection
-        print("\nSelect band:")
-        print("  1. 2.4 GHz")
-        print("  2. 5 GHz (default)")
-        print("  3. 6 GHz")
-        band_choice = InputUtils.safe_input("Enter choice [1-3] (default 2): ", default_value="2", context="band")
-
-        band_map = {"1": "24", "2": "5", "3": "6", "24": "24", "5": "5", "6": "6"}
-        band = band_map.get(band_choice, "5")
-
-        # Channel
-        if band == "24":
-            channel_str = InputUtils.safe_input(
-                "Enter channel (1-11, default 1): ", default_value="1", context="channel"
-            )
-        elif band == "5":
-            channel_str = InputUtils.safe_input(
-                "Enter channel (36-144, default 36): ", default_value="36", context="channel"
-            )
-        else:  # band == "6"
-            channel_str = InputUtils.safe_input(
-                "Enter channel (1-233, default 1): ", default_value="1", context="channel"
-            )
-
-        try:
-            channel = int(channel_str)
-        except ValueError:
-            print(f"\n! Invalid channel: {channel_str}")
-            return
-
-        # Bandwidth
-        print("\nSelect bandwidth:")
-        print("  1. 20 MHz")
-        print("  2. 40 MHz")
-        if band in ["5", "6"]:
-            print("  3. 80 MHz")
-        if band == "6":
-            print("  4. 160 MHz")
-        bw_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="bandwidth")
-        bw_map = {"1": "20", "2": "40", "3": "80", "4": "160"}
-        bandwidth = bw_map.get(bw_choice, "20")
-
-        # Duration
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, min 60, max 86400): ",
-            default_value="60",
-            context="duration",
+    def _start_site_scan_capture_all_aps(self, site_id: str):  # type: ignore[no-untyped-def]
+        """Compatibility facade that delegates multi-AP scan capture to extracted workflow."""
+        logging.info(
+            "Delegating _start_site_scan_capture_all_aps to MultiApScanCaptureWorkflow"
+        )  # Log before constructing extracted workflow dependency graph.
+        workflow = MultiApScanCaptureWorkflow(  # Build extracted workflow with legacy deps.
+            manager=self,
+            mistapi_module=mistapi,
+            input_utils=InputUtils,
+            device_utils=DeviceUtils,
         )
-        try:
-            duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print("\n! Duration must be between 60 and 86400 seconds (API requirement)")
-                return
-        except ValueError:
-            print(f"\n! Invalid duration: {duration_str}")
-            return
-
-        # Number of packets
-        num_packets_str = InputUtils.safe_input(
-            "Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets"
-        )
-        try:
-            num_packets = int(num_packets_str)
-            if num_packets < 0 or num_packets > 10000:
-                print("\n! Number of packets must be between 0 and 10000")
-                return
-        except ValueError:
-            print(f"\n! Invalid number of packets: {num_packets_str}")
-            return
-
-        # Format selection
-        capture_format = self._get_capture_format_selection()  # type: ignore[no-untyped-call]
-
-        # Display configuration summary
-        print("\n" + "=" * 80)
-        print(" MULTI-AP CAPTURE CONFIGURATION SUMMARY")
-        print("=" * 80)
-        print("  Capture Type: Scan Radio (All APs)")
-        print(f"  Number of APs: {len(ap_macs)}")
-        print(f"  Band: {band} GHz")
-        print(f"  Channel: {channel}")
-        print(f"  Bandwidth: {bandwidth} MHz")
-        print(f"  Duration: {duration} seconds")
-        print(f"  Packets: {num_packets}")
-        print(f"  Format: {capture_format}")
-        print("=" * 80)
-
-        InputUtils.safe_input(
-            f"\nPress Enter to start capture for {len(ap_macs)} APs (Ctrl+C to cancel): ",
-            context="confirmation",
-            allow_empty=True,
-        )
-
-        # Build single payload with aps dictionary for all APs
-        print(f"\n> Launching multi-AP capture for {len(ap_macs)} APs with single API call...")
-
-        # Build the aps dictionary - each AP uses the same parent configuration
-        aps_dict = {}
-        for ap_mac in ap_macs:
-            normalized_mac = self.normalize_mac_address(ap_mac)
-            # Per-AP config inherits from parent, so we can leave empty or specify overrides
-            aps_dict[normalized_mac] = {"band": band, "channel": str(channel), "width": str(bandwidth)}
-
-        # Build single payload with parent config + aps dictionary
-        payload = {
-            "type": "scan",
-            "band": band,
-            "channel": channel,
-            "bandwidth": bandwidth,
-            "duration": duration,
-            "num_packets": num_packets,
-            "format": capture_format,
-            "max_pkt_len": 1300,
-            "aps": aps_dict,
-        }
-
-        logging.debug(f"Multi-AP payload constructed for {len(ap_macs)} APs")
-
-        try:
-            response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(self.mist_session, site_id, payload)
-
-            if response.status_code == 200:
-                result = response.data
-                capture_id = result.get("id", "unknown")
-                ap_count = result.get("ap_count", len(ap_macs))
-
-                print("\n* Multi-AP capture started successfully!")
-                print(f"  Capture ID: {capture_id}")
-                print(f"  AP Count: {ap_count}")
-                print(f"  Format: {capture_format}")
-                print(f"  Duration: {duration} seconds")
-                print(f"  Expires: {result.get('expiry', 'unknown')}")
-
-                logging.info(f"Multi-AP capture started: capture_id={capture_id}, ap_count={ap_count}")
-
-                # Export capture details
-                self._export_capture_info_to_csv(result, "site", site_id)
-
-                # Handle based on format
-                if capture_format == "pcap":
-                    print("\n> Waiting for PCAP file to be ready...")
-                    print("  This may take a few moments after capture completes.")
-                    self._wait_and_download_pcap(site_id, capture_id, duration)
-                elif capture_format == "stream":
-                    print("\n> Stream format selected - subscribe to WebSocket for real-time data")
-                    self._subscribe_to_site_capture_stream(site_id, capture_id)
-
-            else:
-                error_details = response.data if hasattr(response, "data") else "Unknown error"
-
-                # Check for common errors
-                if response.status_code == 400 and isinstance(error_details, dict):
-                    detail = error_details.get("detail", "")
-                    if "Recording already in progress" in detail:
-                        print("\n! Capture(s) already in progress on one or more APs")
-                        print("  Mist only allows one capture per AP at a time")
-                        print("  Wait for existing captures to complete or check Mist portal to stop them")
-                    else:
-                        print(f"\n! Failed to start capture: {response.status_code}")
-                        print(f"  Error details: {error_details}")
-                else:
-                    print(f"\n! Failed to start capture: {response.status_code}")
-                    print(f"  Error details: {error_details}")
-
-                logging.error(f"Multi-AP capture failed: {response.status_code} - {error_details}")
-
-        except Exception as error:
-            print(f"\n! Error starting multi-AP capture: {error}")
-            logging.error(f"Exception launching multi-AP capture: {error}", exc_info=True)
-
-        logging.info("Multi-AP scan capture function completed")
+        logging.debug(
+            "Initialized MultiApScanCaptureWorkflow for site_id=%s", site_id
+        )  # Log workflow construction completion for traceability.
+        workflow.run(site_id)  # Delegate execution to extracted workflow while preserving facade signature.
+        logging.debug(
+            "Completed delegated _start_site_scan_capture_all_aps workflow"
+        )  # Log delegated workflow completion.
 
     def _execute_site_capture(self, site_id: str, payload: dict):  # type: ignore[no-untyped-def, type-arg]
         """
@@ -7333,7 +7175,7 @@ class _LegacyPacketCaptureManager:
             print(f"\n! Error starting capture: {error}")
             logging.error(f"Exception in _execute_site_capture: {error}", exc_info=True)
 
-    def _execute_site_capture_loop(self, site_id: str, payload: dict):  # type: ignore[no-untyped-def, type-arg]  # noqa: C901, PLR0912, PLR0915
+    def _execute_site_capture_loop_legacy(self, site_id: str, payload: dict):  # type: ignore[no-untyped-def, type-arg]  # noqa: C901, PLR0912, PLR0915
         """
         Execute site-level packet captures in continuous loop mode.
 
@@ -7549,6 +7391,11 @@ class _LegacyPacketCaptureManager:
             print(f"\n! Unexpected error in capture loop: {loop_error}")
             logging.error(f"Exception in capture loop: {loop_error}", exc_info=True)
 
+    def _execute_site_capture_loop(self, site_id: str, payload: dict):  # type: ignore[no-untyped-def, type-arg]
+        """Delegated site capture loop entrypoint preserved for compatibility."""
+        extracted_manager = ExtractedPacketCaptureManager(self.mist_session, self.org_id)
+        extracted_manager._execute_site_capture_loop(site_id, payload)
+
     def _wait_for_capture_completion(
         self,
         site_id: str,
@@ -7643,7 +7490,7 @@ class _LegacyPacketCaptureManager:
         logging.warning(f"Capture {capture_id} completion check timed out after {max_wait}s")
         return False
 
-    def start_org_packet_capture(self):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
+    def start_org_packet_capture_legacy(self):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
         """
         Interactive menu for starting org-level packet captures (MxEdge only).
 
@@ -8004,6 +7851,11 @@ class _LegacyPacketCaptureManager:
         # Execute org capture
         self._execute_org_capture(payload)
 
+    def start_org_packet_capture(self):  # type: ignore[no-untyped-def]
+        """Delegated org packet capture entrypoint preserved for compatibility."""
+        extracted_manager = ExtractedPacketCaptureManager(self.mist_session, self.org_id)
+        extracted_manager.start_org_packet_capture()
+
     def _execute_org_capture(self, payload: dict):  # type: ignore[no-untyped-def, type-arg]
         """
         Execute org-level packet capture via API.
@@ -8183,352 +8035,51 @@ class _LegacyPacketCaptureManager:
             print(f"\n! Error subscribing to stream: {error}")
             logging.error(f"Exception in _subscribe_to_org_capture_stream: {error}", exc_info=True)
 
-    def _wait_and_download_pcap(self, site_id: str, capture_id: str, duration: int):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Wait for PCAP capture to complete and download the file.
+    def _wait_and_download_pcap(self, site_id: str, capture_id: str, duration: int):  # type: ignore[no-untyped-def]
+        """Compatibility facade that delegates site PCAP wait/download to extracted workflow."""
+        logging.info(
+            "Preparing site PCAP wait/download dependencies for capture_id=%s", capture_id
+        )  # Log before runtime dependency import.
+        import requests  # Import requests lazily to preserve existing startup behavior and test patching points.
 
-        When format='pcap', the Mist cloud saves the capture as a PCAP file
-        and provides a download URL via the pcap_url field.
+        logging.debug("Loaded requests module for site PCAP wait/download facade")  # Log successful dependency import.
 
-        Args:
-            site_id (str): Site UUID
-            capture_id (str): Capture session ID returned from API
-            duration (int): Expected capture duration in seconds
-        """
-        import time
-        from pathlib import Path
+        logging.info(
+            "Delegating _wait_and_download_pcap to SitePcapWaitDownloadWorkflow"
+        )  # Log before constructing extracted wait/download workflow.
+        workflow = SitePcapWaitDownloadWorkflow(  # Build extracted workflow with manager/session/API dependencies.
+            manager=self,
+            mistapi_module=mistapi,
+            requests_module=requests,
+        )
+        logging.debug(
+            "Initialized SitePcapWaitDownloadWorkflow for capture_id=%s", capture_id
+        )  # Log workflow initialization completion.
+        workflow.execute(site_id, capture_id, duration)  # Delegate to extracted workflow preserving facade behavior.
+        logging.debug("Completed delegated _wait_and_download_pcap workflow")  # Log delegated workflow completion.
 
-        import requests
+    def _wait_and_download_pcap_org(self, org_id: str, capture_id: str, duration: int):  # type: ignore[no-untyped-def]
+        """Compatibility facade that delegates org PCAP wait/download to extracted workflow."""
+        logging.info(
+            "Preparing org PCAP wait/download dependencies for capture_id=%s", capture_id
+        )  # Log before runtime dependency import.
+        import requests  # Import requests lazily to preserve existing startup behavior and test patching points.
 
-        pcap_url = None  # Initialize before try block to fix possibly unbound warning
+        logging.debug("Loaded requests module for org PCAP wait/download facade")  # Log successful dependency import.
 
-        try:
-            print(f"\n* Capture initiated (ID: {capture_id})")
-            print(f"  Duration: {duration} seconds (plus processing time)")
-            print("  Polling for PCAP file availability...")
-            print("  Press Ctrl+C to cancel wait and check portal manually")
-
-            # Poll for the PCAP file availability
-            # Start polling immediately - the capture runs on the Mist cloud
-            max_wait_time = duration + 120  # Capture duration + 2 minutes buffer
-            poll_interval = 5  # Check every 5 seconds
-            max_polls = max_wait_time // poll_interval
-            start_time = time.time()
-
-            for poll_attempt in range(1, max_polls + 1):
-                try:
-                    elapsed = int(time.time() - start_time)
-
-                    # List captures for this site to find our capture_id
-                    logging.debug(f"Poll attempt {poll_attempt}: Querying listSitePacketCaptures for site {site_id}")
-                    response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(self.mist_session, site_id)
-
-                    logging.debug(f"Poll attempt {poll_attempt}: Response status={response.status_code}")
-
-                    if response.status_code == 200:
-                        raw_data = response.data
-                        logging.debug(f"Poll attempt {poll_attempt}: Received raw data type: {type(raw_data)}")
-
-                        # Handle case where API returns dict with 'results' key
-                        if isinstance(raw_data, dict) and "results" in raw_data:
-                            captures = raw_data["results"]
-                            logging.debug(
-                                f"Poll attempt {poll_attempt}: Extracted 'results' key containing {len(captures)} items"
-                            )
-                        elif isinstance(raw_data, list):
-                            captures = raw_data
-                            logging.debug(
-                                f"Poll attempt {poll_attempt}: Data is already a list with {len(captures)} items"
-                            )
-                        else:
-                            logging.warning(f"Poll attempt {poll_attempt}: Unexpected data structure: {type(raw_data)}")
-                            logging.warning(f"  Raw data: {raw_data}")
-                            time.sleep(poll_interval)
-                            continue
-
-                        # Log the captures list structure
-                        if captures:
-                            logging.debug(f"Poll attempt {poll_attempt}: Processing {len(captures)} captures")
-
-                        # Find our capture in the list
-                        found_capture = False
-                        for capture in captures:
-                            # Handle case where capture might be a string or other type
-                            if not isinstance(capture, dict):
-                                logging.warning(
-                                    f"Poll attempt {poll_attempt}: Capture is {type(capture)}, not dict: {capture}"
-                                )
-                                continue
-
-                            cap_id = capture.get("id")
-                            if cap_id == capture_id:
-                                found_capture = True
-                                pcap_url = capture.get("pcap_url")
-
-                                # Log all relevant fields from the capture object
-                                logging.debug(f"Poll attempt {poll_attempt}: Found our capture {capture_id}")
-                                logging.debug(f"  - enabled: {capture.get('enabled')}")
-                                logging.debug(f"  - format: {capture.get('format')}")
-                                logging.debug(f"  - type: {capture.get('type')}")
-                                logging.debug(f"  - ap_count: {capture.get('ap_count')}")
-                                logging.debug(f"  - duration: {capture.get('duration')}")
-                                logging.debug(f"  - expiry: {capture.get('expiry')}")
-                                logging.debug(f"  - timestamp: {capture.get('timestamp')}")
-                                logging.debug(f"  - pcap_url: {pcap_url if pcap_url else 'NOT SET YET'}")
-
-                                if pcap_url:
-                                    print(f"\r* PCAP file ready for download (after {elapsed}s)                    ")
-                                    logging.info(f"PCAP URL available after {elapsed}s: {pcap_url}")
-                                    break
-                                else:
-                                    logging.debug("  - Capture found but pcap_url not yet available (still processing)")
-
-                        if not found_capture:
-                            logging.debug(
-                                f"Poll attempt {poll_attempt}: Our capture {capture_id} not found in list of {len(captures)} captures"  # noqa: E501
-                            )
-                            if captures:
-                                # Safely extract IDs, handling non-dict items
-                                capture_ids = [c.get("id") if isinstance(c, dict) else str(c) for c in captures]
-                                logging.debug(f"  Available capture IDs: {capture_ids}")
-
-                        if pcap_url:
-                            break
-                    else:
-                        logging.warning(f"Poll attempt {poll_attempt}: API returned status {response.status_code}")
-                        error_detail = response.data if hasattr(response, "data") else "No details"
-                        logging.warning(f"  Error details: {error_detail}")
-
-                    # Continue waiting if not found yet
-                    if poll_attempt < max_polls:
-                        print(
-                            f"  Waiting for PCAP file... {elapsed}s elapsed (checking every {poll_interval}s)    ",
-                            end="\r",
-                        )
-                        time.sleep(poll_interval)
-
-                except Exception as poll_error:
-                    logging.error(f"Poll attempt {poll_attempt} exception: {poll_error}", exc_info=True)
-                    time.sleep(poll_interval)
-
-            if not pcap_url:
-                elapsed_total = int(time.time() - start_time)
-                print(f"\r! PCAP file URL not available after waiting {elapsed_total} seconds                    ")
-                print(f"  The capture may still be processing. Check the Mist portal for capture ID: {capture_id}")
-                return
-
-            # Download the PCAP file
-            print("\n* Downloading PCAP file...")
-            download_response = requests.get(pcap_url, timeout=300)
-
-            if download_response.status_code == 200:
-                # Save to data directory with sanitized filename
-                output_dir = Path("data")
-                output_dir.mkdir(exist_ok=True)
-
-                output_filename = output_dir / f"PacketCapture_{capture_id}.pcap"
-
-                with open(output_filename, "wb") as pcap_file:
-                    pcap_file.write(download_response.content)
-
-                file_size_mb = len(download_response.content) / (1024 * 1024)
-                print("\n* PCAP file downloaded successfully")
-                print(f"  Location: {output_filename}")
-                print(f"  Size: {file_size_mb:.2f} MB")
-                print("\n  Open with Wireshark or other PCAP analysis tools")
-
-                logging.info(f"PCAP file downloaded: {output_filename} ({file_size_mb:.2f} MB)")
-
-            else:
-                print("\n! Failed to download PCAP file")
-                print(f"  HTTP Status: {download_response.status_code}")
-                print(f"  You can try downloading manually from: {pcap_url}")
-                logging.error(f"PCAP download failed: HTTP {download_response.status_code}")
-
-        except KeyboardInterrupt:
-            print("\n\n! Download cancelled by user")
-            print(f"  Capture ID: {capture_id}")
-            if pcap_url:
-                print(f"  Download manually from: {pcap_url}")
-
-        except Exception as error:
-            print(f"\n! Error downloading PCAP file: {error}")
-            logging.error(f"Exception in _wait_and_download_pcap: {error}", exc_info=True)
-            if pcap_url:
-                print(f"  Try downloading manually from: {pcap_url}")
-
-    def _wait_and_download_pcap_org(self, org_id: str, capture_id: str, duration: int):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Wait for org-level PCAP capture to complete and download the file.
-
-        When format='pcap', the Mist cloud saves the capture as a PCAP file
-        and provides a download URL via the pcap_url field.
-
-        Args:
-            org_id (str): Organization UUID
-            capture_id (str): Capture session ID returned from API
-            duration (int): Expected capture duration in seconds
-        """
-        import time
-        from pathlib import Path
-
-        import requests
-
-        pcap_url = None  # Initialize before try block to fix possibly unbound warning
-
-        try:
-            print(f"\n* Capture initiated (ID: {capture_id})")
-            print(f"  Duration: {duration} seconds (plus processing time)")
-            print("  Polling for PCAP file availability...")
-            print("  Press Ctrl+C to cancel wait and check portal manually")
-
-            # Poll for the PCAP file availability
-            # Start polling immediately - the capture runs on the Mist cloud
-            max_wait_time = duration + 120  # Capture duration + 2 minutes buffer
-            poll_interval = 5  # Check every 5 seconds
-            max_polls = max_wait_time // poll_interval
-            start_time = time.time()
-
-            for poll_attempt in range(1, max_polls + 1):
-                try:
-                    elapsed = int(time.time() - start_time)
-
-                    # List captures for this org to find our capture_id
-                    logging.debug(f"Poll attempt {poll_attempt}: Querying listOrgPacketCaptures for org {org_id}")
-                    response = mistapi.api.v1.orgs.pcaps.listOrgPacketCaptures(self.mist_session, org_id)
-
-                    logging.debug(f"Poll attempt {poll_attempt}: Response status={response.status_code}")
-
-                    if response.status_code == 200:
-                        raw_data = response.data
-                        logging.debug(f"Poll attempt {poll_attempt}: Received raw data type: {type(raw_data)}")
-
-                        # Handle case where API returns dict with 'results' key
-                        if isinstance(raw_data, dict) and "results" in raw_data:
-                            captures = raw_data["results"]
-                            logging.debug(
-                                f"Poll attempt {poll_attempt}: Extracted 'results' key containing {len(captures)} items"
-                            )
-                        elif isinstance(raw_data, list):
-                            captures = raw_data
-                            logging.debug(
-                                f"Poll attempt {poll_attempt}: Data is already a list with {len(captures)} items"
-                            )
-                        else:
-                            logging.warning(f"Poll attempt {poll_attempt}: Unexpected data structure: {type(raw_data)}")
-                            logging.warning(f"  Raw data: {raw_data}")
-                            time.sleep(poll_interval)
-                            continue
-
-                        # Log the captures list structure
-                        if captures:
-                            logging.debug(f"Poll attempt {poll_attempt}: Processing {len(captures)} captures")
-
-                        # Find our capture in the list
-                        found_capture = False
-                        for capture in captures:
-                            # Handle case where capture might be a string or other type
-                            if not isinstance(capture, dict):
-                                logging.warning(
-                                    f"Poll attempt {poll_attempt}: Capture is {type(capture)}, not dict: {capture}"
-                                )
-                                continue
-
-                            cap_id = capture.get("id")
-                            if cap_id == capture_id:
-                                found_capture = True
-                                pcap_url = capture.get("pcap_url")
-
-                                # Log all relevant fields from the capture object
-                                logging.debug(f"Poll attempt {poll_attempt}: Found our capture {capture_id}")
-                                logging.debug(f"  - enabled: {capture.get('enabled')}")
-                                logging.debug(f"  - format: {capture.get('format')}")
-                                logging.debug(f"  - type: {capture.get('type')}")
-                                logging.debug(f"  - duration: {capture.get('duration')}")
-                                logging.debug(f"  - expiry: {capture.get('expiry')}")
-                                logging.debug(f"  - timestamp: {capture.get('timestamp')}")
-                                logging.debug(f"  - pcap_url: {pcap_url if pcap_url else 'NOT SET YET'}")
-
-                                if pcap_url:
-                                    print(f"\r* PCAP file ready for download (after {elapsed}s)                    ")
-                                    logging.info(f"PCAP URL available after {elapsed}s: {pcap_url}")
-                                    break
-                                else:
-                                    logging.debug("  - Capture found but pcap_url not yet available (still processing)")
-
-                        if not found_capture:
-                            logging.debug(
-                                f"Poll attempt {poll_attempt}: Our capture {capture_id} not found in list of {len(captures)} captures"  # noqa: E501
-                            )
-                            if captures:
-                                # Safely extract IDs, handling non-dict items
-                                capture_ids = [c.get("id") if isinstance(c, dict) else str(c) for c in captures]
-                                logging.debug(f"  Available capture IDs: {capture_ids}")
-
-                        if pcap_url:
-                            break
-                    else:
-                        logging.warning(f"Poll attempt {poll_attempt}: API returned status {response.status_code}")
-                        error_detail = response.data if hasattr(response, "data") else "No details"
-                        logging.warning(f"  Error details: {error_detail}")
-
-                    # Continue waiting if not found yet
-                    if poll_attempt < max_polls:
-                        print(
-                            f"  Waiting for PCAP file... {elapsed}s elapsed (checking every {poll_interval}s)    ",
-                            end="\r",
-                        )
-                        time.sleep(poll_interval)
-
-                except Exception as poll_error:
-                    logging.error(f"Poll attempt {poll_attempt} exception: {poll_error}", exc_info=True)
-                    time.sleep(poll_interval)
-
-            if not pcap_url:
-                elapsed_total = int(time.time() - start_time)
-                print(f"\r! PCAP file URL not available after waiting {elapsed_total} seconds                    ")
-                print(f"  The capture may still be processing. Check the Mist portal for capture ID: {capture_id}")
-                return
-
-            # Download the PCAP file
-            print("\n* Downloading PCAP file...")
-            download_response = requests.get(pcap_url, timeout=300)
-
-            if download_response.status_code == 200:
-                # Save to data directory with sanitized filename
-                output_dir = Path("data")
-                output_dir.mkdir(exist_ok=True)
-
-                output_filename = output_dir / f"PacketCapture_org_{capture_id}.pcap"
-
-                with open(output_filename, "wb") as pcap_file:
-                    pcap_file.write(download_response.content)
-
-                file_size_mb = len(download_response.content) / (1024 * 1024)
-                print("\n* PCAP file downloaded successfully")
-                print(f"  Location: {output_filename}")
-                print(f"  Size: {file_size_mb:.2f} MB")
-                print("\n  Open with Wireshark or other PCAP analysis tools")
-
-                logging.info(f"Org PCAP file downloaded: {output_filename} ({file_size_mb:.2f} MB)")
-
-            else:
-                print("\n! Failed to download PCAP file")
-                print(f"  HTTP Status: {download_response.status_code}")
-                print(f"  You can try downloading manually from: {pcap_url}")
-                logging.error(f"Org PCAP download failed: HTTP {download_response.status_code}")
-
-        except KeyboardInterrupt:
-            print("\n\n! Download cancelled by user")
-            print(f"  Capture ID: {capture_id}")
-            if pcap_url:
-                print(f"  Download manually from: {pcap_url}")
-
-        except Exception as error:
-            print(f"\n! Error downloading PCAP file: {error}")
-            logging.error(f"Exception in _wait_and_download_pcap_org: {error}", exc_info=True)
-            if pcap_url:
-                print(f"  Try downloading manually from: {pcap_url}")
+        logging.info(
+            "Delegating _wait_and_download_pcap_org to OrgPcapWaitDownloadWorkflow"
+        )  # Log before constructing extracted org wait/download workflow.
+        workflow = OrgPcapWaitDownloadWorkflow(  # Build extracted org workflow with manager/session/API dependencies.
+            manager=self,
+            mistapi_module=mistapi,
+            requests_module=requests,
+        )
+        logging.debug(
+            "Initialized OrgPcapWaitDownloadWorkflow for capture_id=%s", capture_id
+        )  # Log workflow initialization completion.
+        workflow.execute(org_id, capture_id, duration)  # Delegate to extracted org workflow preserving facade behavior.
+        logging.debug("Completed delegated _wait_and_download_pcap_org workflow")  # Log delegated workflow completion.
 
     def _export_capture_info_to_csv(self, capture_data: dict, scope: str, scope_id: str):  # type: ignore[no-untyped-def, type-arg]
         """
@@ -12169,6 +11720,21 @@ class OrgAlarmEventExporter:
 
     @staticmethod
     def device_events_52w() -> None:
+        """Delegated 52-week device event export entrypoint."""
+        exporter = DeviceEvents52wExporter(
+            apisession=apisession,
+            mistapi=mistapi,
+            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
+            data_processing_utils=DataProcessingUtils,
+            data_exporter=DataExporter,
+            output_format=OUTPUT_FORMAT,
+            database_path=DATABASE_PATH,
+            logger=logging,
+        )
+        exporter.export()
+
+    @staticmethod
+    def device_events_52w_legacy() -> None:
         """
         Export all org device events from the last 52 weeks to OrgDeviceEvents_52w.csv.
 
@@ -16037,158 +15603,28 @@ class SiteClientExporter:
         return PacketCaptureManager.normalize_mac_address(client_mac)
 
     @staticmethod
-    def wifi_clients(site_id=None):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-        """
-        Exports all currently connected WiFi clients and their session data for a selected site to SiteWiFiClients.CSV.
-        Fetches both wireless client data and wireless client session data, then merges them based on MAC address.
-        If site_id is not provided, prompts user to select from site list.
-
-        The merged data includes:
-        - Current client information (if available)
-        - Session data for each client (prefixed with 'session_')
-        - Session count for clients with multiple sessions
-        - Sessions without corresponding current clients (marked as 'session_only')
-        """
-        print("Export Site WiFi Clients:")
-        logging.info("Starting export of site WiFi clients...")
-
-        # Ensure required CSVs are fresh
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-
-        # Get site_id if not provided
-        if not site_id:
-            site_id = PromptUtils.select_site_id_from_csv("SiteList.csv")
-            if not site_id:
-                logging.error(" No site selected.")
-                print(" No site selected.")
-                return
-
-        # Get site name for display
-        site_name = "Unknown Site"
-        try:
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-            with open(site_list_path, encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    if row.get("id") == site_id:
-                        site_name = row.get("name", "Unknown Site")
-                        break
-        except Exception as exception:
-            logging.warning(f"! Failed to load site name from SiteList.csv: {exception}")
-
-        logging.info(f"Fetching WiFi clients for site: {site_name} (ID: {site_id})")
-        print(f"! Fetching WiFi clients for site: {site_name}")
-
-        try:
-            # Call the Mist API to search for wireless clients at the site
-            logging.info("Fetching wireless clients data...")
-            client_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id, limit=1000)
-            clients = mistapi.get_all(response=client_response, mist_session=apisession)
-
-            # Call the Mist API to search for wireless client sessions at the site
-            logging.info("Fetching wireless client sessions data...")
-            session_response = mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions(
-                apisession, site_id, limit=1000
+    def wifi_clients(site_id=None):  # type: ignore[no-untyped-def]
+        """Compatibility facade that delegates WiFi client export to extracted exporter."""
+        logging.info(
+            "Delegating wifi_clients to WifiClientsExporter"
+        )  # Log before constructing extracted exporter dependencies.
+        exporter = (
+            WifiClientsExporter(  # Build extracted exporter with existing utility dependencies to preserve behavior.
+                cache_utils=CacheUtils,
+                org_site_exporter=OrgSiteExporter,
+                prompt_utils=PromptUtils,
+                file_path_utils=FilePathUtils,
+                data_processing_utils=DataProcessingUtils,
+                data_exporter=DataExporter,
+                mistapi_module=mistapi,
+                apisession=apisession,
             )
-            sessions = mistapi.get_all(response=session_response, mist_session=apisession)
-
-            if not clients and not sessions:
-                logging.warning(" No WiFi clients or sessions found at this site.")
-                print(" No WiFi clients or sessions found at this site.")
-                # Create empty CSV with headers
-                wifi_clients_path = FilePathUtils.get_csv_path("SiteWiFiClients.CSV")
-                with open(wifi_clients_path, "w", newline="", encoding="utf-8") as file_handle:
-                    writer = csv.writer(file_handle)
-                    writer.writerow(["site_id", "site_name", "message"])
-                    writer.writerow([site_id, site_name, "No WiFi clients or sessions found"])
-                return
-
-            # Create a dictionary to store session data by MAC address for easy lookup
-            sessions_by_mac: dict[str, list[dict[str, Any]]] = {}
-            if sessions:
-                for session in sessions:
-                    mac = session.get("mac")
-                    if mac:
-                        if mac not in sessions_by_mac:
-                            sessions_by_mac[mac] = []
-                        sessions_by_mac[mac].append(session)
-
-            # Merge client data with session data based on MAC address
-            enriched_clients = []
-            processed_macs = set()
-
-            # Process clients and merge with matching sessions
-            if clients:
-                for client in clients:
-                    client_mac = client.get("mac")
-                    # Add site information
-                    client["site_id"] = site_id
-                    client["site_name"] = site_name
-                    client["data_source"] = "client"
-
-                    # Merge with session data if available
-                    if client_mac and client_mac in sessions_by_mac:
-                        session_list = sessions_by_mac[client_mac]
-                        latest_session = max(
-                            session_list,
-                            key=lambda x: x.get("start_time", 0),
-                        )
-                        for key, value in latest_session.items():
-                            if key not in client:
-                                client[f"session_{key}"] = value
-                        client["session_count"] = len(session_list)
-                        processed_macs.add(client_mac)
-                    else:
-                        client["session_count"] = 0
-
-                    enriched_clients.append(client)
-
-            # Add any sessions that don't have corresponding client data
-            if sessions:
-                for session in sessions:
-                    session_mac = session.get("mac")
-                    if session_mac and session_mac not in processed_macs:
-                        # This is a session without a corresponding current client
-                        session["site_id"] = site_id
-                        session["site_name"] = site_name
-                        session["data_source"] = "session_only"
-                        session["session_count"] = 1
-                        # Prefix session-specific fields to avoid conflicts
-                        session_data: dict[str, Any] = {}
-                        for key, value in session.items():
-                            if key not in ["site_id", "site_name", "data_source", "session_count"]:
-                                session_data[f"session_{key}"] = value
-                            else:
-                                session_data[key] = value
-                        enriched_clients.append(session_data)
-
-            if not enriched_clients:
-                logging.warning(" No data to export after processing.")
-                print(" No data to export after processing.")
-                return
-
-            # Flatten and sanitize the data for CSV
-            flattened = DataProcessingUtils.flatten_nested_fields(enriched_clients)
-            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-
-            # Write to CSV
-            DataExporter.save_data_to_output(sanitized, "SiteWiFiClients.CSV")  # type: ignore[no-untyped-call]
-
-            client_count = len(clients) if clients else 0
-            session_count = len(sessions) if sessions else 0
-            total_records = len(enriched_clients)
-
-            logging.info(
-                f"! WiFi data exported to SiteWiFiClients.CSV ({client_count} clients, {session_count} sessions, {total_records} total records)"  # noqa: E501
-            )
-            print("! WiFi data exported to SiteWiFiClients.CSV")
-            print(
-                f"   {client_count} current clients, {session_count} sessions, {total_records} total records from {site_name}"  # noqa: E501
-            )
-
-        except Exception as exception:
-            logging.error(f"! Failed to fetch WiFi data for site {site_id}: {exception}")
-            print(f"! Failed to fetch WiFi data: {exception}")
+        )
+        logging.debug(
+            "Initialized WifiClientsExporter for site_id=%s", site_id
+        )  # Log exporter construction completion.
+        exporter.execute(site_id=site_id)  # Delegate export execution while preserving facade signature.
+        logging.debug("Completed delegated wifi_clients export workflow")  # Log delegated exporter completion.
 
     @staticmethod
     def beacons():  # type: ignore[no-untyped-def]
@@ -19451,7 +18887,7 @@ class _LegacyGatewayExportUtils:
         logging.info(" Gateway templates exported to OrgGatewayTemplates.csv")
 
     @staticmethod
-    def with_wan_overrides(fast: bool = False) -> None:  # noqa: C901, PLR0912, PLR0915
+    def with_wan_overrides_legacy(fast: bool = False) -> None:  # noqa: C901, PLR0912, PLR0915
         """
         Generates a CSV report of gateways with ports that are overridden from their template configuration.
         This helps identify outliers that need to be corrected back to template compliance.
@@ -19834,6 +19270,11 @@ class _LegacyGatewayExportUtils:
 
         if total_overridden_ports == 0:
             print(" No template overrides found - all gateways are compliant with their assigned templates!")
+
+    @staticmethod
+    def with_wan_overrides(fast: bool = False) -> None:
+        """Delegated gateway WAN override analysis entrypoint preserved for compatibility."""
+        GatewayExportUtils.with_wan_overrides(fast=fast)
 
     @staticmethod
     def _get_devices_with_sites(org_id: str, fast: bool = False) -> list[tuple[str, str, str, str]]:
@@ -27986,199 +27427,44 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
         return False
 
 
-def run_interactive_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
-    """
-    Run systematic test of read-only interactive menu options.
-
-    This function tests menu options that are:
-    - Read-only (GET operations only)
-    - Require interactive site/device/client selection
-    - Safe for automated testing (no destructive operations)
-
-    This complements run_systematic_test() by covering interactive operations
-    that require user input for selection purposes.
-
-    Returns:
-        bool: True if all tests passed, False if any failed
-    """
-    start_time = time.time()
-    print(" Starting interactive test of MistHelper menu options...")
-    print("  Note: This tests read-only operations requiring site/device/client selection")
-    print(f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 80)
-
-    # Use OperationRegistry for centralized classification
-    all_options = sorted(menu_actions.keys(), key=lambda x: float(x.replace("a", ".1")))
-    interactive_options = OperationRegistry.interactive_safe_options(all_options)
-    skip_list = [o for o in all_options if not OperationRegistry.is_interactive_safe(o)]
-
-    # DEPRECATED: Operation classification now centralized in OperationRegistry class.
-    # This dict is preserved for reference only; all runtime logic uses OperationRegistry.
-
-    # DEPRECATED: Operation classification now centralized in OperationRegistry class.
-    # This dict is preserved for reference only; all runtime logic uses OperationRegistry.
-
-    print(f"! Found {len(interactive_options)} interactive read-only options to test")
-    print(f"! {len(skip_list)} options will be skipped")
-    print()
-
-    # Show which interactive options will be tested
-    print(" Testing interactive read-only operations:")
-    for opt in interactive_options:
-        if opt in menu_actions:
-            _, description = menu_actions[opt]
-            print(f"   {opt:>3}: {description}")
-    print()
-
-    # Show which operations will be skipped
-    print(" Skipping non-interactive-safe operations:")
-    for opt in skip_list:
-        if opt in menu_actions:
-            reason = OperationRegistry.skip_reason(opt)
-            if reason:
-                print(f"   {opt:>3}: {reason}")
-    print()
-
-    # Open telemetry emitter with timestamped path
-    telemetry_path = TelemetryEmitter.timestamped_path("data")
-    emitter = TelemetryEmitter(telemetry_path)
-
-    # Emit skip events for non-interactive-safe operations
-    skip_count = 0
-    for opt in skip_list:
-        if opt in menu_actions:
-            _, op_name = menu_actions[opt]
-            emitter.emit_test_skip(
-                opt,
-                op_name,
-                OperationRegistry.skip_reason(opt),
-                OperationRegistry.skip_category(opt),
-                "interactive",
-            )
-            skip_count += 1
-
-    # Test interactive options
-    success_count = 0
-    error_count = 0
-
+def run_interactive_test():  # type: ignore[no-untyped-def]
+    """Compatibility facade that delegates interactive-safe tests to extracted runner."""
     global org_id
-    if not org_id:
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
 
-    # Get test site for interactive operations (optionally pinned via env var)
-    test_site_id = None
-    try:
-        print("   Fetching test site for interactive operations...")
-        site_selector = os.getenv("MIST_INTERACTIVE_TEST_SITE", "").strip()
-        test_site_name = "Unknown"
+    logging.info(
+        "Delegating run_interactive_test to InteractiveTestRunner"
+    )  # Log before helper creation and runner construction.
 
-        if site_selector:
-            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
-            sites_data = mistapi.get_all(response=sites_response, mist_session=apisession)
-            matching_site = next(
-                (
-                    site
-                    for site in sites_data
-                    if site.get("id") == site_selector or site.get("name", "").lower() == site_selector.lower()
-                ),
-                None,
-            )
-            if matching_site:
-                test_site_id = matching_site["id"]
-                test_site_name = matching_site.get("name", "Unknown")
-                print(f"   Using test site from MIST_INTERACTIVE_TEST_SITE: {test_site_name} ({test_site_id})")
-            else:
-                print(
-                    f"   Warning: MIST_INTERACTIVE_TEST_SITE='{site_selector}' not found; "
-                    "falling back to first available site."
-                )
-                logging.warning(
-                    "INTERACTIVE_TEST: MIST_INTERACTIVE_TEST_SITE '%s' not found; using first available site.",
-                    site_selector,
-                )
+    def _get_org_id():  # type: ignore[no-untyped-def]
+        return org_id  # Return current module-level org_id so extracted runner can read shared runtime context.
 
-        if not test_site_id:
-            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1)
-            if sites_response.data and len(sites_response.data) > 0:
-                test_site_id = sites_response.data[0]["id"]
-                test_site_name = sites_response.data[0].get("name", "Unknown")
-                print(f"   Using first available test site: {test_site_name} ({test_site_id})")
+    def _set_org_id(new_org_id):  # type: ignore[no-untyped-def]
+        global org_id
+        org_id = new_org_id  # Persist resolved org_id from runner back into module-level shared state.
 
-        if test_site_id:
-            logging.info(f"INTERACTIVE_TEST: Using test site_id={test_site_id} name={test_site_name}")
-        else:
-            print("[ERROR] No sites found in organization - cannot run interactive tests")
-            logging.error("INTERACTIVE_TEST: No sites available for testing")
-            emitter.close()
-            return False
-    except Exception as error:
-        print(f"[ERROR] Failed to fetch test site: {error}")
-        logging.error(f"INTERACTIVE_TEST: Failed to fetch test site: {error}")
-        emitter.close()
-        return False
-
-    print()
-
-    for i, option in enumerate(interactive_options, 1):
-        if option not in menu_actions:
-            continue
-        func, description = menu_actions[option]
-        print(f"   [{i:2}/{len(interactive_options)}] Testing option {option:>3}: {description[:60]}...")
-
-        emitter.emit_test_start(option, description, "interactive")
-        op_start = time.time()
-        logging.info(f"INTERACTIVE_TEST: Starting test of menu option {option} description='{description}'")
-
-        try:
-            sig = inspect.signature(func)  # type: ignore[arg-type]  # inspect.signature accepts any callable
-            invoke_kwargs = {}
-            if "site_id" in sig.parameters:
-                invoke_kwargs["site_id"] = test_site_id
-            func(**invoke_kwargs)  # type: ignore[operator, no-untyped-call]  # func is a callable from menu_actions
-            duration = time.time() - op_start
-            print(f"   [SUCCESS] Option {option} completed successfully")
-            success_count += 1
-            emitter.emit_test_pass(option, description, duration, "interactive")
-            logging.info(f"INTERACTIVE_TEST: Successfully completed menu option {option}")
-        except Exception as error:
-            duration = time.time() - op_start
-            print(f"   [FAILED]  Option {option} failed: {str(error)[:100]}...")
-            error_count += 1
-            emitter.emit_test_fail(option, description, duration, error, "interactive")
-            logging.error(f"INTERACTIVE_TEST: Failed menu option {option}: {error}")
-
-        # Small delay between tests to be respectful to the API
-        time.sleep(1)
-
-    # Emit summary and clean up telemetry
-    total_time = time.time() - start_time
-    total_ops = len(all_options)
-    emitter.emit_test_summary(total_ops, success_count, error_count, skip_count, total_time, "interactive")
-    emitter.close()
-    emitter.enforce_retention()
-    print()
-    print("=" * 80)
-    print(" Interactive Test Summary:")
-    print(f"   Successful operations: {success_count}")
-    print(f"   Failed operations: {error_count}")
-    print(f"   Skipped operations: {skip_count}")
-    print(
-        f"   Total interactive read-only coverage: {success_count}/{len(interactive_options)} ({success_count / len(interactive_options) * 100:.1f}%)"  # noqa: E501
+    logging.info(
+        "Constructing InteractiveTestRunner facade dependencies"
+    )  # Log before creating extracted runner instance.
+    runner = InteractiveTestRunner(  # Build extracted runner with runtime deps.
+        menu_actions=menu_actions,
+        operation_registry=OperationRegistry,
+        telemetry_emitter_cls=TelemetryEmitter,
+        config_utils=ConfigUtils,
+        mistapi_module=mistapi,
+        apisession=apisession,
+        org_id_getter=_get_org_id,
+        org_id_setter=_set_org_id,
     )
-    print(f"   Total execution time: {total_time:.2f} seconds")
-    print(f"   Telemetry written to: {telemetry_path}")
-    print("   Detailed logs in: script.log")
+    logging.debug("InteractiveTestRunner initialized successfully")  # Log runner construction completion.
 
-    if error_count == 0:
-        print("   All tested interactive operations completed successfully!")
-        logging.info(
-            f"INTERACTIVE_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s"
-        )
-        return True
-    else:
-        print(f"   {error_count} operations failed - check logs for details")
-        logging.warning(f"INTERACTIVE_TEST: {error_count} operations failed out of {len(interactive_options)} tested")
-        return False
+    logging.info(
+        "Executing delegated interactive test runner"
+    )  # Log before invoking extracted runner execution action.
+    result = runner.execute()  # Execute extracted interactive test workflow and capture boolean result.
+    logging.debug(
+        "Completed delegated run_interactive_test with result=%s", result
+    )  # Log delegated execution outcome summary.
+    return result  # Return delegated execution result to preserve prior function contract.
 
 
 def _launch_web_portal(args):  # type: ignore[no-untyped-def]

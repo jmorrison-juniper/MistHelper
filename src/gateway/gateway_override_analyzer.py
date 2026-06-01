@@ -60,6 +60,12 @@ class GatewayOverrideAnalyzer:
         print("Gateway Ports Overridden from Template (Compliance Outliers):")
         logging.info(" Identifying gateway ports with template overrides (outliers for compliance correction)...")
 
+        target_ports = MIST_WAN_TARGET_PORTS
+        if not target_ports:
+            print(" MIST_WAN_TARGET_PORTS not configured in .env - skipping port override analysis")
+            logging.warning("MIST_WAN_TARGET_PORTS environment variable not set")
+            return
+
         CacheUtils.check_and_generate_csv(
             "AllSiteGatewayConfigs.csv",
             lambda: GatewayExportUtilsRef.device_configs(fast=fast),
@@ -79,11 +85,6 @@ class GatewayOverrideAnalyzer:
         template_lookup = {template.get("id"): template.get("name", "Unknown Template") for template in templates}
 
         overridden_port_info = []
-        target_ports = MIST_WAN_TARGET_PORTS
-        if not target_ports:
-            print(" MIST_WAN_TARGET_PORTS not configured in .env - skipping port override analysis")
-            logging.warning("MIST_WAN_TARGET_PORTS environment variable not set")
-            return
 
         logging.info(" First pass: Identifying devices with port overrides...")
         devices_with_overrides = {}
