@@ -242,81 +242,183 @@ class MultiApScanCaptureWorkflow:
             "Displayed summary for %d APs with format %s", ap_count, capture_format
         )  # Log summary contents at a high level for auditability.
 
-    def run(self, site_id: str) -> None:
-        """Execute the extracted multi-AP scan capture workflow."""
-        logging.info(
-            "Starting multi-AP scan capture for site: %s", site_id
-        )  # Log workflow start with site scope for traceability.
-        logging.info("Fetching AP MAC inventory for site %s", site_id)  # Log before AP inventory lookup action.
-        ap_macs = self.device_utils.get_all_ap_macs_from_site(site_id)  # Retrieve AP MACs from site inventory source.
-        logging.debug(
-            "Retrieved %d AP MAC addresses for site %s", len(ap_macs), site_id
-        )  # Log inventory result summary.
-        if not ap_macs:
-            print("\n! No APs found at site")  # Preserve legacy operator message when no APs exist.
-            logging.warning(
-                "No AP MACs found for site %s; aborting workflow", site_id
-            )  # Log early exit reason for troubleshooting.
-            return  # Exit early because no APs means no valid capture targets.
-        print(f"\n* Found {len(ap_macs)} APs at site")  # Preserve legacy success message with AP count.
-        print("  Checking for existing captures...")  # Preserve operator cue before conflict courtesy check.
-        logging.info(
-            "Checking for existing site captures before launch"
-        )  # Log before courtesy API check for active captures.
+    def _check_existing_captures(self, site_id: str) -> None:
+        """Run a non-blocking courtesy lookup for existing site captures."""
+        logging.info("Checking for existing site captures before launch")  # Log before courtesy API check.
         try:
             response = self.mistapi_module.api.v1.sites.pcaps.listSitePacketCaptures(
                 self.manager.mist_session, site_id
             )  # Query current site capture list to surface potential conflicts.
             logging.debug(
                 "Existing-capture lookup returned HTTP status %s", response.status_code
-            )  # Log API response status for observability.
+            )  # Log API response status.
             if response.status_code == 200:
-                existing_captures = response.data or []  # Normalize empty response data to list for safe length checks.
+                existing_captures = response.data or []  # Normalize empty data to list.
                 if existing_captures:
                     logging.debug(
                         "%d capture(s) already in progress or recently completed", len(existing_captures)
-                    )  # Log discovered captures so operator diagnostics can correlate conflicts.
+                    )  # Log discovered captures for operator diagnostics.
         except Exception as check_error:
             logging.debug(
                 "Could not check for existing captures: %s", check_error
-            )  # Keep failure non-blocking to preserve legacy courtesy-check semantics.
-        print(
-            f"  Preparing to launch {len(ap_macs)} simultaneous captures..."
-        )  # Preserve operator cue before configuration prompts.
-        print("\n" + "-" * 80)  # Preserve legacy section separator in CLI output.
-        print(" SCAN RADIO CAPTURE CONFIGURATION (All APs)")  # Preserve legacy configuration header text.
-        print("-" * 80)  # Preserve legacy section separator for readability.
-        band = self._prompt_band()  # Prompt for band while preserving existing prompt flow order.
-        channel = self._prompt_channel(band)  # Prompt for channel constrained by selected band.
+            )  # Keep failure non-blocking to preserve legacy semantics.
+
+    def _gather_capture_config(self) -> dict[str, Any] | None:
+        """Prompt operator for capture parameters; return config dict or None on abort."""
+        band = self._prompt_band()  # Prompt for band first per legacy flow.
+        channel = self._prompt_channel(band)  # Prompt for channel constrained by band.
         if channel is None:
-            logging.warning(
-                "Channel selection invalid; aborting multi-AP capture workflow"
-            )  # Log early-exit reason for invalid channel input.
-            return  # Exit safely on invalid operator input to preserve legacy behavior.
-        bandwidth = self._prompt_bandwidth(band)  # Prompt for bandwidth after channel selection as legacy flow expects.
+            logging.warning("Channel selection invalid; aborting multi-AP capture workflow")  # Log abort reason.
+            return None  # Abort on invalid channel input.
+        bandwidth = self._prompt_bandwidth(band)  # Prompt for bandwidth after channel.
         duration = self._prompt_duration()  # Prompt for duration with bounds validation.
         if duration is None:
-            logging.warning(
-                "Duration selection invalid; aborting multi-AP capture workflow"
-            )  # Log early-exit reason for invalid duration.
-            return  # Exit safely on invalid duration input.
-        num_packets = self._prompt_num_packets()  # Prompt for packet limit after duration selection.
+            logging.warning("Duration selection invalid; aborting multi-AP capture workflow")  # Log abort reason.
+            return None  # Abort on invalid duration.
+        num_packets = self._prompt_num_packets()  # Prompt for packet limit.
         if num_packets is None:
-            logging.warning(
-                "Packet-count selection invalid; aborting multi-AP capture workflow"
-            )  # Log early-exit reason for invalid packet count.
-            return  # Exit safely on invalid packet input.
-        logging.info("Prompting operator for capture format selection")  # Log before format selection prompt.
-        capture_format = (
-            self.manager._get_capture_format_selection()
-        )  # Resolve desired capture output format from existing manager prompt.
-        logging.debug("Selected capture format: %s", capture_format)  # Log chosen format to aid troubleshooting.
+            logging.warning("Packet-count selection invalid; aborting multi-AP capture workflow")  # Log abort.
+            return None  # Abort on invalid packet count.
+        logging.info("Prompting operator for capture format selection")  # Log before format prompt.
+        capture_format = self.manager._get_capture_format_selection()  # Resolve capture format.
+        logging.debug("Selected capture format: %s", capture_format)  # Log chosen format.
+        return {
+            "band": band,
+            "channel": channel,
+            "bandwidth": bandwidth,
+            "duration": duration,
+            "num_packets": num_packets,
+            "capture_format": capture_format,
+        }  # Return aggregated config consumed by launch logic.
+
+    def _post_launch_action(self, capture_format: str, site_id: str, capture_id: str, duration: int) -> None:
+        """Dispatch post-launch wait/download or stream-subscribe based on capture format."""
+        if capture_format == "pcap":
+            print("\n> Waiting for PCAP file to be ready...")  # Preserve legacy wait message.
+            print("  This may take a few moments after capture completes.")  # Preserve legacy expectation message.
+            logging.info(
+                "Delegating to site PCAP wait/download workflow for capture_id=%s", capture_id
+            )  # Log before wait/download action.
+            self.manager._wait_and_download_pcap(site_id, capture_id, duration)  # Trigger wait/download.
+            logging.debug("Site PCAP wait/download workflow finished for capture_id=%s", capture_id)  # Log completion.
+        elif capture_format == "stream":
+            print(
+                "\n> Stream format selected - subscribe to WebSocket for real-time data"
+            )  # Preserve legacy stream guidance text.
+            logging.info(
+                "Delegating to site capture stream subscription for capture_id=%s", capture_id
+            )  # Log before stream subscription.
+            self.manager._subscribe_to_site_capture_stream(site_id, capture_id)  # Trigger stream subscription.
+            logging.debug(
+                "Site capture stream subscription flow completed for capture_id=%s", capture_id
+            )  # Log stream completion.
+
+    def _handle_launch_success(
+        self, result: dict[str, Any], site_id: str, ap_macs: list[str], capture_format: str, duration: int
+    ) -> None:
+        """Print success output, export metadata, and dispatch post-launch action."""
+        capture_id = result.get("id", "unknown")  # Extract capture identifier with safe fallback.
+        ap_count = result.get("ap_count", len(ap_macs))  # Extract AP count with fallback to requested size.
+        print("\n* Multi-AP capture started successfully!")  # Preserve legacy success banner.
+        print(f"  Capture ID: {capture_id}")  # Preserve legacy capture-id output.
+        print(f"  AP Count: {ap_count}")  # Preserve AP count output.
+        print(f"  Format: {capture_format}")  # Preserve format output.
+        print(f"  Duration: {duration} seconds")  # Preserve duration output.
+        print(f"  Expires: {result.get('expiry', 'unknown')}")  # Preserve expiry output.
+        logging.info(
+            "Multi-AP capture started: capture_id=%s, ap_count=%s", capture_id, ap_count
+        )  # Log capture start summary.
+        logging.info("Exporting capture metadata to output backend")  # Log before metadata export.
+        self.manager._export_capture_info_to_csv(result, "site", site_id)  # Persist capture metadata.
+        logging.debug("Capture metadata export completed for capture_id=%s", capture_id)  # Log export completion.
+        self._post_launch_action(capture_format, site_id, capture_id, duration)  # Dispatch on format.
+
+    def _handle_launch_error(self, response: Any) -> None:
+        """Print legacy error guidance for failed startSitePacketCapture responses."""
+        error_details = response.data if hasattr(response, "data") else "Unknown error"  # Normalize error details.
+        is_conflict = (
+            response.status_code == 400
+            and isinstance(error_details, dict)
+            and "Recording already in progress" in error_details.get("detail", "")
+        )  # Identify legacy conflict path.
+        if is_conflict:
+            print("\n! Capture(s) already in progress on one or more APs")  # Preserve legacy conflict message.
+            print("  Mist only allows one capture per AP at a time")  # Preserve legacy limitation message.
+            print(
+                "  Wait for existing captures to complete or check Mist portal to stop them"
+            )  # Preserve legacy remediation guidance.
+        else:
+            print(f"\n! Failed to start capture: {response.status_code}")  # Preserve generic failure message.
+            print(f"  Error details: {error_details}")  # Preserve detailed error output.
+        logging.error(
+            "Multi-AP capture failed: %s - %s", response.status_code, error_details
+        )  # Log API failure outcome.
+
+    def _launch_capture(self, site_id: str, ap_macs: list[str], config: dict[str, Any]) -> None:
+        """Build payload, call startSitePacketCapture, and dispatch success/error handlers."""
+        print(
+            f"\n> Launching multi-AP capture for {len(ap_macs)} APs with single API call..."
+        )  # Preserve launch message.
+        payload = self._build_payload(
+            ap_macs,
+            config["band"],
+            config["channel"],
+            config["bandwidth"],
+            config["duration"],
+            config["num_packets"],
+            config["capture_format"],
+        )  # Build full payload used by API call.
+        logging.debug("Payload ready for startSitePacketCapture request")  # Log payload readiness.
+        try:
+            logging.info("Calling startSitePacketCapture for site %s", site_id)  # Log before primary API action.
+            response = self.mistapi_module.api.v1.sites.pcaps.startSitePacketCapture(
+                self.manager.mist_session, site_id, payload
+            )  # Invoke start API.
+            logging.debug("startSitePacketCapture returned HTTP status %s", response.status_code)  # Log API status.
+            if response.status_code == 200:
+                self._handle_launch_success(
+                    response.data, site_id, ap_macs, config["capture_format"], config["duration"]
+                )  # Dispatch success path.
+            else:
+                self._handle_launch_error(response)  # Dispatch error path.
+        except Exception as error:
+            print(f"\n! Error starting multi-AP capture: {error}")  # Preserve legacy exception message.
+            logging.error(
+                "Exception launching multi-AP capture: %s", error, exc_info=True
+            )  # Log exception with traceback.
+
+    def run(self, site_id: str) -> None:
+        """Execute the extracted multi-AP scan capture workflow."""
+        logging.info("Starting multi-AP scan capture for site: %s", site_id)  # Log workflow start.
+        logging.info("Fetching AP MAC inventory for site %s", site_id)  # Log before inventory lookup.
+        ap_macs = self.device_utils.get_all_ap_macs_from_site(site_id)  # Retrieve AP MACs.
+        logging.debug("Retrieved %d AP MAC addresses for site %s", len(ap_macs), site_id)  # Log inventory result.
+        if not ap_macs:
+            print("\n! No APs found at site")  # Preserve legacy no-AP message.
+            logging.warning("No AP MACs found for site %s; aborting workflow", site_id)  # Log early-exit reason.
+            return  # Exit early because no APs means no valid targets.
+        print(f"\n* Found {len(ap_macs)} APs at site")  # Preserve legacy success message with AP count.
+        print("  Checking for existing captures...")  # Preserve operator cue before courtesy check.
+        self._check_existing_captures(site_id)  # Run non-blocking courtesy check.
+        print(f"  Preparing to launch {len(ap_macs)} simultaneous captures...")  # Preserve operator cue before prompts.
+        print("\n" + "-" * 80)  # Preserve legacy section separator.
+        print(" SCAN RADIO CAPTURE CONFIGURATION (All APs)")  # Preserve legacy configuration header.
+        print("-" * 80)  # Preserve legacy section separator.
+        config = self._gather_capture_config()  # Prompt for full capture configuration.
+        if config is None:
+            return  # Abort on invalid operator input.
         self._display_summary(
-            len(ap_macs), band, channel, bandwidth, duration, num_packets, capture_format
-        )  # Display full configuration summary before final confirmation.
+            len(ap_macs),
+            config["band"],
+            config["channel"],
+            config["bandwidth"],
+            config["duration"],
+            config["num_packets"],
+            config["capture_format"],
+        )  # Display configuration summary before final confirmation.
         logging.info(
             "Requesting final operator confirmation before starting capture"
-        )  # Log before explicit execution confirmation prompt.
+        )  # Log before confirmation prompt.
         self.input_utils.safe_input(  # Pause for explicit operator confirmation.
             f"\nPress Enter to start capture for {len(ap_macs)} APs (Ctrl+C to cancel): ",
             context="confirmation",
@@ -324,123 +426,6 @@ class MultiApScanCaptureWorkflow:
         )
         logging.debug(
             "Operator confirmation received; proceeding with multi-AP capture launch"
-        )  # Log confirmation completion before API call.
-        print(
-            f"\n> Launching multi-AP capture for {len(ap_macs)} APs with single API call..."
-        )  # Preserve operator launch message.
-        payload = self._build_payload(
-            ap_macs, band, channel, bandwidth, duration, num_packets, capture_format
-        )  # Build full payload used by start-capture API call.
-        logging.debug(
-            "Payload ready for startSitePacketCapture request"
-        )  # Log payload readiness before API invocation.
-        try:
-            logging.info("Calling startSitePacketCapture for site %s", site_id)  # Log before primary API action.
-            response = self.mistapi_module.api.v1.sites.pcaps.startSitePacketCapture(  # API call.
-                self.manager.mist_session,
-                site_id,
-                payload,
-            )
-            logging.debug(
-                "startSitePacketCapture returned HTTP status %s", response.status_code
-            )  # Log API status after launch attempt.
-            if response.status_code == 200:
-                result = response.data  # Capture API response body for downstream metadata and export steps.
-                capture_id = result.get(
-                    "id", "unknown"
-                )  # Extract capture identifier while preserving unknown fallback.
-                ap_count = result.get(
-                    "ap_count", len(ap_macs)
-                )  # Extract AP count fallback to requested list size for safety.
-                print(
-                    "\n* Multi-AP capture started successfully!"
-                )  # Preserve legacy success banner for operator feedback.
-                print(f"  Capture ID: {capture_id}")  # Preserve legacy capture-id output for operational tracking.
-                print(f"  AP Count: {ap_count}")  # Preserve AP count output for verification by operator.
-                print(f"  Format: {capture_format}")  # Preserve selected format output for operator awareness.
-                print(f"  Duration: {duration} seconds")  # Preserve duration output for operator awareness.
-                print(
-                    f"  Expires: {result.get('expiry', 'unknown')}"
-                )  # Preserve expiry output for operational planning.
-                logging.info(
-                    "Multi-AP capture started: capture_id=%s, ap_count=%s", capture_id, ap_count
-                )  # Log successful capture start summary.
-                logging.info("Exporting capture metadata to output backend")  # Log before metadata export side effect.
-                self.manager._export_capture_info_to_csv(
-                    result, "site", site_id
-                )  # Persist capture metadata using existing export pathway.
-                logging.debug(
-                    "Capture metadata export completed for capture_id=%s", capture_id
-                )  # Log metadata export completion.
-                if capture_format == "pcap":
-                    print(
-                        "\n> Waiting for PCAP file to be ready..."
-                    )  # Preserve legacy message before wait/download handoff.
-                    print(
-                        "  This may take a few moments after capture completes."
-                    )  # Preserve legacy expectation message for operator.
-                    logging.info(
-                        "Delegating to site PCAP wait/download workflow for capture_id=%s", capture_id
-                    )  # Log before wait/download action.
-                    self.manager._wait_and_download_pcap(
-                        site_id, capture_id, duration
-                    )  # Trigger downstream wait-and-download workflow for pcap format.
-                    logging.debug(
-                        "Site PCAP wait/download workflow finished for capture_id=%s", capture_id
-                    )  # Log completion of delegated wait/download action.
-                elif capture_format == "stream":
-                    print(
-                        "\n> Stream format selected - subscribe to WebSocket for real-time data"
-                    )  # Preserve legacy stream guidance text for operator.
-                    logging.info(
-                        "Delegating to site capture stream subscription for capture_id=%s", capture_id
-                    )  # Log before stream subscription action.
-                    self.manager._subscribe_to_site_capture_stream(
-                        site_id, capture_id
-                    )  # Trigger downstream stream subscription for realtime capture output.
-                    logging.debug(
-                        "Site capture stream subscription flow completed for capture_id=%s", capture_id
-                    )  # Log completion of delegated stream handling.
-            else:
-                error_details = (
-                    response.data if hasattr(response, "data") else "Unknown error"
-                )  # Normalize API error details for consistent reporting.
-                if response.status_code == 400 and isinstance(error_details, dict):
-                    detail = error_details.get(
-                        "detail", ""
-                    )  # Extract detail string for conflict-specific message handling.
-                    if "Recording already in progress" in detail:
-                        print(
-                            "\n! Capture(s) already in progress on one or more APs"
-                        )  # Preserve legacy conflict message for operator guidance.
-                        print(
-                            "  Mist only allows one capture per AP at a time"
-                        )  # Preserve legacy limitation message for clarity.
-                        print(
-                            "  Wait for existing captures to complete or check Mist portal to stop them"
-                        )  # Preserve legacy remediation guidance.
-                    else:
-                        print(
-                            f"\n! Failed to start capture: {response.status_code}"
-                        )  # Preserve generic API-failure message for operator visibility.
-                        print(
-                            f"  Error details: {error_details}"
-                        )  # Preserve detailed error output for troubleshooting by operator.
-                else:
-                    print(
-                        f"\n! Failed to start capture: {response.status_code}"
-                    )  # Preserve generic failure message for non-400 errors.
-                    print(f"  Error details: {error_details}")  # Preserve non-400 detail output for diagnostics.
-                logging.error(
-                    "Multi-AP capture failed: %s - %s", response.status_code, error_details
-                )  # Log API failure outcome with status and details.
-        except Exception as error:
-            print(
-                f"\n! Error starting multi-AP capture: {error}"
-            )  # Preserve legacy exception message for immediate operator visibility.
-            logging.error(
-                "Exception launching multi-AP capture: %s", error, exc_info=True
-            )  # Log exception with traceback for root-cause analysis.
-        logging.info(
-            "Multi-AP scan capture function completed"
-        )  # Log workflow completion so run boundary is explicit in logs.
+        )  # Log confirmation completion.
+        self._launch_capture(site_id, ap_macs, config)  # Launch capture and handle response.
+        logging.info("Multi-AP scan capture function completed")  # Log workflow completion boundary.
