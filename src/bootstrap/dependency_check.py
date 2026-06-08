@@ -43,11 +43,13 @@ class DependencyCheckOrchestrator:
 
     def _is_auto_install_disabled(self) -> bool:
         """Return True when early auto-install behavior is disabled."""
-        return self.os_module.getenv("DISABLE_AUTO_INSTALL", "false").lower() == "true"
+        # Cast to bool: os_module is Any-typed (injected dependency); == comparison could return Any.
+        return bool(self.os_module.getenv("DISABLE_AUTO_INSTALL", "false").lower() == "true")
 
     def _is_auto_upgrade_enabled(self) -> bool:
         """Return True when latest-version checks should be performed."""
-        return (
+        # Cast to bool: os_module is Any-typed (injected dependency); explicit bool ensures declared return type.
+        return bool(
             self.os_module.getenv(
                 "AUTO_UPGRADE_TO_LATEST",
                 self.os_module.getenv("AUTO_UPGRADE_DEPENDENCIES", "true"),

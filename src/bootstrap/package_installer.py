@@ -57,7 +57,7 @@ class PackageInstaller:
                 text=True,
                 timeout=30,
             )
-            return result.returncode == 0
+            return bool(result.returncode == 0)  # Cast to bool: result is Any-typed from injected subprocess module
         except Exception as error:
             self.logging_module.warning("Could not install UV: %s", error)
             return False
@@ -70,7 +70,7 @@ class PackageInstaller:
         command.extend(["--python", self.sys_module.executable, package_spec])
         try:
             result = self.subprocess_module.run(command, capture_output=True, text=True, timeout=60)
-            return result.returncode == 0
+            return bool(result.returncode == 0)  # Cast to bool: result is Any-typed from injected subprocess module
         except Exception as error:
             self.logging_module.warning("UV package action failed for %s: %s", package_spec, error)
             return False
@@ -83,7 +83,7 @@ class PackageInstaller:
         command.append(package_spec)
         try:
             result = self.subprocess_module.run(command, capture_output=True, text=True, timeout=60)
-            return result.returncode == 0
+            return bool(result.returncode == 0)  # Cast to bool: result is Any-typed from injected subprocess module
         except Exception as error:
             self.logging_module.error("Pip package action failed for %s: %s", package_spec, error)
             return False
