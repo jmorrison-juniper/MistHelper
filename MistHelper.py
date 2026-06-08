@@ -96,8 +96,9 @@ from src.audit.analyzer import AuditLogAnalyzer  # Import audit log analysis eng
 from src.audit.filter import AuditLogFilter  # Import audit log filtering to remove noise and system events
 from src.audit.renderer import AuditReportRenderer  # Import Mermaid timeline + HTML report rendering
 from src.audit.time_parser import TimeRangeParser  # Import audit log time range parsing (7d, 4w, etc.)
-from src.auth.interactive_session import (
-    InteractiveSessionManager,
+from src.auth.interactive import (
+    LoginOrchestrator,
+    MspOrgSelector,
 )  # Duplicate import (re-stated with comment below); kept to preserve module load behavior
 from src.bootstrap.dependency_check import (
     DependencyCheckOrchestrator,
@@ -2974,13 +2975,12 @@ def initialize_mist_session_interactive():
         "org_id": org_id,  # Currently selected org ID, if any
     }
 
-    session_manager = InteractiveSessionManager(  # Delegate the interactive flow to a dedicated manager
-        state=state,  # Pass the mutable state bag the manager will update
+    session_manager = LoginOrchestrator(  # Build the interactive login orchestrator with injected deps
+        state=state,  # Pass the mutable state bag the orchestrator will update
         safe_input=InputUtils.safe_input,  # Inject the EOF-safe input function
         detect_msp_privileges=detect_msp_privileges,  # Inject the MSP detection callback
-        select_org_from_session=_select_org_from_session,  # Inject the org selection callback
     )
-    login_success = session_manager.initialize_mist_session_interactive()  # Run the interactive login workflow
+    login_success = session_manager.execute()  # Run the interactive login workflow
 
     apisession = state.get("apisession")  # Copy the (possibly new) session back to the global
     mistapi = state.get("mistapi")  # Copy the SDK reference back to the global
@@ -3115,13 +3115,12 @@ def _select_msp_and_org():
         "org_id": org_id,  # Currently selected org ID, if any
     }
 
-    session_manager = InteractiveSessionManager(  # Delegate MSP/org selection to the dedicated manager
-        state=state,  # Pass the mutable state bag the manager will update
+    session_manager = MspOrgSelector(  # Build the MSP/org selector with injected deps
+        state=state,  # Pass the mutable state bag the selector will update
         safe_input=InputUtils.safe_input,  # Inject the EOF-safe input function
-        detect_msp_privileges=detect_msp_privileges,  # Inject the MSP detection callback
-        select_org_from_session=_select_org_from_session,  # Inject the org selection callback
+        select_org_fallback=_select_org_from_session,  # Inject the non-MSP fallback org selector
     )
-    session_manager.select_msp_and_org()  # Run the interactive MSP-then-org selection flow
+    session_manager.select()  # Run the interactive MSP-then-org selection flow
 
     apisession = state.get("apisession")  # Copy the (possibly switched) session back to the global
     mistapi = state.get("mistapi")  # Copy the SDK reference back to the global

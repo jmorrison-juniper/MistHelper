@@ -1,4 +1,4 @@
-"""Interactive Mist session collaborators for InteractiveSessionManager."""
+"""Interactive Mist session collaborators (login + MSP/org selection)."""
 
 from __future__ import annotations  # Defer annotation evaluation for forward refs
 
