@@ -84,128 +84,144 @@ class GatewayStatsExporter:
     WAN_PORT_COLUMNS = [f"if_stat_ge-{port}_ips" for port in ["0/0/0", "0/0/1", "0/0/2"]]
 
     @staticmethod
-    def device_stats(fast: bool = False) -> None:  # noqa: C901, PLR0912, PLR0915
+    def _fetch_one_device_stats(device_info, fast, connection_semaphore=None):
+        """Fetch single-device stats with bounded retry; return enriched dict or failure record."""
+        max_retries = FAST_MODE_MAX_RETRIES  # Use configured retry ceiling.
+        retry_delay = FAST_MODE_RETRY_DELAY  # Use configured base retry delay.
+        site_id, device_id, device_name, site_name = device_info  # Unpack device tuple.
+        for attempt in range(max_retries + 1):
+            try:
+                ValidationUtils.validate_site_id(site_id, "device_stats")  # Validate site_id before call.
+                ValidationUtils.validate_device_id(device_id, "device_stats")  # Validate device_id before call.
+                logging.info(
+                    "Calling getSiteDeviceStats for device %s at site %s", device_name, site_name
+                )  # Log before API call.
+                if connection_semaphore:
+                    with connection_semaphore:
+                        stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(
+                            apisession, site_id, device_id
+                        ).data  # Bounded-concurrent API call.
+                else:
+                    stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(
+                        apisession, site_id, device_id
+                    ).data  # Sequential API call.
+                stats["site_id"] = site_id  # Enrich record with site_id.
+                stats["site_name"] = site_name  # Enrich record with site_name.
+                stats["device_id"] = device_id  # Enrich record with device_id.
+                stats["device_name"] = device_name  # Enrich record with device_name.
+                if attempt > 0:
+                    logging.info(f"! Retry {attempt} successful for device {device_name} at site {site_name}")
+                else:
+                    logging.debug(f"! Collected device stats for gateway {device_name} at site {site_name}")
+                return stats  # Return enriched stats record.
+            except Exception as exception:
+                if attempt < max_retries:
+                    backoff_delay = retry_delay * (2**attempt) if not fast else retry_delay  # Compute backoff.
+                    logging.warning(
+                        f"! Attempt {attempt + 1} failed for device {device_name} at site {site_name}: {exception}"
+                    )
+                    logging.info(f"! Retrying in {backoff_delay} seconds...")
+                    time.sleep(backoff_delay)  # Sleep before retry.
+                else:
+                    logging.error(
+                        f"! Failed to fetch device stats for {device_name} at site {site_name} "
+                        f"after {max_retries + 1} attempts: {exception}"
+                    )
+                    return {
+                        "site_id": site_id,
+                        "site_name": site_name,
+                        "device_id": device_id,
+                        "device_name": device_name,
+                        "error": str(exception),
+                        "status": "failed",
+                    }  # Return failure record so downstream still tallies attempt.
+
+    @staticmethod
+    def _process_devices_concurrent(gateway_devices):
+        """Fetch device stats concurrently with thread pool; return aggregated results."""
+        logging.info(f"! Fast mode: Processing {len(gateway_devices)} gateway devices concurrently...")
+        max_workers = min(10, len(gateway_devices))  # Cap worker count to prevent connection overuse.
+        connection_semaphore = threading.Semaphore(max_workers)  # Bound concurrent connections.
+        all_stats: list = []  # Accumulate per-device stats records.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    GatewayStatsExporter._fetch_one_device_stats,
+                    device_info,
+                    True,
+                    connection_semaphore,
+                ): device_info
+                for device_info in gateway_devices
+            }  # Submit one task per gateway device.
+            for future in tqdm(
+                concurrent.futures.as_completed(futures),
+                total=len(futures),
+                desc="Gateway Device Stats",
+                unit="device",
+            ):
+                device_info = futures[future]  # Resolve original device tuple for error reporting.
+                try:
+                    result = future.result()  # Collect per-device result.
+                    if result:
+                        all_stats.append(result)  # Append non-empty result.
+                except Exception as exception:
+                    site_id, device_id, device_name, site_name = device_info  # Unpack for error log.
+                    logging.error(
+                        f"! Concurrent processing failed for device {device_name} at site {site_name}: {exception}"
+                    )
+        return all_stats  # Return aggregated stats list.
+
+    @staticmethod
+    def _process_devices_sequential(gateway_devices, fast):
+        """Fetch device stats sequentially; return aggregated results."""
+        logging.info(f"! Processing {len(gateway_devices)} gateway devices sequentially...")
+        all_stats: list = []  # Accumulate per-device stats records.
+        for index, device_info in enumerate(tqdm(gateway_devices, desc="Gateway Device Stats", unit="device"), 1):
+            _, _, device_name, site_name = device_info  # Unpack for progress log.
+            logging.debug(f"! Processing device {index}/{len(gateway_devices)}: {device_name} at {site_name}")
+            result = GatewayStatsExporter._fetch_one_device_stats(device_info, fast)  # Fetch single device.
+            if result:
+                all_stats.append(result)  # Append non-empty result.
+        return all_stats  # Return aggregated stats list.
+
+    @staticmethod
+    def _export_stats(all_stats, gateway_devices):
+        """Flatten, export, and summarize collected gateway device stats."""
+        if not all_stats:
+            logging.warning(" No gateway device statistics found. CSV not created.")
+            return  # Nothing to export.
+        sanitized = []  # Accumulate flattened records.
+        for stats in all_stats:
+            flat_record = DataProcessingUtils.flatten_dict(stats)  # Flatten nested dict for CSV.
+            sanitized.append(flat_record)  # Append flattened record.
+        filename = "AllGatewayDeviceStats.csv"  # Output filename preserved verbatim.
+        logging.info("Saving sanitized gateway stats to %s", filename)  # Log before save action.
+        DataExporter.save_data_to_output(sanitized, filename)  # Persist data to output backend.
+        logging.info(f"! Gateway device statistics saved to {filename} ({len(all_stats)} records).")
+        logging.info(f"! API Optimization: Collected detailed stats for {len(gateway_devices)} gateways")
+        successful_requests = len([stats for stats in all_stats if stats.get("status") != "failed"])
+        failed_requests = len(all_stats) - successful_requests  # Compute failure tally.
+        if failed_requests > 0:
+            logging.warning(f"! {failed_requests} requests failed out of {len(all_stats)} total")
+        else:
+            logging.info(f"! All {successful_requests} requests completed successfully")
+
+    @staticmethod
+    def device_stats(fast: bool = False) -> None:
         """Collect and export detailed gateway device statistics."""
         logging.info("[INFO] Collecting detailed device statistics for all gateways in the org...")
         if fast:
             logging.info(" Fast mode enabled: Using cached data and concurrent processing")
-
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        gateway_devices = GatewayExportUtilsRef._get_devices_with_sites(org_id, fast=fast)
-        all_stats = []
-
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org_id via standard pathway.
+        gateway_devices = GatewayExportUtilsRef._get_devices_with_sites(org_id, fast=fast)  # Fetch device set.
         if not gateway_devices:
             logging.warning("[WARN] No gateway devices found. Exiting gateway device stats export.")
-            return
-
-        def fetch_device_stats_with_retry(device_info, max_retries=None, retry_delay=None, connection_semaphore=None):
-            if max_retries is None:
-                max_retries = FAST_MODE_MAX_RETRIES
-            if retry_delay is None:
-                retry_delay = FAST_MODE_RETRY_DELAY
-
-            site_id, device_id, device_name, site_name = device_info
-
-            for attempt in range(max_retries + 1):
-                try:
-                    ValidationUtils.validate_site_id(site_id, "device_stats")
-                    ValidationUtils.validate_device_id(device_id, "device_stats")
-
-                    if connection_semaphore:
-                        with connection_semaphore:
-                            stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data
-                    else:
-                        stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data
-
-                    stats["site_id"] = site_id
-                    stats["site_name"] = site_name
-                    stats["device_id"] = device_id
-                    stats["device_name"] = device_name
-
-                    if attempt > 0:
-                        logging.info(f"! Retry {attempt} successful for device {device_name} at site {site_name}")
-                    else:
-                        logging.debug(f"! Collected device stats for gateway {device_name} at site {site_name}")
-                    return stats
-
-                except Exception as exception:
-                    if attempt < max_retries:
-                        backoff_delay = retry_delay * (2**attempt) if not fast else retry_delay
-                        logging.warning(
-                            f"! Attempt {attempt + 1} failed for device {device_name} at site {site_name}: {exception}"
-                        )
-                        logging.info(f"! Retrying in {backoff_delay} seconds...")
-                        time.sleep(backoff_delay)
-                    else:
-                        logging.error(
-                            f"! Failed to fetch device stats for {device_name} at site {site_name} after {max_retries + 1} attempts: {exception}"  # noqa: E501
-                        )
-                        return {
-                            "site_id": site_id,
-                            "site_name": site_name,
-                            "device_id": device_id,
-                            "device_name": device_name,
-                            "error": str(exception),
-                            "status": "failed",
-                        }
-
+            return  # Exit when no devices available.
         if fast and len(gateway_devices) > 10:
-            logging.info(f"! Fast mode: Processing {len(gateway_devices)} gateway devices concurrently...")
-            max_workers = min(10, len(gateway_devices))
-            connection_semaphore = threading.Semaphore(max_workers)
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(
-                        fetch_device_stats_with_retry, device_info, connection_semaphore=connection_semaphore
-                    ): device_info
-                    for device_info in gateway_devices
-                }
-
-                for future in tqdm(
-                    concurrent.futures.as_completed(futures),
-                    total=len(futures),
-                    desc="Gateway Device Stats",
-                    unit="device",
-                ):
-                    device_info = futures[future]
-                    try:
-                        result = future.result()
-                        if result:
-                            all_stats.append(result)
-                    except Exception as exception:
-                        site_id, device_id, device_name, site_name = device_info
-                        logging.error(
-                            f"! Concurrent processing failed for device {device_name} at site {site_name}: {exception}"
-                        )
+            all_stats = GatewayStatsExporter._process_devices_concurrent(gateway_devices)  # Concurrent path.
         else:
-            logging.info(f"! Processing {len(gateway_devices)} gateway devices sequentially...")
-            for index, device_info in enumerate(tqdm(gateway_devices, desc="Gateway Device Stats", unit="device"), 1):
-                site_id, device_id, device_name, site_name = device_info
-                logging.debug(f"! Processing device {index}/{len(gateway_devices)}: {device_name} at {site_name}")
-                result = fetch_device_stats_with_retry(device_info)
-                if result:
-                    all_stats.append(result)
-
-        if all_stats:
-            sanitized = []
-            for stats in all_stats:
-                flat_record = DataProcessingUtils.flatten_dict(stats)
-                sanitized.append(flat_record)
-
-            filename = "AllGatewayDeviceStats.csv"
-            DataExporter.save_data_to_output(sanitized, filename)
-            logging.info(f"! Gateway device statistics saved to {filename} ({len(all_stats)} records).")
-            logging.info(f"! API Optimization: Collected detailed stats for {len(gateway_devices)} gateways")
-
-            successful_requests = len([stats for stats in all_stats if stats.get("status") != "failed"])
-            failed_requests = len(all_stats) - successful_requests
-            if failed_requests > 0:
-                logging.warning(f"! {failed_requests} requests failed out of {len(all_stats)} total")
-            else:
-                logging.info(f"! All {successful_requests} requests completed successfully")
-        else:
-            logging.warning(" No gateway device statistics found. CSV not created.")
+            all_stats = GatewayStatsExporter._process_devices_sequential(gateway_devices, fast)  # Sequential.
+        GatewayStatsExporter._export_stats(all_stats, gateway_devices)  # Export collected stats.
 
     @staticmethod
     def device_stats_with_freshness(fast: bool = False) -> None:
