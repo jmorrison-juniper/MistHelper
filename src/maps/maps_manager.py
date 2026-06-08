@@ -3532,11 +3532,9 @@ class MapsManager:
 
         # Initialize template manager for CSS/HTML/metadata
         callback_manager = PlotlyMapCallbackManager()
-        # Wave-A: collect closure dependencies for extracted Dash callbacks
-        # and build the callback handler object. register_with(app) below
-        # wires each wave-A callback to its original @app.callback signature.
-        viewer_state = MapViewerState(callback_manager=callback_manager)  # Shared state container
-        viewer_callbacks = MapViewerCallbacks(state=viewer_state)  # Extracted callback handlers
+        # Wave A+B+C MapViewerState construction is deferred to after
+        # ppm is finalized via _validate_ppm() below (ppm is a state
+        # field consumed by update_shape_labels in wave C).
         template_mgr = DashTemplateManager(org_id=self.org_id)
         figure_builder = PlotlyMapFigureBuilder(logger=logging.getLogger(__name__))
         heatmap_renderer = PlotlyCoverageHeatmapRenderer(logger=logging.getLogger(__name__))
@@ -3565,6 +3563,21 @@ class MapsManager:
 
         # Validate PPM using client coordinates to detect calibration mismatches
         ppm = self._validate_ppm(clients, ppm)  # Returns corrected PPM if mismatch > 10%
+
+        # Waves A+B+C: now that ppm is finalized, build the shared
+        # MapViewerState and the MapViewerCallbacks handler that
+        # register_with(app) will wire below.
+        viewer_state = MapViewerState(  # Shared state container
+            callback_manager=callback_manager,  # Wave A: layer/click delegation
+            zones=zones,  # Wave B/C: zone toggle + zone-action callbacks
+            map_id=map_id,  # Wave B/C: logging + fallback for delete/utilities
+            site_id=site_id,  # Wave C: site_id for delete/zone API calls
+            api_session_ref=self.apisession,  # Wave C: live mistapi session
+            ppm=ppm,  # Wave C: pixels-per-meter fallback in update_shape_labels
+            mistapi_ref=mistapi,  # Wave C: module reference for deleteSiteMap/Zone
+            maps_manager_ref=self,  # Wave C: enables _backup_map_geometry callback
+        )
+        viewer_callbacks = MapViewerCallbacks(state=viewer_state)  # Extracted callback handlers
 
         # Add map image if available
         # Note: Plotly uses bottom-left origin, but we keep Mist's coordinate system (top-left origin)
@@ -5963,57 +5976,13 @@ class MapsManager:
         # Wave-A: register the 5 trivial UI-toggle callbacks via the
         # extracted MapViewerCallbacks. This replaces the nested defs
         # for toggle_layers and display_click_data (and three more below).
-        viewer_callbacks.register_with(app)  # Wires 5 wave-A callbacks at once
+        # Waves B+C extend MapViewerCallbacks with 8 more callbacks
+        # (zone/panel toggles, origin click, delete map, label updates,
+        # zone actions). register_with(app) wires all 13 at once.
+        viewer_callbacks.register_with(app)  # Wires 13 callbacks (waves A+B+C)
 
-        # Callback to add multi-unit labels to drawn shapes
-        @app.callback(
-            Output("map-display", "figure", allow_duplicate=True),
-            Input("map-display", "relayoutData"),
-            State("map-display", "figure"),
-            prevent_initial_call=True,
-        )
-        def update_shape_labels(relayoutData, current_fig):
-            """Add multi-unit measurement labels to drawn shapes."""
-            if not relayoutData:
-                return current_fig
-
-            # Get current PPM from figure metadata (may have been updated by user)
-            current_ppm = current_fig.get("layout", {}).get("meta", {}).get("ppm", ppm)
-
-            # Check if a new shape was added
-            shapes = current_fig.get("layout", {}).get("shapes", [])
-            if shapes and len(shapes) > 0:
-                # Get the last shape (newly drawn)
-                for _, shape in enumerate(shapes):
-                    if shape.get("type") == "line":
-                        # Calculate length in pixels
-                        x0, y0 = shape.get("x0", 0), shape.get("y0", 0)
-                        x1, y1 = shape.get("x1", 0), shape.get("y1", 0)
-                        length_px = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
-
-                        # Convert to meters and feet using current PPM
-                        length_m = length_px / current_ppm if current_ppm > 0 else 0
-                        length_ft = length_m * 3.28084
-
-                        # Create annotation with multi-unit label
-                        annotation = dict(
-                            x=(x0 + x1) / 2,
-                            y=(y0 + y1) / 2,
-                            text=f"<b>{length_px:.1f} px</b><br>{length_ft:.2f} ft<br>{length_m:.2f} m",
-                            showarrow=False,
-                            font=dict(size=12, color="cyan", family="Arial Black"),
-                            bgcolor="rgba(0,0,0,0.7)",
-                            bordercolor="cyan",
-                            borderwidth=2,
-                            borderpad=4,
-                        )
-
-                        # Add to annotations
-                        if "annotations" not in current_fig["layout"]:
-                            current_fig["layout"]["annotations"] = []
-                        current_fig["layout"]["annotations"].append(annotation)
-
-            return current_fig
+        # Wave C: update_shape_labels now lives in MapViewerCallbacks
+        # (registered above via viewer_callbacks.register_with(app)).
 
         # Callback to set scale from user input
         @app.callback(
@@ -6078,75 +6047,8 @@ class MapsManager:
         # Wave-A: toggle_origin_mode now lives in MapViewerCallbacks
         # (registered above via viewer_callbacks.register_with(app)).
 
-        # Callback to set origin from map click
-        @app.callback(
-            [Output("origin-status", "children"), Output("map-display", "figure", allow_duplicate=True)],
-            Input("map-display", "clickData"),
-            [State("origin-mode-button", "n_clicks"), State("map-display", "figure")],
-            prevent_initial_call=True,
-        )
-        def set_origin_from_click(clickData, mode_clicks, current_fig):
-            """Set origin point when map is clicked in origin-setting mode."""
-            # Check if origin mode is active (odd number of clicks)
-            if not mode_clicks or mode_clicks % 2 == 0:
-                # Mode not active - return current status
-                current_origin_x = current_fig.get("layout", {}).get("meta", {}).get("origin_x", 0)
-                current_origin_y = current_fig.get("layout", {}).get("meta", {}).get("origin_y", 0)
-                return [
-                    html.P(
-                        f"Current: ({current_origin_x}, {current_origin_y})",
-                        style={"fontSize": "11px", "color": "#888", "margin": "4px 0"},
-                    )
-                ], current_fig
-
-            if not clickData:
-                return [
-                    html.P("Click map to set origin", style={"fontSize": "11px", "color": "#ff8800", "margin": "4px 0"})
-                ], current_fig
-
-            # Get clicked coordinates
-            point = clickData["points"][0]
-            new_origin_x = point["x"]
-            new_origin_y = point["y"]
-
-            # Update origin in figure metadata
-            if "meta" not in current_fig["layout"]:
-                current_fig["layout"]["meta"] = {}
-            current_fig["layout"]["meta"]["origin_x"] = new_origin_x
-            current_fig["layout"]["meta"]["origin_y"] = new_origin_y
-
-            # Find and update origin crosshair traces
-            crosshair_size = 40
-            for trace in current_fig["data"]:
-                if trace.get("name") == "Origin":
-                    # Update horizontal line
-                    trace["x"] = [new_origin_x - crosshair_size, new_origin_x + crosshair_size]
-                    trace["y"] = [new_origin_y, new_origin_y]
-                    trace["hovertext"] = f"Origin: ({new_origin_x:.1f}, {new_origin_y:.1f})"
-                elif trace.get("name") == "Origin Point":
-                    # Update center dot
-                    trace["x"] = [new_origin_x]
-                    trace["y"] = [new_origin_y]
-                    trace["hovertext"] = f"Origin: ({new_origin_x:.1f}, {new_origin_y:.1f})"
-                elif "hovertext" in trace and "Origin:" in str(trace.get("hovertext", "")):
-                    # Update vertical line (no name but has Origin hovertext)
-                    if trace.get("mode") == "lines" and not trace.get("showlegend"):
-                        trace["x"] = [new_origin_x, new_origin_x]
-                        trace["y"] = [new_origin_y - crosshair_size, new_origin_y + crosshair_size]
-                        trace["hovertext"] = f"Origin: ({new_origin_x:.1f}, {new_origin_y:.1f})"
-
-            status = [
-                html.P(
-                    f"[OK] Origin set: ({new_origin_x:.1f}, {new_origin_y:.1f})",
-                    style={"fontSize": "11px", "color": "#00ff00", "margin": "4px 0"},
-                ),
-                html.P(
-                    "Click button again to exit mode", style={"fontSize": "10px", "color": "#888", "margin": "4px 0"}
-                ),
-            ]
-
-            logging.info(f"Map origin updated to ({new_origin_x:.1f}, {new_origin_y:.1f})")
-            return status, current_fig
+        # Wave C: set_origin_from_click now lives in MapViewerCallbacks
+        # (registered above via viewer_callbacks.register_with(app)).
 
         # Wave-A: toggle_zone_name_input now lives in MapViewerCallbacks
         # (registered above via viewer_callbacks.register_with(app)).
@@ -6537,403 +6439,23 @@ class MapsManager:
 
             return "", no_update
 
-        # Callback to handle utilities button actions
-        @app.callback(
-            Output("utilities-status", "children"),
-            [
-                Input("auto-zone-btn", "n_clicks"),
-                Input("change-image-btn", "n_clicks"),
-                Input("remove-image-btn", "n_clicks"),
-                Input("rename-btn", "n_clicks"),
-            ],
-            prevent_initial_call=True,
-        )
-        def handle_utilities(_auto_zone_clicks, _change_clicks, _remove_clicks, _rename_clicks):
-            """Handle utilities button clicks."""
-            ctx = dash.callback_context
-            if not ctx.triggered:
-                return ""
+        # Wave B: handle_utilities now lives in MapViewerCallbacks
+        # (registered above via viewer_callbacks.register_with(app)).
 
-            button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        # Wave B: toggle_delete_panel now lives in MapViewerCallbacks
+        # (registered above via viewer_callbacks.register_with(app)).
 
-            if button_id == "auto-zone-btn":
-                msg = (
-                    "Robot Auto-Zone: AI-powered zone detection"
-                    " - analyzes walls and creates location zones automatically"
-                )
-                logging.info(f"Utilities: Auto-Zone requested for map {map_id}")
-                return html.Span(msg, style={"color": "#667eea", "fontWeight": "bold"})
+        # Wave C: execute_delete_map now lives in MapViewerCallbacks
+        # (registered above via viewer_callbacks.register_with(app)).
 
-            elif button_id == "change-image-btn":
-                msg = "! Change Image: Use Mist API updateSiteMapImage - feature requires file upload"
-                logging.info(f"Utilities: Change Image requested for map {map_id}")
-                return html.Span(msg, style={"color": "#ff8800"})
+        # Wave B: toggle_clone_panel now lives in MapViewerCallbacks
+        # (registered above via viewer_callbacks.register_with(app)).
 
-            elif button_id == "remove-image-btn":
-                msg = "! Remove Image: Use Mist API deleteSiteMapImage - DESTRUCTIVE operation"
-                logging.warning(f"Utilities: Remove Image requested for map {map_id}")
-                return html.Span(msg, style={"color": "#ff4444"})
+        # Wave B: toggle_individual_zones now lives in MapViewerCallbacks
+        # (registered above via viewer_callbacks.register_with(app)).
 
-            elif button_id == "rename-btn":
-                msg = "! Rename: Use Mist API updateSiteMap with new name - requires text input"
-                logging.info(f"Utilities: Rename requested for map {map_id}")
-                return html.Span(msg, style={"color": "#ff8800"})
-
-            return ""
-
-        # Callback to show/hide delete confirmation panel and update map name
-        @app.callback(
-            [Output("delete-panel", "style"), Output("delete-map-name-display", "children")],
-            [
-                Input("delete-btn", "n_clicks"),
-                Input("cancel-delete-btn", "n_clicks"),
-                Input("confirm-delete-btn", "n_clicks"),
-            ],
-            [State("delete-panel", "style"), State("map-config-store", "data")],
-            prevent_initial_call=True,
-        )
-        def toggle_delete_panel(_delete_clicks, _cancel_clicks, confirm_clicks, current_style, config):
-            """Show or hide the delete confirmation panel and update map name."""
-            ctx = dash.callback_context
-            if not ctx.triggered:
-                return current_style, no_update
-
-            button_id = ctx.triggered[0]["prop_id"].split(".")[0]
-
-            # Get current map name from config store
-            current_map_name = config.get("map_name", "Unknown") if config else "Unknown"
-
-            if button_id == "delete-btn":
-                # Show the delete confirmation panel with CURRENT map name
-                logging.warning(
-                    f"Delete panel opened for map '{current_map_name}' "
-                    f"(ID: {config.get('map_id') if config else 'unknown'})"
-                )
-                return (
-                    {
-                        "display": "block",
-                        "padding": "12px 20px",
-                        "backgroundColor": "#330000",
-                        "borderBottom": "2px solid #ff4444",
-                    },
-                    f"Map: {current_map_name}",
-                )
-            elif button_id in ["cancel-delete-btn", "confirm-delete-btn"]:
-                # Hide the panel
-                return (
-                    {
-                        "display": "none",
-                        "padding": "12px 20px",
-                        "backgroundColor": "#330000",
-                        "borderBottom": "2px solid #ff4444",
-                    },
-                    no_update,
-                )
-
-            return current_style, no_update
-
-        # Callback to execute map deletion
-        @app.callback(
-            [Output("delete-status", "children"), Output("cache-bust-store", "data", allow_duplicate=True)],
-            Input("confirm-delete-btn", "n_clicks"),
-            [State("cache-bust-store", "data"), State("map-config-store", "data")],
-            prevent_initial_call=True,
-        )
-        def execute_delete_map(confirm_clicks, cache_bust_data, config):
-            """Actually delete the map via Mist API - creates backup first."""
-            current_trigger = cache_bust_data.get("trigger", 0) if cache_bust_data else 0
-
-            if not confirm_clicks:
-                return "", no_update
-
-            # CRITICAL: Use config store for current map, not closure variable
-            config_site_id = config.get("site_id") if config else site_id
-            config_map_id = config.get("map_id") if config else map_id
-            config_map_name = config.get("map_name", "Unknown") if config else "Unknown"
-
-            try:
-                # SAFETY: Backup map geometry before deletion
-                logging.info(f"Creating safety backup before deleting map '{config_map_name}'")
-                backup_path = self._backup_map_geometry(
-                    api_session=api_session_ref,
-                    site_id=config_site_id,
-                    map_id=config_map_id,
-                    map_name=config_map_name,
-                    backup_reason="pre_delete",
-                )
-                if backup_path:
-                    logging.info(f"Pre-delete backup saved: {backup_path}")
-                else:
-                    logging.warning("Pre-delete backup failed - proceeding with deletion anyway")
-
-                logging.warning(
-                    f"DESTRUCTIVE: Deleting map '{config_map_name}' (ID: {config_map_id}) from site {config_site_id}"
-                )
-
-                # Call the Mist API to delete the map - use config values!
-                delete_response = mistapi.api.v1.sites.maps.deleteSiteMap(
-                    api_session_ref, site_id=config_site_id, map_id=config_map_id
-                )
-
-                if delete_response.status_code in [200, 204]:
-                    logging.info(f"Map '{config_map_name}' (ID: {config_map_id}) deleted successfully")
-                    # Increment cache bust trigger to refresh map dropdown
-                    new_cache_bust = {"trigger": current_trigger + 1}
-                    return (
-                        html.Span(
-                            f"Map '{config_map_name}' deleted! Close this browser tab.",
-                            style={"color": "#00ff88", "fontWeight": "bold"},
-                        ),
-                        new_cache_bust,
-                    )
-                else:
-                    logging.error(f"Map deletion failed: HTTP {delete_response.status_code}")
-                    return (
-                        html.Span(f"Delete failed: HTTP {delete_response.status_code}", style={"color": "#ff4444"}),
-                        no_update,
-                    )
-
-            except Exception as delete_error:
-                logging.error(f"Error deleting map: {delete_error}", exc_info=True)
-                return html.Span(f"Error: {str(delete_error)[:50]}", style={"color": "#ff4444"}), no_update
-
-        # Callback to show/hide clone panel
-        @app.callback(
-            Output("clone-panel", "style"),
-            [
-                Input("clone-btn", "n_clicks"),
-                Input("cancel-clone-btn", "n_clicks"),
-                Input("execute-clone-btn", "n_clicks"),
-            ],
-            [State("clone-panel", "style")],
-            prevent_initial_call=True,
-        )
-        def toggle_clone_panel(_clone_clicks, _cancel_clicks, _execute_clicks, current_style):
-            """Show or hide the clone input panel."""
-            ctx = dash.callback_context
-            if not ctx.triggered:
-                return current_style
-
-            button_id = ctx.triggered[0]["prop_id"].split(".")[0]
-
-            if button_id == "clone-btn":
-                # Show the panel
-                logging.info(f"Clone panel opened for map {map_id}")
-                return {
-                    "display": "block",
-                    "padding": "12px 20px",
-                    "backgroundColor": "#1a1a1a",
-                    "borderBottom": "1px solid #00ff88",
-                }
-            elif button_id in ["cancel-clone-btn", "execute-clone-btn"]:
-                # Hide the panel
-                return {
-                    "display": "none",
-                    "padding": "12px 20px",
-                    "backgroundColor": "#1a1a1a",
-                    "borderBottom": "1px solid #00ff88",
-                }
-
-            return current_style
-
-        # Callback to handle zone-specific toggles
-        @app.callback(
-            Output("map-display", "figure", allow_duplicate=True),
-            Input("zone-toggle", "value"),
-            State("map-display", "figure"),
-            prevent_initial_call=True,
-        )
-        def toggle_individual_zones(selected_zone_ids, current_fig):
-            """Show/hide individual zones based on checklist."""
-            if not zones:
-                return current_fig
-
-            # Create set of selected IDs for fast lookup
-            selected_set = set(selected_zone_ids) if selected_zone_ids else set()
-
-            # Update visibility for each zone trace
-            for trace in current_fig["data"]:
-                trace_name = trace.get("name", "")
-                if trace_name.startswith("Zone:"):
-                    # Extract zone name from trace name
-                    zone_name = trace_name.replace("Zone: ", "")
-                    # Find matching zone
-                    for i, zone in enumerate(zones):
-                        if zone.get("name") == zone_name:
-                            zone_id = zone.get("id", f"zone_{i}")
-                            trace["visible"] = zone_id in selected_set
-                            break
-
-            return current_fig
-
-        # Callback for zone edit/remove buttons and zone selection
-        @app.callback(
-            [Output("selected-zone-info", "children"), Output("selected-zone-store", "data")],
-            [
-                Input("edit-zone-btn", "n_clicks"),
-                Input("remove-zone-btn", "n_clicks"),
-                Input("map-display", "clickData"),
-            ],
-            [State("selected-zone-store", "data")],
-            prevent_initial_call=True,
-        )
-        def handle_zone_actions(_edit_clicks, _remove_clicks, clickData, selected_zone_data):
-            """Handle zone edit/remove and display selected zone info."""
-            ctx = dash.callback_context
-            if not ctx.triggered:
-                return html.P(
-                    "Click a zone for details", style={"fontSize": "11px", "color": "#888", "fontStyle": "italic"}
-                ), selected_zone_data or {"zone_id": None, "zone_name": None}
-
-            trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
-            current_zone = selected_zone_data or {"zone_id": None, "zone_name": None}
-
-            if trigger_id == "edit-zone-btn":
-                if current_zone.get("zone_id"):
-                    logging.info(
-                        f"Zone management: Edit zone {current_zone.get('zone_name')} requested for map {map_id}"
-                    )
-                    return (
-                        html.Div(
-                            [
-                                html.P(
-                                    f"Pencil Edit Zone: {current_zone.get('zone_name', 'Unknown')}",
-                                    style={"fontSize": "11px", "color": "#667eea", "fontWeight": "bold"},
-                                ),
-                                html.P(
-                                    "Use Mist Dashboard to modify zone shape",
-                                    style={"fontSize": "10px", "color": "#888"},
-                                ),
-                            ]
-                        ),
-                        current_zone,
-                    )
-                else:
-                    return (
-                        html.Div(
-                            [
-                                html.P(
-                                    "! Select a zone first",
-                                    style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
-                                ),
-                                html.P(
-                                    "Click on a zone in the map to select it",
-                                    style={"fontSize": "10px", "color": "#888"},
-                                ),
-                            ]
-                        ),
-                        current_zone,
-                    )
-
-            elif trigger_id == "remove-zone-btn":
-                if current_zone.get("zone_id"):
-                    zone_id = current_zone.get("zone_id")
-                    zone_name = current_zone.get("zone_name", "Unknown")
-                    logging.warning(f"Zone management: Deleting zone {zone_name} (ID: {zone_id}) from site {site_id}")
-
-                    try:
-                        # Call Mist API to delete the zone
-                        delete_response = mistapi.api.v1.sites.zones.deleteSiteZone(
-                            api_session_ref, site_id=site_id, zone_id=zone_id
-                        )
-
-                        if delete_response.status_code in [200, 204]:
-                            logging.info(f"Zone {zone_name} deleted successfully")
-                            return html.Div(
-                                [
-                                    html.P(
-                                        f"[OK] Zone deleted: {zone_name}",
-                                        style={"fontSize": "11px", "color": "#00ff88", "fontWeight": "bold"},
-                                    ),
-                                    html.P(
-                                        "Refresh the page to update view", style={"fontSize": "10px", "color": "#888"}
-                                    ),
-                                ]
-                            ), {"zone_id": None, "zone_name": None}
-                        else:
-                            logging.error(f"Zone deletion failed: HTTP {delete_response.status_code}")
-                            return (
-                                html.Div(
-                                    [
-                                        html.P(
-                                            f"X Delete failed: HTTP {delete_response.status_code}",
-                                            style={"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"},
-                                        ),
-                                        html.P(
-                                            "Check permissions and try again",
-                                            style={"fontSize": "10px", "color": "#888"},
-                                        ),
-                                    ]
-                                ),
-                                current_zone,
-                            )
-
-                    except Exception as del_error:
-                        logging.error(f"Error deleting zone: {del_error}", exc_info=True)
-                        return (
-                            html.Div(
-                                [
-                                    html.P(
-                                        f"X Error: {str(del_error)[:40]}",
-                                        style={"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"},
-                                    )
-                                ]
-                            ),
-                            current_zone,
-                        )
-                else:
-                    return (
-                        html.Div(
-                            [
-                                html.P(
-                                    "! Select a zone first",
-                                    style={"fontSize": "11px", "color": "#ffaa00", "fontWeight": "bold"},
-                                ),
-                                html.P(
-                                    "Click on a zone in the map to select it",
-                                    style={"fontSize": "10px", "color": "#888"},
-                                ),
-                            ]
-                        ),
-                        current_zone,
-                    )
-
-            elif trigger_id == "map-display" and clickData:
-                # Check if clicked on a zone
-                point = clickData["points"][0]
-                hover_text = point.get("hovertext", "")
-
-                if "Zone:" in hover_text:
-                    zone_name = hover_text.split("Zone: ")[1] if "Zone: " in hover_text else "Unknown"
-                    # Find the zone ID
-                    zone_id = None
-                    for zone in zones:
-                        if zone.get("name") == zone_name:
-                            zone_id = zone.get("id")
-                            break
-
-                    return html.Div(
-                        [
-                            html.P(
-                                f">> Selected: {zone_name}",
-                                style={
-                                    "fontSize": "12px",
-                                    "color": "#00ff00",
-                                    "fontWeight": "bold",
-                                    "marginBottom": "5px",
-                                },
-                            ),
-                            html.P(
-                                f"ID: {zone_id[:8] if zone_id else 'Unknown'}...",
-                                style={"fontSize": "10px", "color": "#888"},
-                            ),
-                        ]
-                    ), {"zone_id": zone_id, "zone_name": zone_name}
-
-            return (
-                html.P("Click a zone for details", style={"fontSize": "11px", "color": "#888", "fontStyle": "italic"}),
-                current_zone,
-            )
+        # Wave C: handle_zone_actions now lives in MapViewerCallbacks
+        # (registered above via viewer_callbacks.register_with(app)).
 
         # Wave-A: toggle_auto_refresh now lives in MapViewerCallbacks
         # (registered above via viewer_callbacks.register_with(app)).
