@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.capture.org_pcap_wait_download_workflow import OrgPcapWaitDownloadWorkflow
 

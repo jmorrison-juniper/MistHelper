@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-
 TARGET_NAMES = {
     "_start_site_scan_capture_all_aps",
     "_wait_and_download_pcap",
