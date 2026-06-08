@@ -33,6 +33,7 @@ from datetime import datetime
 from math import cos, pi, radians, sin
 from typing import Any
 
+from src.maps.launcher import MapViewerCallbacks, MapViewerState  # Wave-A callback extraction
 from src.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer
 from src.maps.plotly_map_callback_manager import PlotlyMapCallbackManager
 from src.maps.plotly_map_figure_builder import PlotlyMapFigureBuilder
@@ -3531,6 +3532,11 @@ class MapsManager:
 
         # Initialize template manager for CSS/HTML/metadata
         callback_manager = PlotlyMapCallbackManager()
+        # Wave-A: collect closure dependencies for extracted Dash callbacks
+        # and build the callback handler object. register_with(app) below
+        # wires each wave-A callback to its original @app.callback signature.
+        viewer_state = MapViewerState(callback_manager=callback_manager)  # Shared state container
+        viewer_callbacks = MapViewerCallbacks(state=viewer_state)  # Extracted callback handlers
         template_mgr = DashTemplateManager(org_id=self.org_id)
         figure_builder = PlotlyMapFigureBuilder(logger=logging.getLogger(__name__))
         heatmap_renderer = PlotlyCoverageHeatmapRenderer(logger=logging.getLogger(__name__))
@@ -5954,32 +5960,10 @@ class MapsManager:
                 logging.error(f"URL map switch: Error loading map - {e}", exc_info=True)
                 return no_update, no_update
 
-        # Callback for layer toggle
-        @app.callback(
-            Output("map-display", "figure"),
-            [
-                Input("layer-toggle", "value"),
-                Input("beacon-toggle", "value"),
-                Input("client-toggle", "value"),
-                Input("device-toggle", "value"),
-                Input("filter-toggle", "value"),
-            ],
-            State("map-display", "figure"),
-        )
-        def toggle_layers(infra_layers, beacon_layers, client_layers, device_layers, filter_layers, current_fig):
-            return callback_manager.apply_layer_toggles(
-                current_fig=current_fig,
-                infra_layers=infra_layers,
-                beacon_layers=beacon_layers,
-                client_layers=client_layers,
-                device_layers=device_layers,
-                filter_layers=filter_layers,
-            )
-
-        # Callback for click events - enhanced device details display
-        @app.callback(Output("click-data", "children"), Input("map-display", "clickData"))
-        def display_click_data(clickData):
-            return callback_manager.build_click_details(click_data=clickData, html=html)
+        # Wave-A: register the 5 trivial UI-toggle callbacks via the
+        # extracted MapViewerCallbacks. This replaces the nested defs
+        # for toggle_layers and display_click_data (and three more below).
+        viewer_callbacks.register_with(app)  # Wires 5 wave-A callbacks at once
 
         # Callback to add multi-unit labels to drawn shapes
         @app.callback(
@@ -6091,23 +6075,8 @@ class MapsManager:
 
             return status_msg, current_fig
 
-        # Callback to handle origin setting mode
-        @app.callback(
-            Output("origin-mode-button", "style"),
-            Input("origin-mode-button", "n_clicks"),
-            State("origin-mode-button", "style"),
-            prevent_initial_call=True,
-        )
-        def toggle_origin_mode(n_clicks, current_style):
-            """Toggle origin setting mode on/off with visual feedback."""
-            if n_clicks % 2 == 1:  # Odd clicks = mode active
-                current_style["backgroundColor"] = "#667eea"
-                current_style["border"] = "2px solid #00bfff"
-                return current_style
-            else:  # Even clicks = mode inactive
-                current_style["backgroundColor"] = "#3d3d3d"
-                current_style["border"] = "1px solid #667eea"
-                return current_style
+        # Wave-A: toggle_origin_mode now lives in MapViewerCallbacks
+        # (registered above via viewer_callbacks.register_with(app)).
 
         # Callback to set origin from map click
         @app.callback(
@@ -6179,15 +6148,8 @@ class MapsManager:
             logging.info(f"Map origin updated to ({new_origin_x:.1f}, {new_origin_y:.1f})")
             return status, current_fig
 
-        # Callback to show/hide zone name input based on drawing mode
-        @app.callback(
-            Output("zone-name-container", "style"), Input("drawing-mode-dropdown", "value"), prevent_initial_call=True
-        )
-        def toggle_zone_name_input(mode):
-            """Show zone name input only when zone mode is selected."""
-            if mode == "zone":
-                return {"display": "block", "marginBottom": "10px"}
-            return {"display": "none"}
+        # Wave-A: toggle_zone_name_input now lives in MapViewerCallbacks
+        # (registered above via viewer_callbacks.register_with(app)).
 
         # Callback to handle shape saving to Mist API
         @app.callback(
@@ -6973,37 +6935,8 @@ class MapsManager:
                 current_zone,
             )
 
-        # Callback to toggle auto-refresh intervals on/off
-        @app.callback(
-            [
-                Output("client-refresh-interval", "disabled"),
-                Output("coverage-refresh-interval", "disabled"),
-                Output("countdown-tick-interval", "disabled"),
-                Output("refresh-times-store", "data"),
-                Output("countdown-display", "children"),
-            ],
-            [Input("auto-refresh-toggle", "value")],
-            prevent_initial_call=True,
-        )
-        def toggle_auto_refresh(toggle_value):
-            """Enable or disable auto-refresh intervals based on checkbox."""
-            import time
-
-            is_enabled = "enabled" in (toggle_value or [])
-            current_time = time.time()
-
-            if is_enabled:
-                logging.info("Live data refresh: Auto-refresh ENABLED by user")
-                # Initialize refresh times to now so countdown starts fresh
-                refresh_data = {"client_last_refresh": current_time, "coverage_last_refresh": current_time}
-                countdown_text = "Clients: 30s | RF: 5:00"
-            else:
-                logging.info("Live data refresh: Auto-refresh DISABLED by user")
-                refresh_data = {"client_last_refresh": 0, "coverage_last_refresh": 0}
-                countdown_text = "Auto-refresh: Off"
-
-            # Return disabled=False when enabled, disabled=True when disabled
-            return (not is_enabled, not is_enabled, not is_enabled, refresh_data, countdown_text)
+        # Wave-A: toggle_auto_refresh now lives in MapViewerCallbacks
+        # (registered above via viewer_callbacks.register_with(app)).
 
         # Callback to update countdown display every second
         @app.callback(
