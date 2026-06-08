@@ -143,7 +143,7 @@ from src.troubleshooting.marvis_troubleshoot_utils import (
 )  # Import Marvis troubleshooting utils (renamed to avoid conflicts)
 from src.wan_hub_group_manager import WanHubGroupNumberManager  # Import WAN hub group number manager for hub routing
 from src.wan_vpn_builder import WanVpnBuilder  # Import WAN VPN configuration builder
-from src.websocket.commands import WebSocketCommands  # Import WebSocket command handlers for device diagnostics
+from src.websocket.commands import MacTableCommand  # Import WebSocket show-MAC-table command handler
 from src.websocket.context import WebSocketCmdDeps  # Import WebSocket command dependency injection class
 from src.websocket.diagnostics import (
     ArpDeviceExecutor,
@@ -26485,7 +26485,7 @@ menu_actions = {
     ),
     # > WebSocket Device Commands
     "102": (
-        lambda: WebSocketCommands.show_mac_table(_ws_cmd_deps()),  # type: ignore[misc]
+        lambda: MacTableCommand.execute(_ws_cmd_deps()),  # type: ignore[misc]
         "Show MAC table on switch device via WebSocket (Layer 2 switching table)",
     ),
     "103": (
