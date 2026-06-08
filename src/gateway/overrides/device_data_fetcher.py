@@ -6,7 +6,7 @@ import logging  # Standard library structured logging
 import threading  # Type-hint reference for the connection semaphore passed into worker
 from typing import Any  # Generic typing for nested API JSON payloads
 
-from .. import gateway_override_analyzer as _deps  # Module-level dependency holder set by configure_*
+from . import _deps  # Sibling runtime dependency container set by configure_gateway_override_dependencies
 
 
 class DeviceDataFetcher:

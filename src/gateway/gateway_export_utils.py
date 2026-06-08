@@ -7,11 +7,11 @@ import logging
 import re
 from typing import Any
 
-from src.gateway.gateway_override_analysis import (
-    GatewayOverrideAnalyzer,
-    configure_gateway_override_analyzer_dependencies,
-)
 from src.gateway.gateway_stats_exporter import configure_gateway_stats_exporter_dependencies
+from src.gateway.overrides import (
+    WanOverrideWalker,
+    configure_gateway_override_dependencies,
+)
 
 apisession: Any = None
 mistapi: Any = None
@@ -123,7 +123,7 @@ def configure_gateway_export_utils_dependencies(
         gateway_export_utils_ref=GatewayExportUtils,
     )
 
-    configure_gateway_override_analyzer_dependencies(
+    configure_gateway_override_dependencies(
         apisession_dependency=apisession_dependency,
         mistapi_dependency=mistapi_dependency,
         cache_utils=cache_utils,
@@ -322,8 +322,8 @@ class GatewayExportUtils:
 
     @staticmethod
     def with_wan_overrides(fast: bool = False) -> None:
-        """Delegated gateway override analysis entrypoint."""
-        GatewayOverrideAnalyzer.with_wan_overrides(fast=fast)
+        """Run the WAN override compliance report via the WanOverrideWalker orchestrator."""
+        WanOverrideWalker.walk(fast=fast)  # Delegate directly to the orchestrator collaborator
 
     @staticmethod
     def _get_devices_with_sites(org_id: str, fast: bool = False) -> list[tuple[str, str, str, str]]:

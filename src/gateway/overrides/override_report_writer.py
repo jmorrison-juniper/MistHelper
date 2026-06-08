@@ -6,7 +6,7 @@ import csv  # Standard library CSV writer used for the empty-result fast path
 import logging  # Standard library structured logging
 from typing import Any  # Generic typing for the per-port entry dicts
 
-from .. import gateway_override_analyzer as _deps  # Module-level dependency holder set by configure_*
+from . import _deps  # Sibling runtime dependency container set by configure_gateway_override_dependencies
 
 OUTPUT_FILENAME = "GatewayOverriddenPorts.csv"  # Single source of truth for the report file name
 

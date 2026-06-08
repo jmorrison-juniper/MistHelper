@@ -6,7 +6,7 @@ import csv  # Standard library CSV reader for the cached source-of-truth files
 import logging  # Standard library structured logging
 from typing import Any  # Generic typing for nested CSV rows and lookup dicts
 
-from .. import gateway_override_analyzer as _deps  # Module-level dependency holder set by configure_*
+from . import _deps  # Sibling runtime dependency container set by configure_gateway_override_dependencies
 from .device_data_fetcher import DeviceDataFetcher  # Live API data fetcher used in the second pass
 from .override_classifier import OverrideClassifier  # Per-row classifier used in the first and third passes
 from .override_report_writer import OverrideReportWriter  # Final CSV + console output writer
