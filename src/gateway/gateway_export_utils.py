@@ -145,6 +145,86 @@ class GatewayExportUtils:
         OrgInventoryExporter.gateways_with_site_info()
 
     @staticmethod
+    def _load_management_ip_csv_inputs() -> tuple[list[dict], list[dict], list[dict], list[dict]] | None:
+        """Load the four CSV inputs required for gateway management-IP correlation."""
+        logging.info("Loading CSV inputs for gateway management IP correlation")  # Log before disk reads.
+        try:
+            with open(FilePathUtils.get_csv_path("SiteList.csv"), encoding="utf-8") as csvfile:
+                sites = list(csv.DictReader(csvfile))  # Site list with template assignments.
+            with open(FilePathUtils.get_csv_path("OrgGatewayTemplates.csv"), encoding="utf-8") as csvfile:
+                templates = list(csv.DictReader(csvfile))  # Org-level gateway templates.
+            with open(FilePathUtils.get_csv_path("GatewaysWithSiteInfo.csv"), encoding="utf-8") as csvfile:
+                gateway_devices = list(csv.DictReader(csvfile))  # Gateway devices with site + connection state.
+            with open(FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
+                gateway_configs = list(csv.DictReader(csvfile))  # Per-device config including mgmt overlay IP.
+        except FileNotFoundError as exception:
+            logging.error(f"Required CSV file not found: {exception}")  # Preserve legacy error log.
+            print(f"! Error: Required CSV file not found: {exception}")  # Preserve legacy operator message.
+            return None
+        logging.debug(
+            "Loaded sites=%d templates=%d devices=%d configs=%d",
+            len(sites),
+            len(templates),
+            len(gateway_devices),
+            len(gateway_configs),
+        )  # Log per-source row counts.
+        return sites, templates, gateway_devices, gateway_configs
+
+    @staticmethod
+    def _classify_connected_status(connected_value: str) -> str:
+        """Convert a raw 'connected' CSV cell into Online/Offline/Unknown."""
+        normalized = str(connected_value).strip().lower()  # Normalize for case-insensitive comparison.
+        if normalized in ("true", "1", "yes"):
+            return "Online"  # Truthy boolean indicators map to Online.
+        if normalized in ("false", "0", "no"):
+            return "Offline"  # Falsy boolean indicators map to Offline.
+        return "Unknown"  # Anything else preserves legacy Unknown fallback.
+
+    @staticmethod
+    def _build_management_ip_rows(
+        gateway_devices: list[dict],
+        site_lookup: dict,
+        template_lookup: dict,
+        mgmt_ip_lookup: dict,
+    ) -> tuple[list[dict], int, int]:
+        """Build per-device management-IP rows; return (rows, processed_count, with_mgmt_ip_count)."""
+        results: list[dict] = []  # Per-device records for export.
+        gateways_processed = 0  # Total devices iterated.
+        gateways_with_mgmt_ip = 0  # Devices with a non-empty management IP.
+        for device in gateway_devices:
+            gateway_name = device.get("name", "Unknown Gateway")  # Fallback preserves legacy text.
+            site_id = device.get("site_id", "")  # Empty string fallback for missing site_id.
+            site_name = device.get("site_name", "Unknown Site")  # Fallback preserves legacy text.
+            mgmt_ip = mgmt_ip_lookup.get(gateway_name, "")  # Empty if no config or no mgmt overlay IP.
+            status = GatewayExportUtils._classify_connected_status(device.get("connected", ""))  # Map status.
+            site_info = site_lookup.get(site_id, {})  # Empty dict if site_id not present.
+            template_id = site_info.get("gatewaytemplate_id", "")  # Empty if no template assigned.
+            template_name = (
+                template_lookup.get(template_id, "No Template") if template_id else "No Template"
+            )  # Preserve legacy 'No Template' string.
+            results.append(
+                {
+                    "gateway_name": gateway_name,
+                    "management_ip": mgmt_ip if mgmt_ip else "Not Configured",  # Legacy string for missing IP.
+                    "status": status,
+                    "site_name": site_name,
+                    "gateway_template": template_name,
+                    "template_id": template_id if template_id else "None",  # Legacy 'None' string for empty.
+                }
+            )
+            gateways_processed += 1  # Increment processed counter after row append.
+            if mgmt_ip:
+                gateways_with_mgmt_ip += 1  # Track devices with a usable management IP.
+                logging.debug(
+                    f"Gateway {gateway_name}: Management IP {mgmt_ip}, Status: {status} (Template: {template_name})"
+                )  # Preserve legacy per-device debug log.
+            else:
+                logging.debug(
+                    f"Gateway {gateway_name}: No management IP configured, Status: {status} (Template: {template_name})"
+                )  # Preserve legacy per-device debug log.
+        return results, gateways_processed, gateways_with_mgmt_ip
+
+    @staticmethod
     def management_ips(fast: bool = False) -> None:  # noqa: PLR0915
         """Export gateway management overlay IPs correlated with templates and site status."""
         logging.info("Menu #31: Starting gateway management IPs export")
@@ -170,70 +250,22 @@ class GatewayExportUtils:
 
         print("  5. Processing and correlating data...")
 
-        try:
-            with open(FilePathUtils.get_csv_path("SiteList.csv"), encoding="utf-8") as csvfile:
-                sites = list(csv.DictReader(csvfile))
-            with open(FilePathUtils.get_csv_path("OrgGatewayTemplates.csv"), encoding="utf-8") as csvfile:
-                templates = list(csv.DictReader(csvfile))
-            with open(FilePathUtils.get_csv_path("GatewaysWithSiteInfo.csv"), encoding="utf-8") as csvfile:
-                gateway_devices = list(csv.DictReader(csvfile))
-            with open(FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
-                gateway_configs = list(csv.DictReader(csvfile))
-        except FileNotFoundError as exception:
-            logging.error(f"Required CSV file not found: {exception}")
-            print(f"! Error: Required CSV file not found: {exception}")
+        loaded = GatewayExportUtils._load_management_ip_csv_inputs()  # Read the four CSV inputs into memory.
+        if loaded is None:  # Required CSV missing - error already printed/logged.
             return
+        sites, templates, gateway_devices, gateway_configs = loaded  # Unpack inputs for correlation.
 
-        site_lookup = {site.get("id"): site for site in sites}
-        template_lookup = {template.get("id"): template.get("name", "Unknown Template") for template in templates}
+        site_lookup = {site.get("id"): site for site in sites}  # Index sites by ID for O(1) lookup.
+        template_lookup = {
+            template.get("id"): template.get("name", "Unknown Template") for template in templates
+        }  # Index template ID -> name.
         mgmt_ip_lookup = {
             config.get("name"): config.get("gateway_mgmt_overlay_ip_ip", "") for config in gateway_configs
-        }
+        }  # Index gateway name -> mgmt overlay IP.
 
-        results = []
-        gateways_processed = 0
-        gateways_with_mgmt_ip = 0
-
-        for device in gateway_devices:
-            gateway_name = device.get("name", "Unknown Gateway")
-            site_id = device.get("site_id", "")
-            site_name = device.get("site_name", "Unknown Site")
-            connected_status = device.get("connected", "")
-            mgmt_ip = mgmt_ip_lookup.get(gateway_name, "")
-            connected_val = str(connected_status).strip().lower()
-
-            if connected_val in ["true", "1", "yes"]:
-                status = "Online"
-            elif connected_val in ["false", "0", "no"]:
-                status = "Offline"
-            else:
-                status = "Unknown"
-
-            site_info = site_lookup.get(site_id, {})
-            template_id = site_info.get("gatewaytemplate_id", "")
-            template_name = template_lookup.get(template_id, "No Template") if template_id else "No Template"
-
-            result_row = {
-                "gateway_name": gateway_name,
-                "management_ip": mgmt_ip if mgmt_ip else "Not Configured",
-                "status": status,
-                "site_name": site_name,
-                "gateway_template": template_name,
-                "template_id": template_id if template_id else "None",
-            }
-
-            results.append(result_row)
-            gateways_processed += 1
-
-            if mgmt_ip:
-                gateways_with_mgmt_ip += 1
-                logging.debug(
-                    f"Gateway {gateway_name}: Management IP {mgmt_ip}, Status: {status} (Template: {template_name})"
-                )
-            else:
-                logging.debug(
-                    f"Gateway {gateway_name}: No management IP configured, Status: {status} (Template: {template_name})"
-                )
+        results, gateways_processed, gateways_with_mgmt_ip = GatewayExportUtils._build_management_ip_rows(
+            gateway_devices, site_lookup, template_lookup, mgmt_ip_lookup
+        )  # Build per-device correlation rows.
 
         results.sort(key=lambda row: (row["gateway_template"], row["gateway_name"]))
 
@@ -263,44 +295,54 @@ class GatewayExportUtils:
         )
 
     @staticmethod
-    def device_configs(debug: bool = False, fast: bool = False) -> None:
-        """Fetch and export all gateway device configuration details."""
-        logging.info("Starting export of all gateway device configurations...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        data = APIFetchUtils.gateway_device_configs(apisession, org_id, fast=fast)
-        if not data:
-            logging.warning(" No device configs found.")
-            return
-
-        flattened = DataProcessingUtils.flatten_nested_fields(data)
-        sanitized = DataProcessingUtils.escape_multiline(flattened)
-        DataExporter.save_data_to_output(sanitized, "AllSiteGatewayConfigs.csv")
-        logging.info(" Device configs saved to AllSiteGatewayConfigs.csv")
-
-        base_columns = ["mac", "name"]
+    def _build_filtered_port_rows(sanitized: list) -> list:
+        """Return rows containing only base + WAN port columns where at least one port is non-empty."""
+        base_columns = ["mac", "name"]  # Preserve legacy identifier columns.
         port_columns = [
             col
             for col in sanitized[0].keys()
             if re.match(r"(?i)port_config_ge-0/0/\d+_.*", col) and "_vpn_paths_" not in col
-        ]
-        columns_to_keep = base_columns + port_columns
-
-        filtered_rows = [
+        ]  # Match WAN port-config columns excluding VPN-path noise.
+        columns_to_keep = base_columns + port_columns  # Build final column projection list.
+        logging.debug("Built port-column projection: %d port columns", len(port_columns))  # Log column count.
+        return [
             {col: row.get(col, "") for col in columns_to_keep}
             for row in sanitized
             if any(row.get(col) not in [None, "", "null"] for col in port_columns)
-        ]
+        ]  # Filter rows lacking any port-config data.
 
+    @staticmethod
+    def _save_filtered_port_configs(filtered_rows: list, debug: bool) -> None:
+        """Write FilteredGatewayPortConfigs.csv preserving legacy empty-file fallback."""
         if not filtered_rows:
             logging.warning(" No rows matched the port config filter. FilteredGatewayPortConfigs.csv will be empty.")
-            filtered_csv_path = FilePathUtils.get_csv_path("FilteredGatewayPortConfigs.csv")
+            filtered_csv_path = FilePathUtils.get_csv_path("FilteredGatewayPortConfigs.csv")  # Resolve path.
+            logging.info("Writing empty marker file to %s", filtered_csv_path)  # Log before write.
             with open(filtered_csv_path, "w", newline="", encoding="utf-8") as csvfile:
-                csvfile.write("No matching data found.\n")
-        else:
-            if debug:
-                logging.debug(f"Sample filtered row: {filtered_rows[0]}")
-            DataExporter.save_data_to_output(filtered_rows, "FilteredGatewayPortConfigs.csv")
-            logging.info(" Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")
+                csvfile.write("No matching data found.\n")  # Preserve legacy empty marker content.
+            return  # Nothing else to persist.
+        if debug:
+            logging.debug(f"Sample filtered row: {filtered_rows[0]}")
+        logging.info("Saving filtered gateway port configs to FilteredGatewayPortConfigs.csv")  # Log before save.
+        DataExporter.save_data_to_output(filtered_rows, "FilteredGatewayPortConfigs.csv")  # Persist filtered set.
+        logging.info(" Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")
+
+    @staticmethod
+    def device_configs(debug: bool = False, fast: bool = False) -> None:
+        """Fetch and export all gateway device configuration details."""
+        logging.info("Starting export of all gateway device configurations...")
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org_id via standard pathway.
+        data = APIFetchUtils.gateway_device_configs(apisession, org_id, fast=fast)  # Fetch gateway configs.
+        if not data:
+            logging.warning(" No device configs found.")
+            return  # Abort when no configs returned.
+        flattened = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested JSON.
+        sanitized = DataProcessingUtils.escape_multiline(flattened)  # Escape multiline cells for CSV.
+        logging.info("Saving sanitized gateway configs to AllSiteGatewayConfigs.csv")  # Log before save.
+        DataExporter.save_data_to_output(sanitized, "AllSiteGatewayConfigs.csv")  # Persist full configs.
+        logging.info(" Device configs saved to AllSiteGatewayConfigs.csv")
+        filtered_rows = GatewayExportUtils._build_filtered_port_rows(sanitized)  # Build port-config subset.
+        GatewayExportUtils._save_filtered_port_configs(filtered_rows, debug)  # Persist filtered subset.
 
     @staticmethod
     def templates():
