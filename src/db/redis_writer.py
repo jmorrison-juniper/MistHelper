@@ -68,7 +68,8 @@ class RedisTimeSeriesWriter:
         self._log.info("redis_connected", host=config.redis_host)
 
     def _verify_timeseries_module(self) -> None:
-        modules: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.module_list())  # Client is Any-typed; cast to expected type
+        # cast: _client is Any-typed; module_list() returns list[dict[str, Any]]
+        modules: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.module_list())
         names = [
             m.get("name", b"").lower() if isinstance(m.get("name"), str) else m.get("name", b"").decode().lower()
             for m in modules
@@ -515,7 +516,8 @@ class RedisJSONWriter:
 
     def _verify_json_module(self) -> None:
         """Check that the ReJSON module is loaded."""
-        modules: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.module_list())  # Client is Any-typed; cast to expected type
+        # cast: _client is Any-typed; module_list() returns list[dict[str, Any]]
+        modules: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.module_list())
         names = [
             m.get("name", b"").lower() if isinstance(m.get("name"), str) else m.get("name", b"").decode().lower()
             for m in modules
