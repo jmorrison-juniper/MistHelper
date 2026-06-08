@@ -3,23 +3,18 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import concurrent.futures
 import getpass
-import hashlib
 import logging
 import multiprocessing
 import os
 import re
-import socket
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-import paramiko
-from paramiko import RejectPolicy, SSHClient
-
+from src.ssh.command.command_runner import SingleCommandRunner  # T013b: extracted single-command orchestrator
 from src.ssh.config.csv_loader import CommandCsvLoader  # T013a: extracted CSV loader
 from src.ssh.config.env_loader import EnvSshConfigLoader  # T013a: extracted .env loader
 from src.ssh.config.validators import (  # T013a: shared validators (no more static-method dupes)
@@ -27,6 +22,8 @@ from src.ssh.config.validators import (  # T013a: shared validators (no more sta
     validate_hostname,
     validate_username,
 )
+from src.ssh.connection.connector import SshConnector  # T013b: extracted connection establishment
+from src.ssh.shell_execution.shell_executor import ShellExecutor  # T013b: extracted interactive-shell executor
 
 
 @dataclass
@@ -73,100 +70,8 @@ class EnhancedSSHRunner:
         os.makedirs(data_dir, exist_ok=True)
         return data_dir
 
-    def _get_managed_known_hosts_path(self) -> str:
-        """Return the path to MistHelper's managed known-hosts file."""
-        data_dir = EnhancedSSHRunner._get_data_directory()
-        os.makedirs(data_dir, exist_ok=True)
-        return os.path.join(data_dir, "ssh_known_hosts")
-
-    def _ensure_managed_known_hosts_file(self) -> str:
-        """Ensure the managed known-hosts file exists and is ready to be loaded."""
-        known_hosts_path = self._get_managed_known_hosts_path()
-        if not os.path.exists(known_hosts_path):
-            with open(known_hosts_path, "a", encoding="utf-8"):
-                pass
-        if hasattr(os, "chmod"):
-            try:
-                os.chmod(known_hosts_path, 0o600)
-            except OSError:
-                self.logger.debug("Unable to tighten permissions on %s", known_hosts_path)
-        self.managed_known_hosts_path = known_hosts_path
-        return known_hosts_path
-
-    @staticmethod
-    def _known_hosts_entry_name(hostname: str, port: int) -> str:
-        """Return the known-hosts entry name, including non-default ports."""
-        return hostname if port == 22 else f"[{hostname}]:{port}"
-
-    @staticmethod
-    def _format_host_key_fingerprint(host_key: Any) -> str:
-        """Return an OpenSSH-style SHA256 fingerprint string for a host key."""
-        digest = hashlib.sha256(host_key.asbytes()).digest()
-        return f"SHA256:{base64.b64encode(digest).decode('ascii').rstrip('=')}"
-
-    def _load_known_hosts(self) -> None:
-        """Load system, user, and managed host keys into the current SSH client."""
-        assert self.client is not None, "SSH client must exist before loading host keys"
-        self.client.load_system_host_keys()
-        user_known_hosts_path = os.path.expanduser("~/.ssh/known_hosts")
-        try:
-            self.client.load_host_keys(user_known_hosts_path)
-        except FileNotFoundError:
-            self.logger.debug("User known_hosts file does not exist: %s", user_known_hosts_path)
-        managed_known_hosts_path = self._ensure_managed_known_hosts_file()
-        self.client.load_host_keys(managed_known_hosts_path)
-
-    def _host_key_is_known(self, hostname: str, port: int) -> bool:
-        """Return whether the current SSH client already knows the host key entry."""
-        assert self.client is not None, "SSH client must exist before checking host keys"
-        entry_name = self._known_hosts_entry_name(hostname, port)
-        return self.client.get_host_keys().lookup(entry_name) is not None
-
-    def _fetch_remote_server_key(self, hostname: str, port: int) -> Any:
-        """Fetch the remote SSH server key without authenticating the session."""
-        socket_connection = socket.create_connection((hostname, port), timeout=self.timeout)
-        transport = paramiko.Transport(socket_connection)
-        try:
-            transport.start_client(timeout=self.timeout)
-            return transport.get_remote_server_key()
-        finally:
-            transport.close()
-            socket_connection.close()
-
-    def _save_host_keys(self) -> None:
-        """Persist the current SSH client's host keys to the managed store when available."""
-        assert self.client is not None, "SSH client must exist before saving host keys"
-        if not self.managed_known_hosts_path:
-            return
-        try:
-            self.client.save_host_keys(self.managed_known_hosts_path)
-        except OSError as error:
-            self.logger.warning("Failed to persist known_hosts to %s: %s", self.managed_known_hosts_path, error)
-
-    def _trust_host_on_first_use(self, hostname: str, port: int) -> None:
-        """Enroll an unseen host key into the managed known-hosts file before connect."""
-        assert self.client is not None, "SSH client must exist before trusting host keys"
-        if self._host_key_is_known(hostname, port):
-            return
-        remote_host_key = self._fetch_remote_server_key(hostname, port)
-        entry_name = self._known_hosts_entry_name(hostname, port)
-        self.client.get_host_keys().add(entry_name, remote_host_key.get_name(), remote_host_key)
-        self._save_host_keys()
-        fingerprint = self._format_host_key_fingerprint(remote_host_key)
-        self.logger.warning("TOFU enrolled new SSH host key for %s (%s)", entry_name, fingerprint)
-        print(f"[INFO] Trusted first-seen SSH host key for {entry_name} ({fingerprint})")
-
-    @staticmethod
-    def _validate_port(port: int) -> bool:
-        """Validate port number is in valid range.
-
-        Args:
-            port: Port number to validate
-
-        Returns:
-            bool: True if valid (1-65535), False otherwise
-        """
-        return isinstance(port, int) and 1 <= port <= 65535
+    # T013b: Known-hosts management + _connect moved to src.ssh.connection.connector.SshConnector.
+    # T013b: _validate_port moved to SshConnector._validate_port (still a staticmethod there).
 
     @staticmethod
     def _validate_timeout(timeout: int) -> bool:
@@ -296,116 +201,9 @@ class EnhancedSSHRunner:
 
         return host_log_file, write_to_host_log
 
-    def _connect(self, hostname: str, username: str, password: str, port: int = 22) -> bool:  # noqa: C901, PLR0915
-        """Establish SSH connection to remote host with input validation.
-
-        Args:
-            hostname: IP address or hostname
-            username: SSH username
-            password: SSH password
-            port: SSH port (default 22)
-
-        Returns:
-            bool: True if connection successful, False otherwise
-        """
-        # Validate inputs before attempting connection
-        if not validate_hostname(hostname):  # T013a: shared validator (was self._validate_hostname)
-            error_msg = f"Invalid hostname format: {hostname}"
-            self.logger.error(error_msg)
-            print(f"[ERROR] {error_msg}")
-            return False
-
-        if not validate_username(username):  # T013a: shared validator (was self._validate_username)
-            error_msg = f"Invalid username format: {username}"
-            self.logger.error(error_msg)
-            print(f"[ERROR] {error_msg}")
-            return False
-
-        if not self._validate_port(port):
-            error_msg = f"Invalid port number: {port} (must be 1-65535)"
-            self.logger.error(error_msg)
-            print(f"[ERROR] {error_msg}")
-            return False
-
-        if not password:
-            error_msg = "Password cannot be empty"
-            self.logger.error(error_msg)
-            print(f"[ERROR] {error_msg}")
-            return False
-
-        # Check if paramiko is available
-        if SSHClient is None or paramiko is None:
-            error_msg = "SSH functionality unavailable: paramiko module not installed"
-            self.logger.error(error_msg)
-            print(f"[ERROR] {error_msg}")
-            print("Install paramiko with: pip install paramiko")
-            return False
-
-        try:
-            self.logger.info(f"Attempting SSH connection to {hostname}:{port} as {username}")
-            print(f">> Connecting to {hostname}:{port} as {username}...")
-
-            # Create SSH client  # nosec B101
-            self.client = SSHClient()  # type: ignore[assignment]  # SSHClient typed as None in fallback
-            assert self.client is not None  # nosec B101
-            self._load_known_hosts()
-            self.client.set_missing_host_key_policy(RejectPolicy())
-            self.logger.debug("SSH client created with TOFU enrollment and strict host key verification")
-
-            self._trust_host_on_first_use(hostname, port)
-
-            # Attempt connection
-            connection_start = time.time()
-            self.logger.debug(f"Initiating SSH connection with timeout={self.timeout}s")
-            self.client.connect(
-                hostname=hostname,
-                port=port,
-                username=username,
-                password=password,
-                timeout=self.timeout,
-                allow_agent=False,
-                look_for_keys=False,
-            )
-            connection_time = time.time() - connection_start
-            self.logger.debug(f"SSH connection established in {connection_time:.2f} seconds")
-
-            self.logger.info(f"Successfully connected to {hostname} in {connection_time:.2f} seconds")
-            print(f"[OK] Successfully connected to {hostname}")
-            return True
-
-        except socket.gaierror as e:
-            error_msg = f"DNS Resolution Error for {hostname}: {e}"
-            self.logger.error(error_msg)
-            print(f"[ERROR] DNS Resolution Error: {e}")
-            return False
-        except TimeoutError:
-            error_msg = f"Connection timeout to {hostname}:{port} after {self.timeout} seconds"
-            self.logger.error(error_msg)
-            print(f"[ERROR] Connection timeout after {self.timeout} seconds")
-            return False
-        except paramiko.BadHostKeyException as e:
-            error_msg = f"Host key verification failed for {hostname}: {e}"
-            self.logger.error(error_msg)
-            print("[ERROR] Host key verification failed - update the known_hosts entry before retrying")
-            return False
-        except paramiko.AuthenticationException as e:
-            error_msg = f"Authentication failed for {username}@{hostname}: {e}"
-            self.logger.error(error_msg)
-            print("[ERROR] Authentication failed - check username and password")
-            return False
-        except paramiko.SSHException as e:
-            error_msg = f"SSH Error connecting to {hostname}: {e}"
-            self.logger.error(error_msg)
-            if "known_hosts" in str(e):
-                print("[ERROR] Host key is not trusted - add the host key to known_hosts and retry")
-            else:
-                print(f"[ERROR] SSH Error: {e}")
-            return False
-        except Exception as e:
-            error_msg = f"Unexpected error connecting to {hostname}: {type(e).__name__}: {e}"
-            self.logger.error(error_msg, exc_info=True)
-            print(f"[ERROR] Unexpected error: {e}")
-            return False
+    # T013b: _connect moved to src.ssh.connection.connector.SshConnector. Callers within this
+    # module construct SshConnector inline (a real call, not a façade) and wire the returned
+    # client into the runner's ``client``/``managed_known_hosts_path`` attributes themselves.
 
     def _execute_command(
         self, command: str, use_shell: bool = False, hostname: str = "unknown"
@@ -432,9 +230,12 @@ class EnhancedSSHRunner:
             command_start = time.time()
 
             if use_shell:
-                # Use interactive shell for network devices
+                # T013b: shell execution moved to ShellExecutor; construct inline (real call, not façade)
                 self.logger.debug("Using shell-based execution for network device compatibility")
-                return self._execute_with_shell(command, command_start, hostname)
+                shell_executor = ShellExecutor(  # T013b: instantiate the extracted shell executor
+                    client=self.client, timeout=self.timeout, logger=self.logger
+                )
+                return shell_executor.execute(command, command_start, hostname)  # Real delegation w/ instance state
             else:
                 # Use direct exec_command (try with PTY first for network devices)
                 self.logger.debug("Using direct exec_command execution")
@@ -503,372 +304,8 @@ class EnhancedSSHRunner:
                 self.logger.error(f"Both PTY and non-PTY exec_command failed: {e2}")
                 raise e2
 
-    def _execute_with_shell(
-        self,
-        command: str,
-        start_time: float,
-        hostname: str = "unknown",
-    ) -> tuple[bool, str, str]:  # noqa: C901, PLR0912, PLR0915
-        """Execute command using interactive shell with device type detection."""
-        assert self.client is not None, "No active SSH connection"  # nosec B101
-        try:
-            self.logger.debug("Using interactive shell mode")
-
-            # Start interactive shell
-            shell = self.client.invoke_shell(term="vt100", width=120, height=24)
-            shell.settimeout(self.timeout)
-
-            # Wait for initial prompt
-            max_wait = 3  # Maximum wait time
-            wait_increment = 0.2
-            total_wait: float = 0
-            initial_sample = "(no initial data)"
-
-            while total_wait < max_wait:
-                time.sleep(wait_increment)
-                total_wait += wait_increment
-                if shell.recv_ready():
-                    initial_output = shell.recv(4096).decode("utf-8", errors="ignore")
-                    # Escape newlines and special characters for clean logging
-                    initial_sample = initial_output[:100].replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-                    self.logger.debug(f"Initial shell output: {initial_sample}...")
-                    break
-
-            # Send command with improved buffering
-            try:
-                command_with_newline = command + "\n"
-                shell.send(command_with_newline.encode("utf-8"))
-                time.sleep(0.1)  # Small delay to ensure command is sent completely
-                self.logger.debug(f"Sent command to shell: {command}")
-            except Exception as e:
-                self.logger.warning(f"Error sending command: {e}")
-                return False, "", f"Failed to send command: {e}"
-
-            # Wait for command execution with adaptive timing
-            max_cmd_wait = 6  # Increased maximum command wait time
-            cmd_wait: float = 0
-
-            while cmd_wait < max_cmd_wait:
-                time.sleep(wait_increment)
-                cmd_wait += wait_increment
-                if shell.recv_ready():
-                    break  # Collect output with universal timing-based approach
-            output = ""
-            last_data_time = time.time()
-            no_data_timeout = 3.0  # Universal timeout - wait 3 seconds after no new data
-            max_total_wait = 120  # Universal maximum wait time (2 minutes) for any command
-
-            max_output_size = 100 * 1024 * 1024  # 100MB limit - higher since we now drain properly
-            chunk_count = 0
-
-            try:
-                while (time.time() - start_time) < max_total_wait:
-                    current_duration = time.time() - start_time
-
-                    # Hard timeout detection - if we've been running too long, force completion
-                    if current_duration > 90:  # 90 second hard timeout
-                        print(
-                            f"[TIMEOUT] [{hostname}] HANG DETECTED: Command running for {current_duration:.0f}s, forcing completion"  # noqa: E501
-                        )
-                        self.logger.warning(
-                            f"Command hang detected after {current_duration:.0f}s, forcing completion: {command}"
-                        )
-                        output += f"\n\n[COMMAND TIMEOUT - Forced completion after {current_duration:.0f}s]\n"
-                        break
-
-                    # Progress messages for long-running commands
-                    if current_duration > 30:  # Show progress after 30 seconds
-                        if chunk_count % 150 == 0:  # Every 150 chunks after 30 seconds
-                            print(
-                                f"- [{hostname}] Long-running command... {current_duration:.0f}s elapsed (Ctrl+C to interrupt)"  # noqa: E501
-                            )
-
-                    if shell.recv_ready():
-                        chunk = shell.recv(131072).decode(
-                            "utf-8", errors="ignore"
-                        )  # Even larger buffer (128KB) for efficiency
-                        output += chunk
-                        last_data_time = time.time()  # Reset timer when we get data
-                        chunk_count += 1
-
-                        # Log progress every 100 chunks for very large outputs
-                        if chunk_count % 100 == 0:
-                            output_mb = len(output) / (1024 * 1024)
-                            self.logger.debug(f"Receiving data... {chunk_count} chunks, {output_mb:.1f}MB")
-                            # Print progress for user feedback on large outputs
-                            if output_mb > 5:
-                                print(
-                                    f"- [{hostname}] Receiving large output... {output_mb:.1f}MB (Press Ctrl+C to interrupt)"  # noqa: E501
-                                )
-
-                        # Check output size limit - but keep draining to prevent blocking
-                        if len(output) > max_output_size:
-                            self.logger.warning(
-                                f"Output size limit ({max_output_size // (1024 * 1024)}MB) reached, draining remaining data..."  # noqa: E501
-                            )
-                            output += (
-                                f"\n\n[OUTPUT TRUNCATED - Size limit of {max_output_size // (1024 * 1024)}MB reached]\n"
-                            )
-                            print(
-                                f"!? [{hostname}] Output truncated at {max_output_size // (1024 * 1024)}MB, draining remaining data..."  # noqa: E501
-                            )
-
-                            # Continue draining data without storing it to prevent device blocking
-                            drain_start = time.time()
-                            max_drain_time = 30  # Maximum 30 seconds to drain
-                            drained_chunks = 0
-
-                            while (time.time() - drain_start) < max_drain_time:
-                                if shell.recv_ready():
-                                    shell.recv(262144)  # Large drain buffer (256KB) for maximum efficiency
-                                    drained_chunks += 1
-                                    last_data_time = time.time()  # Reset timeout
-
-                                    # Show drain progress
-                                    if drained_chunks % 100 == 0:
-                                        drain_duration = time.time() - drain_start
-                                        print(
-                                            f"X  [{hostname}] Draining excess data... {drain_duration:.0f}s ({drained_chunks} chunks discarded)"  # noqa: E501
-                                        )
-
-                                else:
-                                    # Check if we've waited long enough since last data
-                                    if (time.time() - last_data_time) >= no_data_timeout:
-                                        break  # No new data, device finished
-                                    time.sleep(0.05)
-
-                            drain_duration = time.time() - drain_start
-                            print(
-                                f"[OK] [{hostname}] Data drain completed in {drain_duration:.1f}s ({drained_chunks} chunks discarded)"  # noqa: E501
-                            )
-                            break
-
-                        time.sleep(0.01)  # Very small delay for maximum throughput
-                    else:
-                        # Check if we've waited long enough since last data
-                        if (time.time() - last_data_time) >= no_data_timeout:
-                            break  # No new data for timeout period, command likely complete
-                        time.sleep(0.05)  # Small sleep when no data available
-
-            except KeyboardInterrupt:
-                print(f"\nX  [{hostname}] Ctrl+C detected! Interrupting command: {command}")
-                self.logger.warning(f"Command interrupted by user: {command}")
-                output += "\n\n[COMMAND INTERRUPTED BY USER - Ctrl+C pressed during data collection]\n"
-                # Don't return here, continue with cleanup and return what we have
-
-            # Log command completion status
-            command_duration = time.time() - start_time
-            output_size_mb = len(output) / (1024 * 1024)
-            if output_size_mb > 1:
-                self.logger.info(
-                    f"Command data collection completed after {command_duration:.2f}s, output size: {output_size_mb:.2f}MB ({chunk_count} chunks)"  # noqa: E501
-                )
-            else:
-                self.logger.debug(
-                    f"Command data collection completed after {command_duration:.2f}s, output size: {len(output)} bytes ({chunk_count} chunks)"  # noqa: E501
-                )
-
-            # Fast cleanup - especially important after truncation
-            cleanup_start = time.time()
-            max_cleanup_time = 2.0  # Maximum 2 seconds for cleanup to prevent hangs
-
-            try:
-                shell.send(b"exit\n")
-                shell.send(b"\n")  # Extra newline to ensure command completion
-
-                # Quick cleanup collection with timeout
-                cleanup_timeout = time.time() + max_cleanup_time
-                while time.time() < cleanup_timeout:
-                    if shell.recv_ready():
-                        try:
-                            shell.recv(4096)  # Drain any remaining output quickly
-                            time.sleep(0.1)
-                        except Exception:
-                            break
-                    else:
-                        time.sleep(0.1)
-                        break  # No more data, exit quickly
-
-            except KeyboardInterrupt:
-                print(f"X  [{hostname}] Ctrl+C during cleanup - forcing shell close")
-                self.logger.warning("Command cleanup interrupted by user")
-            except Exception as e:
-                self.logger.debug(f"Warning during cleanup: {e}")
-
-            cleanup_duration = time.time() - cleanup_start
-            if cleanup_duration > 1.0:
-                self.logger.debug(f"Cleanup took {cleanup_duration:.2f}s")
-
-            # Force close shell to prevent hangs
-            try:
-                shell.close()
-            except Exception as e:
-                self.logger.debug(f"Warning during shell close: {e}")
-            command_time = time.time() - start_time
-
-            # Enhanced output cleaning to remove shell artifacts and prompts
-            lines = output.split("\n")
-            cleaned_lines = []
-            command_found = False
-
-            # Common shell prompts and artifacts to filter out
-            shell_artifacts = [
-                "exit",
-                "logout",
-                "Connection to",
-                "Last login:",
-                "Welcome to",
-                "Match except:",
-                "---(more)---",
-                "No next tag",
-                "press RETURN",
-                "Invalid command:",
-                "xit",
-                "vyos@vyos:~$",
-                "Connection closed",
-            ]
-
-            # Shell prompt patterns (more comprehensive)
-            shell_prompt_patterns = [
-                r".*[$#>]\s*$",  # Basic prompts ending with $, #, or >
-                r"vyos@.*[$#>]\s*$",  # VyOS prompts
-                r".*@.*:.*[$#>]\s*$",  # Standard user@host:path$ prompts
-                r"{master:\d+}",  # Juniper master mode prompts
-                r"^\s*$",  # Empty lines (remove excessive whitespace)
-                r":+.*\[.*\d+;\d+.*H.*",  # ANSI cursor positioning sequences
-                r"^:.*press RETURN.*",  # Pager "press RETURN" prompts
-                r"^>vyos@.*\$ xit$",  # VyOS shell prompt with truncated exit
-                r"^vyos@.*:~\$.*xit$",  # VyOS shell cleanup with xit
-                r"^Invalid command: \[xit\]$",  # VyOS invalid xit command error
-                r"^.*Connection to .* closed\.$",  # Connection closed messages
-                r"^\s*xit\s*$",  # Standalone truncated exit commands
-            ]
-
-            import re
-
-            for line in lines:
-                line = line.strip()
-
-                # Skip empty lines
-                if not line:
-                    continue
-
-                # Skip command echo (first occurrence of the command)
-                if not command_found and command.strip() in line:
-                    command_found = True
-                    continue
-
-                # Skip shell artifacts
-                should_skip = False
-                for artifact in shell_artifacts:
-                    if artifact.lower() in line.lower():
-                        should_skip = True
-                        break
-
-                if should_skip:
-                    continue
-
-                # Skip shell prompts using regex patterns
-                is_prompt = False
-                for pattern in shell_prompt_patterns:
-                    if re.match(pattern, line):
-                        is_prompt = True
-                        break
-
-                if is_prompt:
-                    continue
-
-                # Enhanced cleaning for terminal control sequences and VyOS artifacts
-                clean_line = re.sub(r"\x1b\[[0-9;]*[mK]", "", line)  # ANSI escape codes
-                clean_line = re.sub(r"\x1b\[\?[0-9]+[hl]", "", clean_line)  # ANSI mode changes
-                clean_line = re.sub(r"\x1b\[[0-9]+;[0-9]+H", "", clean_line)  # ANSI cursor positioning
-                clean_line = re.sub(r":\s*$", "", clean_line)  # Remove trailing colons from pager prompts
-                clean_line = (
-                    clean_line.replace("\r", "").replace("\x08", "").strip()
-                )  # Remove carriage returns and backspaces
-
-                # Skip VyOS-specific shell artifacts
-                vyos_artifacts = [
-                    r"^\s*xit\s*$",
-                    r"^Invalid command: \[xit\]$",
-                    r"^vyos@.*:~\$",
-                    r"^Connection.*closed\.$",
-                ]
-
-                skip_vyos_artifact = False
-                for artifact_pattern in vyos_artifacts:
-                    if re.match(artifact_pattern, clean_line):
-                        skip_vyos_artifact = True
-                        break
-
-                # Only add non-empty cleaned lines that aren't VyOS artifacts
-                if clean_line and not skip_vyos_artifact:
-                    cleaned_lines.append(clean_line)
-
-            cleaned_output = "\n".join(cleaned_lines).strip()
-
-            self.logger.debug(f"Shell command completed in {command_time:.2f} seconds")
-            # Only log output sample for smaller outputs to avoid log spam
-            if len(cleaned_output) < 10000:  # Only log sample for outputs under 10KB
-                output_sample = cleaned_output[:200].replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-                self.logger.debug(
-                    f"Shell output ({len(cleaned_output)} chars): {output_sample}{'...' if len(cleaned_output) > 200 else ''}"  # noqa: E501
-                )
-            else:
-                self.logger.debug(f"Shell output: {len(cleaned_output)} characters (large output, sample not logged)")
-
-            # Universal success detection - simple and reliable
-            command_success = len(cleaned_output) > 0
-
-            # More intelligent error detection - only flag real command errors
-            # Skip error detection for shell cleanup artifacts
-            error_patterns = [
-                "command not found",
-                "syntax error",
-                "permission denied",
-                "authentication failed",
-                "connection refused",
-                "host unreachable",
-                "network unreachable",
-                "no such file or directory",
-            ]
-
-            # Exclude patterns that are likely shell cleanup artifacts
-            shell_cleanup_indicators = [
-                "invalid command: [xit]",
-                "unknown command: xit",
-                "invalid command: exit",
-                "connection to .* closed",
-            ]
-
-            output_lower = cleaned_output.lower()
-
-            # Check for shell cleanup indicators first - if found, don't treat as error
-            is_shell_cleanup = False
-            for cleanup_pattern in shell_cleanup_indicators:
-                if cleanup_pattern in output_lower:
-                    is_shell_cleanup = True
-                    self.logger.debug(f"Shell cleanup artifact detected, ignoring: {cleanup_pattern}")
-                    break
-
-            # Only check for real errors if this isn't shell cleanup
-            if not is_shell_cleanup:
-                for pattern in error_patterns:
-                    if pattern in output_lower:
-                        command_success = False
-                        self.logger.warning(f"Command error detected: {pattern}")
-                        break
-
-            self.logger.debug(
-                f"Command success determination: success={command_success}, output_length={len(cleaned_output)}"
-            )
-            print(f"[STATUS] [{hostname}] Command completed in {command_time:.2f} seconds")
-            return command_success, cleaned_output, ""
-
-        except Exception as e:
-            error_msg = f"Shell execution error: {type(e).__name__}: {e}"
-            self.logger.error(error_msg, exc_info=True)
-            return False, "", error_msg
+    # T013b: _execute_with_shell moved to src.ssh.shell_execution.shell_executor.ShellExecutor.
+    # Callers (_execute_command) instantiate ShellExecutor inline (real call, not facade).
 
     def _disconnect(self):  # type: ignore[no-untyped-def]
         """Close SSH connection."""
@@ -1055,12 +492,18 @@ Commands/responses to execute: {num_commands}
         write_to_host_log(header)
 
         try:
-            # Connect once for all commands
-            if not runner._connect(hostname, username, password, port):
+            # T013b: connection establishment moved to SshConnector; construct inline (real call)
+            logger.info("Connecting via SshConnector for interactive session to %s:%s", hostname, port)
+            interactive_connector = SshConnector(timeout=runner.timeout, logger=logger)
+            interactive_client, interactive_kh_path = interactive_connector.connect(hostname, username, password, port)
+            logger.debug("Interactive connect returned client=%s", bool(interactive_client))
+            if interactive_client is None:
                 error_msg = f"Failed to connect to {hostname}"
                 logger.error(f"SSH connection failed: {hostname}:{port}")
                 write_to_host_log(f"[ERROR] {error_msg}")
                 return False
+            runner.client = interactive_client  # Wire live client into runner state
+            runner.managed_known_hosts_path = interactive_kh_path  # Preserve TOFU path for later saves
 
             logger.debug(f"SSH connected to {hostname}, starting interactive session")
             connection_msg = f"\n>> Starting interactive session with {len(commands)} steps..."  # type: ignore[arg-type]
@@ -1373,12 +816,18 @@ Commands to execute: {num_commands}
         write_to_host_log(header)
 
         try:
-            # Connect once for all commands
-            if not runner._connect(hostname, username, password, port):
+            # T013b: connection establishment moved to SshConnector; construct inline (real call)
+            logger.info("Connecting via SshConnector for multi-command session to %s:%s", hostname, port)
+            multi_connector = SshConnector(timeout=runner.timeout, logger=logger)
+            multi_client, multi_kh_path = multi_connector.connect(hostname, username, password, port)
+            logger.debug("Multi-command connect returned client=%s", bool(multi_client))
+            if multi_client is None:
                 error_msg = f"Failed to connect to {hostname}"
                 logger.error(f"SSH connection failed: {hostname}:{port}")
                 write_to_host_log(f"X  {error_msg}")
                 return False
+            runner.client = multi_client  # Wire live client into runner state
+            runner.managed_known_hosts_path = multi_kh_path  # Preserve TOFU path for later saves
 
             logger.debug(f"SSH connected to {hostname}, executing {len(commands)} commands")  # type: ignore[arg-type]
             connection_msg = f"\n>> Executing {len(commands)} commands sequentially..."  # type: ignore[arg-type]
@@ -1477,194 +926,8 @@ Log file: {host_log_file}
                 except Exception as e2:
                     logger.error(f"Even simple multi-command footer failed: {e2}")
 
-    @staticmethod
-    def _run_ssh_command(  # noqa: C901, PLR0912, PLR0913, PLR0915
-        hostname: str | None = None,
-        username: str | None = None,
-        password: str | None = None,
-        command: str | None = None,
-        port: int = 22,
-        timeout: int = 30,
-        use_shell: bool = False,
-        config: SSHConnectionConfig | None = None,
-    ) -> bool:
-        """Connect via SSH and execute a command.
-
-        Args:
-            hostname: IP address or hostname (deprecated, use config)
-            username: SSH username (deprecated, use config)
-            password: SSH password (deprecated, use config)
-            command: Command to execute
-            port: SSH port (deprecated, use config)
-            timeout: Connection timeout (deprecated, use config)
-            use_shell: Use interactive shell mode (deprecated, use config)
-            config: SSHConnectionConfig object (preferred)
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        # Support both config object and individual parameters (backwards compatibility)
-        if config is not None:
-            hostname = config.hostname
-            username = config.username
-            password = config.password
-            port = config.port
-            timeout = config.timeout
-            use_shell = config.use_shell
-
-        # Validate required parameters
-        if hostname is None or username is None or password is None:
-            raise ValueError("hostname, username, and password are required")
-        if command is None:
-            command = ""
-
-        # Get the already-configured logger
-        logger = logging.getLogger("ssh_runner_v2")
-        logger.debug(f"Starting SSH command execution: {hostname}:{port} - '{command}' (shell={use_shell})")
-        logger.debug(f"Single command details: timeout={timeout}, use_shell={use_shell}")
-
-        # Create per-host log file in subfolder with proper sanitization
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_hostname = EnhancedSSHRunner.sanitize_filename(hostname)
-
-        # Ensure per-host-logs directory exists and is secure (in data folder)
-        # SECURITY: Use proper data directory path to avoid permission issues
-        data_dir = EnhancedSSHRunner._get_data_directory()
-        log_dir = os.path.join(data_dir, "per-host-logs")
-        try:
-            os.makedirs(log_dir, exist_ok=True)
-            # Set secure permissions on directory (owner read/write/execute only)
-            if hasattr(os, "chmod"):
-                os.chmod(log_dir, 0o700)
-        except OSError as e:
-            logger.error(f"Failed to create log directory {log_dir}: {e}")
-            # Fallback to data directory
-            log_dir = data_dir
-            safe_hostname = f"fallback_{safe_hostname}"
-
-        host_log_file = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
-        print(f"- [{hostname}] Logging to: {host_log_file}")
-
-        def write_to_host_log(message: str):  # type: ignore[no-untyped-def]
-            """Write message to host-specific log file only (not console)."""
-            if not message:
-                return
-
-            try:
-                # Sanitize message to prevent log injection
-                safe_message = message.replace("\x00", "").replace("\r\n", "\n")
-
-                with open(host_log_file, "a", encoding="utf-8") as f:
-                    f.write(f"{safe_message}\n")
-                    f.flush()  # Ensure data is written immediately
-            except OSError as e:
-                logger.error(f"IO error writing to host log {host_log_file}: {e}")
-            except UnicodeEncodeError as e:
-                logger.error(f"Unicode encoding error writing to host log {host_log_file}: {e}")
-                # Try writing a sanitized version
-                try:
-                    safe_message = message.encode("ascii", errors="replace").decode("ascii")
-                    with open(host_log_file, "a", encoding="utf-8") as f:
-                        f.write(f"{safe_message}\n")
-                        f.flush()
-                except Exception:
-                    logger.error("Failed to write sanitized message to host log")
-            except Exception as e:
-                logger.error(f"Unexpected error writing to host log {host_log_file}: {e}")
-
-        runner = EnhancedSSHRunner(timeout=timeout, logger=logger)
-
-        # Initialize host log with header
-        header = f"""
-{"=" * 80}
-SSH Single Command Log for Host: {hostname}
-Started: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-Command: {command}
-{"=" * 80}"""
-        write_to_host_log(header)
-
-        try:
-            # Connect
-            if not runner._connect(hostname, username, password, port):
-                error_msg = f"Failed to connect to {hostname}"
-                logger.error(f"SSH connection failed: {hostname}:{port}")
-                write_to_host_log(f"X  {error_msg}")
-                return False
-
-            logger.debug(f"SSH connected to {hostname}, executing single command")
-
-            # Execute command
-            single_cmd_success, stdout, stderr = runner._execute_command(
-                command, use_shell=use_shell, hostname=hostname
-            )
-
-            # Display results
-            separator = "\n" + "=" * 60
-            output_header = "!? COMMAND OUTPUT"
-            separator_line = "=" * 60
-
-            write_to_host_log(separator)
-            write_to_host_log(output_header)
-            write_to_host_log(separator_line)
-
-            if stdout:
-                write_to_host_log("-> STDOUT:")
-                write_to_host_log(stdout)
-
-            if stderr:
-                write_to_host_log("-> STDERR:")
-                write_to_host_log(stderr)
-
-            if not stdout and not stderr:
-                write_to_host_log("X  No output returned")
-
-            write_to_host_log(separator_line)
-
-            if single_cmd_success:
-                logger.info(f"[{hostname}] Command completed successfully")
-                success_msg = "[OK] Command executed successfully"
-                write_to_host_log(success_msg)
-            else:
-                logger.warning(f"[{hostname}] Command failed: {command[:50]}...")
-                failure_msg = "[ERROR] Command execution failed or returned non-zero exit status"
-                write_to_host_log(failure_msg)
-
-            return single_cmd_success
-
-        except Exception as e:
-            logger.error(
-                f"[{hostname}] Unexpected error during SSH command execution: {type(e).__name__}: {e}", exc_info=True
-            )
-            error_msg = f"[ERROR] Unexpected error: {e}"
-            write_to_host_log(error_msg)
-            return False
-        finally:
-            runner._disconnect()  # type: ignore[no-untyped-call]
-            logger.debug(f"[{hostname}] SSH single command session completed")
-
-            # Write session footer to host log with safer success check
-            try:
-                # Ensure we have a valid success value
-                final_success = locals().get("single_cmd_success", False)
-                if not isinstance(final_success, bool):
-                    logger.warning(f"Success value is not boolean: {type(final_success)} = {final_success}")
-                    final_success = False
-
-                footer = f"""
-{"=" * 80}
-SSH Single Command Session Completed: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-Status: {"SUCCESS" if final_success else "FAILED"}
-Log file: {host_log_file}
-{"=" * 80}"""
-                write_to_host_log(footer)
-            except Exception as e:
-                logger.error(f"Error in footer generation: {type(e).__name__}: {e}")
-                # Write minimal footer
-                try:
-                    simple_footer = f"Session completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                    write_to_host_log(simple_footer)
-                except Exception as e2:
-                    logger.error(f"Even simple footer failed: {e2}")
+    # T013b: _run_ssh_command moved to src.ssh.command.command_runner.SingleCommandRunner.run().
+    # External callers should invoke SingleCommandRunner.run(...) directly.
 
     @staticmethod
     def _run_ssh_command_on_host(  # noqa: C901, PLR0912, PLR0913
@@ -1719,8 +982,8 @@ Log file: {host_log_file}
             logger.debug(f"[{hostname}] Starting SSH session...")
 
             if len(commands) == 1:  # type: ignore[arg-type]
-                # Single command
-                host_success = EnhancedSSHRunner._run_ssh_command(
+                # T013b: single-command orchestration moved to SingleCommandRunner.run()
+                host_success = SingleCommandRunner.run(
                     hostname,
                     username,
                     password,
@@ -2135,8 +1398,8 @@ Log file: {host_log_file}
                 # Single host execution
                 hostname = final_hosts[0]
                 if len(commands_to_run) == 1:
-                    # Single command on single host
-                    ssh_success = EnhancedSSHRunner._run_ssh_command(
+                    # T013b: single-command orchestration moved to SingleCommandRunner.run()
+                    ssh_success = SingleCommandRunner.run(
                         hostname,
                         str(final_username),
                         str(final_password),
@@ -2264,7 +1527,7 @@ SECURITY NOTES:
         # Optional parameters with validation
         def validate_port_arg(value):  # type: ignore[no-untyped-def]
             ivalue = int(value)
-            if not EnhancedSSHRunner._validate_port(ivalue):
+            if not SshConnector._validate_port(ivalue):
                 raise argparse.ArgumentTypeError(f"Port must be between 1 and 65535, got {ivalue}")
             return ivalue
 
@@ -2352,7 +1615,7 @@ SECURITY NOTES:
                     port = 22
                     break
                 port = int(port_input)
-                if not EnhancedSSHRunner._validate_port(port):
+                if not SshConnector._validate_port(port):
                     print("X  Port must be between 1 and 65535")
                     continue
                 break
@@ -2390,5 +1653,5 @@ SECURITY NOTES:
 
         print(f"\n>> Starting SSH session (shell_mode={use_shell})...")
 
-        # Execute
-        return EnhancedSSHRunner._run_ssh_command(hostname, username, password, command, port, timeout, use_shell)
+        # T013b: single-command orchestration moved to SingleCommandRunner.run()
+        return SingleCommandRunner.run(hostname, username, password, command, port, timeout, use_shell)
