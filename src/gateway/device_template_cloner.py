@@ -95,7 +95,7 @@ class DeviceConfigTemplateClonerManager:
         input_fn: Callable,  # safe_input wrapper for all user prompts
         get_csv_path_fn: Callable,  # FilePathUtils.get_csv_path for output paths
         save_data_fn: Callable,  # DataExporter.save_data_to_output for CSV write
-        check_and_generate_csv_fn: Callable,  # CacheUtils helper for PK-aware CSV export
+        write_csv_fn: Callable,  # DataExporter.write_with_format_selection — PK-aware writer
     ) -> None:
         """Store injected dependencies as instance attributes."""
         self.org_id = org_id  # Org UUID — scope for all API list/create calls
@@ -103,7 +103,7 @@ class DeviceConfigTemplateClonerManager:
         self.input_fn = input_fn  # safe_input — handles EOF in SSH/container contexts
         self.get_csv_path_fn = get_csv_path_fn  # Path builder — avoids hardcoded separators
         self.save_data_fn = save_data_fn  # CSV writer — handles file creation and append
-        self.check_and_generate_csv_fn = check_and_generate_csv_fn  # PK-aware upsert helper
+        self.write_csv_fn = write_csv_fn  # PK-aware format-selecting writer for export row
 
     # ------------------------------------------------------------------
     # Site selection
@@ -383,9 +383,10 @@ class DeviceConfigTemplateClonerManager:
             "source_site_id": device_info.get("site_id", ""),  # Site where source device lives
         }
         logging.info("Exporting new gateway template result to CSV")  # Log before export action
-        self.check_and_generate_csv_fn(  # Use PK-aware CSV helper for upsert behaviour
-            [row],  # Wrap single row in list as expected by the helper
-            api_function_name="createOrgGatewayTemplate",  # PK strategy key for upsert logic
+        self.write_csv_fn(  # PK-aware writer that selects CSV or SQLite per global format
+            [row],  # Wrap single row in list as expected by the writer
+            "CloneGatewayTemplate.csv",  # Output filename (or table name in SQLite mode)
+            api_function_name="createOrgGatewayTemplate",  # PK strategy key for upsert
         )
         logging.debug("CSV export complete for template_id %s", row["template_id"])  # Log after export
         print(f"\nSuccess: Created gateway template '{row['template_name']}' (ID: {row['template_id']})")
