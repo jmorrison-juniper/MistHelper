@@ -603,37 +603,69 @@ class WAN2MigrationManager:
             )
         return report_data
 
+    @staticmethod
+    def _is_info_only_override(result: dict[str, Any]) -> bool:
+        """Return True when a result has overrides but no critical or warning ones."""
+        if not result.get("has_overrides"):  # No overrides at all -> not info-only.
+            return False
+        if result.get("critical_override_count", 0) > 0:  # Has critical -> not info-only.
+            return False
+        if result.get("warning_override_count", 0) > 0:  # Has warning -> not info-only.
+            return False
+        return True  # Has overrides, none critical, none warning -> info-only.
+
+    @staticmethod
+    def _count_override_severities(results: list[dict[str, Any]]) -> dict[str, int]:
+        """Count override sites by severity bucket (override/critical/warning/info)."""
+        override_count = sum(1 for r in results if r["has_overrides"])  # Sites with any override.
+        critical_sites = sum(1 for r in results if r.get("critical_override_count", 0) > 0)  # DHCP->Static.
+        warning_sites = sum(1 for r in results if r.get("warning_override_count", 0) > 0)  # Static->DHCP.
+        info_sites = sum(
+            1 for r in results if WAN2MigrationManager._is_info_only_override(r)
+        )  # Info-only override sites.
+        return {
+            "override": override_count,
+            "critical": critical_sites,
+            "warning": warning_sites,
+            "info": info_sites,
+        }
+
+    def _compute_severity_counts(self, results: list[dict[str, Any]]) -> dict[str, int]:
+        """Compute per-severity site counts from per-site result records."""
+        logging.debug("Computing severity counts from %d result records", len(results))  # Log before scan.
+        success_count = sum(1 for r in results if r["variable_set"])  # Sites where variable was set.
+        severity = self._count_override_severities(results)  # Compute override-related counters in one pass.
+        return {"success": success_count, **severity}  # Merge variable-set count with override severity counts.
+
+    def _print_summary_block(self, results: list[dict[str, Any]], counts: dict[str, int], output_file: str) -> None:
+        """Print the human-readable summary block for the site-variable operation."""
+        print("\n  Configuration Complete!")  # Preserve legacy completion banner.
+        print("=" * 70)  # Preserve legacy divider.
+        print(f"  Sites Processed: {len(results)}")  # Preserve legacy total-sites line.
+        print(f"  Variables Set: {counts['success']}")  # Preserve legacy variables-set line.
+        print(f"  Sites with WAN2 Overrides: {counts['override']}")  # Preserve legacy override-total line.
+        print(f"    -> CRITICAL (DHCP->Static IP conflicts): {counts['critical']}")  # Preserve CRITICAL line.
+        print(f"    -> WARNING (Static->DHCP conflicts): {counts['warning']}")  # Preserve WARNING line.
+        print(f"    -> INFO (Same IP type, other overrides): {counts['info']}")  # Preserve INFO line.
+        print(f"\n  Report saved to: {output_file}")  # Preserve report-location line.
+        print("=" * 70)  # Preserve legacy divider.
+
     def _print_site_variable_summary(self, results: list[dict[str, Any]], output_file: str):  # type: ignore[no-untyped-def]
         """Print summary of site variable operation."""
-        success_count = sum(1 for r in results if r["variable_set"])
-        override_count = sum(1 for r in results if r["has_overrides"])
-        critical_sites = sum(1 for r in results if r.get("critical_override_count", 0) > 0)
-        warning_sites = sum(1 for r in results if r.get("warning_override_count", 0) > 0)
-        info_sites = sum(
-            1
-            for r in results
-            if r.get("has_overrides")
-            and r.get("critical_override_count", 0) == 0
-            and r.get("warning_override_count", 0) == 0
-        )
-
-        print("\n  Configuration Complete!")
-        print("=" * 70)
-        print(f"  Sites Processed: {len(results)}")
-        print(f"  Variables Set: {success_count}")
-        print(f"  Sites with WAN2 Overrides: {override_count}")
-        print(f"    -> CRITICAL (DHCP->Static IP conflicts): {critical_sites}")
-        print(f"    -> WARNING (Static->DHCP conflicts): {warning_sites}")
-        print(f"    -> INFO (Same IP type, other overrides): {info_sites}")
-        print(f"\n  Report saved to: {output_file}")
-        print("=" * 70)
-
-        self._print_severity_warnings(critical_sites, warning_sites, info_sites)
-
-        logging.info("Menu #149 complete: %s/%s sites configured", success_count, len(results))
+        counts = self._compute_severity_counts(results)  # Compute per-severity counters in one pass.
+        self._print_summary_block(results, counts, output_file)  # Render the summary block to the operator.
+        self._print_severity_warnings(
+            counts["critical"], counts["warning"], counts["info"]
+        )  # Emit severity-specific warnings after the summary block.
         logging.info(
-            "Override breakdown - CRITICAL: %s, WARNING: %s, INFO: %s", critical_sites, warning_sites, info_sites
-        )
+            "Menu #149 complete: %s/%s sites configured", counts["success"], len(results)
+        )  # Preserve legacy completion log.
+        logging.info(
+            "Override breakdown - CRITICAL: %s, WARNING: %s, INFO: %s",
+            counts["critical"],
+            counts["warning"],
+            counts["info"],
+        )  # Preserve legacy breakdown log.
 
     def _print_severity_warnings(self, critical_sites: int, warning_sites: int, info_sites: int):  # type: ignore[no-untyped-def]
         """Print severity-specific warnings."""
