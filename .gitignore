@@ -230,6 +230,8 @@ backups/
 *.cfg
 config/
 configs/
+!src/ssh/config/
+!src/ssh/config/*.py
 
 # Archives
 *.zip
@@ -257,3 +259,4 @@ abandoned-specs/
 
 # Auto-generated audit-menu SpecKit stubs (stale, replaced by numbered specs)
 specs/*-audit-menu-*/
+

@@ -17,11 +17,12 @@ class _Args:
 
 def _make_deps(*, no_env: bool = True) -> SSHRunnerManagerDeps:
     """Build dependency container with mocks for SSH runner manager tests."""
+    # T013a: load_ssh_config_from_env / load_commands_from_csv removed from EnhancedSSHRunner.
+    # Manager now calls EnvSshConfigLoader/CommandCsvLoader directly; mock_enhanced only needs
+    # the runtime SSH execution methods (run_application + run_ssh_commands_multi_host).
     mock_enhanced = SimpleNamespace(
-        load_ssh_config_from_env=MagicMock(return_value={}),
         run_ssh_commands_multi_host=MagicMock(return_value={"host-1": {"success": True}}),
         run_application=MagicMock(return_value=True),
-        load_commands_from_csv=MagicMock(return_value=[]),
     )
 
     return SSHRunnerManagerDeps(

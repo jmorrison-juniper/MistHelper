@@ -7,6 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.ssh.config.command_parser import CommandListParser
+from src.ssh.config.csv_loader import CommandCsvLoader
+from src.ssh.config.env_loader import EnvSshConfigLoader
+from src.ssh.config.host_parser import HostListParser
+from src.ssh.config.validators import validate_command, validate_hostname, validate_username
 from src.ssh.ssh_runner import EnhancedSSHRunner, SSHConnectionConfig, SSHExecutionConfig
 
 
@@ -95,7 +100,7 @@ class TestValidateHostname:
     )
     def test_valid_ip_addresses(self, hostname):
         """Valid IP addresses pass validation."""
-        assert EnhancedSSHRunner._validate_hostname(hostname) is True
+        assert validate_hostname(hostname) is True
 
     @pytest.mark.parametrize(
         "hostname",
@@ -109,7 +114,7 @@ class TestValidateHostname:
     )
     def test_valid_hostnames(self, hostname):
         """Valid hostnames pass validation."""
-        assert EnhancedSSHRunner._validate_hostname(hostname) is True
+        assert validate_hostname(hostname) is True
 
     @pytest.mark.parametrize(
         "hostname",
@@ -126,7 +131,7 @@ class TestValidateHostname:
     )
     def test_invalid_hostnames(self, hostname):
         """Invalid or malicious hostnames fail validation."""
-        assert EnhancedSSHRunner._validate_hostname(hostname) is False
+        assert validate_hostname(hostname) is False
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +191,7 @@ class TestValidateUsername:
     )
     def test_valid_usernames(self, username):
         """Standard usernames pass validation."""
-        assert EnhancedSSHRunner._validate_username(username) is True
+        assert validate_username(username) is True
 
     @pytest.mark.parametrize(
         "username",
@@ -201,7 +206,7 @@ class TestValidateUsername:
     )
     def test_invalid_usernames(self, username):
         """Invalid usernames fail validation."""
-        assert EnhancedSSHRunner._validate_username(username) is False
+        assert validate_username(username) is False
 
 
 # ---------------------------------------------------------------------------
@@ -265,19 +270,19 @@ class TestValidateCommand:
     )
     def test_valid_commands(self, cmd):
         """Standard JunOS commands pass."""
-        assert EnhancedSSHRunner._validate_command(cmd) is True
+        assert validate_command(cmd) is True
 
     def test_empty_command(self):
         """Empty commands fail."""
-        assert EnhancedSSHRunner._validate_command("") is False
+        assert validate_command("") is False
 
     def test_null_byte_rejected(self):
         """Commands with null bytes are rejected."""
-        assert EnhancedSSHRunner._validate_command("show\x00version") is False
+        assert validate_command("show\x00version") is False
 
     def test_too_long_command(self):
         """Commands exceeding 1000 chars are rejected."""
-        assert EnhancedSSHRunner._validate_command("x" * 1001) is False
+        assert validate_command("x" * 1001) is False
 
 
 # ---------------------------------------------------------------------------
@@ -316,35 +321,35 @@ class TestValidateThreadCount:
 # Host List Parsing
 # ---------------------------------------------------------------------------
 class TestParseHostList:
-    """Tests for _parse_host_list static method."""
+    """Tests for HostListParser.parse (T013a: was EnhancedSSHRunner._parse_host_list)."""
 
     def test_single_host(self):
         """Single host is parsed correctly."""
-        result = EnhancedSSHRunner._parse_host_list("192.168.1.1")
+        result = HostListParser().parse("192.168.1.1")
         assert result == ["192.168.1.1"]
 
     def test_multiple_hosts(self):
         """Comma-separated hosts are parsed."""
-        result = EnhancedSSHRunner._parse_host_list("10.0.0.1,10.0.0.2,10.0.0.3")
+        result = HostListParser().parse("10.0.0.1,10.0.0.2,10.0.0.3")
         assert len(result) == 3
         assert "10.0.0.2" in result
 
     def test_whitespace_handling(self):
         """Whitespace around hosts is stripped."""
-        result = EnhancedSSHRunner._parse_host_list(" 10.0.0.1 , 10.0.0.2 ")
+        result = HostListParser().parse(" 10.0.0.1 , 10.0.0.2 ")
         assert result == ["10.0.0.1", "10.0.0.2"]
 
     def test_empty_string(self):
         """Empty string returns empty list."""
-        assert EnhancedSSHRunner._parse_host_list("") == []
+        assert HostListParser().parse("") == []
 
     def test_none_input(self):
         """None input returns empty list."""
-        assert EnhancedSSHRunner._parse_host_list(None) == []
+        assert HostListParser().parse(None) == []
 
     def test_invalid_hosts_filtered(self, capsys):
         """Invalid hosts are filtered out with warning."""
-        result = EnhancedSSHRunner._parse_host_list("10.0.0.1,;bad;host,10.0.0.2")
+        result = HostListParser().parse("10.0.0.1,;bad;host,10.0.0.2")
         assert "10.0.0.1" in result
         assert "10.0.0.2" in result
         assert ";bad;host" not in result
@@ -352,7 +357,7 @@ class TestParseHostList:
     def test_max_100_hosts(self, capsys):
         """Host list is limited to 100 entries."""
         hosts = ",".join(f"10.0.0.{i}" for i in range(1, 150))
-        result = EnhancedSSHRunner._parse_host_list(hosts)
+        result = HostListParser().parse(hosts)
         assert len(result) <= 100
 
 
@@ -360,36 +365,36 @@ class TestParseHostList:
 # Command List Parsing
 # ---------------------------------------------------------------------------
 class TestParseCommandList:
-    """Tests for _parse_command_list static method."""
+    """Tests for CommandListParser.parse (T013a: was EnhancedSSHRunner._parse_command_list)."""
 
     def test_single_command(self):
         """Single command is parsed."""
-        result = EnhancedSSHRunner._parse_command_list("show version")
+        result = CommandListParser().parse("show version")
         assert result == ["show version"]
 
     def test_multiple_commands(self):
         """Comma-separated commands are parsed."""
-        result = EnhancedSSHRunner._parse_command_list("show version,show route,show interfaces")
+        result = CommandListParser().parse("show version,show route,show interfaces")
         assert len(result) == 3
 
     def test_quoted_commands(self):
         """Quoted command strings are handled."""
-        result = EnhancedSSHRunner._parse_command_list('"show version","show route"')
+        result = CommandListParser().parse('"show version","show route"')
         assert "show version" in result
         assert "show route" in result
 
     def test_empty_string(self):
         """Empty string returns empty list."""
-        assert EnhancedSSHRunner._parse_command_list("") == []
+        assert CommandListParser().parse("") == []
 
     def test_none_input(self):
         """None input returns empty list."""
-        assert EnhancedSSHRunner._parse_command_list(None) == []
+        assert CommandListParser().parse(None) == []
 
     def test_max_50_commands(self, capsys):
         """Command list is limited to 50 entries."""
         cmds = ",".join(f"show cmd{i}" for i in range(60))
-        result = EnhancedSSHRunner._parse_command_list(cmds)
+        result = CommandListParser().parse(cmds)
         assert len(result) <= 50
 
 
@@ -397,7 +402,7 @@ class TestParseCommandList:
 # CSV Command Loading
 # ---------------------------------------------------------------------------
 class TestLoadCommandsFromCsv:
-    """Tests for load_commands_from_csv static method."""
+    """Tests for CommandCsvLoader.load (T013a: was EnhancedSSHRunner.load_commands_from_csv)."""
 
     def test_basic_csv(self, tmp_path, monkeypatch):
         """Load commands from a basic CSV file."""
@@ -411,7 +416,7 @@ class TestLoadCommandsFromCsv:
             f.write("\n")
             f.write("show route\n")
 
-        result = EnhancedSSHRunner.load_commands_from_csv(csv_path)
+        result = CommandCsvLoader().load(csv_path)
         assert "show version" in result
         assert "show interfaces" in result
         assert "show route" in result
@@ -419,7 +424,7 @@ class TestLoadCommandsFromCsv:
 
     def test_missing_file(self):
         """Missing CSV returns empty list."""
-        result = EnhancedSSHRunner.load_commands_from_csv("data/nonexistent.csv")
+        result = CommandCsvLoader().load("data/nonexistent.csv")
         assert result == []
 
     def test_comments_and_empty_lines_skipped(self, tmp_path, monkeypatch):
@@ -434,7 +439,7 @@ class TestLoadCommandsFromCsv:
             f.write("show version\n")
             f.write("\n")
 
-        result = EnhancedSSHRunner.load_commands_from_csv(csv_path)
+        result = CommandCsvLoader().load(csv_path)
         assert result == ["show version"]
 
 
@@ -808,11 +813,11 @@ class TestCreateSecureLogFile:
 # Load SSH Config from .env
 # ---------------------------------------------------------------------------
 class TestLoadSSHConfigFromEnv:
-    """Tests for load_ssh_config_from_env static method."""
+    """Tests for EnvSshConfigLoader.load (T013a: was EnhancedSSHRunner.load_ssh_config_from_env)."""
 
     def test_missing_env_file(self):
         """Missing .env returns empty config."""
-        config = EnhancedSSHRunner.load_ssh_config_from_env("nonexistent.env")
+        config = EnvSshConfigLoader().load("nonexistent.env")
         assert config["hosts"] == []
         assert config["username"] is None
         assert config["password"] is None
@@ -820,12 +825,12 @@ class TestLoadSSHConfigFromEnv:
 
     def test_path_traversal_rejected(self):
         """Path traversal in env_file is rejected."""
-        config = EnhancedSSHRunner.load_ssh_config_from_env("../../etc/shadow")
+        config = EnvSshConfigLoader().load("../../etc/shadow")
         assert config["hosts"] == []
 
     def test_absolute_path_rejected(self):
         """Absolute paths are rejected."""
-        config = EnhancedSSHRunner.load_ssh_config_from_env("/etc/shadow")
+        config = EnvSshConfigLoader().load("/etc/shadow")
         assert config["hosts"] == []
 
     def test_basic_env_parsing(self, tmp_path, monkeypatch):
@@ -841,7 +846,7 @@ class TestLoadSSHConfigFromEnv:
             f.write("SSH_PASSWORD=secret123\n")
             f.write("SSH_COMMANDS=show version,show route\n")
 
-        config = EnhancedSSHRunner.load_ssh_config_from_env("test.env")  # Parse test fixture
+        config = EnvSshConfigLoader().load("test.env")  # Parse test fixture
         assert "10.0.0.1" in config["hosts"]  # First host must be parsed
         assert config["username"] == "admin"  # Username must come from test file, not real env
         assert config["password"] == "secret123"  # Password must come from test file
@@ -857,7 +862,7 @@ class TestLoadSSHConfigFromEnv:
             f.write("SSH_HOST=10.0.0.1\n")
             f.write("# Another comment\n")
 
-        config = EnhancedSSHRunner.load_ssh_config_from_env("test.env")
+        config = EnvSshConfigLoader().load("test.env")
         assert "10.0.0.1" in config["hosts"]
 
     def test_oversized_env_rejected(self, tmp_path, monkeypatch):
@@ -867,7 +872,7 @@ class TestLoadSSHConfigFromEnv:
         with open(env_path, "w", encoding="utf-8") as f:
             f.write("X" * (1024 * 1024 + 1))  # > 1MB
 
-        config = EnhancedSSHRunner.load_ssh_config_from_env("big.env")
+        config = EnvSshConfigLoader().load("big.env")
         assert config["hosts"] == []
 
     def test_quoted_values(self, tmp_path, monkeypatch):
@@ -881,7 +886,7 @@ class TestLoadSSHConfigFromEnv:
             f.write('SSH_USER="admin"\n')  # Double-quoted value must be unquoted by parser
             f.write("SSH_PASSWORD='secret123'\n")  # Single-quoted value must be unquoted
 
-        config = EnhancedSSHRunner.load_ssh_config_from_env("test.env")  # Parse test fixture
+        config = EnvSshConfigLoader().load("test.env")  # Parse test fixture
         assert config["username"] == "admin"  # Quotes must be stripped from username
         assert config["password"] == "secret123"  # Quotes must be stripped from password
 
@@ -1627,7 +1632,7 @@ class TestRunApplication:
         assert result is not None
 
     @patch("src.ssh.ssh_runner.getpass")
-    @patch.object(EnhancedSSHRunner, "load_ssh_config_from_env")
+    @patch.object(EnvSshConfigLoader, "load")
     @patch.object(EnhancedSSHRunner, "_run_ssh_command")
     def test_env_config_loading(self, mock_run, mock_env, mock_getpass):
         """Env config is loaded when no_env is False."""
@@ -1652,7 +1657,7 @@ class TestRunApplication:
         mock_getpass.getpass.return_value = "password123"
         mock_multi_cmd.return_value = True
         # Use CSV to provide multiple commands
-        with patch.object(EnhancedSSHRunner, "load_commands_from_csv", return_value=["show version", "show route"]):
+        with patch.object(CommandCsvLoader, "load", return_value=["show version", "show route"]):
             args = self._make_args(command=None)
             result = EnhancedSSHRunner.run_application(args)
         assert result is True
@@ -1660,7 +1665,7 @@ class TestRunApplication:
 
     @patch("src.ssh.ssh_runner.getpass")
     @patch.object(EnhancedSSHRunner, "run_ssh_commands_multi_host")
-    @patch.object(EnhancedSSHRunner, "load_ssh_config_from_env")
+    @patch.object(EnvSshConfigLoader, "load")
     def test_multiple_hosts_execution(self, mock_env, mock_multi_host, mock_getpass):
         """Multiple hosts uses run_ssh_commands_multi_host."""
         mock_getpass.getpass.return_value = "password123"
@@ -1690,7 +1695,7 @@ class TestRunApplication:
     def test_no_command_and_no_csv_returns_false(self, mock_run, mock_getpass):
         """No command provided and no CSV file returns False or prompts."""
         mock_getpass.getpass.return_value = "password123"
-        with patch.object(EnhancedSSHRunner, "load_commands_from_csv", return_value=[]):
+        with patch.object(CommandCsvLoader, "load", return_value=[]):
             args = self._make_args(command=None)
             result = EnhancedSSHRunner.run_application(args)
         # Should return False since no commands available

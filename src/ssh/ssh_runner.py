@@ -7,7 +7,6 @@ import base64
 import concurrent.futures
 import getpass
 import hashlib
-import ipaddress
 import logging
 import multiprocessing
 import os
@@ -21,15 +20,13 @@ from typing import Any
 import paramiko
 from paramiko import RejectPolicy, SSHClient
 
-try:
-    from dotenv import load_dotenv
-
-    DOTENV_AVAILABLE = True
-except ImportError:
-    DOTENV_AVAILABLE = False
-
-    def load_dotenv(*_args: Any, **_kwargs: Any) -> None:  # type: ignore[misc]
-        """No-op fallback when python-dotenv is not installed."""
+from src.ssh.config.csv_loader import CommandCsvLoader  # T013a: extracted CSV loader
+from src.ssh.config.env_loader import EnvSshConfigLoader  # T013a: extracted .env loader
+from src.ssh.config.validators import (  # T013a: shared validators (no more static-method dupes)
+    validate_command,
+    validate_hostname,
+    validate_username,
+)
 
 
 @dataclass
@@ -160,44 +157,6 @@ class EnhancedSSHRunner:
         print(f"[INFO] Trusted first-seen SSH host key for {entry_name} ({fingerprint})")
 
     @staticmethod
-    def _validate_hostname(hostname: str) -> bool:
-        """Validate hostname or IP address format.
-
-        Args:
-            hostname: Hostname or IP address to validate
-
-        Returns:
-            bool: True if valid, False otherwise
-        """
-        if not hostname or not isinstance(hostname, str):
-            return False
-
-        # Check length limits
-        if len(hostname) > 253:  # RFC 1035 limit
-            return False
-
-        # Try to parse as IP address first
-        try:
-            ipaddress.ip_address(hostname)
-            return True
-        except ValueError:
-            pass
-
-        # Validate as hostname (RFC 1123 compliant)
-        if len(hostname) > 253:
-            return False
-
-        # Remove trailing dot if present
-        hostname = hostname.rstrip(".")
-
-        # Check overall format
-        hostname_pattern = re.compile(
-            r"^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$"
-        )
-
-        return bool(hostname_pattern.match(hostname))
-
-    @staticmethod
     def _validate_port(port: int) -> bool:
         """Validate port number is in valid range.
 
@@ -220,27 +179,6 @@ class EnhancedSSHRunner:
             bool: True if valid (1-3600), False otherwise
         """
         return isinstance(timeout, int) and 1 <= timeout <= 3600
-
-    @staticmethod
-    def _validate_username(username: str) -> bool:
-        """Validate SSH username format.
-
-        Args:
-            username: Username to validate
-
-        Returns:
-            bool: True if valid, False otherwise
-        """
-        if not username or not isinstance(username, str):
-            return False
-
-        # Length check (typical Unix limit is 32 chars)
-        if len(username) > 32 or len(username) < 1:
-            return False
-
-        # Basic character validation (alphanumeric, underscore, hyphen, dot)
-        username_pattern = re.compile(r"^[a-zA-Z0-9._-]+$")
-        return bool(username_pattern.match(username))
 
     @staticmethod
     def sanitize_filename(filename: str) -> str:
@@ -282,29 +220,6 @@ class EnhancedSSHRunner:
         return sanitized
 
     @staticmethod
-    def _validate_command(command: str) -> bool:
-        """Basic validation for SSH commands.
-
-        Args:
-            command: Command to validate
-
-        Returns:
-            bool: True if valid, False otherwise
-        """
-        if not command or not isinstance(command, str):
-            return False
-
-        # Length check (reasonable command length limit)
-        if len(command) > 1000:
-            return False
-
-        # Check for null bytes (can cause issues in some contexts)
-        if "\x00" in command:
-            return False
-
-        return True
-
-    @staticmethod
     def _validate_thread_count(thread_count: int, max_hosts: int) -> int:
         """Validate and adjust thread count to reasonable limits.
 
@@ -321,195 +236,6 @@ class EnhancedSSHRunner:
         # Limit to reasonable maximum (don't overwhelm system)
         max_reasonable_threads = min(50, max_hosts * 2)
         return min(thread_count, max_reasonable_threads, max_hosts)
-
-    @staticmethod
-    def _parse_host_list(hosts_str: str) -> list:  # type: ignore[type-arg]
-        """Parse comma-separated host list from .env file with validation.
-
-        Args:
-            hosts_str: String containing comma-separated hosts (e.g., '192.168.1.1,192.168.1.2')
-
-        Returns:
-            list: List of validated hostnames/IPs
-        """
-        if not hosts_str or not isinstance(hosts_str, str):
-            return []
-
-        # Length check to prevent DoS
-        if len(hosts_str) > 10000:  # Reasonable limit for host list
-            print("[WARNING] Host list too long, truncating to first 10000 characters")
-            hosts_str = hosts_str[:10000]
-
-        # Split by comma and validate each host
-        hosts = []
-        invalid_hosts = []
-
-        for host in hosts_str.split(","):
-            host = host.strip()
-            if not host:  # Skip empty entries
-                continue
-
-            # Validate hostname/IP format
-            if EnhancedSSHRunner._validate_hostname(host):
-                hosts.append(host)
-            else:
-                invalid_hosts.append(host)
-
-        # Warn about invalid hosts
-        if invalid_hosts:
-            print(f"[WARNING] Skipping {len(invalid_hosts)} invalid hosts: {', '.join(invalid_hosts[:5])}")
-            if len(invalid_hosts) > 5:
-                print(f"    ... and {len(invalid_hosts) - 5} more")
-
-        # Limit total number of hosts to prevent resource exhaustion
-        max_hosts = 100  # Reasonable limit
-        if len(hosts) > max_hosts:
-            print(f"[WARNING] Too many hosts ({len(hosts)}), limiting to first {max_hosts}")
-            hosts = hosts[:max_hosts]
-
-        return hosts
-
-    @staticmethod
-    def _parse_command_list(commands_str: str) -> list:  # type: ignore[type-arg]
-        """Parse comma-separated command list from .env file with validation.
-
-        Args:
-            commands_str: String containing comma-separated commands
-                (e.g., 'show ver,show route' or '"show ver","show route"')
-
-        Returns:
-            list: List of validated commands
-        """
-        if not commands_str or not isinstance(commands_str, str):
-            return []
-
-        # Length check to prevent DoS
-        if len(commands_str) > 50000:  # Reasonable limit for command string
-            print("[WARNING] Command list too long, truncating to first 50000 characters")
-            commands_str = commands_str[:50000]
-
-        # Remove outer quotes if present
-        commands_str = commands_str.strip("'\"")
-
-        # Split by comma and validate each command
-        commands: list[str] = []
-        invalid_commands: list[str] = []
-
-        for cmd in commands_str.split(","):
-            # Remove quotes and whitespace
-            clean_cmd = cmd.strip().strip("'\"").strip()
-
-            if not clean_cmd:  # Skip empty commands
-                continue
-
-            # Validate command
-            if EnhancedSSHRunner._validate_command(clean_cmd):
-                commands.append(clean_cmd)
-            else:
-                invalid_commands.append(clean_cmd[:50] + "..." if len(clean_cmd) > 50 else clean_cmd)
-
-        # Warn about invalid commands
-        if invalid_commands:
-            print(f"[WARNING] Skipping {len(invalid_commands)} invalid commands: {', '.join(invalid_commands[:3])}")
-            if len(invalid_commands) > 3:
-                print(f"    ... and {len(invalid_commands) - 3} more")
-
-        # Limit total number of commands to prevent resource exhaustion
-        max_commands = 50  # Reasonable limit
-        if len(commands) > max_commands:
-            print(f"[WARNING] Too many commands ({len(commands)}), limiting to first {max_commands}")
-            commands = commands[:max_commands]
-
-        return commands
-
-    @staticmethod
-    def load_commands_from_csv(csv_file_path: str = "data/SSH_COMMANDS.CSV") -> list:  # type: ignore[type-arg]  # noqa: C901, PLR0912
-        """Load SSH commands from a CSV file as fallback when .env has no commands.
-
-        Expected CSV format:
-        - First column: command
-        - Optional second column: description/comment (ignored)
-        - Lines starting with # are treated as comments and ignored
-        - Empty lines are ignored
-
-        Example CSV content:
-        # Network device commands
-        show version
-        show interfaces,Interface status
-        show route,Routing table
-
-        Args:
-            csv_file_path (str): Path to the CSV file (default: data/SSH_COMMANDS.CSV)
-
-        Returns:
-            list: List of validated commands loaded from the CSV file
-        """
-        import csv
-
-        commands: list[str] = []
-
-        if not os.path.exists(csv_file_path):
-            # Legacy fallback: check previous root location if default data path missing
-            if csv_file_path.startswith("data/"):
-                legacy_path = csv_file_path.replace("data/", "")
-                if os.path.exists(legacy_path):
-                    try:
-                        print(f"X  Using legacy SSH commands file at {legacy_path}; move it to data/ for consistency.")
-                        csv_file_path = legacy_path
-                    except Exception:
-                        return commands
-                else:
-                    return commands
-            else:
-                return commands
-
-        try:
-            with open(csv_file_path, newline="", encoding="utf-8") as csvfile:
-                # Use simple comma delimiter instead of trying to detect dialect
-                # This is more reliable for simple CSV files with comments
-                reader = csv.reader(csvfile, delimiter=",")
-                invalid_commands = []
-
-                for row_num, row in enumerate(reader, 1):
-                    if not row:  # Skip empty rows
-                        continue
-
-                    # Skip comment lines (lines starting with #)
-                    first_cell = str(row[0]).strip()
-                    if first_cell.startswith("#") or not first_cell:
-                        continue
-
-                    # Get the command (first column)
-                    command = first_cell
-
-                    # Validate the command
-                    if EnhancedSSHRunner._validate_command(command):
-                        commands.append(command)
-                    else:
-                        invalid_cmd = command[:50] + "..." if len(command) > 50 else command
-                        invalid_commands.append(f"line {row_num}: {invalid_cmd}")
-
-                # Warn about invalid commands
-                if invalid_commands:
-                    print(f"[WARNING] Skipping {len(invalid_commands)} invalid commands from {csv_file_path}:")
-                    for invalid_cmd in invalid_commands[:3]:  # Show first 3
-                        print(f"    {invalid_cmd}")
-                    if len(invalid_commands) > 3:
-                        print(f"    ... and {len(invalid_commands) - 3} more")
-
-                # Limit total number of commands to prevent resource exhaustion
-                max_commands = 50  # Reasonable limit
-                if len(commands) > max_commands:
-                    print(
-                        f"[WARNING] Too many commands in {csv_file_path} ({len(commands)}), limiting to first {max_commands}"  # noqa: E501
-                    )
-                    commands = commands[:max_commands]
-
-        except Exception as e:
-            print(f"[WARNING] Warning: Could not read {csv_file_path}: {e}")
-            return []
-
-        return commands
 
     def _create_secure_log_file(self, hostname: str) -> tuple:  # type: ignore[type-arg]
         """Create a secure per-host log file with proper sanitization.
@@ -583,13 +309,13 @@ class EnhancedSSHRunner:
             bool: True if connection successful, False otherwise
         """
         # Validate inputs before attempting connection
-        if not self._validate_hostname(hostname):
+        if not validate_hostname(hostname):  # T013a: shared validator (was self._validate_hostname)
             error_msg = f"Invalid hostname format: {hostname}"
             self.logger.error(error_msg)
             print(f"[ERROR] {error_msg}")
             return False
 
-        if not self._validate_username(username):
+        if not validate_username(username):  # T013a: shared validator (was self._validate_username)
             error_msg = f"Invalid username format: {username}"
             self.logger.error(error_msg)
             print(f"[ERROR] {error_msg}")
@@ -1153,118 +879,6 @@ class EnhancedSSHRunner:
             print(">> SSH connection closed")
         else:
             self.logger.debug("No SSH connection to close")
-
-    @staticmethod
-    def load_ssh_config_from_env(env_file: str = ".env") -> dict:  # type: ignore[type-arg]  # noqa: C901, PLR0912, PLR0915
-        """Load SSH configuration from .env file with comprehensive validation.
-
-        Args:
-            env_file: Path to the .env file (default: ".env")
-
-        Returns:
-            dict: SSH configuration with keys: hosts, username, password, commands
-        """
-        config: dict[str, Any] = {"hosts": [], "username": None, "password": None, "commands": []}  # nosec B105
-
-        # Validate env_file path to prevent directory traversal
-        if not env_file or ".." in env_file or env_file.startswith("/") or "\\" in env_file:
-            print(f"[WARNING] Invalid .env file path: {env_file}")
-            return config
-
-        if not os.path.exists(env_file):
-            return config
-
-        # Check file size to prevent DoS
-        try:
-            file_size = os.path.getsize(env_file)
-            if file_size > 1024 * 1024:  # 1MB limit
-                print(f"[WARNING] .env file too large ({file_size} bytes), skipping")
-                return config
-        except OSError as e:
-            print(f"[WARNING] Cannot access .env file: {e}")
-            return config
-
-        if DOTENV_AVAILABLE:
-            # Use python-dotenv for proper parsing
-            try:
-                load_dotenv(env_file)
-                ssh_host = os.getenv("SSH_HOST")
-                if ssh_host:
-                    config["hosts"] = EnhancedSSHRunner._parse_host_list(ssh_host)
-
-                # Validate username
-                username = os.getenv("SSH_USER")
-                if username and EnhancedSSHRunner._validate_username(username):
-                    config["username"] = username
-                elif username:
-                    print(f"[WARNING] Invalid username format in .env file: {username}")
-
-                config["password"] = os.getenv("SSH_PASSWORD")
-
-                # Parse SSH_COMMANDS
-                ssh_commands = os.getenv("SSH_COMMANDS")
-                if ssh_commands:
-                    config["commands"] = EnhancedSSHRunner._parse_command_list(ssh_commands)
-            except Exception as e:
-                print(f"[WARNING] Error loading .env with python-dotenv: {e}")
-        else:
-            # Basic manual parsing for .env files with enhanced validation
-            try:
-                with open(env_file, encoding="utf-8", errors="ignore") as f:
-                    line_count = 0
-                    for line in f:
-                        line_count += 1
-
-                        # Prevent processing too many lines
-                        if line_count > 1000:
-                            print("[WARNING] .env file has too many lines, stopping at 1000")
-                            break
-
-                        line = line.strip()
-
-                        # Skip empty lines and comments
-                        if not line or line.startswith("#"):
-                            continue
-
-                        # Skip lines without equals sign
-                        if "=" not in line:
-                            continue
-
-                        # Handle multiple = signs correctly
-                        parts = line.split("=", 1)
-                        if len(parts) != 2:
-                            continue
-
-                        key = parts[0].strip()
-                        value = parts[1].strip()
-
-                        # Remove quotes if present
-                        if value.startswith('"') and value.endswith('"'):
-                            value = value[1:-1]
-                        elif value.startswith("'") and value.endswith("'"):
-                            value = value[1:-1]
-
-                        # Process known keys with validation
-                        if key == "SSH_HOST":
-                            config["hosts"] = EnhancedSSHRunner._parse_host_list(value)
-                        elif key == "SSH_USER":
-                            if EnhancedSSHRunner._validate_username(value):
-                                config["username"] = value
-                            else:
-                                print(f"[WARNING] Invalid username format in .env file: {value}")
-                        elif key == "SSH_PASSWORD":
-                            config["password"] = value
-                        elif key == "SSH_COMMANDS":
-                            config["commands"] = EnhancedSSHRunner._parse_command_list(value)
-
-            except UnicodeDecodeError as e:
-                print(f"[WARNING] .env file encoding error: {e}")
-            except OSError as e:
-                print(f"[WARNING] Error reading {env_file}: {e}")
-            except Exception as e:
-                print(f"[WARNING] Unexpected error reading {env_file}: {e}")
-
-        return config
 
     @staticmethod
     def _setup_logging(log_level: str = "INFO") -> logging.Logger:
@@ -2349,7 +1963,7 @@ Log file: {host_log_file}
         env_config: dict[str, Any] = {}
         if use_env:
             logger.info("Loading SSH credentials from .env file (default behavior)")
-            env_config = EnhancedSSHRunner.load_ssh_config_from_env()
+            env_config = EnvSshConfigLoader().load()  # T013a: extracted loader
             if any([env_config.get("hosts"), env_config["username"], env_config["password"]]):
                 host_count = len(env_config.get("hosts", []))
                 hosts_str = ", ".join(env_config.get("hosts", [])) if host_count <= 3 else f"{host_count} hosts"
@@ -2385,7 +1999,7 @@ Log file: {host_log_file}
         invalid_hosts = []
 
         for host in final_hosts:
-            if EnhancedSSHRunner._validate_hostname(host):
+            if validate_hostname(host):  # T013a: shared validator
                 validated_hosts.append(host)
             else:
                 invalid_hosts.append(host)
@@ -2400,7 +2014,7 @@ Log file: {host_log_file}
                 final_hosts = validated_hosts
 
         # Validate username
-        if final_username and not EnhancedSSHRunner._validate_username(final_username):
+        if final_username and not validate_username(final_username):  # T013a: shared validator
             print(f"[ERROR] Invalid username format: {final_username}")
             return False
 
@@ -2436,7 +2050,7 @@ Log file: {host_log_file}
             logger.info(f"Using {len(commands_to_run)} commands from .env file: {commands_to_run}")
         # Priority 3: data/SSH_COMMANDS.CSV file as fallback
         elif not args.command:
-            csv_commands = EnhancedSSHRunner.load_commands_from_csv()
+            csv_commands = CommandCsvLoader().load()  # T013a: extracted CSV loader
             if csv_commands:
                 commands_to_run = csv_commands
                 logger.info(f"Using {len(commands_to_run)} commands from data/SSH_COMMANDS.CSV: {commands_to_run}")
@@ -2445,7 +2059,7 @@ Log file: {host_log_file}
         else:
             # Check what command sources are available
             env_commands = env_config.get("commands", []) if use_env else []
-            csv_commands = EnhancedSSHRunner.load_commands_from_csv() if not commands_to_run else []
+            csv_commands = CommandCsvLoader().load() if not commands_to_run else []  # T013a: extracted CSV loader
 
             if env_commands and csv_commands:
                 command = input(
@@ -2489,7 +2103,7 @@ Log file: {host_log_file}
         invalid_commands = []
 
         for cmd in commands_to_run:
-            if EnhancedSSHRunner._validate_command(cmd):
+            if validate_command(cmd):  # T013a: shared validator
                 validated_commands.append(cmd)
             else:
                 invalid_cmd = cmd[:50] + "..." if len(cmd) > 50 else cmd
@@ -2710,7 +2324,7 @@ SECURITY NOTES:
             if not hostname:
                 print("X  Hostname is required")
                 continue
-            if not EnhancedSSHRunner._validate_hostname(hostname):
+            if not validate_hostname(hostname):  # T013a: shared validator
                 print("X  Invalid hostname or IP address format")
                 continue
             break
@@ -2720,7 +2334,7 @@ SECURITY NOTES:
             if not username:
                 print("X  Username is required")
                 continue
-            if not EnhancedSSHRunner._validate_username(username):
+            if not validate_username(username):  # T013a: shared validator
                 print("X  Invalid username format (alphanumeric, underscore, hyphen, dot only)")
                 continue
             break
@@ -2769,7 +2383,7 @@ SECURITY NOTES:
             if not command:
                 print("X  Command is required")
                 continue
-            if not EnhancedSSHRunner._validate_command(command):
+            if not validate_command(command):  # T013a: shared validator
                 print("X  Invalid command (too long or contains null bytes)")
                 continue
             break

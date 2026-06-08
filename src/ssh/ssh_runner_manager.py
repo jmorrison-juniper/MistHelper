@@ -9,6 +9,9 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from src.ssh.config.csv_loader import CommandCsvLoader  # T013a: extracted CSV loader
+from src.ssh.config.env_loader import EnvSshConfigLoader  # T013a: extracted .env loader
+
 
 @dataclass(frozen=True)
 class SSHRunnerManagerDeps:
@@ -42,7 +45,7 @@ class SSHRunnerManager:
 
             env_config: dict[str, Any] = {}
             if not no_env_flag:
-                env_config = deps.enhanced_ssh_runner.load_ssh_config_from_env()
+                env_config = EnvSshConfigLoader().load()  # T013a: was load_ssh_config_from_env()
 
             hosts = env_config.get("hosts", [])
             username = env_config.get("username")
@@ -184,14 +187,17 @@ class SSHRunnerManager:
     @staticmethod
     def _execute_ssh(deps: SSHRunnerManagerDeps, hosts: Any, username: Any, password: Any, commands: Any) -> bool:
         """Execute SSH commands on specified hosts."""
-        original_load = deps.enhanced_ssh_runner.load_ssh_config_from_env
+        # T013a: monkey-patch EnvSshConfigLoader.load (replaces patching of removed
+        # EnhancedSSHRunner.load_ssh_config_from_env static method). This indirection lets
+        # run_application() see the user's interactive selections instead of re-reading .env.
+        original_load = EnvSshConfigLoader.load  # Capture original bound method for restoration
 
-        def mock_load(env_file: str = ".env") -> dict[str, Any]:
-            _ = env_file
+        def mock_load(_self: EnvSshConfigLoader, env_file: str = ".env") -> dict[str, Any]:
+            _ = env_file  # Argument retained for signature parity with the real loader
             return {"hosts": hosts, "username": username, "password": password, "commands": commands}
 
         try:
-            deps.enhanced_ssh_runner.load_ssh_config_from_env = mock_load
+            EnvSshConfigLoader.load = mock_load  # type: ignore[method-assign]  # Inject mocked loader
 
             if len(hosts) > 1 or len(commands) > 1:
                 print(f"\n!? Executing {len(commands)} command(s) on {len(hosts)} host(s)")
@@ -232,7 +238,7 @@ class SSHRunnerManager:
 
             return deps.enhanced_ssh_runner.run_application(MockArgs())
         finally:
-            deps.enhanced_ssh_runner.load_ssh_config_from_env = original_load
+            EnvSshConfigLoader.load = original_load  # type: ignore[method-assign]  # Restore real loader
 
     @staticmethod
     def _load_gateway_data(deps: SSHRunnerManagerDeps) -> Any:
@@ -350,7 +356,7 @@ class SSHRunnerManager:
         print("\n  4. Loading SSH configuration...")
 
         try:
-            ssh_config = deps.enhanced_ssh_runner.load_ssh_config_from_env()
+            ssh_config = EnvSshConfigLoader().load()  # T013a: extracted .env loader
 
             if not ssh_config.get("username") or not ssh_config.get("password"):
                 print("! SSH credentials not found in .env file.")
@@ -358,7 +364,7 @@ class SSHRunnerManager:
 
             commands = ssh_config.get("commands", [])
             if not commands:
-                commands = deps.enhanced_ssh_runner.load_commands_from_csv()
+                commands = CommandCsvLoader().load()  # T013a: extracted CSV loader
                 if not commands:
                     print("! No SSH commands found.")
                     return
