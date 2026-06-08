@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from src.ssh.batch.multi_host_runner import MultiHostRunner  # T013c: extracted multi-host orchestrator
 from src.ssh.config.csv_loader import CommandCsvLoader  # T013a: extracted CSV loader
 from src.ssh.config.env_loader import EnvSshConfigLoader  # T013a: extracted .env loader
 
@@ -202,7 +203,7 @@ class SSHRunnerManager:
             if len(hosts) > 1 or len(commands) > 1:
                 print(f"\n!? Executing {len(commands)} command(s) on {len(hosts)} host(s)")
 
-                summary = deps.enhanced_ssh_runner.run_ssh_commands_multi_host(
+                summary = MultiHostRunner.run(  # T013c: direct call (no façade through deps.enhanced_ssh_runner)
                     hosts=hosts,
                     username=username,
                     password=password,
@@ -372,7 +373,7 @@ class SSHRunnerManager:
             print(f"  - Target hosts: {len(management_ips)} gateways")
             print(f"  - Commands: {len(commands)}")
 
-            results = deps.enhanced_ssh_runner.run_ssh_commands_multi_host(
+            results = MultiHostRunner.run(  # T013c: direct call (no façade through deps.enhanced_ssh_runner)
                 hosts=management_ips,
                 username=ssh_config["username"],
                 password=ssh_config["password"],
