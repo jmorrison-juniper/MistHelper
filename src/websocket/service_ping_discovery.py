@@ -138,28 +138,50 @@ class ServicePingDiscoveryMixin:
 
     def _extract_from_device_config(self, config: dict[str, Any]) -> None:
         """Extract tenant and service names from device configuration payload."""
-        tenants_set: set[str] = set()
-        services_set: set[str] = set()
+        tenants_set: set[str] = set()  # Accumulate discovered tenant names (deduplicated) from all config sections.
+        services_set: set[str] = set()  # Accumulate discovered service names (deduplicated) from all sections.
 
+        logging.info("Extracting tenants/services from service_policies + routing_instances")  # Before action.
+        self._collect_from_service_policies(config, tenants_set, services_set)  # Walk service_policies block.
+        self._collect_from_routing_instances(config, tenants_set)  # Walk routing_instances block.
+        self._extract_from_router_config(
+            config.get("router", {}), tenants_set, services_set
+        )  # Walk router subsection for additional tenants and services.
+        logging.debug(
+            "Raw discovery counts: tenants=%d services=%d", len(tenants_set), len(services_set)
+        )  # After-action raw count summary before filtering underscore-prefixed system names.
+
+        self.device_tenants = sorted(
+            [tenant for tenant in tenants_set if tenant and not tenant.startswith("_")]
+        )  # Keep only operator-defined tenants (drop empty + system underscore names) and sort for determinism.
+        self.device_services = sorted(
+            [service for service in services_set if service and not service.startswith("_")]
+        )  # Keep only operator-defined services (drop empty + system underscore names) sorted for determinism.
+
+        self._report_device_config_results()  # Print operator-facing summary of discovered tenants and services.
+
+    @staticmethod
+    def _collect_from_service_policies(config: dict[str, Any], tenants_set: set[str], services_set: set[str]) -> None:
+        """Walk the service_policies list extracting tenant names and inner service names."""
         for policy in config.get("service_policies", []):
-            if isinstance(policy, dict):
-                tenant_name = policy.get("tenant")
-                if tenant_name:
-                    tenants_set.add(tenant_name)
-                self._extract_services_from_policy(policy, services_set)
+            if not isinstance(policy, dict):
+                continue  # Skip malformed list entries that are not dicts.
+            tenant_name = policy.get("tenant")  # Optional tenant key on each policy entry.
+            if tenant_name:
+                tenants_set.add(tenant_name)  # Add discovered tenant to dedup set.
+            ServicePingDiscoveryMixin._extract_services_from_policy(
+                policy, services_set
+            )  # Pull inner service names via shared helper.
 
+    @staticmethod
+    def _collect_from_routing_instances(config: dict[str, Any], tenants_set: set[str]) -> None:
+        """Walk the routing_instances list extracting tenant names (skipping underscore-prefixed system names)."""
         for instance in config.get("routing_instances", []):
-            if isinstance(instance, dict):
-                name = instance.get("name")
-                if name and not str(name).startswith("_"):
-                    tenants_set.add(str(name))
-
-        self._extract_from_router_config(config.get("router", {}), tenants_set, services_set)
-
-        self.device_tenants = sorted([tenant for tenant in tenants_set if tenant and not tenant.startswith("_")])
-        self.device_services = sorted([service for service in services_set if service and not service.startswith("_")])
-
-        self._report_device_config_results()
+            if not isinstance(instance, dict):
+                continue  # Skip malformed entries.
+            name = instance.get("name")  # Routing instance name doubles as a tenant identifier.
+            if name and not str(name).startswith("_"):
+                tenants_set.add(str(name))  # Add only operator-defined routing instances to tenant set.
 
     def _extract_services_from_policy(self, policy: dict[str, Any], services_set: set[str]) -> None:
         """Extract service names from a policy object."""
@@ -284,72 +306,61 @@ class ServicePingDiscoveryMixin:
         return self._get_tenant_selection(available_tenants, default_index)
 
     def _display_tenant_categories(self, all_tenants: list[str]) -> None:
-        """Display tenants grouped by discovery source."""
-        index = 0
+        """Display tenants grouped by discovery source, each within its own category section."""
+        categories = self._build_tenant_categories(all_tenants)  # Compute ordered (label, items, suffix) tuples.
+        index = 0  # Running global tenant index shown to operator across all category sections.
+        for label, items, suffix in categories:
+            index = self._print_indexed_category(label, items, suffix, index)  # Print section, advance index.
 
-        if self.org_tenants:
-            print(f"  Organization Tenants ({len(self.org_tenants)}):")
-            for name in self.org_tenants:
-                print(f"    [{index}] {name} (org networks)")
-                index += 1
-
-        site_only = [tenant for tenant in self.site_tenants if tenant not in self.org_tenants]
-        if site_only:
-            print(f"  Site Tenants ({len(site_only)}):")
-            for name in site_only:
-                print(f"    [{index}] {name} (site networks)")
-                index += 1
-
-        policy_only = [
-            tenant
-            for tenant in self.policy_tenants
-            if tenant not in self.org_tenants and tenant not in self.site_tenants
+    def _build_tenant_categories(self, all_tenants: list[str]) -> list[tuple[str, list[str], str]]:
+        """Build the ordered list of (header_label, filtered_items, suffix_text) sections for tenant display."""
+        org = self.org_tenants  # Alias for readability — already-deduplicated source list.
+        site_only = self._filter_unique(self.site_tenants, org)  # Site-only after excluding org tenants.
+        policy_only = self._filter_unique(self.policy_tenants, org, site_only)  # Policy-only after prior sources.
+        template_only = self._filter_unique(
+            self.template_tenants, org, site_only, policy_only
+        )  # Template-only after prior sources.
+        device_only = self._filter_unique(
+            self.device_tenants, org, site_only, policy_only, template_only
+        )  # Device-only after prior sources.
+        remaining = self._filter_unique(
+            all_tenants, org, site_only, policy_only, template_only, device_only
+        )  # Anything left over (default/custom).
+        return [
+            (f"  Organization Tenants ({len(org)}):", list(org), "(org networks)"),
+            (f"  Site Tenants ({len(site_only)}):", site_only, "(site networks)"),
+            (f"  Service Policy Tenants ({len(policy_only)}):", policy_only, "(service policies)"),
+            (
+                f"  Gateway Template Tenants ({len(template_only)}):",
+                template_only,
+                "(gateway templates)",
+            ),
+            (
+                f"  Device Configuration Tenants ({len(device_only)}):",
+                device_only,
+                "(device config)",
+            ),
+            (f"  Additional Tenants ({len(remaining)}):", remaining, "(default/custom)"),
         ]
-        if policy_only:
-            print(f"  Service Policy Tenants ({len(policy_only)}):")
-            for name in policy_only:
-                print(f"    [{index}] {name} (service policies)")
-                index += 1
 
-        template_only = [
-            tenant
-            for tenant in self.template_tenants
-            if tenant not in self.org_tenants and tenant not in self.site_tenants and tenant not in self.policy_tenants
-        ]
-        if template_only:
-            print(f"  Gateway Template Tenants ({len(template_only)}):")
-            for name in template_only:
-                print(f"    [{index}] {name} (gateway templates)")
-                index += 1
+    @staticmethod
+    def _filter_unique(source: list[str], *exclude_lists: list[str]) -> list[str]:
+        """Return items from source that do not appear in any of the exclude_lists, preserving order."""
+        excluded: set[str] = set()  # Union of all exclude lists for O(1) membership tests.
+        for exclude in exclude_lists:
+            excluded.update(exclude)  # Merge each exclude list into combined excluded set.
+        return [item for item in source if item not in excluded]  # Preserve source order while filtering.
 
-        device_only = [
-            tenant
-            for tenant in self.device_tenants
-            if tenant not in self.org_tenants
-            and tenant not in self.site_tenants
-            and tenant not in self.policy_tenants
-            and tenant not in self.template_tenants
-        ]
-        if device_only:
-            print(f"  Device Configuration Tenants ({len(device_only)}):")
-            for name in device_only:
-                print(f"    [{index}] {name} (device config)")
-                index += 1
-
-        remaining = [
-            tenant
-            for tenant in all_tenants
-            if tenant not in self.org_tenants
-            and tenant not in self.site_tenants
-            and tenant not in self.policy_tenants
-            and tenant not in self.template_tenants
-            and tenant not in self.device_tenants
-        ]
-        if remaining:
-            print(f"  Additional Tenants ({len(remaining)}):")
-            for name in remaining:
-                print(f"    [{index}] {name} (default/custom)")
-                index += 1
+    @staticmethod
+    def _print_indexed_category(label: str, items: list[str], suffix: str, index: int) -> int:
+        """Print a labeled category section with indexed entries, returning the next available index."""
+        if not items:
+            return index  # Empty section — skip header entirely (legacy behavior).
+        print(label)  # Print section header line.
+        for name in items:
+            print(f"    [{index}] {name} {suffix}")  # Print indexed entry with provenance suffix.
+            index += 1  # Advance global index for next entry across all sections.
+        return index
 
     def _get_tenant_selection(self, tenants: list[str], default_index: int | None) -> str | None:
         """Read tenant selection from user input."""
@@ -431,38 +442,45 @@ class ServicePingDiscoveryMixin:
         return self._get_service_selection(available_services, default_index)
 
     def _display_service_categories(self, all_services: list[str]) -> None:
-        """Display services grouped by discovery source."""
-        index = 0
+        """Display services grouped by discovery source (org section uses rich label, others use suffix tag)."""
+        index = self._print_org_services_section(0)  # Org section uses per-service detail formatting.
+        device_only = self._filter_unique(
+            self.device_services, self.org_service_names
+        )  # Device-only after excluding org services.
+        index = self._print_indexed_category(
+            f"  Device Configuration Services ({len(device_only)}):",
+            device_only,
+            "(device config)",
+            index,
+        )  # Print device-only section using shared helper.
+        remaining = self._filter_unique(
+            all_services, self.org_service_names, self.device_services
+        )  # Anything not previously listed.
+        self._print_indexed_category(
+            f"  Additional Services ({len(remaining)}):",
+            remaining,
+            "(default/custom)",
+            index,
+        )  # Print remaining section using shared helper (index no longer needed afterward).
 
-        if self.org_service_names:
-            print(f"  Organization Services ({len(self.org_service_names)}):")
-            for name in self.org_service_names:
-                details = next((service for service in self.org_services if service["name"] == name), {})
-                service_type = details.get("type", "custom")
-                description = details.get("description", "")
-                if description:
-                    print(f"    [{index}] {name} ({service_type}) - {description}")
-                else:
-                    print(f"    [{index}] {name} ({service_type})")
-                index += 1
-
-        device_only = [service for service in self.device_services if service not in self.org_service_names]
-        if device_only:
-            print(f"  Device Configuration Services ({len(device_only)}):")
-            for name in device_only:
-                print(f"    [{index}] {name} (device config)")
-                index += 1
-
-        remaining = [
-            service
-            for service in all_services
-            if service not in self.org_service_names and service not in self.device_services
-        ]
-        if remaining:
-            print(f"  Additional Services ({len(remaining)}):")
-            for name in remaining:
-                print(f"    [{index}] {name} (default/custom)")
-                index += 1
+    def _print_org_services_section(self, start_index: int) -> int:
+        """Print the Organization Services section with rich `(type) - description` labels."""
+        if not self.org_service_names:
+            return start_index  # Empty section — skip header (legacy behavior).
+        index = start_index  # Local running index initialized from caller's running count.
+        print(f"  Organization Services ({len(self.org_service_names)}):")  # Section header.
+        for name in self.org_service_names:
+            details = next(
+                (service for service in self.org_services if service["name"] == name), {}
+            )  # Look up matching service metadata (type, description) from cached org services list.
+            service_type = details.get("type", "custom")  # Service type defaults to "custom" when missing.
+            description = details.get("description", "")  # Optional description annotation.
+            if description:
+                print(f"    [{index}] {name} ({service_type}) - {description}")  # Rich label with description.
+            else:
+                print(f"    [{index}] {name} ({service_type})")  # Compact label without description.
+            index += 1  # Advance index for next entry across all category sections.
+        return index  # Hand running index back to caller for subsequent sections.
 
     def _get_service_selection(self, services: list[str], default_index: int | None) -> str:
         """Read service selection from user input."""
