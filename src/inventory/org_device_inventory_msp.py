@@ -126,65 +126,89 @@ class OrgDeviceInventoryMSPOrchestrator:
         run_for_org_fn(chosen_id)
 
     @staticmethod
+    def _flatten_msp_version_rows(
+        all_ver_data: list[tuple[str, list[dict]]],
+    ) -> list[dict]:
+        """Flatten per-org version row lists into a single list tagged with org name."""
+        logging.debug("Flattening MSP version rows from %d orgs", len(all_ver_data))  # Log before pass.
+        flat: list[dict] = []
+        for safe_org, ver_rows in all_ver_data:  # Iterate org -> rows pairs.
+            for row in ver_rows:  # Each row is a model/version count for the given org.
+                flat.append({**row, "org": safe_org})  # Tag row with org for downstream pivoting.
+        return flat
+
+    @staticmethod
+    def _build_msp_version_pivot(
+        flat: list[dict],
+    ) -> tuple[list[str], dict[tuple[str, str], dict]]:
+        """Build (sorted versions list, (org, model) -> {device_type, version: count} pivot)."""
+        versions = sorted({row["version"] for row in flat})  # Deterministic version column order.
+        pivot: dict[tuple, dict] = {}  # (org, model) -> per-version counts plus device_type.
+        for row in flat:  # Single pass to populate pivot cells.
+            key = (row["org"], row["model"])  # Compound key per pivot row.
+            if key not in pivot:  # First time we see this (org, model).
+                pivot[key] = {"device_type": row.get("device_type", "")}  # Seed with device_type.
+            pivot[key][row["version"]] = row.get("count", 0)  # Set per-version count cell.
+        return versions, pivot
+
+    @staticmethod
+    def _build_msp_pivot_table_and_rows(
+        versions: list[str],
+        pivot: dict[tuple[str, str], dict],
+    ) -> tuple[PrettyTable, list[dict], dict[str, int], int]:
+        """Build PrettyTable + export rows + column totals from the pivot map."""
+        table = PrettyTable()  # Console table for operator display.
+        table.field_names = ["Org", "Model", "Device Type"] + versions + ["Total"]  # Stable column order.
+        col_totals: dict[str, int] = {version: 0 for version in versions}  # Per-version running totals.
+        export_rows: list[dict] = []  # Flattened CSV export rows.
+        for (safe_org, model), ver_counts in sorted(pivot.items()):  # Sort by (org, model) for stable output.
+            row_counts = [ver_counts.get(version, 0) for version in versions]  # Cell values in column order.
+            row_total = sum(row_counts)  # Per-row total across all versions.
+            for version, count in zip(versions, row_counts, strict=True):  # Update column totals.
+                col_totals[version] += count
+            table.add_row([safe_org, model, ver_counts.get("device_type", "")] + row_counts + [row_total])  # Add row.
+            export_row: dict = {
+                "Org": safe_org,
+                "Model": model,
+                "Device Type": ver_counts.get("device_type", ""),
+            }  # Build CSV row preserving column names.
+            for version in versions:  # Fill per-version cells in CSV row.
+                export_row[version] = ver_counts.get(version, 0)
+            export_row["Total"] = row_total  # Add total column to CSV row.
+            export_rows.append(export_row)
+        grand_total = sum(col_totals[v] for v in versions)  # Sum across all column totals.
+        table.add_row(["TOTAL", "", ""] + [col_totals[v] for v in versions] + [grand_total])  # Append TOTAL row.
+        return table, export_rows, col_totals, grand_total
+
+    @staticmethod
     def _display_combined_pivot_and_export(
         all_ver_data: list[tuple[str, list[dict]]],
         filename: str,
     ) -> None:
         """Build combined version-per-model pivot across all MSP orgs and export it."""
-        flat: list[dict] = []
-        for safe_org, ver_rows in all_ver_data:
-            for row in ver_rows:
-                flat.append({**row, "org": safe_org})
-        if not flat:
-            print("  No version-per-model data available for combined pivot")
-            logging.warning("_display_combined_pivot_and_export: no data to pivot")
+        logging.info("Building combined MSP version pivot from %d org datasets", len(all_ver_data))  # Log entry.
+        flat = OrgDeviceInventoryMSPOrchestrator._flatten_msp_version_rows(all_ver_data)  # Flatten per-org rows.
+        if not flat:  # No rows -> nothing to pivot or export.
+            print("  No version-per-model data available for combined pivot")  # Preserve legacy operator message.
+            logging.warning("_display_combined_pivot_and_export: no data to pivot")  # Preserve legacy log.
             return
-
-        versions = sorted({row["version"] for row in flat})
-        pivot: dict[tuple, dict] = {}
-        for row in flat:
-            key = (row["org"], row["model"])
-            if key not in pivot:
-                pivot[key] = {"device_type": row.get("device_type", "")}
-            pivot[key][row["version"]] = row.get("count", 0)
-
-        table = PrettyTable()
-        table.field_names = ["Org", "Model", "Device Type"] + versions + ["Total"]
-        col_totals: dict[str, int] = {version: 0 for version in versions}
-        export_rows: list[dict] = []
-
-        for (safe_org, model), ver_counts in sorted(pivot.items()):
-            row_counts = [ver_counts.get(version, 0) for version in versions]
-            row_total = sum(row_counts)
-            for version, count in zip(versions, row_counts, strict=True):
-                col_totals[version] += count
-            table.add_row([safe_org, model, ver_counts.get("device_type", "")] + row_counts + [row_total])
-            export_row: dict = {
-                "Org": safe_org,
-                "Model": model,
-                "Device Type": ver_counts.get("device_type", ""),
-            }
-            for version in versions:
-                export_row[version] = ver_counts.get(version, 0)
-            export_row["Total"] = row_total
-            export_rows.append(export_row)
-
-        col_total_values = [col_totals[version] for version in versions]
-        grand_total = sum(col_total_values)
-        table.add_row(["TOTAL", "", ""] + col_total_values + [grand_total])
-
-        print(f"\n{'=' * 62}")
-        print("  Combined MSP Version Distribution per Model (All Orgs)")
-        print(f"{'=' * 62}")
-        print(table)
-
-        ordered_fields = ["Org", "Model", "Device Type"] + versions + ["Total"]
+        versions, pivot = OrgDeviceInventoryMSPOrchestrator._build_msp_version_pivot(flat)  # Build pivot map.
+        table, export_rows, _col_totals, _grand_total = (
+            OrgDeviceInventoryMSPOrchestrator._build_msp_pivot_table_and_rows(versions, pivot)
+        )  # Build PrettyTable + CSV rows in one pass.
+        print(f"\n{'=' * 62}")  # Preserve legacy divider.
+        print("  Combined MSP Version Distribution per Model (All Orgs)")  # Preserve legacy header.
+        print(f"{'=' * 62}")  # Preserve legacy divider.
+        print(table)  # Render the pivot table to the operator.
+        ordered_fields = ["Org", "Model", "Device Type"] + versions + ["Total"]  # CSV header order.
+        logging.info("Exporting combined MSP pivot to %s", filename)  # Log before export side effect.
         DataExporter.write_with_format_selection(
             export_rows,
             filename,
             api_function_name="orgDeviceVersionPerModel",
             fieldnames=ordered_fields,
         )
+        logging.debug("Combined MSP pivot export complete (%d rows)", len(export_rows))  # Log export result.
 
     @staticmethod
     def _build_combined_reports(msp_safe_name: str, collected: list[dict[str, Any]]) -> None:
