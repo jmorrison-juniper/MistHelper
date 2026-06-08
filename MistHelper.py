@@ -145,7 +145,10 @@ from src.wan_hub_group_manager import WanHubGroupNumberManager  # Import WAN hub
 from src.wan_vpn_builder import WanVpnBuilder  # Import WAN VPN configuration builder
 from src.websocket.commands import WebSocketCommands  # Import WebSocket command handlers for device diagnostics
 from src.websocket.context import WebSocketCmdDeps  # Import WebSocket command dependency injection class
-from src.websocket.diag_commands import WebSocketNetworkDiagCommands  # Import WebSocket network diagnostic commands
+from src.websocket.diagnostics import (
+    ArpDeviceExecutor,
+    PingDeviceExecutor,
+)  # WebSocket network diagnostic command executors
 from src.websocket.manager import WebSocketManager  # Import WebSocket connection manager for long-running diagnostics
 
 # ============================================================================
@@ -26749,11 +26752,11 @@ menu_actions = {
         "Export Site Client Anomaly Events (client-specific anomaly detection: connectivity, roaming, throughput)",
     ),
     "118": (
-        lambda: WebSocketNetworkDiagCommands.ping_device(_ws_cmd_deps()),  # type: ignore[misc]
+        lambda: PingDeviceExecutor().execute(_ws_cmd_deps()),  # type: ignore[misc]
         "WebSocket Device Ping - Execute ping command on device via WebSocket stream (real-time output)",
     ),
     "119": (
-        lambda: WebSocketNetworkDiagCommands.arp_device(_ws_cmd_deps()),  # type: ignore[misc]
+        lambda: ArpDeviceExecutor().execute(_ws_cmd_deps()),  # type: ignore[misc]
         "WebSocket Device ARP - Execute ARP command on device via WebSocket stream (real-time output)",
     ),
     "120": (
