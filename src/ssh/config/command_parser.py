@@ -18,7 +18,8 @@ class CommandListParser:
     def parse(self, commands_str: str) -> list[str]:
         """Return the validated command list extracted from ``commands_str``."""
         logger.info(  # Pre-action log
-            "CommandListParser.parse: input length=%s", len(commands_str) if commands_str else 0,
+            "CommandListParser.parse: input length=%s",
+            len(commands_str) if commands_str else 0,
         )
         if not commands_str or not isinstance(commands_str, str):  # Guard against None/empty/non-str inputs
             return []  # Nothing to parse
@@ -28,7 +29,9 @@ class CommandListParser:
         self._warn_invalid_commands(invalid)  # User-facing warning preserved from original
         result = self._enforce_command_cap(commands)  # Trim to per-run cap
         logger.debug(  # Post-action log
-            "CommandListParser.parse: %s valid commands (%s invalid)", len(result), len(invalid),
+            "CommandListParser.parse: %s valid commands (%s invalid)",
+            len(result),
+            len(invalid),
         )
         return result  # Final validated command list
 
@@ -36,7 +39,9 @@ class CommandListParser:
     def _truncate_oversize(commands_str: str) -> str:
         """Truncate the raw command string if it exceeds the safety cap."""
         if len(commands_str) > _MAX_INPUT_LEN:  # Length check to prevent DoS
-            print("[WARNING] Command list too long, truncating to first 50000 characters")  # Preserve user-facing string
+            print(
+                "[WARNING] Command list too long, truncating to first 50000 characters"
+            )  # Preserve user-facing string
             return commands_str[:_MAX_INPUT_LEN]  # Return truncated copy
         return commands_str  # No truncation needed
 

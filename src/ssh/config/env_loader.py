@@ -46,7 +46,10 @@ class EnvSshConfigLoader:
         """Return SSH config keys (hosts/username/password/commands) from ``env_file``."""
         logger.info("EnvSshConfigLoader.load: env_file=%s", env_file)  # Pre-action log
         config: dict[str, Any] = {  # nosec B105 - empty password is a sentinel for "not provided"
-            "hosts": [], "username": None, "password": None, "commands": [],
+            "hosts": [],
+            "username": None,
+            "password": None,
+            "commands": [],
         }
         if not self._is_safe_env_path(env_file):  # Reject obvious path-traversal / absolute paths
             return config  # Return empty config so callers fall back to interactive prompts

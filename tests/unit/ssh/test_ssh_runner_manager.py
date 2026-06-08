@@ -83,10 +83,11 @@ def test_execute_ssh_uses_multi_host_for_multiple_hosts() -> None:
 
 
 def test_execute_ssh_uses_run_application_for_single_host_single_command() -> None:
-    """Single-host/single-command execution path uses run_application."""
+    """Single-host/single-command execution path uses AppRunner.run (T013d: no façade)."""
     deps = _make_deps()
 
-    ok = SSHRunnerManager._execute_ssh(deps, ["host-1"], "admin", "pw", ["show version"])
+    with patch("src.ssh.ssh_runner_manager.AppRunner.run", return_value=True) as mock_app_run:
+        ok = SSHRunnerManager._execute_ssh(deps, ["host-1"], "admin", "pw", ["show version"])
 
     assert ok is True
-    deps.enhanced_ssh_runner.run_application.assert_called_once()
+    mock_app_run.assert_called_once()

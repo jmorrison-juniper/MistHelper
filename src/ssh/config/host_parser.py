@@ -64,6 +64,8 @@ class HostListParser:
     def _enforce_host_cap(hosts: list[str]) -> list[str]:
         """Trim to the per-run host cap and warn if truncation happens."""
         if len(hosts) > _MAX_HOSTS:  # Enforce resource cap
-            print(f"[WARNING] Too many hosts ({len(hosts)}), limiting to first {_MAX_HOSTS}")  # Preserve user-facing string
+            print(
+                f"[WARNING] Too many hosts ({len(hosts)}), limiting to first {_MAX_HOSTS}"
+            )  # Preserve user-facing string
             return hosts[:_MAX_HOSTS]  # Return truncated list
         return hosts  # No truncation needed

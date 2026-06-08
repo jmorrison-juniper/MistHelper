@@ -17,6 +17,8 @@ from src.ssh.config.env_loader import EnvSshConfigLoader
 from src.ssh.config.host_parser import HostListParser
 from src.ssh.config.validators import validate_command, validate_hostname, validate_username
 from src.ssh.connection.connector import SshConnector  # T013b  # noqa: F401
+from src.ssh.runtime.app_runner import AppRunner  # T013d: concrete CLI orchestrator
+from src.ssh.runtime.interactive_mode import InteractiveMode  # T013d: concrete REPL implementation
 from src.ssh.shell_execution.shell_executor import ShellExecutor  # T013b  # noqa: F401
 from src.ssh.ssh_runner import EnhancedSSHRunner, SSHConnectionConfig, SSHExecutionConfig
 
@@ -1177,67 +1179,67 @@ class TestRunApplication:
             setattr(args, key, value)
         return args
 
-    @patch("src.ssh.ssh_runner.getpass")
-    @patch("src.ssh.ssh_runner.SingleCommandRunner.run")
+    @patch("src.ssh.runtime.app_runner.getpass")
+    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_successful_single_host_execution(self, mock_run_single, mock_getpass):
         """Successful single-host single-command execution."""
         mock_getpass.getpass.return_value = "password123"
         mock_run_single.return_value = True
         args = self._make_args()
-        result = EnhancedSSHRunner.run_application(args)
+        result = AppRunner.run(args)
         # Should not return False (success)
         assert result is not False
 
-    @patch("src.ssh.ssh_runner.getpass")
+    @patch("src.ssh.runtime.app_runner.getpass")
     def test_missing_hostname_returns_false(self, mock_getpass):
         """Missing hostname returns False."""
         mock_getpass.getpass.return_value = "password123"
         args = self._make_args(hostname=None, no_env=True)
-        result = EnhancedSSHRunner.run_application(args)
+        result = AppRunner.run(args)
         assert result is False
 
-    @patch("src.ssh.ssh_runner.getpass")
+    @patch("src.ssh.runtime.app_runner.getpass")
     def test_missing_username_returns_false(self, mock_getpass):
         """Missing username returns False."""
         mock_getpass.getpass.return_value = "password123"
         args = self._make_args(username=None, no_env=True)
-        result = EnhancedSSHRunner.run_application(args)
+        result = AppRunner.run(args)
         assert result is False
 
-    @patch("src.ssh.ssh_runner.getpass")
-    @patch("src.ssh.ssh_runner.SingleCommandRunner.run")
+    @patch("src.ssh.runtime.app_runner.getpass")
+    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_invalid_hostname_rejected(self, mock_run, mock_getpass):
         """Invalid hostname is rejected."""
         mock_getpass.getpass.return_value = "password123"
         mock_run.return_value = True
         args = self._make_args(hostname="../../etc/passwd")
-        result = EnhancedSSHRunner.run_application(args)
+        result = AppRunner.run(args)
         assert result is False
 
-    @patch.object(EnhancedSSHRunner, "_interactive_mode")
+    @patch("src.ssh.runtime.app_runner.InteractiveMode.run")
     def test_interactive_mode_dispatches(self, mock_interactive):
         """Interactive flag dispatches to _interactive_mode."""
         mock_interactive.return_value = True
         args = self._make_args(interactive=True)
-        EnhancedSSHRunner.run_application(args)
+        AppRunner.run(args)
         mock_interactive.assert_called_once()
 
-    @patch("src.ssh.ssh_runner.getpass")
-    @patch("src.ssh.ssh_runner.SingleCommandRunner.run")
+    @patch("src.ssh.runtime.app_runner.getpass")
+    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_invalid_command_rejected(self, mock_run, mock_getpass):
         """Commands with dangerous characters are rejected."""
         mock_getpass.getpass.return_value = "password123"
         mock_run.return_value = True
         # command validation rejects certain patterns
         args = self._make_args(command="show version; rm -rf /")
-        result = EnhancedSSHRunner.run_application(args)
+        result = AppRunner.run(args)
         # Should either reject or proceed depending on validation
         # At minimum, it should not crash
         assert result is not None
 
-    @patch("src.ssh.ssh_runner.getpass")
+    @patch("src.ssh.runtime.app_runner.getpass")
     @patch.object(EnvSshConfigLoader, "load")
-    @patch("src.ssh.ssh_runner.SingleCommandRunner.run")
+    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_env_config_loading(self, mock_run, mock_env, mock_getpass):
         """Env config is loaded when no_env is False."""
         mock_getpass.getpass.return_value = "password123"
@@ -1251,11 +1253,11 @@ class TestRunApplication:
         }
         mock_run.return_value = True
         args = self._make_args(no_env=False, hostname=None, username=None, command=None)
-        EnhancedSSHRunner.run_application(args)
+        AppRunner.run(args)
         mock_env.assert_called_once()
 
-    @patch("src.ssh.ssh_runner.getpass")
-    @patch("src.ssh.ssh_runner.BatchExecutor.run")
+    @patch("src.ssh.runtime.app_runner.getpass")
+    @patch("src.ssh.runtime.app_runner.BatchExecutor.run")
     def test_multiple_commands_single_host(self, mock_multi_cmd, mock_getpass):
         """Multiple commands on single host uses BatchExecutor.run."""
         mock_getpass.getpass.return_value = "password123"
@@ -1263,12 +1265,12 @@ class TestRunApplication:
         # Use CSV to provide multiple commands
         with patch.object(CommandCsvLoader, "load", return_value=["show version", "show route"]):
             args = self._make_args(command=None)
-            result = EnhancedSSHRunner.run_application(args)
+            result = AppRunner.run(args)
         assert result is True
         mock_multi_cmd.assert_called_once()
 
-    @patch("src.ssh.ssh_runner.getpass")
-    @patch("src.ssh.ssh_runner.MultiHostRunner.run")
+    @patch("src.ssh.runtime.app_runner.getpass")
+    @patch("src.ssh.runtime.app_runner.MultiHostRunner.run")
     @patch.object(EnvSshConfigLoader, "load")
     def test_multiple_hosts_execution(self, mock_env, mock_multi_host, mock_getpass):
         """Multiple hosts uses MultiHostRunner.run."""
@@ -1290,40 +1292,40 @@ class TestRunApplication:
             "results": {},
         }
         args = self._make_args(no_env=False, hostname=None, username=None, command=None)
-        result = EnhancedSSHRunner.run_application(args)
+        result = AppRunner.run(args)
         assert result is True
         mock_multi_host.assert_called_once()
 
-    @patch("src.ssh.ssh_runner.getpass")
-    @patch("src.ssh.ssh_runner.SingleCommandRunner.run")
+    @patch("src.ssh.runtime.app_runner.getpass")
+    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_no_command_and_no_csv_returns_false(self, mock_run, mock_getpass):
         """No command provided and no CSV file returns False or prompts."""
         mock_getpass.getpass.return_value = "password123"
         with patch.object(CommandCsvLoader, "load", return_value=[]):
             args = self._make_args(command=None)
-            result = EnhancedSSHRunner.run_application(args)
+            result = AppRunner.run(args)
         # Should return False since no commands available
         assert result is False
 
-    @patch("src.ssh.ssh_runner.getpass")
-    @patch("src.ssh.ssh_runner.SingleCommandRunner.run")
+    @patch("src.ssh.runtime.app_runner.getpass")
+    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_debug_mode_enables_tracing(self, mock_run, mock_getpass):
         """Debug mode enables line tracer."""
         mock_getpass.getpass.return_value = "password123"
         mock_run.return_value = True
         args = self._make_args(debug=True)
-        result = EnhancedSSHRunner.run_application(args)
+        result = AppRunner.run(args)
         # Should not crash even with debug tracing
         assert result is not None
 
-    @patch("src.ssh.ssh_runner.getpass")
-    @patch("src.ssh.ssh_runner.SingleCommandRunner.run")
+    @patch("src.ssh.runtime.app_runner.getpass")
+    @patch("src.ssh.runtime.app_runner.SingleCommandRunner.run")
     def test_secure_password_prompt(self, mock_run, mock_getpass):
         """Secure flag triggers password prompt."""
         mock_getpass.getpass.return_value = "secure_password"
         mock_run.return_value = True
         args = self._make_args(secure=True)
-        result = EnhancedSSHRunner.run_application(args)
+        result = AppRunner.run(args)
         assert result is True
 
 
@@ -1551,9 +1553,9 @@ class TestExecuteDirectFallback:
 class TestInteractiveMode:
     """Tests for _interactive_mode static method."""
 
-    @patch("src.ssh.ssh_runner.getpass")
+    @patch("src.ssh.runtime.interactive_mode.getpass")
     @patch("builtins.input")
-    @patch("src.ssh.ssh_runner.SingleCommandRunner.run")
+    @patch("src.ssh.runtime.interactive_mode.SingleCommandRunner.run")
     def test_successful_interactive_session(self, mock_run, mock_input, mock_getpass):
         """Successful interactive session with valid inputs."""
         mock_input.side_effect = [
@@ -1567,11 +1569,11 @@ class TestInteractiveMode:
         mock_getpass.getpass.return_value = "password123"
         mock_run.return_value = True
 
-        result = EnhancedSSHRunner._interactive_mode()
+        result = InteractiveMode.run()
         assert result is True
         mock_run.assert_called_once()
 
-    @patch("src.ssh.ssh_runner.getpass")
+    @patch("src.ssh.runtime.interactive_mode.getpass")
     @patch("builtins.input")
     def test_empty_password_returns_false(self, mock_input, mock_getpass):
         """Empty password returns False."""
@@ -1581,12 +1583,12 @@ class TestInteractiveMode:
         ]
         mock_getpass.getpass.return_value = ""
 
-        result = EnhancedSSHRunner._interactive_mode()
+        result = InteractiveMode.run()
         assert result is False
 
-    @patch("src.ssh.ssh_runner.getpass")
+    @patch("src.ssh.runtime.interactive_mode.getpass")
     @patch("builtins.input")
-    @patch("src.ssh.ssh_runner.SingleCommandRunner.run")
+    @patch("src.ssh.runtime.interactive_mode.SingleCommandRunner.run")
     def test_default_port_and_timeout(self, mock_run, mock_input, mock_getpass):
         """Empty port/timeout uses defaults (22/30)."""
         mock_input.side_effect = [
@@ -1600,12 +1602,12 @@ class TestInteractiveMode:
         mock_getpass.getpass.return_value = "password123"
         mock_run.return_value = True
 
-        result = EnhancedSSHRunner._interactive_mode()
+        result = InteractiveMode.run()
         assert result is True
 
-    @patch("src.ssh.ssh_runner.getpass")
+    @patch("src.ssh.runtime.interactive_mode.getpass")
     @patch("builtins.input")
-    @patch("src.ssh.ssh_runner.SingleCommandRunner.run")
+    @patch("src.ssh.runtime.interactive_mode.SingleCommandRunner.run")
     def test_invalid_hostname_reprompts(self, mock_run, mock_input, mock_getpass):
         """Invalid hostname re-prompts until valid."""
         mock_input.side_effect = [
@@ -1621,12 +1623,12 @@ class TestInteractiveMode:
         mock_getpass.getpass.return_value = "password123"
         mock_run.return_value = True
 
-        result = EnhancedSSHRunner._interactive_mode()
+        result = InteractiveMode.run()
         assert result is True
 
-    @patch("src.ssh.ssh_runner.getpass")
+    @patch("src.ssh.runtime.interactive_mode.getpass")
     @patch("builtins.input")
-    @patch("src.ssh.ssh_runner.SingleCommandRunner.run")
+    @patch("src.ssh.runtime.interactive_mode.SingleCommandRunner.run")
     def test_invalid_username_reprompts(self, mock_run, mock_input, mock_getpass):
         """Invalid username re-prompts until valid."""
         mock_input.side_effect = [
@@ -1641,7 +1643,7 @@ class TestInteractiveMode:
         mock_getpass.getpass.return_value = "password123"
         mock_run.return_value = True
 
-        result = EnhancedSSHRunner._interactive_mode()
+        result = InteractiveMode.run()
         assert result is True
 
 

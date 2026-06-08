@@ -12,6 +12,7 @@ from typing import Any
 from src.ssh.batch.multi_host_runner import MultiHostRunner  # T013c: extracted multi-host orchestrator
 from src.ssh.config.csv_loader import CommandCsvLoader  # T013a: extracted CSV loader
 from src.ssh.config.env_loader import EnvSshConfigLoader  # T013a: extracted .env loader
+from src.ssh.runtime.app_runner import AppRunner  # T013d: real concrete CLI orchestrator (no façade)
 
 
 @dataclass(frozen=True)
@@ -237,7 +238,7 @@ class SSHRunnerManager:
                     self.max_threads = None
                     self.secure = False
 
-            return deps.enhanced_ssh_runner.run_application(MockArgs())
+            return AppRunner.run(MockArgs())  # T013d: direct call to concrete AppRunner (no façade)
         finally:
             EnvSshConfigLoader.load = original_load  # type: ignore[method-assign]  # Restore real loader
 

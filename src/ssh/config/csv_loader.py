@@ -81,7 +81,9 @@ class CommandCsvLoader:
         """Print warnings for any rejected CSV rows."""
         if not invalid:  # Clean file — nothing to warn about
             return  # No-op
-        print(f"[WARNING] Skipping {len(invalid)} invalid commands from {csv_file_path}:")  # Preserve user-facing string
+        print(
+            f"[WARNING] Skipping {len(invalid)} invalid commands from {csv_file_path}:"
+        )  # Preserve user-facing string
         for invalid_cmd in invalid[:3]:  # Original shows first 3 entries
             print(f"    {invalid_cmd}")  # Preserve user-facing string
         if len(invalid) > 3:  # Indicate further truncation
