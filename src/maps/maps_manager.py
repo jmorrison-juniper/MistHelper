@@ -1228,58 +1228,67 @@ class MapsManager:
             logging.error(f"Error downloading map image {map_item.get('id')}: {e}")
         return False
 
+    def _resolve_site_maps_for_download(self, site_id: str) -> tuple[str, list] | None:
+        """Resolve site name and fetch list of maps with downloadable images. Returns None on failure."""
+        logging.info("Resolving site name for download target site_id=%s", site_id)  # Log resolution start
+        sites = self._fetch_sites()  # Fetch site catalog for name lookup
+        # Find matching site name (default 'Unknown' if site_id not in catalog)
+        site_name = next((s.get("name", "Unknown") for s in sites if s["id"] == site_id), "Unknown")
+        logging.debug("Resolved site_name=%s", site_name)  # Log resolved name
+        print(f"\nFetching maps for site: {site_name}")  # User-visible status
+        logging.info("Calling listSiteMaps for site_id=%s", site_id)  # Log API call start
+        maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)  # Fetch all maps
+        logging.debug("listSiteMaps returned status=%s", maps_response.status_code)  # Log API result
+        if maps_response.status_code != 200:  # API call failed
+            print(f"\n! Failed to fetch maps: {maps_response.status_code}")  # User-visible failure
+            return None  # Signal failure to orchestrator
+        maps_with_images = [m for m in maps_response.data if "url" in m]  # Filter to maps that have downloadable images
+        if not maps_with_images:  # No images available
+            print(f"\n! No maps with images found for site: {site_name}")  # User-visible no-data message
+            return None  # Signal nothing to download
+        return site_name, maps_with_images  # Return resolved name and maps for download loop
+
+    def _download_maps_batch(self, maps_with_images: list, download_dir: str) -> int:
+        """Download a batch of map images to the target directory, returning the success count."""
+        # Log batch start with count and target dir
+        logging.info("Starting batch download of %d map images to %s", len(maps_with_images), download_dir)
+        downloaded = sum(  # Count successful downloads
+            1  # Each successful download contributes 1
+            for map_item in tqdm(maps_with_images, desc="Downloading", unit="image")  # Iterate with progress bar
+            if self._download_single_map_image(map_item, download_dir)  # Delegate to existing single-image helper
+        )
+        logging.debug("Batch download finished with %d successes", downloaded)  # Log batch outcome
+        return downloaded  # Return count for summary
+
     def download_site_map_images(self):
         """Download map images to local disk."""
-        print("\n" + "-" * 80)
-        print("DOWNLOAD SITE MAP IMAGES")
-        print("-" * 80)
+        print("\n" + "-" * 80)  # User-visible banner top border
+        print("DOWNLOAD SITE MAP IMAGES")  # User-visible operation title
+        print("-" * 80)  # User-visible banner bottom border
+        try:  # Wrap entire orchestrator to log any unexpected error to user
+            site_id, _ = self.get_current_site()  # Resolve currently selected site from session state
+            if not site_id:  # No site selected by user
+                print("\n! No site selected")  # User-visible no-site message
+                return  # Nothing to download
+            resolved = self._resolve_site_maps_for_download(site_id)  # Resolve name + maps with images
+            if resolved is None:  # Helper signaled failure or no images
+                return  # Stop -- user already informed
+            site_name, maps_with_images = resolved  # Unpack resolved tuple
+            print(f"\nFound {len(maps_with_images)} maps with images")  # User-visible count
+            import os  # Standard path utilities -- imported lazily to match prior behavior
 
-        try:
-            site_id, _ = self.get_current_site()
-            if not site_id:
-                print("\n! No site selected")
-                return
-
-            sites = self._fetch_sites()
-            site_name = next((s.get("name", "Unknown") for s in sites if s["id"] == site_id), "Unknown")
-
-            print(f"\nFetching maps for site: {site_name}")
-            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
-
-            if maps_response.status_code != 200:
-                print(f"\n! Failed to fetch maps: {maps_response.status_code}")
-                return
-
-            maps = maps_response.data
-            maps_with_images = [m for m in maps if "url" in m]
-
-            if not maps_with_images:
-                print(f"\n! No maps with images found for site: {site_name}")
-                return
-
-            print(f"\nFound {len(maps_with_images)} maps with images")
-
-            import os
-
-            download_dir = os.path.join("data", "map_images", sanitize_filename(site_name))
-            os.makedirs(download_dir, exist_ok=True)
-            print(f"Downloading to: {download_dir}")
-
-            downloaded = sum(
-                1
-                for map_item in tqdm(maps_with_images, desc="Downloading", unit="image")
-                if self._download_single_map_image(map_item, download_dir)
-            )
-
-            print(f"\n{'-' * 80}")
-            print(f"Downloaded {downloaded} of {len(maps_with_images)} images")
-            print(f"Location: {download_dir}")
-            print(f"{'-' * 80}")
-            logging.info(f"Downloaded {downloaded} map images to {download_dir}")
-
-        except Exception as e:
-            logging.error(f"Error downloading map images: {e}", exc_info=True)
-            print(f"\n! Error downloading images: {e}")
+            download_dir = os.path.join("data", "map_images", sanitize_filename(site_name))  # Build per-site output dir
+            os.makedirs(download_dir, exist_ok=True)  # Ensure directory exists
+            print(f"Downloading to: {download_dir}")  # User-visible target path
+            downloaded = self._download_maps_batch(maps_with_images, download_dir)  # Run batch download loop
+            print(f"\n{'-' * 80}")  # User-visible summary top border
+            print(f"Downloaded {downloaded} of {len(maps_with_images)} images")  # User-visible count
+            print(f"Location: {download_dir}")  # User-visible target path
+            print(f"{'-' * 80}")  # User-visible summary bottom border
+            logging.info(f"Downloaded {downloaded} map images to {download_dir}")  # Log final outcome
+        except Exception as e:  # Catch-all for unexpected runtime errors
+            logging.error(f"Error downloading map images: {e}", exc_info=True)  # Log full traceback
+            print(f"\n! Error downloading images: {e}")  # User-visible error message
 
     def _print_map_optional_fields(self, map_details: dict) -> None:
         """Print optional detail fields for a map (URL, coordinates, wayfinding)."""
@@ -3014,11 +3023,10 @@ class MapsManager:
             logging.error(f"Error in interactive map viewer: {e}", exc_info=True)
             print(f"\n! Error launching map viewer: {e}")
 
-    def _validate_ppm(self, clients: list, ppm: float) -> float:
-        """Validate pixels-per-meter ratio using client coordinate data and return corrected value."""
-        if not clients or len(clients) == 0:  # No clients to validate against -- return map PPM unchanged
-            return ppm  # Return the map's stored PPM value as-is
-        ppm_samples = []  # Collect sample PPM values from client x/y coordinates
+    def _collect_ppm_samples(self, clients: list) -> list[float]:
+        """Walk the first 10 clients and collect PPM ratio samples from x/y pixel-vs-meter pairs."""
+        logging.debug("Collecting PPM samples from up to 10 clients")  # Log sample collection start
+        ppm_samples: list[float] = []  # Accumulate computed PPM values
         for client in clients[:10]:  # Check first 10 clients only -- sufficient for validation
             x_px = client.get("x")  # Client x in pixels
             x_m = client.get("x_m")  # Client x in meters
@@ -3028,6 +3036,14 @@ class MapsManager:
                 ppm_samples.append(x_px / x_m)  # Calculate PPM from x coordinates
             if y_px and y_m and y_m > 0:  # Both pixel and meter values required for ratio
                 ppm_samples.append(y_px / y_m)  # Calculate PPM from y coordinates
+        logging.debug("Collected %d PPM samples", len(ppm_samples))  # Log result count
+        return ppm_samples  # Hand back samples for averaging
+
+    def _validate_ppm(self, clients: list, ppm: float) -> float:
+        """Validate pixels-per-meter ratio using client coordinate data and return corrected value."""
+        if not clients or len(clients) == 0:  # No clients to validate against -- return map PPM unchanged
+            return ppm  # Return the map's stored PPM value as-is
+        ppm_samples = self._collect_ppm_samples(clients)  # Gather PPM samples from client coordinates
         if not ppm_samples:  # No valid samples found -- cannot validate
             return ppm  # Return original PPM unchanged
         calculated_ppm = sum(ppm_samples) / len(ppm_samples)  # Average all samples for accuracy
@@ -3275,13 +3291,9 @@ class MapsManager:
             )
         )  # Directional dot indicating which way the device faces
 
-    def _add_vbeacons_to_figure(self, fig, map_data: dict) -> None:
-        """Add virtual beacon markers, labels, and coverage circles to the Plotly figure."""
-        if not map_data.get("vbeacons"):  # No virtual beacons on this map -- skip
-            logging.info("No virtual beacons found on this map")  # Informational for operator
-            return  # Nothing to add
-        vbeacons = map_data["vbeacons"]  # List of virtual beacon objects from Mist API
-        logging.info("Processing %d virtual beacons", len(vbeacons))  # Log beacon count
+    def _collect_vbeacon_markers(self, vbeacons: list) -> tuple[list, list, list, list]:
+        """Return parallel arrays of (xs, ys, hovertexts, names) for placeable virtual beacons."""
+        logging.debug("Collecting marker data for %d virtual beacons", len(vbeacons))  # Log collection start
         beacon_x: list = []  # Beacon x pixel coordinates
         beacon_y: list = []  # Beacon y pixel coordinates
         beacon_hover: list = []  # HTML hover tooltip strings
@@ -3302,8 +3314,12 @@ class MapsManager:
             hover += f"Power: {beacon.get('power', 'N/A')}<br>"  # Transmit power in dBm
             hover += f"Position: ({x}, {y})"  # Pixel coordinates on map
             beacon_hover.append(hover)  # Append completed hover text
-        if not beacon_x:  # No beacons had valid coordinates
-            return  # Nothing to render
+        logging.debug("Collected %d placeable virtual beacons", len(beacon_x))  # Log result count
+        return beacon_x, beacon_y, beacon_hover, beacon_names  # Return parallel arrays for plotting
+
+    def _add_vbeacon_markers_trace(self, fig, beacon_x: list, beacon_y: list, beacon_hover: list) -> None:
+        """Add a single Scatter trace containing all virtual beacon marker points."""
+        logging.debug("Adding virtual beacon Scatter trace with %d points", len(beacon_x))  # Log trace add
         fig.add_trace(
             go.Scatter(
                 x=beacon_x,
@@ -3323,6 +3339,10 @@ class MapsManager:
                 showlegend=True,
             )
         )  # Add all virtual beacon markers as a single trace
+
+    def _add_vbeacon_label_annotations(self, fig, beacon_x: list, beacon_y: list, beacon_names: list) -> None:
+        """Add per-beacon text annotations below each marker."""
+        logging.debug("Adding %d virtual beacon label annotations", len(beacon_x))  # Log annotation add
         for _, (x, y, name) in enumerate(zip(beacon_x, beacon_y, beacon_names, strict=True)):  # Add per-beacon labels
             fig.add_annotation(
                 x=x,
@@ -3338,6 +3358,10 @@ class MapsManager:
                 yanchor="bottom",
                 name="Virtual Beacons Label",
             )  # Label positioned below marker
+
+    def _add_vbeacon_coverage_circles(self, fig, vbeacons: list) -> None:
+        """Add a translucent dashed coverage ring around each virtual beacon, sized by transmit power."""
+        logging.debug("Adding coverage circles for %d virtual beacons", len(vbeacons))  # Log circle add
         for beacon in vbeacons:  # Add power-based coverage circles for each beacon
             x = beacon.get("x")  # Beacon center x
             y = beacon.get("y")  # Beacon center y
@@ -3363,6 +3387,21 @@ class MapsManager:
                     hoverinfo="skip",  # No hover needed -- visual indicator only
                 )
             )  # Draw power-proportional coverage circle
+
+    def _add_vbeacons_to_figure(self, fig, map_data: dict) -> None:
+        """Add virtual beacon markers, labels, and coverage circles to the Plotly figure."""
+        if not map_data.get("vbeacons"):  # No virtual beacons on this map -- skip
+            logging.info("No virtual beacons found on this map")  # Informational for operator
+            return  # Nothing to add
+        vbeacons = map_data["vbeacons"]  # List of virtual beacon objects from Mist API
+        logging.info("Processing %d virtual beacons", len(vbeacons))  # Log beacon count
+        # Build parallel arrays of valid beacon coordinates and hover text
+        beacon_x, beacon_y, beacon_hover, beacon_names = self._collect_vbeacon_markers(vbeacons)
+        if not beacon_x:  # No beacons had valid coordinates
+            return  # Nothing to render
+        self._add_vbeacon_markers_trace(fig, beacon_x, beacon_y, beacon_hover)  # Single Scatter trace for all markers
+        self._add_vbeacon_label_annotations(fig, beacon_x, beacon_y, beacon_names)  # Per-beacon text labels
+        self._add_vbeacon_coverage_circles(fig, vbeacons)  # Power-proportional coverage rings
         logging.info("Added %d virtual beacons to map", len(beacon_x))  # Log final count
 
     def _add_ble_beacons_to_figure(self, fig, map_data: dict) -> None:
