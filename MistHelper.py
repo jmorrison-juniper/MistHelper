@@ -12,7 +12,8 @@ import sys
 # Enforce Python 3.13+ requirement
 MINIMUM_PYTHON_VERSION = (3, 13)  # Define minimum required Python version tuple for compatibility checks
 if sys.version_info < MINIMUM_PYTHON_VERSION:  # Exit early if Python is too old to prevent cryptic errors later
-    version_str = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"  # Format current Python version for display
+    # Format current Python version for display
+    version_str = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     required_str = (
         f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"  # Format minimum required version for display
     )
@@ -110,15 +111,6 @@ from src.capture.multi_ap_scan_workflow import (
 from src.capture.org_pcap_wait_download_workflow import (
     OrgPcapWaitDownloadWorkflow,
 )  # Duplicate import; harmless re-import of org pcap download workflow
-from src.auth.interactive_session import (
-    InteractiveSessionManager,
-)  # Import interactive session manager for auth workflows
-from src.bootstrap.dependency_check import DependencyCheckOrchestrator  # Import dependency validator for startup checks
-from src.bootstrap.package_installer import PackageInstaller  # Import package installer for optional dependencies
-from src.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow  # Import multi-AP packet capture orchestrator
-from src.capture.org_pcap_wait_download_workflow import (
-    OrgPcapWaitDownloadWorkflow,
-)  # Import org-level packet capture download workflow
 from src.capture.packet_capture import (
     PacketCaptureManager as ExtractedPacketCaptureManager,
 )  # Import packet capture manager (renamed to avoid conflicts)
@@ -357,7 +349,8 @@ class PerformanceMonitor:
 
         # Circuit breaker for infinite loops
         if self.iteration_count > self.max_iterations:  # Trip the breaker if iterations exceed the safety ceiling
-            error_msg = f"CIRCUIT BREAKER: {self.name} exceeded {self.max_iterations} iterations!"  # Build a clear diagnostic message
+            # Build a clear diagnostic message for the circuit breaker trip
+            error_msg = f"CIRCUIT BREAKER: {self.name} exceeded {self.max_iterations} iterations!"
             print(f"[EMERGENCY] {error_msg}")  # Print to console so the operator sees it immediately
             logging.error(error_msg)  # Also record the breaker trip in the log file for post-mortem analysis
             raise RuntimeError(error_msg)  # Abort the runaway loop by raising to unwind the call stack
@@ -14240,9 +14233,10 @@ class OrgClientSecurityExporter:
                     age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # Compute the file's age in minutes
                     if age_minutes < CSV_FRESHNESS_MINUTES:  # The file is still within the freshness window
                         logging.info(
-                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."  # Log the cache hit
+                            # Log the cache hit with file freshness info
+                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."
                         )
-                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform the user
+                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform user
                         return  # Skip the API calls entirely
             except Exception as cache_error:  # Inspecting the cache failed
                 logging.debug(
@@ -14313,9 +14307,10 @@ class OrgClientSecurityExporter:
                     age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # Compute the file's age in minutes
                     if age_minutes < CSV_FRESHNESS_MINUTES:  # The file is still within the freshness window
                         logging.info(
-                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."  # Log the cache hit
+                            # Log the cache hit with file freshness info
+                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."
                         )
-                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform the user
+                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform user
                         return  # Skip the API calls entirely
             except Exception as cache_error:  # Inspecting the cache failed
                 logging.debug(
@@ -20278,7 +20273,10 @@ class GatewayTemplateConfigManager:
 
 
 class DeviceConfigTemplateClonerManager:
-    """Menu 194: Clone device local config to a new gateway template. Delegated to src.gateway.device_template_cloner."""
+    """Menu 194: Clone device local config to a new gateway template.
+
+    Delegated to src.gateway.device_template_cloner.
+    """
 
     @staticmethod
     def clone() -> None:  # type: ignore[no-untyped-def]
@@ -27019,7 +27017,9 @@ menu_actions = {
     "193": (OrgTicketManager.export_ticket_details, "Export all tickets with full details and comments"),
     "194": (
         DeviceConfigTemplateClonerManager.clone,  # Delegate to extracted implementation class
-        " DESTRUCTIVE: Clone Device Config to Gateway Template - Select a gateway at a site, extract its local device config, and create a new org gateway template (Requires typing 'CREATE' to confirm)",
+        " DESTRUCTIVE: Clone Device Config to Gateway Template"
+        " - Select a gateway, extract its local config, and create a new org gateway template"
+        " (Requires typing 'CREATE' to confirm)",
     ),
 }
 

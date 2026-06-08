@@ -16,7 +16,8 @@ def _build_workflow() -> tuple[MultiApScanCaptureWorkflow, MagicMock, MagicMock,
     mistapi_module = MagicMock()
     input_utils = MagicMock()
     device_utils = MagicMock()
-    return MultiApScanCaptureWorkflow(manager, mistapi_module, input_utils, device_utils), manager, mistapi_module, input_utils
+    workflow = MultiApScanCaptureWorkflow(manager, mistapi_module, input_utils, device_utils)
+    return workflow, manager, mistapi_module, input_utils
 
 
 def test_run_returns_when_no_aps() -> None:
