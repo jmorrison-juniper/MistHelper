@@ -122,6 +122,12 @@ from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # Imp
 from src.export.site_export_utils import (
     configure_site_export_utils_dependencies,
 )  # Import site export utility configuration
+from src.export.site_insights.site_metric_operation import (
+    SiteMetricOperation,
+)  # Decomposed Menu 74 entry point
+from src.export.site_insights.device_metric_operation import (
+    DeviceMetricOperation,
+)  # Decomposed Menu 76 entry point
 from src.export.wifi_clients_exporter import WifiClientsExporter  # Import WiFi client export handler
 from src.gateway.gateway_export_utils import (
     configure_gateway_export_utils_dependencies,
@@ -16783,16 +16789,16 @@ class SiteExportUtils:
         return module.SiteExportUtils._export_data(api_call, data_type, sort_key=sort_key, **api_kwargs)
 
     @staticmethod
-    def insight_metrics():  
-        """Menu #74 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.insight_metrics()
+    def insight_metrics():
+        """Menu #74 entry: configures deps then runs decomposed SiteMetricOperation."""
+        SiteExportUtils._configure_module()  # Wire apisession / mistapi / DataExporter globals on the extracted module
+        SiteMetricOperation.execute()  # Run the decomposed operation directly (no inheritance delegation)
 
     @staticmethod
-    def device_insights():  
-        """Menu #76 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.device_insights()
+    def device_insights():
+        """Menu #76 entry: configures deps then runs decomposed DeviceMetricOperation."""
+        SiteExportUtils._configure_module()  # Wire apisession / mistapi / DataExporter globals on the extracted module
+        DeviceMetricOperation.execute()  # Run the decomposed operation directly (no inheritance delegation)
 
     @staticmethod
     def insights():  
