@@ -10,104 +10,150 @@ A powerful utility for extracting and analyzing data from Juniper Mist cloud env
 import sys
 
 # Enforce Python 3.13+ requirement
-MINIMUM_PYTHON_VERSION = (3, 13)
-if sys.version_info < MINIMUM_PYTHON_VERSION:
-    version_str = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    required_str = f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"
-    warning_msg = (
+MINIMUM_PYTHON_VERSION = (3, 13)  # Define minimum required Python version tuple for compatibility checks
+if sys.version_info < MINIMUM_PYTHON_VERSION:  # Exit early if Python is too old to prevent cryptic errors later
+    version_str = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"  # Format current Python version for display
+    required_str = (
+        f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"  # Format minimum required version for display
+    )
+    warning_msg = (  # Build user-friendly error message with actionable guidance
         f"WARNING: Python {version_str} detected. MistHelper requires Python {required_str} or newer.\n"
         f"Some features may not work correctly. Please upgrade Python to {required_str}+.\n"
         f"Download from: https://www.python.org/downloads/"
     )
-    print(f"\n{'=' * 70}", file=sys.stderr)
-    print(warning_msg, file=sys.stderr)
-    print(f"{'=' * 70}\n", file=sys.stderr)
+    print(f"\n{'=' * 70}", file=sys.stderr)  # Print separator line to stderr (visible even if stdout redirected)
+    print(warning_msg, file=sys.stderr)  # Print version warning to stderr for visibility during startup
+    print(f"{'=' * 70}\n", file=sys.stderr)  # Print closing separator to stderr
     # Log will be configured later, but we can't use logging yet
     # The warning is printed to stderr so it's visible regardless
 
 # ============================================================================
 # GLOBAL DEPENDENCY MANAGEMENT AND IMPORT SYSTEM
 # ============================================================================
-import warnings
+import warnings  # Import warnings module to suppress harmless SyntaxWarnings from third-party libraries
 
-warnings.filterwarnings("ignore", message="invalid escape sequence", category=SyntaxWarning)
+warnings.filterwarnings(
+    "ignore", message="invalid escape sequence", category=SyntaxWarning
+)  # Suppress false SyntaxWarnings about escape sequences in regex patterns from mistapi library
 
-import argparse
-import csv
-import ipaddress
-import logging
-import os
-import re
-import subprocess  # nosec B404
-import time
-import traceback
-from collections.abc import Callable
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal
+import argparse  # Import argparse for command-line argument parsing (--menu, --test, --fast flags)
+import csv  # Import csv module for writing CSV export files to data/ directory
+import ipaddress  # Import ipaddress for parsing and validating IP addresses in device/client data
+import logging  # Import logging for structured logging to script.log and console
+import os  # Import os for file path operations, environment variables, and data/ directory setup
+import re  # Import re for regex pattern matching in data parsing (SSIDs, descriptions, etc.)
+import subprocess  # nosec B404  # Import subprocess for executing external commands (SSH, JSON parsing) with security review
+import time  # Import time for rate limiting, delays, and performance monitoring
+import traceback  # Import traceback for detailed exception context in error logs
+from collections.abc import Callable  # Import Callable type hint for callback functions passed to API methods
+from concurrent.futures import (
+    FIRST_COMPLETED,
+    ThreadPoolExecutor,
+    as_completed,
+    wait,
+)  # Import thread pool executors for parallel API calls with rate limiting
+from dataclasses import dataclass, field  # Import dataclass decorators for configuration objects and entity classes
+from datetime import datetime  # Import datetime for timestamping logs and events
+from typing import TYPE_CHECKING, Any, Literal  # Import type hints for static analysis without runtime overhead
 
 # Type stubs for dynamically imported modules
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
 # Pylance uses these unconditionally; runtime try/except blocks below handle actual loading.
-if TYPE_CHECKING:
-    import numpy as np
-    import pyte
-    import requests
-    import urllib3
-    from prettytable import PrettyTable
+if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, mypy), not at runtime
+    import numpy as np  # Type stub for numpy (used in optional analytics)
+    import pyte  # Type stub for pyte (terminal emulator for WebSocket output parsing)
+    import requests  # Type stub for requests (HTTP library used by mistapi)
+    import urllib3  # Type stub for urllib3 (connection pooling via requests)
+    from prettytable import PrettyTable  # Type stub for prettytable (ASCII table formatting)
 
-    import websocket
+    import websocket  # Type stub for websocket (WebSocket client for device diagnostics)
 
 # ============================================================================
 # POLYGLOT DATABASE LAYER (OPTIONAL)
 # ============================================================================
 # Conditional import for ArangoDB + Redis TimeSeries backends.
 # Falls back gracefully in standalone mode (no python-arango/redis installed).
-try:
-    from src.db import DatabaseConfig, configure_db_logging
-    from src.db.router import DatabaseRouter
+try:  # Attempt to import polyglot database layer for ArangoDB/Redis export backends
+    from src.db import DatabaseConfig, configure_db_logging  # Import database configuration classes
+    from src.db.router import DatabaseRouter  # Import database router for multi-backend write operations
 
-    DB_LAYER_AVAILABLE = True
-except ImportError:
-    DB_LAYER_AVAILABLE = False
+    DB_LAYER_AVAILABLE = True  # Set flag indicating database backends are available for export operations
+except ImportError:  # If database dependencies (python-arango, redis) not installed, gracefully disable
+    DB_LAYER_AVAILABLE = False  # Set flag to disable database output formats (CSV/SQLite only)
 
-from src.analytics.site_analytics_configurator import (
-    SiteAnalyticsConfigurator as ExtractedSiteAnalyticsConfigurator,
+from src.analytics.site_analytics_configurator import (  # Import site analytics configuration tools
+    SiteAnalyticsConfigurator as ExtractedSiteAnalyticsConfigurator,  # Rename to avoid naming conflicts
 )
-from src.analytics.site_analytics_configurator import SiteAnalyticsConfiguratorDeps
+from src.analytics.site_analytics_configurator import SiteAnalyticsConfiguratorDeps  # Import dependency injection class
+from src.analytics.site_inventory_health_analyzer import (  # Import site inventory health analysis tools
+    SiteInventoryHealthAnalyzer as ExtractedSiteInventoryHealthAnalyzer,  # Rename to avoid naming conflicts
+)
 from src.analytics.site_inventory_health_analyzer import (
-    SiteInventoryHealthAnalyzer as ExtractedSiteInventoryHealthAnalyzer,
-)
-from src.analytics.site_inventory_health_analyzer import SiteInventoryHealthAnalyzerDeps
-from src.audit.analyzer import AuditLogAnalyzer  # Audit log analysis engine
-from src.audit.filter import AuditLogFilter  # Audit log filtering to remove noise
-from src.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering
-from src.audit.time_parser import TimeRangeParser  # Audit log time range parsing (7d, 4w, etc.)
-from src.auth.interactive_session import InteractiveSessionManager
-from src.bootstrap.dependency_check import DependencyCheckOrchestrator
-from src.bootstrap.package_installer import PackageInstaller
-from src.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow
-from src.capture.org_pcap_wait_download_workflow import OrgPcapWaitDownloadWorkflow
-from src.capture.packet_capture import PacketCaptureManager as ExtractedPacketCaptureManager
-from src.capture.site_pcap_wait_download_workflow import SitePcapWaitDownloadWorkflow
-from src.export.device_events_52w_exporter import DeviceEvents52wExporter
-from src.export.site_export_utils import configure_site_export_utils_dependencies
-from src.export.wifi_clients_exporter import WifiClientsExporter
-from src.gateway.gateway_export_utils import configure_gateway_export_utils_dependencies
-from src.org_data_collector import OrgDataCollector
-from src.ssh.ssh_runner import EnhancedSSHRunner
-from src.ssh.ssh_runner_manager import SSHRunnerManager as ExtractedSSHRunnerManager
-from src.ssh.ssh_runner_manager import SSHRunnerManagerDeps
-from src.troubleshooting.interactive_test_runner import InteractiveTestRunner
-from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootDeps
-from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils
-from src.wan_hub_group_manager import WanHubGroupNumberManager
-from src.wan_vpn_builder import WanVpnBuilder
-from src.websocket.commands import WebSocketCommands
-from src.websocket.context import WebSocketCmdDeps
-from src.websocket.diag_commands import WebSocketNetworkDiagCommands
-from src.websocket.manager import WebSocketManager
+    SiteInventoryHealthAnalyzerDeps,
+)  # Import dependency injection class
+from src.audit.analyzer import AuditLogAnalyzer  # Import audit log analysis engine for timeline/report generation
+from src.audit.filter import AuditLogFilter  # Import audit log filtering to remove noise and system events
+from src.audit.renderer import AuditReportRenderer  # Import Mermaid timeline + HTML report rendering
+from src.audit.time_parser import TimeRangeParser  # Import audit log time range parsing (7d, 4w, etc.)
+from src.auth.interactive_session import (
+    InteractiveSessionManager,
+)  # Duplicate import (re-stated with comment below); kept to preserve module load behavior
+from src.bootstrap.dependency_check import (
+    DependencyCheckOrchestrator,
+)  # Duplicate import; harmless re-import of dependency check orchestrator
+from src.bootstrap.package_installer import (
+    PackageInstaller,
+)  # Duplicate import; harmless re-import of package installer
+from src.capture.multi_ap_scan_workflow import (
+    MultiApScanCaptureWorkflow,
+)  # Duplicate import; harmless re-import of multi-AP scan workflow
+from src.capture.org_pcap_wait_download_workflow import (
+    OrgPcapWaitDownloadWorkflow,
+)  # Duplicate import; harmless re-import of org pcap download workflow
+from src.auth.interactive_session import (
+    InteractiveSessionManager,
+)  # Import interactive session manager for auth workflows
+from src.bootstrap.dependency_check import DependencyCheckOrchestrator  # Import dependency validator for startup checks
+from src.bootstrap.package_installer import PackageInstaller  # Import package installer for optional dependencies
+from src.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow  # Import multi-AP packet capture orchestrator
+from src.capture.org_pcap_wait_download_workflow import (
+    OrgPcapWaitDownloadWorkflow,
+)  # Import org-level packet capture download workflow
+from src.capture.packet_capture import (
+    PacketCaptureManager as ExtractedPacketCaptureManager,
+)  # Import packet capture manager (renamed to avoid conflicts)
+from src.capture.site_pcap_wait_download_workflow import (
+    SitePcapWaitDownloadWorkflow,
+)  # Import site-level packet capture download workflow
+from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # Import 52-week device events export handler
+from src.export.site_export_utils import (
+    configure_site_export_utils_dependencies,
+)  # Import site export utility configuration
+from src.export.wifi_clients_exporter import WifiClientsExporter  # Import WiFi client export handler
+from src.gateway.gateway_export_utils import (
+    configure_gateway_export_utils_dependencies,
+)  # Import gateway export utility configuration
+from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
+from src.ssh.ssh_runner import EnhancedSSHRunner  # Import SSH command execution and result parsing
+from src.ssh.ssh_runner_manager import (
+    SSHRunnerManager as ExtractedSSHRunnerManager,
+)  # Import SSH runner manager (renamed to avoid conflicts)
+from src.ssh.ssh_runner_manager import SSHRunnerManagerDeps  # Import SSH runner manager dependency injection class
+from src.troubleshooting.interactive_test_runner import (
+    InteractiveTestRunner,
+)  # Import interactive diagnostic test runner
+from src.troubleshooting.marvis_troubleshoot_utils import (
+    MarvisTroubleshootDeps,
+)  # Import Marvis troubleshooting dependency injection class
+from src.troubleshooting.marvis_troubleshoot_utils import (
+    MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,
+)  # Import Marvis troubleshooting utils (renamed to avoid conflicts)
+from src.wan_hub_group_manager import WanHubGroupNumberManager  # Import WAN hub group number manager for hub routing
+from src.wan_vpn_builder import WanVpnBuilder  # Import WAN VPN configuration builder
+from src.websocket.commands import WebSocketCommands  # Import WebSocket command handlers for device diagnostics
+from src.websocket.context import WebSocketCmdDeps  # Import WebSocket command dependency injection class
+from src.websocket.diag_commands import WebSocketNetworkDiagCommands  # Import WebSocket network diagnostic commands
+from src.websocket.manager import WebSocketManager  # Import WebSocket connection manager for long-running diagnostics
 
 # ============================================================================
 # EARLY LOGGING SETUP
@@ -117,9 +163,11 @@ from src.websocket.manager import WebSocketManager
 # This configuration will be enhanced later by GlobalImportManager._setup_logging()
 # with additional handlers and formatting, but this ensures all early logging
 # calls go to the correct location.
-_early_log_dir = "data"
-os.makedirs(_early_log_dir, exist_ok=True)
-_early_log_path = os.path.join(_early_log_dir, "script.log")
+_early_log_dir = "data"  # Define data directory for logs (same as runtime output directory)
+os.makedirs(_early_log_dir, exist_ok=True)  # Create data/ directory if it doesn't exist (no error if already present)
+_early_log_path = os.path.join(
+    _early_log_dir, "script.log"
+)  # Define full path to script.log using os.path.join for cross-platform compatibility
 
 
 # ============================================================================
@@ -139,163 +187,188 @@ class DataDirectoryChecker:
         DataDirectoryChecker(_early_log_dir).check()
     """
 
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str):  # Initialize checker with target data directory path
         """Initialize with the data directory path to check."""
-        self.data_dir = data_dir
-        self.test_file = os.path.join(data_dir, ".write_test")
+        self.data_dir = data_dir  # Store the data directory path for later validation
+        self.test_file = os.path.join(
+            data_dir, ".write_test"
+        )  # Define test file path (.write_test) for permission validation
 
-    def check(self) -> bool:
-        """
-        Check if data directory is writable.
+    def check(self) -> bool:  # Check if data directory is writable and handle errors
+        """Check if data directory is writable.
 
         Returns:
             True if writable, exits program if not writable due to permissions.
         """
-        try:
-            return self._test_write_permission()
-        except PermissionError:
-            self._handle_permission_error()
+        try:  # Attempt to validate write permission
+            return self._test_write_permission()  # Call permission test helper method
+        except PermissionError:  # Catch permission errors and display actionable guidance
+            self._handle_permission_error()  # Call error handler to print guidance and exit
             return False  # Never reached - _handle_permission_error exits
-        except Exception:
+        except Exception:  # For non-permission errors, proceed and let them fail naturally later
             return True  # Non-permission error, let it proceed and fail naturally
 
-    def _test_write_permission(self) -> bool:
+    def _test_write_permission(self) -> bool:  # Validate data directory write access via test file
         """Create and remove a test file to verify write access."""
-        with open(self.test_file, "w") as file_handle:
-            file_handle.write("test")
-        os.remove(self.test_file)
-        return True
+        with open(
+            self.test_file, "w"
+        ) as file_handle:  # Open test file for writing (will fail if directory not writable)
+            file_handle.write("test")  # Write marker content to test file
+        os.remove(self.test_file)  # Delete test file to clean up
+        return True  # Return success if both write and delete succeeded
 
-    def _handle_permission_error(self) -> None:
+    def _handle_permission_error(self) -> None:  # Display context-specific guidance and exit
         """Print error message with context-specific guidance and exit."""
-        in_container = self._is_running_in_container()
+        in_container = self._is_running_in_container()  # Detect if running in container to show appropriate fix
 
-        self._print_error_header()
+        self._print_error_header()  # Print error banner with path information
 
-        if in_container:
-            self._print_container_guidance()
-        else:
-            self._print_local_guidance()
+        if in_container:  # If running in container, show container-specific fix (chmod on host)
+            self._print_container_guidance()  # Print container deployment remediation steps
+        else:  # If running locally, show local fix (chmod/chown)
+            self._print_local_guidance()  # Print local environment remediation steps
 
-        self._print_error_footer()
-        sys.exit(1)
+        self._print_error_footer()  # Print closing separator
+        sys.exit(1)  # Exit program with error code to prevent further execution
 
-    def _is_running_in_container(self) -> bool:
+    def _is_running_in_container(self) -> bool:  # Detect container environment
         """Detect if running inside a container environment."""
-        return os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")
+        return os.path.exists("/.dockerenv") or os.path.exists(
+            "/run/.containerenv"
+        )  # Check for standard container marker files
 
-    def _print_error_header(self) -> None:
+    def _print_error_header(self) -> None:  # Display error banner with path
         """Print the error header with path information."""
-        print("\n" + "=" * 70)
-        print("ERROR: Data directory is not writable!")
-        print("=" * 70)
-        print(f"\nPath: {os.path.abspath(self.data_dir)}")
-        print("\nMistHelper cannot write logs or data to the data/ directory.")
+        print("\n" + "=" * 70)  # Print separator to visually isolate error message
+        print("ERROR: Data directory is not writable!")  # Print main error message
+        print("=" * 70)  # Print closing separator
+        print(f"\nPath: {os.path.abspath(self.data_dir)}")  # Print absolute path to the inaccessible directory
+        print("\nMistHelper cannot write logs or data to the data/ directory.")  # Explain impact of the error
 
-    def _print_container_guidance(self) -> None:
+    def _print_container_guidance(self) -> None:  # Display container-specific remediation
         """Print guidance specific to container deployments."""
-        print("\n[CONTAINER DETECTED]")
-        print("The container runs as non-root user 'misthelper' for security.")
-        print("The mounted data/ directory must have write permissions.")
-        print("\nTo fix this, run the following on your HOST machine:")
-        print("\n    chmod -R 777 data/")
-        print("\nThen restart the container:")
-        print("    podman stop misthelper && podman rm misthelper")
-        print("    podman run -d --name misthelper -p 2200:2200 -p 8050:8050 \\")
-        print('        -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" \\')
-        print("        ghcr.io/jmorrison-juniper/misthelper:latest")
+        print("\n[CONTAINER DETECTED]")  # Indicate container environment detected
+        print(
+            "The container runs as non-root user 'misthelper' for security."
+        )  # Explain why permissions are restricted
+        print("The mounted data/ directory must have write permissions.")  # State the requirement
+        print("\nTo fix this, run the following on your HOST machine:")  # Provide context for the fix
+        print("\n    chmod -R 777 data/")  # Show command to grant write permissions
+        print("\nThen restart the container:")  # Explain next step
+        print("    podman stop misthelper && podman rm misthelper")  # Show stop and remove command
+        print(
+            "    podman run -d --name misthelper -p 2200:2200 -p 8050:8050 \\"
+        )  # Show container restart with port mapping
+        print(
+            '        -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" \\'
+        )  # Show volume mount with correct permissions
+        print("        ghcr.io/jmorrison-juniper/misthelper:latest")  # Show container image URI
 
-    def _print_local_guidance(self) -> None:
+    def _print_local_guidance(self) -> None:  # Display local environment remediation
         """Print guidance for local (non-container) environments."""
-        print("\nTo fix this, ensure the data/ directory is writable:")
-        print("\n    chmod -R 755 data/")
-        print("    # Or if you own the directory:")
-        print("    chown -R $(whoami) data/")
+        print("\nTo fix this, ensure the data/ directory is writable:")  # Provide context for local fix
+        print("\n    chmod -R 755 data/")  # Show command to set directory permissions
+        print("    # Or if you own the directory:")  # Provide alternative if ownership is an issue
+        print("    chown -R $(whoami) data/")  # Show command to change ownership to current user
 
-    def _print_error_footer(self) -> None:
+    def _print_error_footer(self) -> None:  # Display error footer separator
         """Print the closing separator line."""
-        print("\n" + "=" * 70)
+        print("\n" + "=" * 70)  # Print separator line to visually isolate error message
 
 
 # Run data directory check immediately (NO WRAPPER - direct class instantiation)
-DataDirectoryChecker(_early_log_dir).check()
+DataDirectoryChecker(
+    _early_log_dir
+).check()  # Instantiate checker and validate data/ directory write permissions (exits if not writable)
 
 # Get log levels from environment (same as GlobalImportManager._setup_logging)
-_early_console_level = int(os.environ.get("CONSOLE_LOG_LEVEL", logging.INFO))
-_early_file_level = int(os.environ.get("LOGGING_LOG_LEVEL", logging.INFO))
+_early_console_level = int(
+    os.environ.get("CONSOLE_LOG_LEVEL", logging.INFO)
+)  # Read console log level from env (default: INFO=20)
+_early_file_level = int(
+    os.environ.get("LOGGING_LOG_LEVEL", logging.INFO)
+)  # Read file log level from env (default: INFO=20)
 
 # Create handlers with appropriate levels
-_early_console_handler = logging.StreamHandler()
-_early_console_handler.setLevel(_early_console_level)
-_early_file_handler = logging.FileHandler(_early_log_path)
-_early_file_handler.setLevel(_early_file_level)
+_early_console_handler = logging.StreamHandler()  # Create handler for console output (stdout/stderr)
+_early_console_handler.setLevel(
+    _early_console_level
+)  # Set console handler to respect CONSOLE_LOG_LEVEL environment variable
+_early_file_handler = logging.FileHandler(_early_log_path)  # Create handler for script.log file output
+_early_file_handler.setLevel(_early_file_level)  # Set file handler to respect LOGGING_LOG_LEVEL environment variable
 
-logging.basicConfig(
-    level=logging.DEBUG,  # Root logger captures all, handlers filter
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[_early_file_handler, _early_console_handler],
-    force=True,
+logging.basicConfig(  # Configure root logger with handlers and format
+    level=logging.DEBUG,  # Root logger captures all levels; handlers filter based on their individual levels
+    format="%(asctime)s - %(levelname)s - %(message)s",  # Define log message format with timestamp, level, and message
+    handlers=[_early_file_handler, _early_console_handler],  # Register both file and console handlers
+    force=True,  # Force reconfiguration even if logging was already configured (needed for module init)
 )
 
 # Attach LogSanitizer to redact sensitive fields (API tokens, passwords, MACs) from logs
-try:
-    from mistapi.__logger import LogSanitizer
+try:  # Attempt to import LogSanitizer from mistapi library
+    from mistapi.__logger import LogSanitizer  # Import mistapi log sanitizer (redacts secrets from output)
 
-    logging.getLogger().addFilter(LogSanitizer())
-except ImportError:
+    logging.getLogger().addFilter(LogSanitizer())  # Register sanitizer filter on root logger to redact all log records
+except ImportError:  # If LogSanitizer not available, skip (mistapi pre-0.59.3 doesn't have it)
     pass  # mistapi pre-0.59.3 does not have LogSanitizer; safe to skip
 
 # Log Python version warning if below minimum requirement
-if sys.version_info < MINIMUM_PYTHON_VERSION:
-    version_str = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    required_str = f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"
-    logging.warning(
+if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimum version
+    version_str = (
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"  # Format current Python version
+    )
+    required_str = f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"  # Format minimum required version
+    logging.warning(  # Log warning (will be written to script.log after handler setup)
         f"Python {version_str} detected. MistHelper requires Python {required_str}+. "
         f"Some features may not work correctly."
     )
 
 
 # Debug mode detection helper
-def is_debug_mode():  # type: ignore[no-untyped-def]
+def is_debug_mode():  # type: ignore[no-untyped-def]  # Check if debug mode is enabled via CLI flags
     """Check if debug mode is enabled via command line arguments."""
-    return "--debug" in sys.argv or "-d" in sys.argv
+    return "--debug" in sys.argv or "-d" in sys.argv  # Return True if debug flag present in command line
 
 
 # Performance monitoring helper for detecting infinite loops
 class PerformanceMonitor:
     """Simple performance monitoring to detect hangs and infinite loops."""
 
-    def __init__(self, name, max_iterations=10000, log_interval=5.0):  # type: ignore[no-untyped-def]
-        self.name = name
-        self.start_time = time.time()
-        self.last_log_time = self.start_time
-        self.iteration_count = 0
-        self.max_iterations = max_iterations
-        self.log_interval = log_interval
+    def __init__(self, name, max_iterations=10000, log_interval=5.0):  # type: ignore[no-untyped-def]  # Set up a loop monitor with a name and safety limits
+        self.name = name  # Store a human-readable name so log/error messages identify which loop is being watched
+        self.start_time = time.time()  # Record wall-clock start time to measure total elapsed duration
+        self.last_log_time = self.start_time  # Track when we last printed a progress update (throttles logging)
+        self.iteration_count = 0  # Count loop iterations to detect runaway/infinite loops
+        self.max_iterations = max_iterations  # Hard ceiling on iterations before the circuit breaker trips
+        self.log_interval = log_interval  # Minimum seconds between periodic performance log messages
 
-    def check_iteration(self):  # type: ignore[no-untyped-def]
+    def check_iteration(self):  # type: ignore[no-untyped-def]  # Call once per loop pass to track progress and enforce the safety limit
         """Call this on each loop iteration to monitor for hangs."""
-        self.iteration_count += 1
-        current_time = time.time()
+        self.iteration_count += 1  # Increment the per-iteration counter
+        current_time = time.time()  # Capture current time for interval and elapsed calculations
 
         # Log performance periodically
-        if is_debug_mode() and (current_time - self.last_log_time) >= self.log_interval:  # type: ignore[no-untyped-call]
-            elapsed = current_time - self.start_time
-            print(f"[PERF] {self.name}: {self.iteration_count} iterations in {elapsed:.1f}s")
-            self.last_log_time = current_time
+        if is_debug_mode() and (current_time - self.last_log_time) >= self.log_interval:  # type: ignore[no-untyped-call]  # Only log in debug mode and no more often than log_interval
+            elapsed = current_time - self.start_time  # Compute total seconds since the loop started
+            print(
+                f"[PERF] {self.name}: {self.iteration_count} iterations in {elapsed:.1f}s"
+            )  # Show progress so operators can see the loop is alive
+            self.last_log_time = current_time  # Reset the throttle timer after logging
 
         # Circuit breaker for infinite loops
-        if self.iteration_count > self.max_iterations:
-            error_msg = f"CIRCUIT BREAKER: {self.name} exceeded {self.max_iterations} iterations!"
-            print(f"[EMERGENCY] {error_msg}")
-            logging.error(error_msg)
-            raise RuntimeError(error_msg)
+        if self.iteration_count > self.max_iterations:  # Trip the breaker if iterations exceed the safety ceiling
+            error_msg = f"CIRCUIT BREAKER: {self.name} exceeded {self.max_iterations} iterations!"  # Build a clear diagnostic message
+            print(f"[EMERGENCY] {error_msg}")  # Print to console so the operator sees it immediately
+            logging.error(error_msg)  # Also record the breaker trip in the log file for post-mortem analysis
+            raise RuntimeError(error_msg)  # Abort the runaway loop by raising to unwind the call stack
 
-    def finish(self):  # type: ignore[no-untyped-def]
+    def finish(self):  # type: ignore[no-untyped-def]  # Call when the monitored loop completes normally
         """Call when loop completes normally."""
-        elapsed = time.time() - self.start_time
-        if is_debug_mode():  # type: ignore[no-untyped-call]
-            print(f"[PERF] {self.name} completed: {self.iteration_count} iterations in {elapsed:.1f}s")
+        elapsed = time.time() - self.start_time  # Compute total runtime of the loop
+        if is_debug_mode():  # type: ignore[no-untyped-call]  # Only emit the summary when debugging to avoid log noise
+            print(
+                f"[PERF] {self.name} completed: {self.iteration_count} iterations in {elapsed:.1f}s"
+            )  # Report final iteration count and duration
 
 
 # ============================================================================
@@ -309,21 +382,23 @@ class PerformanceMonitor:
 class SSHConnectionConfig:
     """Configuration for SSH connections - groups connection parameters."""
 
-    hostname: str
-    username: str
-    password: str
-    port: int = 22
-    timeout: int = 30
-    use_shell: bool = True
+    hostname: str  # Target device hostname or IP address to connect to
+    username: str  # SSH login username for authentication
+    password: str  # SSH login password (treated as a secret; never logged in plaintext)
+    port: int = 22  # TCP port for SSH (default 22; override for non-standard device setups)
+    timeout: int = 30  # Seconds to wait before giving up on a connection attempt
+    use_shell: bool = True  # Whether to allocate an interactive shell vs exec a single command
 
 
 @dataclass
 class SSHExecutionConfig:
     """Configuration for SSH command execution - groups execution parameters."""
 
-    commands: list[str] = field(default_factory=list)
-    max_threads: int = 5
-    use_shell: bool = True
+    commands: list[str] = field(
+        default_factory=list
+    )  # Commands to run; default_factory avoids a shared mutable default list
+    max_threads: int = 5  # Cap on concurrent SSH sessions to avoid overloading devices/network
+    use_shell: bool = True  # Whether commands run in an interactive shell context
 
 
 # NOTE: WebSocketListenerConfig removed - use ARPCommandManager._listen_for_output parameters directly
@@ -333,24 +408,24 @@ class SSHExecutionConfig:
 class MapViewerConfig:
     """Configuration for interactive map viewer."""
 
-    site_id: str
-    site_name: str
-    map_id: str
-    coverage_data: dict | None = None  # type: ignore[type-arg]
-    all_maps: list | None = None  # type: ignore[type-arg]
-    all_sites: list | None = None  # type: ignore[type-arg]
+    site_id: str  # Mist site UUID the map belongs to
+    site_name: str  # Human-readable site name shown in the viewer
+    map_id: str  # Mist map UUID identifying the specific floor plan
+    coverage_data: dict | None = None  # type: ignore[type-arg]  # Optional RF coverage overlay data (None if not loaded)
+    all_maps: list | None = None  # type: ignore[type-arg]  # Optional list of all maps at the site for navigation (None if unused)
+    all_sites: list | None = None  # type: ignore[type-arg]  # Optional list of all sites for cross-site navigation (None if unused)
 
 
 @dataclass
 class DeviceFetchConfig:
     """Configuration for interactive device data fetching - groups fetch parameters."""
 
-    fetch_function: Any
-    filename: str
-    description: str
-    device_type: str = "all"
-    site_id: str | None = None
-    device_id: str | None = None
+    fetch_function: Any  # Callable that performs the actual API fetch for the chosen data
+    filename: str  # Output filename for the exported data
+    description: str  # Human-readable description shown to the user during the fetch
+    device_type: str = "all"  # Device type filter (all/ap/switch/gateway); 'all' avoids the AP-only API default
+    site_id: str | None = None  # Optional site scope; None means an org-wide fetch
+    device_id: str | None = None  # Optional single-device scope; None means all matching devices
 
 
 # ============================================================================
@@ -361,135 +436,147 @@ class DeviceFetchConfig:
 
 # Load .env BEFORE dependency check so DISABLE_AUTO_INSTALL and
 # AUTO_UPGRADE_TO_LATEST are honoured when set in .env.
-try:
-    from dotenv import load_dotenv as _early_load_dotenv
+try:  # Attempt to load environment variables from a .env file before any dependency checks
+    from dotenv import (
+        load_dotenv as _early_load_dotenv,
+    )  # Import python-dotenv's loader (aliased to mark it as early-stage)
 
-    _early_load_dotenv()
-except Exception:
+    _early_load_dotenv()  # Read .env and populate os.environ so config flags are available during startup
+except Exception:  # If python-dotenv is not installed yet, fall back to a manual parser
     # Inline fallback: read .env manually so env vars are available
-    try:
-        with open(".env") as _ef:
-            for _line in _ef:
-                _line = _line.strip()
-                if _line and not _line.startswith("#") and "=" in _line:
-                    _k, _v = _line.split("=", 1)
-                    os.environ.setdefault(_k.strip(), _v.strip())
-    except Exception:  # nosec B110
-        pass
+    try:  # Attempt a best-effort manual parse of the .env file
+        with open(".env") as _ef:  # Open .env in the current working directory
+            for _line in _ef:  # Process the file one line at a time
+                _line = _line.strip()  # Remove surrounding whitespace and the trailing newline
+                if (
+                    _line and not _line.startswith("#") and "=" in _line
+                ):  # Skip blanks, comment lines, and malformed entries
+                    _k, _v = _line.split("=", 1)  # Split on the first '=' into key and value (values may contain '=')
+                    os.environ.setdefault(
+                        _k.strip(), _v.strip()
+                    )  # Set the var only if not already defined (don't override real env)
+    except Exception:  # nosec B110  # If .env is missing or unreadable, continue silently (the file is optional)
+        pass  # No .env available; rely on the real process environment only
 
 # Package name to import name mapping for special cases
-PACKAGE_IMPORT_MAP = {
-    "websocket-client": "websocket",
-    "python-dotenv": "dotenv",
-    "usaddress-scourgify": "scourgify",
-    "pillow": "PIL",
-    "beautifulsoup4": "bs4",
-    "pyyaml": "yaml",
-    "python-dateutil": "dateutil",
-    "msgpack-python": "msgpack",
-    "flask": "flask",
-    "flask-wtf": "flask_wtf",
-    "gunicorn": "gunicorn",
+PACKAGE_IMPORT_MAP = {  # Map pip package names to their importable module names where they differ
+    "websocket-client": "websocket",  # pip 'websocket-client' is imported as 'websocket'
+    "python-dotenv": "dotenv",  # pip 'python-dotenv' is imported as 'dotenv'
+    "usaddress-scourgify": "scourgify",  # pip 'usaddress-scourgify' is imported as 'scourgify'
+    "pillow": "PIL",  # pip 'pillow' is imported as 'PIL'
+    "beautifulsoup4": "bs4",  # pip 'beautifulsoup4' is imported as 'bs4'
+    "pyyaml": "yaml",  # pip 'pyyaml' is imported as 'yaml'
+    "python-dateutil": "dateutil",  # pip 'python-dateutil' is imported as 'dateutil'
+    "msgpack-python": "msgpack",  # pip 'msgpack-python' is imported as 'msgpack'
+    "flask": "flask",  # 'flask' package and import names match (listed for completeness)
+    "flask-wtf": "flask_wtf",  # pip 'flask-wtf' is imported as 'flask_wtf' (hyphen becomes underscore)
+    "gunicorn": "gunicorn",  # 'gunicorn' package and import names match (listed for completeness)
 }
 
 
-def _get_installed_version(package_name: str) -> str:
+def _get_installed_version(package_name: str) -> str:  # Look up the installed version string for a package
     """Get installed version of a package using importlib.metadata."""
-    try:
-        from importlib.metadata import version as get_version
+    try:  # Attempt to read version metadata from the installed distribution
+        from importlib.metadata import version as get_version  # Import the stdlib version lookup (Python 3.8+)
 
-        return get_version(package_name)
-    except Exception:
-        return ""
+        return get_version(package_name)  # Return the installed version string (e.g., '0.59.3')
+    except Exception:  # Package not installed or its metadata is missing
+        return ""  # Return empty string to signal 'not installed' to callers
 
 
-def _parse_version(version_str: str) -> tuple:  # type: ignore[type-arg]
+def _parse_version(version_str: str) -> tuple:  # type: ignore[type-arg]  # Convert a version string into a comparable integer tuple
     """Parse version string into comparable tuple (e.g., '0.59.3' -> (0, 59, 3))."""
-    try:
-        parts = []
-        for part in version_str.split("."):
+    try:  # Attempt to parse each dotted segment into an integer
+        parts = []  # Accumulate the numeric version components (major, minor, patch, ...)
+        for part in version_str.split("."):  # Split on dots and process each segment in order
             # Handle versions like '1.0.0a1' by extracting numeric prefix
-            numeric = ""
-            for char in part:
-                if char.isdigit():
-                    numeric += char
-                else:
-                    break
-            parts.append(int(numeric) if numeric else 0)
-        return tuple(parts)
-    except Exception:
-        return (0,)
+            numeric = ""  # Build up the leading digits of this segment
+            for char in part:  # Walk characters until a non-digit ends the numeric prefix
+                if char.isdigit():  # Keep characters that are digits
+                    numeric += char  # Append the digit to the numeric prefix
+                else:  # Stop at the first non-digit (e.g., the 'a' in '0a1')
+                    break  # Ignore any pre-release suffix for comparison purposes
+            parts.append(
+                int(numeric) if numeric else 0
+            )  # Convert to int, defaulting to 0 for empty/non-numeric segments
+        return tuple(parts)  # Return as a tuple so versions compare element-by-element
+    except Exception:  # Malformed version string that cannot be parsed
+        return (0,)  # Return a minimal tuple so comparisons treat it as the lowest possible version
 
 
 def _version_satisfies(installed: str, spec: str) -> bool:  # noqa: C901
     """Check if installed version satisfies the version specification."""
-    if not installed:
-        return False
+    if not installed:  # An empty installed version means the package isn't present
+        return False  # Treat 'not installed' as 'requirement not satisfied'
 
     # Parse operator and required version from spec (e.g., ">=0.59.0" or "==1.0.0")
-    operators = [">=", "<=", "==", "!=", ">", "<"]
-    operator = ">="  # Default
-    required_version = ""
+    operators = [">=", "<=", "==", "!=", ">", "<"]  # Supported operators, two-char first so '>=' matches before '>'
+    operator = ">="  # Default  # Assume '>=' when the spec carries no explicit operator
+    required_version = ""  # Will hold the version number extracted from the spec
 
-    for op in operators:
-        if op in spec:
-            parts = spec.split(op, 1)
-            if len(parts) == 2:
-                operator = op
-                required_version = parts[1].strip()
-                break
+    for op in operators:  # Find which operator the spec uses
+        if op in spec:  # The spec string contains this operator
+            parts = spec.split(op, 1)  # Split once into [package-or-empty, version]
+            if len(parts) == 2:  # Ensure the split produced both halves
+                operator = op  # Remember the matched operator for the comparison below
+                required_version = parts[1].strip()  # Capture the required version (text right of the operator)
+                break  # Stop at the first matching operator
 
-    if not required_version:
+    if not required_version:  # No version constraint was found in the spec
         return True  # No version requirement, any version satisfies
 
-    installed_tuple = _parse_version(installed)
-    required_tuple = _parse_version(required_version)
+    installed_tuple = _parse_version(installed)  # Convert installed version into a comparable integer tuple
+    required_tuple = _parse_version(required_version)  # Convert required version into a comparable integer tuple
 
     # Pad tuples to same length for comparison
-    max_len = max(len(installed_tuple), len(required_tuple))
-    installed_tuple = installed_tuple + (0,) * (max_len - len(installed_tuple))
-    required_tuple = required_tuple + (0,) * (max_len - len(required_tuple))
+    max_len = max(len(installed_tuple), len(required_tuple))  # Longest of the two so we can zero-pad the shorter one
+    installed_tuple = installed_tuple + (0,) * (
+        max_len - len(installed_tuple)
+    )  # Pad installed with zeros (e.g., 1.2 -> 1.2.0)
+    required_tuple = required_tuple + (0,) * (max_len - len(required_tuple))  # Pad required with zeros to align lengths
 
-    if operator == ">=":
-        return installed_tuple >= required_tuple
-    elif operator == ">":
-        return installed_tuple > required_tuple
-    elif operator == "<=":
-        return installed_tuple <= required_tuple
-    elif operator == "<":
-        return installed_tuple < required_tuple
-    elif operator == "==":
-        return installed_tuple == required_tuple
-    elif operator == "!=":
-        return installed_tuple != required_tuple
+    if operator == ">=":  # 'at least' constraint
+        return installed_tuple >= required_tuple  # True when installed meets or exceeds required
+    elif operator == ">":  # 'strictly newer' constraint
+        return installed_tuple > required_tuple  # True when installed is newer than required
+    elif operator == "<=":  # 'at most' constraint
+        return installed_tuple <= required_tuple  # True when installed is required or older
+    elif operator == "<":  # 'strictly older' constraint
+        return installed_tuple < required_tuple  # True when installed is older than required
+    elif operator == "==":  # exact-match constraint
+        return installed_tuple == required_tuple  # True only when versions are identical
+    elif operator == "!=":  # exclusion constraint
+        return installed_tuple != required_tuple  # True when installed differs from the excluded version
 
-    return True
+    return True  # Unknown operator: be permissive and treat the requirement as satisfied
 
 
-def _get_latest_pypi_version(package_name: str) -> str:
+def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a package's newest published version
     """Query PyPI for the latest version of a package.
 
     Uses a bounded read to prevent hangs behind corporate
     proxies (e.g. Zscaler SSL inspection).
     """
-    try:
-        import json as json_mod
-        import ssl
-        import urllib.request
+    try:  # Network calls can fail many ways; treat any failure as 'latest unknown'
+        import json as json_mod  # Local import keeps startup fast when this code path isn't used
+        import ssl  # Needed to build a TLS context for the HTTPS request
+        import urllib.request  # Standard-library HTTP client (avoids needing 'requests' this early)
 
-        url = f"https://pypi.org/pypi/{package_name}/json"
-        ctx = ssl.create_default_context()
-        request = urllib.request.Request(url)
-        max_bytes = 256 * 1024
-        with urllib.request.urlopen(request, timeout=5, context=ctx) as response:  # nosec B310
-            raw = response.read(max_bytes)
-            data = json_mod.loads(raw.decode())
-            return data.get("info", {}).get("version", "")  # type: ignore[no-any-return]
-    except Exception:
-        return ""
+        url = f"https://pypi.org/pypi/{package_name}/json"  # PyPI JSON API endpoint for this package's metadata
+        ctx = ssl.create_default_context()  # Default TLS context (validates server certificates)
+        request = urllib.request.Request(url)  # Build the HTTP GET request object
+        max_bytes = 256 * 1024  # Cap the read at 256 KB to prevent hangs/abuse behind SSL-inspection proxies
+        with urllib.request.urlopen(
+            request, timeout=5, context=ctx
+        ) as response:  # nosec B310  # 5s timeout avoids blocking startup on blocked networks
+            raw = response.read(max_bytes)  # Read at most max_bytes of the JSON response body
+            data = json_mod.loads(raw.decode())  # Parse the JSON metadata into a dict
+            return data.get("info", {}).get("version", "")  # type: ignore[no-any-return]  # Return latest version string, or '' if absent
+    except Exception:  # Any error (offline, proxy block, parse failure) means we can't determine the latest version
+        return ""  # Empty string signals 'latest unknown' so callers skip the upgrade check
 
 
-def _parse_requirements_file(filepath="requirements.txt"):  # type: ignore[no-untyped-def]
+def _parse_requirements_file(filepath="requirements.txt"):  # type: ignore[no-untyped-def]  # Read dependency specs from requirements.txt
     """
     Parse requirements.txt and return list of package specifications.
 
@@ -499,38 +586,44 @@ def _parse_requirements_file(filepath="requirements.txt"):  # type: ignore[no-un
     Returns:
         List of (package_name, package_spec) tuples
     """
-    packages = []
-    try:
-        with open(filepath, encoding="utf-8") as requirements_file:
-            for line in requirements_file:
-                line = line.strip()
+    packages = []  # Accumulate (name, spec) tuples to return to the dependency checker
+    try:  # The file may be missing or unreadable; handle that gracefully below
+        with open(filepath, encoding="utf-8") as requirements_file:  # Open requirements.txt as UTF-8 text
+            for line in requirements_file:  # Process one dependency line at a time
+                line = line.strip()  # Remove surrounding whitespace and the trailing newline
 
                 # Skip empty lines and comments
-                if not line or line.startswith("#"):
-                    continue
+                if not line or line.startswith("#"):  # Ignore blank lines and full-line comments
+                    continue  # Nothing to parse on this line
 
                 # Skip commented-out dev dependencies
-                if line.startswith("# pytest") or line.startswith("# coverage"):
-                    continue
+                if line.startswith("# pytest") or line.startswith(
+                    "# coverage"
+                ):  # Explicitly skip dev-only tooling lines
+                    continue  # These are not runtime dependencies
 
                 # Strip inline comments (e.g., "package>=1.0  # comment" -> "package>=1.0")
-                if "#" in line:
-                    line = line.split("#")[0].strip()
+                if "#" in line:  # Line has a trailing inline comment after the spec
+                    line = line.split("#")[0].strip()  # Keep only the spec text before the '#'
 
                 # Extract package name from spec (e.g., "requests>=2.28.0" -> "requests")
-                package_spec = line
-                package_name = re.split(r"[><=!]", package_spec)[0].strip()
+                package_spec = line  # The full spec including any version constraint
+                package_name = re.split(r"[><=!]", package_spec)[
+                    0
+                ].strip()  # Name is everything before the first comparison operator
 
-                packages.append((package_name, package_spec))
+                packages.append((package_name, package_spec))  # Record this dependency for the caller
 
-        logging.debug(f"Parsed {len(packages)} packages from {filepath}")
-        return packages
-    except FileNotFoundError:
-        logging.warning(f"Requirements file not found: {filepath}")
-        return []
-    except Exception as parse_error:
-        logging.warning(f"Error parsing requirements file: {parse_error}")
-        return []
+        logging.debug(f"Parsed {len(packages)} packages from {filepath}")  # Debug aid: how many specs were parsed
+        return packages  # Return the collected dependency list
+    except FileNotFoundError:  # requirements.txt does not exist at the given path
+        logging.warning(
+            f"Requirements file not found: {filepath}"
+        )  # Warn so the operator knows auto-install is skipped
+        return []  # No packages to check
+    except Exception as parse_error:  # Any other read/parse error
+        logging.warning(f"Error parsing requirements file: {parse_error}")  # Log the failure reason for troubleshooting
+        return []  # Fail safe with an empty list rather than crashing startup
 
 
 def _early_dependency_check_legacy_impl():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
@@ -548,438 +641,554 @@ def _early_dependency_check_legacy_impl():  # type: ignore[no-untyped-def]  # no
     This runs before main import logic to enable direct script execution.
     """
     # Check if auto-install is disabled
-    if os.getenv("DISABLE_AUTO_INSTALL", "false").lower() == "true":
-        logging.debug("Early dependency auto-install disabled via DISABLE_AUTO_INSTALL")
-        return
+    if os.getenv("DISABLE_AUTO_INSTALL", "false").lower() == "true":  # Operators can opt out of auto-install via .env
+        logging.debug(
+            "Early dependency auto-install disabled via DISABLE_AUTO_INSTALL"
+        )  # Record that we're skipping the check
+        return  # Respect the opt-out and do nothing further
 
     # Parse requirements.txt for all dependencies
-    all_packages = _parse_requirements_file()  # type: ignore[no-untyped-call]
-    if not all_packages:
-        logging.warning("No packages found in requirements.txt - skipping dependency check")
-        return
+    all_packages = _parse_requirements_file()  # type: ignore[no-untyped-call]  # Load the list of (name, spec) dependency tuples
+    if not all_packages:  # No requirements parsed (file missing or empty)
+        logging.warning(
+            "No packages found in requirements.txt - skipping dependency check"
+        )  # Warn and skip rather than guess
+        return  # Nothing to verify or install
 
     # Check if we should upgrade to latest versions (not just meet minimum requirements)
     # Accepts both AUTO_UPGRADE_TO_LATEST and AUTO_UPGRADE_DEPENDENCIES for compatibility
-    auto_upgrade_to_latest = (
-        os.getenv("AUTO_UPGRADE_TO_LATEST", os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true")).lower() == "true"
+    auto_upgrade_to_latest = (  # Decide whether to chase newest PyPI versions vs only satisfy minimums
+        os.getenv("AUTO_UPGRADE_TO_LATEST", os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true")).lower()
+        == "true"  # Honor either env var name; default on
     )
-    if auto_upgrade_to_latest:
-        logging.debug("AUTO_UPGRADE_TO_LATEST enabled - will check PyPI for newer versions")
+    if auto_upgrade_to_latest:  # Upgrade-to-latest mode is enabled
+        logging.debug(
+            "AUTO_UPGRADE_TO_LATEST enabled - will check PyPI for newer versions"
+        )  # Note the extra PyPI lookups that follow
 
     # Quick check: try importing each package and check versions
-    missing_packages = []
-    outdated_packages = []
-    for package_name, package_spec in all_packages:
+    missing_packages = []  # Packages that fail to import (not installed)
+    outdated_packages = []  # Packages installed but below required/latest version
+    for package_name, package_spec in all_packages:  # Evaluate every dependency from requirements.txt
         # Handle package name vs import name differences
         # Normalize to lowercase for lookup since pip package names are case-insensitive
         # but PACKAGE_IMPORT_MAP uses lowercase keys (e.g., 'pyyaml' not 'PyYAML')
-        import_name = PACKAGE_IMPORT_MAP.get(package_name.lower(), package_name)
-        if not import_name:
+        import_name = PACKAGE_IMPORT_MAP.get(
+            package_name.lower(), package_name
+        )  # Translate pip name to import name when they differ
+        if not import_name:  # Defensive: skip if mapping yielded an empty name
             continue  # Skip if no valid import name
 
-        try:
-            __import__(import_name)
+        try:  # Probe whether the module can be imported
+            __import__(import_name)  # Attempt the import; raises ImportError if missing
             # Package exists - check if version satisfies requirement
-            installed_version = _get_installed_version(package_name)
-            if installed_version and not _version_satisfies(installed_version, package_spec):
-                outdated_packages.append((package_name, package_spec, installed_version))
-                logging.info(f"Outdated dependency: {package_name} {installed_version} (requires {package_spec})")
-            elif auto_upgrade_to_latest and installed_version:
+            installed_version = _get_installed_version(package_name)  # Read the currently installed version string
+            if installed_version and not _version_satisfies(
+                installed_version, package_spec
+            ):  # Installed but too old for the spec
+                outdated_packages.append((package_name, package_spec, installed_version))  # Queue it for upgrade
+                logging.info(
+                    f"Outdated dependency: {package_name} {installed_version} (requires {package_spec})"
+                )  # Log the version gap
+            elif auto_upgrade_to_latest and installed_version:  # Meets the spec, but we may still chase a newer release
                 # Check PyPI for newer version (best-effort, skip on any error)
-                try:
-                    latest_version = _get_latest_pypi_version(package_name)
-                except Exception:
-                    latest_version = ""
-                if latest_version and _parse_version(latest_version) > _parse_version(installed_version):
-                    outdated_packages.append((package_name, package_spec, installed_version))
-                    logging.info(f"Newer version available: {package_name} {installed_version} -> {latest_version}")
-        except ImportError:
-            missing_packages.append((package_name, package_spec))
-            logging.info(f"Missing dependency detected: {package_name}")
+                try:  # PyPI lookup is best-effort; never let it break startup
+                    latest_version = _get_latest_pypi_version(
+                        package_name
+                    )  # Query PyPI for the newest published version
+                except Exception:  # Network/proxy failure
+                    latest_version = ""  # Treat as 'unknown' so we don't force an upgrade
+                if latest_version and _parse_version(latest_version) > _parse_version(
+                    installed_version
+                ):  # A strictly newer version exists
+                    outdated_packages.append((package_name, package_spec, installed_version))  # Queue it for upgrade
+                    logging.info(
+                        f"Newer version available: {package_name} {installed_version} -> {latest_version}"
+                    )  # Log the available upgrade
+        except ImportError:  # The module could not be imported at all
+            missing_packages.append((package_name, package_spec))  # Queue it for installation
+            logging.info(f"Missing dependency detected: {package_name}")  # Log the missing package
 
-    if not missing_packages and not outdated_packages:
-        logging.debug(f"All {len(all_packages)} dependencies from requirements.txt present and up-to-date")
-        return
+    if not missing_packages and not outdated_packages:  # Everything is present and current
+        logging.debug(
+            f"All {len(all_packages)} dependencies from requirements.txt present and up-to-date"
+        )  # Nothing to do
+        return  # Early exit; no install work needed
 
-    if missing_packages:
-        logging.info(f"Attempting to auto-install {len(missing_packages)} missing dependencies...")
-    if outdated_packages:
-        logging.info(f"Attempting to upgrade {len(outdated_packages)} outdated dependencies...")
+    if missing_packages:  # There are packages to install
+        logging.info(
+            f"Attempting to auto-install {len(missing_packages)} missing dependencies..."
+        )  # Announce the install plan
+    if outdated_packages:  # There are packages to upgrade
+        logging.info(
+            f"Attempting to upgrade {len(outdated_packages)} outdated dependencies..."
+        )  # Announce the upgrade plan
 
     # Helper function to find UV executable in various locations
-    def find_uv_executable():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912
+    def find_uv_executable():  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912  # Locate the 'uv' binary across common install locations
         """Find UV executable, checking PATH and Python environment bin directories."""
-        import sysconfig
+        import sysconfig  # Provides platform-specific path layout (scripts dir, user base)
 
         # List of possible UV command variations to try
-        uv_commands = []
+        uv_commands = []  # Ordered list of candidate commands to probe for a working 'uv'
 
         # 1. Check if 'uv' is in PATH
-        uv_commands.append(["uv"])
+        uv_commands.append(["uv"])  # Simplest case: 'uv' resolvable via PATH
 
         # 2. Check Python's Scripts/bin directory (where pip installs executables)
-        scripts_dir = sysconfig.get_path("scripts")
-        if scripts_dir:
-            uv_in_scripts = os.path.join(scripts_dir, "uv")
-            if os.name == "nt":  # Windows
-                uv_in_scripts += ".exe"
-            uv_commands.append([uv_in_scripts])
+        scripts_dir = sysconfig.get_path("scripts")  # Directory where pip drops console scripts
+        if scripts_dir:  # Only add if the path is known
+            uv_in_scripts = os.path.join(scripts_dir, "uv")  # Build the candidate path to uv in that dir
+            if os.name == "nt":  # Windows  # Windows executables need the .exe suffix
+                uv_in_scripts += ".exe"  # Append .exe so the path resolves on Windows
+            uv_commands.append([uv_in_scripts])  # Add the scripts-dir candidate
 
         # 3. Check relative to sys.executable (for venv scenarios)
-        python_bin_dir = os.path.dirname(sys.executable)
-        uv_beside_python = os.path.join(python_bin_dir, "uv")
-        if os.name == "nt":
-            uv_beside_python += ".exe"
-        uv_commands.append([uv_beside_python])
+        python_bin_dir = os.path.dirname(sys.executable)  # Directory containing the running Python interpreter
+        uv_beside_python = os.path.join(python_bin_dir, "uv")  # uv often sits next to python in a venv
+        if os.name == "nt":  # Add .exe on Windows
+            uv_beside_python += ".exe"  # Windows executable suffix
+        uv_commands.append([uv_beside_python])  # Add the beside-python candidate
 
         # 4. Try python -m uv as fallback
-        uv_commands.append([sys.executable, "-m", "uv"])
+        uv_commands.append([sys.executable, "-m", "uv"])  # Run uv as a module if the binary isn't found
 
         # 5. macOS user base bin directory (common for system Python installs)
-        if sys.platform == "darwin":
-            user_base = sysconfig.get_config_var("userbase")
-            if user_base:
-                user_bin_uv = os.path.join(user_base, "bin", "uv")
-                uv_commands.append([user_bin_uv])
+        if sys.platform == "darwin":  # macOS-specific user install locations
+            user_base = sysconfig.get_config_var("userbase")  # Base dir for per-user installs on macOS
+            if user_base:  # Only if the user base is known
+                user_bin_uv = os.path.join(user_base, "bin", "uv")  # Candidate uv under the user base bin
+                uv_commands.append([user_bin_uv])  # Add the user-base candidate
             # Also try common macOS user Python locations
-            import site
+            import site  # Provides the user site-packages path
 
-            user_site = site.getusersitepackages()
-            if user_site:
+            user_site = site.getusersitepackages()  # Per-user site-packages directory
+            if user_site:  # Only proceed if a user site path exists
                 # Convert site-packages path to bin path
                 # e.g., ~/Library/Python/3.9/lib/python/site-packages -> ~/Library/Python/3.9/bin
-                parts = user_site.split(os.sep)
-                for i, part in enumerate(parts):
-                    if part.startswith("Python") and i + 1 < len(parts):
-                        user_bin = os.path.join(os.sep.join(parts[: i + 2]), "bin", "uv")
-                        uv_commands.append([user_bin])
-                        break
+                parts = user_site.split(os.sep)  # Split the path into components to find the Python version segment
+                for i, part in enumerate(parts):  # Scan components for the 'Python' marker
+                    if part.startswith("Python") and i + 1 < len(parts):  # Found the Python version directory
+                        user_bin = os.path.join(
+                            os.sep.join(parts[: i + 2]), "bin", "uv"
+                        )  # Rebuild path up to version dir + bin/uv
+                        uv_commands.append([user_bin])  # Add the derived macOS candidate
+                        break  # Stop after the first match
 
         # Try each command
-        for cmd in uv_commands:
-            try:
+        for cmd in uv_commands:  # Probe candidates in priority order
+            try:  # Each probe may fail; keep trying the rest
                 # For file paths, check existence first
-                if len(cmd) == 1 and os.path.sep in cmd[0]:
-                    if not os.path.isfile(cmd[0]):
-                        continue
+                if len(cmd) == 1 and os.path.sep in cmd[0]:  # Candidate is an explicit file path (not a bare 'uv')
+                    if not os.path.isfile(cmd[0]):  # Skip if the file doesn't actually exist
+                        continue  # Try the next candidate
 
-                result = subprocess.run(cmd + ["--version"], capture_output=True, text=True, timeout=5)  # nosec B603
-                if result.returncode == 0:
-                    logging.debug(f"Found UV at: {cmd}")
-                    return cmd, result.stdout.strip()
-            except (FileNotFoundError, subprocess.SubprocessError, OSError):
-                continue
+                result = subprocess.run(
+                    cmd + ["--version"], capture_output=True, text=True, timeout=5
+                )  # nosec B603  # Run 'uv --version' to confirm it works
+                if result.returncode == 0:  # Exit code 0 means uv ran successfully
+                    logging.debug(f"Found UV at: {cmd}")  # Record which candidate worked
+                    return cmd, result.stdout.strip()  # Return the working command and its version string
+            except (FileNotFoundError, subprocess.SubprocessError, OSError):  # Candidate missing or failed to execute
+                continue  # Move on to the next candidate
 
-        return None, None
+        return None, None  # No working uv found in any location
 
     # Step 1: Check if UV is installed
-    use_uv = False
-    uv_cmd = None
-    uv_cmd, uv_version = find_uv_executable()  # type: ignore[no-untyped-call]
-    if uv_cmd:
-        use_uv = True
-        logging.info(f"UV package manager detected: {uv_version} (cmd: {' '.join(uv_cmd)})")
-    else:
-        logging.info("UV package manager not found in PATH or Python environment")
+    use_uv = False  # Tracks whether we'll use UV (fast) or fall back to pip
+    uv_cmd = None  # Will hold the working uv command list once found
+    uv_cmd, uv_version = find_uv_executable()  # type: ignore[no-untyped-call]  # Probe for an existing uv install
+    if uv_cmd:  # A working uv was found
+        use_uv = True  # Prefer UV for installs (much faster than pip)
+        logging.info(f"UV package manager detected: {uv_version} (cmd: {' '.join(uv_cmd)})")  # Log which uv we'll use
+    else:  # No uv present yet
+        logging.info("UV package manager not found in PATH or Python environment")  # Note that we'll try to install it
 
     # Step 2: If UV not installed, try to install it with pip
-    if not use_uv:
-        logging.info("Attempting to install UV package manager with pip...")
-        try:
-            install_result = subprocess.run(  # nosec B603
-                [sys.executable, "-m", "pip", "install", "uv"], capture_output=True, text=True, timeout=30
+    if not use_uv:  # Only attempt bootstrap if uv wasn't found
+        logging.info("Attempting to install UV package manager with pip...")  # Announce the bootstrap install
+        try:  # The pip install may fail (no network, restricted env)
+            install_result = subprocess.run(  # nosec B603  # Bootstrap uv via pip
+                [sys.executable, "-m", "pip", "install", "uv"],
+                capture_output=True,
+                text=True,
+                timeout=30,  # 30s cap so startup can't hang
             )
-            if install_result.returncode == 0:
-                logging.info("UV package manager installed successfully")
+            if install_result.returncode == 0:  # pip reported success
+                logging.info("UV package manager installed successfully")  # Confirm the install
                 # Step 3: Re-check for UV in all locations
-                uv_cmd, uv_version = find_uv_executable()  # type: ignore[no-untyped-call]
-                if uv_cmd:
-                    use_uv = True
-                    logging.info(f"UV verified after install: {uv_version} (cmd: {' '.join(uv_cmd)})")
-                else:
-                    logging.warning("UV installation succeeded but uv command not found in any expected location")
-                    use_uv = False
-            else:
-                logging.warning(f"Failed to install UV with pip: {install_result.stderr.strip()}")
-        except Exception as install_error:
-            logging.warning(f"Could not install UV: {install_error}")
+                uv_cmd, uv_version = find_uv_executable()  # type: ignore[no-untyped-call]  # Re-probe now that uv should exist
+                if uv_cmd:  # uv is now usable
+                    use_uv = True  # Switch to the faster UV path
+                    logging.info(
+                        f"UV verified after install: {uv_version} (cmd: {' '.join(uv_cmd)})"
+                    )  # Log the verified uv
+                else:  # Install claimed success but binary not found
+                    logging.warning(
+                        "UV installation succeeded but uv command not found in any expected location"
+                    )  # Surface the oddity
+                    use_uv = False  # Fall back to pip to be safe
+            else:  # pip returned a non-zero exit code
+                logging.warning(
+                    f"Failed to install UV with pip: {install_result.stderr.strip()}"
+                )  # Log the pip error output
+        except Exception as install_error:  # Subprocess raised (timeout, OS error, etc.)
+            logging.warning(f"Could not install UV: {install_error}")  # Log why the bootstrap failed
 
     # Log installation strategy
-    if use_uv:
-        logging.info("Using UV for package installations (pip fallback per package if needed)")
-    else:
-        logging.info("Using pip for package installations (UV unavailable)")
+    if use_uv:  # We have a working uv
+        logging.info(
+            "Using UV for package installations (pip fallback per package if needed)"
+        )  # State the chosen strategy
+    else:  # No uv available
+        logging.info("Using pip for package installations (UV unavailable)")  # Fall back to pip for all installs
 
     # Step 4: Install/update missing packages
-    success_count = 0
-    failure_count = 0
+    success_count = 0  # Count of packages successfully installed
+    failure_count = 0  # Count of packages that failed to install
 
-    for _package_name, package_spec in missing_packages:
-        installed = False
+    for (
+        _package_name,
+        package_spec,
+    ) in missing_packages:  # Install each missing dependency (name unused; spec drives install)
+        installed = False  # Track whether this package got installed by any method
 
         # Try UV first if available
-        if use_uv and uv_cmd:
-            try:
+        if use_uv and uv_cmd:  # Prefer UV when we have a working uv command
+            try:  # UV invocation may fail; pip fallback handles that below
                 # Build UV command - if using 'python -m uv', structure differs
-                if uv_cmd[0] == sys.executable:
-                    cmd = uv_cmd + ["pip", "install", "--python", sys.executable, package_spec]
-                else:
-                    cmd = uv_cmd + ["pip", "install", "--python", sys.executable, package_spec]
-                logging.info(f"Installing {package_spec} with UV...")
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)  # nosec B603
+                if uv_cmd[0] == sys.executable:  # uv is invoked as 'python -m uv'
+                    cmd = uv_cmd + [
+                        "pip",
+                        "install",
+                        "--python",
+                        sys.executable,
+                        package_spec,
+                    ]  # Target the current interpreter
+                else:  # uv is a standalone binary
+                    cmd = uv_cmd + [
+                        "pip",
+                        "install",
+                        "--python",
+                        sys.executable,
+                        package_spec,
+                    ]  # Still target the current interpreter
+                logging.info(f"Installing {package_spec} with UV...")  # Announce the UV install attempt
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=60
+                )  # nosec B603  # 60s cap prevents hangs
 
-                if result.returncode == 0:
-                    logging.info(f"Successfully installed {package_spec} with UV")
-                    success_count += 1
-                    installed = True
-                else:
+                if result.returncode == 0:  # UV reported success
+                    logging.info(f"Successfully installed {package_spec} with UV")  # Confirm the install
+                    success_count += 1  # Tally a successful install
+                    installed = True  # Mark done so we skip the pip fallback
+                else:  # UV failed for this package
                     # UV failed - log and try pip fallback
-                    logging.warning(f"UV installation failed for {package_spec}: {result.stderr.strip()}")
-                    logging.info(f"Retrying {package_spec} with pip fallback...")
-            except Exception as uv_error:
-                logging.warning(f"UV installation error for {package_spec}: {uv_error}")
-                logging.info(f"Retrying {package_spec} with pip fallback...")
+                    logging.warning(
+                        f"UV installation failed for {package_spec}: {result.stderr.strip()}"
+                    )  # Log UV's error
+                    logging.info(f"Retrying {package_spec} with pip fallback...")  # Announce the pip retry
+            except Exception as uv_error:  # UV process raised (timeout, OS error)
+                logging.warning(f"UV installation error for {package_spec}: {uv_error}")  # Log the exception
+                logging.info(f"Retrying {package_spec} with pip fallback...")  # Fall through to pip
 
         # Try pip if UV not available or UV failed
-        if not installed:
-            try:
-                cmd = [sys.executable, "-m", "pip", "install", package_spec]
-                logging.info(f"Installing {package_spec} with pip...")
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)  # nosec B603
+        if not installed:  # Only use pip if UV didn't already install it
+            try:  # pip may also fail; record the failure if so
+                cmd = [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    package_spec,
+                ]  # Standard pip install for the current interpreter
+                logging.info(f"Installing {package_spec} with pip...")  # Announce the pip install
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=60
+                )  # nosec B603  # 60s cap prevents hangs
 
-                if result.returncode == 0:
-                    logging.info(f"Successfully installed {package_spec} with pip")
-                    success_count += 1
-                    installed = True
-                else:
-                    logging.error(f"Pip installation failed for {package_spec}: {result.stderr.strip()}")
-                    failure_count += 1
-            except Exception as pip_error:
-                logging.error(f"Could not install {package_spec} with pip: {pip_error}")
-                failure_count += 1
+                if result.returncode == 0:  # pip reported success
+                    logging.info(f"Successfully installed {package_spec} with pip")  # Confirm the install
+                    success_count += 1  # Tally a successful install
+                    installed = True  # Mark this package done
+                else:  # pip failed
+                    logging.error(
+                        f"Pip installation failed for {package_spec}: {result.stderr.strip()}"
+                    )  # Log pip's error output
+                    failure_count += 1  # Tally a failed install
+            except Exception as pip_error:  # pip process raised (timeout, OS error)
+                logging.error(f"Could not install {package_spec} with pip: {pip_error}")  # Log the exception
+                failure_count += 1  # Tally a failed install
 
     # Step 5: Upgrade outdated packages
-    upgrade_count = 0
-    upgrade_failure_count = 0
+    upgrade_count = 0  # Count of packages successfully upgraded
+    upgrade_failure_count = 0  # Count of packages that failed to upgrade
 
-    for package_name, package_spec, installed_version in outdated_packages:
-        upgraded = False
+    for package_name, package_spec, installed_version in outdated_packages:  # Upgrade each package flagged as outdated
+        upgraded = False  # Track whether this package got upgraded by any method
 
         # Try UV first if available
-        if use_uv and uv_cmd:
-            try:
-                if uv_cmd[0] == sys.executable:
-                    cmd = uv_cmd + ["pip", "install", "--upgrade", "--python", sys.executable, package_spec]
-                else:
-                    cmd = uv_cmd + ["pip", "install", "--upgrade", "--python", sys.executable, package_spec]
-                logging.info(f"Upgrading {package_name} from {installed_version} with UV...")
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)  # nosec B603
+        if use_uv and uv_cmd:  # Prefer UV when available (faster than pip)
+            try:  # UV upgrade may fail; pip fallback handles that below
+                if uv_cmd[0] == sys.executable:  # uv invoked as 'python -m uv'
+                    cmd = uv_cmd + [
+                        "pip",
+                        "install",
+                        "--upgrade",
+                        "--python",
+                        sys.executable,
+                        package_spec,
+                    ]  # Upgrade for current interpreter
+                else:  # uv is a standalone binary
+                    cmd = uv_cmd + [
+                        "pip",
+                        "install",
+                        "--upgrade",
+                        "--python",
+                        sys.executable,
+                        package_spec,
+                    ]  # Upgrade for current interpreter
+                logging.info(f"Upgrading {package_name} from {installed_version} with UV...")  # Announce the UV upgrade
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=60
+                )  # nosec B603  # 60s cap prevents hangs
 
-                if result.returncode == 0:
-                    new_version = _get_installed_version(package_name)
-                    logging.info(f"Successfully upgraded {package_name}: {installed_version} -> {new_version}")
-                    upgrade_count += 1
-                    upgraded = True
-                else:
-                    logging.warning(f"UV upgrade failed for {package_name}: {result.stderr.strip()}")
-                    logging.info(f"Retrying {package_name} upgrade with pip fallback...")
-            except Exception as uv_error:
-                logging.warning(f"UV upgrade error for {package_name}: {uv_error}")
-                logging.info(f"Retrying {package_name} upgrade with pip fallback...")
+                if result.returncode == 0:  # UV upgrade succeeded
+                    new_version = _get_installed_version(package_name)  # Read the version after upgrade for logging
+                    logging.info(
+                        f"Successfully upgraded {package_name}: {installed_version} -> {new_version}"
+                    )  # Log the version change
+                    upgrade_count += 1  # Tally a successful upgrade
+                    upgraded = True  # Mark done so we skip the pip fallback
+                else:  # UV upgrade failed
+                    logging.warning(f"UV upgrade failed for {package_name}: {result.stderr.strip()}")  # Log UV's error
+                    logging.info(f"Retrying {package_name} upgrade with pip fallback...")  # Announce the pip retry
+            except Exception as uv_error:  # UV process raised
+                logging.warning(f"UV upgrade error for {package_name}: {uv_error}")  # Log the exception
+                logging.info(f"Retrying {package_name} upgrade with pip fallback...")  # Fall through to pip
 
         # Try pip if UV not available or UV failed
-        if not upgraded:
-            try:
-                cmd = [sys.executable, "-m", "pip", "install", "--upgrade", package_spec]
-                logging.info(f"Upgrading {package_name} from {installed_version} with pip...")
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)  # nosec B603
+        if not upgraded:  # Only use pip if UV didn't already upgrade it
+            try:  # pip upgrade may fail; handle corrupted-state and generic errors
+                cmd = [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "--upgrade",
+                    package_spec,
+                ]  # Standard pip upgrade for the current interpreter
+                logging.info(
+                    f"Upgrading {package_name} from {installed_version} with pip..."
+                )  # Announce the pip upgrade
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=60
+                )  # nosec B603  # 60s cap prevents hangs
 
-                if result.returncode == 0:
-                    new_version = _get_installed_version(package_name)
-                    logging.info(f"Successfully upgraded {package_name}: {installed_version} -> {new_version}")
-                    upgrade_count += 1
-                    upgraded = True
-                else:
+                if result.returncode == 0:  # pip upgrade succeeded
+                    new_version = _get_installed_version(package_name)  # Read the post-upgrade version for logging
+                    logging.info(
+                        f"Successfully upgraded {package_name}: {installed_version} -> {new_version}"
+                    )  # Log the version change
+                    upgrade_count += 1  # Tally a successful upgrade
+                    upgraded = True  # Mark this package done
+                else:  # pip upgrade failed; inspect why
                     # Check if failure is due to corrupted package state (no RECORD file)
-                    if "no-record-file" in result.stderr or "RECORD" in result.stderr:
-                        logging.warning(f"Package {package_name} has corrupted state - attempting force reinstall...")
-                        force_cmd = [
-                            sys.executable,
-                            "-m",
-                            "pip",
-                            "install",
-                            "--force-reinstall",
-                            "--no-deps",
-                            package_spec,
+                    if (
+                        "no-record-file" in result.stderr or "RECORD" in result.stderr
+                    ):  # Broken install metadata (missing RECORD)
+                        logging.warning(
+                            f"Package {package_name} has corrupted state - attempting force reinstall..."
+                        )  # Explain the recovery attempt
+                        force_cmd = [  # Build a force-reinstall command to repair the broken package
+                            sys.executable,  # Use the current interpreter
+                            "-m",  # Run pip as a module
+                            "pip",  # The pip tool
+                            "install",  # Install action
+                            "--force-reinstall",  # Overwrite the corrupted install
+                            "--no-deps",  # Don't touch dependencies (only repair this package)
+                            package_spec,  # The package to repair
                         ]
-                        force_result = subprocess.run(  # nosec B603
-                            force_cmd,
-                            capture_output=True,
-                            text=True,
-                            timeout=60,
+                        force_result = subprocess.run(  # nosec B603  # Execute the repair install
+                            force_cmd,  # The force-reinstall command built above
+                            capture_output=True,  # Capture output for logging
+                            text=True,  # Decode output as text
+                            timeout=60,  # 60s cap prevents hangs
                         )
-                        if force_result.returncode == 0:
-                            new_version = _get_installed_version(package_name)
-                            logging.info(
+                        if force_result.returncode == 0:  # Repair succeeded
+                            new_version = _get_installed_version(package_name)  # Read the repaired version for logging
+                            logging.info(  # Log the successful repair and version change
                                 f"Successfully force-reinstalled {package_name}: {installed_version} -> {new_version}"
                             )
-                            upgrade_count += 1
-                            upgraded = True
-                        else:
-                            logging.error(f"Force reinstall failed for {package_name}: {force_result.stderr.strip()}")
-                            upgrade_failure_count += 1
-                    else:
-                        logging.error(f"Pip upgrade failed for {package_name}: {result.stderr.strip()}")
-                        upgrade_failure_count += 1
-            except Exception as pip_error:
-                logging.error(f"Could not upgrade {package_name} with pip: {pip_error}")
-                upgrade_failure_count += 1
+                            upgrade_count += 1  # Tally the repair as a successful upgrade
+                            upgraded = True  # Mark this package done
+                        else:  # Repair also failed
+                            logging.error(
+                                f"Force reinstall failed for {package_name}: {force_result.stderr.strip()}"
+                            )  # Log the repair error
+                            upgrade_failure_count += 1  # Tally a failed upgrade
+                    else:  # Failure was not a corrupted-state issue
+                        logging.error(
+                            f"Pip upgrade failed for {package_name}: {result.stderr.strip()}"
+                        )  # Log the generic pip error
+                        upgrade_failure_count += 1  # Tally a failed upgrade
+            except Exception as pip_error:  # pip process raised (timeout, OS error)
+                logging.error(f"Could not upgrade {package_name} with pip: {pip_error}")  # Log the exception
+                upgrade_failure_count += 1  # Tally a failed upgrade
 
     # Summary
-    summary_parts = []
-    if missing_packages:
-        summary_parts.append(f"{success_count} installed")
-    if outdated_packages:
-        summary_parts.append(f"{upgrade_count} upgraded")
-    if failure_count + upgrade_failure_count > 0:
-        summary_parts.append(f"{failure_count + upgrade_failure_count} failed")
+    summary_parts = []  # Build a human-readable summary of install/upgrade outcomes
+    if missing_packages:  # Only report installs if any were attempted
+        summary_parts.append(f"{success_count} installed")  # Add the installed count
+    if outdated_packages:  # Only report upgrades if any were attempted
+        summary_parts.append(f"{upgrade_count} upgraded")  # Add the upgraded count
+    if failure_count + upgrade_failure_count > 0:  # Only report failures if any occurred
+        summary_parts.append(f"{failure_count + upgrade_failure_count} failed")  # Add the combined failure count
 
-    logging.info(f"Early dependency check completed: {', '.join(summary_parts) if summary_parts else 'all up-to-date'}")
+    logging.info(
+        f"Early dependency check completed: {', '.join(summary_parts) if summary_parts else 'all up-to-date'}"
+    )  # Final one-line summary
 
 
 # Simplified facade delegating dependency bootstrap logic to extracted src/bootstrap modules.
-def _early_dependency_check():  # type: ignore[no-untyped-def]
+def _early_dependency_check():  # type: ignore[no-untyped-def]  # Public entry point; delegates to the extracted bootstrap modules
     """Run early dependency checks through the extracted bootstrap orchestrator."""
-    installer = PackageInstaller(
-        os_module=os,
-        subprocess_module=subprocess,
-        sys_module=sys,
-        logging_module=logging,
+    installer = PackageInstaller(  # Build the installer with stdlib modules injected (enables testing/mocking)
+        os_module=os,  # Inject os for path/env operations
+        subprocess_module=subprocess,  # Inject subprocess for running pip/uv
+        sys_module=sys,  # Inject sys for the interpreter path
+        logging_module=logging,  # Inject logging for progress messages
     )
-    orchestrator = DependencyCheckOrchestrator(
-        os_module=os,
-        logging_module=logging,
-        sys_module=sys,
-        package_import_map=PACKAGE_IMPORT_MAP,
-        parse_requirements_file_fn=_parse_requirements_file,
-        get_installed_version_fn=_get_installed_version,
-        version_satisfies_fn=_version_satisfies,
-        get_latest_pypi_version_fn=_get_latest_pypi_version,
-        parse_version_fn=_parse_version,
-        installer=installer,
+    orchestrator = DependencyCheckOrchestrator(  # Build the orchestrator that drives the detect-and-install flow
+        os_module=os,  # Inject os for env checks (DISABLE_AUTO_INSTALL, etc.)
+        logging_module=logging,  # Inject logging for progress messages
+        sys_module=sys,  # Inject sys for the interpreter path
+        package_import_map=PACKAGE_IMPORT_MAP,  # Provide the pip-name -> import-name mapping
+        parse_requirements_file_fn=_parse_requirements_file,  # Reuse the requirements parser defined above
+        get_installed_version_fn=_get_installed_version,  # Reuse the installed-version lookup
+        version_satisfies_fn=_version_satisfies,  # Reuse the version-constraint checker
+        get_latest_pypi_version_fn=_get_latest_pypi_version,  # Reuse the PyPI latest-version lookup
+        parse_version_fn=_parse_version,  # Reuse the version-tuple parser
+        installer=installer,  # Hand the orchestrator the installer built above
     )
-    orchestrator.run()
+    orchestrator.run()  # Execute the dependency check + install/upgrade workflow
 
 
 # Run early dependency check (will be skipped if DISABLE_AUTO_INSTALL=true)
-_early_dependency_check()  # type: ignore[no-untyped-call]
+_early_dependency_check()  # type: ignore[no-untyped-call]  # Run the bootstrap immediately at import time
 
 # Additional standard library imports
-import ast
-import concurrent.futures
-import inspect
-import json
-import shutil
-import sqlite3
-import threading
-from collections import defaultdict
+import ast  # Safely parse Python literals from strings (config/data deserialization)
+import concurrent.futures  # High-level parallelism primitives for batched API calls
+import inspect  # Introspect functions/classes at runtime (signatures, source lookup)
+import json  # Encode/decode JSON for API payloads and cache files
+import shutil  # High-level file operations (copy, move, disk usage checks)
+import sqlite3  # Built-in SQLite access for the local database export backend
+import threading  # Locks and threads for safe concurrent operations
+from collections import defaultdict  # Dict that auto-creates default values (avoids key-exists checks)
 
 # Note: datetime class already imported at top of file (line 26)
 # Only import timezone, timedelta here to avoid shadowing datetime class
-from datetime import UTC, timedelta, timezone
+from datetime import UTC, timedelta, timezone  # UTC marker plus helpers for timezone-aware time math
 
 # Third-party imports with fallbacks
 # Required dependencies: raise clear error if missing (auto-installed by early dependency check)
 # Optional dependencies: use _has_X availability flags for runtime guards
 # Pylance uses the TYPE_CHECKING imports above for type analysis.
-try:
-    from prettytable import PrettyTable
-except ImportError as _pt_err:
-    raise ImportError("PrettyTable is required but not installed. Run: pip install prettytable") from _pt_err
+try:  # PrettyTable is required for formatted console tables
+    from prettytable import PrettyTable  # ASCII table renderer used across menus and reports
+except ImportError as _pt_err:  # Required dependency is missing
+    raise ImportError(
+        "PrettyTable is required but not installed. Run: pip install prettytable"
+    ) from _pt_err  # Fail fast with install guidance
 
-try:
-    import numpy as np
+try:  # numpy is optional (only some analytics need it)
+    import numpy as np  # Numerical arrays for analytics calculations
 
-    _has_numpy = True
-except ImportError:
-    np = None  # type: ignore[assignment]  # Optional - analytics features limited
-    _has_numpy = False
+    _has_numpy = True  # Flag that numpy-backed features are available
+except ImportError:  # numpy not installed
+    np = None  # type: ignore[assignment]  # Optional - analytics features limited  # None lets runtime guards detect absence
+    _has_numpy = False  # Flag that numpy-backed features are unavailable
 
-try:
-    import websocket
-except ImportError as _ws_err:
-    raise ImportError("websocket-client is required but not installed. Run: pip install websocket-client") from _ws_err
+try:  # websocket-client is required for live device diagnostics
+    import websocket  # WebSocket client for streaming device CLI commands
+except ImportError as _ws_err:  # Required dependency is missing
+    raise ImportError(
+        "websocket-client is required but not installed. Run: pip install websocket-client"
+    ) from _ws_err  # Fail fast with install guidance
 
-try:
-    from difflib import SequenceMatcher
-except ImportError:
-    SequenceMatcher = None  # type: ignore[assignment, misc]
+try:  # SequenceMatcher is optional (used for fuzzy string comparisons)
+    from difflib import SequenceMatcher  # Stdlib similarity-ratio helper
+except ImportError:  # Extremely unlikely for a stdlib module, but guard anyway
+    SequenceMatcher = None  # type: ignore[assignment, misc]  # None lets callers detect absence
 
 # Import mistapi later through GlobalImportManager for better dependency management
 # Using Any type since mistapi is dynamically loaded but guaranteed to be available before use
-mistapi: Any = None
+mistapi: Any = None  # Placeholder; the real mistapi module is loaded later by GlobalImportManager
 
 
 # tqdm will be properly imported by GlobalImportManager
 # This fallback will be overridden by the real tqdm import
-def tqdm(iterable, *args, **kwargs):  # type: ignore[no-untyped-def]
+def tqdm(iterable, *args, **kwargs):  # type: ignore[no-untyped-def]  # No-op progress-bar stand-in until the real tqdm loads
     """Fallback tqdm function - will be replaced by real tqdm after import initialization."""
-    return iterable
+    return iterable  # Return the iterable unchanged (no progress bar yet)
 
 
-try:
-    import requests
-except ImportError as _req_err:
-    raise ImportError("requests is required but not installed. Run: pip install requests") from _req_err
+try:  # requests is required for all HTTP calls
+    import requests  # HTTP library used by mistapi and direct API requests
+except ImportError as _req_err:  # Required dependency is missing
+    raise ImportError(
+        "requests is required but not installed. Run: pip install requests"
+    ) from _req_err  # Fail fast with install guidance
 
-try:
-    import urllib3
+try:  # urllib3 is optional (used to suppress noisy SSL warnings)
+    import urllib3  # Low-level HTTP library underlying requests
 
-    _has_urllib3 = True
-except ImportError:
-    urllib3 = None  # type: ignore[assignment]  # Optional - SSL warning suppression
-    _has_urllib3 = False
+    _has_urllib3 = True  # Flag that urllib3-based features are available
+except ImportError:  # urllib3 not installed
+    urllib3 = None  # type: ignore[assignment]  # Optional - SSL warning suppression  # None lets guards detect absence
+    _has_urllib3 = False  # Flag that urllib3-based features are unavailable
 
-try:
-    import pyte
+try:  # pyte is optional (terminal emulation for parsing WebSocket output)
+    import pyte  # In-memory terminal emulator to render device CLI screens
 
-    _has_pyte = True
-except ImportError:
-    pyte = None  # type: ignore[assignment]  # Optional - terminal emulation
-    _has_pyte = False
+    _has_pyte = True  # Flag that terminal-emulation features are available
+except ImportError:  # pyte not installed
+    pyte = None  # type: ignore[assignment]  # Optional - terminal emulation  # None lets guards detect absence
+    _has_pyte = False  # Flag that terminal-emulation features are unavailable
 
-try:
-    import paramiko  # type: ignore[import-untyped]
-    from paramiko import RejectPolicy, SSHClient
-except ImportError:
-    paramiko = None  # type: ignore[assignment]  # Optional - SSH operations
-    SSHClient = None  # type: ignore[assignment, misc]  # Optional - SSH operations
-    RejectPolicy = None  # type: ignore[assignment, misc]  # Optional - SSH operations
+try:  # paramiko is optional (used for direct SSH operations)
+    import paramiko  # type: ignore[import-untyped]  # SSH client library
+    from paramiko import RejectPolicy, SSHClient  # Strict host-key policy and the SSH client class
+except ImportError:  # paramiko not installed
+    paramiko = None  # type: ignore[assignment]  # Optional - SSH operations  # None lets guards detect absence
+    SSHClient = None  # type: ignore[assignment, misc]  # Optional - SSH operations  # None lets guards detect absence
+    RejectPolicy = None  # type: ignore[assignment, misc]  # Optional - SSH operations  # None lets guards detect absence
 
 # Optional imports with fallbacks
-try:
-    from scourgify import normalize_address_record
-except ImportError:
-    normalize_address_record = None
+try:  # scourgify is optional (US street-address normalization)
+    from scourgify import normalize_address_record  # Normalize messy US addresses into structured fields
+except ImportError:  # scourgify not installed
+    normalize_address_record = None  # None lets callers fall back to raw address strings
 
-try:
-    from rapidfuzz import fuzz
-except ImportError:
-    fuzz = None  # type: ignore[assignment]
+try:  # rapidfuzz is optional (fast fuzzy string matching)
+    from rapidfuzz import fuzz  # High-performance fuzzy match scoring
+except ImportError:  # rapidfuzz not installed
+    fuzz = None  # type: ignore[assignment]  # None lets callers skip fuzzy matching
 
 # Keyboard listener functionality has been removed for simplicity
 # These functions are no-op fallbacks
 
 
-def listen_keyboard(*args, **kwargs):  # type: ignore[no-untyped-def]
+def listen_keyboard(*args, **kwargs):  # type: ignore[no-untyped-def]  # Removed feature; harmless stub kept for old call sites
     """Keyboard listener has been removed - this is a no-op fallback."""
-    logging.info("Keyboard listener functionality has been removed")
-    return None
+    logging.info("Keyboard listener functionality has been removed")  # Tell any remaining caller this does nothing
+    return None  # No listener object to return
 
 
-def stop_listening():  # type: ignore[no-untyped-def]
+def stop_listening():  # type: ignore[no-untyped-def]  # Removed feature; harmless stub kept for old call sites
     """No-op fallback for removed keyboard listener functionality."""
-    pass
+    pass  # Nothing to stop; intentionally a no-op
 
 
 # ============================================================================
@@ -991,45 +1200,49 @@ def stop_listening():  # type: ignore[no-untyped-def]
 # variable MIST_PAGE_LIMIT (clamped to 1..1000). All new/updated listOrgSites /
 # getOrgInventory calls should pass limit=DEFAULT_API_PAGE_LIMIT or use the
 # helper wrappers below to ensure consistency and simpler tuning.
-try:
-    _raw_page_limit_env = os.environ.get("MIST_PAGE_LIMIT", "1000").strip()
-    _parsed_limit = int(_raw_page_limit_env)
-except Exception:
-    _parsed_limit = 1000
+try:  # Read the configured API page size from the environment
+    _raw_page_limit_env = os.environ.get("MIST_PAGE_LIMIT", "1000").strip()  # Raw env value, default '1000', trimmed
+    _parsed_limit = int(_raw_page_limit_env)  # Convert to int (raises if non-numeric)
+except Exception:  # Missing or non-numeric value
+    _parsed_limit = 1000  # Fall back to a sensible default page size
 
-DEFAULT_API_PAGE_LIMIT = max(1, min(_parsed_limit, 1000))
-if _parsed_limit != DEFAULT_API_PAGE_LIMIT:
-    logging.warning(f"MIST_PAGE_LIMIT value {_parsed_limit} adjusted to {DEFAULT_API_PAGE_LIMIT} (valid range 1..1000)")
+DEFAULT_API_PAGE_LIMIT = max(1, min(_parsed_limit, 1000))  # Clamp to the 1..1000 range the Mist API accepts
+if _parsed_limit != DEFAULT_API_PAGE_LIMIT:  # The configured value was out of range and had to be clamped
+    logging.warning(
+        f"MIST_PAGE_LIMIT value {_parsed_limit} adjusted to {DEFAULT_API_PAGE_LIMIT} (valid range 1..1000)"
+    )  # Warn about the adjustment
 
-logging.debug(f"API Page Size Configuration Active: DEFAULT_API_PAGE_LIMIT={DEFAULT_API_PAGE_LIMIT}")
+logging.debug(
+    f"API Page Size Configuration Active: DEFAULT_API_PAGE_LIMIT={DEFAULT_API_PAGE_LIMIT}"
+)  # Record the effective page size for debugging
 
 
 # Early dotenv import for configuration loading
-def _fallback_load_dotenv() -> None:
+def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dotenv isn't installed
     """Fallback .env loader when python-dotenv package is not installed."""
-    try:
-        with open(".env") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, value = line.split("=", 1)
-                    os.environ[key.strip()] = value.strip()
-    except FileNotFoundError:
-        logging.debug("No .env file found")
-    except Exception as e:
-        logging.debug(f"Error loading .env file: {e}")
+    try:  # The .env file is optional; handle its absence/errors gracefully
+        with open(".env") as f:  # Open .env in the current working directory
+            for line in f:  # Process the file one line at a time
+                line = line.strip()  # Remove surrounding whitespace and the trailing newline
+                if line and not line.startswith("#") and "=" in line:  # Skip blanks, comments, and malformed entries
+                    key, value = line.split("=", 1)  # Split on the first '=' (values may contain '=')
+                    os.environ[key.strip()] = value.strip()  # Set the env var (overwrites, unlike setdefault)
+    except FileNotFoundError:  # No .env file present
+        logging.debug("No .env file found")  # Not an error; just note it at debug level
+    except Exception as e:  # Any other read/parse problem
+        logging.debug(f"Error loading .env file: {e}")  # Log the reason without crashing startup
 
 
-try:
-    from dotenv import load_dotenv
+try:  # Prefer the full-featured python-dotenv loader when available
+    from dotenv import load_dotenv  # Robust .env parser from python-dotenv
 
-    DOTENV_AVAILABLE = True
-    load_dotenv()
-except ImportError:
-    DOTENV_AVAILABLE = False
+    DOTENV_AVAILABLE = True  # Flag that the real loader is in use
+    load_dotenv()  # Load .env now so config is available to the import manager
+except ImportError:  # python-dotenv not installed
+    DOTENV_AVAILABLE = False  # Flag that we're using the minimal fallback
     # Use fallback loader and create an alias for later calls
-    load_dotenv = _fallback_load_dotenv  # type: ignore[assignment]
-    _fallback_load_dotenv()
+    load_dotenv = _fallback_load_dotenv  # type: ignore[assignment]  # Alias so later load_dotenv() calls still work
+    _fallback_load_dotenv()  # Load .env now using the fallback parser
 
 
 class GlobalImportManager:
@@ -1044,48 +1257,58 @@ class GlobalImportManager:
     - Performance optimization through early imports
     """
 
-    def __init__(self):  # type: ignore[no-untyped-def]
+    def __init__(self):  # type: ignore[no-untyped-def]  # Read config from env and prepare dependency-tracking state
         """Initialize the import manager with configuration from environment variables."""
         # Configuration from .env file
         # For local development: UV enabled, auto-upgrades enabled
         # For containers: These are overridden by environment variables
-        self.auto_upgrade_uv = (
+        self.auto_upgrade_uv = (  # Whether to auto-upgrade the UV package manager itself
             os.getenv("AUTO_UPGRADE_UV", "true").lower() == "true"
         )  # Default to true for local UV usage
-        self.auto_upgrade_dependencies = (
+        self.auto_upgrade_dependencies = (  # Whether to auto-upgrade project dependencies
             os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true").lower() == "true"
         )  # Default to true for local development
-        self.upgrade_check_timeout = int(os.getenv("UPGRADE_CHECK_TIMEOUT", "30"))  # Shorter timeout
-        self.csv_freshness_minutes = int(os.getenv("CSV_FRESHNESS_MINUTES", "15"))
+        self.upgrade_check_timeout = int(
+            os.getenv("UPGRADE_CHECK_TIMEOUT", "30")
+        )  # Seconds before giving up on an upgrade check
+        self.csv_freshness_minutes = int(
+            os.getenv("CSV_FRESHNESS_MINUTES", "15")
+        )  # How long cached CSVs count as 'fresh'
         # Only check for UV updates once per day by default
-        self.uv_update_check_hours = int(os.getenv("UV_UPDATE_CHECK_HOURS", "24"))
+        self.uv_update_check_hours = int(
+            os.getenv("UV_UPDATE_CHECK_HOURS", "24")
+        )  # Throttle UV update checks to once per day
         # Option to completely disable UV checking (useful for containers)
-        self.disable_uv_check = os.getenv("DISABLE_UV_CHECK", "false").lower() == "true"
+        self.disable_uv_check = (
+            os.getenv("DISABLE_UV_CHECK", "false").lower() == "true"
+        )  # Skip all UV checks when set (container use)
         # Option to completely disable auto-installation (useful for containers)
-        self.disable_auto_install = os.getenv("DISABLE_AUTO_INSTALL", "false").lower() == "true"
+        self.disable_auto_install = (
+            os.getenv("DISABLE_AUTO_INSTALL", "false").lower() == "true"
+        )  # Skip auto-install when set (container use)
 
         # Dependency tracking
-        self.required_packages = {}
-        self.optional_packages = {}
-        self.failed_imports = []
-        self.installed_packages = []
+        self.required_packages = {}  # Will hold name -> spec for required packages
+        self.optional_packages = {}  # Will hold name -> spec for optional packages
+        self.failed_imports = []  # Names of packages that failed to import
+        self.installed_packages = []  # Names of packages installed during this run
 
         # Import storage for global access
-        self.imports = {}
+        self.imports = {}  # Cache of imported modules keyed by name for global reuse
 
         # UV availability cache to avoid repeated checks
-        self._uv_available: bool = False
-        self._uv_checked: bool = False
+        self._uv_available: bool = False  # Cached answer to 'is UV usable?'
+        self._uv_checked: bool = False  # Whether the UV availability check has run yet
         self._last_uv_update_check: float | None = None  # Track when we last checked for UV updates
 
         # Deferred initialization tracking
-        self._deferred_init_done: bool = False
-        self._initialization_complete: bool = False
-        self._initialization_success: bool = False
-        self._cached_global_assignments: dict[str, Any] = {}
+        self._deferred_init_done: bool = False  # Whether the deferred (lazy) init has run
+        self._initialization_complete: bool = False  # Whether full initialization finished
+        self._initialization_success: bool = False  # Whether initialization succeeded
+        self._cached_global_assignments: dict[str, Any] = {}  # Module globals to publish once imports complete
 
         # Import name mappings for cases where package name != import name
-        self.import_name_mappings = {
+        self.import_name_mappings = {  # Map pip package names to import names where they differ
             "websocket-client": "websocket",  # websocket-client package provides websocket module
             "python-dotenv": "dotenv",  # python-dotenv package provides dotenv module
             "usaddress-scourgify": "scourgify",  # usaddress-scourgify package provides scourgify module
@@ -1097,76 +1320,82 @@ class GlobalImportManager:
         }
 
         # Special import handlers for complex cases
-        self.special_import_handlers = {
-            "concurrent.futures": self._import_concurrent_futures,
-            "datetime": self._import_datetime,
-            "tqdm": self._import_tqdm,
+        self.special_import_handlers = {  # Map module names to custom import functions for tricky cases
+            "concurrent.futures": self._import_concurrent_futures,  # Custom handler for concurrent.futures
+            "datetime": self._import_datetime,  # Custom handler for datetime (avoids class shadowing)
+            "tqdm": self._import_tqdm,  # Custom handler that swaps in the real tqdm
         }
 
         # Initialize logging early
-        self._setup_logging()  # type: ignore[no-untyped-call]
+        self._setup_logging()  # type: ignore[no-untyped-call]  # Configure handlers/levels before other init runs
 
         # Detect virtual environment for better package management
-        self._detect_virtual_environment()  # type: ignore[no-untyped-call]
+        self._detect_virtual_environment()  # type: ignore[no-untyped-call]  # Log whether we're in a venv (affects installs)
 
         # Define all required and optional packages
-        self._define_package_requirements()  # type: ignore[no-untyped-call]
+        self._define_package_requirements()  # type: ignore[no-untyped-call]  # Populate the required/optional package dicts
 
-    def _detect_virtual_environment(self):  # type: ignore[no-untyped-def]
+    def _detect_virtual_environment(self):  # type: ignore[no-untyped-def]  # Determine and log whether a venv is active
         """Detect if we're running in a virtual environment and log info."""
-        self.in_venv = hasattr(sys, "real_prefix") or (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix)
+        self.in_venv = hasattr(sys, "real_prefix") or (
+            hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
+        )  # venv when prefixes differ
 
-        if self.in_venv:
-            venv_path = getattr(sys, "prefix", "unknown")
-            logging.info(f"Running in virtual environment: {venv_path}")
-            logging.info(f"Python executable: {sys.executable}")
-        else:
-            logging.info("Running in system Python environment")
-            logging.info(f"Python executable: {sys.executable}")
+        if self.in_venv:  # Running inside a virtual environment
+            venv_path = getattr(sys, "prefix", "unknown")  # Path to the active venv
+            logging.info(f"Running in virtual environment: {venv_path}")  # Log the venv location
+            logging.info(f"Python executable: {sys.executable}")  # Log which interpreter is in use
+        else:  # Running against the system Python
+            logging.info("Running in system Python environment")  # Note the non-venv environment
+            logging.info(f"Python executable: {sys.executable}")  # Log which interpreter is in use
 
-    def _setup_logging(self):  # type: ignore[no-untyped-def]
+    def _setup_logging(self):  # type: ignore[no-untyped-def]  # Build console+file handlers with env-driven levels
         """Setup basic logging configuration with environment-specific levels."""
         # Get console and file log levels from environment (default to INFO if not set)
-        console_log_level = int(os.environ.get("CONSOLE_LOG_LEVEL", logging.INFO))
-        file_log_level = int(os.environ.get("LOGGING_LOG_LEVEL", logging.INFO))
+        console_log_level = int(os.environ.get("CONSOLE_LOG_LEVEL", logging.INFO))  # Console verbosity (default INFO)
+        file_log_level = int(os.environ.get("LOGGING_LOG_LEVEL", logging.INFO))  # Log-file verbosity (default INFO)
 
         # Create console handler with environment-specified level
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(console_log_level)
-        console_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        console_handler.setFormatter(console_formatter)
+        console_handler = logging.StreamHandler()  # Handler that writes to stdout/stderr
+        console_handler.setLevel(console_log_level)  # Apply the console verbosity threshold
+        console_formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(message)s"
+        )  # Timestamped log line format
+        console_handler.setFormatter(console_formatter)  # Attach the format to the console handler
 
         # Create file handler with environment-specified level
         # Use data directory for log files to ensure write permissions in container
-        log_file_path = os.path.join("data", "script.log")
-        os.makedirs("data", exist_ok=True)  # Ensure data directory exists
-        file_handler = logging.FileHandler(log_file_path)
-        file_handler.setLevel(file_log_level)
-        file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        file_handler.setFormatter(file_formatter)
+        log_file_path = os.path.join("data", "script.log")  # Log path under data/ (writable in the container)
+        os.makedirs(
+            "data", exist_ok=True
+        )  # Ensure data directory exists  # Create data/ if missing (no error if present)
+        file_handler = logging.FileHandler(log_file_path)  # Handler that writes to script.log
+        file_handler.setLevel(file_log_level)  # Apply the file verbosity threshold
+        file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")  # Same timestamped format
+        file_handler.setFormatter(file_formatter)  # Attach the format to the file handler
 
         # Configure root logger to capture all messages, handlers will filter
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format="%(asctime)s - %(levelname)s - %(message)s",
-            handlers=[file_handler, console_handler],
-            force=True,  # Override any existing configuration
+        logging.basicConfig(  # Wire up the root logger with both handlers
+            level=logging.DEBUG,  # Root captures everything; handlers filter by their own levels
+            format="%(asctime)s - %(levelname)s - %(message)s",  # Default format (handlers override with their own)
+            handlers=[file_handler, console_handler],  # Register both the file and console handlers
+            force=True,  # Override any existing configuration  # Replace the earlier module-import basicConfig
         )
 
-    def _define_package_requirements(self):  # type: ignore[no-untyped-def]
+    def _define_package_requirements(self):  # type: ignore[no-untyped-def]  # Populate the required/optional package dictionaries
         """Define all required and optional package dependencies."""
         # Required packages (core functionality)
-        self.required_packages = {
+        self.required_packages = {  # Map of package name -> pip spec (None means stdlib, no install needed)
             # Core API and networking
-            "mistapi": "mistapi>=0.3.0",
-            "requests": "requests>=2.28.0",
-            "websocket-client": "websocket-client>=1.4.0",
+            "mistapi": "mistapi>=0.3.0",  # Official Mist API SDK (the core dependency)
+            "requests": "requests>=2.28.0",  # HTTP client used for API calls
+            "websocket-client": "websocket-client>=1.4.0",  # WebSocket client for device diagnostics
             # CLI and user interface
-            "prettytable": "prettytable>=3.5.0",
-            "tqdm": "tqdm>=4.64.0",
+            "prettytable": "prettytable>=3.5.0",  # ASCII table rendering for menus/reports
+            "tqdm": "tqdm>=4.64.0",  # Progress bars for long-running operations
             # Data processing
-            "numpy": "numpy>=1.24.0",
-            "python-dotenv": "python-dotenv>=1.0.0",
+            "numpy": "numpy>=1.24.0",  # Numerical arrays for analytics
+            "python-dotenv": "python-dotenv>=1.0.0",  # Loads configuration from .env
             # SSH and direct device connections
             "paramiko": "paramiko>=2.9.0",  # More compatible version for SSH
             # Standard library modules (no installation needed)
@@ -1192,228 +1421,256 @@ class GlobalImportManager:
         }
 
         # Optional packages (enhanced functionality)
-        optional_packages_raw = {
-            "sshkeyboard": "sshkeyboard>=2.3.0",
-            "pyte": "pyte>=0.8.0",
-            "usaddress-scourgify": "usaddress-scourgify>=0.6.0",
-            "rapidfuzz": "rapidfuzz>=3.8.0",
-            "urllib3": "urllib3>=1.26.0",
-            "plotly": "plotly>=5.14.0",
-            "dash": "dash>=2.9.0",
-            "kaleido": "kaleido>=0.2.1",
-            "matplotlib": "matplotlib>=3.5.0",
+        optional_packages_raw = {  # Map of optional package name -> pip spec (enhances but isn't required)
+            "sshkeyboard": "sshkeyboard>=2.3.0",  # Keyboard capture (legacy/optional)
+            "pyte": "pyte>=0.8.0",  # Terminal emulation for parsing device output
+            "usaddress-scourgify": "usaddress-scourgify>=0.6.0",  # US address normalization
+            "rapidfuzz": "rapidfuzz>=3.8.0",  # Fast fuzzy string matching
+            "urllib3": "urllib3>=1.26.0",  # Low-level HTTP (SSL warning control)
+            "plotly": "plotly>=5.14.0",  # Interactive charts for reports
+            "dash": "dash>=2.9.0",  # Web dashboards (maps viewer)
+            "kaleido": "kaleido>=0.2.1",  # Static image export for plotly charts
+            "matplotlib": "matplotlib>=3.5.0",  # Static plotting for analytics
         }
         # Filter out None values (platform-incompatible packages)
-        self.optional_packages = {k: v for k, v in optional_packages_raw.items() if v is not None}
+        self.optional_packages = {
+            k: v for k, v in optional_packages_raw.items() if v is not None
+        }  # Drop any None specs defensively
 
-    def _check_uv_installation(self) -> bool:
+    def _check_uv_installation(self) -> bool:  # Detect whether the UV package manager is usable (result cached)
         """Check if UV package manager is installed and accessible (cached)."""
         # If UV checking is disabled, return False immediately
-        if self.disable_uv_check:
-            return False
+        if self.disable_uv_check:  # Operator/container opted out of UV checks
+            return False  # Treat UV as unavailable
 
         # Return cached result if already checked
-        if self._uv_checked:
-            return self._uv_available
+        if self._uv_checked:  # We already probed UV earlier this run
+            return self._uv_available  # Reuse the cached answer (avoids repeated subprocess calls)
 
-        try:
-            result = subprocess.run(["uv", "--version"], capture_output=True, text=True, timeout=10)  # nosec B603 B607
-            if result.returncode == 0:
-                logging.info(f"UV package manager found: {result.stdout.strip()}")
-                self._uv_available = True
-            else:
-                logging.warning("UV package manager not found or not working properly")
-                self._uv_available = False
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:
-            logging.warning(f"UV package manager check failed: {e}")
-            self._uv_available = False
+        try:  # Probing UV may fail if it's not installed
+            result = subprocess.run(
+                ["uv", "--version"], capture_output=True, text=True, timeout=10
+            )  # nosec B603 B607  # Run 'uv --version'
+            if result.returncode == 0:  # UV ran successfully
+                logging.info(f"UV package manager found: {result.stdout.strip()}")  # Log the detected UV version
+                self._uv_available = True  # Cache that UV is usable
+            else:  # UV exists but returned an error
+                logging.warning("UV package manager not found or not working properly")  # Note the problem
+                self._uv_available = False  # Cache that UV is not usable
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:  # UV missing or hung
+            logging.warning(f"UV package manager check failed: {e}")  # Log why the probe failed
+            self._uv_available = False  # Cache that UV is not usable
 
         # Cache the result
-        self._uv_checked = True
-        return self._uv_available
+        self._uv_checked = True  # Mark that we've probed UV so we don't repeat it
+        return self._uv_available  # Return the (now cached) availability
 
-    def _install_uv(self) -> bool:
+    def _install_uv(self) -> bool:  # Attempt to install UV via pip when it's missing
         """Install UV package manager if not present."""
-        if not self.auto_upgrade_uv:
-            logging.info("Auto-upgrade of UV is disabled in configuration")
-            return False
+        if not self.auto_upgrade_uv:  # UV auto-management disabled by config
+            logging.info("Auto-upgrade of UV is disabled in configuration")  # Note that we won't install UV
+            return False  # Signal UV is unavailable
 
-        logging.info("Attempting to install UV package manager...")
-        try:
+        logging.info("Attempting to install UV package manager...")  # Announce the install attempt
+        try:  # The pip install may fail (no network, restricted env)
             # Try installing UV using pip as fallback
-            result = subprocess.run(  # nosec B603
-                [sys.executable, "-m", "pip", "install", "uv"],
-                capture_output=True,
-                text=True,
-                timeout=self.upgrade_check_timeout,
+            result = subprocess.run(  # nosec B603  # Install uv via pip
+                [sys.executable, "-m", "pip", "install", "uv"],  # pip install command for the current interpreter
+                capture_output=True,  # Capture output for logging
+                text=True,  # Decode output as text
+                timeout=self.upgrade_check_timeout,  # Bound the install so startup can't hang
             )
-            if result.returncode == 0:
-                logging.info("UV package manager installed successfully via pip")
-                return True
-            else:
-                logging.error(f"Failed to install UV via pip: {result.stderr}")
-                return False
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
-            logging.error(f"Failed to install UV package manager: {e}")
-            return False
+            if result.returncode == 0:  # pip reported success
+                logging.info("UV package manager installed successfully via pip")  # Confirm the install
+                return True  # UV is now available
+            else:  # pip returned an error
+                logging.error(f"Failed to install UV via pip: {result.stderr}")  # Log pip's error output
+                return False  # UV remains unavailable
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # pip process hung or failed to launch
+            logging.error(f"Failed to install UV package manager: {e}")  # Log the exception
+            return False  # UV remains unavailable
 
-    def _upgrade_uv(self) -> bool:
+    def _upgrade_uv(self) -> bool:  # Keep UV up to date, throttled to once per configured interval
         """Upgrade UV package manager to latest version (only if needed)."""
-        if not self.auto_upgrade_uv:
-            return True
+        if not self.auto_upgrade_uv:  # UV auto-management disabled by config
+            return True  # Nothing to do; treat as success
 
         # Check if we've recently checked for updates
-        now = time.time()
-        if self._last_uv_update_check:
-            hours_since_last_check = (now - self._last_uv_update_check) / 3600
-            if hours_since_last_check < self.uv_update_check_hours:
-                logging.debug(
+        now = time.time()  # Current timestamp used for throttling
+        if self._last_uv_update_check:  # A prior update-check time is recorded
+            hours_since_last_check = (now - self._last_uv_update_check) / 3600  # Convert elapsed seconds to hours
+            if hours_since_last_check < self.uv_update_check_hours:  # Still inside the throttle window
+                logging.debug(  # Skip the check to avoid frequent network calls
                     f"UV update check skipped (last check {hours_since_last_check:.1f} hours ago, threshold: {self.uv_update_check_hours} hours)"  # noqa: E501
                 )
-                return True
+                return True  # No update needed yet
 
-        try:
-            logging.info("Checking for UV package manager updates...")
+        try:  # The update may fail; treat most failures as non-critical
+            logging.info("Checking for UV package manager updates...")  # Announce the update check
             # First try UV self-update (for standalone installations)
-            result = subprocess.run(  # nosec B603 B607
-                ["uv", "self", "update"], capture_output=True, text=True, timeout=self.upgrade_check_timeout
+            result = subprocess.run(  # nosec B603 B607  # Try uv's built-in self-update
+                ["uv", "self", "update"],
+                capture_output=True,
+                text=True,
+                timeout=self.upgrade_check_timeout,  # Bounded self-update call
             )
 
             # Update the last check time regardless of result
-            self._last_uv_update_check = now
+            self._last_uv_update_check = now  # Record this attempt so we honor the throttle next time
 
-            if result.returncode == 0:
-                logging.info("UV package manager updated successfully")
-                return True
-            else:
+            if result.returncode == 0:  # Self-update succeeded
+                logging.info("UV package manager updated successfully")  # Confirm the update
+                return True  # Done
+            else:  # Self-update failed; determine why
                 # If self-update fails, try pip upgrade (for pip-installed UV)
-                if (
+                if (  # UV was installed via pip, so self-update isn't supported
                     "Self-update is only available for uv binaries installed via the standalone installation scripts"
                     in result.stderr
                 ):
-                    logging.info("UV was installed via pip, attempting pip upgrade...")
-                    pip_result = subprocess.run(  # nosec B603
-                        [sys.executable, "-m", "pip", "install", "--upgrade", "uv"],
-                        capture_output=True,
-                        text=True,
-                        timeout=self.upgrade_check_timeout,
+                    logging.info(
+                        "UV was installed via pip, attempting pip upgrade..."
+                    )  # Switch to the pip upgrade path
+                    pip_result = subprocess.run(  # nosec B603  # Upgrade uv via pip instead
+                        [sys.executable, "-m", "pip", "install", "--upgrade", "uv"],  # pip upgrade command
+                        capture_output=True,  # Capture output for logging
+                        text=True,  # Decode output as text
+                        timeout=self.upgrade_check_timeout,  # Bound the upgrade
                     )
-                    if pip_result.returncode == 0:
-                        logging.info("UV package manager updated successfully via pip")
-                        return True
-                    else:
-                        logging.warning(f"Failed to upgrade UV via pip: {pip_result.stderr}")
-                        return True  # Non-critical failure
-                else:
-                    logging.warning(f"UV self-update returned non-zero: {result.stderr}")
-                    return True  # Non-critical failure
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
+                    if pip_result.returncode == 0:  # pip upgrade succeeded
+                        logging.info("UV package manager updated successfully via pip")  # Confirm the upgrade
+                        return True  # Done
+                    else:  # pip upgrade failed
+                        logging.warning(f"Failed to upgrade UV via pip: {pip_result.stderr}")  # Log the error
+                        return True  # Non-critical failure  # Continue anyway; the current UV still works
+                else:  # Self-update failed for some other reason
+                    logging.warning(f"UV self-update returned non-zero: {result.stderr}")  # Log the error
+                    return True  # Non-critical failure  # Continue anyway; the current UV still works
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # Update process hung or failed to launch
             # Still update the last check time to avoid repeated failures
-            self._last_uv_update_check = now
-            logging.warning(f"UV self-update failed: {e}")
-            return True  # Non-critical failure
+            self._last_uv_update_check = now  # Record the attempt so we don't retry immediately
+            logging.warning(f"UV self-update failed: {e}")  # Log the exception
+            return True  # Non-critical failure  # Continue anyway; the current UV still works
 
     def _install_package_with_uv(self, package_spec: str) -> bool:
         """Install a package using UV package manager with fast resolution and virtual environment awareness."""
         try:
-            logging.debug(f"Installing package with UV: {package_spec}")
+            logging.debug(f"Installing package with UV: {package_spec}")  # Log which package is being installed
 
             # Check if we're in a virtual environment and prefer venv's UV if available
-            uv_cmd = "uv"
-            if hasattr(self, "in_venv") and self.in_venv:
+            uv_cmd = "uv"  # Default to the UV binary found on PATH
+            if hasattr(self, "in_venv") and self.in_venv:  # Running inside a virtual environment
                 # Try to use UV from the virtual environment first
-                venv_uv = os.path.join(os.path.dirname(sys.executable), "uv.exe")
-                if os.path.exists(venv_uv):
-                    uv_cmd = venv_uv
-                    logging.debug(f"Using venv UV: {venv_uv}")
+                venv_uv = os.path.join(os.path.dirname(sys.executable), "uv.exe")  # Build the venv-local UV path
+                if os.path.exists(venv_uv):  # The venv ships its own UV binary
+                    uv_cmd = venv_uv  # Prefer the venv's UV to stay environment-consistent
+                    logging.debug(f"Using venv UV: {venv_uv}")  # Record which UV binary was chosen
 
                 # Use UV with the current Python environment
-                cmd = [uv_cmd, "pip", "install", "--python", sys.executable, "--no-build-isolation", package_spec]
-            else:
+                cmd = [
+                    uv_cmd,
+                    "pip",
+                    "install",
+                    "--python",
+                    sys.executable,
+                    "--no-build-isolation",
+                    package_spec,
+                ]  # Pin install to this interpreter
+            else:  # Not in a venv -- use UV's default target resolution
                 # Use UV with default behavior
-                cmd = [uv_cmd, "pip", "install", "--no-build-isolation", package_spec]
+                cmd = [uv_cmd, "pip", "install", "--no-build-isolation", package_spec]  # Standard UV install command
 
-            result = subprocess.run(  # nosec B603
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=self.upgrade_check_timeout,
+            result = subprocess.run(  # nosec B603  # Execute the UV install (trusted, fixed argv)
+                cmd,  # The assembled UV command
+                capture_output=True,  # Capture stdout/stderr for logging and fallback detection
+                text=True,  # Decode output as text rather than bytes
+                timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
             )
-            if result.returncode == 0:
-                logging.info(f"Successfully installed {package_spec} with UV")
-                return True
-            else:
+            if result.returncode == 0:  # UV reported a successful install
+                logging.info(f"Successfully installed {package_spec} with UV")  # Confirm success
+                return True  # Installation done
+            else:  # First attempt failed -- retry without build isolation
                 # Try without --no-build-isolation if it failed
-                logging.debug("UV install failed with --no-build-isolation, retrying without it")
-                if hasattr(self, "in_venv") and self.in_venv:
-                    cmd = [uv_cmd, "pip", "install", "--python", sys.executable, package_spec]
-                else:
-                    cmd = [uv_cmd, "pip", "install", package_spec]
+                logging.debug("UV install failed with --no-build-isolation, retrying without it")  # Note the retry
+                if hasattr(self, "in_venv") and self.in_venv:  # Still target this interpreter inside a venv
+                    cmd = [
+                        uv_cmd,
+                        "pip",
+                        "install",
+                        "--python",
+                        sys.executable,
+                        package_spec,
+                    ]  # Retry pinned to interpreter
+                else:  # Outside a venv, use the default target
+                    cmd = [uv_cmd, "pip", "install", package_spec]  # Retry with plain UV install
 
-                result = subprocess.run(  # nosec B603
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=self.upgrade_check_timeout,
+                result = subprocess.run(  # nosec B603  # Execute the fallback UV install
+                    cmd,  # The retry command (no build-isolation flag)
+                    capture_output=True,  # Capture output for logging
+                    text=True,  # Decode output as text
+                    timeout=self.upgrade_check_timeout,  # Bound the retry attempt
                 )
-                if result.returncode == 0:
-                    logging.info(f"Successfully installed {package_spec} with UV (fallback)")
-                    return True
-                else:
-                    logging.warning(f"UV install failed for {package_spec}: {result.stderr}")
-                    return False
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
-            logging.warning(f"Failed to install {package_spec} with UV: {e}")
-            return False
+                if result.returncode == 0:  # The fallback install succeeded
+                    logging.info(
+                        f"Successfully installed {package_spec} with UV (fallback)"
+                    )  # Confirm fallback success
+                    return True  # Installation done
+                else:  # Both UV attempts failed
+                    logging.warning(f"UV install failed for {package_spec}: {result.stderr}")  # Log the UV error output
+                    return False  # Signal failure so the caller can fall back to pip
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # UV hung or failed to launch
+            logging.warning(f"Failed to install {package_spec} with UV: {e}")  # Log the exception detail
+            return False  # Signal failure so the caller can fall back to pip
 
     def _install_package_with_pip(self, package_spec: str) -> bool:
         """Install a package using pip as fallback with virtual environment awareness."""
         try:
-            logging.info(f"Installing package with pip: {package_spec}")
+            logging.info(f"Installing package with pip: {package_spec}")  # Log the pip install attempt
             # Always use the current Python executable to ensure installation in the right environment
-            result = subprocess.run(  # nosec B603
-                [sys.executable, "-m", "pip", "install", package_spec],
-                capture_output=True,
-                text=True,
-                timeout=self.upgrade_check_timeout,
+            result = subprocess.run(  # nosec B603  # Run pip against this exact interpreter (trusted argv)
+                [sys.executable, "-m", "pip", "install", package_spec],  # Invoke pip as a module of this Python
+                capture_output=True,  # Capture output for success/failure logging
+                text=True,  # Decode output as text
+                timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
             )
-            if result.returncode == 0:
-                logging.info(f"Successfully installed {package_spec} with pip")
-                return True
-            else:
-                logging.error(f"Failed to install {package_spec} with pip: {result.stderr}")
-                return False
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
-            logging.error(f"Failed to install {package_spec} with pip: {e}")
-            return False
+            if result.returncode == 0:  # pip reported a successful install
+                logging.info(f"Successfully installed {package_spec} with pip")  # Confirm success
+                return True  # Installation done
+            else:  # pip install failed
+                logging.error(f"Failed to install {package_spec} with pip: {result.stderr}")  # Log pip's error output
+                return False  # Signal failure to the caller
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # pip hung or failed to launch
+            logging.error(f"Failed to install {package_spec} with pip: {e}")  # Log the exception detail
+            return False  # Signal failure to the caller
 
     def _should_check_uv_update(self) -> bool:
         """Check if we should check for UV updates based on time since last check."""
-        if not self.auto_upgrade_uv:
-            return False
+        if not self.auto_upgrade_uv:  # UV auto-upgrade is disabled by configuration
+            return False  # Never check when the feature is off
 
-        if self._last_uv_update_check is None:
-            return True
+        if self._last_uv_update_check is None:  # No prior check has ever run this session
+            return True  # Force an initial check
 
-        time_since_check = time.time() - self._last_uv_update_check
-        hours_since_check = time_since_check / 3600
-        return hours_since_check >= self.uv_update_check_hours
+        time_since_check = time.time() - self._last_uv_update_check  # Seconds elapsed since the last check
+        hours_since_check = time_since_check / 3600  # Convert elapsed seconds to hours
+        return hours_since_check >= self.uv_update_check_hours  # Check again only after the configured interval
 
     def _check_uv_needs_update(self) -> bool:
         """Check if UV actually needs an update by comparing versions."""
         try:
             # Get current UV version
-            result = subprocess.run(["uv", "--version"], capture_output=True, text=True, timeout=5)  # nosec B603 B607
-            if result.returncode != 0:
-                return False
+            result = subprocess.run(
+                ["uv", "--version"], capture_output=True, text=True, timeout=5
+            )  # nosec B603 B607  # Query installed UV version
+            if result.returncode != 0:  # UV is missing or failed to report its version
+                return False  # Can't determine an update is needed
 
             # For now, we'll assume UV is up to date since checking remote version is complex
             # In a production environment, you might want to implement version comparison
-            logging.debug("UV version check complete - assuming current version is adequate")
-            return False
+            logging.debug("UV version check complete - assuming current version is adequate")  # Note the no-op result
+            return False  # Treat UV as up to date (remote comparison not implemented)
 
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError):
-            return False
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError):  # Version probe hung or failed to launch
+            return False  # Assume no update needed when the probe fails
 
     def _upgrade_all_dependencies(self) -> bool:  # noqa: C901
         """Install missing dependencies and upgrade existing ones."""
@@ -1427,183 +1684,225 @@ class GlobalImportManager:
             if pkg_spec is not None:  # Skip built-in modules
                 packages_to_process.append((pkg_name, pkg_spec))
 
-        if not packages_to_process:
-            logging.info("No packages to process")
-            return True
+        if not packages_to_process:  # Caller supplied an empty work list
+            logging.info("No packages to process")  # Note there is nothing to do
+            return True  # Success by default -- no work means no failures
 
-        logging.info(f"Processing {len(packages_to_process)} packages...")
+        logging.info(f"Processing {len(packages_to_process)} packages...")  # Announce how many packages will be handled
 
         # Process packages individually for better error handling
-        uv_available = self._check_uv_installation()
-        if uv_available:
-            logging.info("Using UV package manager for installations")
-        else:
-            logging.info("Using pip for package installations (UV not available)")
+        uv_available = self._check_uv_installation()  # Detect whether UV can be used as the fast installer
+        if uv_available:  # UV is present on this system
+            logging.info("Using UV package manager for installations")  # Prefer UV for speed
+        else:  # UV not found
+            logging.info("Using pip for package installations (UV not available)")  # Fall back to pip
 
-        success_count = 0
+        success_count = 0  # Track how many packages installed successfully
 
-        for _pkg_name, pkg_spec in packages_to_process:
+        for _pkg_name, pkg_spec in packages_to_process:  # Iterate each (name, spec) pair to install
             # Extract base package name from spec (e.g., "requests>=2.28.0" -> "requests")
-            pkg_spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[0].strip()
+            pkg_spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[
+                0
+            ].strip()  # Strip version operators to bare name
 
             try:
                 # Try UV first if available
-                if uv_available:
-                    if self._install_package_with_uv(pkg_spec):
-                        success_count += 1
-                        continue
+                if uv_available:  # Attempt the fast UV path when possible
+                    if self._install_package_with_uv(pkg_spec):  # UV install succeeded
+                        success_count += 1  # Count this package as done
+                        continue  # Move to the next package without trying pip
 
                 # Fallback to pip
-                if self._install_package_with_pip(pkg_spec):
-                    success_count += 1
-                else:
-                    logging.warning(f"Failed to install/upgrade {pkg_spec}")
+                if self._install_package_with_pip(pkg_spec):  # pip install succeeded
+                    success_count += 1  # Count this package as done
+                else:  # pip install failed
+                    logging.warning(f"Failed to install/upgrade {pkg_spec}")  # Warn but keep processing others
 
-            except Exception as e:
-                logging.warning(f"Error processing package {pkg_spec}: {e}")
+            except Exception as e:  # Any unexpected error during install of this package
+                logging.warning(f"Error processing package {pkg_spec}: {e}")  # Log and continue with remaining packages
 
-        logging.info(f"Successfully processed {success_count}/{len(packages_to_process)} packages")
-        return success_count > 0
+        logging.info(f"Successfully processed {success_count}/{len(packages_to_process)} packages")  # Summarize results
+        return success_count > 0  # Report success if at least one package installed
 
     def _import_concurrent_futures(self):  # type: ignore[no-untyped-def]
         """Special handler for concurrent.futures import."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from concurrent.futures import ThreadPoolExecutor, as_completed  # Import the thread-pool primitives on demand
 
-        return type("ConcurrentFutures", (), {"ThreadPoolExecutor": ThreadPoolExecutor, "as_completed": as_completed})()
+        return type(
+            "ConcurrentFutures", (), {"ThreadPoolExecutor": ThreadPoolExecutor, "as_completed": as_completed}
+        )()  # Bundle them on a tiny namespace object
 
     def _import_datetime(self):  # type: ignore[no-untyped-def]
         """Special handler for datetime import."""
         # Import the actual datetime module for module-level access
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta  # Pull in the datetime class and timedelta helper
 
         # The code expects 'datetime' to refer to the datetime class, not the module
         # But we also need module-level access. Create a special object that behaves like both.
-        class DateTimeHandler:
+        class DateTimeHandler:  # Adapter exposing both class-like and module-like datetime access
             def __init__(self):  # type: ignore[no-untyped-def]
                 # Make this object callable like datetime class
-                self.now = datetime.now
-                self.fromtimestamp = datetime.fromtimestamp
-                self.fromisoformat = datetime.fromisoformat
-                self.strptime = datetime.strptime
-                self.utcnow = datetime.utcnow
+                self.now = datetime.now  # Expose datetime.now() at the top level
+                self.fromtimestamp = datetime.fromtimestamp  # Expose epoch->datetime conversion
+                self.fromisoformat = datetime.fromisoformat  # Expose ISO-8601 string parsing
+                self.strptime = datetime.strptime  # Expose format-string parsing
+                self.utcnow = datetime.utcnow  # Expose UTC now() helper
                 # Add module attributes
-                self.datetime = datetime
-                self.timezone = timezone
-                self.timedelta = timedelta
+                self.datetime = datetime  # Allow handler.datetime to reach the real class
+                self.timezone = timezone  # Provide timezone for tz-aware construction
+                self.timedelta = timedelta  # Provide timedelta for date arithmetic
                 # Add module for UTC access
-                self.timezone = timezone
+                self.timezone = timezone  # (Re)bind timezone for clarity/UTC access
 
             def __call__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
                 # Allow calling like datetime()
-                return datetime(*args, **kwargs)
+                return datetime(*args, **kwargs)  # Forward calls straight to the datetime constructor
 
-        return DateTimeHandler()  # type: ignore[no-untyped-call]
+        return DateTimeHandler()  # type: ignore[no-untyped-call]  # Hand back the dual-purpose adapter instance
 
     def _import_tqdm(self):  # type: ignore[no-untyped-def]
         """Special handler for tqdm import to ensure proper functionality."""
         try:
-            from tqdm import tqdm
+            from tqdm import tqdm  # Attempt to import the real progress-bar library
 
-            logging.debug("Successfully imported tqdm from package")
-            return tqdm
-        except ImportError:
-            logging.warning("tqdm package not available, using fallback")
+            logging.debug("Successfully imported tqdm from package")  # Note the real library is available
+            return tqdm  # Use the genuine tqdm progress bar
+        except ImportError:  # tqdm is not installed
+            logging.warning("tqdm package not available, using fallback")  # Warn and degrade gracefully
 
             # Return the fallback function if tqdm is not available
             def tqdm_fallback(iterable, *args, **kwargs):  # type: ignore[no-untyped-def]
                 """Fallback when tqdm package is not available."""
-                desc = kwargs.get("desc", "Processing")
-                unit = kwargs.get("unit", "item")
-                if hasattr(iterable, "__len__"):
-                    total = len(iterable)
-                    logging.info(f"{desc}: {total} {unit}s to process")
-                else:
-                    logging.info(f"{desc}: processing {unit}s...")
-                return iterable
+                desc = kwargs.get("desc", "Processing")  # Description label for the log line
+                unit = kwargs.get("unit", "item")  # Unit noun for the progress message
+                if hasattr(iterable, "__len__"):  # The iterable has a known length
+                    total = len(iterable)  # Compute total item count for the message
+                    logging.info(f"{desc}: {total} {unit}s to process")  # Log a one-shot progress summary
+                else:  # Length is unknown (e.g. a generator)
+                    logging.info(f"{desc}: processing {unit}s...")  # Log an indefinite progress message
+                return iterable  # Pass the iterable through unchanged (no live bar)
 
-            return tqdm_fallback
+            return tqdm_fallback  # Provide the no-op progress shim to callers
 
     def _check_and_upgrade_package(self, module_name: str, package_spec: str) -> bool:  # noqa: C901, PLR0912
         """Check if a package needs upgrading and upgrade it if necessary."""
-        if not package_spec:
+        if not package_spec:  # No version spec provided (e.g. a stdlib module)
             return True  # Built-in modules don't need upgrading
 
         try:
             # Extract package name from spec
-            package_name = package_spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[0].strip()
+            package_name = (
+                package_spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[0].strip()
+            )  # Strip version operators to the bare name
 
             # Check current version
-            result = subprocess.run(  # nosec B603
-                [sys.executable, "-m", "pip", "show", package_name], capture_output=True, text=True, timeout=10
+            result = subprocess.run(  # nosec B603  # Ask pip what version is currently installed
+                [sys.executable, "-m", "pip", "show", package_name],
+                capture_output=True,
+                text=True,
+                timeout=10,  # Run pip show for this interpreter
             )
 
-            if result.returncode != 0:
-                logging.debug(f"Package {package_name} not found, skipping upgrade check")
-                return True
+            if result.returncode != 0:  # pip could not find the package
+                logging.debug(
+                    f"Package {package_name} not found, skipping upgrade check"
+                )  # Nothing installed to upgrade
+                return True  # Treat as success -- not an error condition
 
             # Parse current version from pip show output
-            current_version = None
-            for line in result.stdout.split("\n"):
-                if line.startswith("Version:"):
-                    current_version = line.split(":", 1)[1].strip()
-                    break
+            current_version = None  # Will hold the parsed installed version string
+            for line in result.stdout.split("\n"):  # Scan each line of pip show output
+                if line.startswith("Version:"):  # Found the version field
+                    current_version = line.split(":", 1)[1].strip()  # Extract the version value
+                    break  # Stop scanning once found
 
-            if current_version:
-                logging.debug(f"Current version of {package_name}: {current_version}")
+            if current_version:  # We successfully determined the installed version
+                logging.debug(f"Current version of {package_name}: {current_version}")  # Record the current version
 
                 # Try to upgrade the package
-                logging.info(f"  Checking for updates to {package_name}...")
+                logging.info(
+                    f"  Checking for updates to {package_name}..."
+                )  # Inform the user an upgrade check is running
 
                 # Use UV if available, otherwise pip
-                if self._check_uv_installation():
+                if self._check_uv_installation():  # Prefer UV when it is installed
                     # Check if we're in a virtual environment and prefer venv's UV if available
-                    uv_cmd = "uv"
-                    if hasattr(self, "in_venv") and self.in_venv:
+                    uv_cmd = "uv"  # Default to UV on PATH
+                    if hasattr(self, "in_venv") and self.in_venv:  # Running inside a virtual environment
                         # Try to use UV from the virtual environment first
-                        venv_uv = os.path.join(os.path.dirname(sys.executable), "uv.exe")
-                        if os.path.exists(venv_uv):
-                            uv_cmd = venv_uv
-                        upgrade_cmd = [uv_cmd, "pip", "install", "--python", sys.executable, "--upgrade", package_spec]
-                    else:
-                        upgrade_cmd = [uv_cmd, "pip", "install", "--upgrade", package_spec]
-                else:
-                    upgrade_cmd = [sys.executable, "-m", "pip", "install", "--upgrade", package_spec]
+                        venv_uv = os.path.join(os.path.dirname(sys.executable), "uv.exe")  # Build venv-local UV path
+                        if os.path.exists(venv_uv):  # The venv ships its own UV
+                            uv_cmd = venv_uv  # Prefer the venv's UV binary
+                        upgrade_cmd = [
+                            uv_cmd,
+                            "pip",
+                            "install",
+                            "--python",
+                            sys.executable,
+                            "--upgrade",
+                            package_spec,
+                        ]  # UV upgrade pinned to this interpreter
+                    else:  # Not in a venv
+                        upgrade_cmd = [uv_cmd, "pip", "install", "--upgrade", package_spec]  # Plain UV upgrade command
+                else:  # UV unavailable -- use pip
+                    upgrade_cmd = [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        "--upgrade",
+                        package_spec,
+                    ]  # pip upgrade for this interpreter
 
-                upgrade_result = subprocess.run(  # nosec B603
-                    upgrade_cmd, capture_output=True, text=True, timeout=self.upgrade_check_timeout
+                upgrade_result = subprocess.run(  # nosec B603  # Execute the chosen upgrade command
+                    upgrade_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.upgrade_check_timeout,  # Bound the upgrade so it can't hang
                 )
 
-                if upgrade_result.returncode == 0:
+                if upgrade_result.returncode == 0:  # The upgrade command completed without error
                     # Check if version actually changed
-                    new_result = subprocess.run(  # nosec B603
-                        [sys.executable, "-m", "pip", "show", package_name], capture_output=True, text=True, timeout=10
+                    new_result = subprocess.run(  # nosec B603  # Re-query pip to see the post-upgrade version
+                        [sys.executable, "-m", "pip", "show", package_name],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,  # pip show again
                     )
 
-                    new_version = None
-                    for line in new_result.stdout.split("\n"):
-                        if line.startswith("Version:"):
-                            new_version = line.split(":", 1)[1].strip()
-                            break
+                    new_version = None  # Will hold the version after the upgrade attempt
+                    for line in new_result.stdout.split("\n"):  # Scan the new pip show output
+                        if line.startswith("Version:"):  # Found the version field
+                            new_version = line.split(":", 1)[1].strip()  # Extract the new version value
+                            break  # Stop once found
 
-                    if new_version and new_version != current_version:
-                        logging.info(f"  [OK] {package_name}: Upgraded from {current_version} to {new_version}")
-                        return True
-                    else:
-                        logging.debug(f"  [OK] {package_name}: Already up to date ({current_version})")
-                        return True
-                else:
-                    logging.debug(f"  [WARN] {package_name}: Upgrade check failed: {upgrade_result.stderr}")
-                    return True  # Non-critical failure
+                    if new_version and new_version != current_version:  # The version actually advanced
+                        logging.info(
+                            f"  [OK] {package_name}: Upgraded from {current_version} to {new_version}"
+                        )  # Report the upgrade
+                        return True  # Upgrade succeeded
+                    else:  # Version did not change
+                        logging.debug(
+                            f"  [OK] {package_name}: Already up to date ({current_version})"
+                        )  # Already current
+                        return True  # Nothing to do, still success
+                else:  # The upgrade command failed
+                    logging.debug(
+                        f"  [WARN] {package_name}: Upgrade check failed: {upgrade_result.stderr}"
+                    )  # Log the failure detail
+                    return True  # Non-critical failure -- continue without blocking startup
 
-            return True
+            return True  # Reached when version could not be parsed -- treat as non-fatal
 
-        except Exception as e:
-            logging.debug(f"Error checking/upgrading {module_name}: {e}")
-            return True  # Non-critical failure
+        except Exception as e:  # Any unexpected error during the check/upgrade
+            logging.debug(f"Error checking/upgrading {module_name}: {e}")  # Log for diagnostics
+            return True  # Non-critical failure -- never block startup on upgrade issues
 
     def _get_actual_import_name(self, module_name: str) -> str:
         """Get the actual import name for a given module name, handling mappings."""
-        return self.import_name_mappings.get(module_name, module_name)
+        return self.import_name_mappings.get(
+            module_name, module_name
+        )  # Map package name to import name, defaulting to itself
 
     def import_module_safely(  # noqa: C901, PLR0912, PLR0915
         self,
@@ -1628,90 +1927,102 @@ class GlobalImportManager:
         """
         try:
             # Check if we have a special handler for this module
-            if module_name in self.special_import_handlers:
-                module = self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]
-            else:
+            if module_name in self.special_import_handlers:  # Some modules need custom construction logic
+                module = self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]  # Invoke the special handler
+            else:  # Ordinary module -- import it directly
                 # Use mapping to get actual import name
-                actual_import_name = self._get_actual_import_name(module_name)
-                module = __import__(actual_import_name)
+                actual_import_name = self._get_actual_import_name(module_name)  # Resolve package name to import name
+                module = __import__(actual_import_name)  # Import the module by its real import name
 
-            self.imports[module_name] = module
-            logging.debug(f"Successfully imported {module_name}")
+            self.imports[module_name] = module  # Cache the imported module for later global assignment
+            logging.debug(f"Successfully imported {module_name}")  # Record the successful import
 
             # Check if we should upgrade existing packages (only if auto-upgrade is enabled and not skipping)
-            if package_spec and self.auto_upgrade_dependencies and not skip_deps and not skip_upgrade:
-                self._check_and_upgrade_package(module_name, package_spec)
+            if (
+                package_spec and self.auto_upgrade_dependencies and not skip_deps and not skip_upgrade
+            ):  # All upgrade gates passed
+                self._check_and_upgrade_package(
+                    module_name, package_spec
+                )  # Opportunistically upgrade to the desired version
 
-            return module
+            return module  # Hand the imported module back to the caller
 
-        except ImportError as e:
-            logging.warning(f"Failed to import {module_name}: {e}")
+        except ImportError as e:  # The module is not installed or failed to load
+            logging.warning(f"Failed to import {module_name}: {e}")  # Note the import failure
 
             # Attempt to install if package spec is provided and auto-installation is enabled
-            if package_spec and self.auto_upgrade_dependencies and not skip_deps and not self.disable_auto_install:
-                logging.info(f"Attempting to install missing dependency: {package_spec}")
+            if (
+                package_spec and self.auto_upgrade_dependencies and not skip_deps and not self.disable_auto_install
+            ):  # Auto-install is permitted
+                logging.info(
+                    f"Attempting to install missing dependency: {package_spec}"
+                )  # Announce the install attempt
 
                 # Try installing the package
-                installed = False
+                installed = False  # Track whether any installer succeeded
 
                 # Try UV first if available (using cached check)
-                if self._check_uv_installation():
-                    logging.debug(f"Trying UV installation for {package_spec}")
-                    installed = self._install_package_with_uv(package_spec)
+                if self._check_uv_installation():  # UV is the preferred fast installer
+                    logging.debug(f"Trying UV installation for {package_spec}")  # Note the UV attempt
+                    installed = self._install_package_with_uv(package_spec)  # Attempt the UV install
 
                 # Fallback to pip if UV failed or not available
-                if not installed:
-                    logging.debug(f"Trying pip installation for {package_spec}")
-                    installed = self._install_package_with_pip(package_spec)
+                if not installed:  # UV either failed or is unavailable
+                    logging.debug(f"Trying pip installation for {package_spec}")  # Note the pip attempt
+                    installed = self._install_package_with_pip(package_spec)  # Attempt the pip install
 
-                if installed:
+                if installed:  # A package was successfully installed
                     # Clear import caches to allow fresh import
-                    import importlib
+                    import importlib  # Imported locally to invalidate caches only when needed
 
-                    importlib.invalidate_caches()
+                    importlib.invalidate_caches()  # Force Python to notice the newly installed files
 
                     # Remove any cached failed imports
-                    actual_import_name = self._get_actual_import_name(module_name)
-                    modules_to_clear = [actual_import_name, module_name]
-                    for mod_name in modules_to_clear:
-                        if mod_name in sys.modules:
-                            del sys.modules[mod_name]
-                            logging.debug(f"Cleared cached module: {mod_name}")
+                    actual_import_name = self._get_actual_import_name(module_name)  # Resolve the real import name again
+                    modules_to_clear = [actual_import_name, module_name]  # Both names may be cached as failed
+                    for mod_name in modules_to_clear:  # Purge each possibly-cached name
+                        if mod_name in sys.modules:  # A stale/failed entry exists in the module cache
+                            del sys.modules[mod_name]  # Remove it so the retry re-imports cleanly
+                            logging.debug(f"Cleared cached module: {mod_name}")  # Record the cache purge
 
                     # Wait a moment for installation to complete
-                    time.sleep(0.5)
+                    time.sleep(0.5)  # Brief pause to let filesystem writes settle before retrying
 
                     # Retry import after installation
                     try:
-                        if module_name in self.special_import_handlers:
-                            module = self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]
-                        else:
-                            actual_import_name = self._get_actual_import_name(module_name)
-                            module = __import__(actual_import_name)
+                        if module_name in self.special_import_handlers:  # Use the special handler again if present
+                            module = self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]  # Re-run the handler
+                        else:  # Ordinary module retry
+                            actual_import_name = self._get_actual_import_name(module_name)  # Resolve import name
+                            module = __import__(actual_import_name)  # Re-import now that the package is installed
 
-                        self.imports[module_name] = module
-                        self.installed_packages.append(package_spec)
-                        logging.info(f"Successfully imported {module_name} after installation")
-                        return module
+                        self.imports[module_name] = module  # Cache the now-successful import
+                        self.installed_packages.append(package_spec)  # Record that we installed this package this run
+                        logging.info(f"Successfully imported {module_name} after installation")  # Confirm recovery
+                        return module  # Return the freshly imported module
 
-                    except ImportError as retry_e:
-                        logging.error(f"Import still failed after installation for {module_name}: {retry_e}")
+                    except ImportError as retry_e:  # Import still fails even after a successful install
+                        logging.error(
+                            f"Import still failed after installation for {module_name}: {retry_e}"
+                        )  # Log the persistent failure
                         # For optional packages, this is not critical
-                        if not required:
+                        if not required:  # Optional dependency -- degrade gracefully
                             logging.info(
-                                f"Optional package {module_name} installation succeeded but import failed - likely needs system restart or different Python session"  # noqa: E501
+                                f"Optional package {module_name} installation succeeded but import failed - likely needs system restart or different Python session"  # noqa: E501  # Explain the likely cause
                             )
-                else:
-                    logging.error(f"Failed to install {package_spec}")
+                else:  # No installer succeeded
+                    logging.error(f"Failed to install {package_spec}")  # Report the install failure
 
             # Handle failure
-            if required:
-                self.failed_imports.append(module_name)
-                logging.error(f"Required dependency {module_name} could not be imported or installed")
-            else:
-                logging.warning(f"Optional dependency {module_name} not available")
+            if required:  # This dependency is mandatory for the program to run
+                self.failed_imports.append(module_name)  # Track it among hard failures
+                logging.error(
+                    f"Required dependency {module_name} could not be imported or installed"
+                )  # Log a hard error
+            else:  # Optional dependency
+                logging.warning(f"Optional dependency {module_name} not available")  # Warn but allow continuation
 
-            return None
+            return None  # Signal to the caller that the import was unavailable
 
     def _import_packages_concurrently(self, packages_dict, required=True, skip_deps=False, max_workers=4):  # type: ignore[no-untyped-def]
         """
@@ -1723,56 +2034,75 @@ class GlobalImportManager:
             skip_deps: Whether to skip dependency installation
             max_workers: Maximum number of concurrent workers
         """
-        import concurrent.futures
-        import threading
+        import concurrent.futures  # Thread pool for parallel imports
+        import threading  # Lock primitive to serialize log output across threads
 
         # Thread-safe logging
-        log_lock = threading.Lock()
+        log_lock = threading.Lock()  # Guards logging so concurrent threads don't interleave messages
 
         def import_single_package(package_info):  # type: ignore[no-untyped-def]
-            module_name, package_spec = package_info
-            package_type = "required" if required else "optional"
+            module_name, package_spec = package_info  # Unpack the (name, spec) tuple for this worker
+            package_type = "required" if required else "optional"  # Label used in user-facing log lines
 
-            with log_lock:
-                logging.info(f"  Checking {package_type} dependency: {module_name} ({package_spec or 'built-in'})")
+            with log_lock:  # Serialize this log line against other worker threads
+                logging.info(
+                    f"  Checking {package_type} dependency: {module_name} ({package_spec or 'built-in'})"
+                )  # Announce the check
 
-            result = self.import_module_safely(
-                module_name, package_spec, required=required, skip_deps=skip_deps, skip_upgrade=True
+            result = self.import_module_safely(  # Perform the actual import/install for this package
+                module_name,
+                package_spec,
+                required=required,
+                skip_deps=skip_deps,
+                skip_upgrade=True,  # Skip upgrade for speed here
             )
 
-            with log_lock:
-                if result:
-                    logging.info(f"  [OK] {module_name}: Available")
-                else:
-                    if required:
-                        logging.error(f"  [FAIL] {module_name}: Failed to import")
-                    else:
-                        logging.warning(f"  [WARN] {module_name}: Not available")
+            with log_lock:  # Serialize the result log line
+                if result:  # Import succeeded
+                    logging.info(f"  [OK] {module_name}: Available")  # Report availability
+                else:  # Import failed
+                    if required:  # Mandatory dependency missing
+                        logging.error(f"  [FAIL] {module_name}: Failed to import")  # Log a hard failure
+                    else:  # Optional dependency missing
+                        logging.warning(f"  [WARN] {module_name}: Not available")  # Log a soft warning
 
-            return module_name, result
+            return module_name, result  # Return the outcome for aggregation by the caller
 
         # Split packages into built-in and external for better processing
-        builtin_packages = {k: v for k, v in packages_dict.items() if v is None}
-        external_packages = {k: v for k, v in packages_dict.items() if v is not None}
+        builtin_packages = {
+            k: v for k, v in packages_dict.items() if v is None
+        }  # No spec means a stdlib/built-in module
+        external_packages = {
+            k: v for k, v in packages_dict.items() if v is not None
+        }  # Has a spec -> needs network install
 
         # Process built-in packages first (fast, no network needed)
-        for module_name, package_spec in builtin_packages.items():
-            import_single_package((module_name, package_spec))  # type: ignore[no-untyped-call]
+        for module_name, package_spec in builtin_packages.items():  # Built-ins import instantly
+            import_single_package((module_name, package_spec))  # type: ignore[no-untyped-call]  # Import each sequentially
 
         # Process external packages concurrently
-        if external_packages:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_package = {
-                    executor.submit(import_single_package, item): item for item in external_packages.items()
+        if external_packages:  # Only spin up a thread pool if there is network work to do
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=max_workers
+            ) as executor:  # Bounded pool of import workers
+                future_to_package = {  # Map each submitted future back to its source package
+                    executor.submit(import_single_package, item): item
+                    for item in external_packages.items()  # Schedule every external import
                 }
 
-                for future in concurrent.futures.as_completed(future_to_package):
-                    package_info = future_to_package[future]
+                for future in concurrent.futures.as_completed(
+                    future_to_package
+                ):  # Process results as each import finishes
+                    package_info = future_to_package[future]  # Recover which package this future handled
                     try:
-                        module_name, result = future.result()
-                    except Exception as exc:
-                        with log_lock:
-                            logging.error(f"Package {package_info[0]} import generated an exception: {exc}")
+                        module_name, result = (
+                            future.result()
+                        )  # Retrieve the worker's return value (re-raises worker errors)
+                    except Exception as exc:  # A worker raised an unexpected exception
+                        with log_lock:  # Serialize the error log line
+                            logging.error(
+                                f"Package {package_info[0]} import generated an exception: {exc}"
+                            )  # Log the worker failure
 
     def initialize_all_imports(
         self,
@@ -1813,216 +2143,282 @@ class GlobalImportManager:
             self._import_packages_concurrently(self.required_packages, required=True, skip_deps=skip_deps)  # type: ignore[no-untyped-call]
         else:
             # Sequential for smaller loads or when skipping deps
-            for module_name, package_spec in self.required_packages.items():
-                logging.info(f"  Checking required dependency: {module_name} ({package_spec or 'built-in'})")
-                result = self.import_module_safely(
-                    module_name, package_spec, required=True, skip_deps=skip_deps, skip_upgrade=True
+            for (
+                module_name,
+                package_spec,
+            ) in self.required_packages.items():  # Import each required package sequentially
+                logging.info(
+                    f"  Checking required dependency: {module_name} ({package_spec or 'built-in'})"
+                )  # Announce the check
+                result = self.import_module_safely(  # Import (and install if needed) this required package
+                    module_name,
+                    package_spec,
+                    required=True,
+                    skip_deps=skip_deps,
+                    skip_upgrade=True,  # Required path, defer upgrades for speed
                 )
-                if result:
-                    logging.info(f"  [OK] {module_name}: Available")
-                else:
-                    logging.error(f"  [FAIL] {module_name}: Failed to import")
+                if result:  # Import succeeded
+                    logging.info(f"  [OK] {module_name}: Available")  # Report availability
+                else:  # Import failed
+                    logging.error(f"  [FAIL] {module_name}: Failed to import")  # Log a hard failure for a required dep
 
         # Import optional packages
-        logging.info("Importing optional dependencies...")
-        if not skip_deps and len(self.optional_packages) > 3:
-            self._import_packages_concurrently(self.optional_packages, required=False, skip_deps=skip_deps)  # type: ignore[no-untyped-call]
-        else:
+        logging.info("Importing optional dependencies...")  # Begin the optional dependency phase
+        if not skip_deps and len(self.optional_packages) > 3:  # Enough optional packages to benefit from concurrency
+            self._import_packages_concurrently(self.optional_packages, required=False, skip_deps=skip_deps)  # type: ignore[no-untyped-call]  # Import them in parallel
+        else:  # Few packages or deps skipped -- import serially
             # Sequential for smaller loads or when skipping deps
-            for module_name, package_spec in self.optional_packages.items():
-                logging.info(f"  Checking optional dependency: {module_name} ({package_spec or 'built-in'})")
-                result = self.import_module_safely(
-                    module_name, package_spec, required=False, skip_deps=skip_deps, skip_upgrade=True
+            for (
+                module_name,
+                package_spec,
+            ) in self.optional_packages.items():  # Import each optional package one at a time
+                logging.info(
+                    f"  Checking optional dependency: {module_name} ({package_spec or 'built-in'})"
+                )  # Announce the check
+                result = self.import_module_safely(  # Import (and optionally install) this optional package
+                    module_name,
+                    package_spec,
+                    required=False,
+                    skip_deps=skip_deps,
+                    skip_upgrade=True,  # Optional path, defer upgrades
                 )
-                if result:
-                    logging.info(f"  [OK] {module_name}: Available")
-                else:
-                    logging.warning(f"  [WARN] {module_name}: Not available")
+                if result:  # Import succeeded
+                    logging.info(f"  [OK] {module_name}: Available")  # Report availability
+                else:  # Import failed (acceptable for optional deps)
+                    logging.warning(f"  [WARN] {module_name}: Not available")  # Warn but continue
 
         # Special imports for commonly used components
-        self._import_special_modules()  # type: ignore[no-untyped-call]
+        self._import_special_modules()  # type: ignore[no-untyped-call]  # Wire up modules needing bespoke import logic
 
         # Report results
-        elapsed_time = time.time() - start_time
-        total_required = len(self.required_packages)
-        failed_required = len([p for p in self.failed_imports if p in self.required_packages])
-        successful_required = total_required - failed_required
-        optional_imported = len([p for p in self.imports.keys() if p in self.optional_packages])
+        elapsed_time = time.time() - start_time  # Total seconds spent initializing imports
+        total_required = len(self.required_packages)  # How many required packages exist
+        failed_required = len(
+            [p for p in self.failed_imports if p in self.required_packages]
+        )  # Required packages that failed
+        successful_required = total_required - failed_required  # Required packages that succeeded
+        optional_imported = len(
+            [p for p in self.imports.keys() if p in self.optional_packages]
+        )  # Optional packages that loaded
 
-        logging.info(f"Import initialization completed in {elapsed_time:.2f} seconds")
-        logging.info(f"Required dependencies: {successful_required}/{total_required} successful")
-        logging.info(f"Optional dependencies: {optional_imported}/{len(self.optional_packages)} available")
+        logging.info(f"Import initialization completed in {elapsed_time:.2f} seconds")  # Report total elapsed time
+        logging.info(
+            f"Required dependencies: {successful_required}/{total_required} successful"
+        )  # Summarize required results
+        logging.info(
+            f"Optional dependencies: {optional_imported}/{len(self.optional_packages)} available"
+        )  # Summarize optional results
 
-        if self.installed_packages:
-            logging.info(f"Newly installed packages: {', '.join(self.installed_packages)}")
+        if self.installed_packages:  # Some packages were installed during this run
+            logging.info(f"Newly installed packages: {', '.join(self.installed_packages)}")  # List what was installed
 
-        if self.failed_imports:
-            logging.error(f"Failed imports: {', '.join(self.failed_imports)}")
+        if self.failed_imports:  # Some imports failed entirely
+            logging.error(f"Failed imports: {', '.join(self.failed_imports)}")  # List the failures for diagnosis
 
         # Make imported modules available globally
-        global_assignments = self._get_global_assignments()  # type: ignore[no-untyped-call]
+        global_assignments = self._get_global_assignments()  # type: ignore[no-untyped-call]  # Build the name->module map for globals()
 
         # Cache results to avoid duplicate initialization
-        success = len(self.failed_imports) == 0
-        self._initialization_complete = True
-        self._initialization_success = success
-        self._cached_global_assignments = global_assignments
+        success = len(self.failed_imports) == 0  # Overall success means zero failed imports
+        self._initialization_complete = True  # Mark initialization as having run
+        self._initialization_success = success  # Remember whether it fully succeeded
+        self._cached_global_assignments = global_assignments  # Cache assignments so a repeat call is cheap
 
         # Return success status and global assignments
-        return success, global_assignments
+        return success, global_assignments  # Hand both the status flag and the assignment map to the caller
 
     def _get_global_assignments(self):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
         """Get dictionary of global variable assignments for imported modules."""
-        global_vars = {}
+        global_vars = {}  # Accumulate name -> object pairs to inject into globals()
 
         # Add all imported modules to globals
-        for module_name, module_obj in self.imports.items():
+        for module_name, module_obj in self.imports.items():  # Walk every successfully imported module
             # Add to global namespace
-            global_vars[module_name] = module_obj
+            global_vars[module_name] = module_obj  # Expose the module under its own name
 
             # Handle special cases for commonly used attributes
-            if module_name == "datetime":
-                global_vars["timezone"] = getattr(module_obj, "timezone", None)
-                global_vars["timedelta"] = getattr(module_obj, "timedelta", None)
-            elif module_name == "concurrent.futures":
-                global_vars["ThreadPoolExecutor"] = getattr(module_obj, "ThreadPoolExecutor", None)
-                global_vars["as_completed"] = getattr(module_obj, "as_completed", None)
-                global_vars["concurrent"] = module_obj  # For concurrent.futures references
-            elif module_name == "prettytable":
-                global_vars["PrettyTable"] = getattr(module_obj, "PrettyTable", None)
-            elif module_name == "numpy":
-                global_vars["np"] = module_obj
-            elif module_name == "tqdm":
+            if module_name == "datetime":  # datetime needs its helper symbols hoisted too
+                global_vars["timezone"] = getattr(
+                    module_obj, "timezone", None
+                )  # Expose timezone for tz-aware datetimes
+                global_vars["timedelta"] = getattr(module_obj, "timedelta", None)  # Expose timedelta for date math
+            elif module_name == "concurrent.futures":  # Hoist the thread-pool primitives
+                global_vars["ThreadPoolExecutor"] = getattr(
+                    module_obj, "ThreadPoolExecutor", None
+                )  # Expose the executor class
+                global_vars["as_completed"] = getattr(
+                    module_obj, "as_completed", None
+                )  # Expose the completion iterator
+                global_vars["concurrent"] = (
+                    module_obj  # For concurrent.futures references  # Also expose the package itself
+                )
+            elif module_name == "prettytable":  # Table-rendering helper
+                global_vars["PrettyTable"] = getattr(module_obj, "PrettyTable", None)  # Expose the PrettyTable class
+            elif module_name == "numpy":  # Numerical library
+                global_vars["np"] = module_obj  # Expose numpy under its conventional alias np
+            elif module_name == "tqdm":  # Progress-bar library
                 # tqdm is used directly throughout the script
-                global_vars["tqdm"] = module_obj
-            elif module_name == "collections":
-                global_vars["defaultdict"] = getattr(module_obj, "defaultdict", None)
-            elif module_name == "difflib":
-                global_vars["SequenceMatcher"] = getattr(module_obj, "SequenceMatcher", None)
-            elif module_name == "usaddress-scourgify":
+                global_vars["tqdm"] = module_obj  # Expose tqdm by name for progress bars
+            elif module_name == "collections":  # Standard collections module
+                global_vars["defaultdict"] = getattr(module_obj, "defaultdict", None)  # Expose defaultdict directly
+            elif module_name == "difflib":  # Sequence comparison library
+                global_vars["SequenceMatcher"] = getattr(
+                    module_obj, "SequenceMatcher", None
+                )  # Expose SequenceMatcher directly
+            elif module_name == "usaddress-scourgify":  # Optional address-normalization package
                 # Handle optional package - need to import the normalize function
-                if module_obj:
+                if module_obj:  # Only proceed if the package actually loaded
                     try:
-                        normalize_func = getattr(module_obj, "normalize_address_record", None)
-                        if normalize_func:
-                            global_vars["normalize_address_record"] = normalize_func
-                        else:
+                        normalize_func = getattr(
+                            module_obj, "normalize_address_record", None
+                        )  # Look for the normalize function
+                        if normalize_func:  # The attribute exists on the module
+                            global_vars["normalize_address_record"] = normalize_func  # Expose it for address parsing
+                        else:  # Attribute missing -- import it directly from the subpackage
                             # Try importing directly from scourgify
-                            from scourgify import normalize_address_record
+                            from scourgify import normalize_address_record  # Direct import fallback
 
-                            global_vars["normalize_address_record"] = normalize_address_record
-                    except (ImportError, AttributeError):
-                        logging.debug("Could not import normalize_address_record from scourgify, using fallback")
-            elif module_name == "rapidfuzz":
+                            global_vars["normalize_address_record"] = (
+                                normalize_address_record  # Expose the directly-imported function
+                            )
+                    except (ImportError, AttributeError):  # Package present but function unavailable
+                        logging.debug(
+                            "Could not import normalize_address_record from scourgify, using fallback"
+                        )  # Note we'll use a fallback
+            elif module_name == "rapidfuzz":  # Optional fuzzy-matching package
                 # Handle optional package - need to import the fuzz submodule
-                if module_obj:
+                if module_obj:  # Only proceed if rapidfuzz loaded
                     try:
-                        fuzz_module = getattr(module_obj, "fuzz", None)
-                        if fuzz_module:
-                            global_vars["fuzz"] = fuzz_module
-                        else:
+                        fuzz_module = getattr(module_obj, "fuzz", None)  # Look for the fuzz submodule attribute
+                        if fuzz_module:  # The submodule is accessible
+                            global_vars["fuzz"] = fuzz_module  # Expose fuzz for ratio scoring
+                        else:  # Attribute missing -- import it directly
                             # Try importing fuzz directly from rapidfuzz
-                            from rapidfuzz import fuzz
+                            from rapidfuzz import fuzz  # Direct import fallback
 
-                            global_vars["fuzz"] = fuzz
-                    except (ImportError, AttributeError):
-                        logging.debug("Could not import fuzz from rapidfuzz, using fallback")
+                            global_vars["fuzz"] = fuzz  # Expose the directly-imported fuzz module
+                    except (ImportError, AttributeError):  # Package present but submodule unavailable
+                        logging.debug(
+                            "Could not import fuzz from rapidfuzz, using fallback"
+                        )  # Note we'll use a fallback
             # Note: pynput handling removed for simplicity
-            elif module_name == "mistapi":
+            elif module_name == "mistapi":  # The core Mist API SDK
                 # Handle mistapi module - make it globally available
-                if module_obj:
-                    global_vars["mistapi"] = module_obj
-                    logging.debug("Added mistapi to global namespace")
-            elif module_name == "paramiko":
+                if module_obj:  # Only expose if it loaded
+                    global_vars["mistapi"] = module_obj  # Expose the mistapi SDK by name
+                    logging.debug("Added mistapi to global namespace")  # Record the assignment
+            elif module_name == "paramiko":  # SSH client library
                 # Handle SSH client functionality
-                if module_obj:
-                    global_vars["paramiko"] = module_obj
-                    logging.debug("Added paramiko to global namespace")
+                if module_obj:  # Only expose if it loaded
+                    global_vars["paramiko"] = module_obj  # Expose paramiko for SSH operations
+                    logging.debug("Added paramiko to global namespace")  # Record the assignment
             # Note: pexpect handling removed for simplicity
-            elif module_name == "redexpect":
+            elif module_name == "redexpect":  # Cross-platform SSH automation library
                 # Handle cross-platform SSH automation
-                if module_obj:
-                    global_vars["redexpect"] = module_obj
-                    logging.debug("Added redexpect to global namespace")
+                if module_obj:  # Only expose if it loaded
+                    global_vars["redexpect"] = module_obj  # Expose redexpect for scripted SSH sessions
+                    logging.debug("Added redexpect to global namespace")  # Record the assignment
 
         # Handle fallbacks for missing optional modules
-        self._add_fallbacks_to_globals(global_vars)  # type: ignore[no-untyped-call]
+        self._add_fallbacks_to_globals(global_vars)  # type: ignore[no-untyped-call]  # Fill in shims for any optional deps that failed
 
-        return global_vars
+        return global_vars  # Return the complete name->object map for the caller to apply
 
     def _make_modules_global(self):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912
         """Make all successfully imported modules available in the global namespace."""
 
         # Add all imported modules to globals
-        for module_name, module_obj in self.imports.items():
+        for module_name, module_obj in self.imports.items():  # Walk every imported module
             # Add to global namespace
-            globals()[module_name] = module_obj
+            globals()[module_name] = module_obj  # Bind the module into the real module globals
 
             # Handle special cases for commonly used attributes
-            if module_name == "datetime":
-                globals()["timezone"] = getattr(module_obj, "timezone", None)
-                globals()["timedelta"] = getattr(module_obj, "timedelta", None)
-            elif module_name == "concurrent.futures":
-                globals()["ThreadPoolExecutor"] = getattr(module_obj, "ThreadPoolExecutor", None)
-                globals()["as_completed"] = getattr(module_obj, "as_completed", None)
-                globals()["concurrent"] = module_obj  # For concurrent.futures references
-            elif module_name == "prettytable":
-                globals()["PrettyTable"] = getattr(module_obj, "PrettyTable", None)
-            elif module_name == "numpy":
-                globals()["np"] = module_obj
-            elif module_name == "tqdm":
+            if module_name == "datetime":  # datetime needs its helpers hoisted too
+                globals()["timezone"] = getattr(module_obj, "timezone", None)  # Bind timezone globally
+                globals()["timedelta"] = getattr(module_obj, "timedelta", None)  # Bind timedelta globally
+            elif module_name == "concurrent.futures":  # Hoist the thread-pool primitives
+                globals()["ThreadPoolExecutor"] = getattr(
+                    module_obj, "ThreadPoolExecutor", None
+                )  # Bind the executor class
+                globals()["as_completed"] = getattr(module_obj, "as_completed", None)  # Bind the completion iterator
+                globals()["concurrent"] = module_obj  # For concurrent.futures references  # Bind the package itself
+            elif module_name == "prettytable":  # Table-rendering helper
+                globals()["PrettyTable"] = getattr(module_obj, "PrettyTable", None)  # Bind the PrettyTable class
+            elif module_name == "numpy":  # Numerical library
+                globals()["np"] = module_obj  # Bind numpy under its conventional alias np
+            elif module_name == "tqdm":  # Progress-bar library
                 # tqdm is used directly throughout the script
-                globals()["tqdm"] = module_obj
-            elif module_name == "collections":
-                globals()["defaultdict"] = getattr(module_obj, "defaultdict", None)
-            elif module_name == "difflib":
-                globals()["SequenceMatcher"] = getattr(module_obj, "SequenceMatcher", None)
-            elif module_name == "usaddress-scourgify":
+                globals()["tqdm"] = module_obj  # Bind tqdm by name for progress bars
+            elif module_name == "collections":  # Standard collections module
+                globals()["defaultdict"] = getattr(module_obj, "defaultdict", None)  # Bind defaultdict directly
+            elif module_name == "difflib":  # Sequence comparison library
+                globals()["SequenceMatcher"] = getattr(
+                    module_obj, "SequenceMatcher", None
+                )  # Bind SequenceMatcher directly
+            elif module_name == "usaddress-scourgify":  # Optional address-normalization package
                 # Handle optional package - need to import the normalize function
-                if module_obj:
+                if module_obj:  # Only proceed if the package loaded
                     try:
-                        normalize_func = getattr(module_obj, "normalize_address_record", None)
-                        if normalize_func:
-                            globals()["normalize_address_record"] = normalize_func
-                        else:
+                        normalize_func = getattr(
+                            module_obj, "normalize_address_record", None
+                        )  # Look for the normalize function
+                        if normalize_func:  # The attribute exists on the module
+                            globals()["normalize_address_record"] = normalize_func  # Bind it globally
+                        else:  # Attribute missing -- import directly
                             # Try importing directly from scourgify
-                            from scourgify import normalize_address_record
+                            from scourgify import normalize_address_record  # Direct import fallback
 
-                            globals()["normalize_address_record"] = normalize_address_record
-                    except (ImportError, AttributeError):
-                        logging.debug("Could not import normalize_address_record from scourgify, using fallback")
-            elif module_name == "rapidfuzz":
+                            globals()[
+                                "normalize_address_record"
+                            ] = normalize_address_record  # Bind the directly-imported function
+                    except (ImportError, AttributeError):  # Package present but function unavailable
+                        logging.debug(
+                            "Could not import normalize_address_record from scourgify, using fallback"
+                        )  # Note the fallback
+            elif module_name == "rapidfuzz":  # Optional fuzzy-matching package
                 # Handle optional package - need to import the fuzz submodule
-                if module_obj:
+                if module_obj:  # Only proceed if rapidfuzz loaded
                     try:
-                        fuzz_module = getattr(module_obj, "fuzz", None)
-                        if fuzz_module:
-                            globals()["fuzz"] = fuzz_module
-                        else:
+                        fuzz_module = getattr(module_obj, "fuzz", None)  # Look for the fuzz submodule attribute
+                        if fuzz_module:  # The submodule is accessible
+                            globals()["fuzz"] = fuzz_module  # Bind fuzz globally
+                        else:  # Attribute missing -- import directly
                             # Try importing fuzz directly from rapidfuzz
-                            from rapidfuzz import fuzz
+                            from rapidfuzz import fuzz  # Direct import fallback
 
-                            globals()["fuzz"] = fuzz
-                    except (ImportError, AttributeError):
-                        logging.debug("Could not import fuzz from rapidfuzz, using fallback")
+                            globals()["fuzz"] = fuzz  # Bind the directly-imported fuzz module
+                    except (ImportError, AttributeError):  # Package present but submodule unavailable
+                        logging.debug("Could not import fuzz from rapidfuzz, using fallback")  # Note the fallback
             # Note: pynput handling removed for simplicity
 
-        logging.debug("Successfully made imported modules available globally")
+        logging.debug("Successfully made imported modules available globally")  # Confirm the global wiring completed
 
     def _add_fallbacks_to_globals(self, global_vars):  # type: ignore[no-untyped-def]
         """Add fallbacks for optional modules that failed to import."""
         # If scourgify not available, provide a fallback
-        if "normalize_address_record" not in global_vars or global_vars["normalize_address_record"] is None:
+        if (
+            "normalize_address_record" not in global_vars or global_vars["normalize_address_record"] is None
+        ):  # No real normalizer present
 
             def normalize_address_record_fallback(address_string):  # type: ignore[no-untyped-def]
                 """Fallback function when scourgify is not available."""
-                logging.debug("Using fallback address normalization (scourgify not available)")
-                return {"address_line_1": address_string, "city": "", "state": "", "zip": "", "country": ""}
+                logging.debug(
+                    "Using fallback address normalization (scourgify not available)"
+                )  # Note the degraded path
+                return {
+                    "address_line_1": address_string,
+                    "city": "",
+                    "state": "",
+                    "zip": "",
+                    "country": "",
+                }  # Return the raw string with empty fields
 
-            global_vars["normalize_address_record"] = normalize_address_record_fallback
+            global_vars["normalize_address_record"] = (
+                normalize_address_record_fallback  # Install the shim under the expected name
+            )
 
         # If rapidfuzz not available, provide fallback
-        if "fuzz" not in global_vars or global_vars["fuzz"] is None:
+        if "fuzz" not in global_vars or global_vars["fuzz"] is None:  # No real fuzzy matcher present
 
             class FuzzFallback:
                 """Fallback class when rapidfuzz is not available."""
@@ -2030,95 +2426,109 @@ class GlobalImportManager:
                 @staticmethod
                 def token_sort_ratio(str1, str2):  # type: ignore[no-untyped-def]
                     """Fallback using difflib SequenceMatcher."""
-                    if global_vars.get("difflib"):
-                        return int(global_vars["difflib"].SequenceMatcher(None, str1, str2).ratio() * 100)
-                    return 0
+                    if global_vars.get("difflib"):  # Use difflib if it is available as a substitute
+                        return int(
+                            global_vars["difflib"].SequenceMatcher(None, str1, str2).ratio() * 100
+                        )  # Convert 0-1 ratio to a 0-100 score
+                    return 0  # No comparison library at all -- report no similarity
 
-            global_vars["fuzz"] = FuzzFallback()
+            global_vars["fuzz"] = FuzzFallback()  # Install the fuzzy-match shim under the expected name
 
         # Keyboard listener functionality has been removed for simplicity
         # No fallback needed since the feature is no longer supported
 
         # Add SSH connection fallbacks
-        if "paramiko" not in global_vars or global_vars["paramiko"] is None:
+        if "paramiko" not in global_vars or global_vars["paramiko"] is None:  # paramiko SSH library is unavailable
 
             class SSHFallback:
                 """Fallback class when paramiko is not available."""
 
                 @staticmethod
                 def SSHClient():  # type: ignore[no-untyped-def]
-                    raise ImportError(
+                    raise ImportError(  # Fail loudly with install guidance when SSH is attempted without paramiko
                         "SSH functionality requires 'paramiko' package. Install with: pip install paramiko"
                     )
 
-            global_vars["paramiko"] = SSHFallback()
+            global_vars["paramiko"] = (
+                SSHFallback()
+            )  # Install the SSH shim so attribute access fails with a clear message
 
         # pexpect functionality has been removed for simplicity
         # SSH automation should use paramiko directly
 
-        if "redexpect" not in global_vars or global_vars["redexpect"] is None:
+        if (
+            "redexpect" not in global_vars or global_vars["redexpect"] is None
+        ):  # Cross-platform SSH automation lib missing
 
             class RedexpectFallback:
                 """Fallback class when redexpect is not available."""
 
                 @staticmethod
                 def spawn(*args, **kwargs):  # type: ignore[no-untyped-def]
-                    raise ImportError(
+                    raise ImportError(  # Fail loudly with install guidance when redexpect is used but absent
                         "Cross-platform SSH automation requires 'redexpect' package. Install with: pip install redexpect"  # noqa: E501
                     )
 
-            global_vars["redexpect"] = RedexpectFallback()
+            global_vars["redexpect"] = RedexpectFallback()  # Install the redexpect shim with a clear error path
 
     def _import_special_modules(self):  # type: ignore[no-untyped-def]
         """Import special modules with custom handling."""
         # Import mistapi with its sub-modules only if base mistapi is available
-        if "mistapi" in self.imports:
+        if "mistapi" in self.imports:  # Only wire sub-modules if the base SDK imported
             try:
-                mistapi = self.imports["mistapi"]
+                mistapi = self.imports["mistapi"]  # Fetch the cached mistapi module object
                 # Import commonly used mistapi modules without forcing sub-module structure
                 try:
                     # These imports may not be available in all mistapi versions
                     # Import them dynamically to avoid hard dependencies on specific structure
-                    globals()["mistapi"] = mistapi
+                    globals()["mistapi"] = mistapi  # Expose mistapi at module global scope
                     # Also ensure it's in the module's global namespace
-                    import sys
+                    import sys  # Local import to reach this module's namespace object
 
-                    sys.modules[__name__].mistapi = mistapi  # type: ignore[attr-defined]
-                    logging.debug("Successfully imported mistapi main module")
+                    sys.modules[__name__].mistapi = mistapi  # type: ignore[attr-defined]  # Bind mistapi as a module attribute
+                    logging.debug("Successfully imported mistapi main module")  # Confirm the SDK is wired up
                     # Verify the api module is accessible
-                    if hasattr(mistapi, "api") and hasattr(mistapi.api, "v1"):
-                        logging.debug("mistapi.api.v1 module structure confirmed")
-                    else:
-                        logging.warning("mistapi.api.v1 structure not found - this may cause API call failures")
-                except Exception as sub_e:
-                    logging.debug(f"Note: mistapi sub-modules handled dynamically: {sub_e}")
-            except Exception as e:
-                logging.warning(f"Error accessing mistapi: {e}")
-        else:
-            logging.debug("mistapi not imported, skipping sub-module imports")
+                    if hasattr(mistapi, "api") and hasattr(
+                        mistapi.api, "v1"
+                    ):  # Confirm the expected API surface exists
+                        logging.debug("mistapi.api.v1 module structure confirmed")  # Structure looks correct
+                    else:  # The expected nested structure is missing
+                        logging.warning(
+                            "mistapi.api.v1 structure not found - this may cause API call failures"
+                        )  # Warn about likely failures
+                except Exception as sub_e:  # Sub-module wiring hit an unexpected issue
+                    logging.debug(
+                        f"Note: mistapi sub-modules handled dynamically: {sub_e}"
+                    )  # Non-fatal; handled at call sites
+            except Exception as e:  # Failed to even access the cached mistapi object
+                logging.warning(f"Error accessing mistapi: {e}")  # Warn -- API features may be unavailable
+        else:  # The base SDK never imported
+            logging.debug("mistapi not imported, skipping sub-module imports")  # Nothing to wire up
 
         # Import websocket if available
-        if "websocket-client" in self.imports:
-            logging.debug("websocket-client available for WebSocket operations")
-        else:
-            logging.debug("websocket-client not available - WebSocket operations will be disabled")
+        if "websocket-client" in self.imports:  # The websocket client library loaded
+            logging.debug("websocket-client available for WebSocket operations")  # WebSocket features are enabled
+        else:  # The websocket client library is missing
+            logging.debug(
+                "websocket-client not available - WebSocket operations will be disabled"
+            )  # WebSocket features disabled
 
     def get_import(self, module_name: str) -> Any | None:
         """Get an imported module by name."""
-        return self.imports.get(module_name)
+        return self.imports.get(module_name)  # Return the cached module object, or None if it never imported
 
     def is_available(self, module_name: str) -> bool:
         """Check if a module is available."""
-        return module_name in self.imports
+        return module_name in self.imports  # True only if the module imported successfully
 
     def get_configuration(self) -> dict[str, Any]:
         """Get current configuration values."""
-        return {
-            "auto_upgrade_uv": self.auto_upgrade_uv,
-            "auto_upgrade_dependencies": self.auto_upgrade_dependencies,
-            "upgrade_check_timeout": self.upgrade_check_timeout,
-            "csv_freshness_minutes": self.csv_freshness_minutes,
-            "uv_update_check_hours": self.uv_update_check_hours,
+        return {  # Snapshot the manager's tunable settings for inspection/logging
+            "auto_upgrade_uv": self.auto_upgrade_uv,  # Whether UV self-upgrades are enabled
+            "auto_upgrade_dependencies": self.auto_upgrade_dependencies,  # Whether dependency auto-upgrade is enabled
+            "upgrade_check_timeout": self.upgrade_check_timeout,  # Per-install subprocess timeout in seconds
+            "csv_freshness_minutes": self.csv_freshness_minutes,  # How long cached CSVs are considered fresh
+            "uv_update_check_hours": self.uv_update_check_hours,  # Interval between UV update checks
         }
 
 
@@ -2137,26 +2547,26 @@ def _get_tuning_data_file_path() -> str:
     Ensures the directory exists. Separated for future extension (e.g.,
     namespacing by org or mode) without scattering path logic.
     """
-    data_dir = os.path.join(os.getcwd(), "data")
+    data_dir = os.path.join(os.getcwd(), "data")  # Build the path to the data/ subdirectory under the CWD
     try:
-        os.makedirs(data_dir, exist_ok=True)
+        os.makedirs(data_dir, exist_ok=True)  # Create data/ if it does not already exist (idempotent)
     except Exception:
         # If directory creation fails, fall back to current working directory;
         # logging deferred until logger configured.
-        return os.path.join(os.getcwd(), "tuning_data.json")
-    return os.path.join(data_dir, "tuning_data.json")
+        return os.path.join(os.getcwd(), "tuning_data.json")  # Degrade gracefully to a CWD-level file
+    return os.path.join(data_dir, "tuning_data.json")  # Normal case: store tuning data inside data/
 
 
-tuning_data_file = _get_tuning_data_file_path()
+tuning_data_file = _get_tuning_data_file_path()  # Resolve the tuning-data path once at import time
 
 # API usage tracking cache
-_api_usage_cache = {
-    "timestamp": 0,
-    "used": 0,
-    "limit": 5000,
-    "last_updated": 0,
-    "perceived_requests": 0,
-    "initialized": False,
+_api_usage_cache = {  # Module-level cache for Mist API rate-limit accounting
+    "timestamp": 0,  # Epoch seconds when the cache was last populated from the API
+    "used": 0,  # Number of API requests the server reports as consumed
+    "limit": 5000,  # Default per-window request quota until the real limit is learned
+    "last_updated": 0,  # Epoch seconds of the most recent local update
+    "perceived_requests": 0,  # Locally counted requests since the last server sync
+    "initialized": False,  # Whether the cache has been seeded from a real API response yet
 }
 
 # ============================================================================
@@ -2164,46 +2574,64 @@ _api_usage_cache = {
 # ============================================================================
 
 # Create global import manager instance
-import_manager = GlobalImportManager()  # type: ignore[no-untyped-call]
+import_manager = GlobalImportManager()  # type: ignore[no-untyped-call]  # Single shared manager for all dependency imports
 
 # Initialize imports immediately (unless deferred by CLI flags)
 # Test mode and skip-deps both defer initialization to main() for better control
-_initialize_imports_now = True
+_initialize_imports_now = True  # Default: resolve all imports eagerly at module load
 
 # Check for test mode or skip-deps from command line
-if "--test" in sys.argv or "--testinteractive" in sys.argv or "--skip-deps" in sys.argv:
-    _initialize_imports_now = False
-    if ("--test" in sys.argv or "--testinteractive" in sys.argv) and "--skip-deps" not in sys.argv:
-        logging.info("Deferring import initialization for test mode (dependencies will still be checked)")
-    elif "--skip-deps" in sys.argv:
-        logging.info("Deferring import initialization due to --skip-deps flag")
-    else:
-        logging.info("Deferring import initialization due to CLI flags")
+if (
+    "--test" in sys.argv or "--testinteractive" in sys.argv or "--skip-deps" in sys.argv
+):  # Any flag that defers import setup
+    _initialize_imports_now = False  # Defer initialization to main() for finer control
+    if (
+        "--test" in sys.argv or "--testinteractive" in sys.argv
+    ) and "--skip-deps" not in sys.argv:  # Test mode without skip-deps
+        logging.info(
+            "Deferring import initialization for test mode (dependencies will still be checked)"
+        )  # Explain the deferral
+    elif "--skip-deps" in sys.argv:  # The caller explicitly asked to skip dependency handling
+        logging.info("Deferring import initialization due to --skip-deps flag")  # Explain the deferral
+    else:  # Some other deferring flag combination
+        logging.info("Deferring import initialization due to CLI flags")  # Generic deferral notice
 
-if _initialize_imports_now:
+if _initialize_imports_now:  # Eager path: set up all imports now
     # Initialize all imports upfront for faster runtime performance
-    success, global_assignments = import_manager.initialize_all_imports()
+    success, global_assignments = (
+        import_manager.initialize_all_imports()
+    )  # Import everything and collect global bindings
 
     # Apply global assignments to module namespace
-    if global_assignments:
-        for var_name, var_value in global_assignments.items():
-            globals()[var_name] = var_value
+    if global_assignments:  # The manager produced name->object bindings to publish
+        for var_name, var_value in global_assignments.items():  # Apply each binding to module globals
+            globals()[var_name] = var_value  # Make the imported object available at module scope
             # Special handling for tqdm to ensure it overrides the fallback
-            if var_name == "tqdm" and var_value is not None:
-                logging.info(f"Successfully imported real tqdm: {type(var_value)}")
-        logging.debug(f"Applied {len(global_assignments)} global variable assignments")
+            if var_name == "tqdm" and var_value is not None:  # Real tqdm must replace any earlier fallback
+                logging.info(
+                    f"Successfully imported real tqdm: {type(var_value)}"
+                )  # Confirm the real progress bar is active
+        logging.debug(
+            f"Applied {len(global_assignments)} global variable assignments"
+        )  # Report how many bindings were applied
 
         # Verify tqdm was properly imported
-        if "tqdm" in global_assignments:
-            logging.info(f"tqdm is available in global namespace: {type(globals().get('tqdm'))}")
-        else:
-            logging.warning("tqdm was not found in global assignments - progress bars will not be functional")
+        if "tqdm" in global_assignments:  # tqdm binding is present
+            logging.info(
+                f"tqdm is available in global namespace: {type(globals().get('tqdm'))}"
+            )  # Confirm availability and type
+        else:  # tqdm binding is missing
+            logging.warning(
+                "tqdm was not found in global assignments - progress bars will not be functional"
+            )  # Warn progress bars are off
 
-    if not success:
-        logging.warning("Some required imports failed - functionality may be limited")
-else:
+    if not success:  # One or more required imports failed
+        logging.warning(
+            "Some required imports failed - functionality may be limited"
+        )  # Warn the user features may be degraded
+else:  # Deferred path: imports happen later in main()
     # Deferred initialization - will be done in main()
-    success, global_assignments = False, {}
+    success, global_assignments = False, {}  # Placeholder values until main() runs initialization
 
 # ============================================================================
 # TEST MODE GLOBALS & TIME UTILITIES CLASS
@@ -2245,25 +2673,27 @@ class TimeUtils:
             Hours to use for lookback calculations.
         """
         try:
-            if IS_TEST_MODE:
+            if IS_TEST_MODE:  # Test runs use a shortened lookback to keep API calls cheap
                 # Boundaries & safety: never return less than 1 hour
-                if test_hours < 1:
-                    return 1
-                return test_hours
-            if default_hours < 1:
-                return 1
-            return default_hours
-        except Exception as error:
-            logging.debug(f"get_dynamic_lookback_hours fallback due to error: {error}")
-            return test_hours if IS_TEST_MODE else default_hours
+                if test_hours < 1:  # Guard against a misconfigured sub-hour value
+                    return 1  # Clamp to the minimum sensible window
+                return test_hours  # Use the reduced test-mode window
+            if default_hours < 1:  # Guard against a misconfigured production value
+                return 1  # Clamp to the minimum sensible window
+            return default_hours  # Normal path: use the standard production window
+        except Exception as error:  # Never let lookback math crash a caller
+            logging.debug(f"get_dynamic_lookback_hours fallback due to error: {error}")  # Log the unexpected failure
+            return test_hours if IS_TEST_MODE else default_hours  # Fall back to a sensible default per mode
 
     @staticmethod
     def log_dynamic_lookback(context: str, hours: int) -> None:
         """Helper to produce a consistent log line when dynamic lookback applies."""
-        if IS_TEST_MODE:
-            logging.info(f"[TEST MODE] Using reduced lookback window of {hours}h for {context} (normally 24h)")
-        else:
-            logging.debug(f"Using standard lookback window of {hours}h for {context}")
+        if IS_TEST_MODE:  # Surface the reduced window prominently during tests
+            logging.info(
+                f"[TEST MODE] Using reduced lookback window of {hours}h for {context} (normally 24h)"
+            )  # Visible test-mode notice
+        else:  # Production: keep the note at debug level
+            logging.debug(f"Using standard lookback window of {hours}h for {context}")  # Quiet production notice
 
 
 # ============================================================================
@@ -2280,30 +2710,30 @@ class InputUtils:
     @staticmethod
     def ensure_tqdm_available() -> bool:
         """Ensure tqdm is available and properly imported."""
-        global tqdm
+        global tqdm  # Rebind the module-level tqdm if we recover a better implementation
 
         # Check if tqdm is properly imported (not our fallback)
-        if hasattr(tqdm, "__module__") and tqdm.__module__ == "tqdm":
-            logging.debug("tqdm is properly imported and available")
-            return True
+        if hasattr(tqdm, "__module__") and tqdm.__module__ == "tqdm":  # The real tqdm package is already active
+            logging.debug("tqdm is properly imported and available")  # Nothing to do
+            return True  # Progress bars are functional
 
         # Try to get tqdm from the import manager
-        tqdm_from_manager = import_manager.get_import("tqdm")
-        if tqdm_from_manager:
-            tqdm = tqdm_from_manager
-            logging.info("Retrieved tqdm from import manager")
-            return True
+        tqdm_from_manager = import_manager.get_import("tqdm")  # Ask the manager for a cached real tqdm
+        if tqdm_from_manager:  # The manager has a usable tqdm
+            tqdm = tqdm_from_manager  # Replace the fallback with the real implementation
+            logging.info("Retrieved tqdm from import manager")  # Record the recovery
+            return True  # Progress bars are now functional
 
         # Try importing tqdm directly
         try:
-            from tqdm import tqdm as real_tqdm
+            from tqdm import tqdm as real_tqdm  # Last-resort direct import
 
-            tqdm = real_tqdm
-            logging.info("Successfully imported tqdm directly")
-            return True
-        except ImportError:
-            logging.warning("tqdm package is not available - progress bars will be disabled")
-            return False
+            tqdm = real_tqdm  # Adopt the directly-imported progress bar
+            logging.info("Successfully imported tqdm directly")  # Record the successful import
+            return True  # Progress bars are now functional
+        except ImportError:  # tqdm simply is not installed
+            logging.warning("tqdm package is not available - progress bars will be disabled")  # Warn of degraded UX
+            return False  # Caller should proceed without progress bars
 
     @staticmethod
     def safe_input(prompt: str, default_value: str = "", allow_empty: bool = True, context: str = "unknown") -> str:
@@ -2320,35 +2750,43 @@ class InputUtils:
             str: User input, default_value on EOF/empty input, or empty string on interrupt
         """
         try:
-            user_input = input(prompt).strip()
+            user_input = input(prompt).strip()  # Read a line and trim surrounding whitespace
 
             # If user provided empty input and we have a default value, use it
-            if not user_input and default_value:
-                logging.debug(f"Empty input for {context}, using default: '{default_value}'")
-                return default_value
+            if not user_input and default_value:  # Blank entry but a default is configured
+                logging.debug(
+                    f"Empty input for {context}, using default: '{default_value}'"
+                )  # Note the default substitution
+                return default_value  # Return the caller-supplied default
 
             # If user provided empty input, no default, but empty is allowed
-            if not user_input and allow_empty:
-                return user_input
+            if not user_input and allow_empty:  # Blank entry is acceptable here
+                return user_input  # Return the empty string as-is
 
             # If user provided empty input, no default, and empty not allowed
-            if not user_input and not allow_empty:
-                logging.warning(f"Empty input not allowed for {context}, returning empty string")
-                return ""
+            if not user_input and not allow_empty:  # Blank entry is not acceptable and no default exists
+                logging.warning(
+                    f"Empty input not allowed for {context}, returning empty string"
+                )  # Warn about the rejected blank
+                return ""  # Signal an invalid/empty response to the caller
 
             # User provided non-empty input
-            return user_input
+            return user_input  # Normal path: return the trimmed user response
 
-        except EOFError:
+        except EOFError:  # Stream closed (Ctrl+D, broken pipe, SSH disconnect)
             # Handle EOF condition (Ctrl+D, broken pipe, SSH disconnection)
-            print(f"\n[EOF] Input stream closed during {context}. Using default value: '{default_value}'")
-            logging.info(f"EOF encountered on input during {context} - returning default: '{default_value}'")
-            return default_value
-        except KeyboardInterrupt:
+            print(
+                f"\n[EOF] Input stream closed during {context}. Using default value: '{default_value}'"
+            )  # Inform the user
+            logging.info(
+                f"EOF encountered on input during {context} - returning default: '{default_value}'"
+            )  # Log the disconnect
+            return default_value  # Degrade gracefully to the default instead of crashing
+        except KeyboardInterrupt:  # User pressed Ctrl+C
             # Handle Ctrl+C
-            print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")
-            logging.info(f"KeyboardInterrupt encountered during {context}")
-            return ""
+            print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")  # Acknowledge the cancellation
+            logging.info(f"KeyboardInterrupt encountered during {context}")  # Log the interrupt
+            return ""  # Return empty to signal the caller should abort this prompt
 
 
 # ============================================================================
@@ -2356,46 +2794,58 @@ class InputUtils:
 # ============================================================================
 
 # Configuration variables from .env (with defaults) - now managed by import manager
-config = import_manager.get_configuration()
-CSV_FRESHNESS_MINUTES: int = config["csv_freshness_minutes"]
-AUTO_UPGRADE_UV: bool = config["auto_upgrade_uv"]
-AUTO_UPGRADE_DEPENDENCIES: bool = config["auto_upgrade_dependencies"]
-UPGRADE_CHECK_TIMEOUT: int = config["upgrade_check_timeout"]
+config = import_manager.get_configuration()  # Pull resolved settings from the import manager
+CSV_FRESHNESS_MINUTES: int = config["csv_freshness_minutes"]  # Minutes a cached CSV stays "fresh" before refetch
+AUTO_UPGRADE_UV: bool = config["auto_upgrade_uv"]  # Whether UV self-upgrades automatically
+AUTO_UPGRADE_DEPENDENCIES: bool = config["auto_upgrade_dependencies"]  # Whether Python deps auto-upgrade on import
+UPGRADE_CHECK_TIMEOUT: int = config["upgrade_check_timeout"]  # Seconds before an install/upgrade subprocess times out
 
 # API Request Timeout (seconds) - prevents indefinite hangs on slow/dropped connections
 # Default 120s is generous; most Mist API calls return within 30s
-API_REQUEST_TIMEOUT = int(os.getenv("API_REQUEST_TIMEOUT", "120"))
-API_REQUEST_MAX_RETRIES = int(os.getenv("API_REQUEST_MAX_RETRIES", "3"))
-API_REQUEST_RETRY_DELAY = float(os.getenv("API_REQUEST_RETRY_DELAY", "5.0"))
+API_REQUEST_TIMEOUT = int(os.getenv("API_REQUEST_TIMEOUT", "120"))  # Hard cap on a single API request
+API_REQUEST_MAX_RETRIES = int(os.getenv("API_REQUEST_MAX_RETRIES", "3"))  # How many times to retry a failed API request
+API_REQUEST_RETRY_DELAY = float(os.getenv("API_REQUEST_RETRY_DELAY", "5.0"))  # Seconds to wait between API retries
 
 # Fast Mode Configuration from .env
-FAST_MODE_MAX_RETRIES = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))
-FAST_MODE_RETRY_DELAY = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))
+FAST_MODE_MAX_RETRIES = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))  # Retry ceiling when --fast is active
+FAST_MODE_RETRY_DELAY = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))  # Shorter retry delay for fast mode
 
-org_id = None
+org_id = None  # Active organization ID, populated after the user selects an org
 
 # Additional Fast Mode Configuration from .env (continuing from earlier definitions)
-FAST_MODE_BACKOFF_MULTIPLIER = float(os.getenv("FAST_MODE_BACKOFF_MULTIPLIER", "1.5"))
-FAST_MODE_DEVICES_PER_THREAD = int(os.getenv("FAST_MODE_DEVICES_PER_THREAD", "10"))
-FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))
-FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))
-FAST_MODE_SEQUENTIAL_MAX_RETRIES = int(os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1"))
-FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))
-FAST_MODE_MAX_CONCURRENT_CONNECTIONS = int(os.getenv("FAST_MODE_MAX_CONCURRENT_CONNECTIONS", "8"))
-FAST_MODE_USE_CONNECTION_AWARE_THREADING = (
-    os.getenv("FAST_MODE_USE_CONNECTION_AWARE_THREADING", "true").lower() == "true"
+FAST_MODE_BACKOFF_MULTIPLIER = float(
+    os.getenv("FAST_MODE_BACKOFF_MULTIPLIER", "1.5")
+)  # Exponential backoff growth factor
+FAST_MODE_DEVICES_PER_THREAD = int(
+    os.getenv("FAST_MODE_DEVICES_PER_THREAD", "10")
+)  # Devices each worker thread handles
+FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))  # Thread count for the retry pass
+FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))  # Retry ceiling within the retry pass
+FAST_MODE_SEQUENTIAL_MAX_RETRIES = int(
+    os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1")
+)  # Retry ceiling for the sequential fallback
+FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))  # Thread count for the fallback pass
+FAST_MODE_MAX_CONCURRENT_CONNECTIONS = int(
+    os.getenv("FAST_MODE_MAX_CONCURRENT_CONNECTIONS", "8")
+)  # Cap on simultaneous API connections
+FAST_MODE_USE_CONNECTION_AWARE_THREADING = (  # Whether to size threads based on connection limits
+    os.getenv("FAST_MODE_USE_CONNECTION_AWARE_THREADING", "true").lower() == "true"  # Parse the boolean env flag
 )
 FAST_MODE_ENABLED: bool = False  # Set to True via --fast CLI flag at startup
 
 # WAN Port Configuration from .env (REQUIRED - no defaults)
 # MIST_WAN_TARGET_PORTS: Comma-separated list of WAN port names to target
 # Example: "ge-0/0/0,ge-0/0/1,ge-0/0/2,{{wan1_interface}},{{wan2_interface}},{{wan3_interface}}"
-MIST_WAN_TARGET_PORTS = [p.strip() for p in os.getenv("MIST_WAN_TARGET_PORTS", "").split(",") if p.strip()]
+MIST_WAN_TARGET_PORTS = [
+    p.strip() for p in os.getenv("MIST_WAN_TARGET_PORTS", "").split(",") if p.strip()
+]  # Parse CSV env into a clean list of port names
 
 # Site Exclusion Configuration from .env (REQUIRED - no defaults)
 # MIST_SITE_EXCLUDE_PREFIX: Site name prefix to exclude from destructive operations
 # Example: "VRE" to exclude Juniper internal VRE sites
-MIST_SITE_EXCLUDE_PREFIX = os.getenv("MIST_SITE_EXCLUDE_PREFIX", "")
+MIST_SITE_EXCLUDE_PREFIX = os.getenv(
+    "MIST_SITE_EXCLUDE_PREFIX", ""
+)  # Name prefix that shields sites from destructive ops
 
 # Global configuration for output format (CSV or Redis/SQLite)
 # Default to CSV for general use, can be overridden by CLI flag
@@ -2403,7 +2853,7 @@ OUTPUT_FORMAT = "csv"  # Valid values: "csv", "sqlite"
 DATABASE_PATH = os.path.join("data", "mist_data.db")  # Path to hybrid SQLite database with natural primary keys
 
 # Global progress telemetry emitter (initialized in main(), best-effort per FR-008)
-PROGRESS_EMITTER = None
+PROGRESS_EMITTER = None  # Set in main() to a telemetry sink; None disables progress reporting
 
 # ============================================================================
 # GLOBAL SESSION INITIALIZATION
@@ -2436,58 +2886,64 @@ def detect_msp_privileges():  # type: ignore[no-untyped-def]
         return []
 
     try:
-        import mistapi.api.v1.self.self as self_api
+        import mistapi.api.v1.self.self as self_api  # Import the "self" endpoint module lazily
 
-        response = self_api.getSelf(apisession)
+        response = self_api.getSelf(apisession)  # Ask the API who the authenticated user is
 
-        if not response or not hasattr(response, "data"):
-            logging.warning("getSelf returned no data - cannot detect MSP privileges")
-            return []
+        if not response or not hasattr(response, "data"):  # No usable payload came back
+            logging.warning(
+                "getSelf returned no data - cannot detect MSP privileges"
+            )  # Warn we can't determine MSP access
+            return []  # No privileges could be detected
 
-        user_data = response.data
-        if not isinstance(user_data, dict):
-            logging.warning(f"getSelf returned unexpected type: {type(user_data)}")
-            return []
+        user_data = response.data  # Extract the decoded JSON body
+        if not isinstance(user_data, dict):  # The body should be a JSON object
+            logging.warning(f"getSelf returned unexpected type: {type(user_data)}")  # Warn about the malformed shape
+            return []  # Cannot parse privileges from this
 
-        privileges = user_data.get("privileges", [])
-        detected_msps = []
-        logging.debug(f"MSP detection: parsing {len(privileges)} privilege entries")
+        privileges = user_data.get("privileges", [])  # Pull the list of privilege grants
+        detected_msps = []  # Accumulate any MSP-scoped privileges we find
+        logging.debug(f"MSP detection: parsing {len(privileges)} privilege entries")  # Log how many grants we'll scan
 
-        for priv in privileges:
-            if isinstance(priv, dict) and priv.get("msp_id"):
-                logging.debug(f"MSP privilege found: scope={priv.get('scope')}, role={priv.get('role')}")
-                msp_id = priv.get("msp_id")
-                if not msp_id or not isinstance(msp_id, str):
-                    continue
+        for priv in privileges:  # Examine each privilege grant
+            if isinstance(priv, dict) and priv.get("msp_id"):  # This grant is MSP-scoped
+                logging.debug(
+                    f"MSP privilege found: scope={priv.get('scope')}, role={priv.get('role')}"
+                )  # Log the grant details
+                msp_id = priv.get("msp_id")  # Extract the MSP identifier
+                if not msp_id or not isinstance(msp_id, str):  # Guard against missing/invalid IDs
+                    continue  # Skip malformed grants
                 # Try multiple field names for MSP name (API inconsistency)
-                msp_name = priv.get("msp_name") or priv.get("name") or None
+                msp_name = (
+                    priv.get("msp_name") or priv.get("name") or None
+                )  # The API uses different keys across versions
 
                 # If name still not found, try to fetch it from MSP API
-                if not msp_name or msp_name == "Unknown":
-                    msp_name = _fetch_msp_name(msp_id) or f"MSP-{msp_id[:8]}"
+                if not msp_name or msp_name == "Unknown":  # Name absent or placeholder
+                    msp_name = _fetch_msp_name(msp_id) or f"MSP-{msp_id[:8]}"  # Look it up, else derive a short label
 
-                msp_info = {
-                    "msp_id": msp_id,
-                    "msp_name": msp_name,
-                    "role": priv.get("role", "unknown"),
-                    "scope": priv.get("scope", "unknown"),
+                msp_info = {  # Build a normalized record for this MSP grant
+                    "msp_id": msp_id,  # The MSP's unique identifier
+                    "msp_name": msp_name,  # Human-readable MSP name
+                    "role": priv.get("role", "unknown"),  # The user's role within this MSP
+                    "scope": priv.get("scope", "unknown"),  # The scope of the grant
                 }
-                detected_msps.append(msp_info)
+                detected_msps.append(msp_info)  # Record this MSP grant
                 logging.info(
-                    f"Detected MSP privilege: {msp_info['msp_name']} (ID: {msp_info['msp_id'][:8]}..., role: {msp_info['role']}, scope: {msp_info['scope']})"  # noqa: E501
+                    f"Detected MSP privilege: {msp_info['msp_name']} (ID: {msp_info['msp_id'][:8]}..., role: {msp_info['role']}, scope: {msp_info['scope']})"  # noqa: E501  # Surface the detected grant to the operator
                 )
 
-        if detected_msps:
-            msp_privileges = detected_msps
-            logging.info(f"User has MSP-level access to {len(detected_msps)} MSP(s)")
-        else:
-            logging.debug("No MSP privileges detected for current user")
+        if detected_msps:  # At least one MSP grant was found
+            msp_privileges = detected_msps  # Cache the grants in the module-level global
+            logging.info(f"User has MSP-level access to {len(detected_msps)} MSP(s)")  # Report the count
+        else:  # No MSP grants present
+            logging.debug("No MSP privileges detected for current user")  # Note the absence at debug level
 
-        return detected_msps
+        return detected_msps  # Hand the parsed MSP list back to the caller
 
-    except Exception as e:
-        logging.warning(f"Failed to detect MSP privileges: {e}")
-        return []
+    except Exception as e:  # Any API or parsing failure
+        logging.warning(f"Failed to detect MSP privileges: {e}")  # Warn but don't crash the session
+        return []  # Treat as no MSP access on error
 
 
 def _fetch_msp_name(msp_id: str) -> str | None:
@@ -2499,69 +2955,71 @@ def _fetch_msp_name(msp_id: str) -> str | None:
     Returns:
         MSP name string, or None if lookup fails
     """
-    if apisession is None:
-        return None
+    if apisession is None:  # No active session to query with
+        return None  # Can't look anything up
     try:
-        import mistapi.api.v1.msps.msps as msps_api
+        import mistapi.api.v1.msps.msps as msps_api  # Import the MSP details endpoint lazily
 
-        response = msps_api.getMspDetails(apisession, msp_id)
-        if response and hasattr(response, "data") and isinstance(response.data, dict):
-            name = response.data.get("name")
-            return name if isinstance(name, str) else None
-    except Exception as e:
-        logging.debug(f"Could not fetch MSP name for {msp_id[:8]}...: {e}")
-    return None
+        response = msps_api.getMspDetails(apisession, msp_id)  # Fetch the MSP record by ID
+        if response and hasattr(response, "data") and isinstance(response.data, dict):  # Got a well-formed payload
+            name = response.data.get("name")  # Extract the MSP's name field
+            return name if isinstance(name, str) else None  # Return the name only if it's a valid string
+    except Exception as e:  # Lookup failed (network, permissions, etc.)
+        logging.debug(f"Could not fetch MSP name for {msp_id[:8]}...: {e}")  # Note the failure at debug level
+    return None  # Default to None when the name can't be resolved
 
 
 def initialize_mist_session_interactive():  # type: ignore[no-untyped-def]
     """Initialize Mist API session via extracted interactive session manager."""
-    global apisession, mistapi, msp_privileges, selected_msp, org_id
+    global apisession, mistapi, msp_privileges, selected_msp, org_id  # These module globals are updated on login
 
-    state = {
-        "apisession": apisession,
-        "mistapi": mistapi,
-        "msp_privileges": msp_privileges,
-        "selected_msp": selected_msp,
-        "org_id": org_id,
+    state = {  # Snapshot current session globals into a mutable state bag for the manager
+        "apisession": apisession,  # Current API session object (may be None)
+        "mistapi": mistapi,  # The mistapi SDK module reference
+        "msp_privileges": msp_privileges,  # Any previously detected MSP grants
+        "selected_msp": selected_msp,  # Currently selected MSP, if any
+        "org_id": org_id,  # Currently selected org ID, if any
     }
 
-    session_manager = InteractiveSessionManager(
-        state=state,
-        safe_input=InputUtils.safe_input,
-        detect_msp_privileges=detect_msp_privileges,
-        select_org_from_session=_select_org_from_session,
+    session_manager = InteractiveSessionManager(  # Delegate the interactive flow to a dedicated manager
+        state=state,  # Pass the mutable state bag the manager will update
+        safe_input=InputUtils.safe_input,  # Inject the EOF-safe input function
+        detect_msp_privileges=detect_msp_privileges,  # Inject the MSP detection callback
+        select_org_from_session=_select_org_from_session,  # Inject the org selection callback
     )
-    login_success = session_manager.initialize_mist_session_interactive()
+    login_success = session_manager.initialize_mist_session_interactive()  # Run the interactive login workflow
 
-    apisession = state.get("apisession")
-    mistapi = state.get("mistapi")
-    msp_privileges = state.get("msp_privileges", msp_privileges)
-    selected_msp = state.get("selected_msp", selected_msp)
-    org_id = state.get("org_id", org_id)
-    return login_success
+    apisession = state.get("apisession")  # Copy the (possibly new) session back to the global
+    mistapi = state.get("mistapi")  # Copy the SDK reference back to the global
+    msp_privileges = state.get("msp_privileges", msp_privileges)  # Copy detected MSP grants back
+    selected_msp = state.get("selected_msp", selected_msp)  # Copy the selected MSP back
+    org_id = state.get("org_id", org_id)  # Copy the selected org ID back
+    return login_success  # Report whether the interactive login succeeded
 
 
 def _print_switch_login_header():  # type: ignore[no-untyped-def]
     """Display switch to interactive login header and benefits."""
-    logging.debug("Entering _print_switch_login_header()")
-    print("")
-    print("=" * 60)
-    print("  SWITCH TO INTERACTIVE LOGIN")
-    print("=" * 60)
-    print("")
-    print("  This will replace your current API token session with")
-    print("  an interactive (email/password) session.")
-    print("")
-    print("  Benefits of interactive login:")
-    print("    - Can access MSP-level APIs (if you have MSP privileges)")
-    print("    - Session-based auth with cookie management")
-    print("    - Supports 2FA authentication")
-    print("    - Select and switch between MSPs and Organizations")
-    print("")
-    if msp_privileges:
-        logging.debug(f"MSP privileges already detected: {len(msp_privileges)} MSP(s)")
-        print(f"  Note: You already have MSP access to {len(msp_privileges)} MSP(s)")
-        print("")
+    logging.debug("Entering _print_switch_login_header()")  # Trace entry for debugging
+    print("")  # Blank spacer line
+    print("=" * 60)  # Top border of the header banner
+    print("  SWITCH TO INTERACTIVE LOGIN")  # Banner title
+    print("=" * 60)  # Bottom border of the header banner
+    print("")  # Blank spacer line
+    print("  This will replace your current API token session with")  # Explain the consequence (line 1)
+    print("  an interactive (email/password) session.")  # Explain the consequence (line 2)
+    print("")  # Blank spacer line
+    print("  Benefits of interactive login:")  # Introduce the benefits list
+    print("    - Can access MSP-level APIs (if you have MSP privileges)")  # Benefit: MSP API access
+    print("    - Session-based auth with cookie management")  # Benefit: cookie session handling
+    print("    - Supports 2FA authentication")  # Benefit: two-factor support
+    print("    - Select and switch between MSPs and Organizations")  # Benefit: MSP/org switching
+    print("")  # Blank spacer line
+    if msp_privileges:  # The user already has MSP grants detected
+        logging.debug(f"MSP privileges already detected: {len(msp_privileges)} MSP(s)")  # Trace the existing grants
+        print(
+            f"  Note: You already have MSP access to {len(msp_privileges)} MSP(s)"
+        )  # Inform the user of existing access
+        print("")  # Blank spacer line
 
 
 def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:  # type: ignore[no-untyped-def]
@@ -2570,42 +3028,46 @@ def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:  
     Returns:
         bool: True if login succeeded, False if failed (session restored)
     """
-    global apisession, msp_privileges, org_id
+    global apisession, msp_privileges, org_id  # We may overwrite or restore these globals
 
-    logging.debug("Entering _attempt_interactive_login_with_rollback()")
-    logging.debug("Clearing existing session state for re-authentication")
+    logging.debug("Entering _attempt_interactive_login_with_rollback()")  # Trace entry for debugging
+    logging.debug("Clearing existing session state for re-authentication")  # Note we're resetting before re-login
 
-    apisession = None
-    msp_privileges = []
-    org_id = None
+    apisession = None  # Drop the current session so the interactive flow starts clean
+    msp_privileges = []  # Clear cached MSP grants from the old session
+    org_id = None  # Clear the selected org from the old session
 
-    if not initialize_mist_session_interactive():  # type: ignore[no-untyped-call]
-        print("")
-        print("  X Login failed - restoring previous session")
-        apisession = old_session
-        org_id = old_org_id
-        detect_msp_privileges()  # type: ignore[no-untyped-call]
-        logging.warning("Interactive login failed - restored previous API session")
-        return False
-    logging.debug("Interactive login succeeded")
-    return True
+    if not initialize_mist_session_interactive():  # type: ignore[no-untyped-call]  # Attempt the interactive login
+        print("")  # Blank spacer line
+        print("  X Login failed - restoring previous session")  # Inform the user of the rollback
+        apisession = old_session  # Restore the prior API session
+        org_id = old_org_id  # Restore the prior org selection
+        detect_msp_privileges()  # type: ignore[no-untyped-call]  # Re-detect MSP grants for the restored session
+        logging.warning("Interactive login failed - restored previous API session")  # Log the failed attempt
+        return False  # Signal failure to the caller
+    logging.debug("Interactive login succeeded")  # Trace the successful login
+    return True  # Signal success to the caller
 
 
 def _handle_interactive_login_success():  # type: ignore[no-untyped-def]
     """Handle successful interactive login - display status and select MSP/org."""
-    logging.debug("Entering _handle_interactive_login_success()")
-    print("")
-    print("  + Successfully switched to interactive login")
-    if msp_privileges:
-        print(f"  + MSP access available: {len(msp_privileges)} MSP(s)")
-        logging.info(f"Successfully switched to interactive login session with {len(msp_privileges)} MSP(s)")
-    else:
-        logging.info("Successfully switched to interactive login session (no MSP privileges)")
+    logging.debug("Entering _handle_interactive_login_success()")  # Trace entry for debugging
+    print("")  # Blank spacer line
+    print("  + Successfully switched to interactive login")  # Confirm the switch to the user
+    if msp_privileges:  # The new session has MSP grants
+        print(f"  + MSP access available: {len(msp_privileges)} MSP(s)")  # Report how many MSPs are accessible
+        logging.info(
+            f"Successfully switched to interactive login session with {len(msp_privileges)} MSP(s)"
+        )  # Log the success with MSP count
+    else:  # No MSP grants on the new session
+        logging.info(
+            "Successfully switched to interactive login session (no MSP privileges)"
+        )  # Log the success without MSPs
 
-    if msp_privileges:
-        _select_msp_and_org()  # type: ignore[no-untyped-call]
-    else:
-        _select_org_from_session()  # type: ignore[no-untyped-call]
+    if msp_privileges:  # Choose the selection flow based on MSP access
+        _select_msp_and_org()  # type: ignore[no-untyped-call]  # MSP users pick an MSP then an org
+    else:  # No MSP access
+        _select_org_from_session()  # type: ignore[no-untyped-call]  # Non-MSP users pick an org directly
 
 
 def switch_to_interactive_login():  # type: ignore[no-untyped-def]
@@ -2636,41 +3098,43 @@ def switch_to_interactive_login():  # type: ignore[no-untyped-def]
         logging.warning("User cancelled switch to interactive login")
         return True
 
-    old_session = apisession
-    old_org_id = org_id
+    old_session = apisession  # Preserve the current session so we can roll back on failure
+    old_org_id = org_id  # Preserve the current org so we can roll back on failure
 
-    if not _attempt_interactive_login_with_rollback(old_session, old_org_id):
-        return True
+    if not _attempt_interactive_login_with_rollback(
+        old_session, old_org_id
+    ):  # Try interactive login; restores on failure
+        return True  # Login failed but the old session was restored -- stay running
 
-    _handle_interactive_login_success()  # type: ignore[no-untyped-call]
-    return True
+    _handle_interactive_login_success()  # type: ignore[no-untyped-call]  # Login succeeded -- show status and pick MSP/org
+    return True  # Always return True so the menu loop continues
 
 
 def _select_msp_and_org():  # type: ignore[no-untyped-def]
     """Select MSP and organization via extracted interactive session manager."""
-    global apisession, mistapi, msp_privileges, selected_msp, org_id
+    global apisession, mistapi, msp_privileges, selected_msp, org_id  # These globals are updated by the selection flow
 
-    state = {
-        "apisession": apisession,
-        "mistapi": mistapi,
-        "msp_privileges": msp_privileges,
-        "selected_msp": selected_msp,
-        "org_id": org_id,
+    state = {  # Snapshot current session globals into a mutable bag for the manager to update
+        "apisession": apisession,  # Current API session object
+        "mistapi": mistapi,  # The mistapi SDK module reference
+        "msp_privileges": msp_privileges,  # Detected MSP grants to choose from
+        "selected_msp": selected_msp,  # Currently selected MSP, if any
+        "org_id": org_id,  # Currently selected org ID, if any
     }
 
-    session_manager = InteractiveSessionManager(
-        state=state,
-        safe_input=InputUtils.safe_input,
-        detect_msp_privileges=detect_msp_privileges,
-        select_org_from_session=_select_org_from_session,
+    session_manager = InteractiveSessionManager(  # Delegate MSP/org selection to the dedicated manager
+        state=state,  # Pass the mutable state bag the manager will update
+        safe_input=InputUtils.safe_input,  # Inject the EOF-safe input function
+        detect_msp_privileges=detect_msp_privileges,  # Inject the MSP detection callback
+        select_org_from_session=_select_org_from_session,  # Inject the org selection callback
     )
-    session_manager.select_msp_and_org()
+    session_manager.select_msp_and_org()  # Run the interactive MSP-then-org selection flow
 
-    apisession = state.get("apisession")
-    mistapi = state.get("mistapi")
-    msp_privileges = state.get("msp_privileges", msp_privileges)
-    selected_msp = state.get("selected_msp", selected_msp)
-    org_id = state.get("org_id", org_id)
+    apisession = state.get("apisession")  # Copy the (possibly switched) session back to the global
+    mistapi = state.get("mistapi")  # Copy the SDK reference back to the global
+    msp_privileges = state.get("msp_privileges", msp_privileges)  # Copy MSP grants back
+    selected_msp = state.get("selected_msp", selected_msp)  # Copy the chosen MSP back
+    org_id = state.get("org_id", org_id)  # Copy the chosen org ID back
 
 
 def _select_org_from_session():  # type: ignore[no-untyped-def]
@@ -2679,28 +3143,28 @@ def _select_org_from_session():  # type: ignore[no-untyped-def]
     Uses mistapi's built-in org selection when user doesn't have MSP access
     or chooses to skip MSP selection.
     """
-    global org_id
+    global org_id  # We update the selected org ID global here
 
-    logging.debug("Entering _select_org_from_session()")
+    logging.debug("Entering _select_org_from_session()")  # Trace entry for debugging
 
-    print("")
-    print("  Selecting organization from your session privileges...")
-    print("")
+    print("")  # Blank spacer line
+    print("  Selecting organization from your session privileges...")  # Tell the user what's happening
+    print("")  # Blank spacer line
 
     try:
         # Use mistapi's built-in org selection
-        logging.debug("Invoking mistapi.cli.select_org()")
-        org_id_list = mistapi.cli.select_org(apisession)
-        if org_id_list and len(org_id_list) > 0:
-            org_id = org_id_list[0]
-            print(f"  + Organization ID set: {org_id}")
-            logging.info(f"User selected org from session: {org_id}")
-        else:
-            print("  X No organization selected")
-            logging.warning("No organization selected from session privileges")
-    except Exception as e:
-        print(f"  X Error selecting organization: {e}")
-        logging.error(f"Failed to select org from session: {e}")  # nosec B608
+        logging.debug("Invoking mistapi.cli.select_org()")  # Trace the SDK call
+        org_id_list = mistapi.cli.select_org(apisession)  # Let mistapi present an org picker and return the choice
+        if org_id_list and len(org_id_list) > 0:  # The user selected at least one org
+            org_id = org_id_list[0]  # Use the first selected org ID
+            print(f"  + Organization ID set: {org_id}")  # Confirm the selection to the user
+            logging.info(f"User selected org from session: {org_id}")  # Log the chosen org
+        else:  # Nothing was selected
+            print("  X No organization selected")  # Inform the user no org was chosen
+            logging.warning("No organization selected from session privileges")  # Log the empty selection
+    except Exception as e:  # The SDK picker raised an error
+        print(f"  X Error selecting organization: {e}")  # Show the error to the user
+        logging.error(f"Failed to select org from session: {e}")  # nosec B608  # Log the failure detail
 
 
 def _load_mistapi_module(current_mistapi: Any) -> Any:
@@ -3220,6 +3684,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "description": "Organization devices with stable UUID identifiers",
     },
     # Template and configuration entities
+    "createOrgGatewayTemplate": {
+        "type": "natural_pk",  # API returns a UUID id field on the newly created template
+        "primary_key": ["id"],  # Template UUID is the stable natural key for upsert
+        "indexes": ["org_id", "name", "type"],  # Secondary lookup fields for queries
+        "unique_constraints": [],  # No additional unique constraints beyond PK
+        "description": "Newly created org gateway template from device config clone",
+    },
     "listOrgGatewayTemplates": {
         "type": "natural_pk",
         "primary_key": ["id"],
@@ -5581,23 +6052,27 @@ class CacheUtils:
             dict: Dictionary where keys are unique values from the key column,
                   and values are lists of row dictionaries
         """
-        logging.info(f"Loading CSV file '{filename}' into dictionary keyed by '{key}'...")
-        csv_file_path = FilePathUtils.get_csv_path(filename)
-        with open(csv_file_path, encoding="utf-8") as file:
-            reader = csv.DictReader(file)
-            data_dict: dict[str, list[dict[str, Any]]] = {}
-            row_count = 0
-            for row in reader:
-                data_key = row.get(key)
-                if data_key is None:
-                    logging.warning(f"Row missing key '{key}': {row}")
-                    continue
-                if data_key not in data_dict:
-                    data_dict[data_key] = []
-                data_dict[data_key].append(row)
-                row_count += 1
-            logging.info(f"Loaded {row_count} rows from '{filename}'. Found {len(data_dict)} unique keys for '{key}'.")
-        return data_dict
+        logging.info(
+            f"Loading CSV file '{filename}' into dictionary keyed by '{key}'..."
+        )  # Log before reading the file
+        csv_file_path = FilePathUtils.get_csv_path(filename)  # Resolve the CSV path under the data/ directory
+        with open(csv_file_path, encoding="utf-8") as file:  # Open the CSV for reading
+            reader = csv.DictReader(file)  # Parse each row into a dictionary keyed by column name
+            data_dict: dict[str, list[dict[str, Any]]] = {}  # Group rows by the chosen key column
+            row_count = 0  # Count how many valid rows we ingest
+            for row in reader:  # Process each CSV row
+                data_key = row.get(key)  # Extract the grouping key value from this row
+                if data_key is None:  # The key column is missing on this row
+                    logging.warning(f"Row missing key '{key}': {row}")  # Warn about the malformed row
+                    continue  # Skip rows that can't be grouped
+                if data_key not in data_dict:  # First time we've seen this key value
+                    data_dict[data_key] = []  # Start a new bucket for it
+                data_dict[data_key].append(row)  # Add this row to its key's bucket
+                row_count += 1  # Tally the ingested row
+            logging.info(
+                f"Loaded {row_count} rows from '{filename}'. Found {len(data_dict)} unique keys for '{key}'."
+            )  # Summary log
+        return data_dict  # Return the grouped-by-key dictionary
 
     @staticmethod
     def write_support_data_to_csv(data: dict[str, list[dict[str, Any]]], filename: str) -> None:
@@ -6149,26 +6624,28 @@ class _LegacyPacketCaptureManager:
             "39": "tcp[tcpflags] & (tcp-syn|tcp-fin|tcp-rst|tcp-push|tcp-ack|tcp-urg) = 0",
         }
 
-        if choice in expressions:
-            expr = expressions[choice]
-            if expr:
-                print(f"\n! Filter applied: {expr}")
-            else:
-                print("\n! Filter: None (capturing all traffic)")
-            return expr
-        elif choice == "40":
-            print("\nEnter custom tcpdump expression:")
-            print("  Examples: 'host 192.168.1.1', 'net 10.0.0.0/8', 'port 8080'")
-            custom_expr = InputUtils.safe_input("Expression: ", context="tcpdump_custom", allow_empty=True)
-            if custom_expr:
-                print(f"\n! Filter applied: {custom_expr}")
-                return custom_expr
-            else:
-                print("\n! No filter applied")
-                return ""
-        else:
-            print("\n! Invalid choice, using no filter")
-            return ""
+        if choice in expressions:  # The user picked one of the predefined filter numbers
+            expr = expressions[choice]  # Look up the corresponding tcpdump expression
+            if expr:  # A non-empty expression was selected
+                print(f"\n! Filter applied: {expr}")  # Confirm the active filter to the user
+            else:  # The empty expression means "capture everything"
+                print("\n! Filter: None (capturing all traffic)")  # Tell the user no filter is applied
+            return expr  # Return the chosen tcpdump expression (may be empty)
+        elif choice == "40":  # The user chose to enter a custom expression
+            print("\nEnter custom tcpdump expression:")  # Prompt header for the custom filter
+            print("  Examples: 'host 192.168.1.1', 'net 10.0.0.0/8', 'port 8080'")  # Show example syntax
+            custom_expr = InputUtils.safe_input(
+                "Expression: ", context="tcpdump_custom", allow_empty=True
+            )  # Read the custom filter
+            if custom_expr:  # The user typed a non-empty expression
+                print(f"\n! Filter applied: {custom_expr}")  # Confirm the custom filter
+                return custom_expr  # Use the custom expression
+            else:  # The user left it blank
+                print("\n! No filter applied")  # Note that no filter will be used
+                return ""  # Capture all traffic
+        else:  # The choice didn't match any known option
+            print("\n! Invalid choice, using no filter")  # Inform the user of the fallback
+            return ""  # Default to capturing all traffic
 
     def _get_capture_format_selection(self):  # type: ignore[no-untyped-def]
         """
@@ -6181,11 +6658,13 @@ class _LegacyPacketCaptureManager:
         Returns:
             str: Selected format - 'pcap' or 'stream'
         """
-        print("\nCapture format:")
-        print("  1. PCAP file - downloadable (default, recommended)")
-        print("  2. Stream to Mist Cloud (WebSocket real-time)")
-        format_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="format")
-        return "pcap" if format_choice == "1" else "stream"
+        print("\nCapture format:")  # Header for the capture-format choices
+        print("  1. PCAP file - downloadable (default, recommended)")  # Option 1: downloadable pcap file
+        print("  2. Stream to Mist Cloud (WebSocket real-time)")  # Option 2: live WebSocket stream
+        format_choice = InputUtils.safe_input(
+            "Enter choice (default 1): ", default_value="1", context="format"
+        )  # Read the format choice (defaults to 1)
+        return "pcap" if format_choice == "1" else "stream"  # Map the choice to the API's format keyword
 
     def start_site_packet_capture(self):  # type: ignore[no-untyped-def]
         """
@@ -8224,22 +8703,32 @@ class SFPTransceiverDataProcessor:
                     len(unique_devices_with_transceivers),
                 )
 
-            DataExporter.save_data_to_output(merged_data, SFPTransceiverDataProcessor.OUTPUT_FILENAME)  # type: ignore[no-untyped-call]
-            logging.info(f"Wrote {len(merged_data)} rows to {SFPTransceiverDataProcessor.OUTPUT_FILENAME}")
-            print(f"! Merged data written to {SFPTransceiverDataProcessor.OUTPUT_FILENAME}")
-            logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - success")
-        except FileNotFoundError as e:
-            logging.error(f"File I/O: Required CSV file not found: {e}")
-            logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - file not found")
-            raise
-        except csv.Error as e:
-            logging.error(f"File I/O: CSV processing error: {e}")
-            logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - CSV error")
-            raise
-        except Exception as e:
-            logging.error(f"File I/O: Unexpected error during transceiver merge: {e}")
-            logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - unexpected error")
-            raise
+            DataExporter.save_data_to_output(merged_data, SFPTransceiverDataProcessor.OUTPUT_FILENAME)  # type: ignore[no-untyped-call]  # Write the merged rows to the output backend
+            logging.info(
+                f"Wrote {len(merged_data)} rows to {SFPTransceiverDataProcessor.OUTPUT_FILENAME}"
+            )  # Log the row count written
+            print(
+                f"! Merged data written to {SFPTransceiverDataProcessor.OUTPUT_FILENAME}"
+            )  # Tell the user where the file landed
+            logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - success")  # Trace successful exit
+        except FileNotFoundError as e:  # A required input CSV was missing
+            logging.error(f"File I/O: Required CSV file not found: {e}")  # Log which file was absent
+            logging.debug(
+                "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - file not found"
+            )  # Trace the failure exit
+            raise  # Re-raise so the caller knows the merge could not run
+        except csv.Error as e:  # The CSV parser hit malformed data
+            logging.error(f"File I/O: CSV processing error: {e}")  # Log the parsing error
+            logging.debug(
+                "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - CSV error"
+            )  # Trace the failure exit
+            raise  # Re-raise so the caller can handle the bad input
+        except Exception as e:  # Any other unexpected failure during the merge
+            logging.error(f"File I/O: Unexpected error during transceiver merge: {e}")  # Log the unexpected error
+            logging.debug(
+                "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - unexpected error"
+            )  # Trace the failure exit
+            raise  # Re-raise to surface the problem to the caller
 
 
 class FilePathUtils:
@@ -9418,9 +9907,12 @@ class SQLiteDatabaseWriter:
 
     def _create_table_and_indexes(self) -> None:
         """Create table with strategy-appropriate schema and indexes."""
-        assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
+        assert (
+            self.cursor is not None
+        ), "Database cursor not initialized"  # nosec B101  # Defensive: ensure connect() succeeded
+        # Build the CREATE TABLE SQL using the strategy (natural/composite/auto-increment)
         create_table_sql = DatabaseSchemaUtils.build_create_table_sql(self.table_name, self.fields, self.strategy)
-        self.cursor.execute(create_table_sql)
+        self.cursor.execute(create_table_sql)  # Execute DDL to create or verify the table structure
         logging.debug(
             f"Table {self.table_name} created/verified with hybrid {self.strategy['type']} schema - using natural business keys from API"  # noqa: E501
         )
@@ -11983,10 +12475,13 @@ class OrgSiteExporter:
             print(" No sites returned from API.")
             return
         sites = DataProcessingUtils.flatten_nested_fields(sites)
+        # Normalize nested JSON structures into a flat row-per-record format for CSV/DB output
+        sites = DataProcessingUtils.flatten_nested_fields(sites)
         sites = DataProcessingUtils.escape_multiline(sites)  # type: ignore[no-untyped-call]
+        # Write to the configured output backend (CSV or SQLite) via the DataExporter abstraction
         DataExporter.save_data_to_output(sites, output_file)  # type: ignore[no-untyped-call]
-        logging.info(f"! Sites exported to {output_file}")
-        print(f"! Sites exported to {output_file}")
+        logging.info(f"! Sites exported to {output_file}")  # Log the successful export
+        print(f"! Sites exported to {output_file}")  # Inform the user on stdout
 
     @staticmethod
     def sites_with_location():  # type: ignore[no-untyped-def]
@@ -13469,21 +13964,30 @@ class OrgTemplateExporter:
     @staticmethod
     def ap_templates():  # type: ignore[no-untyped-def]
         """Export AP templates to OrgApTemplates.csv."""
-        print("Export Organization AP Templates:")
-        logging.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        filename = "OrgApTemplates.csv"
+        print("Export Organization AP Templates:")  # Header line for this export operation
+        logging.info(
+            "Starting export of organization AP templates (canonical deviceprofiles type=ap)..."
+        )  # Log the start
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org to export from
+        filename = "OrgApTemplates.csv"  # Destination CSV filename
         try:
-            response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
-                apisession, org_id, type="ap", limit=1000
+            response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(  # Request device profiles from the org
+                apisession,
+                org_id,
+                type="ap",
+                limit=1000,  # Filter to AP-type profiles (the canonical AP-template source)
             )
-            ap_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
-            if not ap_profiles:
-                print("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")
-                logging.info("No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv")
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-                return
-            processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)
+            ap_profiles = (
+                mistapi.get_all(response=response, mist_session=apisession) or []
+            )  # Page through all results (empty list on None)
+            if not ap_profiles:  # No AP templates exist in this org
+                print("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")  # Inform the user
+                logging.info(
+                    "No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv"
+                )  # Log the empty result
+                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]  # Write an empty file for consistency
+                return  # Nothing more to do
+            processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON into flat CSV rows
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(processed)} AP templates exported to {filename}")
@@ -13563,124 +14067,162 @@ class OrgClientSecurityExporter:
             for output_file in output_files:
                 try:
                     path = FilePathUtils.get_csv_path(output_file)
-                    if os.path.exists(path):
-                        age_minutes = (time.time() - os.path.getmtime(path)) / 60.0
-                        if age_minutes >= CSV_FRESHNESS_MINUTES:
-                            all_fresh = False
-                            break
-                    else:
-                        all_fresh = False
-                        break
-                except Exception:
-                    all_fresh = False
-                    break
-            if all_fresh:
-                logging.info("Fast mode cache hit: All security data CSVs are fresh; skipping fetch.")
-                print("* Fast mode: Using cached security data (all files fresh)")
-                return
-        print("Export Organization Security Data:")
-        logging.info("Starting export of organization security policies, intelligence profiles, and rogue data...")
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("42", "security_events", 3)
-        op_start = time.time()
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        policies: list[dict[str, Any]] = []
+                    if os.path.exists(path):  # The cached CSV exists on disk
+                        age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # How old the file is in minutes
+                        if age_minutes >= CSV_FRESHNESS_MINUTES:  # The file is older than the freshness window
+                            all_fresh = False  # Mark the cache as stale
+                            break  # Stop checking -- one stale file is enough to refetch
+                    else:  # The expected cache file is missing
+                        all_fresh = False  # Treat a missing file as not-fresh
+                        break  # Stop checking -- we must refetch
+                except Exception:  # Any error inspecting the file
+                    all_fresh = False  # Be conservative and refetch on error
+                    break  # Stop checking immediately
+            if all_fresh:  # Every required CSV was present and within the freshness window
+                logging.info(
+                    "Fast mode cache hit: All security data CSVs are fresh; skipping fetch."
+                )  # Log the cache hit
+                print("* Fast mode: Using cached security data (all files fresh)")  # Inform the user no fetch ran
+                return  # Skip the API calls entirely
+        print("Export Organization Security Data:")  # Header for this export operation
+        logging.info(
+            "Starting export of organization security policies, intelligence profiles, and rogue data..."
+        )  # Log the start
+        emitter = PROGRESS_EMITTER  # Grab the optional progress-telemetry sink
+        if emitter:  # Telemetry is enabled
+            emitter.emit_progress_start("42", "security_events", 3)  # Announce a 3-step operation to the UI
+        op_start = time.time()  # Record the operation start time for duration metrics
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org to export from
+        policies: list[dict[str, Any]] = []  # Accumulate fetched security policies
         try:
-            logging.info("Fetching organization security policies (secpolicies)...")
-            resp = mistapi.api.v1.orgs.secpolicies.listOrgSecPolicies(apisession, current_org_id, limit=1000)
-            policies = mistapi.get_all(response=resp, mist_session=apisession) or []
-            logging.debug(f"Security policies fetched: {len(policies)}")
-        except Exception as e:
-            logging.warning(f"Failed to fetch security policies: {e}")
-        if policies:
-            processed = DataProcessingUtils.flatten_nested_fields(policies)
-            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed, "OrgSecurityPolicies.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(processed)} security policies exported to OrgSecurityPolicies.csv")
-            logging.info(f"Exported {len(processed)} security policies to OrgSecurityPolicies.csv")
-        else:
-            print("! 0 security policies exported to OrgSecurityPolicies.csv (no policies found)")
-            logging.warning("No data to export for OrgSecurityPolicies.csv (zero policies returned).")
-            DataExporter.save_data_to_output([], "OrgSecurityPolicies.csv")  # type: ignore[no-untyped-call]
-        secintel_profiles: list[dict[str, Any]] = []
+            logging.info("Fetching organization security policies (secpolicies)...")  # Log before the API call
+            resp = mistapi.api.v1.orgs.secpolicies.listOrgSecPolicies(
+                apisession, current_org_id, limit=1000
+            )  # Request security policies
+            policies = (
+                mistapi.get_all(response=resp, mist_session=apisession) or []
+            )  # Page through all results (empty list on None)
+            logging.debug(f"Security policies fetched: {len(policies)}")  # Log how many policies came back
+        except Exception as e:  # The policy fetch failed
+            logging.warning(f"Failed to fetch security policies: {e}")  # Warn but continue with other security data
+        if policies:  # At least one policy was retrieved
+            processed = DataProcessingUtils.flatten_nested_fields(policies)  # Flatten nested JSON into flat CSV rows
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # Escape newlines so CSV stays one-row-per-record
+            DataExporter.save_data_to_output(processed, "OrgSecurityPolicies.csv")  # type: ignore[no-untyped-call]  # Write to the chosen output backend
+            print(
+                f"! {len(processed)} security policies exported to OrgSecurityPolicies.csv"
+            )  # Tell the user the count
+            logging.info(f"Exported {len(processed)} security policies to OrgSecurityPolicies.csv")  # Log the export
+        else:  # No policies were returned
+            print("! 0 security policies exported to OrgSecurityPolicies.csv (no policies found)")  # Inform the user
+            logging.warning(
+                "No data to export for OrgSecurityPolicies.csv (zero policies returned)."
+            )  # Log the empty result
+            DataExporter.save_data_to_output([], "OrgSecurityPolicies.csv")  # type: ignore[no-untyped-call]  # Write an empty file for consistency
+        secintel_profiles: list[dict[str, Any]] = []  # Accumulate security intelligence profiles
         try:
-            logging.info("Fetching organization security intelligence profiles...")
-            resp_secintel = mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles(apisession, current_org_id)
-            secintel_profiles = mistapi.get_all(response=resp_secintel, mist_session=apisession) or []
-            logging.debug(f"Security intelligence profiles fetched: {len(secintel_profiles)}")
-        except Exception as e:
-            logging.warning(f"Failed to fetch security intelligence profiles: {e}")
-        if secintel_profiles:
-            processed_si = DataProcessingUtils.flatten_nested_fields(secintel_profiles)
-            processed_si = DataProcessingUtils.escape_multiline(processed_si)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed_si, "OrgSecIntelProfiles.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(processed_si)} security intelligence profiles exported to OrgSecIntelProfiles.csv")
-            logging.info(f"Exported {len(processed_si)} security intelligence profiles to OrgSecIntelProfiles.csv")
-        else:
-            print("! 0 security intelligence profiles exported to OrgSecIntelProfiles.csv (no profiles found)")
-            logging.warning("No data to export for OrgSecIntelProfiles.csv (zero profiles returned).")
-            DataExporter.save_data_to_output([], "OrgSecIntelProfiles.csv")  # type: ignore[no-untyped-call]
-        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
-        rogue_duration = f"{lookback_hours}h"
-        TimeUtils.log_dynamic_lookback("rogue data fetch", lookback_hours)
-        logging.info("Fetching rogue APs and clients from all sites via insights...")
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-        all_rogue_aps: list[dict[str, Any]] = []
-        all_rogue_clients: list[dict[str, Any]] = []
+            logging.info("Fetching organization security intelligence profiles...")  # Log before the API call
+            resp_secintel = mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles(
+                apisession, current_org_id
+            )  # Request secintel profiles
+            secintel_profiles = (
+                mistapi.get_all(response=resp_secintel, mist_session=apisession) or []
+            )  # Page through all results
+            logging.debug(f"Security intelligence profiles fetched: {len(secintel_profiles)}")  # Log the count
+        except Exception as e:  # The secintel fetch failed
+            logging.warning(f"Failed to fetch security intelligence profiles: {e}")  # Warn but continue
+        if secintel_profiles:  # At least one profile was retrieved
+            processed_si = DataProcessingUtils.flatten_nested_fields(
+                secintel_profiles
+            )  # Flatten nested JSON to CSV rows
+            processed_si = DataProcessingUtils.escape_multiline(processed_si)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
+            DataExporter.save_data_to_output(processed_si, "OrgSecIntelProfiles.csv")  # type: ignore[no-untyped-call]  # Write to the output backend
+            print(
+                f"! {len(processed_si)} security intelligence profiles exported to OrgSecIntelProfiles.csv"
+            )  # Report the count
+            logging.info(
+                f"Exported {len(processed_si)} security intelligence profiles to OrgSecIntelProfiles.csv"
+            )  # Log the export
+        else:  # No profiles were returned
+            print(
+                "! 0 security intelligence profiles exported to OrgSecIntelProfiles.csv (no profiles found)"
+            )  # Inform the user
+            logging.warning(
+                "No data to export for OrgSecIntelProfiles.csv (zero profiles returned)."
+            )  # Log the empty result
+            DataExporter.save_data_to_output([], "OrgSecIntelProfiles.csv")  # type: ignore[no-untyped-call]  # Write an empty file for consistency
+        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
+        rogue_duration = f"{lookback_hours}h"  # Format the lookback as the API's duration string
+        TimeUtils.log_dynamic_lookback("rogue data fetch", lookback_hours)  # Log which lookback window is in use
+        logging.info("Fetching rogue APs and clients from all sites via insights...")  # Log before the per-site loop
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure the site list CSV is fresh
+        all_rogue_aps: list[dict[str, Any]] = []  # Accumulate rogue APs across all sites
+        all_rogue_clients: list[dict[str, Any]] = []  # Accumulate rogue clients across all sites
         try:
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-            with open(site_list_path, encoding="utf-8") as f:
-                sites = list(csv.DictReader(f))
-            for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]
-                if ConfigUtils.check_stop_signal():
-                    break
-                site_id = site.get("id")
-                site_name = site.get("name", "Unknown Site")
-                if not site_id:
-                    continue
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve the path to the site list CSV
+            with open(site_list_path, encoding="utf-8") as f:  # Open the cached site list
+                sites = list(csv.DictReader(f))  # Read all sites as dictionaries
+            for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]  # Iterate sites with a progress bar
+                if ConfigUtils.check_stop_signal():  # The user requested an early stop
+                    break  # Exit the loop gracefully
+                site_id = site.get("id")  # The site's unique ID
+                site_name = site.get("name", "Unknown Site")  # The site's display name
+                if not site_id:  # Defensive: skip rows missing an ID
+                    continue  # Move to the next site
                 try:
-                    response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(
-                        apisession, site_id, duration=rogue_duration, limit=1000
+                    response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(  # Request rogue APs for this site
+                        apisession, site_id, duration=rogue_duration, limit=1000  # Use the chosen lookback window
                     )
-                    site_rogue_aps = mistapi.get_all(response=response_aps, mist_session=apisession) or []
-                    for rogue_access_point in site_rogue_aps:
-                        rogue_access_point["site_id"] = site_id
-                        rogue_access_point["site_name"] = site_name
-                        rogue_access_point["rogue_type"] = "AP"
-                    all_rogue_aps.extend(site_rogue_aps)
-                    response_clients = mistapi.api.v1.sites.insights.listSiteRogueClients(
-                        apisession, site_id, duration=rogue_duration, limit=1000
+                    site_rogue_aps = (
+                        mistapi.get_all(response=response_aps, mist_session=apisession) or []
+                    )  # Page through results
+                    for rogue_access_point in site_rogue_aps:  # Tag each rogue AP with site context
+                        rogue_access_point["site_id"] = site_id  # Record which site detected it
+                        rogue_access_point["site_name"] = site_name  # Record the site name for readability
+                        rogue_access_point["rogue_type"] = "AP"  # Mark the record type as an access point
+                    all_rogue_aps.extend(site_rogue_aps)  # Add this site's rogue APs to the aggregate
+                    response_clients = (
+                        mistapi.api.v1.sites.insights.listSiteRogueClients(  # Request rogue clients for this site
+                            apisession, site_id, duration=rogue_duration, limit=1000  # Use the chosen lookback window
+                        )
                     )
-                    site_rogue_clients = mistapi.get_all(response=response_clients, mist_session=apisession) or []
-                    for client in site_rogue_clients:
-                        client["site_id"] = site_id
-                        client["site_name"] = site_name
-                        client["rogue_type"] = "Client"
-                    all_rogue_clients.extend(site_rogue_clients)
+                    site_rogue_clients = (
+                        mistapi.get_all(response=response_clients, mist_session=apisession) or []
+                    )  # Page through results
+                    for client in site_rogue_clients:  # Tag each rogue client with site context
+                        client["site_id"] = site_id  # Record which site detected it
+                        client["site_name"] = site_name  # Record the site name for readability
+                        client["rogue_type"] = "Client"  # Mark the record type as a client
+                    all_rogue_clients.extend(site_rogue_clients)  # Add this site's rogue clients to the aggregate
                     logging.info(
-                        f"! Fetched {len(site_rogue_aps)} rogue APs and {len(site_rogue_clients)} rogue clients from site: {site_name}"  # noqa: E501
+                        f"! Fetched {len(site_rogue_aps)} rogue APs and {len(site_rogue_clients)} rogue clients from site: {site_name}"  # noqa: E501  # Per-site summary
                     )
-                except Exception as e:
-                    logging.warning(f"! Failed to fetch rogue data from site {site_name}: {e}")
-                    continue
-        except Exception as e:
-            logging.error(f"Failed to process sites for rogue data: {e}")
-        all_rogue_data = all_rogue_aps + all_rogue_clients
-        if all_rogue_data:
-            processed_r = DataProcessingUtils.flatten_nested_fields(all_rogue_data)
-            processed_r = DataProcessingUtils.escape_multiline(processed_r)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed_r, "OrgRogueData.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(processed_r)} rogue devices exported to OrgRogueData.csv")
-            logging.info(f"Exported {len(processed_r)} rogue devices to OrgRogueData.csv")
-        else:
-            print("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")
-            logging.info("No rogue devices found across all sites (OrgRogueData.csv written empty).")
-            DataExporter.save_data_to_output([], "OrgRogueData.csv")  # type: ignore[no-untyped-call]
-        print("Security data export completed (3 files generated)")
-        logging.info("Completed security policies, intelligence profiles, and rogue data export aggregate.")
-        if emitter:
-            emitter.emit_progress_complete("42", "security_events", 3, 3, False, time.time() - op_start)
+                except Exception as e:  # This site's rogue fetch failed
+                    logging.warning(f"! Failed to fetch rogue data from site {site_name}: {e}")  # Warn but keep going
+                    continue  # Move to the next site
+        except Exception as e:  # Failure iterating the site list itself
+            logging.error(f"Failed to process sites for rogue data: {e}")  # Log the broader failure
+        all_rogue_data = all_rogue_aps + all_rogue_clients  # Combine APs and clients into one export set
+        if all_rogue_data:  # At least one rogue device was found
+            processed_r = DataProcessingUtils.flatten_nested_fields(all_rogue_data)  # Flatten nested JSON to CSV rows
+            processed_r = DataProcessingUtils.escape_multiline(processed_r)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
+            DataExporter.save_data_to_output(processed_r, "OrgRogueData.csv")  # type: ignore[no-untyped-call]  # Write to the output backend
+            print(f"! {len(processed_r)} rogue devices exported to OrgRogueData.csv")  # Report the count
+            logging.info(f"Exported {len(processed_r)} rogue devices to OrgRogueData.csv")  # Log the export
+        else:  # No rogue devices found anywhere
+            print("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")  # Inform the user
+            logging.info(
+                "No rogue devices found across all sites (OrgRogueData.csv written empty)."
+            )  # Log the empty result
+            DataExporter.save_data_to_output([], "OrgRogueData.csv")  # type: ignore[no-untyped-call]  # Write an empty file for consistency
+        print("Security data export completed (3 files generated)")  # Final user-facing summary
+        logging.info(
+            "Completed security policies, intelligence profiles, and rogue data export aggregate."
+        )  # Log completion
+        if emitter:  # Telemetry is enabled
+            emitter.emit_progress_complete(
+                "42", "security_events", 3, 3, False, time.time() - op_start
+            )  # Report completion and duration
 
     @staticmethod
     def rogue_clients(fast: bool = False):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0915
@@ -13690,62 +14232,70 @@ class OrgClientSecurityExporter:
             - Cache hit: If fresh CSV exists, skip fetch entirely.
             - Reduced lookback: Dynamic hours (1h in test) instead of hardcoded 7d.
         """
-        output_file = "OrgRogueClients.csv"
-        if fast:
+        output_file = "OrgRogueClients.csv"  # Destination CSV for this export
+        if fast:  # Fast mode may reuse a fresh cached file
             try:
-                path = FilePathUtils.get_csv_path(output_file)
-                if os.path.exists(path):
-                    age_minutes = (time.time() - os.path.getmtime(path)) / 60.0
-                    if age_minutes < CSV_FRESHNESS_MINUTES:
+                path = FilePathUtils.get_csv_path(output_file)  # Resolve the cached file path
+                if os.path.exists(path):  # A prior export exists
+                    age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # Compute the file's age in minutes
+                    if age_minutes < CSV_FRESHNESS_MINUTES:  # The file is still within the freshness window
                         logging.info(
-                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."
+                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."  # Log the cache hit
                         )
-                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
-                        return
-            except Exception as cache_error:
-                logging.debug(f"Fast mode freshness check failed for {output_file}: {cache_error}")
-        logging.info("Starting export of rogue clients from all sites...")
-        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
-        rogue_duration = f"{lookback_hours}h"
-        TimeUtils.log_dynamic_lookback("rogue clients fetch", lookback_hours)
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-        all_rogue_clients: list[dict[str, Any]] = []
+                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform the user
+                        return  # Skip the API calls entirely
+            except Exception as cache_error:  # Inspecting the cache failed
+                logging.debug(
+                    f"Fast mode freshness check failed for {output_file}: {cache_error}"
+                )  # Note and fall through to fetch
+        logging.info("Starting export of rogue clients from all sites...")  # Log the start of the export
+        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
+        rogue_duration = f"{lookback_hours}h"  # Format the lookback as the API's duration string
+        TimeUtils.log_dynamic_lookback("rogue clients fetch", lookback_hours)  # Log which lookback window is used
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure the site list CSV is current
+        all_rogue_clients: list[dict[str, Any]] = []  # Accumulate rogue clients across all sites
         try:
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-            with open(site_list_path, encoding="utf-8") as f:
-                sites = list(csv.DictReader(f))
-            for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]
-                if ConfigUtils.check_stop_signal():
-                    break
-                site_id = site.get("id")
-                site_name = site.get("name", "Unknown Site")
-                if not site_id:
-                    continue
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve the site list CSV path
+            with open(site_list_path, encoding="utf-8") as f:  # Open the cached site list
+                sites = list(csv.DictReader(f))  # Read all sites as dictionaries
+            for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]  # Iterate sites with a progress bar
+                if ConfigUtils.check_stop_signal():  # The user requested an early stop
+                    break  # Exit the loop gracefully
+                site_id = site.get("id")  # The site's unique ID
+                site_name = site.get("name", "Unknown Site")  # The site's display name
+                if not site_id:  # Defensive: skip rows missing an ID
+                    continue  # Move to the next site
                 try:
-                    response = mistapi.api.v1.sites.insights.listSiteRogueClients(
-                        apisession, site_id, duration=rogue_duration, limit=1000
+                    response = (
+                        mistapi.api.v1.sites.insights.listSiteRogueClients(  # Request rogue clients for this site
+                            apisession, site_id, duration=rogue_duration, limit=1000  # Use the chosen lookback window
+                        )
                     )
-                    clients = mistapi.get_all(response=response, mist_session=apisession)
-                    for client in clients:
-                        client["site_id"] = site_id
-                        client["site_name"] = site_name
-                    all_rogue_clients.extend(clients)
-                    logging.info(f"! Fetched {len(clients)} rogue clients from site: {site_name}")
-                except Exception as e:
-                    logging.warning(f"! Failed to fetch rogue clients from site {site_name}: {e}")
-                    continue
-        except Exception as e:
-            logging.error(f"Failed to process sites for rogue clients: {e}")
-            return
-        if all_rogue_clients:
-            flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_clients)
-            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(sanitized, "OrgRogueClients")  # type: ignore[no-untyped-call]
-            logging.info(f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")
-            print(f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")
-        else:
-            logging.info("No rogue clients found across all sites")
-            print(" No rogue clients detected across all sites")
+                    clients = mistapi.get_all(response=response, mist_session=apisession)  # Page through all results
+                    for client in clients:  # Tag each rogue client with site context
+                        client["site_id"] = site_id  # Record which site detected it
+                        client["site_name"] = site_name  # Record the site name for readability
+                    all_rogue_clients.extend(clients)  # Add this site's rogue clients to the aggregate
+                    logging.info(f"! Fetched {len(clients)} rogue clients from site: {site_name}")  # Per-site summary
+                except Exception as e:  # This site's fetch failed
+                    logging.warning(
+                        f"! Failed to fetch rogue clients from site {site_name}: {e}"
+                    )  # Warn but keep going
+                    continue  # Move to the next site
+        except Exception as e:  # Failure iterating the site list itself
+            logging.error(f"Failed to process sites for rogue clients: {e}")  # Log the broader failure
+            return  # Abort the export
+        if all_rogue_clients:  # At least one rogue client was found
+            flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_clients)  # Flatten nested JSON to CSV rows
+            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
+            DataExporter.save_data_to_output(sanitized, "OrgRogueClients")  # type: ignore[no-untyped-call]  # Write to the output backend
+            logging.info(f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")  # Log the export
+            print(
+                f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients"
+            )  # Report the count to the user
+        else:  # No rogue clients found anywhere
+            logging.info("No rogue clients found across all sites")  # Log the empty result
+            print(" No rogue clients detected across all sites")  # Inform the user
 
     @staticmethod
     def rogue_aps(fast: bool = False):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0915
@@ -13755,60 +14305,62 @@ class OrgClientSecurityExporter:
             - Cache hit: If fresh CSV exists, skip fetch entirely.
             - Reduced lookback: Dynamic hours (1h in test) instead of hardcoded 7d.
         """
-        output_file = "OrgRogueAPs.csv"
-        if fast:
+        output_file = "OrgRogueAPs.csv"  # Destination CSV for this export
+        if fast:  # Fast mode may reuse a fresh cached file
             try:
-                path = FilePathUtils.get_csv_path(output_file)
-                if os.path.exists(path):
-                    age_minutes = (time.time() - os.path.getmtime(path)) / 60.0
-                    if age_minutes < CSV_FRESHNESS_MINUTES:
+                path = FilePathUtils.get_csv_path(output_file)  # Resolve the cached file path
+                if os.path.exists(path):  # A prior export exists
+                    age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # Compute the file's age in minutes
+                    if age_minutes < CSV_FRESHNESS_MINUTES:  # The file is still within the freshness window
                         logging.info(
-                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."
+                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."  # Log the cache hit
                         )
-                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
-                        return
-            except Exception as cache_error:
-                logging.debug(f"Fast mode freshness check failed for {output_file}: {cache_error}")
-        logging.info("Starting export of rogue APs from all sites...")
-        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)
-        rogue_duration = f"{lookback_hours}h"
-        TimeUtils.log_dynamic_lookback("rogue APs fetch", lookback_hours)
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-        all_rogue_aps: list[dict[str, Any]] = []
+                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform the user
+                        return  # Skip the API calls entirely
+            except Exception as cache_error:  # Inspecting the cache failed
+                logging.debug(
+                    f"Fast mode freshness check failed for {output_file}: {cache_error}"
+                )  # Note and fall through to fetch
+        logging.info("Starting export of rogue APs from all sites...")  # Log the start of the export
+        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
+        rogue_duration = f"{lookback_hours}h"  # Format the lookback as the API's duration string
+        TimeUtils.log_dynamic_lookback("rogue APs fetch", lookback_hours)  # Log which lookback window is used
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure the site list CSV is current
+        all_rogue_aps: list[dict[str, Any]] = []  # Accumulate rogue APs across all sites
         try:
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-            with open(site_list_path, encoding="utf-8") as f:
-                sites = list(csv.DictReader(f))
-            for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]
-                if ConfigUtils.check_stop_signal():
-                    break
-                site_id = site.get("id")
-                site_name = site.get("name", "Unknown Site")
-                if not site_id:
-                    continue
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve the site list CSV path
+            with open(site_list_path, encoding="utf-8") as f:  # Open the cached site list
+                sites = list(csv.DictReader(f))  # Read all sites as dictionaries
+            for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]  # Iterate sites with a progress bar
+                if ConfigUtils.check_stop_signal():  # The user requested an early stop
+                    break  # Exit the loop gracefully
+                site_id = site.get("id")  # The site's unique ID
+                site_name = site.get("name", "Unknown Site")  # The site's display name
+                if not site_id:  # Defensive: skip rows missing an ID
+                    continue  # Move to the next site
                 try:
-                    response = mistapi.api.v1.sites.insights.listSiteRogueAPs(
-                        apisession, site_id, duration=rogue_duration, limit=1000
+                    response = mistapi.api.v1.sites.insights.listSiteRogueAPs(  # Request rogue APs for this site
+                        apisession, site_id, duration=rogue_duration, limit=1000  # Use the chosen lookback window
                     )
-                    aps = mistapi.get_all(response=response, mist_session=apisession)
-                    for access_point in aps:
-                        access_point["site_id"] = site_id
-                        access_point["site_name"] = site_name
-                    all_rogue_aps.extend(aps)
-                    logging.info(f"! Fetched {len(aps)} rogue APs from site: {site_name}")
-                except Exception as e:
-                    logging.warning(f"! Failed to fetch rogue APs from site {site_name}: {e}")
-                    continue
-        except Exception as e:
-            logging.error(f"Failed to process sites for rogue APs: {e}")
-            return
-        if all_rogue_aps:
-            flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_aps)
-            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(sanitized, "OrgRogueAPs")  # type: ignore[no-untyped-call]
-            logging.info(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")
-            print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")
-        else:
+                    aps = mistapi.get_all(response=response, mist_session=apisession)  # Page through all results
+                    for access_point in aps:  # Tag each rogue AP with site context
+                        access_point["site_id"] = site_id  # Record which site detected it
+                        access_point["site_name"] = site_name  # Record the site name for readability
+                    all_rogue_aps.extend(aps)  # Add this site's rogue APs to the aggregate
+                    logging.info(f"! Fetched {len(aps)} rogue APs from site: {site_name}")  # Per-site summary
+                except Exception as e:  # This site's fetch failed
+                    logging.warning(f"! Failed to fetch rogue APs from site {site_name}: {e}")  # Warn but keep going
+                    continue  # Move to the next site
+        except Exception as e:  # Failure iterating the site list itself
+            logging.error(f"Failed to process sites for rogue APs: {e}")  # Log the broader failure
+            return  # Abort the export
+        if all_rogue_aps:  # At least one rogue AP was found
+            flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_aps)  # Flatten nested JSON to CSV rows
+            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
+            DataExporter.save_data_to_output(sanitized, "OrgRogueAPs")  # type: ignore[no-untyped-call]  # Write to the output backend
+            logging.info(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")  # Log the export
+            print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")  # Report the count to the user
+        else:  # No rogue APs found anywhere
             logging.info("No rogue APs found across all sites")
             print(" No rogue APs detected across all sites")
 
@@ -14018,22 +14570,24 @@ class GlobalWiredClientReportGenerator:
     @staticmethod
     def _build_remote_params(criteria: dict[str, str], params: dict[str, Any]) -> bool:
         """Add best-effort remote prefilter params. Returns True if any were added."""
-        remote_used = False
-        mac_operator = criteria.get("mac_operator", "")
-        if mac_operator in FilterOperatorEngine.REMOTE_PREFILTER_OPERATORS:
-            mac_value = criteria.get("mac_value", "")
-            if mac_value:
-                params["mac"] = mac_value
-                remote_used = True
-                logging.info(f"Remote prefilter: mac={mac_value}")
-        mfg_operator = criteria.get("mfg_operator", "")
-        if mfg_operator in FilterOperatorEngine.REMOTE_PREFILTER_OPERATORS:
-            mfg_value = criteria.get("mfg_value", "")
-            if mfg_value:
-                params["manufacture"] = mfg_value
-                remote_used = True
-                logging.info(f"Remote prefilter: manufacture={mfg_value}")
-        return remote_used
+        remote_used = False  # Track whether we added any server-side prefilter parameters
+        mac_operator = criteria.get("mac_operator", "")  # The chosen MAC comparison operator (may be empty)
+        if (
+            mac_operator in FilterOperatorEngine.REMOTE_PREFILTER_OPERATORS
+        ):  # Only some operators can be pushed to the API
+            mac_value = criteria.get("mac_value", "")  # The MAC value to prefilter on
+            if mac_value:  # A non-empty value was provided
+                params["mac"] = mac_value  # Add the MAC prefilter to the API query params
+                remote_used = True  # Note that a remote prefilter was applied
+                logging.info(f"Remote prefilter: mac={mac_value}")  # Log the applied prefilter
+        mfg_operator = criteria.get("mfg_operator", "")  # The chosen manufacturer comparison operator
+        if mfg_operator in FilterOperatorEngine.REMOTE_PREFILTER_OPERATORS:  # Only push API-supported operators
+            mfg_value = criteria.get("mfg_value", "")  # The manufacturer value to prefilter on
+            if mfg_value:  # A non-empty value was provided
+                params["manufacture"] = mfg_value  # Add the manufacturer prefilter to the API query params
+                remote_used = True  # Note that a remote prefilter was applied
+                logging.info(f"Remote prefilter: manufacture={mfg_value}")  # Log the applied prefilter
+        return remote_used  # Report whether any server-side prefilter was used
 
     @staticmethod
     def _apply_filters(
@@ -14042,43 +14596,49 @@ class GlobalWiredClientReportGenerator:
         remote_used: bool,
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """Apply local authoritative filtering with AND logic. Returns matched records and metadata."""
-        total_retrieved = len(records)
-        has_filters = criteria is not None and bool(criteria)
-        if not has_filters:
-            metadata = GlobalWiredClientReportGenerator._build_metadata(
+        total_retrieved = len(records)  # How many records the API returned before local filtering
+        has_filters = criteria is not None and bool(criteria)  # Whether any filter criteria were supplied
+        if not has_filters:  # No criteria -- every record passes
+            metadata = GlobalWiredClientReportGenerator._build_metadata(  # Build metadata noting no filtering occurred
                 total_retrieved,
                 total_retrieved,
                 remote_used,
                 False,
                 criteria,
             )
-            return records, metadata
-        matched = [record for record in records if GlobalWiredClientReportGenerator._record_matches(record, criteria)]
-        metadata = GlobalWiredClientReportGenerator._build_metadata(
+            return records, metadata  # Return all records unchanged with metadata
+        matched = [
+            record for record in records if GlobalWiredClientReportGenerator._record_matches(record, criteria)
+        ]  # Keep only records passing all criteria
+        metadata = GlobalWiredClientReportGenerator._build_metadata(  # Build metadata describing the filter results
             total_retrieved,
             len(matched),
             remote_used,
             True,
             criteria,
         )
-        return matched, metadata
+        return matched, metadata  # Return the filtered records plus metadata
 
     @staticmethod
     def _record_matches(record: dict[str, Any], criteria: dict[str, str]) -> bool:
         """Evaluate a single record against all active filter criteria with AND logic."""
-        mac_operator = criteria.get("mac_operator")
-        if mac_operator:
-            mac_value = criteria.get("mac_value", "")
-            field_value = record.get("mac")
-            if not FilterOperatorEngine.evaluate_operator(field_value, mac_operator, mac_value, is_mac=True):
-                return False
-        mfg_operator = criteria.get("mfg_operator")
-        if mfg_operator:
-            mfg_value = criteria.get("mfg_value", "")
-            field_value = record.get("manufacture")
-            if not FilterOperatorEngine.evaluate_operator(field_value, mfg_operator, mfg_value, is_mac=False):
-                return False
-        return True
+        mac_operator = criteria.get("mac_operator")  # The MAC operator to evaluate, if any
+        if mac_operator:  # A MAC filter is active
+            mac_value = criteria.get("mac_value", "")  # The MAC value to compare against
+            field_value = record.get("mac")  # This record's MAC address
+            if not FilterOperatorEngine.evaluate_operator(
+                field_value, mac_operator, mac_value, is_mac=True
+            ):  # Apply the MAC comparison
+                return False  # AND logic: any failed criterion rejects the record
+        mfg_operator = criteria.get("mfg_operator")  # The manufacturer operator to evaluate, if any
+        if mfg_operator:  # A manufacturer filter is active
+            mfg_value = criteria.get("mfg_value", "")  # The manufacturer value to compare against
+            field_value = record.get("manufacture")  # This record's manufacturer field
+            if not FilterOperatorEngine.evaluate_operator(
+                field_value, mfg_operator, mfg_value, is_mac=False
+            ):  # Apply the manufacturer comparison
+                return False  # AND logic: any failed criterion rejects the record
+        return True  # The record passed every active criterion
 
     @staticmethod
     def _build_metadata(
@@ -14439,34 +14999,36 @@ class OrgConfigExporter:
 
         If no MSP privileges are available, provides guidance on requirements.
         """
-        global msp_privileges
+        global msp_privileges  # Read the module-level cache of detected MSP grants
 
-        if not msp_privileges:
+        if not msp_privileges:  # The user has no MSP-level access
             # No MSP privileges detected - show guidance
-            logging.warning("MSP data requires MSP-level privileges (not detected)")
-            print("")
-            print("=" * 60)
-            print("  MSP ACCESS NOT AVAILABLE")
-            print("=" * 60)
-            print("")
-            print("  MSP-level API access requires one of the following:")
-            print("")
-            print("  1. Interactive login with MSP admin credentials:")
-            print("     python MistHelper.py --login")
-            print("")
-            print("  2. A personal API token from an MSP Super User")
-            print("     (The token inherits the user's MSP privileges)")
-            print("")
-            print("  Note: Organization-scoped API tokens CANNOT access MSP APIs.")
-            print("  The token must be from a user who has MSP-level access.")
-            print("")
-            print("  MSP API Endpoints available with proper access:")
-            print("    - GET /api/v1/msps/{msp_id}/orgs (list organizations)")
-            print("    - GET /api/v1/msps/{msp_id}/licenses (MSP licenses)")
-            print("    - GET /api/v1/msps/{msp_id}/stats/orgs (org statistics)")
-            print("    - GET /api/v1/msps/{msp_id}/inventory/{mac} (cross-org device lookup)")
-            print("")
-            return
+            logging.warning("MSP data requires MSP-level privileges (not detected)")  # Log why the export can't run
+            print("")  # Blank spacer line
+            print("=" * 60)  # Top border of the guidance banner
+            print("  MSP ACCESS NOT AVAILABLE")  # Banner title
+            print("=" * 60)  # Bottom border of the banner title
+            print("")  # Blank spacer line
+            print("  MSP-level API access requires one of the following:")  # Introduce the requirements list
+            print("")  # Blank spacer line
+            print("  1. Interactive login with MSP admin credentials:")  # Option 1 heading
+            print("     python MistHelper.py --login")  # The command to use for interactive MSP login
+            print("")  # Blank spacer line
+            print("  2. A personal API token from an MSP Super User")  # Option 2 heading
+            print("     (The token inherits the user's MSP privileges)")  # Clarify how token privileges work
+            print("")  # Blank spacer line
+            print("  Note: Organization-scoped API tokens CANNOT access MSP APIs.")  # Common pitfall warning
+            print("  The token must be from a user who has MSP-level access.")  # Restate the requirement
+            print("")  # Blank spacer line
+            print("  MSP API Endpoints available with proper access:")  # List the endpoints that would unlock
+            print("    - GET /api/v1/msps/{msp_id}/orgs (list organizations)")  # Org listing endpoint
+            print("    - GET /api/v1/msps/{msp_id}/licenses (MSP licenses)")  # License endpoint
+            print("    - GET /api/v1/msps/{msp_id}/stats/orgs (org statistics)")  # Org stats endpoint
+            print(
+                "    - GET /api/v1/msps/{msp_id}/inventory/{mac} (cross-org device lookup)"
+            )  # Inventory lookup endpoint
+            print("")  # Blank spacer line
+            return  # Abort the export -- no MSP access to query
 
         # MSP privileges available - let user select which MSP to query
         print("")
@@ -15372,6 +15934,7 @@ class SiteDeviceExporter:
                 if sanitized:
                     print(f"\n!! Virtual Chassis Summary for {device_name}:")
                     print(f"   * Records exported: {len(sanitized)}")
+                    # If the flattened output includes a 'members' field, show a short summary
                     if "members" in sanitized[0]:
                         print(f"   * VC members: {sanitized[0].get('members', 'N/A')}")
                     if "preprovisioned" in sanitized[0]:
@@ -19714,6 +20277,26 @@ class GatewayTemplateConfigManager:
         ).clone_by_location()
 
 
+class DeviceConfigTemplateClonerManager:
+    """Menu 194: Clone device local config to a new gateway template. Delegated to src.gateway.device_template_cloner."""
+
+    @staticmethod
+    def clone() -> None:  # type: ignore[no-untyped-def]
+        """Menu 194: Fetch gateway device config and create a new org-level gateway template."""
+        from src.gateway.device_template_cloner import (  # pylint: disable=import-outside-toplevel
+            DeviceConfigTemplateClonerManager as Impl,  # Import extracted implementation class
+        )
+
+        Impl(
+            org_id=ConfigUtils.get_cached_or_prompted_org_id(),  # Resolve org_id from cache or prompt
+            apisession=apisession,  # Pass authenticated global API session
+            input_fn=InputUtils.safe_input,  # Pass EOF-safe input wrapper for SSH/container contexts
+            get_csv_path_fn=FilePathUtils.get_csv_path,  # Pass path builder for OS-safe output paths
+            save_data_fn=DataExporter.save_data_to_output,  # Pass CSV writer for output persistence
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,  # Pass PK-aware upsert helper
+        ).clone()  # Delegate all business logic to extracted implementation
+
+
 # ============================================================================
 # SSH RUNNER MANAGER CLASS
 # ============================================================================
@@ -19873,28 +20456,30 @@ class CLIShellManager:
         def resize_terminal():  # type: ignore[no-untyped-def]
             cols, rows = shutil.get_terminal_size()
             resize_msg = json.dumps({"resize": {"width": cols, "height": rows}})
-            if debug:
-                print(f"[DEBUG] Sending resize: {resize_msg}")
-            ws.send(resize_msg)
+            if debug:  # Verbose troubleshooting output is enabled
+                print(f"[DEBUG] Sending resize: {resize_msg}")  # Show the terminal-resize control message being sent
+            ws.send(resize_msg)  # Tell the remote PTY about the new terminal dimensions
 
         def receive_websocket_data():  # type: ignore[no-untyped-def]
-            while ws.connected:
+            while ws.connected:  # Keep reading while the WebSocket stays open
                 try:
-                    data = ws.recv()
-                    if isinstance(data, bytes):
-                        data = data.decode("utf-8", errors="ignore")
-                    if debug:
-                        print(f"[DEBUG] Raw recv: {repr(data)}")
-                    if data and isinstance(data, str):
-                        stream.feed(data)
-                        for row_index in sorted(screen.dirty):
-                            sys.stdout.write(f"\x1b[{row_index + 1};1H")
-                            sys.stdout.write(screen.display[row_index] + "\x1b[K")
-                        sys.stdout.flush()
-                        screen.dirty.clear()
-                except Exception as exception:
-                    print(f"\n## Connection lost: {exception} ##")
-                    return
+                    data = ws.recv()  # Block for the next chunk of terminal output
+                    if isinstance(data, bytes):  # Binary frames need decoding to text
+                        data = data.decode("utf-8", errors="ignore")  # Decode as UTF-8, dropping invalid bytes
+                    if debug:  # Verbose troubleshooting output is enabled
+                        print(f"[DEBUG] Raw recv: {repr(data)}")  # Show the raw received payload
+                    if data and isinstance(data, str):  # We have a non-empty text frame to render
+                        stream.feed(data)  # Feed the bytes into the terminal emulator (pyte)
+                        for row_index in sorted(screen.dirty):  # Redraw only the rows the emulator marked changed
+                            sys.stdout.write(f"\x1b[{row_index + 1};1H")  # Move the cursor to the start of that row
+                            sys.stdout.write(
+                                screen.display[row_index] + "\x1b[K"
+                            )  # Write the row text and clear to end of line
+                        sys.stdout.flush()  # Flush so the terminal updates immediately
+                        screen.dirty.clear()  # Reset the dirty set now that the screen is current
+                except Exception as exception:  # The socket closed or a read error occurred
+                    print(f"\n## Connection lost: {exception} ##")  # Notify the user the session dropped
+                    return  # Exit the receive loop
 
         def send_keyboard_input(key):  # type: ignore[no-untyped-def]
             if ws.connected:
@@ -22839,23 +23424,25 @@ class DeviceRebootManager:
     @staticmethod
     def _find_sites_using_templates(template_ids: set[str], id_to_name: dict[str, str]) -> dict[str, tuple]:  # type: ignore[type-arg]
         """Find sites that use the target gateway templates."""
-        site_to_template = {}
+        site_to_template = {}  # Map of site_id -> (template_id, template_name, site_name) for matching sites
         try:
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-            with open(site_list_path, encoding="utf-8") as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    gateway_template_id = row.get("gatewaytemplate_id", "").strip()
-                    if gateway_template_id in template_ids:
-                        site_id = row.get("id", "").strip()
-                        site_name = row.get("name", "").strip()
-                        template_name = id_to_name.get(gateway_template_id, "Unknown")
-                        site_to_template[site_id] = (gateway_template_id, template_name, site_name)
-                        logging.info(f"Found site '{site_name}' using template '{template_name}'")
-        except Exception as error:
-            logging.error(f"! Failed to load site list: {error}")
-            print(f"! Failed to load site list: {error}")
-        return site_to_template
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve the cached site list CSV path
+            with open(site_list_path, encoding="utf-8") as file:  # Open the site list for reading
+                reader = csv.DictReader(file)  # Parse each site row into a dictionary
+                for row in reader:  # Examine every site
+                    gateway_template_id = row.get(
+                        "gatewaytemplate_id", ""
+                    ).strip()  # The gateway template assigned to this site
+                    if gateway_template_id in template_ids:  # This site uses one of the target templates
+                        site_id = row.get("id", "").strip()  # The site's unique ID
+                        site_name = row.get("name", "").strip()  # The site's display name
+                        template_name = id_to_name.get(gateway_template_id, "Unknown")  # Resolve the template's name
+                        site_to_template[site_id] = (gateway_template_id, template_name, site_name)  # Record the match
+                        logging.info(f"Found site '{site_name}' using template '{template_name}'")  # Log the match
+        except Exception as error:  # Reading or parsing the site list failed
+            logging.error(f"! Failed to load site list: {error}")  # Log the failure detail
+            print(f"! Failed to load site list: {error}")  # Inform the user
+        return site_to_template  # Return the site-to-template mapping
 
     @staticmethod
     def _confirm_reboot_operation(targets: list[dict]) -> bool:  # type: ignore[type-arg]
@@ -24635,239 +25222,255 @@ class WLANRadiusTimerManager:
 
     def manage(self) -> None:
         """Main entry point - orchestrates the WLAN timer management workflow."""
-        logging.info("Starting WLAN RADIUS authentication timer management")
-        self._enable_debug_if_requested()
-        if not self._select_site():
-            return
-        if not self._get_org_id():
-            return
-        if not self._fetch_site_info():
-            return
-        self._fetch_all_wlans()
-        self._filter_radius_wlans()
-        if not self.all_radius_wlans:
-            self._print_no_wlans_message()
-            return
-        self._display_wlans()
-        if not self._prompt_wlan_selection():
-            return
-        self._display_current_config()
-        if not self._prompt_new_values():
-            return
-        self._display_behavior_impact()
-        self._display_proposed_changes()
-        if not self._confirm_changes():
-            return
-        self._apply_changes()
-        self._print_completion_message()
+        logging.info("Starting WLAN RADIUS authentication timer management")  # Announce the workflow start
+        self._enable_debug_if_requested()  # Turn on verbose logging if the user asked for it
+        if not self._select_site():  # Prompt for a site; abort if none chosen
+            return  # No site selected -- nothing to manage
+        if not self._get_org_id():  # Resolve the org ID; abort if it can't be determined
+            return  # Without an org ID we cannot fetch templates
+        if not self._fetch_site_info():  # Load site details; abort on failure
+            return  # Site info is required for template resolution
+        self._fetch_all_wlans()  # Gather WLANs from site, template, and org sources
+        self._filter_radius_wlans()  # Reduce to only RADIUS/RadSec WLANs
+        if not self.all_radius_wlans:  # No RADIUS WLANs were found
+            self._print_no_wlans_message()  # Tell the user there is nothing to modify
+            return  # Exit -- no candidates to change
+        self._display_wlans()  # Show the user the candidate WLANs and their timers
+        if not self._prompt_wlan_selection():  # Ask which WLAN to modify; abort if cancelled
+            return  # User declined to pick a WLAN
+        self._display_current_config()  # Show the selected WLAN's current timer config
+        if not self._prompt_new_values():  # Collect new timer values; abort if cancelled
+            return  # User declined to enter new values
+        self._display_behavior_impact()  # Explain how the new values change behavior
+        self._display_proposed_changes()  # Show a before/after diff of the settings
+        if not self._confirm_changes():  # Require explicit confirmation before writing
+            return  # User did not confirm -- make no changes
+        self._apply_changes()  # Push the new timer settings to the Mist API
+        self._print_completion_message()  # Report that the workflow finished
 
     def _enable_debug_if_requested(self) -> None:
         """Enable debug logging if debug mode is requested."""
-        if not self.debug:
-            return
-        self.original_log_level = logging.getLogger().level
-        logging.getLogger().setLevel(logging.DEBUG)
-        logging.debug("Debug mode enabled - verbose output active for WLAN template troubleshooting")
+        if not self.debug:  # Debug mode was not requested
+            return  # Leave the existing log level untouched
+        self.original_log_level = logging.getLogger().level  # Remember the current level so it can be restored later
+        logging.getLogger().setLevel(logging.DEBUG)  # Raise verbosity to DEBUG for troubleshooting
+        logging.debug(
+            "Debug mode enabled - verbose output active for WLAN template troubleshooting"
+        )  # Confirm debug is on
 
     def _select_site(self) -> bool:
         """Prompt user to select a site."""
-        self.site_id = PromptUtils.select_site_with_logging()
-        if not self.site_id:
-            logging.warning("No site selected for WLAN management")
-            print("\n[!] No site selected. Exiting.")
-            return False
-        return True
+        self.site_id = PromptUtils.select_site_with_logging()  # Show the interactive site picker and capture the choice
+        if not self.site_id:  # The user did not select a site
+            logging.warning("No site selected for WLAN management")  # Log the empty selection
+            print("\n[!] No site selected. Exiting.")  # Inform the user and bail out
+            return False  # Signal the caller to abort
+        return True  # A site was selected -- continue
 
     def _get_org_id(self) -> bool:
         """Get organization ID from cache or prompt."""
-        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not self.org_id:
-            logging.error("Could not determine organization ID")
-            print("\n[!] Unable to determine organization ID. Exiting.")
-            return False
-        return True
+        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Reuse a cached org ID or prompt for one
+        if not self.org_id:  # The org ID could not be determined
+            logging.error("Could not determine organization ID")  # Log the failure
+            print("\n[!] Unable to determine organization ID. Exiting.")  # Inform the user and bail out
+            return False  # Signal the caller to abort
+        return True  # An org ID is available -- continue
 
     def _fetch_site_info(self) -> bool:
         """Fetch site information from API."""
-        logging.info(f"Fetching site information for site ID: {self.site_id}")
+        logging.info(f"Fetching site information for site ID: {self.site_id}")  # Log before the API call
         try:
-            response = mistapi.api.v1.sites.sites.getSiteInfo(apisession, self.site_id)
-            if response.status_code != 200:
-                logging.error(f"Failed to fetch site info: HTTP {response.status_code}")
-                print("\n[!] Failed to fetch site information. Exiting.")
-                return False
-            self.site_info = response.data
-            self.site_name = self.site_info.get("name", "Unknown Site")
-            self.site_template_id = self.site_info.get("sitetemplate_id")
-            self._log_site_info()
-            return True
-        except Exception as error:
-            logging.error(f"Error fetching site info: {error}")
-            print(f"\n[!] Error fetching site information: {error}")
-            return False
+            response = mistapi.api.v1.sites.sites.getSiteInfo(apisession, self.site_id)  # Request the site's details
+            if response.status_code != 200:  # The API returned a non-success status
+                logging.error(f"Failed to fetch site info: HTTP {response.status_code}")  # Log the HTTP error
+                print("\n[!] Failed to fetch site information. Exiting.")  # Inform the user
+                return False  # Abort -- we cannot proceed without site info
+            self.site_info = response.data  # Cache the decoded site record
+            self.site_name = self.site_info.get("name", "Unknown Site")  # Extract a display name (fallback if missing)
+            self.site_template_id = self.site_info.get("sitetemplate_id")  # Note any assigned site template
+            self._log_site_info()  # Log the resolved site details
+            return True  # Site info loaded successfully
+        except Exception as error:  # Network or parsing failure
+            logging.error(f"Error fetching site info: {error}")  # Log the exception detail
+            print(f"\n[!] Error fetching site information: {error}")  # Inform the user
+            return False  # Abort on error
 
     def _log_site_info(self) -> None:
         """Log site information details."""
-        logging.info(f"Site: {self.site_name}")
-        if self.site_template_id:
-            logging.info(f"Site Template ID: {self.site_template_id}")
-        else:
-            logging.info("No site template assigned")
+        logging.info(f"Site: {self.site_name}")  # Record the resolved site name
+        if self.site_template_id:  # A site template is assigned
+            logging.info(f"Site Template ID: {self.site_template_id}")  # Log the template ID for traceability
+        else:  # No template is assigned to this site
+            logging.info("No site template assigned")  # Note the absence of a template
 
     def _fetch_all_wlans(self) -> None:
         """Fetch WLANs from all sources (site, template, org)."""
-        self._fetch_site_wlans()
-        self._fetch_site_template_wlans()
-        self._fetch_org_wlans()
+        self._fetch_site_wlans()  # Pull WLANs defined directly on the site
+        self._fetch_site_template_wlans()  # Pull WLANs inherited from the site template
+        self._fetch_org_wlans()  # Pull org WLANs applied via assigned templates
 
     def _fetch_site_wlans(self) -> None:
         """Fetch WLANs configured at site level."""
-        logging.info("Fetching WLANs configured at site level...")
+        logging.info("Fetching WLANs configured at site level...")  # Log before the API call
         try:
-            response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, self.site_id)
-            if response.status_code == 200:
-                self.site_wlans = response.data
-                logging.info(f"Found {len(self.site_wlans)} site-level WLANs")
-            else:
-                logging.warning(f"Failed to fetch site WLANs: HTTP {response.status_code}")
-        except Exception as error:
-            logging.error(f"Error fetching site WLANs: {error}")
+            response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, self.site_id)  # Request site-level WLANs
+            if response.status_code == 200:  # The request succeeded
+                self.site_wlans = response.data  # Cache the returned WLAN list
+                logging.info(f"Found {len(self.site_wlans)} site-level WLANs")  # Report how many were found
+            else:  # Non-success status
+                logging.warning(f"Failed to fetch site WLANs: HTTP {response.status_code}")  # Warn but continue
+        except Exception as error:  # Network or parsing failure
+            logging.error(f"Error fetching site WLANs: {error}")  # Log the exception detail
 
     def _fetch_site_template_wlans(self) -> None:
         """Fetch WLANs from site template if assigned."""
-        if not self.site_template_id:
-            return
-        logging.info("Fetching WLANs from site template...")
+        if not self.site_template_id:  # No site template is assigned
+            return  # Nothing to fetch from a template
+        logging.info("Fetching WLANs from site template...")  # Log before the API call
         try:
-            response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
-                apisession, self.org_id, self.site_template_id
+            response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(  # Request the assigned site template
+                apisession, self.org_id, self.site_template_id  # Scope the lookup to this org and template
             )
-            if response.status_code == 200:
-                template_data = response.data
-                self.template_name = template_data.get("name", "Unknown Template")
-                if "wlans" in template_data and template_data["wlans"]:
-                    self.site_template_wlans = list(template_data["wlans"].values())
-                    logging.info(f"Found {len(self.site_template_wlans)} site template-level WLANs")
-            else:
-                logging.warning(f"Failed to fetch site template: HTTP {response.status_code}")
-        except Exception as error:
-            logging.error(f"Error fetching site template: {error}")
+            if response.status_code == 200:  # The request succeeded
+                template_data = response.data  # Decode the template record
+                self.template_name = template_data.get("name", "Unknown Template")  # Capture a display name
+                if "wlans" in template_data and template_data["wlans"]:  # The template embeds WLAN definitions
+                    self.site_template_wlans = list(template_data["wlans"].values())  # Flatten the WLAN map to a list
+                    logging.info(f"Found {len(self.site_template_wlans)} site template-level WLANs")  # Report the count
+            else:  # Non-success status
+                logging.warning(f"Failed to fetch site template: HTTP {response.status_code}")  # Warn but continue
+        except Exception as error:  # Network or parsing failure
+            logging.error(f"Error fetching site template: {error}")  # Log the exception detail
 
     def _fetch_org_wlans(self) -> None:
         """Fetch org-level WLANs using templates assigned to this site."""
-        logging.info("Fetching org-level WLANs to check for template-based configurations...")
+        logging.info("Fetching org-level WLANs to check for template-based configurations...")  # Log before the work
         try:
-            self._fetch_wlan_templates()
-            self._determine_assigned_templates()
-            self._fetch_and_filter_org_wlans()
-        except Exception as error:
-            logging.error(f"Error fetching org WLANs or templates: {error}")
+            self._fetch_wlan_templates()  # Load every WLAN template in the org
+            self._determine_assigned_templates()  # Work out which templates apply to this site
+            self._fetch_and_filter_org_wlans()  # Pull org WLANs and keep only those on assigned templates
+        except Exception as error:  # Any failure across the multi-step fetch
+            logging.error(f"Error fetching org WLANs or templates: {error}")  # Log the exception detail
 
     def _fetch_wlan_templates(self) -> None:
         """Fetch all WLAN templates from the organization."""
-        logging.debug("Fetching WLAN templates to determine which are assigned to this site")
-        response = mistapi.api.v1.orgs.templates.listOrgTemplates(apisession, self.org_id)
-        if response.status_code == 200:
-            self.wlan_templates = response.data
-            logging.info(f"Found {len(self.wlan_templates)} org-level WLAN templates")
-        else:
-            logging.warning(f"Failed to fetch WLAN templates: HTTP {response.status_code}")
+        logging.debug("Fetching WLAN templates to determine which are assigned to this site")  # Log before the API call
+        response = mistapi.api.v1.orgs.templates.listOrgTemplates(apisession, self.org_id)  # Request all org templates
+        if response.status_code == 200:  # The request succeeded
+            self.wlan_templates = response.data  # Cache the template list
+            logging.info(f"Found {len(self.wlan_templates)} org-level WLAN templates")  # Report the count
+        else:  # Non-success status
+            logging.warning(f"Failed to fetch WLAN templates: HTTP {response.status_code}")  # Warn but continue
 
     def _determine_assigned_templates(self) -> None:
         """Determine which templates are assigned to the selected site."""
-        for wlan_template in self.wlan_templates:
-            if self._is_template_assigned_to_site(wlan_template):
-                self.assigned_template_ids.add(wlan_template.get("id"))
-        logging.info(f"Found {len(self.assigned_template_ids)} WLAN templates assigned to this site")
+        for wlan_template in self.wlan_templates:  # Examine every org template
+            if self._is_template_assigned_to_site(wlan_template):  # The template applies to this site
+                self.assigned_template_ids.add(wlan_template.get("id"))  # Remember its ID for WLAN filtering
+        logging.info(
+            f"Found {len(self.assigned_template_ids)} WLAN templates assigned to this site"
+        )  # Report the count
 
     def _is_template_assigned_to_site(self, wlan_template: dict[str, Any]) -> bool:
         """Check if a WLAN template is assigned to the current site."""
-        applies = wlan_template.get("applies", {})
-        if not isinstance(applies, dict):
-            return False
-        if applies.get("org_id"):
-            return True
-        if self.site_id in applies.get("site_ids", []):
-            return True
-        site_groups = self.site_info.get("sitegroup_ids", [])
-        if any(sg in applies.get("sitegroup_ids", []) for sg in site_groups):
-            return True
-        site_tags = self.site_info.get("wxtag_ids", [])
-        if any(tag in applies.get("wxtag_ids", []) for tag in site_tags):
-            return True
-        return False
+        applies = wlan_template.get("applies", {})  # The template's assignment scope rules
+        if not isinstance(applies, dict):  # Malformed/absent scope object
+            return False  # Treat as not applicable
+        if applies.get("org_id"):  # The template applies org-wide
+            return True  # Org-wide templates apply to every site
+        if self.site_id in applies.get("site_ids", []):  # The site is explicitly listed
+            return True  # Direct site assignment
+        site_groups = self.site_info.get("sitegroup_ids", [])  # Site groups this site belongs to
+        if any(sg in applies.get("sitegroup_ids", []) for sg in site_groups):  # A shared site group matches
+            return True  # Assigned via site group membership
+        site_tags = self.site_info.get("wxtag_ids", [])  # Wx tags applied to this site
+        if any(tag in applies.get("wxtag_ids", []) for tag in site_tags):  # A shared Wx tag matches
+            return True  # Assigned via matching tag
+        return False  # None of the assignment rules matched
 
     def _fetch_and_filter_org_wlans(self) -> None:
         """Fetch org WLANs and filter to those using assigned templates."""
-        response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)
-        if response.status_code != 200:
-            logging.warning(f"Failed to fetch org WLANs: HTTP {response.status_code}")
-            return
-        all_org_wlans = response.data
-        logging.info(f"Found {len(all_org_wlans)} total org WLANs")
-        for wlan in all_org_wlans:
-            wlan_template_id = wlan.get("template_id")
-            if wlan_template_id and wlan_template_id in self.assigned_template_ids:
-                self._add_org_wlan_metadata(wlan, wlan_template_id)
-                self.org_wlans.append(wlan)
-        if self.org_wlans:
-            logging.info(f"Found {len(self.org_wlans)} org WLANs using templates assigned to this site")
+        response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)  # Request every WLAN in the org
+        if response.status_code != 200:  # The request failed
+            logging.warning(f"Failed to fetch org WLANs: HTTP {response.status_code}")  # Warn but continue
+            return  # Nothing to filter without data
+        all_org_wlans = response.data  # Decode the full org WLAN list
+        logging.info(f"Found {len(all_org_wlans)} total org WLANs")  # Report the total count
+        for wlan in all_org_wlans:  # Examine each org WLAN
+            wlan_template_id = wlan.get("template_id")  # The template this WLAN belongs to
+            if (
+                wlan_template_id and wlan_template_id in self.assigned_template_ids
+            ):  # It uses a template assigned to this site
+                self._add_org_wlan_metadata(wlan, wlan_template_id)  # Tag it with inheritance metadata
+                self.org_wlans.append(wlan)  # Keep it as a relevant org WLAN
+        if self.org_wlans:  # At least one relevant org WLAN was kept
+            logging.info(
+                f"Found {len(self.org_wlans)} org WLANs using templates assigned to this site"
+            )  # Report the count
 
     def _add_org_wlan_metadata(self, wlan: dict[str, Any], template_id: str) -> None:
         """Add inheritance metadata to an org WLAN."""
-        wlan["_inheritance_level"] = "org_wlan_with_template"
-        wlan["_wlan_template_id"] = template_id
-        template_info = next((t for t in self.wlan_templates if t.get("id") == template_id), None)
-        wlan["_wlan_template_name"] = (
-            template_info.get("name", "Unknown Template") if template_info else "Unknown Template"
+        wlan["_inheritance_level"] = "org_wlan_with_template"  # Mark where this WLAN sits in the inheritance chain
+        wlan["_wlan_template_id"] = template_id  # Record the source template ID
+        template_info = next(
+            (t for t in self.wlan_templates if t.get("id") == template_id), None
+        )  # Find the template record
+        wlan["_wlan_template_name"] = (  # Store a human-readable template name for display
+            template_info.get("name", "Unknown Template")
+            if template_info
+            else "Unknown Template"  # Fallback if not found
         )
 
     def _uses_radius_auth(self, wlan: dict[str, Any]) -> bool:
         """Check if WLAN uses RADIUS or RadSec authentication."""
-        has_auth_servers = bool(wlan.get("auth_servers"))
-        radsec_config = wlan.get("radsec", {})
-        has_radsec = radsec_config.get("enabled", False) if isinstance(radsec_config, dict) else False
-        auth_config = wlan.get("auth", {})
-        uses_eap = auth_config.get("type", "") in ["eap", "eap192"] if isinstance(auth_config, dict) else False
-        return has_auth_servers or has_radsec or uses_eap
+        has_auth_servers = bool(wlan.get("auth_servers"))  # True if any RADIUS auth servers are configured
+        radsec_config = wlan.get("radsec", {})  # The RadSec sub-configuration (may be absent)
+        has_radsec = (
+            radsec_config.get("enabled", False) if isinstance(radsec_config, dict) else False
+        )  # RadSec turned on?
+        auth_config = wlan.get("auth", {})  # The auth sub-configuration (may be absent)
+        uses_eap = (
+            auth_config.get("type", "") in ["eap", "eap192"] if isinstance(auth_config, dict) else False
+        )  # 802.1X/EAP?
+        return has_auth_servers or has_radsec or uses_eap  # Any RADIUS-style auth signal counts
 
     def _filter_radius_wlans(self) -> None:
         """Filter all WLANs to only those using RADIUS or RadSec."""
-        filtered_site = self._filter_site_wlans()
-        filtered_template = self._filter_site_template_wlans()
-        filtered_org = self._filter_org_wlans()
-        self.all_radius_wlans = filtered_site + filtered_template + filtered_org
+        filtered_site = self._filter_site_wlans()  # RADIUS WLANs defined on the site
+        filtered_template = self._filter_site_template_wlans()  # RADIUS WLANs from the site template
+        filtered_org = self._filter_org_wlans()  # RADIUS WLANs from assigned org templates
+        self.all_radius_wlans = filtered_site + filtered_template + filtered_org  # Combine all sources into one list
 
     def _filter_site_wlans(self) -> list[dict[str, Any]]:
         """Filter site WLANs and add inheritance metadata."""
-        filtered = []
-        for wlan in self.site_wlans:
-            if self._uses_radius_auth(wlan):
-                wlan["_inheritance_level"] = "site"
-                wlan["_inheritance_source"] = f"Site: {self.site_name}"
-                filtered.append(wlan)
-        return filtered
+        filtered = []  # Collect site WLANs that use RADIUS auth
+        for wlan in self.site_wlans:  # Examine each site-level WLAN
+            if self._uses_radius_auth(wlan):  # Keep only RADIUS/RadSec/EAP WLANs
+                wlan["_inheritance_level"] = "site"  # Mark its inheritance level for display
+                wlan["_inheritance_source"] = f"Site: {self.site_name}"  # Describe where it comes from
+                filtered.append(wlan)  # Add it to the result list
+        return filtered  # Return the RADIUS site WLANs
 
     def _filter_site_template_wlans(self) -> list[dict[str, Any]]:
         """Filter site template WLANs and add inheritance metadata."""
-        filtered = []
-        for wlan in self.site_template_wlans:
-            if self._uses_radius_auth(wlan):
-                wlan["_inheritance_level"] = "site_template"
-                wlan["_inheritance_source"] = f"Site Template: {self.template_name}"
-                wlan["_template_id"] = self.site_template_id
-                filtered.append(wlan)
-        return filtered
+        filtered = []  # Collect template WLANs that use RADIUS auth
+        for wlan in self.site_template_wlans:  # Examine each site-template WLAN
+            if self._uses_radius_auth(wlan):  # Keep only RADIUS/RadSec/EAP WLANs
+                wlan["_inheritance_level"] = "site_template"  # Mark its inheritance level
+                wlan["_inheritance_source"] = f"Site Template: {self.template_name}"  # Describe its source template
+                wlan["_template_id"] = self.site_template_id  # Record the template ID for later writes
+                filtered.append(wlan)  # Add it to the result list
+        return filtered  # Return the RADIUS template WLANs
 
     def _filter_org_wlans(self) -> list[dict[str, Any]]:
         """Filter org WLANs and add inheritance metadata."""
-        filtered = []
-        for wlan in self.org_wlans:
-            if self._uses_radius_auth(wlan):
-                template_name_wlan = wlan.get("_wlan_template_name", "Unknown Template")
-                wlan["_inheritance_source"] = f"Org WLAN using template: {template_name_wlan}"
-                filtered.append(wlan)
-        return filtered
+        filtered = []  # Collect org WLANs that use RADIUS auth
+        for wlan in self.org_wlans:  # Examine each relevant org WLAN
+            if self._uses_radius_auth(wlan):  # Keep only RADIUS/RadSec/EAP WLANs
+                template_name_wlan = wlan.get("_wlan_template_name", "Unknown Template")  # The source template's name
+                wlan["_inheritance_source"] = f"Org WLAN using template: {template_name_wlan}"  # Describe its source
+                filtered.append(wlan)  # Add it to the result list
+        return filtered  # Return the RADIUS org WLANs
 
     def _print_no_wlans_message(self) -> None:
         """Print message when no RADIUS/RadSec WLANs are found."""
@@ -24877,387 +25480,445 @@ class WLANRadiusTimerManager:
 
     def _display_wlans(self) -> None:
         """Display all RADIUS/RadSec WLANs with current configuration."""
-        print(f"\n{'=' * 100}")
-        print(f"RADIUS/RadSec Authenticated WLANs at Site: {self.site_name}")
-        print(f"{'=' * 100}\n")
-        for index, wlan in enumerate(self.all_radius_wlans, start=1):
-            self._display_single_wlan(index, wlan)
-        print(f"{'=' * 100}\n")
+        print(f"\n{'=' * 100}")  # Top border of the WLAN list banner
+        print(f"RADIUS/RadSec Authenticated WLANs at Site: {self.site_name}")  # Banner title with the site name
+        print(f"{'=' * 100}\n")  # Bottom border of the WLAN list banner
+        for index, wlan in enumerate(self.all_radius_wlans, start=1):  # Number each WLAN from 1 for the user
+            self._display_single_wlan(index, wlan)  # Render this WLAN's details
+        print(f"{'=' * 100}\n")  # Closing border after the full list
 
     def _display_single_wlan(self, index: int, wlan: dict[str, Any]) -> None:
         """Display a single WLAN's information."""
-        ssid = wlan.get("ssid", "Unknown SSID")
-        wlan_id = wlan.get("id", "Unknown ID")
-        enabled = wlan.get("enabled", False)
-        inheritance = wlan.get("_inheritance_level", "unknown")
-        source = wlan.get("_inheritance_source", "Unknown")
-        timeout = wlan.get("auth_servers_timeout", 5)
-        retries = wlan.get("auth_servers_retries", 2)
-        selection = wlan.get("auth_server_selection", "ordered")
-        fast_timers = wlan.get("fast_dot1x_timers", False)
-        auth_servers = wlan.get("auth_servers", [])
-        server_count = len(auth_servers) if auth_servers else 0
-        radsec_config = wlan.get("radsec", {})
-        radsec_enabled = radsec_config.get("enabled", False) if isinstance(radsec_config, dict) else False
-        print(f"[{index}] SSID: {ssid}")
-        print(f"    ID: {wlan_id}")
-        print(f"    Status: {'Enabled' if enabled else 'Disabled'}")
-        print(f"    Inheritance: {inheritance.upper()} - {source}")
-        print("    ")
-        print("    Authentication Configuration:")
-        print(f"      - RADIUS Servers: {server_count}")
-        print(f"      - RadSec: {'Enabled' if radsec_enabled else 'Disabled'}")
-        print("    ")
-        print("    Current Timer Settings:")
-        print(f"      - auth_servers_timeout: {timeout} seconds")
-        print(f"      - auth_servers_retries: {retries}")
-        print(f"      - auth_server_selection: {selection}")
-        print(f"      - fast_dot1x_timers: {fast_timers}")
-        print("")
+        ssid = wlan.get("ssid", "Unknown SSID")  # The WLAN's broadcast name (fallback if missing)
+        wlan_id = wlan.get("id", "Unknown ID")  # The WLAN's unique identifier
+        enabled = wlan.get("enabled", False)  # Whether the WLAN is currently active
+        inheritance = wlan.get("_inheritance_level", "unknown")  # Where the WLAN is defined (site/template/org)
+        source = wlan.get("_inheritance_source", "Unknown")  # Human-readable description of the source
+        timeout = wlan.get("auth_servers_timeout", 5)  # Current per-attempt RADIUS timeout
+        retries = wlan.get("auth_servers_retries", 2)  # Current RADIUS retry count
+        selection = wlan.get("auth_server_selection", "ordered")  # Current server-selection mode
+        fast_timers = wlan.get("fast_dot1x_timers", False)  # Whether fast 802.1X timers are enabled
+        auth_servers = wlan.get("auth_servers", [])  # The configured RADIUS servers (may be empty)
+        server_count = len(auth_servers) if auth_servers else 0  # How many RADIUS servers are defined
+        radsec_config = wlan.get("radsec", {})  # The RadSec sub-configuration (may be absent)
+        radsec_enabled = radsec_config.get("enabled", False) if isinstance(radsec_config, dict) else False  # RadSec on?
+        print(f"[{index}] SSID: {ssid}")  # Show the menu index and SSID
+        print(f"    ID: {wlan_id}")  # Show the WLAN ID
+        print(f"    Status: {'Enabled' if enabled else 'Disabled'}")  # Show enabled/disabled state
+        print(f"    Inheritance: {inheritance.upper()} - {source}")  # Show where the WLAN comes from
+        print("    ")  # Indented spacer line
+        print("    Authentication Configuration:")  # Sub-header for auth details
+        print(f"      - RADIUS Servers: {server_count}")  # Number of RADIUS servers
+        print(f"      - RadSec: {'Enabled' if radsec_enabled else 'Disabled'}")  # RadSec on/off
+        print("    ")  # Indented spacer line
+        print("    Current Timer Settings:")  # Sub-header for timer values
+        print(f"      - auth_servers_timeout: {timeout} seconds")  # Current timeout value
+        print(f"      - auth_servers_retries: {retries}")  # Current retry value
+        print(f"      - auth_server_selection: {selection}")  # Current selection mode
+        print(f"      - fast_dot1x_timers: {fast_timers}")  # Current fast-timer flag
+        print("")  # Blank spacer line between WLANs
 
     def _prompt_wlan_selection(self) -> bool:
         """Prompt user to select a WLAN to modify."""
         try:
-            selection_input = (
+            selection_input = (  # Ask which WLAN to edit, allowing 'q' to quit
                 InputUtils.safe_input(
                     f"Select WLAN to modify (1-{len(self.all_radius_wlans)}) or 'q' to quit: ", context="wlan_selection"
                 )
-                .strip()
-                .lower()
+                .strip()  # Trim surrounding whitespace
+                .lower()  # Normalize to lowercase so 'Q' also works
             )
-            if selection_input == "q":
-                print("\n[*] Exiting WLAN management.")
-                return False
-            selected_index = int(selection_input) - 1
-            if selected_index < 0 or selected_index >= len(self.all_radius_wlans):
-                print(f"\n[!] Invalid selection. Must be between 1 and {len(self.all_radius_wlans)}.")
-                return False
-            self.selected_wlan = self.all_radius_wlans[selected_index]
-            return True
-        except ValueError:
-            print(f"\n[!] Invalid input. Please enter a number between 1 and {len(self.all_radius_wlans)}.")
-            return False
+            if selection_input == "q":  # User chose to quit the picker
+                print("\n[*] Exiting WLAN management.")  # Acknowledge the exit
+                return False  # Signal the caller to abort
+            selected_index = int(selection_input) - 1  # Convert the 1-based choice to a 0-based list index
+            if selected_index < 0 or selected_index >= len(self.all_radius_wlans):  # Index out of range
+                print(
+                    f"\n[!] Invalid selection. Must be between 1 and {len(self.all_radius_wlans)}."
+                )  # Reject the choice
+                return False  # Signal the caller to abort
+            self.selected_wlan = self.all_radius_wlans[selected_index]  # Record the chosen WLAN
+            return True  # A valid WLAN was selected
+        except ValueError:  # The input was not a number
+            print(
+                f"\n[!] Invalid input. Please enter a number between 1 and {len(self.all_radius_wlans)}."
+            )  # Reject non-numeric input
+            return False  # Signal the caller to abort
 
     def _display_current_config(self) -> None:
         """Display current configuration of selected WLAN."""
-        wlan = self._get_selected_wlan()
-        print(f"\n{'=' * 100}")
-        print(f"Modifying WLAN: {wlan.get('ssid')}")
-        print(f"Inheritance: {wlan.get('_inheritance_level', 'unknown').upper()}")
-        print(f"{'=' * 100}\n")
-        print("Current Configuration:")
-        print(f"  auth_servers_timeout: {wlan.get('auth_servers_timeout', 5)} seconds")
-        print(f"  auth_servers_retries: {wlan.get('auth_servers_retries', 2)}")
-        print(f"  auth_server_selection: {wlan.get('auth_server_selection', 'ordered')}")
-        print(f"  fast_dot1x_timers: {wlan.get('fast_dot1x_timers', False)}")
-        print("")
+        wlan = self._get_selected_wlan()  # Fetch the WLAN the user picked
+        print(f"\n{'=' * 100}")  # Top border of the config banner
+        print(f"Modifying WLAN: {wlan.get('ssid')}")  # Show which SSID is being edited
+        print(f"Inheritance: {wlan.get('_inheritance_level', 'unknown').upper()}")  # Show where the WLAN is defined
+        print(f"{'=' * 100}\n")  # Bottom border of the config banner
+        print("Current Configuration:")  # Header for the current values
+        print(f"  auth_servers_timeout: {wlan.get('auth_servers_timeout', 5)} seconds")  # Current per-attempt timeout
+        print(f"  auth_servers_retries: {wlan.get('auth_servers_retries', 2)}")  # Current retry count
+        print(
+            f"  auth_server_selection: {wlan.get('auth_server_selection', 'ordered')}"
+        )  # Current server-selection mode
+        print(f"  fast_dot1x_timers: {wlan.get('fast_dot1x_timers', False)}")  # Whether fast 802.1X timers are on
+        print("")  # Blank spacer line
 
     def _prompt_new_values(self) -> bool:
         """Prompt user for new timer values."""
-        print("Enter new values (press Enter to keep current):\n")
+        print("Enter new values (press Enter to keep current):\n")  # Tell the user blank entries keep current values
         try:
-            self._prompt_timeout()
-            self._prompt_retries()
-            self._prompt_selection()
-            self._prompt_fast_timers()
-            return True
-        except ValueError as error:
-            print(f"\n[!] Invalid input: {error}. Exiting.")
-            return False
+            self._prompt_timeout()  # Ask for the new auth_servers_timeout
+            self._prompt_retries()  # Ask for the new auth_servers_retries
+            self._prompt_selection()  # Ask for the new auth_server_selection
+            self._prompt_fast_timers()  # Ask whether to enable fast 802.1X timers
+            return True  # All prompts completed successfully
+        except ValueError as error:  # A prompt received an unparseable value
+            print(f"\n[!] Invalid input: {error}. Exiting.")  # Inform the user and abort
+            return False  # Signal the caller to abort
 
     def _prompt_timeout(self) -> None:
         """Prompt for auth_servers_timeout value."""
-        wlan = self._get_selected_wlan()
-        current = wlan.get("auth_servers_timeout", 5)
-        timeout_input = InputUtils.safe_input(
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        current = wlan.get("auth_servers_timeout", 5)  # Current timeout, defaulting to 5 seconds
+        timeout_input = InputUtils.safe_input(  # Prompt with the current value as the default
             f"auth_servers_timeout (1-30) [{current}]: ", default_value=str(current), context="timeout_input"
-        ).strip()
-        self.new_timeout = int(timeout_input) if timeout_input else current
-        if self.new_timeout < 1 or self.new_timeout > 30:
-            print("\n[!] Timeout must be between 1 and 30 seconds. Using current value.")
-            self.new_timeout = current
+        ).strip()  # Trim whitespace from the response
+        self.new_timeout = int(timeout_input) if timeout_input else current  # Parse the entry or keep current
+        if self.new_timeout < 1 or self.new_timeout > 30:  # Validate the allowed range
+            print("\n[!] Timeout must be between 1 and 30 seconds. Using current value.")  # Reject out-of-range input
+            self.new_timeout = current  # Fall back to the existing value
 
     def _prompt_retries(self) -> None:
         """Prompt for auth_servers_retries value."""
-        wlan = self._get_selected_wlan()
-        current = wlan.get("auth_servers_retries", 2)
-        retries_input = InputUtils.safe_input(
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        current = wlan.get("auth_servers_retries", 2)  # Current retry count, defaulting to 2
+        retries_input = InputUtils.safe_input(  # Prompt with the current value as the default
             f"auth_servers_retries (0-10) [{current}]: ", default_value=str(current), context="retries_input"
-        ).strip()
-        self.new_retries = int(retries_input) if retries_input else current
-        if self.new_retries < 0 or self.new_retries > 10:
-            print("\n[!] Retries must be between 0 and 10. Using current value.")
-            self.new_retries = current
+        ).strip()  # Trim whitespace from the response
+        self.new_retries = int(retries_input) if retries_input else current  # Parse the entry or keep current
+        if self.new_retries < 0 or self.new_retries > 10:  # Validate the allowed range
+            print("\n[!] Retries must be between 0 and 10. Using current value.")  # Reject out-of-range input
+            self.new_retries = current  # Fall back to the existing value
 
     def _prompt_selection(self) -> None:
         """Prompt for auth_server_selection value."""
-        wlan = self._get_selected_wlan()
-        current = wlan.get("auth_server_selection", "ordered")
-        selection_input = (
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        current = wlan.get("auth_server_selection", "ordered")  # Current selection mode, defaulting to ordered
+        selection_input = (  # Prompt with the current value as the default
             InputUtils.safe_input(
                 f"auth_server_selection (ordered/unordered) [{current}]: ",
                 default_value=current,
                 context="selection_input",
             )
-            .strip()
-            .lower()
+            .strip()  # Trim whitespace from the response
+            .lower()  # Normalize to lowercase for comparison
         )
-        self.new_selection = selection_input if selection_input in ["ordered", "unordered"] else current
+        self.new_selection = (
+            selection_input if selection_input in ["ordered", "unordered"] else current
+        )  # Accept only valid modes
 
     def _prompt_fast_timers(self) -> None:
         """Prompt for fast_dot1x_timers value."""
-        wlan = self._get_selected_wlan()
-        current = wlan.get("fast_dot1x_timers", False)
-        fast_input = (
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        current = wlan.get("fast_dot1x_timers", False)  # Current fast-timer flag, defaulting to False
+        fast_input = (  # Prompt with the current value as the default
             InputUtils.safe_input(
                 f"fast_dot1x_timers (true/false) [{str(current).lower()}]: ",
                 default_value=str(current).lower(),
                 context="fast_timers_input",
             )
-            .strip()
-            .lower()
+            .strip()  # Trim whitespace from the response
+            .lower()  # Normalize to lowercase for comparison
         )
-        self.new_fast = fast_input == "true" if fast_input in ["true", "false"] else current
+        self.new_fast = (
+            fast_input == "true" if fast_input in ["true", "false"] else current
+        )  # Parse the boolean or keep current
 
     def _display_behavior_impact(self) -> None:
         """Display calculated authentication behavior impact."""
-        wlan = self._get_selected_wlan()
-        print(f"\n{'=' * 100}")
-        print("Calculated Authentication Behavior:")
-        print(f"{'=' * 100}\n")
-        auth_servers = wlan.get("auth_servers", [])
-        server_count = len(auth_servers) if auth_servers else 1
-        single_server_max = self.new_timeout * self.new_retries
-        all_servers_max = single_server_max * server_count
-        self._print_radius_config(server_count)
-        self._print_timeout_behavior(single_server_max)
-        self._print_failover_behavior(server_count, all_servers_max)
-        self._print_fast_timer_info()
-        self._print_client_experience(server_count, single_server_max, all_servers_max)
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        print(f"\n{'=' * 100}")  # Top border of the behavior banner
+        print("Calculated Authentication Behavior:")  # Banner title
+        print(f"{'=' * 100}\n")  # Bottom border of the behavior banner
+        auth_servers = wlan.get("auth_servers", [])  # The configured RADIUS servers (may be empty)
+        server_count = len(auth_servers) if auth_servers else 1  # Count servers, assuming 1 if none listed
+        single_server_max = self.new_timeout * self.new_retries  # Worst-case seconds per server
+        all_servers_max = single_server_max * server_count  # Worst-case seconds across every server
+        self._print_radius_config(server_count)  # Show the server count and selection mode
+        self._print_timeout_behavior(single_server_max)  # Show per-server timeout math
+        self._print_failover_behavior(server_count, all_servers_max)  # Show failover/load-balancing behavior
+        self._print_fast_timer_info()  # Show the 802.1X fast-timer impact
+        self._print_client_experience(server_count, single_server_max, all_servers_max)  # Show expected client timings
 
     def _print_radius_config(self, server_count: int) -> None:
         """Print RADIUS server configuration details."""
-        print("RADIUS Server Configuration:")
-        print(f"  - Configured servers: {server_count}")
-        print(f"  - Server selection mode: {self.new_selection}")
-        print("")
+        print("RADIUS Server Configuration:")  # Section header
+        print(f"  - Configured servers: {server_count}")  # How many RADIUS servers are defined
+        print(f"  - Server selection mode: {self.new_selection}")  # Ordered vs unordered selection
+        print("")  # Blank spacer line
 
     def _print_timeout_behavior(self, single_server_max: int) -> None:
         """Print timeout behavior details."""
-        print("Timeout Behavior:")
-        print(f"  - Timeout per attempt: {self.new_timeout} seconds")
-        print(f"  - Retry attempts per server: {self.new_retries}")
-        print(
+        print("Timeout Behavior:")  # Section header
+        print(f"  - Timeout per attempt: {self.new_timeout} seconds")  # Seconds before one attempt gives up
+        print(f"  - Retry attempts per server: {self.new_retries}")  # How many times each server is retried
+        print(  # Worst-case time for a single server, with the math shown
             f"  - Maximum time per server: {single_server_max} seconds ({self.new_timeout}s x {self.new_retries} retries)"  # noqa: E501
         )
-        print("")
+        print("")  # Blank spacer line
 
     def _print_failover_behavior(self, server_count: int, all_servers_max: int) -> None:
         """Print failover or single-server behavior details."""
-        if server_count > 1:
-            if self.new_selection == "ordered":
-                print("Failover Behavior (ordered mode):")
-                print("  - Primary server: Server #1 (always tries first)")
-                print(f"  - Failover sequence: Server #1 -> Server #2 -> ... -> Server #{server_count}")
-                print("  - Returns to Server #1 for next authentication")
-                print(f"  - Maximum time if all servers fail: {all_servers_max} seconds")
-            else:
-                print("Load Balancing Behavior (unordered mode):")
-                print("  - Server selection: Round-robin or random")
-                print("  - No server preference")
-                print(f"  - Maximum time if all servers fail: {all_servers_max} seconds")
-        else:
-            single_max = self.new_timeout * self.new_retries
-            print("Single Server Behavior:")
-            print(f"  - Maximum authentication failure time: {single_max} seconds")
-        print("")
+        if server_count > 1:  # Multiple servers -- failover/load-balancing applies
+            if self.new_selection == "ordered":  # Ordered mode tries servers in sequence
+                print("Failover Behavior (ordered mode):")  # Section header for ordered failover
+                print("  - Primary server: Server #1 (always tries first)")  # Server #1 is always primary
+                print(
+                    f"  - Failover sequence: Server #1 -> Server #2 -> ... -> Server #{server_count}"
+                )  # Show the order
+                print("  - Returns to Server #1 for next authentication")  # Next auth restarts at the primary
+                print(f"  - Maximum time if all servers fail: {all_servers_max} seconds")  # Worst-case total time
+            else:  # Unordered mode load-balances across servers
+                print("Load Balancing Behavior (unordered mode):")  # Section header for load balancing
+                print("  - Server selection: Round-robin or random")  # How servers are chosen
+                print("  - No server preference")  # No primary in unordered mode
+                print(f"  - Maximum time if all servers fail: {all_servers_max} seconds")  # Worst-case total time
+        else:  # Only one server is configured
+            single_max = self.new_timeout * self.new_retries  # Worst-case time for the lone server
+            print("Single Server Behavior:")  # Section header for the single-server case
+            print(f"  - Maximum authentication failure time: {single_max} seconds")  # Worst-case failure time
+        print("")  # Blank spacer line
 
     def _print_fast_timer_info(self) -> None:
         """Print fast 802.1X timer information."""
-        quiet_period = self.new_timeout / 2
-        transmit_period = self.new_timeout / 2
-        supplicant_timeout = 10
-        max_requests = 3
-        if self.new_fast:
-            print("Fast 802.1X Timers (ENABLED):")
-            print(f"  - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")
-            print(f"  - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)")
-            print(f"  - retries: {self.new_retries} (from auth_servers_retries)")
-            print(f"  - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")
-            print(f"  - max-requests: {max_requests} (fixed default)")
-            print("")
-            print("  Impact: Faster authentication and retry cycles")
-            print("  Best for: Modern clients, stable networks, quick roaming")
-        else:
-            print("Standard 802.1X Timers (DISABLED):")
-            print("  - Current mode: Uses standard 802.1X defaults")
-            print("  - quiet-period: ~60 seconds (standard default)")
-            print("  - transmit-period: ~30 seconds (standard default)")
-            print("")
-            print("  If fast_dot1x_timers were enabled, would calculate:")
-            print(f"    - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")
-            print(f"    - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)")
-            print(f"    - retries: {self.new_retries} (from auth_servers_retries)")
-            print(f"    - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")
-            print(f"    - max-requests: {max_requests} (fixed default)")
-            print("")
-            print("  Impact: Slower but more conservative authentication")
-            print("  Best for: Legacy clients, unstable networks, maximum compatibility")
-        print("")
+        quiet_period = self.new_timeout / 2  # Derived quiet-period when fast timers are enabled
+        transmit_period = self.new_timeout / 2  # Derived transmit-period when fast timers are enabled
+        supplicant_timeout = 10  # Fixed default supplicant timeout in seconds
+        max_requests = 3  # Fixed default maximum EAP requests
+        if self.new_fast:  # Fast 802.1X timers are being enabled
+            print("Fast 802.1X Timers (ENABLED):")  # Section header for the enabled case
+            print(f"  - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")  # Derived quiet-period
+            print(
+                f"  - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)"
+            )  # Derived transmit-period
+            print(
+                f"  - retries: {self.new_retries} (from auth_servers_retries)"
+            )  # Retries inherited from the timer setting
+            print(f"  - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")  # Fixed supplicant timeout
+            print(f"  - max-requests: {max_requests} (fixed default)")  # Fixed max-requests value
+            print("")  # Blank spacer line
+            print("  Impact: Faster authentication and retry cycles")  # Summarize the benefit
+            print("  Best for: Modern clients, stable networks, quick roaming")  # Recommend ideal conditions
+        else:  # Fast timers remain disabled (standard 802.1X defaults)
+            print("Standard 802.1X Timers (DISABLED):")  # Section header for the disabled case
+            print("  - Current mode: Uses standard 802.1X defaults")  # Explain the current behavior
+            print("  - quiet-period: ~60 seconds (standard default)")  # Standard quiet-period
+            print("  - transmit-period: ~30 seconds (standard default)")  # Standard transmit-period
+            print("")  # Blank spacer line
+            print("  If fast_dot1x_timers were enabled, would calculate:")  # Show what enabling would produce
+            print(
+                f"    - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)"
+            )  # Hypothetical quiet-period
+            print(
+                f"    - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)"
+            )  # Hypothetical transmit-period
+            print(f"    - retries: {self.new_retries} (from auth_servers_retries)")  # Hypothetical retries
+            print(
+                f"    - supplicant-timeout: {supplicant_timeout} seconds (fixed default)"
+            )  # Hypothetical supplicant timeout
+            print(f"    - max-requests: {max_requests} (fixed default)")  # Hypothetical max-requests
+            print("")  # Blank spacer line
+            print("  Impact: Slower but more conservative authentication")  # Summarize the tradeoff
+            print("  Best for: Legacy clients, unstable networks, maximum compatibility")  # Recommend ideal conditions
+        print("")  # Blank spacer line
 
     def _print_client_experience(self, server_count: int, single_max: int, all_max: int) -> None:
         """Print expected client experience information."""
-        print("Expected Client Experience:")
-        print("  - Success case: 1-3 seconds (single request/response)")
-        print(f"  - First server timeout: ~{single_max} seconds")
-        if server_count > 1:
-            print(f"  - All servers fail: ~{all_max} seconds")
-        print("")
+        print("Expected Client Experience:")  # Section header
+        print("  - Success case: 1-3 seconds (single request/response)")  # Typical happy-path timing
+        print(f"  - First server timeout: ~{single_max} seconds")  # Delay if the first server is unresponsive
+        if server_count > 1:  # Only relevant when multiple servers exist
+            print(f"  - All servers fail: ~{all_max} seconds")  # Worst-case delay across all servers
+        print("")  # Blank spacer line
 
     def _display_proposed_changes(self) -> None:
         """Display proposed configuration changes with warnings."""
-        wlan = self._get_selected_wlan()
-        print(f"{'=' * 100}")
-        print("Proposed Configuration Changes:")
-        print(f"{'=' * 100}")
-        print(f"  auth_servers_timeout: {wlan.get('auth_servers_timeout', 5)} -> {self.new_timeout}")
-        print(f"  auth_servers_retries: {wlan.get('auth_servers_retries', 2)} -> {self.new_retries}")
-        print(f"  auth_server_selection: {wlan.get('auth_server_selection', 'ordered')} -> {self.new_selection}")
-        print(f"  fast_dot1x_timers: {wlan.get('fast_dot1x_timers', False)} -> {self.new_fast}")
-        print("")
-        self._print_inheritance_warning()
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        print(f"{'=' * 100}")  # Top border of the changes banner
+        print("Proposed Configuration Changes:")  # Banner title
+        print(f"{'=' * 100}")  # Bottom border of the changes banner
+        print(
+            f"  auth_servers_timeout: {wlan.get('auth_servers_timeout', 5)} -> {self.new_timeout}"
+        )  # Old -> new timeout
+        print(
+            f"  auth_servers_retries: {wlan.get('auth_servers_retries', 2)} -> {self.new_retries}"
+        )  # Old -> new retries
+        print(
+            f"  auth_server_selection: {wlan.get('auth_server_selection', 'ordered')} -> {self.new_selection}"
+        )  # Old -> new mode
+        print(
+            f"  fast_dot1x_timers: {wlan.get('fast_dot1x_timers', False)} -> {self.new_fast}"
+        )  # Old -> new fast-timer flag
+        print("")  # Blank spacer line
+        self._print_inheritance_warning()  # Warn if the change affects shared templates
 
     def _print_inheritance_warning(self) -> None:
         """Print warning about template inheritance if applicable."""
-        wlan = self._get_selected_wlan()
-        inheritance = wlan.get("_inheritance_level")
-        if inheritance == "site_template":
-            print(f"[!] WARNING: This WLAN is inherited from site template: {wlan.get('_inheritance_source')}")
-            print("[!] Changes will affect ALL sites using this template!")
-        elif inheritance == "org_wlan_with_template":
-            print(f"[!] WARNING: This WLAN is from an org-level WLAN template: {wlan.get('_inheritance_source')}")
-            assignment = wlan.get("_org_template_assignment", "assigned sites")
-            template_name_wlan = wlan.get("_wlan_template_name", "Unknown")
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        inheritance = wlan.get("_inheritance_level")  # Where this WLAN is defined in the hierarchy
+        if inheritance == "site_template":  # The WLAN comes from a shared site template
             print(
+                f"[!] WARNING: This WLAN is inherited from site template: {wlan.get('_inheritance_source')}"
+            )  # Name the template
+            print("[!] Changes will affect ALL sites using this template!")  # Emphasize the blast radius
+        elif inheritance == "org_wlan_with_template":  # The WLAN comes from an org-level WLAN template
+            print(
+                f"[!] WARNING: This WLAN is from an org-level WLAN template: {wlan.get('_inheritance_source')}"
+            )  # Name the source
+            assignment = wlan.get(
+                "_org_template_assignment", "assigned sites"
+            )  # Which sites the template is applied to
+            template_name_wlan = wlan.get("_wlan_template_name", "Unknown")  # The template's display name
+            print(  # Warn that every site using this template is affected
                 f"[!] Changes will affect ALL sites where WLAN template '{template_name_wlan}' is applied: {assignment}"
             )
-        print("")
+        print("")  # Blank spacer line
 
     def _confirm_changes(self) -> bool:
         """Prompt user for confirmation to apply changes."""
-        confirmation = InputUtils.safe_input("Type 'APPLY' to apply these changes: ", context="confirmation").strip()
-        if confirmation != "APPLY":
-            print("\n[*] Changes cancelled. No modifications made.")
-            logging.info("User cancelled WLAN authentication timer changes")
-            return False
-        return True
+        confirmation = InputUtils.safe_input(
+            "Type 'APPLY' to apply these changes: ", context="confirmation"
+        ).strip()  # Require an explicit typed keyword
+        if confirmation != "APPLY":  # The user did not type the exact confirmation word
+            print("\n[*] Changes cancelled. No modifications made.")  # Inform the user nothing changed
+            logging.info("User cancelled WLAN authentication timer changes")  # Log the cancellation
+            return False  # Signal the caller to abort
+        return True  # Confirmation received -- proceed with the update
 
     def _build_update_payload(self) -> dict[str, Any]:
         """Build the update payload for the API call."""
-        return {
-            "auth_servers_timeout": self.new_timeout,
-            "auth_servers_retries": self.new_retries,
-            "auth_server_selection": self.new_selection,
-            "fast_dot1x_timers": self.new_fast,
+        return {  # Assemble only the four timer fields the API should change
+            "auth_servers_timeout": self.new_timeout,  # New per-attempt timeout
+            "auth_servers_retries": self.new_retries,  # New retry count
+            "auth_server_selection": self.new_selection,  # New server-selection mode
+            "fast_dot1x_timers": self.new_fast,  # New fast-timer flag
         }
 
     def _apply_changes(self) -> None:
         """Apply changes to appropriate endpoint based on inheritance."""
-        wlan = self._get_selected_wlan()
-        inheritance = wlan.get("_inheritance_level")
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        inheritance = wlan.get("_inheritance_level")  # Decide which API endpoint owns this WLAN
         try:
-            if inheritance == "site":
-                self._update_site_wlan()
-            elif inheritance == "site_template":
-                self._update_site_template_wlan()
-            elif inheritance == "org_wlan_with_template":
-                self._update_org_wlan()
-            else:
-                print(f"[!] Unknown inheritance level: {inheritance}")
-                logging.error("Unknown inheritance level for WLAN")
-        except Exception as error:
-            print(f"\n[!] Error applying changes: {error}")
-            logging.error(f"Error applying WLAN authentication timer changes: {error}", exc_info=True)
+            if inheritance == "site":  # WLAN lives directly on the site
+                self._update_site_wlan()  # Update via the site WLAN endpoint
+            elif inheritance == "site_template":  # WLAN lives in a site template
+                self._update_site_template_wlan()  # Update via the site-template endpoint
+            elif inheritance == "org_wlan_with_template":  # WLAN is an org WLAN tied to a template
+                self._update_org_wlan()  # Update via the org WLAN endpoint
+            else:  # The inheritance level is unrecognized
+                print(f"[!] Unknown inheritance level: {inheritance}")  # Report the unexpected value
+                logging.error("Unknown inheritance level for WLAN")  # Log the error for diagnosis
+        except Exception as error:  # Any API failure during the write
+            print(f"\n[!] Error applying changes: {error}")  # Inform the user of the failure
+            logging.error(
+                f"Error applying WLAN authentication timer changes: {error}", exc_info=True
+            )  # Log with traceback
 
     def _update_site_wlan(self) -> None:
         """Update a site-level WLAN."""
-        wlan = self._get_selected_wlan()
-        print("\n[*] Updating site-level WLAN...")
-        payload = self._build_update_payload()
-        logging.info(f"Updating site WLAN {wlan.get('id')} with payload: {payload}")
-        response = mistapi.api.v1.sites.wlans.updateSiteWlan(apisession, self.site_id, wlan.get("id"), payload)
-        if response.status_code == 200:
-            print(f"[+] Successfully updated WLAN: {wlan.get('ssid')}")
-            logging.info(f"Successfully updated site WLAN {wlan.get('id')}")
-        else:
-            print(f"[!] Failed to update WLAN: HTTP {response.status_code}")
-            logging.error(f"Failed to update site WLAN: HTTP {response.status_code}, Response: {response.data}")
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        print("\n[*] Updating site-level WLAN...")  # Inform the user the write is starting
+        payload = self._build_update_payload()  # Build the timer-only update body
+        logging.info(f"Updating site WLAN {wlan.get('id')} with payload: {payload}")  # Log before the API call
+        response = mistapi.api.v1.sites.wlans.updateSiteWlan(
+            apisession, self.site_id, wlan.get("id"), payload
+        )  # Push the update
+        if response.status_code == 200:  # The update succeeded
+            print(f"[+] Successfully updated WLAN: {wlan.get('ssid')}")  # Confirm success to the user
+            logging.info(f"Successfully updated site WLAN {wlan.get('id')}")  # Log the success
+        else:  # The update failed
+            print(f"[!] Failed to update WLAN: HTTP {response.status_code}")  # Report the HTTP error
+            logging.error(
+                f"Failed to update site WLAN: HTTP {response.status_code}, Response: {response.data}"
+            )  # Log the detail
 
     def _update_site_template_wlan(self) -> None:
         """Update a site template-level WLAN."""
-        wlan = self._get_selected_wlan()
-        print("\n[*] Updating site template-level WLAN...")
-        template_id = wlan.get("_template_id")
-        wlan_id = wlan.get("id")
-        logging.info(f"Updating site template WLAN {wlan_id} in template {template_id}")
-        template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(apisession, self.org_id, template_id)
-        if template_response.status_code != 200:
-            print(f"[!] Failed to fetch site template: HTTP {template_response.status_code}")
-            logging.error(f"Failed to fetch site template for update: HTTP {template_response.status_code}")
-            return
-        template_data = template_response.data
-        if "wlans" not in template_data or not isinstance(template_data["wlans"], dict):
-            print("[!] Site template does not contain wlans data structure")
-            logging.error("Site template missing wlans dictionary")
-            return
-        wlan_found = False
-        for _wlan_key, wlan_data in template_data["wlans"].items():
-            if wlan_data.get("id") == wlan_id:
-                wlan_data.update(self._build_update_payload())
-                wlan_found = True
-                break
-        if not wlan_found:
-            print("[!] WLAN not found in site template")
-            logging.error(f"WLAN {wlan_id} not found in site template {template_id}")
-            return
-        update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(
-            apisession, self.org_id, template_id, template_data
-        )
-        if update_response.status_code == 200:
-            print(f"[+] Successfully updated site template WLAN: {wlan.get('ssid')}")
-            print("[+] All sites using this template will inherit these changes")
-            logging.info(f"Successfully updated site template WLAN {wlan_id} in template {template_id}")
-        else:
-            print(f"[!] Failed to update site template: HTTP {update_response.status_code}")
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        print("\n[*] Updating site template-level WLAN...")  # Inform the user the write is starting
+        template_id = wlan.get("_template_id")  # The template that owns this WLAN
+        wlan_id = wlan.get("id")  # The WLAN's unique ID within the template
+        logging.info(
+            f"Updating site template WLAN {wlan_id} in template {template_id}"
+        )  # Log before the read-modify-write
+        template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
+            apisession, self.org_id, template_id
+        )  # Fetch current template
+        if template_response.status_code != 200:  # Could not load the template to modify
+            print(f"[!] Failed to fetch site template: HTTP {template_response.status_code}")  # Report the error
             logging.error(
+                f"Failed to fetch site template for update: HTTP {template_response.status_code}"
+            )  # Log the failure
+            return  # Abort -- cannot safely update without the current state
+        template_data = template_response.data  # The full template document to mutate
+        if "wlans" not in template_data or not isinstance(template_data["wlans"], dict):  # Template lacks a WLAN map
+            print("[!] Site template does not contain wlans data structure")  # Report the unexpected shape
+            logging.error("Site template missing wlans dictionary")  # Log the structural problem
+            return  # Abort -- nothing to update
+        wlan_found = False  # Track whether the target WLAN exists in the template
+        for _wlan_key, wlan_data in template_data["wlans"].items():  # Scan every WLAN in the template
+            if wlan_data.get("id") == wlan_id:  # Found the WLAN we intend to change
+                wlan_data.update(self._build_update_payload())  # Apply the new timer values in place
+                wlan_found = True  # Mark that we located and updated it
+                break  # Stop scanning once updated
+        if not wlan_found:  # The WLAN was not present in the template
+            print("[!] WLAN not found in site template")  # Report the miss
+            logging.error(f"WLAN {wlan_id} not found in site template {template_id}")  # Log the failure
+            return  # Abort -- nothing was changed
+        update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(  # Write the modified template back
+            apisession, self.org_id, template_id, template_data  # Send the full mutated document
+        )
+        if update_response.status_code == 200:  # The template write succeeded
+            print(f"[+] Successfully updated site template WLAN: {wlan.get('ssid')}")  # Confirm success
+            print("[+] All sites using this template will inherit these changes")  # Remind the user of the blast radius
+            logging.info(
+                f"Successfully updated site template WLAN {wlan_id} in template {template_id}"
+            )  # Log the success
+        else:  # The template write failed
+            print(f"[!] Failed to update site template: HTTP {update_response.status_code}")  # Report the HTTP error
+            logging.error(  # Log the failure detail
                 f"Failed to update site template: HTTP {update_response.status_code}, Response: {update_response.data}"
             )
 
     def _update_org_wlan(self) -> None:
         """Update an org-level WLAN."""
-        wlan = self._get_selected_wlan()
-        print("\n[*] Updating org-level WLAN...")
-        wlan_id = wlan.get("id")
-        if not wlan_id:
-            print("[!] Missing WLAN ID - cannot update")
-            logging.error("Missing WLAN id for org WLAN update")
-            return
-        payload = self._build_update_payload()
-        logging.info(f"Updating org WLAN {wlan_id} with payload: {payload}")
-        response = mistapi.api.v1.orgs.wlans.updateOrgWlan(apisession, self.org_id, wlan_id, payload)
-        if response.status_code == 200:
-            print(f"[+] Successfully updated org WLAN: {wlan.get('ssid')}")
-            template_name = wlan.get("_wlan_template_name", "Unknown")
-            print(f"[+] WLAN uses template '{template_name}' for its base configuration")
-            logging.info(f"Successfully updated org WLAN {wlan_id}")
-        else:
-            print(f"[!] Failed to update org WLAN: HTTP {response.status_code}")
-            logging.error(f"Failed to update org WLAN: HTTP {response.status_code}, Response: {response.data}")
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        print("\n[*] Updating org-level WLAN...")  # Inform the user the write is starting
+        wlan_id = wlan.get("id")  # The org WLAN's unique ID
+        if not wlan_id:  # Defensive: the WLAN record lacks an ID
+            print("[!] Missing WLAN ID - cannot update")  # Report the missing identifier
+            logging.error("Missing WLAN id for org WLAN update")  # Log the failure
+            return  # Abort -- cannot target the update
+        payload = self._build_update_payload()  # Build the timer-only update body
+        logging.info(f"Updating org WLAN {wlan_id} with payload: {payload}")  # Log before the API call
+        response = mistapi.api.v1.orgs.wlans.updateOrgWlan(apisession, self.org_id, wlan_id, payload)  # Push the update
+        if response.status_code == 200:  # The update succeeded
+            print(f"[+] Successfully updated org WLAN: {wlan.get('ssid')}")  # Confirm success to the user
+            template_name = wlan.get("_wlan_template_name", "Unknown")  # The base template name for context
+            print(
+                f"[+] WLAN uses template '{template_name}' for its base configuration"
+            )  # Clarify the template relationship
+            logging.info(f"Successfully updated org WLAN {wlan_id}")  # Log the success
+        else:  # The update failed
+            print(f"[!] Failed to update org WLAN: HTTP {response.status_code}")  # Report the HTTP error
+            logging.error(
+                f"Failed to update org WLAN: HTTP {response.status_code}, Response: {response.data}"
+            )  # Log the detail
 
     def _print_completion_message(self) -> None:
         """Print completion message."""
-        print("\n[+] WLAN authentication timer management completed successfully")
-        logging.info("WLAN authentication timer management completed")
+        print(
+            "\n[+] WLAN authentication timer management completed successfully"
+        )  # Tell the user the workflow finished
+        logging.info("WLAN authentication timer management completed")  # Log the completion
 
 
 # ============================================================================
@@ -25419,194 +26080,198 @@ class BulkRadiusWLANConfigManager:
 
     def _display_wlans(self) -> None:
         """Display unified table of all RADIUS WLANs with compliance markers."""
-        print("\n" + "-" * 70)
-        print("  RADIUS-ENABLED WLANs")
-        print("-" * 70)
-        print(f"  {'#':<4} {'SSID':<25} {'Level':<12} {'Timeout':<8} {'Retries':<8} {'Fast':<6}")
-        print("-" * 70)
-        display_index = 1
-        combined: list[tuple[dict[str, Any], int | None]] = []
-        for wlan in self.radius_wlans:
-            combined.append((wlan, display_index))
-            display_index += 1
-        for wlan in self.compliant_wlans:
-            combined.append((wlan, None))
-        combined.sort(key=lambda item: item[0].get("ssid", "").lower())
-        for wlan, idx in combined:
-            ssid = wlan.get("ssid", "Unknown")
-            is_compliant = wlan.get("_compliance_status") == "COMPLIANT"
-            suffix = " (COMPLIANT)" if is_compliant else ""
-            ssid_display = (ssid[:13] + suffix) if is_compliant else ssid[:24]
-            level = wlan.get("_inheritance_level", "unknown")[:11]
-            timeout = wlan.get("auth_servers_timeout", 5)
-            retries = wlan.get("auth_servers_retries", 2)
-            fast = "Yes" if wlan.get("fast_dot1x_timers", False) else "No"
-            idx_str = str(idx) if idx is not None else "--"
-            print(f"  {idx_str:<4} {ssid_display:<25} {level:<12} {timeout:<8} {retries:<8} {fast:<6}")
-        print("-" * 70)
-        total = len(self.radius_wlans) + len(self.compliant_wlans)
-        print(
+        print("\n" + "-" * 70)  # Top border of the WLAN table
+        print("  RADIUS-ENABLED WLANs")  # Table title
+        print("-" * 70)  # Separator under the title
+        print(f"  {'#':<4} {'SSID':<25} {'Level':<12} {'Timeout':<8} {'Retries':<8} {'Fast':<6}")  # Column headers
+        print("-" * 70)  # Separator under the headers
+        display_index = 1  # Running 1-based number for selectable (non-compliant) WLANs
+        combined: list[tuple[dict[str, Any], int | None]] = []  # Pairs of (wlan, display index or None for compliant)
+        for wlan in self.radius_wlans:  # Selectable WLANs that need configuration
+            combined.append((wlan, display_index))  # Give each a selectable index
+            display_index += 1  # Advance the index for the next selectable WLAN
+        for wlan in self.compliant_wlans:  # Already-compliant WLANs (shown but not selectable)
+            combined.append((wlan, None))  # No index -- they cannot be selected
+        combined.sort(key=lambda item: item[0].get("ssid", "").lower())  # Sort the table alphabetically by SSID
+        for wlan, idx in combined:  # Render each row in sorted order
+            ssid = wlan.get("ssid", "Unknown")  # The WLAN's SSID (fallback if missing)
+            is_compliant = wlan.get("_compliance_status") == "COMPLIANT"  # Whether this WLAN already meets the target
+            suffix = " (COMPLIANT)" if is_compliant else ""  # Tag compliant rows for clarity
+            ssid_display = (ssid[:13] + suffix) if is_compliant else ssid[:24]  # Truncate SSID to fit the column
+            level = wlan.get("_inheritance_level", "unknown")[:11]  # Inheritance level, truncated to the column width
+            timeout = wlan.get("auth_servers_timeout", 5)  # Current timeout value
+            retries = wlan.get("auth_servers_retries", 2)  # Current retry value
+            fast = "Yes" if wlan.get("fast_dot1x_timers", False) else "No"  # Fast-timer flag as a friendly string
+            idx_str = str(idx) if idx is not None else "--"  # Show the index, or '--' for non-selectable rows
+            print(f"  {idx_str:<4} {ssid_display:<25} {level:<12} {timeout:<8} {retries:<8} {fast:<6}")  # Print the row
+        print("-" * 70)  # Bottom border of the table
+        total = len(self.radius_wlans) + len(self.compliant_wlans)  # Total RADIUS WLANs across both buckets
+        print(  # Summary line of selectable vs compliant counts
             f"  Total: {total} RADIUS WLANs ({len(self.radius_wlans)} selectable, {len(self.compliant_wlans)} compliant)"  # noqa: E501
         )
-        print("")
+        print("")  # Blank spacer line
 
     def _parse_selection(self, user_input: str) -> list | None:  # type: ignore[type-arg]  # noqa: C901, PLR0912
         """Parse user selection input into list of 0-based indices, or None for cancel."""
-        cleaned = user_input.strip().lower()
-        if cleaned in self.CANCEL_KEYWORDS:
-            return None
+        cleaned = user_input.strip().lower()  # Normalize the input for keyword comparison
+        if cleaned in self.CANCEL_KEYWORDS:  # The user asked to cancel
+            return None  # Signal cancellation to the caller
 
-        if cleaned == "all":
-            return list(range(len(self.radius_wlans)))
+        if cleaned == "all":  # The user selected every WLAN
+            return list(range(len(self.radius_wlans)))  # Return all 0-based indices
 
-        selected_indices = []
-        max_count = len(self.radius_wlans)
-        normalized = user_input.lower().replace(" through ", "-").replace("through", "-")
-        parts = [part.strip() for part in normalized.split(",")]
+        selected_indices = []  # Accumulate the parsed 0-based indices
+        max_count = len(self.radius_wlans)  # Upper bound for valid indices
+        normalized = (
+            user_input.lower().replace(" through ", "-").replace("through", "-")
+        )  # Treat 'through' like a range dash
+        parts = [part.strip() for part in normalized.split(",")]  # Split comma-separated selections into pieces
 
-        for part in parts:
-            if "-" in part and not part.startswith("-"):
+        for part in parts:  # Interpret each selection piece
+            if "-" in part and not part.startswith("-"):  # This piece is a range like "3-7"
                 try:
-                    range_parts = part.split("-")
-                    if len(range_parts) == 2:
-                        start = int(range_parts[0].strip()) - 1
-                        end = int(range_parts[1].strip()) - 1
-                        if start > end:
-                            start, end = end, start
-                        for idx in range(start, end + 1):
-                            if 0 <= idx < max_count and idx not in selected_indices:
-                                selected_indices.append(idx)
-                            elif idx >= max_count:
-                                print(f"    [!] Index {idx + 1} out of range (max: {max_count})")
-                except ValueError:
-                    logging.warning(f"Invalid range format: {part}")
-            else:
+                    range_parts = part.split("-")  # Split into start and end
+                    if len(range_parts) == 2:  # A well-formed two-ended range
+                        start = int(range_parts[0].strip()) - 1  # Convert start to 0-based
+                        end = int(range_parts[1].strip()) - 1  # Convert end to 0-based
+                        if start > end:  # Tolerate reversed ranges like "7-3"
+                            start, end = end, start  # Swap so start <= end
+                        for idx in range(start, end + 1):  # Expand the inclusive range
+                            if 0 <= idx < max_count and idx not in selected_indices:  # Valid and not already chosen
+                                selected_indices.append(idx)  # Add this index
+                            elif idx >= max_count:  # Index beyond the list
+                                print(f"    [!] Index {idx + 1} out of range (max: {max_count})")  # Warn the user
+                except ValueError:  # A non-numeric range piece
+                    logging.warning(f"Invalid range format: {part}")  # Log and skip it
+            else:  # This piece is a single index
                 try:
-                    idx = int(part) - 1
-                    if 0 <= idx < max_count and idx not in selected_indices:
-                        selected_indices.append(idx)
-                    elif idx >= max_count:
-                        print(f"    [!] Index {idx + 1} out of range (max: {max_count})")
-                except ValueError:
-                    logging.warning(f"Invalid index: {part}")
+                    idx = int(part) - 1  # Convert to 0-based
+                    if 0 <= idx < max_count and idx not in selected_indices:  # Valid and not already chosen
+                        selected_indices.append(idx)  # Add this index
+                    elif idx >= max_count:  # Index beyond the list
+                        print(f"    [!] Index {idx + 1} out of range (max: {max_count})")  # Warn the user
+                except ValueError:  # A non-numeric single piece
+                    logging.warning(f"Invalid index: {part}")  # Log and skip it
 
-        selected_indices.sort()
-        return selected_indices
+        selected_indices.sort()  # Present the chosen indices in ascending order
+        return selected_indices  # Hand the parsed indices back to the caller
 
     def _display_preview(self) -> None:
         """Display preview of changes that will be applied."""
-        print("\n" + "=" * 70)
-        print("  PREVIEW: CHANGES TO BE APPLIED")
-        print("=" * 70)
-        print("\n  Target settings:")
-        print(f"    auth_servers_timeout: {self.target_timeout} seconds")
-        print(f"    auth_servers_retries: {self.target_retries}")
-        print(f"    fast_dot1x_timers:    {self.target_fast_dot1x}")
-        print(f"\n  WLANs to be updated ({len(self.selected_wlans)} total):")
-        print("-" * 70)
-        for wlan in self.selected_wlans:
-            ssid = wlan.get("ssid", "Unknown")
-            curr_timeout = wlan.get("auth_servers_timeout", 5)
-            curr_retries = wlan.get("auth_servers_retries", 2)
-            curr_fast = wlan.get("fast_dot1x_timers", False)
-            print(f"\n  SSID: {ssid}")
-            print(f"    timeout: {curr_timeout} -> {self.target_timeout}")
-            print(f"    retries: {curr_retries} -> {self.target_retries}")
-            print(f"    fast_dot1x: {curr_fast} -> {self.target_fast_dot1x}")
-        print("\n" + "-" * 70)
+        print("\n" + "=" * 70)  # Top border of the preview banner
+        print("  PREVIEW: CHANGES TO BE APPLIED")  # Banner title
+        print("=" * 70)  # Bottom border of the preview banner
+        print("\n  Target settings:")  # Sub-header for the target values
+        print(f"    auth_servers_timeout: {self.target_timeout} seconds")  # The timeout that will be applied
+        print(f"    auth_servers_retries: {self.target_retries}")  # The retry count that will be applied
+        print(f"    fast_dot1x_timers:    {self.target_fast_dot1x}")  # The fast-timer flag that will be applied
+        print(f"\n  WLANs to be updated ({len(self.selected_wlans)} total):")  # How many WLANs will change
+        print("-" * 70)  # Separator before the per-WLAN diff
+        for wlan in self.selected_wlans:  # Show a before/after for each selected WLAN
+            ssid = wlan.get("ssid", "Unknown")  # The WLAN's SSID
+            curr_timeout = wlan.get("auth_servers_timeout", 5)  # Its current timeout
+            curr_retries = wlan.get("auth_servers_retries", 2)  # Its current retry count
+            curr_fast = wlan.get("fast_dot1x_timers", False)  # Its current fast-timer flag
+            print(f"\n  SSID: {ssid}")  # Label this WLAN's diff block
+            print(f"    timeout: {curr_timeout} -> {self.target_timeout}")  # Old -> new timeout
+            print(f"    retries: {curr_retries} -> {self.target_retries}")  # Old -> new retries
+            print(f"    fast_dot1x: {curr_fast} -> {self.target_fast_dot1x}")  # Old -> new fast-timer flag
+        print("\n" + "-" * 70)  # Closing separator under the preview
 
     def _apply_changes(self) -> None:
         """Apply configuration changes to selected WLANs with rate limiting."""
-        mode_label = "DRY-RUN: Simulating" if self.dry_run else "Applying"
-        print(f"\n[*] {mode_label} configuration to {len(self.selected_wlans)} WLANs...")
-        success_count = 0
-        fail_count = 0
+        mode_label = "DRY-RUN: Simulating" if self.dry_run else "Applying"  # Verb depends on whether this is a dry run
+        print(f"\n[*] {mode_label} configuration to {len(self.selected_wlans)} WLANs...")  # Announce the apply phase
+        success_count = 0  # Count WLANs updated successfully
+        fail_count = 0  # Count WLANs that failed to update
 
-        for idx, wlan in enumerate(self.selected_wlans, 1):
-            wlan_id = wlan.get("id")
-            ssid = wlan.get("ssid", "Unknown")
+        for idx, wlan in enumerate(self.selected_wlans, 1):  # Process each selected WLAN (1-based for display)
+            wlan_id = wlan.get("id")  # The WLAN's unique ID needed for the update call
+            ssid = wlan.get("ssid", "Unknown")  # The WLAN's SSID for user-facing messages
 
-            if not wlan_id:
-                logging.error(f"Missing WLAN ID for {ssid}")
-                self._record_change(wlan, "failed", "Missing WLAN ID")
-                fail_count += 1
-                continue
+            if not wlan_id:  # Defensive: the WLAN record lacks an ID
+                logging.error(f"Missing WLAN ID for {ssid}")  # Log the missing identifier
+                self._record_change(wlan, "failed", "Missing WLAN ID")  # Record the failure in the audit trail
+                fail_count += 1  # Count this as a failure
+                continue  # Skip to the next WLAN
 
-            payload = {
-                "auth_servers_timeout": self.target_timeout,
-                "auth_servers_retries": self.target_retries,
-                "fast_dot1x_timers": self.target_fast_dot1x,
+            payload = {  # Build the timer-only update body for this WLAN
+                "auth_servers_timeout": self.target_timeout,  # Target timeout to apply
+                "auth_servers_retries": self.target_retries,  # Target retry count to apply
+                "fast_dot1x_timers": self.target_fast_dot1x,  # Target fast-timer flag to apply
             }
 
-            print(f"  [{idx}/{len(self.selected_wlans)}] Updating {ssid}...", end=" ")
-            logging.info(
+            print(f"  [{idx}/{len(self.selected_wlans)}] Updating {ssid}...", end=" ")  # Progress line (no newline yet)
+            logging.info(  # Log before the update, noting dry-run vs real
                 f"{'DRY-RUN: Would update' if self.dry_run else 'Updating'} org WLAN {wlan_id} ({ssid}) with payload: {payload}"  # noqa: E501
             )
 
-            if self.dry_run:
-                print("DRY-RUN (would update)")
-                self._record_change(wlan, "DRY-RUN", "")
-                success_count += 1
-                if is_debug_mode():  # type: ignore[no-untyped-call]
-                    logging.debug(f"DRY-RUN payload for {ssid}: {payload}")
-                continue
+            if self.dry_run:  # In dry-run mode we simulate instead of calling the API
+                print("DRY-RUN (would update)")  # Show that no real change was made
+                self._record_change(wlan, "DRY-RUN", "")  # Record the simulated change
+                success_count += 1  # Count the simulation as a success
+                if is_debug_mode():  # type: ignore[no-untyped-call]  # Only dump payload when debugging
+                    logging.debug(f"DRY-RUN payload for {ssid}: {payload}")  # Log the would-be payload
+                continue  # Skip the real API call
 
             try:
-                response = mistapi.api.v1.orgs.wlans.updateOrgWlan(apisession, self.org_id, wlan_id, payload)
-                if response.status_code == 200:
-                    print("OK")
-                    self._record_change(wlan, "success", "")
-                    success_count += 1
-                    if is_debug_mode():  # type: ignore[no-untyped-call]
-                        logging.debug(f"API response for {ssid}: {response.data}")
-                else:
-                    print(f"FAILED (HTTP {response.status_code})")
-                    self._record_change(wlan, "failed", f"HTTP {response.status_code}")
-                    fail_count += 1
-                    logging.error(f"Failed to update {ssid}: HTTP {response.status_code}")
-            except Exception as e:
-                print(f"ERROR ({e})")
-                self._record_change(wlan, "failed", str(e))
-                fail_count += 1
-                logging.error(f"Exception updating {ssid}: {e}")
+                response = mistapi.api.v1.orgs.wlans.updateOrgWlan(
+                    apisession, self.org_id, wlan_id, payload
+                )  # Push the update
+                if response.status_code == 200:  # The update succeeded
+                    print("OK")  # Complete the progress line with success
+                    self._record_change(wlan, "success", "")  # Record the successful change
+                    success_count += 1  # Count the success
+                    if is_debug_mode():  # type: ignore[no-untyped-call]  # Only dump response when debugging
+                        logging.debug(f"API response for {ssid}: {response.data}")  # Log the API response body
+                else:  # The API returned a non-success status
+                    print(f"FAILED (HTTP {response.status_code})")  # Complete the progress line with failure
+                    self._record_change(wlan, "failed", f"HTTP {response.status_code}")  # Record the failure
+                    fail_count += 1  # Count the failure
+                    logging.error(f"Failed to update {ssid}: HTTP {response.status_code}")  # Log the HTTP error
+            except Exception as e:  # The update call raised an exception
+                print(f"ERROR ({e})")  # Complete the progress line with the error
+                self._record_change(wlan, "failed", str(e))  # Record the exception in the audit trail
+                fail_count += 1  # Count the failure
+                logging.error(f"Exception updating {ssid}: {e}")  # Log the exception detail
 
-            time.sleep(0.3)
+            time.sleep(0.3)  # Brief pause between writes to respect API rate limits
 
-        result_label = "DRY-RUN complete" if self.dry_run else "Update complete"
-        print(f"\n[+] {result_label}: {success_count} successful, {fail_count} failed")
-        logging.info(f"{result_label}: {success_count} success, {fail_count} failed")
+        result_label = "DRY-RUN complete" if self.dry_run else "Update complete"  # Final summary verb
+        print(f"\n[+] {result_label}: {success_count} successful, {fail_count} failed")  # Show the run totals
+        logging.info(f"{result_label}: {success_count} success, {fail_count} failed")  # Log the run totals
 
     def _record_change(self, wlan: dict[str, Any], status: str, error_msg: str) -> None:
         """Record a change for the audit trail."""
-        record = {
-            "timestamp": datetime.now().isoformat(),
-            "wlan_id": wlan.get("id", ""),
-            "ssid": wlan.get("ssid", ""),
-            "site_name": wlan.get("_inheritance_source", "Org-Level"),
-            "inheritance_level": wlan.get("_inheritance_level", "unknown"),
-            "before_timeout": wlan.get("auth_servers_timeout", 5),
-            "after_timeout": self.target_timeout,
-            "before_retries": wlan.get("auth_servers_retries", 2),
-            "after_retries": self.target_retries,
-            "before_fast_dot1x": wlan.get("fast_dot1x_timers", False),
-            "after_fast_dot1x": self.target_fast_dot1x,
-            "status": status,
-            "error_message": error_msg,
+        record = {  # Build a flat audit record capturing before/after values
+            "timestamp": datetime.now().isoformat(),  # When the change was recorded
+            "wlan_id": wlan.get("id", ""),  # The WLAN's ID
+            "ssid": wlan.get("ssid", ""),  # The WLAN's SSID
+            "site_name": wlan.get("_inheritance_source", "Org-Level"),  # Where the WLAN is defined
+            "inheritance_level": wlan.get("_inheritance_level", "unknown"),  # Site/template/org level
+            "before_timeout": wlan.get("auth_servers_timeout", 5),  # Timeout before the change
+            "after_timeout": self.target_timeout,  # Timeout after the change
+            "before_retries": wlan.get("auth_servers_retries", 2),  # Retries before the change
+            "after_retries": self.target_retries,  # Retries after the change
+            "before_fast_dot1x": wlan.get("fast_dot1x_timers", False),  # Fast-timer flag before the change
+            "after_fast_dot1x": self.target_fast_dot1x,  # Fast-timer flag after the change
+            "status": status,  # Outcome (success/failed/DRY-RUN)
+            "error_message": error_msg,  # Any error detail for failures
         }
-        self.change_records.append(record)
+        self.change_records.append(record)  # Append to the audit trail for later CSV export
 
     def _export_audit_trail(self) -> None:
         """Export change records to CSV in data/ directory."""
-        if not self.change_records:
-            print("[*] No changes to export.")
-            return
+        if not self.change_records:  # No changes were recorded this run
+            print("[*] No changes to export.")  # Tell the user there is nothing to write
+            return  # Nothing to export
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        prefix = "DRYRUN_" if self.dry_run else ""
-        filename = f"{prefix}RadiusWLANBulkConfig_{timestamp}.csv"
-        filepath = os.path.join("data", filename)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Timestamp for a unique filename
+        prefix = "DRYRUN_" if self.dry_run else ""  # Mark dry-run exports distinctly
+        filename = f"{prefix}RadiusWLANBulkConfig_{timestamp}.csv"  # Compose the audit CSV filename
+        filepath = os.path.join("data", filename)  # Place it under the data/ directory (cross-platform join)
 
-        os.makedirs("data", exist_ok=True)
+        os.makedirs("data", exist_ok=True)  # Ensure the data/ directory exists before writing
 
         fieldnames = [
             "timestamp",
@@ -25625,81 +26290,85 @@ class BulkRadiusWLANConfigManager:
         ]
 
         try:
-            with open(filepath, "w", newline="", encoding="utf-8") as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(self.change_records)
-            print(f"\n[+] Audit trail exported to: {filepath}")
-            logging.info(f"Audit trail exported to {filepath} with {len(self.change_records)} records")
-        except Exception as e:
-            print(f"\n[!] Failed to export audit trail: {e}")
-            logging.error(f"Failed to export audit trail: {e}")
+            with open(filepath, "w", newline="", encoding="utf-8") as csvfile:  # Open the audit CSV for writing
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)  # Map dict records to CSV columns
+                writer.writeheader()  # Write the column header row
+                writer.writerows(self.change_records)  # Write every recorded change
+            print(f"\n[+] Audit trail exported to: {filepath}")  # Tell the user where the file landed
+            logging.info(
+                f"Audit trail exported to {filepath} with {len(self.change_records)} records"
+            )  # Log the export
+        except Exception as e:  # Writing the CSV failed (permissions, disk, etc.)
+            print(f"\n[!] Failed to export audit trail: {e}")  # Inform the user of the failure
+            logging.error(f"Failed to export audit trail: {e}")  # Log the error detail
 
     def manage(self, dry_run: bool = False) -> None:
         """Main entry point - orchestrates the bulk RADIUS WLAN configuration."""
-        self.dry_run = dry_run
-        logging.info("Starting Bulk RADIUS WLAN Configuration (Menu 122)")
+        self.dry_run = dry_run  # Remember whether this run only simulates changes
+        logging.info("Starting Bulk RADIUS WLAN Configuration (Menu 122)")  # Announce the workflow start
 
-        self._display_config()
+        self._display_config()  # Show the target settings the user configured
 
-        if not self._get_org_id():
-            return
+        if not self._get_org_id():  # Resolve the org ID; abort if unavailable
+            return  # Cannot proceed without an org
 
-        if not self._scan_org_wlans():
-            return
+        if not self._scan_org_wlans():  # Fetch all org WLANs; abort on failure
+            return  # Cannot proceed without WLAN data
 
-        self._filter_radius_wlans()
+        self._filter_radius_wlans()  # Split WLANs into selectable vs already-compliant buckets
 
-        total_radius = len(self.radius_wlans) + len(self.compliant_wlans)
-        if total_radius == 0:
-            print("\n[*] No RADIUS-enabled WLANs found in the organization.")
-            logging.info("No RADIUS WLANs found in organization")
-            return
+        total_radius = len(self.radius_wlans) + len(self.compliant_wlans)  # Total RADIUS WLANs discovered
+        if total_radius == 0:  # No RADIUS WLANs exist in the org
+            print("\n[*] No RADIUS-enabled WLANs found in the organization.")  # Inform the user
+            logging.info("No RADIUS WLANs found in organization")  # Log the empty result
+            return  # Nothing to do
 
-        if not self.radius_wlans and self.compliant_wlans:
-            self._display_wlans()
-            print("[*] All RADIUS WLANs are already at target settings. No changes needed.")
-            logging.info("All RADIUS WLANs already compliant - no changes needed")
-            return
+        if not self.radius_wlans and self.compliant_wlans:  # Every RADIUS WLAN already meets the target
+            self._display_wlans()  # Still show the table for transparency
+            print("[*] All RADIUS WLANs are already at target settings. No changes needed.")  # Inform the user
+            logging.info("All RADIUS WLANs already compliant - no changes needed")  # Log the no-op outcome
+            return  # Nothing to change
 
-        self._display_wlans()
+        self._display_wlans()  # Show the selectable WLAN table
 
-        print("  Enter selection (e.g., 'all', '1', '1,3,5', '1-5') or 'q' to cancel:")
-        selection = self._safe_input("  > ", "wlan_selection")
+        print("  Enter selection (e.g., 'all', '1', '1,3,5', '1-5') or 'q' to cancel:")  # Explain the selection syntax
+        selection = self._safe_input("  > ", "wlan_selection")  # Read the user's WLAN selection
 
-        if not selection.strip():
-            print("\n[*] No selection made. Exiting.")
-            return
+        if not selection.strip():  # The user entered nothing
+            print("\n[*] No selection made. Exiting.")  # Inform the user and exit
+            return  # No selection -- abort
 
-        selected_indices = self._parse_selection(selection)
+        selected_indices = self._parse_selection(selection)  # Parse the selection into 0-based indices
 
-        if selected_indices is None:
-            print("\n[*] Operation cancelled by user.")
-            logging.info("Menu 122 cancelled by user at selection prompt")
-            return
+        if selected_indices is None:  # The user explicitly cancelled
+            print("\n[*] Operation cancelled by user.")  # Acknowledge the cancellation
+            logging.info("Menu 122 cancelled by user at selection prompt")  # Log the cancellation
+            return  # Abort the workflow
 
-        if not selected_indices:
-            print("\n[!] Invalid selection. Please use valid indices.")
-            return
+        if not selected_indices:  # The selection parsed to no valid indices
+            print("\n[!] Invalid selection. Please use valid indices.")  # Reject the input
+            return  # Abort the workflow
 
-        self.selected_wlans = [self.radius_wlans[i] for i in selected_indices]
+        self.selected_wlans = [self.radius_wlans[i] for i in selected_indices]  # Resolve indices to WLAN records
 
-        self._display_preview()
+        self._display_preview()  # Show a before/after preview of the pending changes
 
-        print("\n  WARNING: This will modify WLAN authentication settings.")
-        print("  Type 'APPLY' to proceed, or anything else to cancel.")
-        confirm = self._safe_input("  > ", "apply_confirm")
+        print(
+            "\n  WARNING: This will modify WLAN authentication settings."
+        )  # Warn the user before the destructive step
+        print("  Type 'APPLY' to proceed, or anything else to cancel.")  # Explain the required confirmation
+        confirm = self._safe_input("  > ", "apply_confirm")  # Read the confirmation keyword
 
-        if confirm.strip() != "APPLY":
-            print("\n[*] Operation cancelled by user.")
-            logging.info("Bulk RADIUS config cancelled by user")
-            return
+        if confirm.strip() != "APPLY":  # The user did not type the exact confirmation word
+            print("\n[*] Operation cancelled by user.")  # Acknowledge the cancellation
+            logging.info("Bulk RADIUS config cancelled by user")  # Log the cancellation
+            return  # Abort without making changes
 
-        self._apply_changes()
-        self._export_audit_trail()
+        self._apply_changes()  # Apply (or simulate) the timer changes to all selected WLANs
+        self._export_audit_trail()  # Write the before/after audit trail to CSV
 
-        print("\n[+] Bulk RADIUS WLAN configuration completed.")
-        logging.info("Bulk RADIUS WLAN Configuration completed successfully")
+        print("\n[+] Bulk RADIUS WLAN configuration completed.")  # Tell the user the workflow finished
+        logging.info("Bulk RADIUS WLAN Configuration completed successfully")  # Log the completion
 
 
 # NOTE: GatewayTemplateConfigManager class provides Menu 105, 106, 111 operations.
@@ -26348,6 +27017,10 @@ menu_actions = {
     "191": (OrgTicketManager.update_ticket, "Update fields on an existing support ticket"),
     "192": (OrgTicketManager.view_ticket, "View a support ticket with full comments and history"),
     "193": (OrgTicketManager.export_ticket_details, "Export all tickets with full details and comments"),
+    "194": (
+        DeviceConfigTemplateClonerManager.clone,  # Delegate to extracted implementation class
+        " DESTRUCTIVE: Clone Device Config to Gateway Template - Select a gateway at a site, extract its local device config, and create a new org gateway template (Requires typing 'CREATE' to confirm)",
+    ),
 }
 
 
@@ -27416,15 +28089,17 @@ def run_systematic_test():  # type: ignore[no-untyped-def]  # noqa: C901, PLR091
     print("   Detailed logs in: script.log")
 
     if error_count == 0:
+        # All tests passed - provide a clear success message and a concise telemetry summary
         print("   All tested operations completed successfully!")
         logging.info(
             f"SYSTEMATIC_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s"
         )
-        return True
+        return True  # Caller can use this boolean to change control flow (e.g., exit code)
     else:
+        # Some operations failed: print a short summary and surface telemetry in the logs for investigation
         print(f"    {error_count} operations failed - check logs for details")
         logging.warning(f"SYSTEMATIC_TEST: {error_count} operations failed out of {len(safe_options)} tested")
-        return False
+        return False  # False indicates failures occurred during the systematic test
 
 
 def run_interactive_test():  # type: ignore[no-untyped-def]

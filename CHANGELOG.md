@@ -7,6 +7,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+## [26.06.08] - Menu 194 Clone Device Config to Gateway Template
+
+### Added
+
+- **Menu 194**: Clone Device Config to Gateway Template — promote a gateway device's local configuration into a reusable org-level gateway template. Selects site → selects gateway device → fetches live device config via `getSiteDevice` → strips device metadata → prompts for template name/type/model → requires typed `CREATE` confirmation → calls `createOrgGatewayTemplate` → exports result to CSV. Implemented in `src/gateway/device_template_cloner.py` with delegation stub in `MistHelper.py`.
+
 ## [26.05.27.05.29] - Decomposition Wave 2 Complete (Phases 1-9)
 
 ### Added

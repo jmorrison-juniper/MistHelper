@@ -600,5 +600,5 @@ When implementing a Feature Spec, AI agents must follow this protocol:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/196-decompose-next5-functions/plan.md
+at specs/168-clone-gateway-template/plan.md
 <!-- SPECKIT END -->
