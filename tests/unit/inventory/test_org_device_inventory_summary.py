@@ -91,9 +91,12 @@ def test_run_for_org_calls_all_export_steps(monkeypatch) -> None:
         "_fetch_all_counts",
         staticmethod(lambda target_org_id, distinct: [{"device_type": "ap", distinct: "v", "count": 1}]),
     )
+    from src.inventory.inventory_summary import pivot_renderer as _pivot_mod
+    from src.inventory.inventory_summary import version_per_model_fetcher as _vpm_mod
+
     monkeypatch.setattr(
-        OrgDeviceInventorySummaryCore,
-        "_fetch_versions_per_model",
+        _vpm_mod.VersionPerModelFetcher,
+        "fetch",
         staticmethod(
             lambda target_org_id, model_rows: [{"device_type": "ap", "model": "A", "version": "1", "count": 1}]
         ),
@@ -101,7 +104,7 @@ def test_run_for_org_calls_all_export_steps(monkeypatch) -> None:
     display_mock = MagicMock()
     pivot_mock = MagicMock()
     monkeypatch.setattr(OrgDeviceInventorySummaryCore, "_display_and_export", staticmethod(display_mock))
-    monkeypatch.setattr(OrgDeviceInventorySummaryCore, "_display_pivot_and_export", staticmethod(pivot_mock))
+    monkeypatch.setattr(_pivot_mod.PivotRenderer, "render", staticmethod(pivot_mock))
 
     model_rows, version_rows, ver_per_model, safe_org = OrgDeviceInventorySummaryCore.run_for_org("org-1")
 
