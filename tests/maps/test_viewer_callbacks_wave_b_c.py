@@ -218,13 +218,13 @@ def test_state_defaults_when_only_callback_manager_supplied() -> None:
 
 
 def test_register_with_wires_thirteen_callbacks_total() -> None:
-    """register_with wires 5 wave-A + 4 wave-B + 4 wave-C callbacks."""
+    """register_with wires 5 wave-A + 4 wave-B + 4 wave-C callbacks (+ 3 wave-D = 16 total)."""
     callbacks = MapViewerCallbacks(state=_make_state())
     app = _FakeDashApp()
 
     callbacks.register_with(app)
 
-    assert len(app.registered) == 13  # 5 + 4 + 4
+    assert len(app.registered) == 16  # waves A+B+C+D
 
     bound_names = {record.bound_func.__name__ for record in app.registered}
     expected_wave_b = {
