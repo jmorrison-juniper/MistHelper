@@ -198,6 +198,9 @@ dmypy.json
 .DS_Store?
 ._*
 .Spotlight-V100
+
+# Caveman installer artifacts (universal skills format, unused by VS Code Copilot)
+.agents/
 .Trashes
 ehthumbs.db
 Thumbs.db
