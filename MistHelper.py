@@ -133,6 +133,7 @@ from src.gateway.gateway_export_utils import (
     configure_gateway_export_utils_dependencies,
 )  # Import gateway export utility configuration
 from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
+from src.reports.e911_bssid import E911BSSIDReportGenerator  # Module-level for tests
 from src.ssh.ssh_runner import EnhancedSSHRunner  # Import SSH command execution and result parsing
 from src.ssh.ssh_runner_manager import (
     SSHRunnerManager as ExtractedSSHRunnerManager,
@@ -15784,9 +15785,7 @@ class OrgExportUtils:
         if not current_org_id:
             print("! No organization selected. Exiting.")
             return
-        from src.reports.e911_bssid import E911BSSIDReportGenerator as _E911  # noqa: PLC0415
-
-        _E911.execute(
+        E911BSSIDReportGenerator.execute(
             apisession=apisession,
             page_limit=DEFAULT_API_PAGE_LIMIT,
             org_id=current_org_id,
