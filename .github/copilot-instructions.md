@@ -7,7 +7,7 @@ When refactoring code, avoid using wrappers; actually restructure into classes a
 ---
 
 ## Project Overview
-MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud network operations. It provides 193 menu-driven operations for data extraction, device management, and firmware upgrades with multi-backend output (CSV, SQLite, or polyglot ArangoDB/Redis) and containerized SSH access.
+MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud network operations. It provides 194 menu-driven operations for data extraction, device management, and firmware upgrades with multi-backend output (CSV, SQLite, or polyglot ArangoDB/Redis) and containerized SSH access.
 
 **Target Audience**: Junior NOC engineers. Use clear, professional language without jargon. Think Fred Rogers meets NASA/JPL safety standards.
 
@@ -243,7 +243,7 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 
 ## Menu System & Operations
 
-### Menu Categories (Full Range: 1-193)
+### Menu Categories (Full Range: 1-194)
 
 | Range | Category | Notes |
 | - | - | - |
@@ -253,7 +253,7 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 | 102-123 | WebSocket | Show commands (102-115), Diagnostics (116-123) |
 | 124-150 | Interactive | Diagnostics (124-127), Management (128-133), Packet captures (134-135), Tools (136-147), Config (148-150) |
 | 151-152 | Continuous | Monitoring loops |
-| 154-193 | **Destructive** | Firmware (154-157), Reboots (158-160), VC (161-162), Templates (163-167), Site config (168-170), Test data (171-174), SSH runners (175-176), Clear/reset (177-187), Support tickets (188-193). **NEVER automate without explicit user confirmation.** |
+| 154-194 | **Destructive** | Firmware (154-157), Reboots (158-160), VC (161-162), Templates (163-167), Site config (168-170), Test data (171-174), SSH runners (175-176), Clear/reset (177-187), Support tickets (188-193), Clone device config to gateway template (194). **NEVER automate without explicit user confirmation.** |
 
 ### Interactive vs Direct Invocation
 - **Interactive**: No args = menu-driven selection with safe navigation

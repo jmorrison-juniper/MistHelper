@@ -1,6 +1,6 @@
 # Menu Reference
 
-Operation Count: MistHelper currently defines 193 actionable menu entries (1-193).
+Operation Count: MistHelper currently defines 194 actionable menu entries (1-194).
 
 Below is the authoritative list derived directly from `menu_actions` in code. WIP = unstable schema, DESTRUCTIVE = requires explicit user confirmation.
 
