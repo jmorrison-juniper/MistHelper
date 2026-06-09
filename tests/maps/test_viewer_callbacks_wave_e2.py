@@ -248,9 +248,7 @@ def test_refresh_map_dropdown_returns_no_update_without_site_id() -> None:
 
 
 def test_refresh_map_dropdown_returns_fresh_options_on_success() -> None:
-    mistapi_stub = _make_mistapi_stub(
-        list_maps_response=_FakeResponse(200, data=[{"id": "m1", "name": "Lobby"}])
-    )
+    mistapi_stub = _make_mistapi_stub(list_maps_response=_FakeResponse(200, data=[{"id": "m1", "name": "Lobby"}]))
     state = _make_state(mistapi_ref=mistapi_stub)
     callbacks = MapViewerCallbacks(state=state)
     options, store = callbacks.refresh_map_dropdown(None, None, None, {"site_id": "site-1"})
@@ -396,9 +394,7 @@ def test_handle_url_map_switch_returns_no_update_when_site_missing() -> None:
 
 
 def test_handle_url_map_switch_rejects_unknown_map() -> None:
-    state = _make_state(
-        mistapi_ref=_make_mistapi_stub(list_maps_response=_FakeResponse(200, data=[{"id": "m1"}]))
-    )
+    state = _make_state(mistapi_ref=_make_mistapi_stub(list_maps_response=_FakeResponse(200, data=[{"id": "m1"}])))
     callbacks = MapViewerCallbacks(state=state)
     fig, cfg = callbacks.handle_url_map_switch(
         "?map_id=unknown", {"site_id": "s1", "map_id": "m1"}, {}, [{"id": "m1"}], "m1"

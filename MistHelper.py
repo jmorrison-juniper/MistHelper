@@ -122,12 +122,12 @@ from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # Imp
 from src.export.site_export_utils import (
     configure_site_export_utils_dependencies,
 )  # Import site export utility configuration
-from src.export.site_insights.site_metric_operation import (
-    SiteMetricOperation,
-)  # Decomposed Menu 74 entry point
 from src.export.site_insights.device_metric_operation import (
     DeviceMetricOperation,
 )  # Decomposed Menu 76 entry point
+from src.export.site_insights.site_metric_operation import (
+    SiteMetricOperation,
+)  # Decomposed Menu 74 entry point
 from src.export.wifi_clients_exporter import WifiClientsExporter  # Import WiFi client export handler
 from src.gateway.gateway_export_utils import (
     configure_gateway_export_utils_dependencies,
@@ -327,7 +327,7 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimu
 
 
 # Debug mode detection helper
-def is_debug_mode():    # Check if debug mode is enabled via CLI flags
+def is_debug_mode():  # Check if debug mode is enabled via CLI flags
     """Check if debug mode is enabled via command line arguments."""
     return "--debug" in sys.argv or "-d" in sys.argv  # Return True if debug flag present in command line
 
@@ -336,7 +336,8 @@ def is_debug_mode():    # Check if debug mode is enabled via CLI flags
 class PerformanceMonitor:
     """Simple performance monitoring to detect hangs and infinite loops."""
 
-    def __init__(self, name, max_iterations=10000, log_interval=5.0):    # Set up a loop monitor with a name and safety limits
+    # Set up a loop monitor with a name and safety limits
+    def __init__(self, name, max_iterations=10000, log_interval=5.0):
         self.name = name  # Store a human-readable name so log/error messages identify which loop is being watched
         self.start_time = time.time()  # Record wall-clock start time to measure total elapsed duration
         self.last_log_time = self.start_time  # Track when we last printed a progress update (throttles logging)
@@ -344,7 +345,7 @@ class PerformanceMonitor:
         self.max_iterations = max_iterations  # Hard ceiling on iterations before the circuit breaker trips
         self.log_interval = log_interval  # Minimum seconds between periodic performance log messages
 
-    def check_iteration(self):    # Call once per loop pass to track progress and enforce the safety limit
+    def check_iteration(self):  # Call once per loop pass to track progress and enforce the safety limit
         """Call this on each loop iteration to monitor for hangs."""
         self.iteration_count += 1  # Increment the per-iteration counter
         current_time = time.time()  # Capture current time for interval and elapsed calculations
@@ -365,7 +366,7 @@ class PerformanceMonitor:
             logging.error(error_msg)  # Also record the breaker trip in the log file for post-mortem analysis
             raise RuntimeError(error_msg)  # Abort the runaway loop by raising to unwind the call stack
 
-    def finish(self):    # Call when the monitored loop completes normally
+    def finish(self):  # Call when the monitored loop completes normally
         """Call when loop completes normally."""
         elapsed = time.time() - self.start_time  # Compute total runtime of the loop
         if is_debug_mode():  # type: ignore[no-untyped-call]  # Only emit the summary when debugging to avoid log noise
@@ -579,7 +580,7 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
         return ""  # Empty string signals 'latest unknown' so callers skip the upgrade check
 
 
-def _parse_requirements_file(filepath="requirements.txt"):    # Read dependency specs from requirements.txt
+def _parse_requirements_file(filepath="requirements.txt"):  # Read dependency specs from requirements.txt
     """
     Parse requirements.txt and return list of package specifications.
 
@@ -629,7 +630,7 @@ def _parse_requirements_file(filepath="requirements.txt"):    # Read dependency 
         return []  # Fail safe with an empty list rather than crashing startup
 
 
-def _early_dependency_check_legacy_impl():    # noqa: C901, PLR0912, PLR0915
+def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
     """
     Check and auto-install critical dependencies before they're imported.
 
@@ -728,7 +729,7 @@ def _early_dependency_check_legacy_impl():    # noqa: C901, PLR0912, PLR0915
         )  # Announce the upgrade plan
 
     # Helper function to find UV executable in various locations
-    def find_uv_executable():    # noqa: C901, PLR0912  # Locate the 'uv' binary across common install locations
+    def find_uv_executable():  # noqa: C901, PLR0912  # Locate the 'uv' binary across common install locations
         """Find UV executable, checking PATH and Python environment bin directories."""
         import sysconfig  # Provides platform-specific path layout (scripts dir, user base)
 
@@ -1054,7 +1055,7 @@ def _early_dependency_check_legacy_impl():    # noqa: C901, PLR0912, PLR0915
 
 
 # Simplified facade delegating dependency bootstrap logic to extracted src/bootstrap modules.
-def _early_dependency_check():    # Public entry point; delegates to the extracted bootstrap modules
+def _early_dependency_check():  # Public entry point; delegates to the extracted bootstrap modules
     """Run early dependency checks through the extracted bootstrap orchestrator."""
     installer = PackageInstaller(  # Build the installer with stdlib modules injected (enables testing/mocking)
         os_module=os,  # Inject os for path/env operations
@@ -1132,7 +1133,7 @@ mistapi: Any = None  # Placeholder; the real mistapi module is loaded later by G
 
 # tqdm will be properly imported by GlobalImportManager
 # This fallback will be overridden by the real tqdm import
-def tqdm(iterable, *args, **kwargs):    # No-op progress-bar stand-in until the real tqdm loads
+def tqdm(iterable, *args, **kwargs):  # No-op progress-bar stand-in until the real tqdm loads
     """Fallback tqdm function - will be replaced by real tqdm after import initialization."""
     return iterable  # Return the iterable unchanged (no progress bar yet)
 
@@ -1183,13 +1184,13 @@ except ImportError:  # rapidfuzz not installed
 # These functions are no-op fallbacks
 
 
-def listen_keyboard(*args, **kwargs):    # Removed feature; harmless stub kept for old call sites
+def listen_keyboard(*args, **kwargs):  # Removed feature; harmless stub kept for old call sites
     """Keyboard listener has been removed - this is a no-op fallback."""
     logging.info("Keyboard listener functionality has been removed")  # Tell any remaining caller this does nothing
     return None  # No listener object to return
 
 
-def stop_listening():    # Removed feature; harmless stub kept for old call sites
+def stop_listening():  # Removed feature; harmless stub kept for old call sites
     """No-op fallback for removed keyboard listener functionality."""
     pass  # Nothing to stop; intentionally a no-op
 
@@ -1260,7 +1261,7 @@ class GlobalImportManager:
     - Performance optimization through early imports
     """
 
-    def __init__(self):    # Read config from env and prepare dependency-tracking state
+    def __init__(self):  # Read config from env and prepare dependency-tracking state
         """Initialize the import manager with configuration from environment variables."""
         # Configuration from .env file
         # For local development: UV enabled, auto-upgrades enabled
@@ -1338,7 +1339,7 @@ class GlobalImportManager:
         # Define all required and optional packages
         self._define_package_requirements()  # type: ignore[no-untyped-call]  # Populate the required/optional package dicts
 
-    def _detect_virtual_environment(self):    # Determine and log whether a venv is active
+    def _detect_virtual_environment(self):  # Determine and log whether a venv is active
         """Detect if we're running in a virtual environment and log info."""
         self.in_venv = hasattr(sys, "real_prefix") or (
             hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
@@ -1352,7 +1353,7 @@ class GlobalImportManager:
             logging.info("Running in system Python environment")  # Note the non-venv environment
             logging.info(f"Python executable: {sys.executable}")  # Log which interpreter is in use
 
-    def _setup_logging(self):    # Build console+file handlers with env-driven levels
+    def _setup_logging(self):  # Build console+file handlers with env-driven levels
         """Setup basic logging configuration with environment-specific levels."""
         # Get console and file log levels from environment (default to INFO if not set)
         console_log_level = int(os.environ.get("CONSOLE_LOG_LEVEL", logging.INFO))  # Console verbosity (default INFO)
@@ -1385,7 +1386,7 @@ class GlobalImportManager:
             force=True,  # Override any existing configuration  # Replace the earlier module-import basicConfig
         )
 
-    def _define_package_requirements(self):    # Populate the required/optional package dictionaries
+    def _define_package_requirements(self):  # Populate the required/optional package dictionaries
         """Define all required and optional package dependencies."""
         # Required packages (core functionality)
         self.required_packages = {  # Map of package name -> pip spec (None means stdlib, no install needed)
@@ -1727,7 +1728,7 @@ class GlobalImportManager:
         logging.info(f"Successfully processed {success_count}/{len(packages_to_process)} packages")  # Summarize results
         return success_count > 0  # Report success if at least one package installed
 
-    def _import_concurrent_futures(self):  
+    def _import_concurrent_futures(self):
         """Special handler for concurrent.futures import."""
         from concurrent.futures import ThreadPoolExecutor, as_completed  # Import the thread-pool primitives on demand
 
@@ -1735,7 +1736,7 @@ class GlobalImportManager:
             "ConcurrentFutures", (), {"ThreadPoolExecutor": ThreadPoolExecutor, "as_completed": as_completed}
         )()  # Bundle them on a tiny namespace object
 
-    def _import_datetime(self):  
+    def _import_datetime(self):
         """Special handler for datetime import."""
         # Import the actual datetime module for module-level access
         from datetime import datetime, timedelta  # Pull in the datetime class and timedelta helper
@@ -1743,7 +1744,7 @@ class GlobalImportManager:
         # The code expects 'datetime' to refer to the datetime class, not the module
         # But we also need module-level access. Create a special object that behaves like both.
         class DateTimeHandler:  # Adapter exposing both class-like and module-like datetime access
-            def __init__(self):  
+            def __init__(self):
                 # Make this object callable like datetime class
                 self.now = datetime.now  # Expose datetime.now() at the top level
                 self.fromtimestamp = datetime.fromtimestamp  # Expose epoch->datetime conversion
@@ -1757,13 +1758,13 @@ class GlobalImportManager:
                 # Add module for UTC access
                 self.timezone = timezone  # (Re)bind timezone for clarity/UTC access
 
-            def __call__(self, *args, **kwargs):  
+            def __call__(self, *args, **kwargs):
                 # Allow calling like datetime()
                 return datetime(*args, **kwargs)  # Forward calls straight to the datetime constructor
 
         return DateTimeHandler()  # type: ignore[no-untyped-call]  # Hand back the dual-purpose adapter instance
 
-    def _import_tqdm(self):  
+    def _import_tqdm(self):
         """Special handler for tqdm import to ensure proper functionality."""
         try:
             from tqdm import tqdm  # Attempt to import the real progress-bar library
@@ -1774,7 +1775,7 @@ class GlobalImportManager:
             logging.warning("tqdm package not available, using fallback")  # Warn and degrade gracefully
 
             # Return the fallback function if tqdm is not available
-            def tqdm_fallback(iterable, *args, **kwargs):  
+            def tqdm_fallback(iterable, *args, **kwargs):
                 """Fallback when tqdm package is not available."""
                 desc = kwargs.get("desc", "Processing")  # Description label for the log line
                 unit = kwargs.get("unit", "item")  # Unit noun for the progress message
@@ -2027,7 +2028,7 @@ class GlobalImportManager:
 
             return None  # Signal to the caller that the import was unavailable
 
-    def _import_packages_concurrently(self, packages_dict, required=True, skip_deps=False, max_workers=4):  
+    def _import_packages_concurrently(self, packages_dict, required=True, skip_deps=False, max_workers=4):
         """
         Import packages concurrently for faster dependency resolution.
 
@@ -2043,7 +2044,7 @@ class GlobalImportManager:
         # Thread-safe logging
         log_lock = threading.Lock()  # Guards logging so concurrent threads don't interleave messages
 
-        def import_single_package(package_info):  
+        def import_single_package(package_info):
             module_name, package_spec = package_info  # Unpack the (name, spec) tuple for this worker
             package_type = "required" if required else "optional"  # Label used in user-facing log lines
 
@@ -2230,7 +2231,7 @@ class GlobalImportManager:
         # Return success status and global assignments
         return success, global_assignments  # Hand both the status flag and the assignment map to the caller
 
-    def _get_global_assignments(self):    # noqa: C901, PLR0912, PLR0915
+    def _get_global_assignments(self):  # noqa: C901, PLR0912, PLR0915
         """Get dictionary of global variable assignments for imported modules."""
         global_vars = {}  # Accumulate name -> object pairs to inject into globals()
 
@@ -2327,7 +2328,7 @@ class GlobalImportManager:
 
         return global_vars  # Return the complete name->object map for the caller to apply
 
-    def _make_modules_global(self):    # noqa: C901, PLR0912
+    def _make_modules_global(self):  # noqa: C901, PLR0912
         """Make all successfully imported modules available in the global namespace."""
 
         # Add all imported modules to globals
@@ -2396,14 +2397,14 @@ class GlobalImportManager:
 
         logging.debug("Successfully made imported modules available globally")  # Confirm the global wiring completed
 
-    def _add_fallbacks_to_globals(self, global_vars):  
+    def _add_fallbacks_to_globals(self, global_vars):
         """Add fallbacks for optional modules that failed to import."""
         # If scourgify not available, provide a fallback
         if (
             "normalize_address_record" not in global_vars or global_vars["normalize_address_record"] is None
         ):  # No real normalizer present
 
-            def normalize_address_record_fallback(address_string):  
+            def normalize_address_record_fallback(address_string):
                 """Fallback function when scourgify is not available."""
                 logging.debug(
                     "Using fallback address normalization (scourgify not available)"
@@ -2427,7 +2428,7 @@ class GlobalImportManager:
                 """Fallback class when rapidfuzz is not available."""
 
                 @staticmethod
-                def token_sort_ratio(str1, str2):  
+                def token_sort_ratio(str1, str2):
                     """Fallback using difflib SequenceMatcher."""
                     if global_vars.get("difflib"):  # Use difflib if it is available as a substitute
                         return int(
@@ -2447,7 +2448,7 @@ class GlobalImportManager:
                 """Fallback class when paramiko is not available."""
 
                 @staticmethod
-                def SSHClient():  
+                def SSHClient():
                     raise ImportError(  # Fail loudly with install guidance when SSH is attempted without paramiko
                         "SSH functionality requires 'paramiko' package. Install with: pip install paramiko"
                     )
@@ -2467,14 +2468,14 @@ class GlobalImportManager:
                 """Fallback class when redexpect is not available."""
 
                 @staticmethod
-                def spawn(*args, **kwargs):  
+                def spawn(*args, **kwargs):
                     raise ImportError(  # Fail loudly with install guidance when redexpect is used but absent
                         "Cross-platform SSH automation requires 'redexpect' package. Install with: pip install redexpect"  # noqa: E501
                     )
 
             global_vars["redexpect"] = RedexpectFallback()  # Install the redexpect shim with a clear error path
 
-    def _import_special_modules(self):  
+    def _import_special_modules(self):
         """Import special modules with custom handling."""
         # Import mistapi with its sub-modules only if base mistapi is available
         if "mistapi" in self.imports:  # Only wire sub-modules if the base SDK imported
@@ -2871,7 +2872,7 @@ msp_privileges: list[dict[str, Any]] = []  # List of {msp_id, msp_name, role, sc
 selected_msp: dict[str, Any] | None = None  # Currently selected MSP (from menu 115 or elsewhere)
 
 
-def detect_msp_privileges():  
+def detect_msp_privileges():
     """Detect MSP-level privileges from the authenticated user's profile.
 
     Calls GET /api/v1/self to retrieve user privileges and extracts any MSP-level access.
@@ -2972,7 +2973,7 @@ def _fetch_msp_name(msp_id: str) -> str | None:
     return None  # Default to None when the name can't be resolved
 
 
-def initialize_mist_session_interactive():  
+def initialize_mist_session_interactive():
     """Initialize Mist API session via extracted interactive session manager."""
     global apisession, mistapi, msp_privileges, selected_msp, org_id  # These module globals are updated on login
 
@@ -2999,7 +3000,7 @@ def initialize_mist_session_interactive():
     return login_success  # Report whether the interactive login succeeded
 
 
-def _print_switch_login_header():  
+def _print_switch_login_header():
     """Display switch to interactive login header and benefits."""
     logging.debug("Entering _print_switch_login_header()")  # Trace entry for debugging
     print("")  # Blank spacer line
@@ -3024,7 +3025,7 @@ def _print_switch_login_header():
         print("")  # Blank spacer line
 
 
-def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:  
+def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:
     """Clear session and attempt interactive login with rollback on failure.
 
     Returns:
@@ -3051,7 +3052,7 @@ def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:
     return True  # Signal success to the caller
 
 
-def _handle_interactive_login_success():  
+def _handle_interactive_login_success():
     """Handle successful interactive login - display status and select MSP/org."""
     logging.debug("Entering _handle_interactive_login_success()")  # Trace entry for debugging
     print("")  # Blank spacer line
@@ -3072,7 +3073,7 @@ def _handle_interactive_login_success():
         _select_org_from_session()  # type: ignore[no-untyped-call]  # Non-MSP users pick an org directly
 
 
-def switch_to_interactive_login():  
+def switch_to_interactive_login():
     """Menu option to switch from API token to interactive login.
 
     Returns:
@@ -3112,7 +3113,7 @@ def switch_to_interactive_login():
     return True  # Always return True so the menu loop continues
 
 
-def _select_msp_and_org():  
+def _select_msp_and_org():
     """Select MSP and organization via extracted interactive session manager."""
     global apisession, mistapi, msp_privileges, selected_msp, org_id  # These globals are updated by the selection flow
 
@@ -3138,7 +3139,7 @@ def _select_msp_and_org():
     org_id = state.get("org_id", org_id)  # Copy the chosen org ID back
 
 
-def _select_org_from_session():  
+def _select_org_from_session():
     """Helper to select organization from session privileges (non-MSP path).
 
     Uses mistapi's built-in org selection when user doesn't have MSP access
@@ -3513,7 +3514,7 @@ def _ensure_mist_get_method(session: Any) -> bool:
         return True  # Session is compatible as-is
     if hasattr(session, "get") and callable(session.get):  # Alternate method found -- wrap it
 
-        def _mist_get_wrapper(*args, **kwargs):    # pragma: no cover (simple adapter)
+        def _mist_get_wrapper(*args, **kwargs):  # pragma: no cover (simple adapter)
             return session.get(*args, **kwargs)  # Delegate to get() with all args forwarded
 
         session.mist_get = _mist_get_wrapper  # Attach wrapper so callers using mist_get work transparently
@@ -3631,11 +3632,11 @@ def _configure_session_timeout(session_obj: Any) -> None:
         class TimeoutAdapter(HTTPAdapter):
             """HTTPAdapter that injects a default timeout."""
 
-            def __init__(self, default_timeout: int, **kwargs):  
+            def __init__(self, default_timeout: int, **kwargs):
                 self.default_timeout = default_timeout
                 super().__init__(**kwargs)
 
-            def send(self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None):    # noqa: PLR0913
+            def send(self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None):  # noqa: PLR0913
                 if timeout is None:
                     timeout = self.default_timeout
                 return super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
@@ -6456,7 +6457,7 @@ class _LegacyPacketCaptureManager:
         - Class-based design eliminates wrapper functions
     """
 
-    def __init__(self, mist_session, org_id=None):  
+    def __init__(self, mist_session, org_id=None):
         """
         Initialize packet capture manager.
 
@@ -6505,7 +6506,7 @@ class _LegacyPacketCaptureManager:
         # Insert colons every 2 characters
         return ":".join(mac_clean[i : i + 2] for i in range(0, 12, 2))
 
-    def _get_tcpdump_expression_selection(self):    # noqa: PLR0915
+    def _get_tcpdump_expression_selection(self):  # noqa: PLR0915
         """
         Prompt user for tcpdump expression with comprehensive examples.
         Based on Daniel Miessler's tcpdump tutorial (danielmiessler.com/blog/tcpdump)
@@ -6648,7 +6649,7 @@ class _LegacyPacketCaptureManager:
             print("\n! Invalid choice, using no filter")  # Inform the user of the fallback
             return ""  # Default to capturing all traffic
 
-    def _get_capture_format_selection(self):  
+    def _get_capture_format_selection(self):
         """
         Prompt user for capture format selection.
 
@@ -6667,7 +6668,7 @@ class _LegacyPacketCaptureManager:
         )  # Read the format choice (defaults to 1)
         return "pcap" if format_choice == "1" else "stream"  # Map the choice to the API's format keyword
 
-    def start_site_packet_capture(self):  
+    def start_site_packet_capture(self):
         """
         Interactive menu for starting site-level packet captures.
 
@@ -6710,7 +6711,7 @@ class _LegacyPacketCaptureManager:
             print("\n! Invalid choice")
             return
 
-    def _start_site_client_capture_wireless(self):    # noqa: C901, PLR0912, PLR0915
+    def _start_site_client_capture_wireless(self):  # noqa: C901, PLR0912, PLR0915
         """Start wireless client packet capture at site level."""
         logging.info("Starting site wireless client capture")
 
@@ -6880,7 +6881,7 @@ class _LegacyPacketCaptureManager:
         else:
             self._execute_site_capture(site_id, payload)
 
-    def _start_site_client_capture_wired(self):    # noqa: C901, PLR0912, PLR0915
+    def _start_site_client_capture_wired(self):  # noqa: C901, PLR0912, PLR0915
         """Start wired client packet capture at site level."""
         logging.info("Starting site wired client capture")
 
@@ -7002,7 +7003,7 @@ class _LegacyPacketCaptureManager:
         else:
             self._execute_site_capture(site_id, payload)
 
-    def _start_site_gateway_capture(self):    # noqa: C901, PLR0912, PLR0915
+    def _start_site_gateway_capture(self):  # noqa: C901, PLR0912, PLR0915
         """Start gateway packet capture at site level."""
         logging.info("Starting site gateway capture")
 
@@ -7142,7 +7143,7 @@ class _LegacyPacketCaptureManager:
         else:
             self._execute_site_capture(site_id, payload)
 
-    def _start_site_switch_capture(self):    # noqa: C901, PLR0912, PLR0915
+    def _start_site_switch_capture(self):  # noqa: C901, PLR0912, PLR0915
         """Start switch packet capture at site level."""
         logging.info("Starting site switch capture")
 
@@ -7282,7 +7283,7 @@ class _LegacyPacketCaptureManager:
         else:
             self._execute_site_capture(site_id, payload)
 
-    def _start_site_new_association_capture(self):  
+    def _start_site_new_association_capture(self):
         """Start new association packet capture at site level."""
         logging.info("Starting site new association capture")
 
@@ -7356,7 +7357,7 @@ class _LegacyPacketCaptureManager:
         else:
             self._execute_site_capture(site_id, payload)
 
-    def _start_site_scan_capture(self):    # noqa: C901, PLR0912, PLR0915
+    def _start_site_scan_capture(self):  # noqa: C901, PLR0912, PLR0915
         """Start scan radio packet capture at site level."""
         logging.info("Starting site scan capture")
 
@@ -7576,7 +7577,7 @@ class _LegacyPacketCaptureManager:
         else:
             self._execute_site_capture(site_id, payload)
 
-    def _start_site_scan_capture_all_aps(self, site_id: str):  
+    def _start_site_scan_capture_all_aps(self, site_id: str):
         """Compatibility facade that delegates multi-AP scan capture to extracted workflow."""
         logging.info(
             "Delegating _start_site_scan_capture_all_aps to MultiApScanCaptureWorkflow"
@@ -7970,7 +7971,7 @@ class _LegacyPacketCaptureManager:
         logging.warning(f"Capture {capture_id} completion check timed out after {max_wait}s")
         return False
 
-    def start_org_packet_capture_legacy(self):    # noqa: C901, PLR0912, PLR0915
+    def start_org_packet_capture_legacy(self):  # noqa: C901, PLR0912, PLR0915
         """
         Interactive menu for starting org-level packet captures (MxEdge only).
 
@@ -8331,7 +8332,7 @@ class _LegacyPacketCaptureManager:
         # Execute org capture
         self._execute_org_capture(payload)
 
-    def start_org_packet_capture(self):  
+    def start_org_packet_capture(self):
         """Delegated org packet capture entrypoint preserved for compatibility."""
         extracted_manager = ExtractedPacketCaptureManager(self.mist_session, self.org_id)
         extracted_manager.start_org_packet_capture()
@@ -8385,7 +8386,7 @@ class _LegacyPacketCaptureManager:
             print(f"\n! Error starting capture: {error}")
             logging.error(f"Exception in _execute_org_capture: {error}", exc_info=True)
 
-    def _subscribe_to_site_capture_stream(self, site_id: str, capture_id: str):    # noqa: C901
+    def _subscribe_to_site_capture_stream(self, site_id: str, capture_id: str):  # noqa: C901
         """
         Subscribe to WebSocket stream for site capture results.
 
@@ -8453,7 +8454,7 @@ class _LegacyPacketCaptureManager:
             print(f"\n! Error subscribing to stream: {error}")
             logging.error(f"Exception in _subscribe_to_site_capture_stream: {error}", exc_info=True)
 
-    def _subscribe_to_org_capture_stream(self, capture_id: str):    # noqa: C901
+    def _subscribe_to_org_capture_stream(self, capture_id: str):  # noqa: C901
         """
         Subscribe to WebSocket stream for org capture results.
 
@@ -8515,7 +8516,7 @@ class _LegacyPacketCaptureManager:
             print(f"\n! Error subscribing to stream: {error}")
             logging.error(f"Exception in _subscribe_to_org_capture_stream: {error}", exc_info=True)
 
-    def _wait_and_download_pcap(self, site_id: str, capture_id: str, duration: int):  
+    def _wait_and_download_pcap(self, site_id: str, capture_id: str, duration: int):
         """Compatibility facade that delegates site PCAP wait/download to extracted workflow."""
         logging.info(
             "Preparing site PCAP wait/download dependencies for capture_id=%s", capture_id
@@ -8538,7 +8539,7 @@ class _LegacyPacketCaptureManager:
         workflow.execute(site_id, capture_id, duration)  # Delegate to extracted workflow preserving facade behavior.
         logging.debug("Completed delegated _wait_and_download_pcap workflow")  # Log delegated workflow completion.
 
-    def _wait_and_download_pcap_org(self, org_id: str, capture_id: str, duration: int):  
+    def _wait_and_download_pcap_org(self, org_id: str, capture_id: str, duration: int):
         """Compatibility facade that delegates org PCAP wait/download to extracted workflow."""
         logging.info(
             "Preparing org PCAP wait/download dependencies for capture_id=%s", capture_id
@@ -8611,7 +8612,7 @@ class SFPTransceiverDataProcessor:
     OUTPUT_FILENAME = "MergedTransceiverData.csv"
 
     @staticmethod
-    def merge_transceiver_data():    # noqa: C901, PLR0915
+    def merge_transceiver_data():  # noqa: C901, PLR0915
         """Generate a merged transceiver CSV linking port optics to site + device context.
 
         Steps:
@@ -9213,7 +9214,7 @@ class APIFetchUtils:
             return []
 
     @staticmethod
-    def all_site_settings(apisession, org_id, limit=1000):  
+    def all_site_settings(apisession, org_id, limit=1000):
         """
         Fetches configuration settings for all sites in the organization.
 
@@ -9250,7 +9251,7 @@ class APIFetchUtils:
         return all_configs
 
     @staticmethod
-    def gateway_device_configs(apisession, org_id, fast=False, max_workers=None):    # noqa: C901, PLR0915
+    def gateway_device_configs(apisession, org_id, fast=False, max_workers=None):  # noqa: C901, PLR0915
         """
         Fetches configuration details for all gateway devices in the org using org inventory.
         If `fast` is True, fetches each device config concurrently using connection pool management.
@@ -9296,7 +9297,7 @@ class APIFetchUtils:
 
         logging.info(f"Prepared {len(work_items)} gateway device config API calls.")
 
-        def fetch_config(work_item, connection_semaphore):  
+        def fetch_config(work_item, connection_semaphore):
             """Fetch configuration for a single device with retry logic."""
             work_site_id, work_device_id, work_site_name = work_item
 
@@ -9319,7 +9320,7 @@ class APIFetchUtils:
                     logging.error(f"! Failed to fetch config for device {work_device_id}: {inner_error}")
                     return None
 
-        def retry_fetch_config(failed_items, connection_semaphore):  
+        def retry_fetch_config(failed_items, connection_semaphore):
             """Retry wrapper for device config fetching."""
             max_retries = int(os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1"))
             retry_results = []
@@ -9467,7 +9468,7 @@ class DataProcessingUtils:
         return flattened
 
     @staticmethod
-    def convert_list_values_to_strings(data):  
+    def convert_list_values_to_strings(data):
         """
         Convert list, tuple, or set values to CSV-compatible comma-separated strings.
 
@@ -9485,7 +9486,7 @@ class DataProcessingUtils:
         return data
 
     @staticmethod
-    def get_unique_keys(data):  
+    def get_unique_keys(data):
         """
         Get all unique dictionary keys from a list of dictionaries.
         Returns a sorted list of string keys.
@@ -9502,7 +9503,7 @@ class DataProcessingUtils:
         return sorted(str(f) for f in fields)
 
     @staticmethod
-    def escape_multiline(data):  
+    def escape_multiline(data):
         """
         Escape multiline strings for CSV compatibility.
         Joins list values as comma-separated strings.
@@ -10282,7 +10283,7 @@ class DataExporter:
             raise
 
     @staticmethod
-    def save_data_to_output(data, filename, api_function_name=None):  
+    def save_data_to_output(data, filename, api_function_name=None):
         """
         Save data to the specified format (CSV or SQLite).
         Convenience method with identical signature for backward compatibility.
@@ -10298,7 +10299,7 @@ class DataExporter:
         return DataExporter.write_with_format_selection(data, filename, api_function_name=api_function_name)
 
     @staticmethod
-    def export_with_processing(data, filename, sort_key=None, api_function_name=None):  
+    def export_with_processing(data, filename, sort_key=None, api_function_name=None):
         """
         Export data with standard processing (flatten, escape, sort).
         Common pattern used throughout the codebase.
@@ -10358,7 +10359,7 @@ class APIDataFetcher:
         - Detailed logging for troubleshooting
     """
 
-    def __init__(  
+    def __init__(
         self,
         title: str,
         api_call: Any,
@@ -11005,7 +11006,7 @@ class PromptClientUtils:
             return None, None, None
 
     @staticmethod
-    def select_site_and_device_ids(site_id=None, device_id=None):  
+    def select_site_and_device_ids(site_id=None, device_id=None):
         """
         Returns site_id and device_id, either from arguments or via interactive prompts.
 
@@ -12119,7 +12120,7 @@ class OrgAlarmEventExporter:
     """
 
     @staticmethod
-    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  
+    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):
         """
         Generic helper to export organization data via APIDataFetcher.
 
@@ -12142,7 +12143,7 @@ class OrgAlarmEventExporter:
         ).execute()
 
     @staticmethod
-    def alarms():  
+    def alarms():
         """
         Export open organization alarms from the past 24 hours to OrgAlarms.csv.
         """
@@ -12167,7 +12168,7 @@ class OrgAlarmEventExporter:
             raise
 
     @staticmethod
-    def alarm_templates():  
+    def alarm_templates():
         """Export alarm templates to OrgAlarmTemplates.csv."""
         OrgAlarmEventExporter._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates,
@@ -12176,7 +12177,7 @@ class OrgAlarmEventExporter:
         )
 
     @staticmethod
-    def events():  
+    def events():
         """Export organization events to OrgEvents.csv."""
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
         TimeUtils.log_dynamic_lookback("org events export", hours)
@@ -12188,7 +12189,7 @@ class OrgAlarmEventExporter:
         )
 
     @staticmethod
-    def device_events():  
+    def device_events():
         """
         Export all device events from the past 24 hours to OrgDeviceEvents.csv.
         """
@@ -12433,7 +12434,7 @@ class OrgSiteExporter:
     """
 
     @staticmethod
-    def sites():  
+    def sites():
         """
         Fetches and exports the list of all sites in the organization.
         Output format determined by global OUTPUT_FORMAT setting.
@@ -12457,7 +12458,7 @@ class OrgSiteExporter:
             emitter.emit_progress_complete("11", "sites", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def sites_list_api():  
+    def sites_list_api():
         """
         Uses the 'list' sites API endpoint (not 'search') to export all sites to SiteList_ListAPI.csv,
         but only if the file does not already exist.
@@ -12485,7 +12486,7 @@ class OrgSiteExporter:
         print(f"! Sites exported to {output_file}")  # Inform the user on stdout
 
     @staticmethod
-    def sites_with_location():  
+    def sites_with_location():
         """
         Export a list of sites with all available fields to SitesWithLocations.csv.
         """
@@ -12502,7 +12503,7 @@ class OrgSiteExporter:
         logging.info(" Full site data written to SitesWithLocations.csv")
 
     @staticmethod
-    def current_guests():  
+    def current_guests():
         """
         Export all current guest users in the org to OrgCurrentGuests.csv
         """
@@ -12520,7 +12521,7 @@ class OrgSiteExporter:
         logging.info(" Current guests exported to OrgCurrentGuests.csv")
 
     @staticmethod
-    def historical_guests():  
+    def historical_guests():
         """
         Export all guest users from the last 7 days to OrgHistoricalGuests.csv
         """
@@ -12550,7 +12551,7 @@ class OrgInventoryExporter:
     """
 
     @staticmethod
-    def inventory():  
+    def inventory():
         """
         Fetches and exports the full inventory of devices in the organization to OrgInventory.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
@@ -12573,7 +12574,7 @@ class OrgInventoryExporter:
             emitter.emit_progress_complete("12", "inventory", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def devices():  
+    def devices():
         """
         Fetches and exports a list of all devices in the organization to OrgDevices.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
@@ -12594,7 +12595,7 @@ class OrgInventoryExporter:
             emitter.emit_progress_complete("17", "devices", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def combined_inventory_with_site_info():  
+    def combined_inventory_with_site_info():
         """
         Combines fresh AllDevicesWithSiteInfo data into multiple CSV files
         grouped by calendar week based on 'created_time' field.
@@ -12822,7 +12823,7 @@ class OrgInventoryExporter:
         )
 
     @staticmethod
-    def devices_with_site_info(fast: bool = False):    # noqa: PLR0915
+    def devices_with_site_info(fast: bool = False):  # noqa: PLR0915
         """
         Fetches all devices in the organization, enriches them with site and address info,
         and exports the result to AllDevicesWithSiteInfo.csv. Also logs and displays a summary table.
@@ -12889,7 +12890,7 @@ class OrgInventoryExporter:
             inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
             logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
 
-        def split_address(address):  
+        def split_address(address):
             """
             Splits a full address string into street, city, state, zip, and country.
             Returns empty strings if parsing fails.
@@ -12993,7 +12994,7 @@ class OrgInventoryExporter:
         logging.debug("\n" + table.get_string())
 
     @staticmethod
-    def gateways_with_site_info():  
+    def gateways_with_site_info():
         """
         Fetches all gateway devices in the organization, enriches them with site and address info,
         and exports the result to GatewaysWithSiteInfo.csv. Also logs and displays a summary table.
@@ -13011,7 +13012,7 @@ class OrgInventoryExporter:
         inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
         logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
 
-        def split_address(address):  
+        def split_address(address):
             """
             Splits a full address string into street, city, state, zip, and country.
             Returns empty strings if parsing fails.
@@ -13095,7 +13096,7 @@ class OrgDeviceStatsExporter:
     """
 
     @staticmethod
-    def device_stats(fast: bool = False):  
+    def device_stats(fast: bool = False):
         """Export statistics for all devices in the organization to OrgDeviceStats.csv.
 
         Fast Mode Behavior:
@@ -13136,7 +13137,7 @@ class OrgDeviceStatsExporter:
             emitter.emit_progress_complete("13", "device_stats", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def device_port_stats(fast: bool = False):    # noqa: C901, PLR0912, PLR0915
+    def device_port_stats(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
         """Export port-level statistics for all switches and gateways to `OrgDevicePortStats.csv`.
 
         Fast Mode Behavior:
@@ -13197,7 +13198,7 @@ class OrgDeviceStatsExporter:
                 )
 
             # Worker function to fetch port stats for a single site
-            def fetch_site_port_stats(site_info, connection_semaphore):  
+            def fetch_site_port_stats(site_info, connection_semaphore):
                 """Fetch port statistics for a single site with retry logic."""
                 site_id, site_name = site_info
 
@@ -13242,7 +13243,7 @@ class OrgDeviceStatsExporter:
                 return []
 
             # Retry function for failed sites
-            def retry_failed_sites(failed_sites, connection_semaphore):  
+            def retry_failed_sites(failed_sites, connection_semaphore):
                 retry_results = []
                 still_failed = []
                 retry_threads = min(
@@ -13355,7 +13356,7 @@ class OrgDeviceStatsExporter:
             ).execute()
 
     @staticmethod
-    def vpn_peer_stats(fast: bool = False):  
+    def vpn_peer_stats(fast: bool = False):
         """Export VPN peer path statistics to OrgVPNPeerStats.csv.
 
         Fast Mode Behavior:
@@ -13395,7 +13396,7 @@ class OrgDeviceStatsExporter:
             emitter.emit_progress_complete("15", "vpn_peer_stats", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def switch_vc_stats():  
+    def switch_vc_stats():
         """
         Export virtual chassis stats (including stacking cable info) for all switches in the org.
         """
@@ -13411,7 +13412,7 @@ class OrgDeviceStatsExporter:
             return
         all_vc_stats = []  # Accumulates one merged dict per switch
 
-        def _fetch_vc_for_switch(switch):    # Fetch VC stats for a single switch; returns merged dict or None
+        def _fetch_vc_for_switch(switch):  # Fetch VC stats for a single switch; returns merged dict or None
             site_id = switch.get("site_id")  # Required for the getSiteDeviceVirtualChassis API call
             device_id = switch.get("id")  # Device UUID used as API path parameter
             name = switch.get("name", "")  # Human-readable name for log messages
@@ -13889,7 +13890,7 @@ class OrgTemplateExporter:
     """
 
     @staticmethod
-    def all_templates():  
+    def all_templates():
         """
         Export all organization templates (gateway, network, RF, site, AP) to CSV files.
         """
@@ -13947,7 +13948,7 @@ class OrgTemplateExporter:
         logging.info(" Organization templates export completed")
 
     @staticmethod
-    def network_templates():  
+    def network_templates():
         """Export network templates to OrgNetworkTemplates.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
@@ -13956,14 +13957,14 @@ class OrgTemplateExporter:
         )
 
     @staticmethod
-    def rf_templates():  
+    def rf_templates():
         """Export RF templates to OrgRfTemplates.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates, data_type="rf templates", sort_key="name"
         )
 
     @staticmethod
-    def ap_templates():  
+    def ap_templates():
         """Export AP templates to OrgApTemplates.csv."""
         print("Export Organization AP Templates:")  # Header line for this export operation
         logging.info(
@@ -14002,7 +14003,7 @@ class OrgTemplateExporter:
             raise
 
     @staticmethod
-    def switch_templates():  
+    def switch_templates():
         """Export switch templates to OrgSwitchTemplates.csv."""
         print("Export Organization Switch Templates:")
         logging.info("Starting export of organization switch templates (canonical networktemplates)...")
@@ -14041,21 +14042,21 @@ class OrgClientSecurityExporter:
     """
 
     @staticmethod
-    def wireless_clients():  
+    def wireless_clients():
         """Export wireless client statistics for the entire organization to OrgWirelessClients.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.clients.searchOrgWirelessClients, data_type="wireless clients", sort_key="mac"
         )
 
     @staticmethod
-    def wired_clients():  
+    def wired_clients():
         """Export wired client statistics for the entire organization to OrgWiredClients.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients, data_type="wired clients", sort_key="mac"
         )
 
     @staticmethod
-    def security_events(fast: bool = False):    # noqa: C901, PLR0912, PLR0915
+    def security_events(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
         """Export security policies, intelligence profiles, and rogue data.
 
         Fast Mode Behavior:
@@ -14226,7 +14227,7 @@ class OrgClientSecurityExporter:
             )  # Report completion and duration
 
     @staticmethod
-    def rogue_clients(fast: bool = False):    # noqa: C901, PLR0915
+    def rogue_clients(fast: bool = False):  # noqa: C901, PLR0915
         """Export rogue clients to OrgRogueClients.csv.
 
         Fast Mode Behavior:
@@ -14300,7 +14301,7 @@ class OrgClientSecurityExporter:
             print(" No rogue clients detected across all sites")  # Inform the user
 
     @staticmethod
-    def rogue_aps(fast: bool = False):    # noqa: C901, PLR0915
+    def rogue_aps(fast: bool = False):  # noqa: C901, PLR0915
         """Export rogue APs to OrgRogueAps.csv.
 
         Fast Mode Behavior:
@@ -14843,7 +14844,7 @@ class OrgAdminExporter:
     """
 
     @staticmethod
-    def api_tokens():  
+    def api_tokens():
         """Export organization API tokens to OrgApiTokens.csv."""
         logging.info("Starting export of organization api tokens...")
         APIDataFetcher(
@@ -14854,7 +14855,7 @@ class OrgAdminExporter:
         ).execute()
 
     @staticmethod
-    def admins():  
+    def admins():
         """Export organization admins to OrgAdmins.csv."""
         logging.info("Starting export of organization admins...")
         APIDataFetcher(
@@ -14865,12 +14866,12 @@ class OrgAdminExporter:
         ).execute()
 
     @staticmethod
-    def sso():  
+    def sso():
         """Export organization SSO configuration to OrgSso.csv."""
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.ssos.listOrgSsos, data_type="sso", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def licenses():  
+    def licenses():
         """Export organization licenses to OrgLicenses.csv."""
         logging.info("Starting export of organization licenses (canonical endpoint)...")
         filename = "OrgLicenses.csv"
@@ -14907,7 +14908,7 @@ class OrgAdminExporter:
             raise
 
     @staticmethod
-    def usage():  
+    def usage():
         """Export organization usage data to OrgUsage.csv."""
         logging.info("Starting export of organization license usage...")
         APIDataFetcher(
@@ -14930,7 +14931,7 @@ class SelfExportUtils:
     """
 
     @staticmethod
-    def audit_logs() -> None:  
+    def audit_logs() -> None:
         """Export audit log of changes made by the authenticated admin account to SelfAuditLogs.csv."""
         logging.info("Starting export of self (admin account) audit logs...")  # Log before operation
         filename = "SelfAuditLogs.csv"  # Output filename for self audit log entries
@@ -14970,31 +14971,31 @@ class OrgConfigExporter:
     """
 
     @staticmethod
-    def psks():  
+    def psks():
         """Export organization PSKs to OrgPsks.csv."""
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.psks.listOrgPsks, data_type="psks", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def webhooks():  
+    def webhooks():
         """Export organization webhooks to OrgWebhooks.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.webhooks.listOrgWebhooks, data_type="webhooks", sort_key="name"
         )
 
     @staticmethod
-    def wlans():  
+    def wlans():
         """Export organization WLANs to OrgWlans.csv."""
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.wlans.listOrgWlans, data_type="wlans", sort_key="ssid")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def mx_edges():  
+    def mx_edges():
         """Export MX Edge data to OrgMxEdges.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.mxedges.listOrgMxEdges, data_type="mx edges", sort_key="name"
         )
 
     @staticmethod
-    def msp():    # noqa: C901, PLR0912, PLR0915
+    def msp():  # noqa: C901, PLR0912, PLR0915
         """Export MSP data - lists organizations under MSP when MSP privileges are available.
 
         When the user has MSP-level privileges (detected at login), this function
@@ -15129,7 +15130,7 @@ class OrgExportUtils:
     """
 
     @staticmethod
-    def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):  
+    def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):
         """
         Generic function to export organization-specific data to CSV.
 
@@ -15162,7 +15163,7 @@ class OrgExportUtils:
         ).execute()
 
     @staticmethod
-    def sites_sle_summary():  
+    def sites_sle_summary():
         """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
         print("Export Organization Sites SLE Summary:")
         logging.info("Starting export of sites SLE summary...")
@@ -15216,7 +15217,7 @@ class OrgExportUtils:
             )
 
     @staticmethod
-    def insight_metrics():    # noqa: C901, PLR0912, PLR0915
+    def insight_metrics():  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide insight metrics to normalized CSV files."""
         print("Export Organization Insight Metrics (Normalized):")
         logging.info("Starting export of organization insight metrics with normalized structure...")
@@ -15407,35 +15408,35 @@ class OrgExportUtils:
             DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def _nac_clients():  
+    def _nac_clients():
         """Export NAC clients to OrgNacClients.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClients, data_type="nac clients", sort_key="mac"
         )
 
     @staticmethod
-    def _nac_tags():  
+    def _nac_tags():
         """Export NAC tags to OrgNacTags.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nactags.listOrgNacTags, data_type="nac tags", sort_key="name"
         )
 
     @staticmethod
-    def _nac_portals():  
+    def _nac_portals():
         """Export NAC portals to OrgNacPortals.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nacportals.listOrgNacPortals, data_type="nac portals", sort_key="name"
         )
 
     @staticmethod
-    def _nac_rules():  
+    def _nac_rules():
         """Export NAC rules to OrgNacRules.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nacrules.listOrgNacRules, data_type="nac rules", sort_key="name"
         )
 
     @staticmethod
-    def _nac_events():  
+    def _nac_events():
         """Export NAC events to OrgNacEvents.csv."""
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
         TimeUtils.log_dynamic_lookback("org NAC events export", hours)
@@ -15447,42 +15448,42 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def _assets():  
+    def _assets():
         """Export organization assets to OrgAssets.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgAssets, data_type="assets", sort_key="name"
         )
 
     @staticmethod
-    def _bgp_peers():  
+    def _bgp_peers():
         """Export BGP peer data to OrgBgpPeers.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgBgpStats, data_type="bgp peers", sort_key="peer_ip"
         )
 
     @staticmethod
-    def _tunnel_stats():  
+    def _tunnel_stats():
         """Export tunnel statistics to OrgTunnelStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgTunnelsStats, data_type="tunnel stats", sort_key="name"
         )
 
     @staticmethod
-    def _site_stats():  
+    def _site_stats():
         """Export site statistics to OrgSiteStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.listOrgSiteStats, data_type="site stats", sort_key="name"
         )
 
     @staticmethod
-    def _mxedge_stats():  
+    def _mxedge_stats():
         """Export MX Edge statistics to OrgMxedgeStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.listOrgMxEdgesStats, data_type="mx edge stats", sort_key="name"
         )
 
     @staticmethod
-    def e911_report():  
+    def e911_report():
         """Export E911 report for the organization to OrgE911Report.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.exports.getOrgE911Report,
@@ -15492,7 +15493,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def jsi_pbn():  
+    def jsi_pbn():
         """Export JSI PBN (Product Bulletin Notifications) data to OrgJsiPbn.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiPbn,
@@ -15501,7 +15502,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def jsi_sirt():  
+    def jsi_sirt():
         """Export JSI SIRT (Security Incident Response Team) advisories to OrgJsiSirt.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiSirt,
@@ -15510,7 +15511,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def ospf_stats():  
+    def ospf_stats():
         """Export OSPF adjacency statistics for the organization to OrgOspfStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgOspfStats,
@@ -15519,7 +15520,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def _security_intel_profiles():  
+    def _security_intel_profiles():
         """Export security intelligence profiles to OrgSecurityIntelProfiles.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles,
@@ -15528,7 +15529,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def _invites():  
+    def _invites():
         """Export organization invites to OrgInvites.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.invites.listOrgInvites, data_type="invites", sort_key="email"
@@ -15579,7 +15580,7 @@ class OrgExportUtils:
             raise
 
     @staticmethod
-    def sle_metrics(fast: bool = False):    # noqa: C901, PLR0912, PLR0915
+    def sle_metrics(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
         print("Export Organization SLE Metrics:")
         logging.info("Starting export of organization SLE metrics...")
@@ -15808,7 +15809,7 @@ class SiteDeviceExporter:
     """
 
     @staticmethod
-    def device_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):  
+    def device_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):
         """
         Fetches and displays the device inventory for a given site.
 
@@ -15865,7 +15866,7 @@ class SiteDeviceExporter:
         logging.debug("\n" + table.get_string())
 
     @staticmethod
-    def device_stats():  
+    def device_stats():
         """Export device statistics for a site to SiteDeviceStats.csv."""
         print("Site Device Statistics:")
         logging.info("Starting export of site device statistics...")
@@ -15896,7 +15897,7 @@ class SiteDeviceExporter:
             print(f"! Error fetching device statistics: {e}")
 
     @staticmethod
-    def port_stats():  
+    def port_stats():
         """Export port statistics for a site to SitePortStats.csv."""
         emitter = PROGRESS_EMITTER
         if emitter:
@@ -15909,7 +15910,7 @@ class SiteDeviceExporter:
             emitter.emit_progress_complete("29", "port_stats", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def device_virtual_chassis():  
+    def device_virtual_chassis():
         """Export virtual chassis data for a site to SiteDeviceVirtualChassis.csv."""
         print("Export Virtual Chassis Information:")
         logging.info("Starting export of site device virtual chassis information...")
@@ -15951,7 +15952,7 @@ class SiteDeviceExporter:
             print(f"! Failed to export virtual chassis information: {e}")
 
     @staticmethod
-    def devices():  
+    def devices():
         """Export device data for a site to SiteDevices.csv."""
         print("Site Device List:")
         logging.info("Starting export of site device list...")
@@ -15991,7 +15992,7 @@ class SiteClientExporter:
     """
 
     @staticmethod
-    def clients():  
+    def clients():
         """Export client data for a site to SiteClients.csv."""
         print("Site Client Statistics:")
         logging.info("Starting export of site client statistics...")
@@ -16022,7 +16023,7 @@ class SiteClientExporter:
             print(f"! Error fetching client data: {e}")
 
     @staticmethod
-    def client_insights():    # noqa: C901, PLR0912, PLR0915
+    def client_insights():  # noqa: C901, PLR0912, PLR0915
         """Export client-specific insight metrics for a selected site to SiteClientInsights_[SiteName].csv."""
         print("Export Site Client Insights:")
         logging.info("Starting export of site client insights...")
@@ -16169,7 +16170,7 @@ class SiteClientExporter:
         return PacketCaptureManager.normalize_mac_address(client_mac)
 
     @staticmethod
-    def wifi_clients(site_id=None):  
+    def wifi_clients(site_id=None):
         """Compatibility facade that delegates WiFi client export to extracted exporter."""
         logging.info(
             "Delegating wifi_clients to WifiClientsExporter"
@@ -16193,7 +16194,7 @@ class SiteClientExporter:
         logging.debug("Completed delegated wifi_clients export workflow")  # Log delegated exporter completion.
 
     @staticmethod
-    def beacons():  
+    def beacons():
         """Export beacons for a site to SiteBeacons.csv."""
         SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.sites.beacons.listSiteBeacons, data_type="beacons", sort_key="name"
@@ -16209,7 +16210,7 @@ class SiteConfigExporter:
     """
 
     @staticmethod
-    def wlans(site_id=None):  
+    def wlans(site_id=None):
         """Export effective WLANs for a site to SiteWlans.csv."""
         logging.info("Starting export of site WLANs...")
 
@@ -16264,19 +16265,19 @@ class SiteConfigExporter:
         logging.info(f"Exported {len(processed)} WLAN records for site {site_name} to {filename}")
 
     @staticmethod
-    def maps():  
+    def maps():
         """Export maps for a site to SiteMaps.csv."""
         SiteExportUtils._export_data(api_call=mistapi.api.v1.sites.maps.listSiteMaps, data_type="maps", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def zones():  
+    def zones():
         """Export zones for a site to SiteZones.csv."""
         SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.sites.zones.listSiteZones, data_type="zones", sort_key="name"
         )
 
     @staticmethod
-    def settings():  
+    def settings():
         """Export configuration settings for all sites to AllSiteConfigs.csv."""
         print("Site Configuration Settings:")
         logging.info("Starting export of all site configuration settings...")
@@ -16304,7 +16305,7 @@ class SiteAnomalyExporter:
     """
 
     @staticmethod
-    def anomaly_events():    # noqa: C901, PLR0912, PLR0915
+    def anomaly_events():  # noqa: C901, PLR0912, PLR0915
         """Export comprehensive anomaly events for a selected site to SiteAnomalyEvents_[SiteName].csv.
 
         Dynamically discovers potential anomaly metrics from ConstInsightMetrics.csv and uses
@@ -16407,7 +16408,7 @@ class SiteAnomalyExporter:
                 logging.getLogger(logger_name).setLevel(original_level)
 
     @staticmethod
-    def device_anomaly_events():    # noqa: C901, PLR0912, PLR0915
+    def device_anomaly_events():  # noqa: C901, PLR0912, PLR0915
         """Export device-specific anomaly events for a selected device
         to SiteDeviceAnomalyEvents_[SiteName]_[DeviceName].csv.
 
@@ -16509,7 +16510,7 @@ class SiteAnomalyExporter:
                 logging.getLogger(logger_name).setLevel(original_level)
 
     @staticmethod
-    def client_anomaly_events():    # noqa: C901, PLR0912, PLR0915
+    def client_anomaly_events():  # noqa: C901, PLR0912, PLR0915
         """Export client-specific anomaly events for a selected client
         to SiteClientAnomalyEvents_[SiteName]_[ClientMAC].csv.
 
@@ -16760,7 +16761,7 @@ class SiteExportUtils:
     """Delegation wrapper for extracted site export implementation."""
 
     @staticmethod
-    def _configure_module():  
+    def _configure_module():
         """Configure extracted module dependencies and return module handle."""
         from src.export import site_export_utils as site_export_module  # noqa: PLC0415,I001
 
@@ -16783,7 +16784,7 @@ class SiteExportUtils:
         return site_export_module
 
     @staticmethod
-    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  
+    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):
         """Delegate generic site export flow to extracted module."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils._export_data(api_call, data_type, sort_key=sort_key, **api_kwargs)
@@ -16801,79 +16802,79 @@ class SiteExportUtils:
         DeviceMetricOperation.execute()  # Run the decomposed operation directly (no inheritance delegation)
 
     @staticmethod
-    def insights():  
+    def insights():
         """Menu #73 delegated entrypoint."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.insights()
 
     @staticmethod
-    def _system_events():  
+    def _system_events():
         """Delegated site system events export."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils._system_events()
 
     @staticmethod
-    def _fast_roam_events():  
+    def _fast_roam_events():
         """Delegated site fast-roam events export."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils._fast_roam_events()
 
     @staticmethod
-    def ospf_stats():  
+    def ospf_stats():
         """Menu #70 delegated entrypoint."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.ospf_stats()
 
     @staticmethod
-    def mxedge_upgrade_status():  
+    def mxedge_upgrade_status():
         """Menu #71 delegated entrypoint."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.mxedge_upgrade_status()
 
     @staticmethod
-    def auto_map_assignment_status():  
+    def auto_map_assignment_status():
         """Menu #72 delegated entrypoint."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.auto_map_assignment_status()
 
     @staticmethod
-    def site_stats() -> None:  
+    def site_stats() -> None:
         """Menu #80 delegated entrypoint."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.site_stats()
 
     @staticmethod
-    def gateway_metrics() -> None:  
+    def gateway_metrics() -> None:
         """Menu #81 delegated entrypoint."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.gateway_metrics()
 
     @staticmethod
-    def switches_metrics() -> None:  
+    def switches_metrics() -> None:
         """Menu #82 delegated entrypoint."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.switches_metrics()
 
     @staticmethod
-    def beacons_stats() -> None:  
+    def beacons_stats() -> None:
         """Menu #83 delegated entrypoint."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.beacons_stats()
 
     @staticmethod
-    def wxrules_usage() -> None:  
+    def wxrules_usage() -> None:
         """Menu #84 delegated entrypoint."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.wxrules_usage()
 
     @staticmethod
-    def assets_stats() -> None:  
+    def assets_stats() -> None:
         """Menu #85 delegated entrypoint."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.assets_stats()
 
     @staticmethod
-    def current_channel_planning() -> None:  
+    def current_channel_planning() -> None:
         """Menu #86 delegated entrypoint."""
         module = SiteExportUtils._configure_module()
         return module.SiteExportUtils.current_channel_planning()
@@ -17049,7 +17050,7 @@ class GatewayHaExporter:
         print()  # Blank line after table for readability
 
 
-def _get_service_ping_manager_instance():  
+def _get_service_ping_manager_instance():
     """Create extracted ServicePingManager instance with MistHelper runtime dependencies."""
     from src.websocket.service_ping_manager import ServicePingManager as _SPM
     from src.websocket.service_ping_manager import configure_service_ping_manager_dependencies as _configure_spm
@@ -17087,13 +17088,13 @@ class ServicePingManager:
     DEFAULT_TENANT = _Extracted.DEFAULT_TENANT
     DEFAULT_SERVICE = _Extracted.DEFAULT_SERVICE
 
-    def __init__(self):  
+    def __init__(self):
         """Initialize wrapper by mirroring extracted manager state for test compatibility."""
         extracted = _get_service_ping_manager_instance()
         self.__dict__.update(extracted.__dict__)
         self._delegate = extracted
 
-    def __getattr__(self, name):  
+    def __getattr__(self, name):
         """Delegate unknown attributes and methods to extracted implementation."""
         return getattr(self._delegate, name)
 
@@ -17107,7 +17108,7 @@ class ServicePingManager:
 # ============================================================================
 
 
-def _get_routing_utils_instance():  
+def _get_routing_utils_instance():
     """Create RoutingUtils instance with MistHelper globals."""
     from src.network.routing_utils import RoutingUtils as _RU
 
@@ -17130,17 +17131,17 @@ class RoutingUtils:
     """
 
     @staticmethod
-    def execute_show_forwarding_table():  
+    def execute_show_forwarding_table():
         """Execute show forwarding table on a gateway/SSR device via WebSocket."""
         _get_routing_utils_instance().execute_show_forwarding_table()
 
     @staticmethod
-    def execute_show_routing_table():  
+    def execute_show_routing_table():
         """Execute show route command on switches via WebSocket."""
         _get_routing_utils_instance().execute_show_routing_table()
 
     @staticmethod
-    def execute_show_ssr_routes():  
+    def execute_show_ssr_routes():
         """Execute SSR/SRX routing table via dedicated API."""
         _get_routing_utils_instance().execute_show_ssr_routes()
 
@@ -17151,7 +17152,7 @@ class RoutingUtils:
 # ============================================================================
 
 
-def _get_duc_instance():  
+def _get_duc_instance():
     """Create DeviceUtilityCommands instance with MistHelper globals."""
     from src.device.utility_commands import (
         DeviceUtilityCommands as _DUC,
@@ -17396,7 +17397,7 @@ class ConstDefinitionsExporter:
     FALLBACK_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP", "CN", "IN", "BR"]
     FALLBACK_CHANNEL_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP"]
 
-    def __init__(self, api_session):  
+    def __init__(self, api_session):
         """Initialize exporter with API session and counters."""
         self.api_session = api_session
         self.discovered_endpoints: dict[str, EndpointConfig] = {}
@@ -17472,7 +17473,7 @@ class ConstDefinitionsExporter:
             print(f"    ! Error inspecting {module_display_name}: {error}")
             logging.error(f"Error inspecting const module {module_display_name}: {error}")
 
-    def _find_api_functions(self, module, endpoint_name: str) -> list[str]:  
+    def _find_api_functions(self, module, endpoint_name: str) -> list[str]:
         """Find all callable API functions in a module."""
         import inspect
 
@@ -17503,7 +17504,7 @@ class ConstDefinitionsExporter:
 
         return functions[0] if functions else None
 
-    def _register_endpoint(self, endpoint_name: str, module, api_function: str, modname: str) -> None:  
+    def _register_endpoint(self, endpoint_name: str, module, api_function: str, modname: str) -> None:
         """Register an endpoint after analyzing its parameters."""
         import inspect
 
@@ -17551,7 +17552,7 @@ class ConstDefinitionsExporter:
             if p.default == inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]
         ]
 
-    def _get_optional_params(self, sig) -> list[str]:  
+    def _get_optional_params(self, sig) -> list[str]:
         """Extract optional parameter names from function signature."""
         import inspect
 
@@ -17664,7 +17665,7 @@ class ConstDefinitionsExporter:
             DataExporter.save_data_to_output([], config.filename)  # type: ignore[no-untyped-call]
             self.endpoints_failed += 1
 
-    def _fetch_endpoint_data(self, config: EndpointConfig):  
+    def _fetch_endpoint_data(self, config: EndpointConfig):
         """Fetch data based on special handling type."""
         if config.special_handling == "all_models":
             return self._fetch_all_gateway_models(config)
@@ -17675,7 +17676,7 @@ class ConstDefinitionsExporter:
         else:
             return self._fetch_standard_endpoint(config)
 
-    def _fetch_standard_endpoint(self, config: EndpointConfig):  
+    def _fetch_standard_endpoint(self, config: EndpointConfig):
         """Fetch data from a standard endpoint with no special parameters."""
         api_function = getattr(config.module, config.function_name)
         response = api_function(self.api_session)
@@ -17730,7 +17731,7 @@ class ConstDefinitionsExporter:
         print(f"    ! Using fallback gateway models: {len(self.FALLBACK_GATEWAY_MODELS)} models")
         return self.FALLBACK_GATEWAY_MODELS
 
-    def _extract_gateway_models(self, device_models_data) -> list[str]:  
+    def _extract_gateway_models(self, device_models_data) -> list[str]:
         """Extract gateway model names from device models data."""
         gateway_models = []
 
@@ -17820,7 +17821,7 @@ class ConstDefinitionsExporter:
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_COUNTRIES)} countries")
         return self.FALLBACK_COUNTRIES
 
-    def _extract_country_codes(self, countries_data) -> list[str]:  
+    def _extract_country_codes(self, countries_data) -> list[str]:
         """Extract country codes from countries data."""
         if isinstance(countries_data, dict):
             return list(countries_data.keys())
@@ -17910,7 +17911,7 @@ class ConstDefinitionsExporter:
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_CHANNEL_COUNTRIES)} countries")
         return self.FALLBACK_CHANNEL_COUNTRIES
 
-    def _extract_channel_country_codes(self, countries_data) -> list[str]:  
+    def _extract_channel_country_codes(self, countries_data) -> list[str]:
         """Extract country codes from countries data for channel lookup."""
         if isinstance(countries_data, dict):
             return list(countries_data.keys())
@@ -17940,7 +17941,7 @@ class ConstDefinitionsExporter:
 
         return records
 
-    def _export_data(self, config: EndpointConfig, const_data) -> None:  
+    def _export_data(self, config: EndpointConfig, const_data) -> None:
         """Convert data to list format and export to file."""
         if not const_data:
             print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
@@ -18348,7 +18349,7 @@ class DataCollectionManager:
     """
 
     @staticmethod
-    def continuous_loop():  
+    def continuous_loop():
         """
         Menu 76: Continuously collect core organizational data.
 
@@ -18426,7 +18427,7 @@ class DataCollectionManager:
             time.sleep(5)
 
     @staticmethod
-    def generate_support_packages():  
+    def generate_support_packages():
         """
         Menu 78: Generate support package CSV for each site with alarms or events.
 
@@ -18523,7 +18524,7 @@ class InteractiveDisplayUtils:
     """
 
     @staticmethod
-    def site_inventory():  
+    def site_inventory():
         """
         Prompts the user to select a site and displays its device inventory.
         """
@@ -18537,7 +18538,7 @@ class InteractiveDisplayUtils:
             logging.warning("No site selected or invalid input provided for site selection.")
 
     @staticmethod
-    def device_stats(site_id=None, device_id=None):  
+    def device_stats(site_id=None, device_id=None):
         """
         Fetches and displays detailed statistics for a specific device.
 
@@ -18556,7 +18557,7 @@ class InteractiveDisplayUtils:
         logging.info("Completed device_stats execution.")
 
     @staticmethod
-    def device_tests():  
+    def device_tests():
         """
         Prompts user to select a gateway device and displays its synthetic test stats.
         """
@@ -18570,7 +18571,7 @@ class InteractiveDisplayUtils:
         logging.info("Completed device_tests execution.")
 
     @staticmethod
-    def device_config():  
+    def device_config():
         """
         Prompts user to select a device and displays its configuration details.
         """
@@ -18595,7 +18596,7 @@ class GatewayTestExporter:
     """
 
     @staticmethod
-    def synthetic_tests(fast=False):    # noqa: C901, PLR0915
+    def synthetic_tests(fast=False):  # noqa: C901, PLR0915
         """
         Collects and exports synthetic test stats for all gateways in the organization.
         Optimized to use cached inventory data and concurrent processing when fast=True.
@@ -18623,7 +18624,7 @@ class GatewayTestExporter:
             logging.warning("[WARN] No gateway devices found. Exiting synthetic tests export.")
             return
 
-        def fetch_synthetic_test_stats_with_retry(  
+        def fetch_synthetic_test_stats_with_retry(
             device_info, max_retries=None, retry_delay=None, connection_semaphore=None
         ):
             """
@@ -18691,12 +18692,12 @@ class GatewayTestExporter:
             start_time = time.time()
 
             # Define worker function for the connection pool helper
-            def fetch_device_stats(device_info, connection_semaphore):  
+            def fetch_device_stats(device_info, connection_semaphore):
                 """Worker function that fetches synthetic test stats for a single device."""
                 return fetch_synthetic_test_stats_with_retry(device_info, connection_semaphore=connection_semaphore)  # type: ignore[no-untyped-call]
 
             # Define retry function for failed devices
-            def retry_failed_devices(failed_devices, connection_semaphore):  
+            def retry_failed_devices(failed_devices, connection_semaphore):
                 retry_results = []
                 still_failed = []
                 retry_threads = min(
@@ -18783,7 +18784,7 @@ class GatewayTestExporter:
             )
 
     @staticmethod
-    def test_results_by_site(fast: bool = False):    # noqa: C901, PLR0912, PLR0915
+    def test_results_by_site(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
         """Export all synthetic test results (including speed tests) for all sites with gateways.
 
         When fast=True:
@@ -18834,7 +18835,7 @@ class GatewayTestExporter:
 
         all_results = []
 
-        def fetch_site_tests(site_id, connection_semaphore):  
+        def fetch_site_tests(site_id, connection_semaphore):
             """Worker to fetch all synthetic test results for one site (with optional semaphore)."""
             try:
                 ValidationUtils.validate_site_id(site_id, "GatewayTestExporter.test_results_by_site")
@@ -18859,7 +18860,7 @@ class GatewayTestExporter:
             start_time = time.time()
 
             # Use generic connection pool executor (treat each site as a work item)
-            def worker(site_id, connection_semaphore):  
+            def worker(site_id, connection_semaphore):
                 return fetch_site_tests(site_id, connection_semaphore)  # type: ignore[no-untyped-call]
 
             successful_results, failed_sites = execute_with_connection_pool_management(
@@ -18909,7 +18910,7 @@ class _LegacyGatewayStatsExporter:
     """
 
     @staticmethod
-    def device_stats(fast=False):    # noqa: C901, PLR0912, PLR0915
+    def device_stats(fast=False):  # noqa: C901, PLR0912, PLR0915
         """
         Collects and exports detailed device statistics for all gateways in the organization.
         Makes individual getSiteDeviceStats API calls for each gateway device.
@@ -18931,7 +18932,7 @@ class _LegacyGatewayStatsExporter:
             logging.warning("[WARN] No gateway devices found. Exiting gateway device stats export.")
             return
 
-        def fetch_device_stats_with_retry(device_info, max_retries=None, retry_delay=None, connection_semaphore=None):  
+        def fetch_device_stats_with_retry(device_info, max_retries=None, retry_delay=None, connection_semaphore=None):
             """
             Fetch device statistics for a single gateway device with retry logic and connection pool management.
 
@@ -19084,7 +19085,7 @@ class _LegacyGatewayStatsExporter:
             logging.info(f"! {output_file} was generated or refreshed")
 
     @staticmethod
-    def wan_port_conflicts():  
+    def wan_port_conflicts():
         """
         Orchestrates WAN port IP conflict analysis for gateway devices.
         Delegates to helper methods for loading, analyzing, and exporting results.
@@ -19110,7 +19111,7 @@ class _LegacyGatewayExportUtils:
     WAN_PORT_COLUMNS = [f"if_stat_ge-{port}_ips" for port in ["0/0/0", "0/0/1", "0/0/2"]]
 
     @staticmethod
-    def _load_gateway_stats_for_conflicts():  
+    def _load_gateway_stats_for_conflicts():
         """Load gateway device stats CSV for conflict analysis."""
         stats_file = "AllGatewayDeviceStats.csv"
         CacheUtils.check_and_generate_csv(stats_file, lambda: GatewayStatsExporter.device_stats(fast=True))  # type: ignore[no-untyped-call]
@@ -19127,7 +19128,7 @@ class _LegacyGatewayExportUtils:
             return None
 
     @staticmethod
-    def _analyze_all_gateway_conflicts(gateway_data):  
+    def _analyze_all_gateway_conflicts(gateway_data):
         """Analyze all gateways for internal WAN port IP conflicts."""
         logging.info(" Analyzing individual gateways for internal WAN port IP conflicts...")
         conflicts_found = []
@@ -19139,7 +19140,7 @@ class _LegacyGatewayExportUtils:
         return conflicts_found
 
     @staticmethod
-    def _analyze_device_ip_conflicts(row, index):  
+    def _analyze_device_ip_conflicts(row, index):
         """Analyze a single gateway device for WAN port IP conflicts."""
         device_name = row.get("device_name", row.get("name", f"Device_{index}"))
         site_name = row.get("site_name", "Unknown Site")
@@ -19150,7 +19151,7 @@ class _LegacyGatewayExportUtils:
         return GatewayExportUtils._build_conflict_records(conflicts, device_name, site_name)  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def _collect_device_wan_ips(row):  
+    def _collect_device_wan_ips(row):
         """Collect IP addresses from WAN ports for a device."""
         device_ips: dict[str, list[str]] = {}
         for col in GatewayExportUtils.WAN_PORT_COLUMNS:
@@ -19162,7 +19163,7 @@ class _LegacyGatewayExportUtils:
         return device_ips
 
     @staticmethod
-    def _find_ip_conflicts(device_ips, device_name):  
+    def _find_ip_conflicts(device_ips, device_name):
         """Find IP addresses assigned to multiple WAN ports."""
         conflicts = []
         for ip_address, ports in device_ips.items():
@@ -19172,7 +19173,7 @@ class _LegacyGatewayExportUtils:
         return conflicts
 
     @staticmethod
-    def _build_conflict_records(conflicts, device_name, site_name):  
+    def _build_conflict_records(conflicts, device_name, site_name):
         """Build conflict records for export."""
         records = []
         for conflict in conflicts:
@@ -19190,7 +19191,7 @@ class _LegacyGatewayExportUtils:
         return records
 
     @staticmethod
-    def _export_conflict_results(conflicts_found):  
+    def _export_conflict_results(conflicts_found):
         """Export and display WAN port conflict results."""
         if not conflicts_found:
             logging.info(" No internal WAN port IP conflicts found")
@@ -19209,7 +19210,7 @@ class _LegacyGatewayExportUtils:
         GatewayExportUtils._display_conflict_samples(conflicts_found)  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def _display_conflict_samples(conflicts_found):  
+    def _display_conflict_samples(conflicts_found):
         """Display sample of WAN port IP conflicts."""
         print("\n  Sample WAN Port IP Conflicts Found:")
         for idx, record in enumerate(conflicts_found[:10], 1):
@@ -19221,7 +19222,7 @@ class _LegacyGatewayExportUtils:
             print(f"... and {len(conflicts_found) - 10} more conflicted ports")
 
     @staticmethod
-    def _with_site_info():  
+    def _with_site_info():
         """Exports gateways with their associated site information."""
         OrgInventoryExporter.gateways_with_site_info()  # type: ignore[no-untyped-call]
 
@@ -19435,7 +19436,7 @@ class _LegacyGatewayExportUtils:
             logging.info(" Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")
 
     @staticmethod
-    def templates():  
+    def templates():
         """Exports gateway templates."""
         print("Gateway Templates:")
         logging.info("Exporting gateway templates for the organization...")
@@ -19624,7 +19625,7 @@ class _LegacyGatewayExportUtils:
             logging.info(" Using fast mode with connection pool management for device data fetching...")
 
             # Define worker function for fetching device configs and stats
-            def fetch_device_data(device_info, connection_semaphore):  
+            def fetch_device_data(device_info, connection_semaphore):
                 """Worker function that fetches config and stats for a single device."""
                 device_id_inner = device_info[0]
                 device_data = device_info[1]
@@ -19968,7 +19969,7 @@ class GatewayStatsExporter:
     """Delegation wrapper for extracted gateway stats exporter implementation."""
 
     @staticmethod
-    def _configure_module():  
+    def _configure_module():
         """Configure extracted gateway modules and return stats module handle."""
         from src.gateway import gateway_stats_exporter as stats_module  # noqa: PLC0415,I001
 
@@ -19976,7 +19977,7 @@ class GatewayStatsExporter:
         return stats_module
 
     @staticmethod
-    def device_stats(fast=False):  
+    def device_stats(fast=False):
         """Delegated gateway device stats export entrypoint."""
         module = GatewayStatsExporter._configure_module()
         return module.GatewayStatsExporter.device_stats(fast=fast)
@@ -19988,7 +19989,7 @@ class GatewayStatsExporter:
         return module.GatewayStatsExporter.device_stats_with_freshness(fast=fast)
 
     @staticmethod
-    def wan_port_conflicts():  
+    def wan_port_conflicts():
         """Delegated WAN port conflict analysis entrypoint."""
         module = GatewayStatsExporter._configure_module()
         return module.GatewayStatsExporter.wan_port_conflicts()
@@ -19998,7 +19999,7 @@ class GatewayExportUtils:
     """Delegation wrapper for extracted gateway export utility implementation."""
 
     @staticmethod
-    def _configure_module():  
+    def _configure_module():
         """Configure extracted gateway modules and return gateway export module handle."""
         from src.gateway import gateway_export_utils as gateway_export_module  # noqa: PLC0415,I001
 
@@ -20028,7 +20029,7 @@ class GatewayExportUtils:
         return gateway_export_module
 
     @staticmethod
-    def _with_site_info():  
+    def _with_site_info():
         """Delegated gateways-with-site-info export entrypoint."""
         module = GatewayExportUtils._configure_module()
         return module.GatewayExportUtils._with_site_info()
@@ -20046,7 +20047,7 @@ class GatewayExportUtils:
         return module.GatewayExportUtils.device_configs(debug=debug, fast=fast)
 
     @staticmethod
-    def templates():  
+    def templates():
         """Delegated gateway template export entrypoint."""
         module = GatewayExportUtils._configure_module()
         return module.GatewayExportUtils.templates()
@@ -20226,7 +20227,7 @@ class GatewayTemplateConfigManager:
     """Delegation stub. Implementation in src.gateway.template_config."""
 
     @staticmethod
-    def extract():  
+    def extract():
         """Menu 105: Extract DIA_Pico and Picocell configs. Delegated to src.gateway.template_config."""
         from src.gateway.template_config import (
             GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
@@ -20244,7 +20245,7 @@ class GatewayTemplateConfigManager:
         ).extract()
 
     @staticmethod
-    def apply():  
+    def apply():
         """Menu 106: Apply extracted configs. Delegated to src.gateway.template_config."""
         from src.gateway.template_config import (
             GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
@@ -20262,7 +20263,7 @@ class GatewayTemplateConfigManager:
         ).apply()
 
     @staticmethod
-    def clone_by_location():  
+    def clone_by_location():
         """Menu 111: Clone template by state/country. Delegated to src.gateway.template_config."""
         from src.gateway.template_config import (
             GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
@@ -20287,7 +20288,7 @@ class DeviceConfigTemplateClonerManager:
     """
 
     @staticmethod
-    def clone() -> None:  
+    def clone() -> None:
         """Menu 194: Fetch gateway device config and create a new org-level gateway template."""
         from src.gateway.device_template_cloner import (  # pylint: disable=import-outside-toplevel
             DeviceConfigTemplateClonerManager as Impl,  # Import extracted implementation class
@@ -20324,17 +20325,17 @@ class SSHRunnerManager:
         )
 
     @staticmethod
-    def interactive():  
+    def interactive():
         """Delegated interactive SSH runner entrypoint."""
         return ExtractedSSHRunnerManager.interactive(SSHRunnerManager._build_deps())
 
     @staticmethod
-    def by_gateway_template(fast=False):  
+    def by_gateway_template(fast=False):
         """Delegated SSH runner by gateway template entrypoint."""
         ExtractedSSHRunnerManager.by_gateway_template(SSHRunnerManager._build_deps(), fast=fast)
 
     @staticmethod
-    def _collect_missing_data(hosts, username, password, commands):  
+    def _collect_missing_data(hosts, username, password, commands):
         """Delegated helper to collect missing SSH configuration data."""
         return ExtractedSSHRunnerManager._collect_missing_data(
             SSHRunnerManager._build_deps(),
@@ -20345,7 +20346,7 @@ class SSHRunnerManager:
         )
 
     @staticmethod
-    def _execute_ssh(hosts, username, password, commands):  
+    def _execute_ssh(hosts, username, password, commands):
         """Delegated helper to execute SSH commands."""
         return ExtractedSSHRunnerManager._execute_ssh(
             SSHRunnerManager._build_deps(),
@@ -20356,32 +20357,32 @@ class SSHRunnerManager:
         )
 
     @staticmethod
-    def _load_gateway_data():  
+    def _load_gateway_data():
         """Delegated helper to load gateway management data."""
         return ExtractedSSHRunnerManager._load_gateway_data(SSHRunnerManager._build_deps())
 
     @staticmethod
-    def _select_gateway_template(gateways):  
+    def _select_gateway_template(gateways):
         """Delegated helper to choose gateway template."""
         return ExtractedSSHRunnerManager._select_gateway_template(SSHRunnerManager._build_deps(), gateways)
 
     @staticmethod
-    def _filter_gateways(gateways, template_name):  
+    def _filter_gateways(gateways, template_name):
         """Delegated helper to filter gateways by template and status."""
         return ExtractedSSHRunnerManager._filter_gateways(gateways, template_name)
 
     @staticmethod
-    def _display_filtered_gateways(gateways):  
+    def _display_filtered_gateways(gateways):
         """Delegated helper to display filtered gateways."""
         ExtractedSSHRunnerManager._display_filtered_gateways(gateways)
 
     @staticmethod
-    def _confirm_execution(count):  
+    def _confirm_execution(count):
         """Delegated helper to confirm SSH execution."""
         return ExtractedSSHRunnerManager._confirm_execution(SSHRunnerManager._build_deps(), count)
 
     @staticmethod
-    def _execute_by_template(management_ips, template_name):  
+    def _execute_by_template(management_ips, template_name):
         """Delegated helper to execute SSH by selected template."""
         ExtractedSSHRunnerManager._execute_by_template(SSHRunnerManager._build_deps(), management_ips, template_name)
 
@@ -20459,14 +20460,14 @@ class CLIShellManager:
         screen = pyte.Screen(80, 40)
         stream = pyte.Stream(screen)
 
-        def resize_terminal():  
+        def resize_terminal():
             cols, rows = shutil.get_terminal_size()
             resize_msg = json.dumps({"resize": {"width": cols, "height": rows}})
             if debug:  # Verbose troubleshooting output is enabled
                 print(f"[DEBUG] Sending resize: {resize_msg}")  # Show the terminal-resize control message being sent
             ws.send(resize_msg)  # Tell the remote PTY about the new terminal dimensions
 
-        def receive_websocket_data():  
+        def receive_websocket_data():
             while ws.connected:  # Keep reading while the WebSocket stays open
                 try:
                     data = ws.recv()  # Block for the next chunk of terminal output
@@ -20487,7 +20488,7 @@ class CLIShellManager:
                     print(f"\n## Connection lost: {exception} ##")  # Notify the user the session dropped
                     return  # Exit the receive loop
 
-        def send_keyboard_input(key):  
+        def send_keyboard_input(key):
             if ws.connected:
                 keymap = {
                     "enter": "\n",
@@ -20541,7 +20542,7 @@ class ARPCommandManager:
     """
 
     @staticmethod
-    def execute(site_id=None, device_id=None):  
+    def execute(site_id=None, device_id=None):
         """
         Execute ARP command on a device and receive output via WebSocket.
 
@@ -20569,7 +20570,7 @@ class ARPCommandManager:
             )
 
     @staticmethod
-    def _trigger_command(mist_host, mist_apitoken, site_id, device_id):  
+    def _trigger_command(mist_host, mist_apitoken, site_id, device_id):
         """Trigger ARP command on device via REST API."""
         url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/arp"
         headers = {"Authorization": f"Token {mist_apitoken}"}
@@ -20585,7 +20586,7 @@ class ARPCommandManager:
             return None
 
     @staticmethod
-    def _listen_for_output(    # noqa: PLR0913
+    def _listen_for_output(  # noqa: PLR0913
         mist_host, mist_apitoken, site_id, device_id, session_id, timeout=30, idle_timeout=3, debug=False
     ):
         """Listen for WebSocket command output from a device."""
@@ -20600,19 +20601,19 @@ class ARPCommandManager:
         buffer = ""
         last_message_time = time.time()
 
-        def on_message(ws, message):  
+        def on_message(ws, message):
             nonlocal last_message_time, buffer, output_lines
             last_message_time, buffer = ARPCommandManager._handle_message(  # type: ignore[no-untyped-call]
                 message, session_id, buffer, output_lines, debug
             )
 
-        def on_close(ws, *args):  
+        def on_close(ws, *args):
             ARPCommandManager._handle_close(output_lines, debug)  # type: ignore[no-untyped-call]
 
-        def on_error(ws, error):  
+        def on_error(ws, error):
             logging.error(f"! WebSocket error: {error}")
 
-        def on_open(ws):  
+        def on_open(ws):
             logging.info(" WebSocket opened. Subscribing...")
             ws.send(json.dumps(subscribe_msg))
 
@@ -20620,7 +20621,7 @@ class ARPCommandManager:
             ws_url, header=headers, on_message=on_message, on_error=on_error, on_close=on_close, on_open=on_open
         )
 
-        def run_ws():  
+        def run_ws():
             ws.run_forever()
 
         ws_thread = threading.Thread(target=run_ws)
@@ -20639,7 +20640,7 @@ class ARPCommandManager:
             ws.close()
 
     @staticmethod
-    def _handle_message(message, session_id, buffer, output_lines, debug=False):  
+    def _handle_message(message, session_id, buffer, output_lines, debug=False):
         """Handle incoming WebSocket message."""
         last_message_time = time.time()
         try:
@@ -20672,7 +20673,7 @@ class ARPCommandManager:
         return last_message_time, buffer
 
     @staticmethod
-    def _handle_close(output_lines, debug=False):  
+    def _handle_close(output_lines, debug=False):
         """Handle WebSocket close and process output."""
         logging.info(" WebSocket closed.")
         if output_lines:
@@ -20704,7 +20705,7 @@ class ARPCommandManager:
             logging.warning(" No ARP output received for this session.")
 
     @staticmethod
-    def _save_output(compiled_output, filename="arp_output_raw.txt"):  
+    def _save_output(compiled_output, filename="arp_output_raw.txt"):
         """Save compiled output to file."""
         try:
             file_path = FilePathUtils.get_csv_path(filename)
@@ -20715,7 +20716,7 @@ class ARPCommandManager:
             logging.error(f"! Failed to save ARP output to file: {e}")
 
     @staticmethod
-    def _export_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):  
+    def _export_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
         """Export ARP output to CSV files."""
         try:
             txt_file_path = FilePathUtils.get_csv_path(txt_filename)
@@ -20771,7 +20772,7 @@ from src.utils.rate_limiting import RateLimitingUtils  # noqa: E402
 class AddressComparisonCounters:
     """Track metrics for address comparison. Delegated to src.inventory.csv_comparator."""
 
-    def __init__(self):  
+    def __init__(self):
         """Initialize all counter attributes and timing."""
         from src.inventory.csv_comparator import (
             AddressComparisonCounters as _Impl,  # pylint: disable=import-outside-toplevel
@@ -20791,19 +20792,19 @@ class AddressComparisonCounters:
         self.start_time = self._impl.start_time
         self.end_time = self._impl.end_time
 
-    def start_timing(self):  
+    def start_timing(self):
         """Start the timing counter for performance tracking."""
         self._impl.start_timing()
 
-    def end_timing(self):  
+    def end_timing(self):
         """End the timing counter for performance tracking."""
         self._impl.end_timing()
 
-    def get_duration(self):  
+    def get_duration(self):
         """Get the elapsed time in seconds between start and end timing."""
         return self._impl.get_duration()
 
-    def increment_parse_failure(self, reason):  
+    def increment_parse_failure(self, reason):
         """
         Increment parse failure counter and track the specific reason.
 
@@ -20812,7 +20813,7 @@ class AddressComparisonCounters:
         """
         self._impl.increment_parse_failure(reason)
 
-    def log_summary(self):  
+    def log_summary(self):
         """Log a comprehensive summary of all counter metrics."""
         self._impl.log_summary()
 
@@ -20870,7 +20871,7 @@ class _LegacyWAN2MigrationManager:
     static IP overrides by properly handling port_config keys.
     """
 
-    def __init__(self):  
+    def __init__(self):
         """Initialize the WAN2 migration manager."""
         self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
         self.sites = []
@@ -20880,7 +20881,7 @@ class _LegacyWAN2MigrationManager:
         self.template_port_configs = {}
         self.site_overrides_map = {}
 
-    def set_site_variable(self):  
+    def set_site_variable(self):
         """
         Menu #149: Set WAN2 Interface Site Variable.
 
@@ -20907,7 +20908,7 @@ class _LegacyWAN2MigrationManager:
         results = self._process_sites_for_variable(sites_to_configure)
         self._generate_site_variable_report(results)
 
-    def _display_site_variable_header(self):  
+    def _display_site_variable_header(self):
         """Display operation header for Menu #149."""
         print("\n  Set WAN2 Interface Site Variable")
         print("=" * 70)
@@ -21046,7 +21047,7 @@ class _LegacyWAN2MigrationManager:
         )
         return True
 
-    def _build_override_detection_map(self):  
+    def _build_override_detection_map(self):
         """Build map of sites with WAN2 port overrides for analysis."""
         self._load_gateway_configs()  # type: ignore[no-untyped-call]
         self._load_template_configs()  # type: ignore[no-untyped-call]
@@ -21054,19 +21055,19 @@ class _LegacyWAN2MigrationManager:
         self._extract_template_port_configs()  # type: ignore[no-untyped-call]
         self._detect_device_overrides()  # type: ignore[no-untyped-call]
 
-    def _load_gateway_configs(self):  
+    def _load_gateway_configs(self):
         """Load gateway device configurations from CSV."""
         gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")
         with open(gateway_configs_path, encoding="utf-8") as file_handle:
             self.gateway_configs = list(csv.DictReader(file_handle))
 
-    def _load_template_configs(self):  
+    def _load_template_configs(self):
         """Load gateway template configurations from CSV."""
         template_configs_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
         with open(template_configs_path, encoding="utf-8") as file_handle:
             self.template_data = list(csv.DictReader(file_handle))
 
-    def _build_site_to_template_mapping(self):  
+    def _build_site_to_template_mapping(self):
         """Build mapping from site_id to gateway template_id."""
         for site in self.sites:
             site_id = site.get("id", "").strip()
@@ -21075,7 +21076,7 @@ class _LegacyWAN2MigrationManager:
                 self.site_to_template_id[site_id] = template_id
         logging.info(f"Mapped {len(self.site_to_template_id)} sites to gateway templates")
 
-    def _extract_template_port_configs(self):  
+    def _extract_template_port_configs(self):
         """Extract IP configuration type from templates for ge-0/0/1 port."""
         for template_row in self.template_data:
             template_id = template_row.get("id", "").strip()
@@ -21108,7 +21109,7 @@ class _LegacyWAN2MigrationManager:
 
         return result
 
-    def _detect_device_overrides(self):  
+    def _detect_device_overrides(self):
         """Detect devices with WAN2 port overrides and classify severity."""
         for config_row in self.gateway_configs:
             site_id = config_row.get("site_id", "").strip()
@@ -21293,7 +21294,7 @@ class _LegacyWAN2MigrationManager:
             "error": "",
         }
 
-    def _add_override_info_to_result(self, result: dict[str, Any], site_id: str):  
+    def _add_override_info_to_result(self, result: dict[str, Any], site_id: str):
         """Add override detection info to result dictionary."""
         if site_id not in self.site_overrides_map:
             return
@@ -21334,7 +21335,7 @@ class _LegacyWAN2MigrationManager:
 
         return "; ".join(summaries)
 
-    def _update_site_settings(self, site_id: str, site_name: str, result: dict[str, Any]):  
+    def _update_site_settings(self, site_id: str, site_name: str, result: dict[str, Any]):
         """Update site settings with wan2_interface variable."""
         logging.debug(f"Fetching current settings for site {site_name} ({site_id})")
         settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)
@@ -21362,7 +21363,7 @@ class _LegacyWAN2MigrationManager:
             result["error"] = f"API returned status {update_resp.status_code}"
             logging.error(f"Failed to set variable for site {site_name}: status {update_resp.status_code}")
 
-    def _generate_site_variable_report(self, results: list[dict[str, Any]]):  
+    def _generate_site_variable_report(self, results: list[dict[str, Any]]):
         """Generate and save the site variable report."""
         report_data = self._build_report_data(results)
         output_file = "WAN2_SiteVariable_Report.csv"
@@ -21403,7 +21404,7 @@ class _LegacyWAN2MigrationManager:
             )
         return report_data
 
-    def _print_site_variable_summary(self, results: list[dict[str, Any]], output_file: str):  
+    def _print_site_variable_summary(self, results: list[dict[str, Any]], output_file: str):
         """Print summary of site variable operation."""
         success_count = sum(1 for r in results if r["variable_set"])
         override_count = sum(1 for r in results if r["has_overrides"])
@@ -21433,7 +21434,7 @@ class _LegacyWAN2MigrationManager:
         logging.info(f"Menu #149 complete: {success_count}/{len(results)} sites configured")
         logging.info(f"Override breakdown - CRITICAL: {critical_sites}, WARNING: {warning_sites}, INFO: {info_sites}")
 
-    def _print_severity_warnings(self, critical_sites: int, warning_sites: int, info_sites: int):  
+    def _print_severity_warnings(self, critical_sites: int, warning_sites: int, info_sites: int):
         """Print severity-specific warnings."""
         if critical_sites > 0:
             print(f"\n  !? CRITICAL ATTENTION: {critical_sites} sites have DHCP->Static IP conflicts")
@@ -21459,7 +21460,7 @@ class _LegacyWAN2MigrationManager:
 class WAN2MigrationManager:
     """Delegation wrapper for extracted WAN2 migration manager implementation."""
 
-    def __init__(self):  
+    def __init__(self):
         """Initialize delegated WAN2 manager with runtime dependencies."""
         from src.gateway import wan2_migration_manager as wan2_module  # noqa: PLC0415,I001
 
@@ -21477,11 +21478,11 @@ class WAN2MigrationManager:
         )
         self._impl = wan2_module.WAN2MigrationManager()
 
-    def set_site_variable(self):  
+    def set_site_variable(self):
         """Menu #149 delegated entrypoint."""
         return self._impl.set_site_variable()
 
-    def __getattr__(self, name):  
+    def __getattr__(self, name):
         """Proxy attribute access to the extracted implementation."""
         return getattr(self._impl, name)  # Delegate to real impl for test compat
 
@@ -21549,7 +21550,7 @@ class OrgConfigMigrationManager:
         },
     ]
 
-    def __init__(self, session, org_id_fn, safe_input_fn):  
+    def __init__(self, session, org_id_fn, safe_input_fn):
         """Initialize with API session, org_id resolver, and safe_input function."""
         self.session = session  # Authenticated mistapi session for API calls
         self.org_id_fn = org_id_fn  # Callable that returns current org_id (may prompt user)
@@ -21622,7 +21623,7 @@ class OrgConfigMigrationManager:
             logging.warning("Could not fetch org name: %s", error)  # Log warning with error details
         return "Unknown"  # Fallback when API call fails
 
-    def _resolve_api_fn(self, dotted_path: str):  
+    def _resolve_api_fn(self, dotted_path: str):
         """Resolve a dotted string like 'mistapi.api.v1.orgs.networks.listOrgNetworks' to a callable."""
         parts = dotted_path.split(".")  # Split dotted path into module segments
         current = mistapi  # Start from the top-level mistapi module
@@ -22069,7 +22070,7 @@ class OrgConfigMigrationManager:
             logging.error("Failed to create %s '%s': %s", type_key, name, error)  # Log error with context
             results.append({"type": type_key, "name": name, "status": "failed", "reason": str(error)})  # Record failure
 
-    def _extract_created_id(self, response) -> str:  
+    def _extract_created_id(self, response) -> str:
         """Extract the new object ID from a create API response."""
         if hasattr(response, "data") and isinstance(response.data, dict):  # Check response has data dict
             return response.data.get("id", "")  # type: ignore[no-any-return] # Return the new ID
@@ -22150,7 +22151,7 @@ class WANProbeConfigManager:
     ]
     DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")
 
-    def __init__(self):  
+    def __init__(self):
         """Initialize the WAN Probe Configuration Manager."""
         self.org_id = None
         self.templates = []
@@ -22588,7 +22589,7 @@ class _LegacyWANProbeDeviceOverrideManager:
     ]
     DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")
 
-    def __init__(self):  
+    def __init__(self):
         """Initialize the WAN Probe Device Override Manager."""
         self.org_id: str | None = None
         self.templates: list[dict[str, Any]] = []
@@ -23168,7 +23169,7 @@ class SiteConfigManager:
     """Delegation wrapper for extracted site configuration implementation."""
 
     @staticmethod
-    def _configure_module():  
+    def _configure_module():
         """Configure extracted module dependencies and return the module handle."""
         from src.site import site_config_manager as site_config_module  # noqa: PLC0415,I001
 
@@ -23184,25 +23185,25 @@ class SiteConfigManager:
         return site_config_module
 
     @staticmethod
-    def create_test_sites_from_csv():  
+    def create_test_sites_from_csv():
         """Menu #171 delegated entrypoint."""
         module = SiteConfigManager._configure_module()
         return module.SiteConfigManager.create_test_sites_from_csv()
 
     @staticmethod
-    def create_country_rf_templates_and_assign():  
+    def create_country_rf_templates_and_assign():
         """Menu #172 delegated entrypoint."""
         module = SiteConfigManager._configure_module()
         return module.SiteConfigManager.create_country_rf_templates_and_assign()
 
     @staticmethod
-    def create_ap_model_device_profiles():  
+    def create_ap_model_device_profiles():
         """Menu #173 delegated entrypoint."""
         module = SiteConfigManager._configure_module()
         return module.SiteConfigManager.create_ap_model_device_profiles()
 
     @staticmethod
-    def assign_aps_to_matching_device_profiles():  
+    def assign_aps_to_matching_device_profiles():
         """Menu #174 delegated entrypoint."""
         module = SiteConfigManager._configure_module()
         return module.SiteConfigManager.assign_aps_to_matching_device_profiles()
@@ -23224,7 +23225,7 @@ class DeviceRebootManager:
     """
 
     @staticmethod
-    def by_gateway_template_list():  
+    def by_gateway_template_list():
         """
         Reboots all devices associated with gateway templates in GatewayTemplateRebootList.CSV.
         Logs results to GatewayTemplateRebootResults.CSV.
@@ -23563,7 +23564,7 @@ class DeviceRebootManager:
         return results
 
     @staticmethod
-    def _parse_reboot_response(response) -> str:  
+    def _parse_reboot_response(response) -> str:
         """Parse reboot API response into status string."""
         if hasattr(response, "data") and response.data:
             if isinstance(response.data, dict):
@@ -24599,7 +24600,7 @@ class MSPInventoryExporter:
     Output File: data/MSP_Inventory_Export.csv
     """
 
-    def __init__(self):  
+    def __init__(self):
         """Initialize the MSP inventory exporter."""
         self.all_devices: list = []  # type: ignore[type-arg]
         self.msp_count: int = 0
@@ -24627,7 +24628,7 @@ class MSPInventoryExporter:
             f"Menu #144 complete: {self.device_count} devices exported from {self.org_count} orgs across {self.msp_count} MSPs"  # noqa: E501
         )
 
-    def _print_header(self):  
+    def _print_header(self):
         """Print export header banner."""
         print("")
         print("=" * 70)
@@ -24666,7 +24667,7 @@ class MSPInventoryExporter:
 
         return self._execute_login_and_validate()
 
-    def _print_login_prompt(self):  
+    def _print_login_prompt(self):
         """Print the login prompt message."""
         print("  MSP privileges not currently available.")
         print("")
@@ -24695,7 +24696,7 @@ class MSPInventoryExporter:
         self._print_continuation_header()  # type: ignore[no-untyped-call]
         return True
 
-    def _print_continuation_header(self):  
+    def _print_continuation_header(self):
         """Print continuation header after successful login."""
         global msp_privileges
         print("")
@@ -24706,13 +24707,13 @@ class MSPInventoryExporter:
         print(f"  + MSP privileges detected: {len(msp_privileges)} MSP(s) available")
         print("")
 
-    def _process_all_msps(self):  
+    def _process_all_msps(self):
         """Process all MSPs to collect device inventory."""
         global msp_privileges
         for msp_info in msp_privileges:
             self._process_msp(msp_info)
 
-    def _finalize_export(self):  
+    def _finalize_export(self):
         """Finalize export by writing results or reporting no data."""
         if self.all_devices:
             self._write_results()
@@ -24956,7 +24957,7 @@ class SiteAutoUpgradeConfigurator:
     """Thin wrapper that delegates to src.firmware.site_auto_upgrade."""
 
     @staticmethod
-    def execute():  
+    def execute():
         """Static entry point - delegates to extracted module."""
         from src.firmware.site_auto_upgrade import SiteAutoUpgradeConfigurator as _Impl
 
@@ -24985,7 +24986,7 @@ class OrgLevelAPFirmwareUpgrader:
         self.dry_run = dry_run
 
     @staticmethod
-    def run():  
+    def run():
         """Static entry point - delegates to extracted module."""
         from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl
 
@@ -25027,7 +25028,7 @@ class OrgLevelAPFirmwareUpgrader:
         upgrader.execute()
 
     @staticmethod
-    def _select_msps():  
+    def _select_msps():
         """Delegate MSP selection to extracted module."""
         from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl
 
@@ -25043,7 +25044,7 @@ class OrgLevelAPFirmwareUpgrader:
         return upgrader._select_msps()
 
     @staticmethod
-    def _select_orgs_from_msp(msp):  
+    def _select_orgs_from_msp(msp):
         """Delegate org selection to extracted module."""
         from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl
 
@@ -27045,7 +27046,7 @@ class MapsManagerLauncher:
         MapsManagerLauncher().launch()
     """
 
-    def __init__(self):  
+    def __init__(self):
         """Initialize launcher with module reference placeholder."""
         self.maps_manager = None
         self.org_id: str = ""
@@ -27113,7 +27114,7 @@ class TUILauncher:
         TUILauncher().launch()
     """
 
-    def __init__(self):  
+    def __init__(self):
         """Initialize TUI launcher with console handler tracking."""
         self.console_handlers: list = []  # type: ignore[type-arg]
         self.debug_mode: bool = False
@@ -27910,7 +27911,7 @@ class OperationRegistry:
         return {key: list(values) for key, values in cls.WAVE1_SAFETY_CLASSIFICATION_BASELINE.items()}
 
 
-def run_systematic_test():    # noqa: C901, PLR0912, PLR0915
+def run_systematic_test():  # noqa: C901, PLR0912, PLR0915
     """
     Run systematic test of all safe menu options.
 
@@ -28110,7 +28111,7 @@ def run_systematic_test():    # noqa: C901, PLR0912, PLR0915
         return False  # False indicates failures occurred during the systematic test
 
 
-def run_interactive_test():  
+def run_interactive_test():
     """Compatibility facade that delegates interactive-safe tests to extracted runner."""
     global org_id
 
@@ -28118,10 +28119,10 @@ def run_interactive_test():
         "Delegating run_interactive_test to InteractiveTestRunner"
     )  # Log before helper creation and runner construction.
 
-    def _get_org_id():  
+    def _get_org_id():
         return org_id  # Return current module-level org_id so extracted runner can read shared runtime context.
 
-    def _set_org_id(new_org_id):  
+    def _set_org_id(new_org_id):
         global org_id
         org_id = new_org_id  # Persist resolved org_id from runner back into module-level shared state.
 
@@ -28150,7 +28151,7 @@ def run_interactive_test():
     return result  # Return delegated execution result to preserve prior function contract.
 
 
-def _launch_web_portal(args):  
+def _launch_web_portal(args):
     """Launch the Flask web portal.
 
     Determines whether to use Gunicorn (container)
@@ -28681,7 +28682,7 @@ def _run_interactive_mode(args: argparse.Namespace) -> None:  # noqa: C901, PLR0
             # In container mode, continue loop for another attempt
 
 
-def main():  
+def main():
     """Main entry point for MistHelper CLI application."""
     logging.debug("ENTRY: main()")  # Log application entry point
     _initialize_deferred_imports()  # Initialize deferred module imports if not already completed
@@ -28726,7 +28727,7 @@ if __name__ == "__main__":
             pass
 
         # Install a global exception hook early so we capture full tracebacks for unexpected issues
-        def _global_excepthook(exc_type, exc_value, exc_traceback):  
+        def _global_excepthook(exc_type, exc_value, exc_traceback):
             try:
                 import traceback as _tb
 
