@@ -69,7 +69,7 @@ class InteractiveBatchExecutor:
         )
         logger.debug("InteractiveBatchExecutor: steps=%r use_shell=%s timeout=%s", commands, use_shell, timeout)
         runner, write_to_host_log, host_log_file = InteractiveBatchExecutor._setup_host_log(
-            hostname, commands, timeout, logger
+            hostname, commands, timeout, logger, password=password
         )
         overall_success = True  # Track failures across all steps
         try:
@@ -134,6 +134,7 @@ class InteractiveBatchExecutor:
         commands: list[str],
         timeout: int,
         logger: logging.Logger,
+        password: str | None = None,
     ) -> tuple[Any, Callable[[str], None], str]:
         """Build the runner, create the ANSI-cleaning per-host log writer, write header."""
         from src.ssh.ssh_runner import EnhancedSSHRunner  # Local import — avoids circular module load
@@ -141,7 +142,9 @@ class InteractiveBatchExecutor:
         runner = EnhancedSSHRunner(timeout=timeout, logger=logger)  # Owns timeout + client lifecycle
         host_log_file = InteractiveBatchExecutor._build_log_path(hostname, logger)  # Sanitized per-host path
         print(f"** [{hostname}] Logging to: {host_log_file}")  # Verbatim console status line
-        write_to_host_log = InteractiveBatchExecutor._make_log_writer(host_log_file, logger)  # ANSI-cleaning writer
+        write_to_host_log = InteractiveBatchExecutor._make_log_writer(
+            host_log_file, logger, password=password
+        )  # ANSI-cleaning writer with password redaction
         num_commands = len(commands) if commands else 0  # Header counter
         header = (  # Verbatim header format from the original interactive entrypoint
             f"\n{'=' * 80}\n"
@@ -173,8 +176,15 @@ class InteractiveBatchExecutor:
         return os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")
 
     @staticmethod
-    def _make_log_writer(host_log_file: str, logger: logging.Logger) -> Callable[[str], None]:
-        """Return a closure that strips ANSI/control sequences before writing each line."""
+    def _make_log_writer(
+        host_log_file: str, logger: logging.Logger, password: str | None = None
+    ) -> Callable[[str], None]:
+        """Return a closure that strips ANSI/control sequences before writing each line.
+
+        Any literal occurrence of ``password`` in a message is replaced with
+        ``***REDACTED***`` before the line is written to disk, so the
+        per-host log file never persists the user's credential in clear text.
+        """
         ansi_escape = re.compile(r"\x1b\[[0-9;]*[mGKHfABCDsuJ]")  # ANSI color + cursor sequences (verbatim)
         control_sequences = [  # Additional terminal-control sequences cleaned for readability (verbatim)
             r"\x1b\[\?[0-9]+[lh]",
@@ -199,23 +209,29 @@ class InteractiveBatchExecutor:
                 clean = re.sub(r"\n\s*\n\s*\n", "\n\n", clean)  # Collapse 3+ blank lines to 2 (verbatim)
                 clean = re.sub(r"[ \t]+\n", "\n", clean)  # Trim trailing horizontal whitespace
                 safe_message = clean.replace("\x00", "").replace("\r\n", "\n")  # Prevent log injection
+                if password:  # Scrub the literal credential value from the message before persistence
+                    safe_message = safe_message.replace(password, "***REDACTED***")
                 with open(host_log_file, "a", encoding="utf-8") as log_file:
                     log_file.write(f"{safe_message}\n")
                     log_file.flush()
                 if hasattr(os, "chmod"):  # Owner-only permission on POSIX
                     os.chmod(host_log_file, 0o600)
             except UnicodeEncodeError:  # ASCII fallback path mirrors original behavior
-                InteractiveBatchExecutor._write_ascii_fallback(message, host_log_file, logger)
+                InteractiveBatchExecutor._write_ascii_fallback(message, host_log_file, logger, password=password)
             except Exception as write_error:  # noqa: BLE001 - last-resort path (verbatim)
                 logger.error("Unexpected error writing to host log %s: %s", host_log_file, write_error)
 
         return write_to_host_log
 
     @staticmethod
-    def _write_ascii_fallback(message: str, host_log_file: str, logger: logging.Logger) -> None:
+    def _write_ascii_fallback(
+        message: str, host_log_file: str, logger: logging.Logger, password: str | None = None
+    ) -> None:
         """ASCII-only fallback used when UTF-8 encoding fails."""
         try:
             safe_message = message.encode("ascii", errors="replace").decode("ascii")
+            if password:  # Same credential scrub as the primary writer
+                safe_message = safe_message.replace(password, "***REDACTED***")
             with open(host_log_file, "a", encoding="utf-8") as log_file:
                 log_file.write(f"{safe_message}\n")
                 log_file.flush()

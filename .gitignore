@@ -260,3 +260,7 @@ abandoned-specs/
 # Auto-generated audit-menu SpecKit stubs (stale, replaced by numbered specs)
 specs/*-audit-menu-*/
 
+
+# Throwaway evidence snapshots from spec decomposition runs (CodeQL false positives)
+specs/**/evidence/.tmp_head_tree/
+

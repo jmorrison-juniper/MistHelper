@@ -1,1 +1,0 @@
-"""SSID template consolidation package."""
