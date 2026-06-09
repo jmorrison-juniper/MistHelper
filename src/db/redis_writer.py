@@ -15,7 +15,7 @@ import os
 import socket
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, cast
 
 import redis
 
@@ -61,13 +61,15 @@ class RedisTimeSeriesWriter:
             password=config.redis_password or None,
             decode_responses=True,
         )
+        # Initialize client and confirm module availability; decode_responses=True returns str instead of bytes
         self._verify_timeseries_module()
         self._ts = self._client.ts()
         self._created_keys: set[str] = set()
         self._log.info("redis_connected", host=config.redis_host)
 
     def _verify_timeseries_module(self) -> None:
-        modules: list[dict[str, Any]] = self._client.module_list()  # type: ignore[assignment]
+        # cast: _client is Any-typed; module_list() returns list[dict[str, Any]]
+        modules: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.module_list())
         names = [
             m.get("name", b"").lower() if isinstance(m.get("name"), str) else m.get("name", b"").decode().lower()
             for m in modules
@@ -191,9 +193,9 @@ class RedisTimeSeriesWriter:
                 numeric = self._extract_numeric(record, primary_keys)
             for field_name, value in numeric.items():
                 ts_key = f"{api_function_name}:{entity_id}:{field_name}"
-                adds.append((ts_key, value))
+                adds.append((ts_key, value))  # Record time-series key + numeric value
                 if ts_key not in key_records:
-                    key_records[ts_key] = record
+                    key_records[ts_key] = record  # Keep first-seen record for label extraction
         return adds, key_records
 
     def _batch_ensure_keys(
@@ -514,7 +516,8 @@ class RedisJSONWriter:
 
     def _verify_json_module(self) -> None:
         """Check that the ReJSON module is loaded."""
-        modules: list[dict[str, Any]] = self._client.module_list()  # type: ignore[assignment]
+        # cast: _client is Any-typed; module_list() returns list[dict[str, Any]]
+        modules: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.module_list())
         names = [
             m.get("name", b"").lower() if isinstance(m.get("name"), str) else m.get("name", b"").decode().lower()
             for m in modules

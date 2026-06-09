@@ -185,141 +185,6 @@ class OrgDeviceInventorySummaryCore:
         return all_rows
 
     @staticmethod
-    def _fetch_versions_per_model(target_org_id: str, model_rows: list[dict]) -> list[dict]:
-        """Fetch version distribution per model with VC/HA-aware logic."""
-        logging.info("Fetching version distribution per model, org=%s", target_org_id)
-        all_rows: list[dict] = []
-        has_switches = any(row.get("device_type") == "switch" for row in model_rows)
-        switch_records: list[dict] = []
-        if has_switches:
-            try:
-                switch_records = OrgDeviceInventorySummaryCore._fetch_switch_physical_inventory(target_org_id)
-            except Exception as error:
-                logging.error("Switch inventory pre-fetch failed: %s", error, exc_info=True)
-        has_gateways = any(row.get("device_type") == "gateway" for row in model_rows)
-        gateway_records: list[dict] = []
-        if has_gateways:
-            try:
-                gateway_records = OrgDeviceInventorySummaryCore._fetch_gateway_physical_inventory(target_org_id)
-            except Exception as error:
-                logging.error("Gateway inventory pre-fetch failed: %s", error, exc_info=True)
-        for model_row in model_rows:
-            device_type = model_row.get("device_type", "")
-            model_name = model_row.get("model", "")
-            if not model_name:
-                continue
-            if device_type == "switch":
-                version_counts: dict[str, int] = {}
-                for record in switch_records:
-                    if record.get("model") != model_name:
-                        continue
-                    version = record.get("version") or "unknown"
-                    num_members = int(record.get("num_members") or 1)
-                    version_counts[version] = version_counts.get(version, 0) + num_members
-                all_rows.extend(
-                    {
-                        "device_type": "switch",
-                        "model": model_name,
-                        "version": version,
-                        "count": count,
-                    }
-                    for version, count in version_counts.items()
-                )
-                continue
-            if device_type == "gateway":
-                version_counts_gateway: dict[str, int] = {}
-                for record in gateway_records:
-                    if record.get("model") != model_name:
-                        continue
-                    version = record.get("version") or "unknown"
-                    version_counts_gateway[version] = version_counts_gateway.get(version, 0) + 1
-                all_rows.extend(
-                    {
-                        "device_type": "gateway",
-                        "model": model_name,
-                        "version": version,
-                        "count": count,
-                    }
-                    for version, count in version_counts_gateway.items()
-                )
-                continue
-            try:
-                response = mistapi.api.v1.orgs.devices.countOrgDevices(
-                    apisession,
-                    target_org_id,
-                    distinct="version",
-                    type=device_type,
-                    model=model_name,
-                    limit=1000,
-                )
-                data = response.data if response and response.data else {}
-                results = data.get("results", [])
-                all_rows.extend(
-                    {
-                        "device_type": device_type,
-                        "model": model_name,
-                        "version": item.get("version", "unknown"),
-                        "count": item.get("count", 0),
-                    }
-                    for item in results
-                )
-            except Exception as error:
-                logging.error(
-                    "countOrgDevices distinct=version type=%s model=%s failed: %s",
-                    device_type,
-                    model_name,
-                    error,
-                    exc_info=True,
-                )
-        all_rows.sort(key=lambda row: (row.get("device_type", ""), row.get("model", ""), -int(row.get("count", 0))))
-        logging.info("Total version-per-model rows after fetch and sort: %d", len(all_rows))
-        return all_rows
-
-    @staticmethod
-    def _display_pivot_and_export(rows: list[dict], filename: str) -> None:
-        """Render and export combined version-per-model pivot table."""
-        models = sorted({row["model"] for row in rows})
-        versions = sorted({row["version"] for row in rows})
-        model_type: dict[str, str] = {row["model"]: row["device_type"] for row in rows}
-        pivot: dict[str, dict[str, int]] = {model: {} for model in models}
-        for row in rows:
-            pivot[row["model"]][row["version"]] = row.get("count", 0)
-
-        table = PrettyTable()
-        table.field_names = ["Model"] + versions + ["Total"]
-        col_totals: dict[str, int] = {version: 0 for version in versions}
-        export_rows: list[dict] = []
-
-        for model in models:
-            row_counts = [pivot[model].get(version, 0) for version in versions]
-            row_total = sum(row_counts)
-            for version, count in zip(versions, row_counts, strict=True):
-                col_totals[version] += count
-            table.add_row([model] + row_counts + [row_total])
-            export_row: dict = {"Model": model, "Device Type": model_type.get(model, "")}
-            for version in versions:
-                export_row[version] = pivot[model].get(version, 0)
-            export_row["Total"] = row_total
-            export_rows.append(export_row)
-
-        col_total_values = [col_totals[version] for version in versions]
-        grand_total = sum(col_total_values)
-        table.add_row(["TOTAL"] + col_total_values + [grand_total])
-
-        print(f"\n{'=' * 62}")
-        print("  Version Distribution per Model (All Device Types)")
-        print(f"{'=' * 62}")
-        print(table)
-
-        ordered_fields = ["Model", "Device Type"] + versions + ["Total"]
-        DataExporter.write_with_format_selection(
-            export_rows,
-            filename,
-            api_function_name="orgDeviceVersionPerModel",
-            fieldnames=ordered_fields,
-        )
-
-    @staticmethod
     def _display_and_export(rows: list[dict], distinct: str, filename: str, api_func: str) -> None:
         """Render and export summary table for model/version counts."""
         value_col = distinct.capitalize()
@@ -361,6 +226,14 @@ class OrgDeviceInventorySummaryCore:
     @staticmethod
     def run_for_org(target_org_id: str) -> tuple[list[dict], list[dict], list[dict], str]:
         """Run all inventory summaries for one organization and export results."""
+        # Lazy imports avoid the circular dependency: collaborators import this module's globals at call time
+        from src.inventory.inventory_summary.pivot_renderer import (
+            PivotRenderer,
+        )  # Local import keeps module load order clean
+        from src.inventory.inventory_summary.version_per_model_fetcher import (
+            VersionPerModelFetcher,
+        )  # Local import keeps module load order clean
+
         logging.info("Starting org device inventory summary org=%s", target_org_id)
         start_time = time.time()
         safe_org = OrgDeviceInventorySummaryCore._resolve_safe_org_name(target_org_id)
@@ -381,8 +254,12 @@ class OrgDeviceInventorySummaryCore:
             "orgDeviceFirmwareSummary",
         )
 
-        ver_per_model = OrgDeviceInventorySummaryCore._fetch_versions_per_model(target_org_id, model_rows)
-        OrgDeviceInventorySummaryCore._display_pivot_and_export(ver_per_model, f"{safe_org}_OrgDeviceVersionPerModel")
+        ver_per_model = VersionPerModelFetcher.fetch(
+            target_org_id, model_rows
+        )  # Decomposed: per-type version expansion lives in collaborator
+        PivotRenderer.render(
+            ver_per_model, f"{safe_org}_OrgDeviceVersionPerModel"
+        )  # Decomposed: pivot + table + export now in collaborator
 
         elapsed = time.time() - start_time
         logging.info("Org device inventory summary for %s completed in %.1f seconds", target_org_id, elapsed)

@@ -17,9 +17,18 @@ import MistHelper  # Main module under test — must be importable from repo roo
 # Any count below this means menu keys were silently removed
 _MENU_ACTIONS_BASELINE_COUNT = 178
 
-# Expected filenames in src/capture/ at Wave 1 baseline — no new ones should appear
-# Wave 1 exclusion: no packet-capture architecture decomposition
-_CAPTURE_MODULE_BASELINE = {"packet_capture.py", "packet_capture_download.py", "__init__.py"}
+# Expected filenames in src/capture/ at current baseline — no unauthorised new files should appear
+# Wave 1 exclusion: no packet-capture architecture decomposition beyond approved post-Wave-1 additions
+_CAPTURE_MODULE_BASELINE = {
+    "__init__.py",
+    "multi_ap_scan_workflow.py",  # Approved post-Wave-1: multi-AP scan orchestration
+    "org_capture_workflow.py",  # Approved post-Wave-1: org-level capture workflow
+    "org_pcap_wait_download_workflow.py",  # Approved post-Wave-1: org pcap download poller
+    "packet_capture.py",  # Original Wave-1 baseline
+    "packet_capture_download.py",  # Original Wave-1 baseline
+    "site_capture_loop.py",  # Approved post-Wave-1: site-level capture loop
+    "site_pcap_wait_download_workflow.py",  # Approved post-Wave-1: site pcap download poller
+}
 
 # Absolute path to src/capture/ for packet-capture decomposition scan
 _SRC_CAPTURE_PATH = Path(__file__).resolve().parents[2] / "src" / "capture"

@@ -71,18 +71,18 @@ def test_get_site_ids_with_devices_filters_gateway_entries_only() -> None:
     assert sorted(site_ids) == ["site-1", "site-3"]
 
 
-def test_with_wan_overrides_delegates_to_override_analyzer() -> None:
-    """WAN override entrypoint should delegate execution to extracted override analyzer."""
+def test_with_wan_overrides_delegates_to_wan_override_walker() -> None:
+    """WAN override entrypoint should delegate execution to the WanOverrideWalker orchestrator."""
     _configure_dependencies()
 
-    from src.gateway import gateway_export_utils as module
+    from src.gateway import gateway_export_utils as module  # Module under test
 
-    override_mock = MagicMock()
-    original_method = module.GatewayOverrideAnalyzer.with_wan_overrides
-    module.GatewayOverrideAnalyzer.with_wan_overrides = override_mock
+    override_mock = MagicMock()  # Stand-in for the walker's walk classmethod
+    original_method = module.WanOverrideWalker.walk  # Snapshot real method for restoration
+    module.WanOverrideWalker.walk = override_mock  # Patch in place for this single test
 
     try:
-        GatewayExportUtils.with_wan_overrides(fast=True)
-        override_mock.assert_called_once_with(fast=True)
+        GatewayExportUtils.with_wan_overrides(fast=True)  # Trigger the delegation path
+        override_mock.assert_called_once_with(fast=True)  # Confirm walker invoked with fast flag
     finally:
-        module.GatewayOverrideAnalyzer.with_wan_overrides = original_method
+        module.WanOverrideWalker.walk = original_method  # Always restore the original method

@@ -266,61 +266,94 @@ class SiteConfigManager:
         print("=" * 70)
 
     @staticmethod
-    def _analyze_sites_for_rf_templates(org_id: str) -> tuple | None:  # type: ignore[type-arg]
-        """Analyze organization sites and existing RF templates."""
-        print("\n  Step 1: Scanning organization sites for unique country codes...")
-
+    def _fetch_org_sites_for_rf(org_id: str) -> list[dict[str, Any]] | None:
+        """Fetch all sites for an org, returning None on failure or empty result."""
+        logging.info("Fetching org sites for RF-template analysis (org_id=%s)", org_id)  # Log before API call.
         try:
-            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
-            sites = mistapi.get_all(response=sites_response, mist_session=apisession)
-
-            if not sites:
-                print(" No sites found in organization.")
-                return None
-
-            print(f" Found {len(sites)} sites in organization")
-        except Exception as error:
-            logging.error("Failed to fetch sites: %s", error)
-            print(f" ERROR: Failed to fetch sites - {error}")
+            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(
+                apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT
+            )  # Page-aware list of all org sites.
+            sites = mistapi.get_all(response=sites_response, mist_session=apisession)  # Materialize paginated list.
+        except Exception as error:  # API failure is non-fatal at workflow level - we just abort the operation.
+            logging.error("Failed to fetch sites: %s", error)  # Preserve original error log.
+            print(f" ERROR: Failed to fetch sites - {error}")  # Preserve original operator message.
             return None
+        if not sites:  # No sites means RF-template workflow has nothing to do.
+            print(" No sites found in organization.")  # Preserve legacy operator message.
+            return None
+        logging.debug("Fetched %d sites for RF-template analysis", len(sites))  # Log result size for diagnostics.
+        print(f" Found {len(sites)} sites in organization")  # Preserve legacy operator message.
+        return sites
 
-        sites_by_country: dict[str, list[dict[str, Any]]] = {}
-        sites_without_country: list[dict[str, Any]] = []
-
+    @staticmethod
+    def _group_sites_by_country(
+        sites: list[dict[str, Any]],
+    ) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
+        """Group sites by uppercase country code; collect sites without country separately."""
+        logging.info("Grouping %d sites by country code", len(sites))  # Log before grouping pass.
+        sites_by_country: dict[str, list[dict[str, Any]]] = {}  # country_code -> list of {id,name}.
+        sites_without_country: list[dict[str, Any]] = []  # Sites missing a country code.
         for site in sites:
-            country_code = site.get("country_code", "").strip().upper()
-            site_info = {"id": site.get("id"), "name": site.get("name", "Unknown")}
-
+            country_code = site.get("country_code", "").strip().upper()  # Normalize country to uppercase.
+            site_info = {"id": site.get("id"), "name": site.get("name", "Unknown")}  # Minimal site descriptor.
             if country_code:
-                if country_code not in sites_by_country:
-                    sites_by_country[country_code] = []
-                sites_by_country[country_code].append(site_info)
+                sites_by_country.setdefault(country_code, []).append(site_info)  # Append to per-country bucket.
             else:
-                sites_without_country.append(site_info)
+                sites_without_country.append(site_info)  # Track for warning message later.
+        logging.debug(
+            "Grouped %d countries; %d sites without country", len(sites_by_country), len(sites_without_country)
+        )  # Log grouping outcome.
+        return sites_by_country, sites_without_country
 
-        if not sites_by_country:
-            print(" WARNING: No sites have country codes assigned.")
-            return None
-
-        print(f"\n  Found {len(sites_by_country)} unique countries:")
+    @staticmethod
+    def _print_country_distribution(
+        sites_by_country: dict[str, list[dict[str, Any]]],
+        sites_without_country: list[dict[str, Any]],
+    ) -> None:
+        """Print the per-country site distribution and any missing-country warning."""
+        print(f"\n  Found {len(sites_by_country)} unique countries:")  # Preserve legacy header line.
         for country in sorted(sites_by_country.keys()):
-            print(f"   - {country}: {len(sites_by_country[country])} sites")
-
+            print(f"   - {country}: {len(sites_by_country[country])} sites")  # Preserve legacy per-country listing.
         if sites_without_country:
-            print(f"\n  WARNING: {len(sites_without_country)} sites have no country code")
+            print(f"\n  WARNING: {len(sites_without_country)} sites have no country code")  # Preserve legacy warning.
 
-        print("\n  Step 2: Checking for existing RF templates...")
+    @staticmethod
+    def _fetch_existing_rf_templates(org_id: str) -> dict[str, str] | None:
+        """Fetch existing RF templates as a {name: id} map; return None on API error."""
+        print("\n  Step 2: Checking for existing RF templates...")  # Preserve legacy step header.
+        logging.info("Fetching existing RF templates for org_id=%s", org_id)  # Log before API call.
         try:
             templates_response = mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates(
                 apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT
-            )
-            existing = mistapi.get_all(response=templates_response, mist_session=apisession) or []
-            existing_templates = {t.get("name"): t.get("id") for t in existing}
-        except Exception as error:
-            logging.error("Failed to fetch RF templates: %s", error)
+            )  # Page-aware list of all RF templates.
+            existing = mistapi.get_all(response=templates_response, mist_session=apisession) or []  # Materialize list.
+        except Exception as error:  # API failure is non-fatal at workflow level.
+            logging.error("Failed to fetch RF templates: %s", error)  # Preserve original error log.
             return None
+        existing_templates = {t.get("name"): t.get("id") for t in existing}  # Build name->id lookup table.
+        logging.debug("Loaded %d existing RF templates", len(existing_templates))  # Log result size.
+        return existing_templates
 
-        return sites_by_country, sites_without_country, existing_templates
+    @staticmethod
+    def _analyze_sites_for_rf_templates(org_id: str) -> tuple | None:  # type: ignore[type-arg]
+        """Analyze organization sites and existing RF templates."""
+        print("\n  Step 1: Scanning organization sites for unique country codes...")  # Preserve legacy step header.
+        sites = SiteConfigManager._fetch_org_sites_for_rf(org_id)  # Fetch all org sites for analysis.
+        if not sites:  # _fetch_org_sites_for_rf already emitted the operator message.
+            return None
+        sites_by_country, sites_without_country = SiteConfigManager._group_sites_by_country(
+            sites
+        )  # Bucket sites by country code.
+        if not sites_by_country:  # No sites with country codes means nothing to template.
+            print(" WARNING: No sites have country codes assigned.")  # Preserve legacy warning text.
+            return None
+        SiteConfigManager._print_country_distribution(
+            sites_by_country, sites_without_country
+        )  # Emit per-country distribution table for operator.
+        existing_templates = SiteConfigManager._fetch_existing_rf_templates(org_id)  # Load existing RF templates.
+        if existing_templates is None:  # API error fetching templates -> abort.
+            return None
+        return sites_by_country, sites_without_country, existing_templates  # Return analysis tuple to caller.
 
     @staticmethod
     def _plan_rf_template_operations(sites_by_country: dict, existing_templates: dict) -> tuple | None:  # type: ignore[type-arg]

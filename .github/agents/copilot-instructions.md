@@ -60,6 +60,10 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - N/A -- no data model or schema changes (189-quality-gate-remediation)
 - Python 3.13+ + mistapi 0.59+, pytest/pytest-cov, ruff, black, mypy, tqdm, PrettyTable (main)
 - CSV/SQLite/ArangoDB/Redis outputs via existing exporter flows, JSON report artifacts under `data/` (main)
+- Python 3.13+ + `mistapi>=0.59`, `requests`, `python-dotenv`, `ruff`, `black`, `radon`, existing `src/*` extracted modules (feat/194-capture-bootstrap-session-refactor)
+- CSV and SQLite outputs under `data/` (plus optional ArangoDB/Redis via existing exporter paths) (feat/194-capture-bootstrap-session-refactor)
+- Python 3.13+ + `mistapi>=0.59`, `requests`, existing `src/*` extraction modules, `ruff`, `black`, `radon` (feat/194-capture-bootstrap-session-refactor)
+- CSV/SQLite (plus existing optional ArangoDB/Redis paths) under `data/` (feat/194-capture-bootstrap-session-refactor)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -79,9 +83,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- feat/194-capture-bootstrap-session-refactor: Added Python 3.13+ + `mistapi>=0.59`, `requests`, existing `src/*` extraction modules, `ruff`, `black`, `radon`
+- feat/194-capture-bootstrap-session-refactor: Added Python 3.13+ + `mistapi>=0.59`, `requests`, `python-dotenv`, `ruff`, `black`, `radon`, existing `src/*` extracted modules
 - main: Added Python 3.13+ + mistapi 0.59+, pytest/pytest-cov, ruff, black, mypy, tqdm, PrettyTable
-- 189-quality-gate-remediation: Added Python 3.13+ + `requests` (present), `subprocess` (stdlib),
-- 189-quality-gate-remediation: Added Python 3.13+ + `requests` (present), `subprocess` (stdlib),
 
 
 <!-- MANUAL ADDITIONS START -->

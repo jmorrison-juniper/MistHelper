@@ -71,72 +71,76 @@ class SiteInventoryHealthAnalyzer:
     @staticmethod
     def _fetch_devices(org_id: str, deps: SiteInventoryHealthAnalyzerDeps) -> list[dict[str, Any]]:
         """Fetch all devices (inventory) in the organization."""
-        print("! Fetching device inventory...")
-        logging.info("Fetching all organization devices from inventory...")
-
+        print("! Fetching device inventory...")  # User progress message
+        logging.info("Fetching all organization devices from inventory...")  # Pre-action log
         try:
-            response = deps.mistapi.api.v1.orgs.inventory.getOrgInventory(deps.apisession, org_id, limit=1000)
-            devices = deps.mistapi.get_all(response=response, mist_session=deps.apisession) or []
-
-            ap_count = sum(1 for device in devices if device.get("type") == "ap")
-            switch_count = sum(1 for device in devices if device.get("type") == "switch")
-            gateway_count = sum(1 for device in devices if device.get("type") == "gateway")
-            connected_count = sum(1 for device in devices if device.get("connected") is True)
-
-            print(
-                f"  Found {len(devices)} devices: {ap_count} APs, {switch_count} switches, {gateway_count} gateways ({connected_count} connected)"  # noqa: E501
+            response = deps.mistapi.api.v1.orgs.inventory.getOrgInventory(  # API: first page of inventory
+                deps.apisession, org_id, limit=1000
             )
-            logging.info("Fetched %d devices from organization inventory", len(devices))
+            devices = deps.mistapi.get_all(response=response, mist_session=deps.apisession) or []  # Paginate fully
+            logging.debug("Fetched %d devices from organization inventory", len(devices))  # Post-action log
+            SiteInventoryHealthAnalyzer._print_device_summary(devices)  # Print AP/switch/gateway/connected breakdown
             return devices
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001 - Mist SDK raises bare Exception subclasses
             logging.error("Failed to fetch devices: %s", error)
             return []
 
     @staticmethod
+    def _print_device_summary(devices: list[dict[str, Any]]) -> None:
+        """Print a one-line summary of device counts by type plus connected total."""
+        counts = {"ap": 0, "switch": 0, "gateway": 0, "connected": 0}  # Accumulator for tally below
+        for device in devices:  # Single pass over the device list
+            device_type = device.get("type")  # Categorise by mistapi type field
+            if device_type in counts:  # Bump per-type counter when known
+                counts[device_type] += 1
+            if device.get("connected") is True:  # Connected counter is independent of type
+                counts["connected"] += 1
+        print(  # noqa: E501
+            f"  Found {len(devices)} devices: {counts['ap']} APs, {counts['switch']} switches, "
+            f"{counts['gateway']} gateways ({counts['connected']} connected)"
+        )
+
+    @staticmethod
     def _group_devices_by_site(devices: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
         """Group devices by site_id and categorize by type."""
-        site_inventory: dict[str, dict[str, Any]] = {}
-
-        for device in devices:
-            site_id = device.get("site_id", "")
+        # Maps from raw mistapi device.type -> our per-site bucket key
+        type_to_bucket = {"ap": "aps", "switch": "switches", "gateway": "gateways"}
+        site_inventory: dict[str, dict[str, Any]] = {}  # site_id -> {aps:[], switches:[], gateways:[]}
+        for device in devices:  # Walk every device record once
+            site_id = device.get("site_id", "")  # Devices without site_id are unassigned — skip
             if not site_id:
                 continue
-
-            if site_id not in site_inventory:
-                site_inventory[site_id] = {"aps": [], "switches": [], "gateways": []}
-
-            device_type = device.get("type", "")
-            device_id = device.get("id", "")
-            device_mac = device.get("mac", "")
-            device_name = device.get("name", device_mac or device_id or "Unknown")
-            device_model = device.get("model", "Unknown")
-            device_serial = device.get("serial", "Unknown")
-
-            connected = device.get("connected")
-            if connected is True:
-                status = "connected"
-            elif connected is False:
-                status = "disconnected"
-            else:
-                status = "unknown"
-
-            device_info = {
-                "id": device_id,
-                "mac": device_mac,
-                "name": device_name,
-                "model": device_model,
-                "serial": device_serial,
-                "status": status,
-            }
-
-            if device_type == "ap":
-                site_inventory[site_id]["aps"].append(device_info)
-            elif device_type == "switch":
-                site_inventory[site_id]["switches"].append(device_info)
-            elif device_type == "gateway":
-                site_inventory[site_id]["gateways"].append(device_info)
-
+            bucket_key = type_to_bucket.get(device.get("type", ""))  # Type → bucket name
+            if bucket_key is None:  # Unknown / unsupported device type — skip
+                continue
+            buckets = site_inventory.setdefault(  # Lazily create the per-site bucket dict
+                site_id, {"aps": [], "switches": [], "gateways": []}
+            )
+            buckets[bucket_key].append(SiteInventoryHealthAnalyzer._build_device_info(device))  # Append shape
         return site_inventory
+
+    @staticmethod
+    def _build_device_info(device: dict[str, Any]) -> dict[str, Any]:
+        """Project a raw device record into our internal info dict (name/model/status)."""
+        device_id = device.get("id", "")  # Mist device UUID
+        device_mac = device.get("mac", "")  # MAC address (fallback name source)
+        return {
+            "id": device_id,
+            "mac": device_mac,
+            "name": device.get("name", device_mac or device_id or "Unknown"),  # Best-available name
+            "model": device.get("model", "Unknown"),
+            "serial": device.get("serial", "Unknown"),
+            "status": SiteInventoryHealthAnalyzer._derive_status(device.get("connected")),  # 3-state
+        }
+
+    @staticmethod
+    def _derive_status(connected: Any) -> str:
+        """Translate the raw ``connected`` flag into a 3-state status string."""
+        if connected is True:  # Explicit boolean True → connected
+            return "connected"
+        if connected is False:  # Explicit boolean False → disconnected
+            return "disconnected"
+        return "unknown"  # None / missing → unknown
 
     @staticmethod
     def _find_sites_missing_infrastructure(
@@ -184,76 +188,96 @@ class SiteInventoryHealthAnalyzer:
         site_inventory: dict[str, dict[str, Any]], site_lookup: dict[str, str]
     ) -> list[dict[str, Any]]:
         """Find sites with APs where switch or gateway is offline."""
-        offline_sites: list[dict[str, Any]] = []
+        offline_sites: list[dict[str, Any]] = []  # Accumulator for matching site reports
+        for site_id, inventory in site_inventory.items():  # One pass over every site
+            entry = SiteInventoryHealthAnalyzer._build_offline_entry(site_id, site_lookup, inventory)
+            if entry is not None:  # Append only when this site actually qualifies
+                offline_sites.append(entry)
+        return sorted(offline_sites, key=lambda row: row["site_name"])  # Stable display order
 
-        for site_id, inventory in site_inventory.items():
-            ap_count = len(inventory["aps"])
-            if ap_count == 0:
-                continue
+    @staticmethod
+    def _build_offline_entry(
+        site_id: str, site_lookup: dict[str, str], inventory: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Build a per-site offline-infrastructure report row, or None when not applicable."""
+        ap_count = len(inventory["aps"])  # APs are the trigger for considering this site
+        if ap_count == 0:  # Site has no APs → not interesting for this report
+            return None
+        offline_switches = SiteInventoryHealthAnalyzer._filter_disconnected(inventory["switches"])  # Bad switches
+        offline_gateways = SiteInventoryHealthAnalyzer._filter_disconnected(inventory["gateways"])  # Bad GWs
+        if not offline_switches and not offline_gateways:  # Everything online → nothing to report
+            return None
+        offline_device_details = SiteInventoryHealthAnalyzer._format_offline_details(  # Pretty labels
+            offline_switches, offline_gateways
+        )
+        return {
+            "site_id": site_id,
+            "site_name": site_lookup.get(site_id, "Unknown Site"),  # Friendly name fallback
+            "ap_count": ap_count,
+            "total_switches": len(inventory["switches"]),
+            "offline_switches": len(offline_switches),
+            "total_gateways": len(inventory["gateways"]),
+            "offline_gateways": len(offline_gateways),
+            "offline_devices": "; ".join(offline_device_details),  # Semi-colon joined list for CSV
+            "offline_switch_names": ", ".join(s["name"] for s in offline_switches),
+            "offline_gateway_names": ", ".join(g["name"] for g in offline_gateways),
+        }
 
-            offline_switches = [switch for switch in inventory["switches"] if switch["status"] == "disconnected"]
-            offline_gateways = [gateway for gateway in inventory["gateways"] if gateway["status"] == "disconnected"]
+    @staticmethod
+    def _filter_disconnected(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return the subset of devices whose status is ``disconnected``."""
+        return [device for device in devices if device["status"] == "disconnected"]
 
-            if offline_switches or offline_gateways:
-                site_name = site_lookup.get(site_id, "Unknown Site")
-
-                offline_device_details: list[str] = []
-                for switch in offline_switches:
-                    offline_device_details.append(f"Switch: {switch['name']} ({switch['model']})")
-                for gateway in offline_gateways:
-                    offline_device_details.append(f"Gateway: {gateway['name']} ({gateway['model']})")
-
-                offline_sites.append(
-                    {
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "ap_count": ap_count,
-                        "total_switches": len(inventory["switches"]),
-                        "offline_switches": len(offline_switches),
-                        "total_gateways": len(inventory["gateways"]),
-                        "offline_gateways": len(offline_gateways),
-                        "offline_devices": "; ".join(offline_device_details),
-                        "offline_switch_names": ", ".join([switch["name"] for switch in offline_switches]),
-                        "offline_gateway_names": ", ".join([gateway["name"] for gateway in offline_gateways]),
-                    }
-                )
-
-        return sorted(offline_sites, key=lambda row: row["site_name"])
+    @staticmethod
+    def _format_offline_details(
+        offline_switches: list[dict[str, Any]], offline_gateways: list[dict[str, Any]]
+    ) -> list[str]:
+        """Format ``Switch: name (model)`` / ``Gateway: name (model)`` labels for the report."""
+        switch_labels = [f"Switch: {s['name']} ({s['model']})" for s in offline_switches]
+        gateway_labels = [f"Gateway: {g['name']} ({g['model']})" for g in offline_gateways]
+        return switch_labels + gateway_labels
 
     @staticmethod
     def _display_results(missing_report: list[dict[str, Any]], offline_report: list[dict[str, Any]]) -> None:
         """Display analysis results to console."""
-        print("\n" + "=" * 60)
+        print("\n" + "=" * 60)  # Banner separator
         print("ANALYSIS RESULTS")
         print("=" * 60)
+        SiteInventoryHealthAnalyzer._display_missing_section(missing_report)  # Missing-infrastructure block
+        SiteInventoryHealthAnalyzer._display_offline_section(offline_report)  # Offline-infrastructure block
+        print("\n" + "=" * 60)  # Trailing separator
 
+    @staticmethod
+    def _display_missing_section(missing_report: list[dict[str, Any]]) -> None:
+        """Console block for sites missing switch/gateway infrastructure."""
         print("\n[SITES MISSING INFRASTRUCTURE]")
         print(f"  Sites with APs but missing switch/gateway: {len(missing_report)}")
-        if missing_report:
-            missing_switches = sum(1 for report in missing_report if "switch" in report["missing_types"])
-            missing_gateways = sum(1 for report in missing_report if "gateway" in report["missing_types"])
-            print(f"    - Missing switches: {missing_switches}")
-            print(f"    - Missing gateways: {missing_gateways}")
+        if not missing_report:  # Nothing more to render when the report is empty
+            return
+        missing_switches = sum(1 for report in missing_report if "switch" in report["missing_types"])
+        missing_gateways = sum(1 for report in missing_report if "gateway" in report["missing_types"])
+        print(f"    - Missing switches: {missing_switches}")
+        print(f"    - Missing gateways: {missing_gateways}")
+        print("\n  Sample sites (first 5):")
+        for site in missing_report[:5]:  # Bounded preview
+            print(f"    - {site['site_name']}: {site['ap_count']} APs, missing {site['missing_types']}")
 
-            print("\n  Sample sites (first 5):")
-            for site in missing_report[:5]:
-                print(f"    - {site['site_name']}: {site['ap_count']} APs, missing {site['missing_types']}")
-
+    @staticmethod
+    def _display_offline_section(offline_report: list[dict[str, Any]]) -> None:
+        """Console block for sites with offline switch/gateway infrastructure."""
         print("\n[SITES WITH OFFLINE INFRASTRUCTURE]")
         print(f"  Sites with APs and offline switch/gateway: {len(offline_report)}")
-        if offline_report:
-            total_offline_switches = sum(report["offline_switches"] for report in offline_report)
-            total_offline_gateways = sum(report["offline_gateways"] for report in offline_report)
-            print(f"    - Total offline switches: {total_offline_switches}")
-            print(f"    - Total offline gateways: {total_offline_gateways}")
-
-            print("\n  Sample sites (first 5):")
-            for site in offline_report[:5]:
-                print(
-                    f"    - {site['site_name']}: {site['ap_count']} APs, offline: {site['offline_devices'][:80]}{'...' if len(site['offline_devices']) > 80 else ''}"  # noqa: E501
-                )
-
-        print("\n" + "=" * 60)
+        if not offline_report:  # Nothing more to render when the report is empty
+            return
+        total_offline_switches = sum(report["offline_switches"] for report in offline_report)
+        total_offline_gateways = sum(report["offline_gateways"] for report in offline_report)
+        print(f"    - Total offline switches: {total_offline_switches}")
+        print(f"    - Total offline gateways: {total_offline_gateways}")
+        print("\n  Sample sites (first 5):")
+        for site in offline_report[:5]:  # Bounded preview
+            devices_label = site["offline_devices"]
+            suffix = "..." if len(devices_label) > 80 else ""  # Truncate long detail strings
+            print(f"    - {site['site_name']}: {site['ap_count']} APs, offline: {devices_label[:80]}{suffix}")
 
     @staticmethod
     def _export_results(

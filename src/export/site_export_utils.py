@@ -89,82 +89,91 @@ class SiteExportUtils(SiteInsightsExporter):
     """Centralized site-level data export utilities."""
 
     @staticmethod
-    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
+    def _resolve_site_name(site_id):  # type: ignore[no-untyped-def]
+        """Resolve human-readable site name from org sites list; fall back to site_id."""
+        try:
+            logging.info("Fetching org sites to resolve site name for %s", site_id)  # Log before API call.
+            response = mistapi.api.v1.orgs.sites.listOrgSites(
+                apisession, ConfigUtils.get_cached_or_prompted_org_id()
+            )  # Fetch org sites for name resolution.
+            sites = mistapi.get_all(response=response, mist_session=apisession)  # Paginate full list.
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Match by id.
+            logging.debug("Resolved site_name=%s for site_id=%s", site_name, site_id)  # Log result.
+            return site_name  # Return resolved name.
+        except Exception as e:
+            logging.error(f"Error getting site name: {e}")  # Preserve legacy error string.
+            return site_id  # Fall back to raw site_id.
+
+    @staticmethod
+    def _call_site_api(api_call, site_id, api_kwargs):  # type: ignore[no-untyped-def]
+        """Invoke site API call, respecting limit-parameter support; return paginated rawdata."""
+        logging.debug(f"Making site-specific API call: {api_call.__name__} with site_id: {site_id}")
+        try:
+            sig = inspect.signature(api_call)  # Inspect signature to detect limit support.
+            supports_limit = "limit" in sig.parameters  # Gate limit kwarg on actual support.
+        except Exception:
+            supports_limit = True  # Default to passing limit when signature unavailable.
+        if supports_limit:
+            logging.info("Calling %s with limit=1000 for site %s", api_call.__name__, site_id)  # Log before call.
+            response = api_call(apisession, site_id, limit=1000, **api_kwargs)  # Call with limit.
+        else:
+            logging.debug(f"API function {api_call.__name__} does not support 'limit' parameter")
+            logging.info("Calling %s without limit for site %s", api_call.__name__, site_id)  # Log before call.
+            response = api_call(apisession, site_id, **api_kwargs)  # Call without limit.
+        rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Paginate response.
+        logging.debug("Retrieved rawdata with %s records", len(rawdata) if rawdata else 0)  # Log count.
+        return rawdata  # Return paginated rawdata.
+
+    @staticmethod
+    def _display_or_log_results(data, data_type, filename):  # type: ignore[no-untyped-def]
+        """Render debug-mode PrettyTable or log completion summary."""
+        if is_debug_mode():  # type: ignore[no-untyped-call]
+            fields = DataProcessingUtils.get_unique_keys(data)  # type: ignore[no-untyped-call]
+            table = PrettyTable()  # Build PrettyTable for debug output.
+            table.field_names = fields  # Set table columns from union of keys.
+            table.valign = "t"  # Vertical alignment preserved.
+            for item in tqdm(data, desc="Processing", unit="record"):  # type: ignore[no-untyped-call]
+                row = [item.get(field, "") for field in table.field_names]  # Build row in stable order.
+                table.add_row(row)  # Add row to table.
+            print(table)  # Preserve legacy debug table output.
+            logging.debug("Site data displayed in table format (debug mode).")
+        else:
+            logging.info(f"Site {data_type} export completed - {len(data)} records saved to {filename}.")
+
+    @staticmethod
+    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # type: ignore[no-untyped-def]
         """Generic function to export site-specific data to CSV."""
         logging.info(f"Starting export of site {data_type}...")
-
-        site_id = PromptUtils.select_site()
+        site_id = PromptUtils.select_site()  # Prompt operator for target site.
         if not site_id:
             logging.error("No site selected. Exiting.")
-            return
-
-        try:
-            response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception as e:
-            logging.error(f"Error getting site name: {e}")
-            site_name = site_id
-
+            return  # Abort when operator declines.
+        site_name = SiteExportUtils._resolve_site_name(site_id)  # Resolve display name for site_id.
         logging.info(f"Exporting {data_type} for site: {site_name}")
-
-        safe_data_type = data_type.replace(" ", "").replace("-", "").title()
-        safe_site_name = site_name.replace(" ", "_").replace("-", "_")
-        filename = f"Site{safe_data_type}_{safe_site_name}.csv"
-
+        safe_data_type = data_type.replace(" ", "").replace("-", "").title()  # Sanitize for filename.
+        safe_site_name = site_name.replace(" ", "_").replace("-", "_")  # Sanitize for filename.
+        filename = f"Site{safe_data_type}_{safe_site_name}.csv"  # Preserve legacy filename format.
         try:
-            logging.debug(f"Making site-specific API call: {api_call.__name__} with site_id: {site_id}")
-
-            try:
-                sig = inspect.signature(api_call)
-                supports_limit = "limit" in sig.parameters
-            except Exception:
-                supports_limit = True
-
-            if supports_limit:
-                response = api_call(apisession, site_id, limit=1000, **api_kwargs)
-            else:
-                logging.debug(f"API function {api_call.__name__} does not support 'limit' parameter")
-                response = api_call(apisession, site_id, **api_kwargs)
-
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)
+            rawdata = SiteExportUtils._call_site_api(api_call, site_id, api_kwargs)  # Fetch site data.
             if rawdata is None:
                 logging.warning(f"! No data returned from API for {data_type} at site {site_name}. Skipping.")
-                return
-
+                return  # Abort on empty response.
             logging.info(f"Fetched {len(rawdata)} raw records for {data_type} from site {site_name}.")
-
             if sort_key:
-                rawdata = sorted(rawdata, key=lambda x: x.get(sort_key, ""))
-
-            data = DataProcessingUtils.flatten_nested_fields(rawdata)
+                rawdata = sorted(rawdata, key=lambda x: x.get(sort_key, ""))  # Stable sort by key.
+            data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested JSON.
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
+            logging.info("Saving exported site data to %s", filename)  # Log before save.
             DataExporter.save_data_to_output(data, filename)  # type: ignore[no-untyped-call]
-
-            if not os.path.dirname(filename):
-                full_file_path = os.path.join("data", filename)
-            else:
-                full_file_path = filename
-
-            print(f"! {len(data)} records exported to {full_file_path}")
+            full_file_path = (
+                filename if os.path.dirname(filename) else os.path.join("data", filename)
+            )  # Compose absolute-style display path preserved.
+            print(f"! {len(data)} records exported to {full_file_path}")  # Preserve operator output.
             logging.info(f"Site {data_type} data written to {filename} ({len(data)} rows).")
-
-            if is_debug_mode():  # type: ignore[no-untyped-call]
-                fields = DataProcessingUtils.get_unique_keys(data)  # type: ignore[no-untyped-call]
-                table = PrettyTable()
-                table.field_names = fields
-                table.valign = "t"
-                for item in tqdm(data, desc="Processing", unit="record"):  # type: ignore[no-untyped-call]
-                    row = [item.get(field, "") for field in table.field_names]
-                    table.add_row(row)
-                print(table)
-                logging.debug("Site data displayed in table format (debug mode).")
-            else:
-                logging.info(f"Site {data_type} export completed - {len(data)} records saved to {filename}.")
-
+            SiteExportUtils._display_or_log_results(data, data_type, filename)  # Display or log summary.
         except Exception as e:
             logging.error(f"! Error during site {data_type} export for {site_name}: {e}")
-            raise
+            raise  # Re-raise to preserve legacy bubbling.
 
     @staticmethod
     def insights():  # type: ignore[no-untyped-def]

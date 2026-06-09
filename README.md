@@ -4,7 +4,7 @@ Network Operations & Data Export Tool for Juniper Mist Cloud
 [![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
 [![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-**Operation Count:** The code currently defines 193 actionable menu entries (1-193), organized into 31 logical groups with no gaps. Exit is menu 0.
+**Operation Count:** The code currently defines 194 actionable menu entries (1-194), organized into 31 logical groups with no gaps. Exit is menu 0.
 
 MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to CSV files, a local SQLite database, or a polyglot backend (ArangoDB for documents, Redis for time-series and JSON caching) using natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -104,7 +104,7 @@ flowchart LR
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 mindmap
-   root((MistHelper<br/>193 Operations))
+   root((MistHelper<br/>194 Operations))
     Safe Org Exports (59)
       Sites and Analysis 1-7
       Device Inventory 8-14
@@ -135,7 +135,7 @@ mindmap
       Config Mgmt 148-150
     Continuous (2)
       Loops 151-152
-    Destructive (40)
+    Destructive (41)
       ::icon(fa fa-warning)
       Firmware 154-157
       Reboot 158-160
@@ -146,6 +146,7 @@ mindmap
       SSH Runners 175-176
       Clear Reset 177-187
       Support Tickets 188-193
+      Gateway Template 194
 ```
 
 > See [full operations reference](documentation/diagrams/operations/operations-reference.md) with lifecycle states, NOC engineer journey, and safety requirements.

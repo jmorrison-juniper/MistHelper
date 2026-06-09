@@ -288,11 +288,9 @@ class SiteAnalyticsConfigurator:
         return deviations
 
     @staticmethod
-    def _compare_engagement(current: dict[str, Any]) -> list[dict[str, Any]]:
-        """Compare engagement settings including nested dwell tags."""
+    def _compare_dwell_tags(current: dict[str, Any], standard: dict[str, Any]) -> list[dict[str, Any]]:
+        """Compare engagement dwell_tags settings."""
         deviations: list[dict[str, Any]] = []
-        standard = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT
-
         current_dwell_tags = current.get("dwell_tags", {})
         for tag_name, expected_range in standard["dwell_tags"].items():
             current_range = current_dwell_tags.get(tag_name)
@@ -304,7 +302,7 @@ class SiteAnalyticsConfigurator:
                         "current": "NOT SET",
                         "expected": expected_range,
                     }
-                )
+                )  # noqa: E501
             elif current_range != expected_range:
                 deviations.append(
                     {
@@ -313,8 +311,13 @@ class SiteAnalyticsConfigurator:
                         "current": current_range,
                         "expected": expected_range,
                     }
-                )
+                )  # noqa: E501
+        return deviations
 
+    @staticmethod
+    def _compare_dwell_tag_names(current: dict[str, Any], standard: dict[str, Any]) -> list[dict[str, Any]]:
+        """Compare engagement dwell_tag_names settings."""
+        deviations: list[dict[str, Any]] = []
         current_dwell_names = current.get("dwell_tag_names", {})
         for tag_name, expected_name in standard["dwell_tag_names"].items():
             current_name = current_dwell_names.get(tag_name)
@@ -326,8 +329,13 @@ class SiteAnalyticsConfigurator:
                         "current": current_name,
                         "expected": expected_name,
                     }
-                )
+                )  # noqa: E501
+        return deviations
 
+    @staticmethod
+    def _compare_engagement_hours(current: dict[str, Any], standard: dict[str, Any]) -> list[dict[str, Any]]:
+        """Compare engagement hours settings."""
+        deviations: list[dict[str, Any]] = []
         current_hours = current.get("hours", {})
         for day_name, expected_hours in standard["hours"].items():
             current_day_hours = current_hours.get(day_name)
@@ -339,8 +347,27 @@ class SiteAnalyticsConfigurator:
                         "current": current_day_hours,
                         "expected": expected_hours if expected_hours else "(empty)",
                     }
-                )
+                )  # noqa: E501
+        return deviations
 
+    @staticmethod
+    def _count_deviations(deviations: list[dict[str, Any]]) -> dict[str, int]:
+        """Count sites with each type of deviation."""
+        counts: dict[str, int] = {"rtsa": 0, "rogue": 0, "engagement": 0, "analytic": 0, "occupancy": 0, "wifi": 0}
+        for site in deviations:
+            for key in counts:
+                if site.get(f"{key}_deviation"):  # Increment counter if this deviation type is set
+                    counts[key] += 1
+        return counts
+
+    @staticmethod
+    def _compare_engagement(current: dict[str, Any]) -> list[dict[str, Any]]:
+        """Compare engagement settings including nested dwell tags."""
+        standard = SiteAnalyticsConfigurator.STANDARD_ENGAGEMENT
+        deviations: list[dict[str, Any]] = []
+        deviations.extend(SiteAnalyticsConfigurator._compare_dwell_tags(current, standard))
+        deviations.extend(SiteAnalyticsConfigurator._compare_dwell_tag_names(current, standard))
+        deviations.extend(SiteAnalyticsConfigurator._compare_engagement_hours(current, standard))
         return deviations
 
     @staticmethod
@@ -387,17 +414,12 @@ class SiteAnalyticsConfigurator:
         print("SITE ANALYTICS CONFIGURATION DEVIATIONS")
         print("=" * 60)
 
-        rtsa_count = sum(1 for site in deviations if site["rtsa_deviation"])
-        rogue_count = sum(1 for site in deviations if site["rogue_deviation"])
-        engagement_count = sum(1 for site in deviations if site["engagement_deviation"])
-        analytic_count = sum(1 for site in deviations if site["analytic_deviation"])
-        occupancy_count = sum(1 for site in deviations if site["occupancy_deviation"])
-        wifi_count = sum(1 for site in deviations if site["wifi_deviation"])
+        counts = SiteAnalyticsConfigurator._count_deviations(deviations)
 
         print("\n[DEVIATION SUMMARY]")
         print(f"  Total sites with deviations: {len(deviations)}")
-        print(f"  - RTSA: {rtsa_count}  - Rogue: {rogue_count}  - Engagement: {engagement_count}")
-        print(f"  - Analytic: {analytic_count}  - Occupancy: {occupancy_count}  - WiFi: {wifi_count}")
+        print(f"  - RTSA: {counts['rtsa']}  - Rogue: {counts['rogue']}  - Engagement: {counts['engagement']}")
+        print(f"  - Analytic: {counts['analytic']}  - Occupancy: {counts['occupancy']}  - WiFi: {counts['wifi']}")
 
         print("\n[SITES WITH DEVIATIONS] (showing first 10)")
         for site in deviations[:10]:

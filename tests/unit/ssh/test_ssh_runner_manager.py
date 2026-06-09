@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps
 
@@ -17,11 +17,11 @@ class _Args:
 
 def _make_deps(*, no_env: bool = True) -> SSHRunnerManagerDeps:
     """Build dependency container with mocks for SSH runner manager tests."""
+    # T013a: load_ssh_config_from_env / load_commands_from_csv removed from EnhancedSSHRunner.
+    # T013c: run_ssh_commands_multi_host removed from EnhancedSSHRunner — callers use MultiHostRunner directly.
+    # mock_enhanced now only needs run_application (still on EnhancedSSHRunner) for the single-host path.
     mock_enhanced = SimpleNamespace(
-        load_ssh_config_from_env=MagicMock(return_value={}),
-        run_ssh_commands_multi_host=MagicMock(return_value={"host-1": {"success": True}}),
         run_application=MagicMock(return_value=True),
-        load_commands_from_csv=MagicMock(return_value=[]),
     )
 
     return SSHRunnerManagerDeps(
@@ -69,20 +69,25 @@ def test_confirm_execution_accepts_yes() -> None:
 
 
 def test_execute_ssh_uses_multi_host_for_multiple_hosts() -> None:
-    """Multi-host execution path calls run_ssh_commands_multi_host and returns success."""
+    """Multi-host execution path calls MultiHostRunner.run and returns success."""
     deps = _make_deps()
 
-    ok = SSHRunnerManager._execute_ssh(deps, ["host-1", "host-2"], "admin", "pw", ["show version"])
+    with patch(
+        "src.ssh.ssh_runner_manager.MultiHostRunner.run",
+        return_value={"host-1": {"success": True}},
+    ) as mock_run:
+        ok = SSHRunnerManager._execute_ssh(deps, ["host-1", "host-2"], "admin", "pw", ["show version"])
 
     assert ok is True
-    deps.enhanced_ssh_runner.run_ssh_commands_multi_host.assert_called_once()
+    mock_run.assert_called_once()
 
 
 def test_execute_ssh_uses_run_application_for_single_host_single_command() -> None:
-    """Single-host/single-command execution path uses run_application."""
+    """Single-host/single-command execution path uses AppRunner.run (T013d: no façade)."""
     deps = _make_deps()
 
-    ok = SSHRunnerManager._execute_ssh(deps, ["host-1"], "admin", "pw", ["show version"])
+    with patch("src.ssh.ssh_runner_manager.AppRunner.run", return_value=True) as mock_app_run:
+        ok = SSHRunnerManager._execute_ssh(deps, ["host-1"], "admin", "pw", ["show version"])
 
     assert ok is True
-    deps.enhanced_ssh_runner.run_application.assert_called_once()
+    mock_app_run.assert_called_once()

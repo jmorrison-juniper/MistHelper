@@ -26,16 +26,16 @@ classDiagram
         +close()
     }
 
-    class WebSocketNetworkDiagCommands {
-        +ping()
-        +traceroute()
-        +arp_table()
+    class ArpDeviceExecutor {
+        +execute()
     }
 
-    class WebSocketCommands {
-        +show_route()
-        +show_session()
-        +cable_test()
+    class PingDeviceExecutor {
+        +execute()
+    }
+
+    class MacTableCommand {
+        +show_mac_table()
     }
 
     class ServicePingManager {
@@ -51,8 +51,9 @@ classDiagram
         +org_level_capture()
     }
 
-    WebSocketManager <|-- WebSocketNetworkDiagCommands
-    WebSocketManager <|-- WebSocketCommands
+    WebSocketManager <|-- ArpDeviceExecutor
+    WebSocketManager <|-- PingDeviceExecutor
+    WebSocketManager <|-- MacTableCommand
     WebSocketManager --> ServicePingManager : delegates
     WebSocketManager --> PacketCaptureManager : triggers
 ```
