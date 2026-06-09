@@ -3482,47 +3482,25 @@ class MapsManager:
         all_sites=None,
     ):
         """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap."""
-        coverage_count = len(coverage_data.get("results", [])) if coverage_data else 0
-        all_maps = all_maps or []
-        all_sites = all_sites or []
+        coverage_count = self._resolve_coverage_count(coverage_data)  # Helper extracts the ternary
+        all_maps, all_sites = self._normalize_optional_lists(all_maps, all_sites)  # Drops 2 BoolOps from parent CC
         logging.info(
             f"_launch_plotly_viewer called - site: {site_name} ({site_id}), "
             f"map_id: {map_id}, devices: {len(devices)}, zones: {len(zones)}, "
             f"clients: {len(clients)}, coverage: {coverage_count}, "
             f"available_maps: {len(all_maps)}, available_sites: {len(all_sites)}"
         )
-        import os
-        import webbrowser
+        import os  # Used by getenv for DASH_PORT lookup
 
         import plotly.graph_objects as go
 
-        try:
-            logging.debug("Importing Dash modules for interactive viewer")
-            import dash
-            from dash import Dash, Input, Output, State, dcc, html, no_update
-
-            logging.info(f"Dash version: {dash.__version__}")
-        except ImportError as e:
-            logging.error(f"Failed to import Dash, falling back to static view: {e}", exc_info=True)
-            print("\n! Dash not available - using static Plotly view only")
-            print("! Install with: pip install dash")
-            self._create_static_plotly_map(map_data, devices)
+        # Wave E2: dash import + ImportError fallback extracted to helper to drop CC.
+        dash_modules = self._try_import_dash_modules(map_data, devices)
+        if dash_modules is None:  # Helper already invoked the static-fallback path
             return
-
-        print("\n" + "-" * 80)
-        print("LAUNCHING INTERACTIVE MAP VIEWER")
-        print("-" * 80)
-        print("! Opening web browser with interactive map...")
-        print("! Features:")
-        print("!   - Toggle layers (walls, zones, wayfinding, devices, clients)")
-        print("!   - Live data refresh (clients update every 30s, RF every 5min)")
-        print("!   - Ruler tool - Draw lines to measure distances")
-        print("!   - Connected client visualization (green dots)")
-        print("!   - Click devices/clients to see details")
-        print("!   - Drag devices to new positions (future: save to cloud)")
-        print("!   - Pan and zoom")
-        print("! Press Ctrl+C in terminal to stop server")
-        print("-" * 80)
+        dash, Dash, Input, Output, State, dcc, html, no_update = dash_modules
+        # Wave E2: viewer banner extracted to helper (purely print statements, no CC).
+        self._print_viewer_intro_banner()
 
         # Create Dash app with dark theme
         # update_title="" prevents "Updating..." flash in browser tab during callbacks
@@ -3575,27 +3553,17 @@ class MapsManager:
             ppm=ppm,  # Wave C: pixels-per-meter fallback in update_shape_labels
             mistapi_ref=mistapi,  # Wave C: module reference for deleteSiteMap/Zone
             maps_manager_ref=self,  # Wave C: enables _backup_map_geometry callback
+            serializer=serializer,  # Wave E2: dropdown option/store builder
+            all_sites=all_sites,  # Wave E2: URL/site-switch site list
+            all_maps=all_maps,  # Wave E2: URL/site-switch map list
+            available_sites=all_sites,  # Wave E2: same data as all_sites for parity
+            figure_builder=figure_builder,  # Wave E2: shared walls/wayfinding/zones builder
+            heatmap_renderer=heatmap_renderer,  # Wave E2: RF coverage heatmap renderer
         )
         viewer_callbacks = MapViewerCallbacks(state=viewer_state)  # Extracted callback handlers
 
-        # Add map image if available
-        # Note: Plotly uses bottom-left origin, but we keep Mist's coordinate system (top-left origin)
-        # by inverting the Y-axis in the layout
-        if "url" in map_data:
-            logging.debug(f"Adding map background image: {map_data.get('url')[:100]}...")
-            fig.add_layout_image(
-                source=map_data["url"],
-                x=0,
-                y=0,
-                sizex=map_width,
-                sizey=map_height,
-                xref="x",
-                yref="y",
-                sizing="stretch",
-                layer="below",
-            )
-        else:
-            logging.warning("Map has no background image URL")
+        # Wave E2: background image add extracted to helper (gates the URL check internally).
+        self._add_background_image_to_figure(fig, map_data, map_width, map_height)
 
         figure_builder.add_walls(fig, map_data)
         figure_builder.add_wayfinding(fig, map_data)
@@ -3608,11 +3576,8 @@ class MapsManager:
         self._add_clients_to_figure(fig, clients, map_id)  # Draw connected client dots on the map
 
         # Add devices by type with LARGER, more visible markers
-        device_types = {"ap": [], "switch": [], "gateway": []}
-        for device in devices:
-            device_type = device.get("type", "unknown")
-            if device_type in device_types and "x" in device and "y" in device:
-                device_types[device_type].append(device)
+        # Wave E2: device categorization extracted to helper to drop parent CC (for + if + 2 BoolOp).
+        device_types = self._categorize_devices_by_type(devices)
 
         # Enhanced colors and symbols for device types - with status-based coloring
         # Status colors: connected (green), disconnected (red), upgrading (orange/amber)
@@ -3649,74 +3614,9 @@ class MapsManager:
             },
         }
 
-        for device_type, type_cfg in type_config.items():
-            type_devices = device_types[device_type]
-            if type_devices:
-                x_coords = [d["x"] for d in type_devices]
-                y_coords = [d["y"] for d in type_devices]  # Keep Mist Y-coordinates as-is
-                names = [d.get("name", d.get("mac", "Unknown")) for d in type_devices]
-                orientations = [d.get("orientation", 0) for d in type_devices]
-
-                # Debug log device orientations
-                for device in type_devices:
-                    device_name = device.get("name", "Unnamed")
-                    device_orientation = device.get("orientation", 0)
-                    logging.debug(f"Device '{device_name}': orientation={device_orientation}")
-
-                # Determine status and color for each device using extracted helpers
-                statuses = [self._get_device_status(device) for device in type_devices]  # Per-device status string
-                colors = [type_cfg["colors"][status] for status in statuses]  # Per-device color from type config
-                hover_text = [  # Per-device hover tooltip HTML
-                    self._build_device_hover_text(device, status)
-                    for device, status in zip(type_devices, statuses, strict=True)
-                ]
-
-                # Add device markers with status-based colors
-                fig.add_trace(
-                    go.Scatter(
-                        x=x_coords,
-                        y=y_coords,
-                        mode="markers",
-                        name=type_cfg["name"],
-                        marker=dict(
-                            symbol=type_cfg["symbol"],
-                            size=type_cfg["size"],
-                            color=colors,  # Status-based color array
-                            line=dict(color="white", width=2),
-                            opacity=0.9,
-                        ),
-                        hovertext=hover_text,
-                        hoverinfo="text",
-                        visible=True,
-                        showlegend=True,
-                    )
-                )
-
-                # Add device name labels with shadow effect using annotations
-                for _, (x, y, name, device_color) in enumerate(zip(x_coords, y_coords, names, colors, strict=True)):
-                    fig.add_annotation(
-                        x=x,
-                        y=y - 15,  # Position above marker
-                        text=f"<b>{name}</b>",
-                        showarrow=False,
-                        font=dict(size=11, color="white", family="Arial Black"),
-                        bgcolor="rgba(0,0,0,0.85)",
-                        bordercolor=device_color,  # Match device status color
-                        borderwidth=2,
-                        borderpad=3,
-                        xanchor="center",
-                        yanchor="bottom",
-                        name=f"{type_cfg['name']} Label",  # For toggle control
-                    )
-
-                # Add mesh links for APs if mesh topology exists
-                if device_type == "ap":
-                    self._add_mesh_links(fig, type_devices)  # Draw dashed lines between mesh AP pairs
-
-                # Add Mist-style orientation markers for each device using extracted helper
-                for x, y, angle, device_color in zip(x_coords, y_coords, orientations, colors, strict=True):
-                    # Delegate crosshair + directional dot drawing to extracted helper
-                    self._add_device_orientation_markers(fig, x, y, angle, device_color, type_cfg)
+        # Wave E2: keep parent CC <= 10 by handling per-type rendering in a helper.
+        for device_type, type_cfg in type_config.items():  # One iteration per device type
+            self._render_device_type_on_figure(fig, device_types[device_type], type_cfg, device_type)
 
         # Add virtual beacons (vBeacons) if present in map data
         self._add_vbeacons_to_figure(fig, map_data)  # Draw virtual beacon markers and power circles
@@ -3724,35 +3624,18 @@ class MapsManager:
         # Add BLE beacons if present in map data
         self._add_ble_beacons_to_figure(fig, map_data)  # Draw BLE beacon markers on the map
 
-        # Add RF Coverage Heatmap from Mist API data
-        heatmap_trace = heatmap_renderer.build_heatmap_trace(
+        # Wave E2: heatmap conditional moved inside helper to drop parent if-check.
+        self._maybe_add_heatmap_trace(
+            fig,
+            heatmap_renderer,
             coverage_data=coverage_data,
             ppm=ppm,
             map_width=map_width,
             map_height=map_height,
         )
-        if heatmap_trace is not None:
-            fig.add_trace(heatmap_trace)
 
-        # Add map origin marker (coordinate reference point)
-        origin = map_data.get("origin", {}) or {}
-        origin_x = origin.get("x", 0)
-        origin_y = origin.get("y", 0)
-
-        fig.add_trace(
-            go.Scatter(
-                x=[origin_x],
-                y=[origin_y],
-                mode="markers+text",
-                name="Map Origin",
-                marker=dict(symbol="x", size=20, color="yellow", line=dict(width=3, color="black")),
-                text=["Origin (0,0)"],
-                textposition="top center",
-                textfont=dict(size=12, color="yellow"),
-                visible=False,
-                showlegend=True,
-            )
-        )
+        # Wave E2: origin marker extracted to helper (drops 1 BoolOp + add_trace).
+        self._add_origin_marker_trace(fig, map_data, go)
 
         # Update layout with dark theme and responsive sizing
         fig.update_layout(
@@ -3798,60 +3681,11 @@ class MapsManager:
             meta={"ppm": ppm, "origin_x": map_data.get("origin_x", 0), "origin_y": map_data.get("origin_y", 0)},
         )
 
-        # Add origin crosshair marker (blue crosshair at origin point)
-        origin_x = map_data.get("origin_x", 0)
-        origin_y = map_data.get("origin_y", 0)
-        crosshair_size = 40
+        # Wave E2: origin crosshair extracted to helper (3 fig.add_trace calls, 0 decisions but keeps method short).
+        self._add_origin_crosshair(fig, map_data)
 
-        # Horizontal line of origin crosshair
-        fig.add_trace(
-            go.Scatter(
-                x=[origin_x - crosshair_size, origin_x + crosshair_size],
-                y=[origin_y, origin_y],
-                mode="lines",
-                line=dict(color="#00bfff", width=3),  # Deep sky blue
-                name="Origin",
-                showlegend=True,
-                hovertext=f"Origin: ({origin_x}, {origin_y})",
-                hoverinfo="text",
-            )
-        )
-
-        # Vertical line of origin crosshair
-        fig.add_trace(
-            go.Scatter(
-                x=[origin_x, origin_x],
-                y=[origin_y - crosshair_size, origin_y + crosshair_size],
-                mode="lines",
-                line=dict(color="#00bfff", width=3),  # Deep sky blue
-                showlegend=False,
-                hovertext=f"Origin: ({origin_x}, {origin_y})",
-                hoverinfo="text",
-            )
-        )
-
-        # Center dot of origin crosshair
-        fig.add_trace(
-            go.Scatter(
-                x=[origin_x],
-                y=[origin_y],
-                mode="markers",
-                marker=dict(size=12, color="#00bfff", line=dict(color="white", width=2)),
-                name="Origin Point",
-                showlegend=False,
-                hovertext=f"Origin: ({origin_x}, {origin_y})",
-                hoverinfo="text",
-            )
-        )
-
-        # Build map dropdown options for switching between maps
-        map_dropdown_options: list = [{"label": m.get("name", "Unnamed"), "value": m.get("id")} for m in all_maps]
-
-        # Build site dropdown options for switching between sites (sorted by name)
-        sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())
-        site_dropdown_options: list = [
-            {"label": s.get("name", "Unnamed Site"), "value": s.get("id")} for s in sites_sorted
-        ]
+        # Wave E2: dropdown option building extracted to helper to drop comprehensions + lambda from parent CC.
+        map_dropdown_options, site_dropdown_options = self._build_selector_options(all_maps, all_sites)
 
         # Create responsive Dash layout with dark theme
         app.layout = html.Div(
@@ -4654,31 +4488,7 @@ class MapsManager:
                                 html.H3("Location Zones"),
                                 html.Div(
                                     [
-                                        (
-                                            dcc.Checklist(
-                                                id="zone-toggle",
-                                                options=[
-                                                    {
-                                                        "label": f" {zone.get('name', f'Zone {i + 1}')}",
-                                                        "value": zone.get("id", f"zone_{i}"),
-                                                    }
-                                                    for i, zone in enumerate(zones)
-                                                ],
-                                                value=[zone.get("id", f"zone_{i}") for i, zone in enumerate(zones)],
-                                                labelStyle={
-                                                    "display": "block",
-                                                    "margin": "8px 0",
-                                                    "fontSize": "13px",
-                                                    "color": "#e0e0e0",
-                                                },
-                                                style={"marginBottom": "15px"},
-                                            )
-                                            if zones
-                                            else html.P(
-                                                "No zones on this map",
-                                                style={"color": "#888", "fontSize": "12px", "fontStyle": "italic"},
-                                            )
-                                        ),
+                                        self._build_zone_toggle_widget(zones, dcc, html),
                                         html.Div(
                                             id="selected-zone-info",
                                             children=[
@@ -4919,1059 +4729,9 @@ class MapsManager:
             prevent_initial_call=True,
         )
 
-        # Store reference to API session for site switching callbacks
-        api_session_for_site_switch = self.apisession
-
-        # Server-side callback to handle site switching from dropdown selection
-        # This fetches new site data without requiring a page reload
-        @app.callback(
-            [
-                Output("map-selector-dropdown", "options"),
-                Output("map-selector-dropdown", "value", allow_duplicate=True),
-                Output("available-maps-store", "data", allow_duplicate=True),
-                Output("map-config-store", "data", allow_duplicate=True),
-                Output("map-display", "figure", allow_duplicate=True),
-            ],
-            [Input("site-selector-dropdown", "value")],
-            [State("map-config-store", "data"), State("available-sites-store", "data"), State("map-display", "figure")],
-            prevent_initial_call=True,
-        )
-        def handle_site_switch_from_dropdown(selected_site_id, config, available_sites, current_fig):
-            """Handle site switching when user selects a new site from dropdown - no page reload needed."""
-            # EXTENSIVE DEBUGGING
-            print(f"\n{'=' * 60}")
-            print("[DEBUG] handle_site_switch_from_dropdown TRIGGERED")
-            print(f"[DEBUG] selected_site_id: {selected_site_id}")
-            print(f"[DEBUG] config: {config}")
-            print(f"[DEBUG] available_sites count: {len(available_sites) if available_sites else 0}")
-            print(f"{'=' * 60}\n")
-            logging.info(f"[SITE-SWITCH] Callback triggered with site_id={selected_site_id}")
-
-            if not selected_site_id:
-                print("[DEBUG] No selected_site_id, returning no_update")
-                logging.warning("[SITE-SWITCH] No selected_site_id provided")
-                return no_update, no_update, no_update, no_update, no_update
-
-            current_site_id = config.get("site_id") if config else None
-            print(f"[DEBUG] current_site_id from config: {current_site_id}")
-
-            # If same site selected, no update needed
-            if selected_site_id == current_site_id:
-                print(f"[DEBUG] Same site selected ({selected_site_id}), returning no_update")
-                logging.debug(f"[SITE-SWITCH] Same site selected ({selected_site_id}), no update needed")
-                return no_update, no_update, no_update, no_update, no_update
-
-            # Get site name from available sites
-            site_name = next(
-                (s.get("name", "Unknown") for s in available_sites if s.get("id") == selected_site_id), "Unknown"
-            )
-            print(f"[DEBUG] Switching to site: {site_name} ({selected_site_id})")
-            logging.info(f"[SITE-SWITCH] Switching to site {site_name} ({selected_site_id})")
-
-            try:
-                # Fetch maps for the new site
-                print(f"[DEBUG] Fetching maps for site {selected_site_id}...")
-                maps_response = mistapi.api.v1.sites.maps.listSiteMaps(
-                    api_session_for_site_switch, site_id=selected_site_id
-                )
-                print(f"[DEBUG] Maps API response status: {maps_response.status_code}")
-
-                if maps_response.status_code != 200:
-                    print(f"[DEBUG] ERROR: Failed to fetch maps - HTTP {maps_response.status_code}")
-                    logging.error(
-                        f"[SITE-SWITCH] Failed to fetch maps for site "
-                        f"{selected_site_id} - HTTP {maps_response.status_code}"
-                    )
-                    return no_update, no_update, no_update, no_update, no_update
-
-                new_maps = maps_response.data if maps_response.data else []
-                print(f"[DEBUG] Found {len(new_maps)} maps for site {site_name}")
-                logging.info(f"[SITE-SWITCH] Found {len(new_maps)} maps for site {site_name}")
-
-                if not new_maps:
-                    print("[DEBUG] No maps found, returning empty figure")
-                    logging.warning(f"[SITE-SWITCH] No maps found for site {selected_site_id}")
-                    # Return empty dropdown options and clear the figure
-                    empty_fig = go.Figure()
-                    empty_fig.update_layout(
-                        title=f"No maps found for site: {site_name}",
-                        paper_bgcolor="#1e1e1e",
-                        plot_bgcolor="#1e1e1e",
-                        font=dict(color="#e0e0e0"),
-                    )
-                    updated_config = config.copy() if config else {}
-                    updated_config["site_id"] = selected_site_id
-                    updated_config["site_name"] = site_name
-                    updated_config["map_id"] = None
-                    updated_config["map_name"] = None
-                    print("[DEBUG] Returning: empty options, None value, empty store, updated config, empty figure")
-                    return [], None, [], updated_config, empty_fig
-
-                # Build new dropdown options
-                new_map_options = serializer.build_dropdown_options(new_maps, default_name="Unnamed")
-                new_maps_store = serializer.build_named_items(new_maps, default_name="Unnamed")
-                print(f"[DEBUG] Built {len(new_map_options)} dropdown options")
-
-                # Select first map
-                first_map = new_maps[0]
-                selected_map_id = first_map.get("id")
-                map_name = first_map.get("name", "Unnamed")
-                print(f"[DEBUG] Selected first map: {map_name} ({selected_map_id})")
-
-                # Update config with new site info
-                updated_config = config.copy() if config else {}
-                updated_config["site_id"] = selected_site_id
-                updated_config["site_name"] = site_name
-                updated_config["map_id"] = selected_map_id
-                updated_config["map_name"] = map_name
-
-                # Fetch and build the new map figure
-                # Get map details including image URL
-                map_data = first_map
-                ppm = map_data.get("ppm", 1.0)
-                map_width = map_data.get("width", 1000)
-                map_height = map_data.get("height", 1000)
-                updated_config["ppm"] = ppm
-                updated_config["map_width"] = map_width
-                updated_config["map_height"] = map_height
-
-                # Create new figure with the map image
-                new_fig = go.Figure()
-
-                # Add map image as background
-                if "url" in map_data:
-                    new_fig.add_layout_image(
-                        source=map_data["url"],
-                        xref="x",
-                        yref="y",
-                        x=0,
-                        y=map_height,
-                        sizex=map_width,
-                        sizey=map_height,
-                        sizing="stretch",
-                        opacity=1.0,
-                        layer="below",
-                    )
-
-                # Fetch devices for this map
-                try:
-                    devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                        api_session_for_site_switch, site_id=selected_site_id, limit=1000
-                    )
-                    if devices_response.status_code == 200:
-                        all_devices = devices_response.data or []
-                        devices = [d for d in all_devices if d.get("map_id") == selected_map_id]
-                    else:
-                        devices = []
-                except Exception:
-                    devices = []
-
-                # Add device markers to figure
-                for device in devices:
-                    device_x = device.get("x", 0)
-                    device_y = device.get("y", 0)
-                    device_name = device.get("name", "Unknown")
-                    device_type = device.get("type", "ap")
-                    device_status = device.get("status", "unknown")
-
-                    # Color based on status
-                    if device_status == "connected":
-                        marker_color = "#00ff00"
-                    elif device_status == "disconnected":
-                        marker_color = "#ff0000"
-                    else:
-                        marker_color = "#ffaa00"
-
-                    # Symbol based on type
-                    if device_type == "switch":
-                        marker_symbol = "square"
-                    elif device_type == "gateway":
-                        marker_symbol = "diamond"
-                    else:
-                        marker_symbol = "circle"
-
-                    new_fig.add_trace(
-                        go.Scatter(
-                            x=[device_x],
-                            y=[device_y],
-                            mode="markers+text",
-                            marker=dict(
-                                size=12, color=marker_color, symbol=marker_symbol, line=dict(color="white", width=1)
-                            ),
-                            text=[device_name],
-                            textposition="top center",
-                            textfont=dict(size=10, color="#e0e0e0"),
-                            name=device_name,
-                            showlegend=False,
-                            hovertemplate=(
-                                f"<b>{device_name}</b><br>Type: {device_type}<br>Status: {device_status}<extra></extra>"
-                            ),
-                        )
-                    )
-
-                # Configure figure layout
-                new_fig.update_layout(
-                    title=dict(text=f"{site_name} - {map_name}", font=dict(color="#e0e0e0", size=16), x=0.5),
-                    paper_bgcolor="#1e1e1e",
-                    plot_bgcolor="#1e1e1e",
-                    xaxis=dict(
-                        range=[0, map_width],
-                        showgrid=False,
-                        zeroline=False,
-                        showticklabels=False,
-                        scaleanchor="y",
-                        scaleratio=1,
-                    ),
-                    yaxis=dict(range=[0, map_height], showgrid=False, zeroline=False, showticklabels=False),
-                    margin=dict(l=0, r=0, t=40, b=0),
-                    dragmode="pan",
-                )
-
-                print("[DEBUG] SUCCESS! Returning new data:")
-                print(f"[DEBUG]   - map_options: {len(new_map_options)} options")
-                print(f"[DEBUG]   - selected_map_id: {selected_map_id}")
-                print(f"[DEBUG]   - maps_store: {len(new_maps_store)} maps")
-                print(f"[DEBUG]   - updated_config site: {updated_config.get('site_name')}")
-                print(f"[DEBUG]   - new_fig has {len(new_fig.data)} traces")  # type: ignore[arg-type]
-                logging.info(f"[SITE-SWITCH] Successfully loaded map {map_name} with {len(devices)} devices")
-                return new_map_options, selected_map_id, new_maps_store, updated_config, new_fig
-
-            except Exception as site_switch_error:
-                print(f"[DEBUG] EXCEPTION in site switch: {site_switch_error}")
-                import traceback
-
-                traceback.print_exc()
-                logging.error(f"[SITE-SWITCH] Error: {site_switch_error}", exc_info=True)
-                return no_update, no_update, no_update, no_update, no_update
-
-        # Keep URL-based callback for handling direct URL access with site_id parameter
-        @app.callback(
-            [Output("site-selector-dropdown", "value")],
-            [Input("url-location", "search")],
-            [State("map-config-store", "data"), State("available-sites-store", "data")],
-            prevent_initial_call="initial_duplicate",
-        )
-        def handle_site_from_url(url_search, config, available_sites):
-            """Handle site selection when URL contains site_id parameter (for bookmarks/links)."""
-            import urllib.parse
-
-            if not url_search:
-                return [no_update]
-
-            params = urllib.parse.parse_qs(url_search.lstrip("?"))
-            url_site_id = params.get("site_id", [None])[0]
-
-            if not url_site_id:
-                return [no_update]
-
-            current_site_id = config.get("site_id") if config else None
-            if url_site_id == current_site_id:
-                return [no_update]
-
-            # Verify site exists
-            valid_site_ids = [s.get("id") for s in available_sites] if available_sites else []
-            if url_site_id not in valid_site_ids:
-                logging.warning(f"URL site switch: Invalid site_id {url_site_id}")
-                return [no_update]
-
-            # Return the site_id to update dropdown, which will trigger handle_site_switch_from_dropdown
-            logging.info(f"URL site switch: Setting dropdown to site {url_site_id}")
-            return [url_site_id]
-
-        # Callback to sync dropdown value with URL on page load (runs BEFORE clientside callback)
-        @app.callback(
-            Output("map-selector-dropdown", "value"),
-            [Input("url-location", "search")],
-            [State("available-maps-store", "data"), State("map-selector-dropdown", "value")],
-            prevent_initial_call=False,  # Must run on initial load
-        )
-        def sync_dropdown_with_url(url_search, available_maps, current_dropdown_value):
-            """Sync dropdown selection with URL parameter on page load."""
-            import urllib.parse
-
-            if not url_search:
-                return no_update
-
-            # Parse URL query parameters
-            params = urllib.parse.parse_qs(url_search.lstrip("?"))
-            url_map_id = params.get("map_id", [None])[0]
-
-            if not url_map_id:
-                return no_update
-
-            # If dropdown already shows the correct map, no update needed
-            if url_map_id == current_dropdown_value:
-                return no_update
-
-            # Verify the requested map exists in available maps
-            valid_map_ids = [m.get("id") for m in available_maps] if available_maps else []
-            if url_map_id not in valid_map_ids:
-                logging.warning(f"URL dropdown sync: Invalid map_id {url_map_id}")
-                return no_update
-
-            logging.debug(f"URL dropdown sync: Setting dropdown to {url_map_id}")
-            return url_map_id
-
-        # Callback to handle URL-based map loading on page load
-        @app.callback(
-            [
-                Output("map-display", "figure", allow_duplicate=True),
-                Output("map-config-store", "data", allow_duplicate=True),
-            ],
-            [Input("url-location", "search")],
-            [
-                State("map-config-store", "data"),
-                State("map-display", "figure"),
-                State("available-maps-store", "data"),
-                State("map-selector-dropdown", "value"),
-            ],
-            prevent_initial_call="initial_duplicate",
-        )
-        def handle_url_map_switch(url_search, config, current_fig, available_maps, _dropdown_value):
-            """Handle map switching when URL contains map_id parameter."""
-            import urllib.parse
-
-            if not url_search:
-                return no_update, no_update
-
-            # Parse URL query parameters
-            params = urllib.parse.parse_qs(url_search.lstrip("?"))
-            url_map_id = params.get("map_id", [None])[0]
-
-            if not url_map_id:
-                return no_update, no_update
-
-            current_map_id = config.get("map_id")
-
-            # If URL map_id matches current config map, no action needed
-            if url_map_id == current_map_id:
-                logging.debug(f"URL map switch: URL map_id {url_map_id} matches config, no switch needed")
-                return no_update, no_update
-
-            # ALWAYS fetch fresh map list from API to avoid stale cache issues after clone/delete
-            # This bypasses the available_maps store which may be outdated
-            site_id_local = config.get("site_id")
-            if not site_id_local:
-                logging.warning("URL map switch: site_id not available in config")
-                return no_update, no_update
-
-            try:
-                # Fetch fresh map list from API
-                fresh_maps_response = mistapi.api.v1.sites.maps.listSiteMaps(api_session_ref, site_id=site_id_local)
-                if fresh_maps_response.status_code == 200:
-                    fresh_maps = fresh_maps_response.data if fresh_maps_response.data else []
-                    valid_map_ids = [m.get("id") for m in fresh_maps]
-                else:
-                    # Fallback to store if API call fails
-                    logging.warning("URL map switch: Could not fetch fresh maps, using store")
-                    valid_map_ids = [m.get("id") for m in available_maps]
-            except Exception as fetch_err:
-                logging.warning(f"URL map switch: Error fetching fresh maps: {fetch_err}")
-                valid_map_ids = [m.get("id") for m in available_maps]
-
-            if url_map_id not in valid_map_ids:
-                logging.warning(f"URL map switch: Invalid map_id {url_map_id}")
-                return no_update, no_update
-
-            logging.info(f"URL map switch: Loading map {url_map_id} (current: {current_map_id})")
-
-            try:
-                # Fetch the new map data (site_id_local already set above)
-                map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session_ref, site_id_local, url_map_id)
-
-                if map_response.status_code != 200:
-                    logging.error(f"URL map switch: Failed to fetch map - HTTP {map_response.status_code}")
-                    return no_update, no_update
-
-                new_map_data = map_response.data
-                new_map_name = new_map_data.get("name", "Unnamed")
-                new_map_width = new_map_data.get("width", 1000)
-                new_map_height = new_map_data.get("height", 1000)
-                new_ppm = new_map_data.get("ppm") or 10  # Use 10 if ppm is 0 or None
-
-                logging.info(
-                    f"URL map switch: Loaded map '{new_map_name}' ({new_map_width}x{new_map_height}, ppm={new_ppm})"
-                )
-
-                # Fetch devices for new map
-                devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                    api_session_ref, site_id=site_id_local, limit=1000
-                )
-                new_devices = []
-                if devices_response.status_code == 200:
-                    all_devices = mistapi.get_all(response=devices_response, mist_session=api_session_ref)
-                    new_devices = [d for d in all_devices if d.get("map_id") == url_map_id]
-
-                # Fetch zones for new map
-                zones_response = mistapi.api.v1.sites.zones.listSiteZones(api_session_ref, site_id=site_id_local)
-                new_zones = []
-                if zones_response.status_code == 200:
-                    all_zones = mistapi.get_all(response=zones_response, mist_session=api_session_ref)
-                    new_zones = [z for z in all_zones if z.get("map_id") == url_map_id]
-
-                # Fetch clients for new map
-                clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
-                    api_session_ref, site_id=site_id_local, limit=1000
-                )
-                new_clients = []
-                if clients_response.status_code == 200:
-                    all_clients = mistapi.get_all(response=clients_response, mist_session=api_session_ref)
-                    new_clients = [c for c in all_clients if c.get("map_id") == url_map_id and c.get("x") is not None]
-
-                logging.info(
-                    f"URL map switch: Found {len(new_devices)} devices, "
-                    f"{len(new_zones)} zones, {len(new_clients)} clients"
-                )
-
-                # Build new figure with plotly
-                import plotly.graph_objects as go
-
-                new_fig = go.Figure()
-
-                # Add map image
-                if "url" in new_map_data:
-                    new_fig.add_layout_image(
-                        source=new_map_data["url"],
-                        x=0,
-                        y=0,
-                        sizex=new_map_width,
-                        sizey=new_map_height,
-                        xref="x",
-                        yref="y",
-                        sizing="stretch",
-                        layer="below",
-                    )
-
-                # Add walls
-                wall_path = new_map_data.get("wall_path", {})
-                if "nodes" in wall_path:
-                    node_lookup = {}
-                    for node in wall_path["nodes"]:
-                        node_name = node.get("name", "")
-                        pos = node.get("position", {})
-                        if node_name and pos:
-                            node_lookup[node_name] = pos
-
-                    for node in wall_path["nodes"]:
-                        node_pos = node.get("position", {})
-                        edges = node.get("edges", {})
-                        for edge_name in edges.keys():
-                            if edge_name in node_lookup:
-                                target_pos = node_lookup[edge_name]
-                                new_fig.add_trace(
-                                    go.Scatter(
-                                        x=[node_pos.get("x", 0), target_pos.get("x", 0)],
-                                        y=[node_pos.get("y", 0), target_pos.get("y", 0)],
-                                        mode="lines",
-                                        name="Walls",
-                                        line=dict(color="#ff3333", width=4),
-                                        showlegend=False,
-                                        hoverinfo="skip",
-                                    )
-                                )
-
-                # Add wayfinding paths
-                wf_path = new_map_data.get("wayfinding_path", {})
-                if "nodes" in wf_path:
-                    wf_node_lookup = {}
-                    for node in wf_path["nodes"]:
-                        node_name = node.get("name", "")
-                        pos = node.get("position", {})
-                        if node_name and pos:
-                            wf_node_lookup[node_name] = pos
-
-                    for node in wf_path["nodes"]:
-                        node_pos = node.get("position", {})
-                        edges = node.get("edges", {})
-                        for edge_name in edges.keys():
-                            if edge_name in wf_node_lookup:
-                                target_pos = wf_node_lookup[edge_name]
-                                new_fig.add_trace(
-                                    go.Scatter(
-                                        x=[node_pos.get("x", 0), target_pos.get("x", 0)],
-                                        y=[node_pos.get("y", 0), target_pos.get("y", 0)],
-                                        mode="lines+markers",
-                                        name="Wayfinding",
-                                        line=dict(color="#4488ff", width=3, dash="dash"),
-                                        marker=dict(size=8, color="#4488ff"),
-                                        visible=True,
-                                        showlegend=False,
-                                        hoverinfo="skip",
-                                    )
-                                )
-
-                # Add zones with varied colors (matching original)
-                zone_colors = [
-                    ("rgba(255,165,0,0.3)", "#ffa500"),  # Orange
-                    ("rgba(0,255,255,0.3)", "#00ffff"),  # Cyan
-                    ("rgba(255,0,255,0.3)", "#ff00ff"),  # Magenta
-                    ("rgba(255,255,0,0.3)", "#ffff00"),  # Yellow
-                    ("rgba(0,255,0,0.3)", "#00ff00"),  # Green
-                    ("rgba(128,0,255,0.3)", "#8000ff"),  # Purple
-                    ("rgba(255,0,0,0.3)", "#ff0000"),  # Red
-                    ("rgba(0,128,255,0.3)", "#0080ff"),  # Blue
-                ]
-                for idx, zone in enumerate(new_zones):
-                    vertices = zone.get("vertices", [])
-                    if len(vertices) >= 3:
-                        zone_x = [v.get("x", 0) for v in vertices] + [vertices[0].get("x", 0)]
-                        zone_y = [v.get("y", 0) for v in vertices] + [vertices[0].get("y", 0)]
-                        fill_color, border_color = zone_colors[idx % len(zone_colors)]
-                        zone_name = zone.get("name", f"Zone {idx + 1}")
-                        new_fig.add_trace(
-                            go.Scatter(
-                                x=zone_x,
-                                y=zone_y,
-                                mode="lines",
-                                fill="toself",
-                                fillcolor=fill_color,
-                                line=dict(color=border_color, width=2),
-                                name=f"Zone: {zone_name}",
-                                showlegend=True,
-                                visible=True,
-                            )
-                        )
-                        # Add zone label annotation
-                        center_x = sum(v.get("x", 0) for v in vertices) / len(vertices)
-                        center_y = sum(v.get("y", 0) for v in vertices) / len(vertices)
-                        new_fig.add_annotation(
-                            x=center_x,
-                            y=center_y,
-                            text=f"<b>{zone_name}</b>",
-                            showarrow=False,
-                            font=dict(size=10, color="white", family="Arial Black"),
-                            bgcolor=(
-                                border_color.replace(")", ",0.8)").replace("rgb", "rgba")
-                                if "rgb" in border_color
-                                else border_color
-                            ),
-                            bordercolor="white",
-                            borderwidth=1,
-                            borderpad=3,
-                            xanchor="center",
-                            yanchor="middle",
-                            name=f"Zone: {zone_name} Label",
-                        )
-
-                # Add validation paths if present
-                val_paths = new_map_data.get("validation_paths", [])
-                for val_path in val_paths:
-                    path_name = val_path.get("name", "Validation Path")
-                    path_coords = val_path.get("nodes", [])
-                    if len(path_coords) >= 2:
-                        path_x = [p.get("x", 0) for p in path_coords]
-                        path_y = [p.get("y", 0) for p in path_coords]
-                        new_fig.add_trace(
-                            go.Scatter(
-                                x=path_x,
-                                y=path_y,
-                                mode="lines+markers",
-                                name=f"Validation: {path_name}",
-                                line=dict(color="#00ff88", width=3, dash="dot"),
-                                marker=dict(size=10, color="#00ff88", symbol="circle"),
-                                visible=True,
-                                showlegend=True,
-                            )
-                        )
-
-                # Add devices (APs, Switches, Gateways) with status-based colors
-                # Device type configurations matching original styling
-                device_type_config = {
-                    "ap": {
-                        "symbol": "triangle-up",
-                        "name": "Access Points",
-                        "size": 20,
-                        "colors": {
-                            "connected": "#00ff00",  # Bright green
-                            "disconnected": "#ff0000",  # Bright red
-                            "upgrading": "#ff8800",  # Orange/amber
-                        },
-                    },
-                    "switch": {
-                        "symbol": "square",
-                        "name": "Switches",
-                        "size": 18,
-                        "colors": {
-                            "connected": "#00ccff",  # Cyan
-                            "disconnected": "#ff0000",  # Bright red
-                            "upgrading": "#ff8800",  # Orange/amber
-                        },
-                    },
-                    "gateway": {
-                        "symbol": "diamond",
-                        "name": "Gateways",
-                        "size": 20,
-                        "colors": {
-                            "connected": "#ff00ff",  # Magenta
-                            "disconnected": "#ff0000",  # Bright red
-                            "upgrading": "#ff8800",  # Orange/amber
-                        },
-                    },
-                }
-
-                # Group devices by type
-                device_types = {"ap": [], "switch": [], "gateway": []}
-                for device in new_devices:
-                    device_type = device.get("type", "ap")
-                    if device.get("x") is not None and device.get("y") is not None:
-                        if device_type in device_types:
-                            device_types[device_type].append(device)
-
-                # Add traces for each device type
-                for device_type, type_cfg in device_type_config.items():
-                    type_devices = device_types[device_type]
-                    if type_devices:
-                        x_coords = [d["x"] for d in type_devices]
-                        y_coords = [d["y"] for d in type_devices]
-                        names = [d.get("name", d.get("mac", "Unknown")) for d in type_devices]
-
-                        # Determine status and color for each device
-                        colors = []
-                        hover_texts = []
-                        for device in type_devices:
-                            status = device.get("status", "disconnected")
-                            if device.get("upgrade_status") or device.get("fwupdate", {}).get("progress") is not None:
-                                device_status = "upgrading"
-                            elif status == "connected":
-                                device_status = "connected"
-                            else:
-                                device_status = "disconnected"
-                            colors.append(type_cfg["colors"][device_status])
-
-                            # Build hover text
-                            text = f"<b>{device.get('name', 'Unnamed')}</b><br>"
-                            text += f"Type: {device.get('type', 'N/A')}<br>"
-                            text += f"Model: {device.get('model', 'N/A')}<br>"
-                            text += f"MAC: {device.get('mac', 'N/A')}<br>"
-                            text += f"Status: <b>{device_status.upper()}</b>"
-                            hover_texts.append(text)
-
-                        # Add device markers
-                        new_fig.add_trace(
-                            go.Scatter(
-                                x=x_coords,
-                                y=y_coords,
-                                mode="markers",
-                                name=type_cfg["name"],
-                                marker=dict(
-                                    symbol=type_cfg["symbol"],
-                                    size=type_cfg["size"],
-                                    color=colors,
-                                    line=dict(color="white", width=2),
-                                    opacity=0.9,
-                                ),
-                                hovertext=hover_texts,
-                                hoverinfo="text",
-                                visible=True,
-                                showlegend=True,
-                            )
-                        )
-
-                        # Add device name labels
-                        for _, (x, y, name, device_color) in enumerate(
-                            zip(x_coords, y_coords, names, colors, strict=True)
-                        ):
-                            new_fig.add_annotation(
-                                x=x,
-                                y=y - 15,
-                                text=f"<b>{name}</b>",
-                                showarrow=False,
-                                font=dict(size=11, color="white", family="Arial Black"),
-                                bgcolor="rgba(0,0,0,0.85)",
-                                bordercolor=device_color,
-                                borderwidth=2,
-                                borderpad=3,
-                                xanchor="center",
-                                yanchor="bottom",
-                                name=f"{type_cfg['name']} Label",
-                            )
-
-                        # Add device orientation crosshairs
-                        import math
-
-                        for _, (x, y, device, device_color) in enumerate(
-                            zip(x_coords, y_coords, type_devices, colors, strict=True)
-                        ):
-                            orientation = device.get("orientation", 0)
-                            crosshair_size = 40
-
-                            # Horizontal line
-                            new_fig.add_trace(
-                                go.Scatter(
-                                    x=[x - crosshair_size, x + crosshair_size],
-                                    y=[y, y],
-                                    mode="lines",
-                                    line=dict(color=device_color, width=3),
-                                    name=f"{type_cfg['name']} Orientation",
-                                    showlegend=False,
-                                    hoverinfo="skip",
-                                )
-                            )
-
-                            # Vertical line
-                            new_fig.add_trace(
-                                go.Scatter(
-                                    x=[x, x],
-                                    y=[y - crosshair_size, y + crosshair_size],
-                                    mode="lines",
-                                    line=dict(color=device_color, width=3),
-                                    name=f"{type_cfg['name']} Orientation",
-                                    showlegend=False,
-                                    hoverinfo="skip",
-                                )
-                            )
-
-                            # Directional dot showing orientation
-                            dot_distance = 50
-                            math_angle = 90 - orientation
-                            rad = math.radians(math_angle)
-                            dot_x = x + dot_distance * math.cos(rad)
-                            dot_y = y - dot_distance * math.sin(rad)
-
-                            new_fig.add_trace(
-                                go.Scatter(
-                                    x=[dot_x],
-                                    y=[dot_y],
-                                    mode="markers",
-                                    marker=dict(
-                                        size=12, color=device_color, symbol="circle", line=dict(color="black", width=2)
-                                    ),
-                                    name=f"{type_cfg['name']} Orientation",
-                                    showlegend=False,
-                                    hoverinfo="skip",
-                                )
-                            )
-
-                # Add virtual beacons (vBeacons)
-                vbeacons = new_map_data.get("vbeacons", [])
-                if vbeacons:
-                    beacon_x, beacon_y, beacon_hover = [], [], []
-                    for beacon in vbeacons:
-                        x = beacon.get("x")
-                        y = beacon.get("y")
-                        if x is not None and y is not None:
-                            beacon_x.append(x)
-                            beacon_y.append(y)
-                            hover = "<b>vBeacon</b><br>"
-                            hover += f"Name: {beacon.get('name', 'N/A')}<br>"
-                            hover += f"UUID: {beacon.get('uuid', 'N/A')}<br>"
-                            hover += f"Major: {beacon.get('major', 'N/A')}<br>"
-                            hover += f"Minor: {beacon.get('minor', 'N/A')}<br>"
-                            hover += f"Power: {beacon.get('power', 'N/A')} dBm"
-                            beacon_hover.append(hover)
-
-                    if beacon_x:
-                        new_fig.add_trace(
-                            go.Scatter(
-                                x=beacon_x,
-                                y=beacon_y,
-                                mode="markers",
-                                name="Virtual Beacons",
-                                marker=dict(
-                                    symbol="diamond",
-                                    size=14,
-                                    color="#00ffff",
-                                    line=dict(color="white", width=2),
-                                    opacity=0.9,
-                                ),
-                                hovertext=beacon_hover,
-                                hoverinfo="text",
-                                visible=True,
-                                showlegend=True,
-                            )
-                        )
-
-                # Add BLE beacons
-                ble_beacons = new_map_data.get("beacons", [])
-                if ble_beacons:
-                    ble_x, ble_y, ble_hover = [], [], []
-                    for beacon in ble_beacons:
-                        x = beacon.get("x")
-                        y = beacon.get("y")
-                        if x is not None and y is not None:
-                            ble_x.append(x)
-                            ble_y.append(y)
-                            hover = "<b>BLE Beacon</b><br>"
-                            hover += f"Name: {beacon.get('name', 'N/A')}<br>"
-                            hover += f"MAC: {beacon.get('mac', 'N/A')}<br>"
-                            hover += f"Type: {beacon.get('type', 'N/A')}"
-                            ble_hover.append(hover)
-
-                    if ble_x:
-                        new_fig.add_trace(
-                            go.Scatter(
-                                x=ble_x,
-                                y=ble_y,
-                                mode="markers",
-                                name="BLE Beacons",
-                                marker=dict(
-                                    symbol="hexagon",
-                                    size=12,
-                                    color="#ff69b4",
-                                    line=dict(color="white", width=2),
-                                    opacity=0.9,
-                                ),
-                                hovertext=ble_hover,
-                                hoverinfo="text",
-                                visible=True,
-                                showlegend=True,
-                            )
-                        )
-
-                # Add clients
-                client_x, client_y, client_hover, client_names = [], [], [], []
-                for client in new_clients:
-                    x = client.get("x")
-                    y = client.get("y")
-                    if x is not None and y is not None:
-                        client_x.append(x)
-                        client_y.append(y)
-
-                        # Use hostname or MAC for label
-                        client_mac = client.get("mac", "unknown")
-                        hostname = client.get("hostname", "")
-                        label = hostname if hostname else client_mac[-8:]
-                        client_names.append(label)
-
-                        # Build hover text with client details
-                        hover = "<b>Client</b><br>"
-                        hover += f"MAC: {client.get('mac', 'N/A')}<br>"
-                        hover += f"Hostname: {client.get('hostname', 'N/A')}<br>"
-                        hover += f"SSID: {client.get('ssid', 'N/A')}<br>"
-                        hover += f"AP: {client.get('ap_name', 'N/A')}<br>"
-                        hover += f"Band: {client.get('band', 'N/A')}<br>"
-                        hover += f"Signal: {client.get('rssi', 'N/A')} dBm<br>"
-                        hover += f"Position: ({x}, {y})"
-                        client_hover.append(hover)
-
-                if client_x:
-                    # Add client markers with proper styling
-                    new_fig.add_trace(
-                        go.Scatter(
-                            x=client_x,
-                            y=client_y,
-                            mode="markers",
-                            name="Clients",
-                            marker=dict(
-                                symbol="circle",
-                                size=12,
-                                color="#00ff00",  # Bright green
-                                line=dict(color="white", width=2),
-                                opacity=0.9,
-                            ),
-                            hovertext=client_hover,
-                            hoverinfo="text",
-                            visible=True,
-                            showlegend=True,
-                        )
-                    )
-
-                    # Add client name labels with shadow effect using annotations
-                    for _, (x, y, name) in enumerate(zip(client_x, client_y, client_names, strict=True)):
-                        new_fig.add_annotation(
-                            x=x,
-                            y=y - 10,  # Position above marker
-                            text=f"<b>{name}</b>",
-                            showarrow=False,
-                            font=dict(size=9, color="white", family="Arial"),
-                            bgcolor="rgba(0,128,0,0.9)",
-                            bordercolor="white",
-                            borderwidth=1,
-                            borderpad=2,
-                            xanchor="center",
-                            yanchor="bottom",
-                            name="Clients Label",  # For toggle control
-                        )
-
-                # Add map origin marker
-                origin = new_map_data.get("origin", {}) or {}
-                origin_x = origin.get("x", 0)
-                origin_y = origin.get("y", 0)
-                new_fig.add_trace(
-                    go.Scatter(
-                        x=[origin_x],
-                        y=[origin_y],
-                        mode="markers+text",
-                        name="Map Origin",
-                        marker=dict(symbol="x", size=20, color="yellow", line=dict(width=3, color="black")),
-                        text=["Origin"],
-                        textposition="top center",
-                        textfont=dict(color="yellow", size=10),
-                        visible=False,  # Hidden by default, toggle to show
-                        showlegend=True,
-                    )
-                )
-
-                # Fetch and add RF coverage heatmap using raw API endpoint
-                try:
-                    site_id_for_coverage = config.get("site_id")
-                    if site_id_for_coverage:
-                        coverage_url = f"/api/v1/sites/{site_id_for_coverage}/location/coverage"
-                        coverage_params = {
-                            "resolution": "fine",
-                            "duration": "1d",
-                            "map_id": url_map_id,
-                            "type": "client",
-                            "from_apollo": "true",
-                        }
-                        logging.info(f"URL map switch: Fetching RF coverage for map {url_map_id}")
-                        coverage_response = api_session_ref.mist_get(coverage_url, query=coverage_params)
-
-                        if coverage_response.status_code == 200:
-                            coverage_data = coverage_response.data
-                            # Check for error response structure
-                            if isinstance(coverage_data, dict) and "exception" in coverage_data:
-                                logging.warning(
-                                    f"URL map switch: RF Coverage backend error - "
-                                    f"{str(coverage_data.get('exception', ''))[:200]}"
-                                )
-                                coverage_data = None
-
-                            if coverage_data:
-                                results = coverage_data.get("results", [])
-                                result_def = coverage_data.get("result_def", [])
-                                logging.info(f"URL map switch: RF coverage API returned {len(results)} grid points")
-                                if results and result_def:
-                                    # Find indices for data fields from result_def
-                                    try:
-                                        x_idx = result_def.index("x")
-                                        y_idx = result_def.index("y")
-                                        max_rssi_idx = result_def.index("max_rssi")
-                                    except ValueError as idx_error:
-                                        logging.warning(
-                                            f"URL map switch: Coverage data missing expected fields "
-                                            f"in result_def: {idx_error}"
-                                        )
-                                        x_idx, y_idx, max_rssi_idx = 0, 1, 4  # Fallback indices
-
-                                    # Build grid data - results is list of lists, not list of dicts
-                                    grid_data = {}
-                                    for item in results:
-                                        if not isinstance(item, (list, tuple)) or len(item) <= max(
-                                            x_idx, y_idx, max_rssi_idx
-                                        ):
-                                            continue
-                                        x_m = item[x_idx]
-                                        y_m = item[y_idx]
-                                        max_rssi = item[max_rssi_idx]
-                                        if x_m is None or y_m is None or max_rssi is None:
-                                            continue
-                                        pixel_x = x_m * new_ppm
-                                        pixel_y = y_m * new_ppm
-                                        grid_data[(pixel_x, pixel_y)] = max_rssi
-
-                                    if grid_data:
-                                        all_rssi = list(grid_data.values())
-                                        min_rssi = min(all_rssi)
-                                        max_rssi_val = max(all_rssi)
-
-                                        unique_x = sorted(set(x for x, y in grid_data.keys()))
-                                        unique_y = sorted(set(y for x, y in grid_data.keys()))
-
-                                        z_matrix = []
-                                        for y_val in unique_y:
-                                            row = [grid_data.get((x_val, y_val), None) for x_val in unique_x]
-                                            z_matrix.append(row)
-
-                                        colorscale = [
-                                            [0.0, "rgb(0, 0, 255)"],
-                                            [0.33, "rgb(0, 255, 0)"],
-                                            [0.50, "rgb(255, 255, 0)"],
-                                            [0.67, "rgb(255, 165, 0)"],
-                                            [1.0, "rgb(255, 0, 0)"],
-                                        ]
-
-                                        new_fig.add_trace(
-                                            go.Heatmap(
-                                                x=unique_x,
-                                                y=unique_y,
-                                                z=z_matrix,
-                                                colorscale=colorscale,
-                                                zmin=min_rssi,
-                                                zmax=max_rssi_val,
-                                                opacity=0.5,
-                                                name="RF Coverage",
-                                                visible=False,  # Hidden by default
-                                                showscale=True,
-                                                colorbar=dict(
-                                                    title=dict(
-                                                        text="RSSI (dBm)",
-                                                        side="right",
-                                                        font=dict(size=12, color="white"),
-                                                    ),
-                                                    thickness=20,
-                                                    len=0.5,
-                                                    y=0.95,
-                                                    yanchor="top",
-                                                    tickfont=dict(size=10, color="white"),
-                                                ),
-                                                connectgaps=True,
-                                                zsmooth="best",
-                                            )
-                                        )
-                                        logging.info(
-                                            f"URL map switch: Added RF coverage heatmap with "
-                                            f"{len(grid_data)} cells, RSSI range {min_rssi} to {max_rssi_val} dBm"
-                                        )
-                                    else:
-                                        logging.warning(
-                                            f"URL map switch: RF coverage - no valid grid data "
-                                            f"after processing {len(results)} points"
-                                        )
-                                else:
-                                    logging.info(
-                                        "URL map switch: No RF coverage data available for this map (empty results)"
-                                    )
-                        else:
-                            logging.warning(
-                                f"URL map switch: RF coverage API returned HTTP {coverage_response.status_code}"
-                            )
-                    else:
-                        logging.warning("URL map switch: Cannot fetch RF coverage - site_id is None")
-                except Exception as rf_error:
-                    logging.warning(f"URL map switch: Could not load RF coverage - {rf_error}", exc_info=True)
-
-                # Update layout
-                new_fig.update_layout(
-                    title=dict(text=f"Map: {new_map_name}", font=dict(color="white")),
-                    xaxis=dict(
-                        range=[0, new_map_width],
-                        showgrid=False,
-                        zeroline=False,
-                        scaleanchor="y",
-                        scaleratio=1,
-                        constrain="domain",
-                    ),
-                    yaxis=dict(range=[new_map_height, 0], showgrid=False, zeroline=False, constrain="domain"),
-                    plot_bgcolor="#1a1a1a",
-                    paper_bgcolor="#1a1a1a",
-                    font=dict(color="#e0e0e0"),
-                    showlegend=True,
-                    legend=dict(bgcolor="rgba(0,0,0,0.7)", font=dict(color="white")),
-                    margin=dict(l=50, r=50, t=50, b=50),
-                )
-
-                # Update config - preserve site_id from original config
-                new_config = config.copy()
-                new_config["map_id"] = url_map_id
-                new_config["map_name"] = new_map_name
-                new_config["ppm"] = new_ppm
-                new_config["map_width"] = new_map_width
-                new_config["map_height"] = new_map_height
-                # site_id stays the same since we're switching maps within the same site
-
-                logging.info(f"URL map switch: Successfully switched to map '{new_map_name}'")
-                logging.debug(
-                    f"URL map switch: Returning new_config with "
-                    f"site_id={new_config.get('site_id')}, map_id={new_config.get('map_id')}"
-                )
-
-                return new_fig, new_config
-
-            except Exception as e:
-                logging.error(f"URL map switch: Error loading map - {e}", exc_info=True)
-                return no_update, no_update
-
+        # Wave E2: handle_site_switch_from_dropdown, handle_site_from_url, sync_dropdown_with_url,
+        # and handle_url_map_switch now live in MapViewerCallbacks (registered below via
+        # viewer_callbacks.register_with(app)).
         # Wave-A: register the 5 trivial UI-toggle callbacks via the
         # extracted MapViewerCallbacks. This replaces the nested defs
         # for toggle_layers and display_click_data (and three more below).
@@ -5983,207 +4743,402 @@ class MapsManager:
         # Wave C: update_shape_labels now lives in MapViewerCallbacks
         # (registered above via viewer_callbacks.register_with(app)).
 
-        # Callback to set scale from user input
-        @app.callback(
-            [Output("scale-status", "children"), Output("map-display", "figure", allow_duplicate=True)],
-            Input("set-scale-button", "n_clicks"),
-            [State("scale-length-input", "value"), State("map-display", "figure")],
-            prevent_initial_call=True,
-        )
-        def set_scale(n_clicks, actual_length_m, current_fig):
-            """Calculate and update PPM based on drawn line and known length."""
-            if not n_clicks or not actual_length_m or actual_length_m <= 0:
-                return "[!] Please enter a valid length in meters", current_fig
-
-            # Find the last line shape
-            shapes = current_fig.get("layout", {}).get("shapes", [])
-            last_line = None
-            for shape in reversed(shapes):
-                if shape.get("type") == "line":
-                    last_line = shape
-                    break
-
-            if not last_line:
-                return "[!] Please draw a line first using the ruler tool", current_fig
-
-            # Calculate line length in pixels
-            x0, y0 = last_line.get("x0", 0), last_line.get("y0", 0)
-            x1, y1 = last_line.get("x1", 0), last_line.get("y1", 0)
-            length_px = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
-
-            # Calculate new PPM
-            new_ppm = length_px / actual_length_m
-
-            # Update PPM in figure metadata
-            if "meta" not in current_fig["layout"]:
-                current_fig["layout"]["meta"] = {}
-            current_fig["layout"]["meta"]["ppm"] = new_ppm
-
-            # Update all existing measurement annotations with new PPM
-            if "annotations" in current_fig["layout"]:
-                for ann_idx, annotation in enumerate(current_fig["layout"]["annotations"]):
-                    # Check if this is a measurement annotation (has px/ft/m format)
-                    if "px" in annotation.get("text", ""):
-                        # Find corresponding shape
-                        for _, shape in enumerate(shapes):
-                            if shape.get("type") == "line":
-                                sx0, sy0 = shape.get("x0", 0), shape.get("y0", 0)
-                                sx1, sy1 = shape.get("x1", 0), shape.get("y1", 0)
-                                shape_px = ((sx1 - sx0) ** 2 + (sy1 - sy0) ** 2) ** 0.5
-                                shape_m = shape_px / new_ppm
-                                shape_ft = shape_m * 3.28084
-
-                                # Update annotation text
-                                annotation_text = f"<b>{shape_px:.1f} px</b><br>{shape_ft:.2f} ft<br>{shape_m:.2f} m"
-                                current_fig["layout"]["annotations"][ann_idx]["text"] = annotation_text
-                                break
-
-            status_msg = f"[OK] Scale set! New PPM: {new_ppm:.2f} ({actual_length_m:.2f}m = {length_px:.1f}px)"
-            logging.info(f"Map scale updated: PPM {ppm} -> {new_ppm:.2f} (user calibration: {actual_length_m}m)")
-
-            return status_msg, current_fig
-
-        # Wave-A: toggle_origin_mode now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave C: set_origin_from_click now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave-A: toggle_zone_name_input now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave E1: handle_drawing_tools now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave B: handle_utilities now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave B: toggle_delete_panel now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave C: execute_delete_map now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave B: toggle_clone_panel now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave B: toggle_individual_zones now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave C: handle_zone_actions now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave-A: toggle_auto_refresh now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave D: update_countdown_display now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Store reference to API session for refresh callbacks
-        api_session_ref = self.apisession
+        # Wave E2: set_scale now lives in MapViewerCallbacks (registered below via
+        # viewer_callbacks.register_with(app)).
+        # Wave E2: api_session_ref closure removed; refresh callback now uses self._state.api_session_ref.
 
         # Wave E1: execute_clone_operation now lives in MapViewerCallbacks
         # (registered above via viewer_callbacks.register_with(app)).
 
-        # Callback to refresh map dropdown after clone/delete operations or page load (cache bust)
-        @app.callback(
-            [Output("map-selector-dropdown", "options"), Output("available-maps-store", "data")],
-            [
-                Input("cache-bust-store", "data"),
-                Input("manual-refresh-btn", "n_clicks"),
-                Input("url-location", "search"),
-            ],
-            [State("map-config-store", "data")],
-            prevent_initial_call=False,  # Run on initial load to get fresh data
-        )
-        def refresh_map_dropdown(cache_bust_data, _manual_clicks, url_search, config):
-            """Fetch fresh map list from API after clone/delete, manual refresh, or page load."""
-            site_id_local = config.get("site_id") if config else None
-
-            if not site_id_local:
-                logging.warning("Cannot refresh map dropdown: site_id not available")
-                return no_update, no_update
-
-            try:
-                # Determine trigger for logging
-                ctx = dash.callback_context
-                trigger_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else "initial_load"
-                logging.info(f"Refreshing map dropdown list (trigger: {trigger_id})")
-
-                # Fetch fresh map list from API
-                maps_response = mistapi.api.v1.sites.maps.listSiteMaps(api_session_ref, site_id=site_id_local)
-
-                if maps_response.status_code != 200:
-                    logging.warning(f"Failed to refresh map list: HTTP {maps_response.status_code}")
-                    return no_update, no_update
-
-                fresh_maps = maps_response.data if maps_response.data else []
-                logging.info(f"Map dropdown refreshed: {len(fresh_maps)} maps found")
-
-                # Build new dropdown options
-                new_options = serializer.build_dropdown_options(fresh_maps, default_name="Unnamed")
-                # Build new available maps store data
-                new_store_data = serializer.build_named_items(fresh_maps, default_name="Unnamed")
-
-                return new_options, new_store_data
-
-            except Exception as refresh_error:
-                logging.error(f"Error refreshing map dropdown: {refresh_error}", exc_info=True)
-                return no_update, no_update
-
+        # Wave E2: refresh_map_dropdown now lives in MapViewerCallbacks (registered below via
+        # viewer_callbacks.register_with(app)).
         # Wave D: refresh_client_positions (now update_clients_traces) and refresh_rf_coverage
         # (now update_coverage_heatmap) live in MapViewerCallbacks and are registered above
         # via viewer_callbacks.register_with(app).
 
-        # Determine host binding - use 0.0.0.0 in containers for external access
-        dash_host = "127.0.0.1"
-        if is_running_in_container():
-            dash_host = "0.0.0.0"  # nosec B104 — container must bind all interfaces
-        # Use port 8050 by default (matches container EXPOSE and compose.yml)
-        dash_port = int(os.getenv("DASH_PORT", "8050"))
+        # Wave E2: dash binding + server boot extracted into helpers to drop parent CC.
+        dash_host, dash_port = self._resolve_dash_binding(os)  # Network binding + port
+        self._print_dash_startup_banner(dash_host, dash_port)  # User-facing banner
+        self._schedule_browser_open(dash_port)  # Background browser open (no-op in containers)
+        self._run_dash_server(app, dash_host, dash_port)  # Runs server + handles KeyboardInterrupt/Exception
 
+    @staticmethod
+    def _open_browser_after_delay(dash_port: int) -> None:
+        """Wait for the Dash server to start, then open the system browser to the viewer URL."""
+        import time  # Local import keeps top-of-file imports minimal
+        import webbrowser  # Stdlib browser launcher
+
+        logging.info("Browser auto-open: scheduling open to http://127.0.0.1:%s", dash_port)  # Trace start
+        time.sleep(1.5)  # Wait for Dash server to initialize (matches original delay)
+        webbrowser.open(f"http://127.0.0.1:{dash_port}")  # Launch system browser
+        logging.debug("Browser opened to http://127.0.0.1:%s", dash_port)  # Mirror original log
+
+    # ------------------------------------------------------------------
+    # Wave E2 helpers extracted from _launch_plotly_viewer to drive CC <= 10
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_coverage_count(coverage_data: dict | None) -> int:
+        """Return the number of grid results in ``coverage_data`` (0 if missing)."""
+        if not coverage_data:  # Original used a ternary; explicit guard preserves behavior
+            return 0
+        return len(coverage_data.get("results", []))
+
+    @staticmethod
+    def _normalize_optional_lists(all_maps: list | None, all_sites: list | None) -> tuple[list, list]:
+        """Coalesce optional list args to empty lists (drops two BoolOps from parent CC)."""
+        return all_maps if all_maps else [], all_sites if all_sites else []
+
+    def _try_import_dash_modules(self, map_data: dict, devices: list) -> tuple | None:
+        """Import dash + companions; on ImportError run the static fallback and return ``None``."""
+        logging.info("_try_import_dash_modules: attempting to import dash")  # Trace start
+        try:
+            logging.debug("Importing Dash modules for interactive viewer")  # Mirror original log
+            import dash  # Heavy module; local import keeps top-of-file imports minimal
+            from dash import Dash, Input, Output, State, dcc, html, no_update  # Names used in layout/callbacks
+
+            logging.info("Dash version: %s", dash.__version__)  # Mirror original log
+            return dash, Dash, Input, Output, State, dcc, html, no_update
+        except ImportError as e:  # Fallback path (mirrors original except block)
+            logging.error("Failed to import Dash, falling back to static view: %s", e, exc_info=True)
+            print("\n! Dash not available - using static Plotly view only")
+            print("! Install with: pip install dash")
+            self._create_static_plotly_map(map_data, devices)  # Render static figure instead
+            return None
+
+    @staticmethod
+    def _print_viewer_intro_banner() -> None:
+        """Print the user-facing 'LAUNCHING INTERACTIVE MAP VIEWER' banner (no decisions)."""
+        print("\n" + "-" * 80)
+        print("LAUNCHING INTERACTIVE MAP VIEWER")
+        print("-" * 80)
+        print("! Opening web browser with interactive map...")
+        print("! Features:")
+        print("!   - Toggle layers (walls, zones, wayfinding, devices, clients)")
+        print("!   - Live data refresh (clients update every 30s, RF every 5min)")
+        print("!   - Ruler tool - Draw lines to measure distances")
+        print("!   - Connected client visualization (green dots)")
+        print("!   - Click devices/clients to see details")
+        print("!   - Drag devices to new positions (future: save to cloud)")
+        print("!   - Pan and zoom")
+        print("! Press Ctrl+C in terminal to stop server")
+        print("-" * 80)
+
+    @staticmethod
+    def _add_background_image_to_figure(fig: object, map_data: dict, map_width: int, map_height: int) -> None:
+        """Add the map background image to the figure (gates the URL check internally)."""
+        if "url" not in map_data:  # Mirror original else-branch behavior
+            logging.warning("Map has no background image URL")
+            return
+        logging.debug("Adding map background image: %s...", str(map_data.get("url"))[:100])  # Mirror log
+        fig.add_layout_image(  # Plotly background-image API
+            source=map_data["url"],
+            x=0,
+            y=0,
+            sizex=map_width,
+            sizey=map_height,
+            xref="x",
+            yref="y",
+            sizing="stretch",
+            layer="below",
+        )
+
+    @staticmethod
+    def _categorize_devices_by_type(devices: list[dict]) -> dict[str, list[dict]]:
+        """Bucket devices by type filtered to those with both x and y coordinates."""
+        buckets: dict[str, list[dict]] = {"ap": [], "switch": [], "gateway": []}  # Mirror original keys
+        for device in devices:  # One pass; ignores devices without coords or unknown type
+            device_type = device.get("type", "unknown")
+            if device_type not in buckets:  # Skip unknown device types
+                continue
+            if "x" not in device or "y" not in device:  # Skip un-placed devices
+                continue
+            buckets[device_type].append(device)
+        return buckets
+
+    def _render_device_type_on_figure(
+        self,
+        fig: object,
+        type_devices: list[dict],
+        type_cfg: dict,
+        device_type: str,
+    ) -> None:
+        """Render markers + labels + mesh links + orientation markers for one device type."""
+        if not type_devices:  # Nothing to render for this type
+            return
+        coords = self._extract_device_coords(type_devices)  # x/y/names/orientations arrays
+        colors, hover_text = self._compute_device_visuals(type_devices, type_cfg)  # Per-device color + hover
+        self._log_device_orientations(type_devices)  # Debug log (mirror original)
+        self._add_device_marker_trace(fig, coords, type_cfg, colors, hover_text)  # Trace
+        self._add_device_name_labels(fig, coords, type_cfg, colors)  # Per-device label annotations
+        if device_type == "ap":  # Mirror original "ap" mesh-links branch
+            self._add_mesh_links(fig, type_devices)
+        self._add_orientation_markers_for_devices(fig, coords, colors, type_cfg)  # Crosshair + dot
+
+    @staticmethod
+    def _extract_device_coords(type_devices: list[dict]) -> dict[str, list]:
+        """Pull parallel x/y/names/orientations arrays from a list of device dicts."""
+        return {
+            "x_coords": [d["x"] for d in type_devices],
+            "y_coords": [d["y"] for d in type_devices],
+            "names": [d.get("name", d.get("mac", "Unknown")) for d in type_devices],
+            "orientations": [d.get("orientation", 0) for d in type_devices],
+        }
+
+    def _compute_device_visuals(self, type_devices: list[dict], type_cfg: dict) -> tuple[list[str], list[str]]:
+        """Compute per-device color array + per-device hover-text array."""
+        statuses = [self._get_device_status(device) for device in type_devices]  # Per-device status
+        colors = [type_cfg["colors"][status] for status in statuses]  # Status -> color
+        hover_text = [
+            self._build_device_hover_text(device, status) for device, status in zip(type_devices, statuses, strict=True)
+        ]
+        return colors, hover_text
+
+    @staticmethod
+    def _log_device_orientations(type_devices: list[dict]) -> None:
+        """Debug-log each device's orientation (mirrors original loop verbatim)."""
+        for device in type_devices:  # One log line per device
+            device_name = device.get("name", "Unnamed")
+            device_orientation = device.get("orientation", 0)
+            logging.debug("Device '%s': orientation=%s", device_name, device_orientation)
+
+    @staticmethod
+    def _add_device_marker_trace(
+        fig: object,
+        coords: dict[str, list],
+        type_cfg: dict,
+        colors: list[str],
+        hover_text: list[str],
+    ) -> None:
+        """Add the per-type marker Scatter trace (preserves original styling exactly)."""
+        import plotly.graph_objects as go  # Local import keeps top-level light
+
+        fig.add_trace(
+            go.Scatter(
+                x=coords["x_coords"],
+                y=coords["y_coords"],
+                mode="markers",
+                name=type_cfg["name"],
+                marker=dict(
+                    symbol=type_cfg["symbol"],
+                    size=type_cfg["size"],
+                    color=colors,
+                    line=dict(color="white", width=2),
+                    opacity=0.9,
+                ),
+                hovertext=hover_text,
+                hoverinfo="text",
+                visible=True,
+                showlegend=True,
+            )
+        )
+
+    @staticmethod
+    def _add_device_name_labels(
+        fig: object,
+        coords: dict[str, list],
+        type_cfg: dict,
+        colors: list[str],
+    ) -> None:
+        """Add per-device name labels as annotations (preserves original styling)."""
+        for _, (x, y, name, device_color) in enumerate(
+            zip(coords["x_coords"], coords["y_coords"], coords["names"], colors, strict=True)
+        ):
+            fig.add_annotation(
+                x=x,
+                y=y - 15,  # Position above marker
+                text=f"<b>{name}</b>",
+                showarrow=False,
+                font=dict(size=11, color="white", family="Arial Black"),
+                bgcolor="rgba(0,0,0,0.85)",
+                bordercolor=device_color,
+                borderwidth=2,
+                borderpad=3,
+                xanchor="center",
+                yanchor="bottom",
+                name=f"{type_cfg['name']} Label",
+            )
+
+    def _add_orientation_markers_for_devices(
+        self,
+        fig: object,
+        coords: dict[str, list],
+        colors: list[str],
+        type_cfg: dict,
+    ) -> None:
+        """Add Mist-style orientation crosshair + directional dot for each device."""
+        for x, y, angle, device_color in zip(
+            coords["x_coords"], coords["y_coords"], coords["orientations"], colors, strict=True
+        ):
+            self._add_device_orientation_markers(fig, x, y, angle, device_color, type_cfg)
+
+    @staticmethod
+    def _maybe_add_heatmap_trace(  # noqa: PLR0913 - mirrors original kwarg flow
+        fig: object,
+        heatmap_renderer: object,
+        *,
+        coverage_data: dict | None,
+        ppm: float,
+        map_width: int,
+        map_height: int,
+    ) -> None:
+        """Build the RF coverage heatmap trace and add it to ``fig`` when non-None."""
+        heatmap_trace = heatmap_renderer.build_heatmap_trace(
+            coverage_data=coverage_data, ppm=ppm, map_width=map_width, map_height=map_height
+        )
+        if heatmap_trace is None:  # Mirror original guard
+            return
+        fig.add_trace(heatmap_trace)
+
+    @staticmethod
+    def _add_origin_marker_trace(fig: object, map_data: dict, go: object) -> None:
+        """Add the map-origin marker trace (hidden by default; mirrors original)."""
+        origin = map_data.get("origin") or {}  # Drop ``or {}`` BoolOp from parent
+        origin_x = origin.get("x", 0)
+        origin_y = origin.get("y", 0)
+        fig.add_trace(
+            go.Scatter(
+                x=[origin_x],
+                y=[origin_y],
+                mode="markers+text",
+                name="Map Origin",
+                marker=dict(symbol="x", size=20, color="yellow", line=dict(width=3, color="black")),
+                text=["Origin (0,0)"],
+                textposition="top center",
+                textfont=dict(size=12, color="yellow"),
+                visible=False,
+                showlegend=True,
+            )
+        )
+
+    @staticmethod
+    def _add_origin_crosshair(fig: object, map_data: dict) -> None:
+        """Add a blue crosshair (horizontal line + vertical line + center dot) at the origin point."""
+        import plotly.graph_objects as go  # Local import keeps top-level light
+
+        origin_x = map_data.get("origin_x", 0)  # Pixel-space origin x
+        origin_y = map_data.get("origin_y", 0)  # Pixel-space origin y
+        crosshair_size = 40  # Match original size
+        fig.add_trace(  # Horizontal line
+            go.Scatter(
+                x=[origin_x - crosshair_size, origin_x + crosshair_size],
+                y=[origin_y, origin_y],
+                mode="lines",
+                line=dict(color="#00bfff", width=3),
+                name="Origin",
+                showlegend=True,
+                hovertext=f"Origin: ({origin_x}, {origin_y})",
+                hoverinfo="text",
+            )
+        )
+        fig.add_trace(  # Vertical line
+            go.Scatter(
+                x=[origin_x, origin_x],
+                y=[origin_y - crosshair_size, origin_y + crosshair_size],
+                mode="lines",
+                line=dict(color="#00bfff", width=3),
+                showlegend=False,
+                hovertext=f"Origin: ({origin_x}, {origin_y})",
+                hoverinfo="text",
+            )
+        )
+        fig.add_trace(  # Center dot
+            go.Scatter(
+                x=[origin_x],
+                y=[origin_y],
+                mode="markers",
+                marker=dict(size=12, color="#00bfff", line=dict(color="white", width=2)),
+                name="Origin Point",
+                showlegend=False,
+                hovertext=f"Origin: ({origin_x}, {origin_y})",
+                hoverinfo="text",
+            )
+        )
+
+    @staticmethod
+    def _build_selector_options(all_maps: list[dict], all_sites: list[dict]) -> tuple[list[dict], list[dict]]:
+        """Build (map_dropdown_options, site_dropdown_options) for the selectors."""
+        map_options = [{"label": m.get("name", "Unnamed"), "value": m.get("id")} for m in all_maps]
+        sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())  # Sort by name
+        site_options = [{"label": s.get("name", "Unnamed Site"), "value": s.get("id")} for s in sites_sorted]
+        return map_options, site_options
+
+    @staticmethod
+    def _build_zone_toggle_widget(zones: list[dict], dcc: object, html: object) -> object:
+        """Build either a zone-toggle Checklist or a 'no zones' placeholder paragraph."""
+        if not zones:  # Mirror original else-branch
+            return html.P(
+                "No zones on this map",
+                style={"color": "#888", "fontSize": "12px", "fontStyle": "italic"},
+            )
+        return dcc.Checklist(  # Mirror original Checklist construction byte-for-byte
+            id="zone-toggle",
+            options=[
+                {
+                    "label": f" {zone.get('name', f'Zone {i + 1}')}",
+                    "value": zone.get("id", f"zone_{i}"),
+                }
+                for i, zone in enumerate(zones)
+            ],
+            value=[zone.get("id", f"zone_{i}") for i, zone in enumerate(zones)],
+            labelStyle={
+                "display": "block",
+                "margin": "8px 0",
+                "fontSize": "13px",
+                "color": "#e0e0e0",
+            },
+            style={"marginBottom": "15px"},
+        )
+
+    @staticmethod
+    def _resolve_dash_binding(os_mod: object) -> tuple[str, int]:
+        """Resolve Dash server bind host + port (container-aware, ``DASH_PORT`` override)."""
+        dash_host = "127.0.0.1"  # Default to loopback for safety
+        if is_running_in_container():  # In container -> bind all interfaces
+            dash_host = "0.0.0.0"  # nosec B104 — container must bind all interfaces
+        dash_port = int(os_mod.getenv("DASH_PORT", "8050"))  # Use port 8050 by default
+        return dash_host, dash_port
+
+    @staticmethod
+    def _print_dash_startup_banner(dash_host: str, dash_port: int) -> None:
+        """Print the user-facing 'Starting Dash server...' banner."""
         print("\nStarting Dash server...")
-        if is_running_in_container():
+        if is_running_in_container():  # Container-specific lines
             print(f"! Map viewer available at http://<container-ip>:{dash_port}")
             print(f"! Access from host: http://localhost:{dash_port} (if port is mapped)")
         else:
             print("! Map viewer will open in your default browser")
         print("! Press Ctrl+C to stop the server\n")
+        logging.info("Starting Dash server on http://%s:%s", dash_host, dash_port)  # Mirror original log
 
-        logging.info(f"Starting Dash server on http://{dash_host}:{dash_port}")
+    def _schedule_browser_open(self, dash_port: int) -> None:
+        """Start a daemon thread that opens the browser shortly after server boots (skip in container)."""
+        if is_running_in_container():  # No display in container; skip browser
+            return
+        import threading  # Local import keeps top-of-file lean
 
-        # Open browser automatically (skip in container - no display)
-        if not is_running_in_container():
-            import threading
-            import time
-            import webbrowser
+        threading.Thread(  # Background thread -> _open_browser_after_delay
+            target=self._open_browser_after_delay, args=(dash_port,), daemon=True
+        ).start()
 
-            def open_browser():
-                """Wait for server to start, then open browser."""
-                time.sleep(1.5)  # Wait for Dash server to initialize
-                webbrowser.open(f"http://127.0.0.1:{dash_port}")
-                logging.debug(f"Browser opened to http://127.0.0.1:{dash_port}")
-
-            # Start browser opening in background thread
-            threading.Thread(target=open_browser, daemon=True).start()
-
+    @staticmethod
+    def _run_dash_server(app: object, dash_host: str, dash_port: int) -> None:
+        """Run the Dash server with the project's standard kwargs, handling Ctrl+C + errors."""
         try:
-            # Check if --debug flag was passed via CLI args
-            debug_mode = getattr(globals().get("args"), "debug", False)
-            logging.info(f"Starting Dash server with debug_mode={debug_mode}")
-            # Dash 3.x uses app.run() instead of app.run_server()
-            app.run(
+            debug_mode = getattr(globals().get("args"), "debug", False)  # CLI --debug flag if present
+            logging.info("Starting Dash server with debug_mode=%s", debug_mode)  # Mirror original log
+            app.run(  # Dash 3.x uses app.run() instead of app.run_server()
                 host=dash_host,
                 port=dash_port,
                 debug=debug_mode,
                 use_reloader=False,  # Disable reloader to prevent double-execution
                 threaded=True,
             )
-        except KeyboardInterrupt:
+        except KeyboardInterrupt:  # Mirror original user-cancel path
             print("\n\nMap viewer stopped by user")
             logging.info("Interactive map viewer stopped by user (Ctrl+C)")
-        except Exception as e:
-            logging.error(f"Error running Dash server: {e}", exc_info=True)
+        except Exception as e:  # Mirror original catch-all
+            logging.error("Error running Dash server: %s", e, exc_info=True)
             print(f"\n! Error running map viewer: {e}")
 
     def _launch_flask_viewer(

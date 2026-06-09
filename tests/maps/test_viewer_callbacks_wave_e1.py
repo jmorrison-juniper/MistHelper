@@ -222,7 +222,7 @@ def test_register_with_wires_eighteen_callbacks_total() -> None:
 
     callbacks.register_with(app)
 
-    assert len(app.registered) == 18
+    assert len(app.registered) == 24
     bound_names = {record.bound_func.__name__ for record in app.registered}
     assert "execute_clone_operation" in bound_names
     assert "handle_drawing_tools" in bound_names

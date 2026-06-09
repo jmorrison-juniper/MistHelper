@@ -203,7 +203,7 @@ def test_register_with_wires_sixteen_callbacks_total() -> None:
 
     callbacks.register_with(app)
 
-    assert len(app.registered) == 18
+    assert len(app.registered) == 24
     bound_names = {record.bound_func.__name__ for record in app.registered}
     expected_wave_d = {"update_countdown_display", "update_clients_traces", "update_coverage_heatmap"}
     assert expected_wave_d.issubset(bound_names)

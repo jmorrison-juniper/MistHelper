@@ -224,7 +224,7 @@ def test_register_with_wires_thirteen_callbacks_total() -> None:
 
     callbacks.register_with(app)
 
-    assert len(app.registered) == 18  # waves A+B+C+D+E1
+    assert len(app.registered) == 24  # waves A+B+C+D+E1+E2
 
     bound_names = {record.bound_func.__name__ for record in app.registered}
     expected_wave_b = {
