@@ -132,8 +132,8 @@ class SSHRunnerManager:
         commands: Any,
     ) -> tuple[Any, Any, Any, Any]:
         """Interactively collect missing SSH configuration data."""
-        logging.info(  # Snapshot what was already provided vs missing before prompting
-            "Collecting missing SSH data (hosts_in=%s username_in=%s commands_in=%s)",
+        logging.info(  # Wave-1 entry envelope expected by guardrail tests
+            "Entering _collect_missing_data (hosts_in=%s username_in=%s commands_in=%s)",
             bool(hosts),
             bool(username),
             bool(commands),
@@ -150,7 +150,10 @@ class SSHRunnerManager:
             return None, None, None, None
         commands = commands or SSHRunnerManager._prompt_commands(deps)  # Optional: empty is acceptable
 
-        logging.debug("Collected SSH inputs (commands_count=%s password=***REDACTED***)", len(commands))
+        logging.info(  # Wave-1 exit envelope expected by guardrail tests
+            "Exiting _collect_missing_data (commands_count=%s password=***REDACTED***)",
+            len(commands),
+        )
         return hosts, username, password, commands
 
     @staticmethod

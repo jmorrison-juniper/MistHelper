@@ -19,6 +19,7 @@ class LayoutBuilder:
     """Builds the composite Rich Panel that represents the TUI main screen."""
 
     def __init__(self, tui: Any) -> None:
+        """Store a back-reference to the owning TUI for shared state access."""
         self._tui = tui  # Back-reference to shared TUI state
 
     def build(self) -> Any:

@@ -13,6 +13,7 @@ class DotenvLoader:
     """Parse a project-local ``.env`` into a plain dict (no env-var merging)."""
 
     def __init__(self, tui: Any) -> None:
+        """Store TUI back-reference (used only for the debug-mode flag)."""
         self._tui = tui  # Back-reference for debug flag
 
     def load(self) -> dict[str, str]:

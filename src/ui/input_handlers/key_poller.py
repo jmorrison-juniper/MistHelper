@@ -138,6 +138,7 @@ class KeyPoller:
     """Public façade exposed to MistHelperTUI — picks the right platform poller."""
 
     def __init__(self, tui: Any) -> None:
+        """Pick the platform-specific key poller implementation once at construction."""
         self._tui = tui  # Back-reference for shared state
         if tui.IS_WINDOWS:  # Platform selection happens once
             self._impl: Any = _WindowsKeyPoller(tui)  # Windows uses msvcrt path

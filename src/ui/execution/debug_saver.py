@@ -16,6 +16,7 @@ class DebugResultSaver:
     """Serialize a TUI API call (raw + parsed) to a timestamped JSON file."""
 
     def __init__(self, tui: Any) -> None:
+        """Store a back-reference to the owning TUI for access to function_params."""
         self._tui = tui  # Back-reference for function_params
 
     def save(self, func_name: str, raw_result: Any, parsed_data: Any) -> None:

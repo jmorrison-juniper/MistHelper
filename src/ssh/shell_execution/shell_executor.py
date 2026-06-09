@@ -160,7 +160,7 @@ class ShellExecutor:
     # Phase 2: send command
     # ------------------------------------------------------------------
     def _send_command(self, shell: Any, command: str) -> tuple[bool, str, str] | None:
-        """Send ``command\\n`` to the shell; return an error tuple on failure, ``None`` on success."""
+        r"""Send ``command\n`` to the shell; return an error tuple on failure, ``None`` on success."""
         try:
             command_with_newline = command + "\n"  # Newline triggers command execution
             shell.send(command_with_newline.encode("utf-8"))  # Byte-level write to channel

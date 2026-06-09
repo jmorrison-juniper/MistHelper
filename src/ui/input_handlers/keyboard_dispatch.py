@@ -18,6 +18,7 @@ class KeyboardDispatchTable:
     """Routes a key press to the correct handler based on TUI execution state."""
 
     def __init__(self, tui: Any) -> None:
+        """Store TUI back-reference and pre-build the mode-specific handler tables once."""
         self._tui = tui  # Back-reference for shared TUI state
         # Build mode tables once at __init__ — no per-call rebuild (perf rule)
         self._results_handlers: dict[str, Callable[[], None]] = self._build_results_table()

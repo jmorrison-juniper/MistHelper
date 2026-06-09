@@ -15,6 +15,7 @@ class ParameterCollector:
     """Captures keystroke-collected parameter values and advances state."""
 
     def __init__(self, tui: Any, executor: FunctionExecutor) -> None:
+        """Store back-references to the TUI state and the FunctionExecutor used after submit."""
         self._tui = tui  # Back-reference to TUI state
         self._executor = executor  # Used to run when collection is done
 

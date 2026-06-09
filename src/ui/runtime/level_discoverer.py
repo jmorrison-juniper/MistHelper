@@ -14,6 +14,7 @@ class LevelDiscoverer:
     """Introspect the mistapi package to populate ``tui.current_items``."""
 
     def __init__(self, tui: Any) -> None:
+        """Store a back-reference to the owning TUI for shared state access."""
         self._tui = tui  # Back-reference for TUI state
 
     def discover(self) -> None:

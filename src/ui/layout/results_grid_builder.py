@@ -120,6 +120,7 @@ class ResultsGridBuilder:
     """Build the Rich Panel that holds the results-grid table."""
 
     def __init__(self, tui: Any) -> None:
+        """Store TUI back-reference and pre-build value formatter + hierarchy flattener once."""
         self._tui = tui  # Back-reference for state + Rich classes
         self._formatter = _ValueFormatter()  # Built once (perf rule)
         self._flattener = _HierarchyFlattener(self._formatter)  # Built once (perf rule)

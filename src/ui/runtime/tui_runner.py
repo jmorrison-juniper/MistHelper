@@ -19,6 +19,7 @@ class TuiRunner:
     """Owns the lifecycle of the TUI: terminal setup, render loop, teardown."""
 
     def __init__(self, tui: Any) -> None:
+        """Store a back-reference to the owning TUI for shared state access."""
         self._tui = tui  # Back-reference for shared TUI state
 
     def run(self) -> None:

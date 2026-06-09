@@ -46,6 +46,7 @@ class MapViewerCallbacks:
     """Callback handlers for the Plotly/Dash map viewer (waves A + B + C)."""
 
     def __init__(self, state: MapViewerState) -> None:
+        """Store the shared MapViewerState for use by every callback method."""
         # Store the shared state container so each callback method can
         # access closure-equivalent values (e.g. callback_manager) via
         # self._state without needing per-callback parameters.
@@ -64,6 +65,7 @@ class MapViewerCallbacks:
         filter_layers: Any,
         current_fig: Any,
     ) -> Any:
+        """Apply checkbox-driven trace visibility toggles to the current figure."""
         # Delegate visibility toggling to PlotlyMapCallbackManager which
         # owns the layer-name -> trace mapping logic (extracted earlier).
         return self._state.callback_manager.apply_layer_toggles(
@@ -76,6 +78,7 @@ class MapViewerCallbacks:
         )
 
     def display_click_data(self, click_data: Any) -> Any:
+        """Render a Dash details panel describing the most recently clicked trace point."""
         # Defer import of dash.html until the callback actually fires,
         # mirroring the original closure which captured `html` from the
         # enclosing _launch_plotly_viewer scope.
@@ -420,9 +423,6 @@ class MapViewerCallbacks:
         except Exception as delete_error:  # noqa: BLE001 - preserve original broad-except behavior
             logging.error(f"Error deleting map: {delete_error}", exc_info=True)  # Capture stack trace
             return html.Span(f"Error: {str(delete_error)[:50]}", style={"color": "#ff4444"}), no_update
-
-        # Backup path is unused by callers but logged for operator traceability
-        _ = backup_path  # noqa: F841 - referenced via the audit log inside _backup_before_delete
 
     def _backup_before_delete(self, site_id: str | None, map_id: str | None, map_name: str) -> Any:
         """Run pre-delete backup and log the outcome; return backup path or None."""

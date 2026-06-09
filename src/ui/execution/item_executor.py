@@ -21,6 +21,7 @@ class ItemExecutor:
     """Drives the synchronous (stdin-prompt) execution flow."""
 
     def __init__(self, tui: Any) -> None:
+        """Store a back-reference to the owning TUI for shared state access."""
         self._tui = tui  # Back-reference for TUI state
 
     def execute(self) -> None:

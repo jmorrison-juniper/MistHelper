@@ -24,6 +24,7 @@ class FunctionExecutor:
     """Executes the currently-selected API function in Live (in-TUI) mode."""
 
     def __init__(self, tui: Any) -> None:
+        """Store a back-reference to the owning TUI for shared state access."""
         self._tui = tui  # Back-reference for shared TUI state
 
     # ---- start: parameter discovery & prompting kickoff -----------------
