@@ -7,6 +7,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+## [26.06.09.22.10] - Fix E911BSSIDReportGenerator module-level access
+
+### Fixed
+
+- **Tests**: `tests/integration/test_mistapi_sdk_compatibility.py::test_maps_and_wlan_helpers_are_covered` and `test_e911_report_runs_with_stubbed_maps_and_wlans` no longer fail with `AttributeError: module 'MistHelper' has no attribute 'E911BSSIDReportGenerator'`. Moved `E911BSSIDReportGenerator` import from function-local (aliased as `_E911`) to module-level so tests can access it via `MistHelper.E911BSSIDReportGenerator`. Closes #364.
+
 ## [26.06.08] - Menu 194 Clone Device Config to Gateway Template
 
 ### Added
