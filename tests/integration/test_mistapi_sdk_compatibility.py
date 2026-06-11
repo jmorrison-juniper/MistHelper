@@ -49,7 +49,10 @@ def test_device_events_52w_paginates_and_writes_csv(monkeypatch, tmp_path):
                 "search_after": "token1",
             }
         elif search_after == "token1":
-            response.data = {"results": [{"id": "e3", "timestamp": "2026-01-03T00:00:00Z"}], "search_after": None}
+            response.data = {
+                "results": [{"id": "e3", "timestamp": "2026-01-03T00:00:00Z"}],
+                "search_after": None,
+            }
         else:
             response.data = {"results": [], "search_after": None}
         return response
@@ -112,7 +115,11 @@ def test_sites_sle_summary_writes_output(monkeypatch, tmp_path):
         sle_calls.append(kwargs["sle"])
         return SimpleNamespace(data=[{"site_id": f"{kwargs['sle']}-site", "score": 88}])
 
-    monkeypatch.setattr(MistHelper.mistapi.api.v1.orgs.insights, "getOrgSitesSle", get_org_sites_sle_stub)
+    monkeypatch.setattr(
+        MistHelper.mistapi.api.v1.orgs.insights,
+        "getOrgSitesSle",
+        get_org_sites_sle_stub,
+    )
     monkeypatch.setattr(MistHelper.mistapi, "get_all", lambda response, mist_session: response.data)
 
     captured: dict[str, object] = {}
@@ -152,14 +159,17 @@ def test_maps_and_wlan_helpers_are_covered(monkeypatch):
         lambda *_args, **_kwargs: SimpleNamespace(status_code=200),
     )
 
-    MistHelper.E911BSSIDReportGenerator._fetch_site_maps("site-1", map_lookup)
+    # Pass apisession + page_limit to match actual signature
+    MistHelper.E911BSSIDReportGenerator._fetch_site_maps(MistHelper.mistapi, "site-1", 1000, map_lookup)
     MistHelper.E911BSSIDReportGenerator._resolve_site_ssids(
-        "site-1",
-        {"sitetemplate_id": "", "sitegroup_ids": []},
-        [],
-        [],
-        wlan_band_lookup,
-        {},
+        MistHelper.mistapi,  # apisession param
+        "site-1",  # site_id param
+        1000,  # page_limit param
+        {"sitetemplate_id": "", "sitegroup_ids": []},  # site_info
+        [],  # wlan_templates
+        [],  # org_wlans
+        wlan_band_lookup,  # wlan_band_lookup
+        {},  # site_template_cache
     )
 
     assert map_lookup["map-1"] == "First Floor"
@@ -171,7 +181,11 @@ def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
     monkeypatch.setattr(MistHelper.PromptUtils, "select_site", lambda: "site-1")
     monkeypatch.setattr(MistHelper.InsightMetricsUtils, "export_legacy", lambda: None)
     monkeypatch.setattr(MistHelper.InsightMetricsUtils, "get_by_scope", lambda scope: ["metric-one"])
-    monkeypatch.setattr(MistHelper.EnhancedSSHRunner, "sanitize_filename", lambda value: value.replace(" ", "_"))
+    monkeypatch.setattr(
+        MistHelper.EnhancedSSHRunner,
+        "sanitize_filename",
+        lambda value: value.replace(" ", "_"),
+    )
 
     site_response = [{"id": "site-1", "name": "Site One"}]
     client_response = [{"mac": "00:11:22:33:44:55", "hostname": "Client One", "last_seen": "now"}]
@@ -220,7 +234,11 @@ def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
 def test_e911_report_runs_with_stubbed_maps_and_wlans(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
-    monkeypatch.setattr(MistHelper.E911BSSIDReportGenerator, "_load_checkpoint", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        MistHelper.E911BSSIDReportGenerator,
+        "_load_checkpoint",
+        lambda *_args, **_kwargs: None,
+    )
     monkeypatch.setattr(MistHelper.E911BSSIDReportGenerator, "_clear_checkpoint", lambda: None)
 
     org_data = {
@@ -257,10 +275,20 @@ def test_e911_report_runs_with_stubbed_maps_and_wlans(monkeypatch, tmp_path):
         lambda *_args, **_kwargs: org_data,
     )
 
-    def fetch_site_maps(site_id, map_lookup):
-        map_lookup["map-1"] = "First Floor"
+    def fetch_site_maps(apisession, site_id, page_limit, map_lookup):  # Added apisession, page_limit params
+        map_lookup["map-1"] = "First Floor"  # Populate lookup table for test assertion
 
-    def resolve_site_ssids(site_id, site_info, wlan_templates, org_wlans, wlan_band_lookup, site_template_cache):
+    # Stub accepts full method signature including apisession + page_limit
+    def resolve_site_ssids(
+        apisession,
+        site_id,
+        page_limit,
+        site_info,
+        wlan_templates,
+        org_wlans,
+        wlan_band_lookup,
+        site_template_cache,
+    ):
         wlan_band_lookup[f"{site_id}::band_5"] = ["Corp WiFi"]
 
     monkeypatch.setattr(MistHelper.E911BSSIDReportGenerator, "_fetch_site_maps", fetch_site_maps)
@@ -273,9 +301,19 @@ def test_e911_report_runs_with_stubbed_maps_and_wlans(monkeypatch, tmp_path):
         captured["filename"] = filename_or_table
         captured["api_function_name"] = api_function_name
 
-    monkeypatch.setattr(MistHelper.DataExporter, "write_with_format_selection", write_with_format_selection_stub)
+    monkeypatch.setattr(
+        MistHelper.DataExporter,
+        "write_with_format_selection",
+        write_with_format_selection_stub,
+    )
 
-    MistHelper.E911BSSIDReportGenerator.execute()
+    MistHelper.E911BSSIDReportGenerator.execute(  # Call with all 5 required keyword arguments
+        apisession=MistHelper.mistapi,  # Mist API session object
+        page_limit=1000,  # Default page limit for API calls
+        org_id="org-1",  # Test org ID from fixtures
+        safe_input_fn=lambda: "Y",  # Mock user confirmation (press Y)
+        write_data_fn=lambda *a, **k: None,  # Mock data export (no-op for test)
+    )
 
     assert captured["api_function_name"] == "generateE911BSSIDReport"
     assert str(captured["filename"]).startswith("E911_BSSID_Report_")
