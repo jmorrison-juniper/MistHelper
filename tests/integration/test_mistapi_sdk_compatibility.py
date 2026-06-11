@@ -21,12 +21,8 @@ def test_alarm_export_uses_search_org_alarms(monkeypatch):
             captured["executed"] = True
 
     monkeypatch.setattr(MistHelper, "APIDataFetcher", FakeAPIDataFetcher)
-    monkeypatch.setattr(
-        MistHelper.TimeUtils, "get_dynamic_lookback_hours", lambda *_args, **_kwargs: 24
-    )
-    monkeypatch.setattr(
-        MistHelper.TimeUtils, "log_dynamic_lookback", lambda *_args, **_kwargs: None
-    )
+    monkeypatch.setattr(MistHelper.TimeUtils, "get_dynamic_lookback_hours", lambda *_args, **_kwargs: 24)
+    monkeypatch.setattr(MistHelper.TimeUtils, "log_dynamic_lookback", lambda *_args, **_kwargs: None)
 
     MistHelper.OrgAlarmEventExporter.alarms()
 
@@ -39,14 +35,10 @@ def test_alarm_export_uses_search_org_alarms(monkeypatch):
 
 
 def test_device_events_52w_paginates_and_writes_csv(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1"
-    )
+    monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
     monkeypatch.chdir(tmp_path)
 
-    def search_stub(
-        session, org_id, device_type, limit, duration, *, search_after=None
-    ):
+    def search_stub(session, org_id, device_type, limit, duration, *, search_after=None):
         response = SimpleNamespace()
         if not search_after:
             response.data = {
@@ -65,9 +57,7 @@ def test_device_events_52w_paginates_and_writes_csv(monkeypatch, tmp_path):
             response.data = {"results": [], "search_after": None}
         return response
 
-    monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.orgs.devices, "searchOrgDeviceEvents", search_stub
-    )
+    monkeypatch.setattr(MistHelper.mistapi.api.v1.orgs.devices, "searchOrgDeviceEvents", search_stub)
 
     MistHelper.OrgAlarmEventExporter.device_events_52w()
 
@@ -83,9 +73,7 @@ def test_device_events_52w_paginates_and_writes_csv(monkeypatch, tmp_path):
 
 def test_site_client_stats_export_uses_stats_endpoint(monkeypatch, tmp_path):
     monkeypatch.setattr(MistHelper.PromptUtils, "select_site", lambda: "site-1")
-    monkeypatch.setattr(
-        MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1"
-    )
+    monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
     monkeypatch.setattr(
         MistHelper.APICoreFetchUtils,
         "all_sites_with_limit",
@@ -96,21 +84,15 @@ def test_site_client_stats_export_uses_stats_endpoint(monkeypatch, tmp_path):
     captured: dict[str, object] = {}
 
     def list_site_wireless_clients_stats_stub(*_args, **_kwargs):
-        captured["site_id"] = _kwargs.get("site_id") or (
-            _args[1] if len(_args) > 1 else None
-        )
-        return SimpleNamespace(
-            data=[{"mac": "00:11:22:33:44:55", "hostname": "Client One"}]
-        )
+        captured["site_id"] = _kwargs.get("site_id") or (_args[1] if len(_args) > 1 else None)
+        return SimpleNamespace(data=[{"mac": "00:11:22:33:44:55", "hostname": "Client One"}])
 
     monkeypatch.setattr(
         MistHelper.mistapi.api.v1.sites.stats,
         "listSiteWirelessClientsStats",
         list_site_wireless_clients_stats_stub,
     )
-    monkeypatch.setattr(
-        MistHelper.mistapi, "get_all", lambda response, mist_session: response.data
-    )
+    monkeypatch.setattr(MistHelper.mistapi, "get_all", lambda response, mist_session: response.data)
     monkeypatch.setattr(
         MistHelper.DataExporter,
         "save_data_to_output",
@@ -124,9 +106,7 @@ def test_site_client_stats_export_uses_stats_endpoint(monkeypatch, tmp_path):
 
 
 def test_sites_sle_summary_writes_output(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1"
-    )
+    monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
     monkeypatch.chdir(tmp_path)
 
     sle_calls: list[str] = []
@@ -140,9 +120,7 @@ def test_sites_sle_summary_writes_output(monkeypatch, tmp_path):
         "getOrgSitesSle",
         get_org_sites_sle_stub,
     )
-    monkeypatch.setattr(
-        MistHelper.mistapi, "get_all", lambda response, mist_session: response.data
-    )
+    monkeypatch.setattr(MistHelper.mistapi, "get_all", lambda response, mist_session: response.data)
 
     captured: dict[str, object] = {}
     monkeypatch.setattr(
@@ -182,9 +160,7 @@ def test_maps_and_wlan_helpers_are_covered(monkeypatch):
     )
 
     # Pass apisession + page_limit to match actual signature
-    MistHelper.E911BSSIDReportGenerator._fetch_site_maps(
-        MistHelper.mistapi, "site-1", 1000, map_lookup
-    )
+    MistHelper.E911BSSIDReportGenerator._fetch_site_maps(MistHelper.mistapi, "site-1", 1000, map_lookup)
     MistHelper.E911BSSIDReportGenerator._resolve_site_ssids(
         MistHelper.mistapi,  # apisession param
         "site-1",  # site_id param
@@ -204,9 +180,7 @@ def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(MistHelper.PromptUtils, "select_site", lambda: "site-1")
     monkeypatch.setattr(MistHelper.InsightMetricsUtils, "export_legacy", lambda: None)
-    monkeypatch.setattr(
-        MistHelper.InsightMetricsUtils, "get_by_scope", lambda scope: ["metric-one"]
-    )
+    monkeypatch.setattr(MistHelper.InsightMetricsUtils, "get_by_scope", lambda scope: ["metric-one"])
     monkeypatch.setattr(
         MistHelper.EnhancedSSHRunner,
         "sanitize_filename",
@@ -214,9 +188,7 @@ def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
     )
 
     site_response = [{"id": "site-1", "name": "Site One"}]
-    client_response = [
-        {"mac": "00:11:22:33:44:55", "hostname": "Client One", "last_seen": "now"}
-    ]
+    client_response = [{"mac": "00:11:22:33:44:55", "hostname": "Client One", "last_seen": "now"}]
     get_all_calls = {"count": 0}
 
     def get_all_stub(*_args, **_kwargs):
@@ -249,9 +221,7 @@ def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
         "getSiteInsightMetricsForClient",
         get_client_insight_stub,
     )
-    monkeypatch.setattr(
-        MistHelper.DataExporter, "save_data_to_output", lambda *_args, **_kwargs: None
-    )
+    monkeypatch.setattr(MistHelper.DataExporter, "save_data_to_output", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: "0")
 
     MistHelper.SiteClientExporter.client_insights()
@@ -263,17 +233,13 @@ def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
 
 def test_e911_report_runs_with_stubbed_maps_and_wlans(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1"
-    )
+    monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
     monkeypatch.setattr(
         MistHelper.E911BSSIDReportGenerator,
         "_load_checkpoint",
         lambda *_args, **_kwargs: None,
     )
-    monkeypatch.setattr(
-        MistHelper.E911BSSIDReportGenerator, "_clear_checkpoint", lambda: None
-    )
+    monkeypatch.setattr(MistHelper.E911BSSIDReportGenerator, "_clear_checkpoint", lambda: None)
 
     org_data = {
         "sites": {
@@ -309,9 +275,7 @@ def test_e911_report_runs_with_stubbed_maps_and_wlans(monkeypatch, tmp_path):
         lambda *_args, **_kwargs: org_data,
     )
 
-    def fetch_site_maps(
-        apisession, site_id, page_limit, map_lookup
-    ):  # Added apisession, page_limit params
+    def fetch_site_maps(apisession, site_id, page_limit, map_lookup):  # Added apisession, page_limit params
         map_lookup["map-1"] = "First Floor"  # Populate lookup table for test assertion
 
     # Stub accepts full method signature including apisession + page_limit
@@ -327,12 +291,8 @@ def test_e911_report_runs_with_stubbed_maps_and_wlans(monkeypatch, tmp_path):
     ):
         wlan_band_lookup[f"{site_id}::band_5"] = ["Corp WiFi"]
 
-    monkeypatch.setattr(
-        MistHelper.E911BSSIDReportGenerator, "_fetch_site_maps", fetch_site_maps
-    )
-    monkeypatch.setattr(
-        MistHelper.E911BSSIDReportGenerator, "_resolve_site_ssids", resolve_site_ssids
-    )
+    monkeypatch.setattr(MistHelper.E911BSSIDReportGenerator, "_fetch_site_maps", fetch_site_maps)
+    monkeypatch.setattr(MistHelper.E911BSSIDReportGenerator, "_resolve_site_ssids", resolve_site_ssids)
 
     captured: dict[str, object] = {}
 

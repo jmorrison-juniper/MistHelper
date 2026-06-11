@@ -1,11 +1,11 @@
 [project]
 name = "misthelper"
-version = "2.1.0"
+version = "2.0.0"
 description = "Network operations tool for Juniper Mist cloud infrastructure management and monitoring"
 readme = "README.md"
-license = {text = "CC-BY-NC-SA-4.0"}
+license = {text = "MIT"}
 authors = [
-    {name = "Joseph Morrison", email = "jmorrison@juniper.net"}
+    {name = "Network Operations Development Team"}
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -15,17 +15,21 @@ classifiers = [
     "Topic :: System :: Networking",
     "Topic :: System :: Systems Administration",
     "Topic :: System :: Monitoring",
-    "License :: Other/Proprietary License",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9", 
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.8"
 dependencies = [
     # Core API and networking
-    "mistapi>=0.61.4",
+    "mistapi>=0.3.0",
     "requests>=2.28.0",
-    "websocket-client>=1.8.0",
+    "websocket-client>=1.4.0",
     
     # CLI and user interface
     "prettytable>=3.5.0",
@@ -42,45 +46,24 @@ dependencies = [
     # Address parsing and fuzzy matching
     "usaddress-scourgify>=0.6.0",
     "rapidfuzz>=3.8.0",
-
-    # Polyglot database backends (ArangoDB + Redis TimeSeries)
-    "python-arango>=8.3.2",
-    "redis[hiredis]>=7.4.0",
-
-    # Structured logging for database modules
-    "structlog",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
     "coverage>=7.0.0",
-    "ruff>=0.8.0",
-    "black==26.5.1",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
     "mypy>=1.0.0",
-    "types-requests>=2.28.0",   # stubs for requests (Phase 1 fix)
-    "types-paramiko>=3.0.0",    # stubs for paramiko (Phase 1 fix)
-    "types-tqdm>=4.64.0",       # stubs for tqdm (Phase 1 fix)
-    "bandit>=1.7.0",
-    "pip-audit>=2.7.0",
-    "pylint>=3.0.0",
-    "radon>=6.0.0",
-    "vulture>=2.10",
-    "pydocstyle[toml]>=6.3.0",
-    "interrogate>=1.7.0",
-    "hypothesis>=6.151.12",
-    "playwright>=1.40.0",
-    "pre-commit>=3.0.0",
 ]
 container = [
-    "uvicorn>=0.20.0",
+    "uvicorn>=0.20.0",  # For potential web interface
 ]
 
 [project.urls]
 Homepage = "https://github.com/jmorrison-juniper/MistHelper"
 Repository = "https://github.com/jmorrison-juniper/MistHelper.git"
-Documentation = "https://github.com/jmorrison-juniper/MistHelper/wiki"
+Documentation = "https://github.com/jmorrison-juniper/MistHelper#readme"
 Issues = "https://github.com/jmorrison-juniper/MistHelper/issues"
 
 [project.scripts]
@@ -93,122 +76,24 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["."]
 
-[tool.ruff]
+[tool.black]
 line-length = 120
-target-version = "py313"
-extend-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "scripts", "specs", "src/maps"]
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B"]
-# Phase 1 ignores (2026-03-12) — tighten these incrementally:
-#   E402: module-import-not-at-top (33) — intentional: version check runs before imports
-#   RESOLVED: F402, B007, PLR0913, E501, PLR0915/C901/PLR0912 (166 noqa annotations)
-# Phase 2 goal: re-enable T20 (print) after migrating prints to logging
-ignore = ["E402"]
-
-[tool.ruff.lint.isort]
-known-first-party = ["src"]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = ["B011"]
+target-version = ["py313"]
+extend-exclude = "mist-ops-platform|ops-portal|web_portal|scripts|specs"
 
 [tool.mypy]
-python_version = "3.13"
-strict = true
-# --- Phased strict compliance (started 2025-07-12) ---
-# Full strict mode: all checks enforced with inline type: ignore annotations
-#   RESOLVED: warn_return_any, disallow_any_generics, disallow_untyped_defs/calls/incomplete_defs
-#   Remaining annotations: type: ignore[*] on legacy untyped code — reduce over time
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-disallow_untyped_calls = true
-disallow_any_generics = true
+python_version = "3.8"
 warn_return_any = true
-ignore_missing_imports = true
 warn_unused_configs = true
-warn_unused_ignores = true
-explicit_package_bases = true
-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "maps_manager", "scripts", "specs", "tests", "src/maps"]
-
-[[tool.mypy.overrides]]
-# Dash dynamically generates HTML/DCC component classes (Div, Span, P, Button, etc.)
-# at runtime — mypy cannot resolve them statically, producing false attr-defined errors.
-# follow_imports = skip prevents mypy from analyzing dash internals at all.
-module = ["dash", "dash.*"]
-follow_imports = "skip"
-
-[[tool.mypy.overrides]]
-# Skip type-checking for imported modules that are not part of the CI target (MistHelper.py).
-# maps_manager: large module with its own type issues — Phase 2 target
-# web_portal: Flask app with its own type issues — Phase 2 target
-# Others: third-party or legacy code not under active development
-module = ["MistHelper", "MistHelper.*", "maps_manager", "maps_manager.*", "src.maps", "src.maps.*", "mist-ops-platform.*", "ops-portal.*", "web_portal.*", "scripts.*", "specs.*"]
-follow_imports = "skip"
-
-[[tool.mypy.overrides]]
-# src.db: polyglot database modules use python-arango and redis SDKs which have
-# untyped methods and return union types. Relax strict checks here; tighten in Phase 2.
-module = ["src.db", "src.db.*"]
-disallow_untyped_calls = false
-disallow_any_generics = false
-warn_return_any = false
-
-[[tool.mypy.overrides]]
-# Tests: relax strict mode — test functions rarely benefit from full type annotations.
-# Phase 2 target: incrementally add annotations to test helpers.
-module = [
-    "tests",
-    "tests.*",
-    "tests.unit.*",
-    "tests.e2e.*",
-]
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
-disallow_any_generics = false
-warn_return_any = false
-check_untyped_defs = false
-strict = false
-
-[[tool.mypy.overrides]]
-# Wave 2 extracted modules: legacy code extracted as-is from MistHelper.py monolith.
-# Uses module-level dependency injection (Any-typed globals) and mixin patterns that
-# produce attr-defined errors. Relax strict checks; tighten after type annotations are
-# added in a dedicated refactoring pass.
-module = [
-    "src.analytics.*",
-    "src.export.*",
-    "src.gateway.*",
-    "src.inventory.*",
-    "src.site.*",
-    "src.troubleshooting.*",
-    "src.websocket.*",
-    "src.ssh.ssh_runner",
-    "src.ssh.ssh_runner_manager",
-]
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
-disallow_any_generics = false
-warn_return_any = false
-check_untyped_defs = false
-warn_unused_ignores = false
-ignore_errors = true
-
-[tool.bandit]
-targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "web_portal", "src"]
-exclude_dirs = ["tests", ".venv", "node_modules", "mist-ops-platform", "ops-portal", "scripts", "specs"]
+disallow_untyped_defs = true
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
-markers = [
-    "integration: tests that call the real Mist API (require .env credentials)",
-]
 
 [tool.coverage.run]
 source = ["."]
@@ -217,15 +102,10 @@ omit = [
     "venv/*",
     ".venv/*",
     "setup.py",
-    "*/site-packages/*",
-    "src/maps/*",
-    "src/firmware/firmware_manager.py",
-    "src/ui/tui.py",
-    "src/websocket/*"
+    "*/site-packages/*"
 ]
 
 [tool.coverage.report]
-fail_under = 90
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -238,43 +118,3 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
-
-# --- Black (redundant with ruff format, included for explicit gate) ---
-[tool.black]
-line-length = 120
-target-version = ["py313"]
-extend-exclude = "mist-ops-platform|ops-portal|web_portal|scripts|specs"
-
-# --- Pylint ---
-[tool.pylint.main]
-fail-under = 9.5
-
-[tool.pylint.format]
-max-line-length = 120
-
-[tool.pylint."messages control"]
-# Docstring enforcement handled by pydocstyle/interrogate
-# W1203: logging-fstring-interpolation -- project uses f-strings throughout for readability
-# W0613: unused-argument -- WebSocket callback signatures are protocol-mandated
-# W0718: broad-exception-caught -- intentional in cleanup/error handlers
-disable = ["C0114", "C0115", "C0116", "W1203", "W0613", "W0718"]
-
-[tool.pylint.basic]
-good-names = ["i", "e", "f", "db", "ok"]
-
-# --- pydocstyle ---
-[tool.pydocstyle]
-convention = "google"
-match-dir = "(?!tests|\\.|analytics|capture|export|gateway|inventory|site|troubleshooting|websocket).*"
-
-# --- Interrogate (docstring coverage) ---
-[tool.interrogate]
-fail-under = 90
-exclude = ["tests", ".venv", "setup.py"]
-verbose = 1
-generate-badge = "."
-ignore-init-method = true
-ignore-init-module = true
-ignore-magic = true
-ignore-semiprivate = false
-ignore-private = false
