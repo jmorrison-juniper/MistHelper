@@ -7,7 +7,7 @@ from pathlib import Path  # Use pathlib for robust repository traversal in stati
 
 def test_no_internal_export_legacy_callsites() -> None:  # Ensure canonical callsites remain in place post-migration.
     repository_root = Path(__file__).resolve().parents[2]  # Resolve repository root from test file location.
-    disallowed_token = "InsightMetricsUtils.export_legacy("  # Define banned call expression for direct textual scan.
+    disallowed_token = "InsightMetricsUtils" + ".export_legacy("  # Build banned call token without retired literal in source.
     violations: list[str] = []  # Capture violating locations so assertion message is actionable.
 
     for python_file in repository_root.rglob("*.py"):  # Traverse python files to catch regressions in any module.
