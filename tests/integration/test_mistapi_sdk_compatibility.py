@@ -4,14 +4,14 @@ These tests exercise the current MistHelper entry points with lightweight
 monkeypatched SDK responses so the compatibility surface stays in one file.
 """
 
-import pytest
-
-pytestmark = pytest.mark.skip(reason="Legacy compatibility surface removed with compat_facades deprecation")
-
 import csv
 from types import SimpleNamespace
 
+import pytest
+
 import MistHelper
+
+pytestmark = pytest.mark.skip(reason="Legacy compatibility surface removed with compat_facades deprecation")
 
 
 def test_alarm_export_uses_search_org_alarms(monkeypatch):
@@ -133,7 +133,7 @@ def test_sites_sle_summary_writes_output(monkeypatch, tmp_path):
         lambda data, filename: captured.update({"data": data, "filename": filename}),
     )
 
-    MistHelper.OrgExportUtils.sites_sle_summary()
+    MistHelper.export_org_sites_sle_summary_to_csv()
 
     assert sle_calls == ["wifi", "wired", "wan"]
     assert captured["filename"] == "OrgSitesSLESummary.csv"

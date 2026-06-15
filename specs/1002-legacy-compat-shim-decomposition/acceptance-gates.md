@@ -13,7 +13,7 @@
 - [x] Retired wrappers removed: `get_csv_file_path_legacy`, `export_gateway_templates_to_csv_legacy`
 - [x] Legacy insight callsites replaced (`site_metric_operation`, `device_metric_operation`)
 - [x] Capture `run()` adapters explicitly marked temporary with expiry
-- [ ] `__init__.py` shim branch retirement phase complete
+- [ ] `__init__.py` shim branch retirement phase complete (blocked by active facade dependencies; tracked in migration tracker)
 - [ ] Static scan confirms zero references for all retired US1 symbols
 
 ## Gate C — US2 Parity / Risk
@@ -27,8 +27,8 @@
 
 - [ ] Legacy facade test imports migrated to canonical imports
 - [ ] Alias-path capture tests migrated to `execute()`
-- [ ] No new `export_legacy` callsites test added
-- [ ] Canonical import enforcement test added
+- [x] No new `export_legacy` callsites test added
+- [x] Canonical import enforcement test added
 
 ## Gate E — Release Readiness
 

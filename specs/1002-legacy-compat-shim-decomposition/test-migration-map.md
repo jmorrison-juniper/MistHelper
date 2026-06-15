@@ -7,6 +7,7 @@
 | `tests/unit/test_exports.py` | monkeypatch on `InsightMetricsUtils.export_legacy` | rely on scoped metric lookup (`get_by_scope`) + canonical cache refresh path in runtime |
 | `tests/integration/test_mistapi_sdk_compatibility.py` | monkeypatch on `InsightMetricsUtils.export_legacy` | rely on scoped metric lookup (`get_by_scope`) + canonical cache refresh path in runtime |
 | `tests/unit/test_no_export_legacy_callsites.py` | none (new guard) | static enforcement of no internal `InsightMetricsUtils.export_legacy(` callsites |
+| `tests/unit/test_no_new_legacy_facade_imports.py` | none (new guard) | blocks introducing new test references to selected legacy facades |
 
 ## Remaining migrations (target)
 

@@ -15,9 +15,16 @@
 | S009 | `__init__.py` | `_noop_menu_action` fallback | temporary adapter | ⏳ pending | Scheduled with parity guard rollout |
 | S010 | `__init__.py` | `_ensure_menu_coverage` fallback | temporary adapter | ⏳ pending | Scheduled with parity guard rollout |
 | S011 | `src/capture/__init__.py` | lazy `PacketCaptureManager` facade | replace export map | ⏳ pending | Scheduled US1 chunk C |
+| S012 | `tests/unit/test_no_export_legacy_callsites.py` | internal `export_legacy` guard | hardening test | ✅ done | Prevents legacy callsite reintroduction |
+| S013 | `tests/unit/test_no_new_legacy_facade_imports.py` | test-time legacy facade growth guard | hardening test | ✅ done | Prevents new test migration debt |
 
 ## Task Mapping Snapshot
 
-- Completed: T013 (partial scope), T015, T016, T017, T041, T042, T007
-- In progress: T014, T018-T040
-- Pending: US2/US3 gates and test migration
+- Completed: T013 (partial scope), T015, T016, T017, T041, T042, T007, T047 (partial), T061 (partial), T063
+- In progress: T014, T018-T040, T056-T060
+- Pending: remaining US2/US3 gates and full facade retirement
+
+## Current blocker snapshot
+
+- Full US1 chunk B/C `__init__.py` shim-branch retirement is blocked by active runtime/test dependencies on facade symbols (`SiteExportUtils`, `InsightMetricsUtils`, `TimeUtils`, `OperationRegistry`, and `OrgExportUtils`) where canonical replacements are not fully decoupled yet.
+- Approach: continue US3 migration of test/runtime callsites to canonical module paths, then retire branches in smaller verified batches.
