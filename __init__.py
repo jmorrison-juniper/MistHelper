@@ -315,19 +315,6 @@ def __getattr__(name: str):
         globals()["OrgAlarmEventExporter"] = _OrgAlarmEventExporter
         return _OrgAlarmEventExporter
 
-    if name == "OrgExportUtils":
-
-        class _OrgExportUtils:
-            @staticmethod
-            def sites_sle_summary(*args, **kwargs):
-                fn = getattr(heavy, "export_org_sites_sle_summary_to_csv", None)
-                if fn:
-                    return fn(*args, **kwargs)
-                return None
-
-        globals()["OrgExportUtils"] = _OrgExportUtils
-        return _OrgExportUtils
-
     if name == "APIDataFetcher":
 
         class _APIDataFetcher:
