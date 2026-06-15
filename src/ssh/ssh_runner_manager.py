@@ -50,7 +50,7 @@ class SSHRunnerManager:
             print("\n[INTERRUPT] Operation cancelled by user")
             SSHRunnerManager._emit_completion(emitter, op_start, cancelled=True)
             return False
-        except Exception as error:  # noqa: BLE001 - surface any fatal error to operator
+        except Exception as error:
             print(f"[ERROR] Fatal error: {error}")
             logging.error("SSH Runner error: %s", error, exc_info=True)
             SSHRunnerManager._emit_completion(emitter, op_start, cancelled=False)
@@ -214,7 +214,7 @@ class SSHRunnerManager:
             return {"hosts": hosts, "username": username, "password": password, "commands": commands}
 
         try:
-            EnvSshConfigLoader.load = mock_load  # type: ignore[method-assign]  # Inject mocked loader
+            EnvSshConfigLoader.load = mock_load  # Inject mocked loader
 
             if len(hosts) > 1 or len(commands) > 1:
                 print(f"\n!? Executing {len(commands)} command(s) on {len(hosts)} host(s)")
@@ -255,7 +255,7 @@ class SSHRunnerManager:
 
             return AppRunner.run(MockArgs())  # T013d: direct call to concrete AppRunner (no façade)
         finally:
-            EnvSshConfigLoader.load = original_load  # type: ignore[method-assign]  # Restore real loader
+            EnvSshConfigLoader.load = original_load  # Restore real loader
 
     @staticmethod
     def _load_gateway_data(deps: SSHRunnerManagerDeps) -> Any:
@@ -432,6 +432,6 @@ class SSHRunnerManager:
                 results.get("total", len(management_ips)),
             )
 
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             print(f"! Error: {error}")
             logging.error("SSH by template error: %s", error, exc_info=True)

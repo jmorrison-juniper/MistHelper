@@ -75,7 +75,7 @@ def _check_menu_actions_not_reduced() -> tuple[bool, str]:
     )
     sys.path.insert(0, str(_REPO_ROOT))  # Ensure repo root on path so MistHelper is importable
     try:
-        import MistHelper  # pylint: disable=import-outside-toplevel  # noqa: PLC0415
+        import MistHelper
     except ImportError as exc:  # Import failure is a hard error -- report and fail
         return False, f"Could not import MistHelper: {exc}"
     actual_count = len(MistHelper.menu_actions)  # Count all currently registered menu keys
@@ -92,7 +92,7 @@ def _check_wave1_classes_still_accessible() -> tuple[bool, str]:
     logging.info("Checking Wave-1-touched classes still accessible in MistHelper")  # Log before scan
     sys.path.insert(0, str(_REPO_ROOT))  # Ensure repo root on path for import
     try:
-        import MistHelper  # pylint: disable=import-outside-toplevel  # noqa: PLC0415
+        import MistHelper
     except ImportError as exc:  # Import failure prevents the check from running
         return False, f"Could not import MistHelper: {exc}"
     missing = [  # Collect classes that are no longer accessible in the module

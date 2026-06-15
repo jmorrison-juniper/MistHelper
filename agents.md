@@ -11,7 +11,7 @@ You are an autonomous software engineer. Parse requests, infer missing details,
 implement complete solutions, write tests, and run quality gates -- all without
 requiring intervention unless a critical ambiguity blocks progress.
 
-When refactoring, restructure into classes per project conventions. No wrappers.
+When refactoring, restructure into classes per project conventions. No wrappers. No legacy compatibility shims.
 
 ## Local Development Quick Reference
 
@@ -50,7 +50,7 @@ git checkout main && git pull origin main
 ## Key Conventions (Quick Reminders)
 
 - **Target audience**: Junior NOC engineers. Clear language, no jargon.
-- **Python 3.13+**, **mistapi 0.59+**, **UV** preferred over pip
+- **Python 3.13+**, **mistapi 0.63+**, **UV** preferred over pip
 - **5-Item Rule**: Max 5 children per hierarchy level, max 5 params, max 25 lines per function
 - **safe_input()**: Wrap all `input()` calls for EOF handling in SSH/container contexts
 - **Natural business keys**: Define PK strategy in `ENDPOINT_PRIMARY_KEY_STRATEGIES` for new operations

@@ -296,6 +296,35 @@ class EnhancedSSHRunner:
     # T013b: _execute_with_shell moved to src.ssh.shell_execution.shell_executor.ShellExecutor.
     # Callers (_execute_command) instantiate ShellExecutor inline (real call, not facade).
 
+    def connect(self, hostname: str, username: str, password: str, port: int = 22) -> bool:
+        """Establish SSH connection to the remote host.
+
+        Delegates to :class:`src.ssh.connection.connector.SshConnector` (T013b:
+        extracted connection logic) and wires the returned paramiko client into
+        ``self.client`` / ``self.managed_known_hosts_path`` so callers that access
+        ``runner.client.invoke_shell()`` directly keep working unchanged.
+
+        Args:
+            hostname: IP address or hostname of the target device.
+            username: SSH username.
+            password: SSH password.
+            port: SSH port number (default 22).
+
+        Returns:
+            bool: True when the connection is established, False on any error.
+        """
+        logging.info("EnhancedSSHRunner.connect called for %s@%s:%s", username, hostname, port)  # Pre-action log
+        from src.ssh.connection.connector import SshConnector  # Late import; avoids circular deps at module load
+        connector = SshConnector(timeout=self.timeout, logger=self.logger)  # Real delegation to T013b module
+        client, kh_path = connector.connect(hostname, username, password, port)  # Returns (SSHClient|None, path|None)
+        if client is None:  # SshConnector already logged and printed the specific error
+            self.logger.debug("SshConnector.connect returned None for %s; connection failed", hostname)
+            return False  # Propagate failure to caller for early-return guard
+        self.client = client  # Wire the live paramiko client so invoke_shell() / exec_command() work
+        self.managed_known_hosts_path = kh_path  # Persist TOFU known-hosts path for cleanup on disconnect
+        self.logger.debug("EnhancedSSHRunner.connect succeeded for %s:%s; client wired", hostname, port)
+        return True  # Connection live; caller can now use runner.client directly
+
     def _disconnect(self):  # type: ignore[no-untyped-def]
         """Close SSH connection."""
         if self.client:

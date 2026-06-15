@@ -7,7 +7,6 @@ NEXT5_TARGET_FUNCTIONS = [
     "_wait_and_download_pcap",
     "_wait_and_download_pcap_org",
     "wifi_clients",
-    "run_interactive_test",
 ]
 
 NEXT5_TARGET_TO_MODULE = {
@@ -15,5 +14,4 @@ NEXT5_TARGET_TO_MODULE = {
     "_wait_and_download_pcap": "src.capture.site_pcap_wait_download_workflow.SitePcapWaitDownloadWorkflow",
     "_wait_and_download_pcap_org": "src.capture.org_pcap_wait_download_workflow.OrgPcapWaitDownloadWorkflow",
     "wifi_clients": "src.export.wifi_clients_exporter.WifiClientsExporter",
-    "run_interactive_test": "src.troubleshooting.interactive_test_runner.InteractiveTestRunner",
 }

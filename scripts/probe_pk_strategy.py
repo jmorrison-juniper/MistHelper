@@ -44,7 +44,7 @@ sys.path.insert(0, str(REPO_ROOT))  # prepend repo root so local imports work
 # Load .env early — before argparse evaluates os.environ.get() defaults
 # ---------------------------------------------------------------------------
 try:
-    from dotenv import load_dotenv as _load_dotenv  # type: ignore[import-untyped]
+    from dotenv import load_dotenv as _load_dotenv
 
     _load_dotenv(REPO_ROOT / ".env")  # load project .env into os.environ NOW
 except ImportError:
@@ -264,7 +264,7 @@ class MistApiProbe:
         """Walk mistapi.api.v1 to find the function matching op_id."""
         import pkgutil  # local import — only needed here
 
-        import mistapi.api.v1 as v1  # mistapi SDK root package  # noqa: I001
+        import mistapi.api.v1 as v1  # mistapi SDK root package
 
         for module_info in pkgutil.walk_packages(v1.__path__, v1.__name__ + "."):
             try:
@@ -387,7 +387,7 @@ class SuggestionWriter:
 def _load_mist_session():
     """Create an authenticated mistapi session (dotenv already loaded at module level)."""
     try:
-        import mistapi  # type: ignore[import]
+        import mistapi
 
         mist_session = mistapi.APISession()  # create session from env/config
         mist_session.login()  # authenticate with Mist API
@@ -550,7 +550,7 @@ def _load_op_ids_from_args(args) -> list[str]:
         op_ids += _collect_library_only_funcs()  # scan library for all known funcs
 
     seen: set[str] = set()  # deduplicate while preserving order
-    deduped = [op for op in op_ids if not (op in seen or seen.add(op))]  # type: ignore[func-returns-value]
+    deduped = [op for op in op_ids if not (op in seen or seen.add(op))]
     logging.info("Probing %d unique operationIds", len(deduped))
     return deduped  # return deduplicated list
 
@@ -559,7 +559,7 @@ def _collect_library_only_funcs() -> list[str]:
     """Return function names that are in mistapi but not in ENDPOINT_PRIMARY_KEY_STRATEGIES."""
     import pkgutil  # local import
 
-    import mistapi.api.v1 as v1  # mistapi SDK root package  # noqa: I001
+    import mistapi.api.v1 as v1  # mistapi SDK root package
 
     logging.info("Scanning mistapi library for all public function names ...")
 

@@ -400,6 +400,20 @@ jobs:
       - name: Run E2E smoke tests
         run: pytest tests/e2e/ -v --timeout=60
 
+  retired_compat_symbols:
+    name: "Retired compat symbol guard"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Check retired compatibility symbols
+        run: python scripts/ci/check_retired_compat_symbols.py
+
   # ──────────────────────────────────────────────────────────────
   # FAILURE → GITHUB ISSUES (auto-create issues for each failure)
   # ──────────────────────────────────────────────────────────────
@@ -417,6 +431,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
+      - retired_compat_symbols
     if: ${{ always() && github.ref == 'refs/heads/main' && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
@@ -449,6 +464,7 @@ jobs:
           RESULTS[vulture]="${{ needs.vulture.result }}"
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
+          RESULTS[retired_compat_symbols]="${{ needs.retired_compat_symbols.result }}"
 
           for gate in "${!RESULTS[@]}"; do
             result="${RESULTS[$gate]}"
@@ -499,6 +515,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
+      - retired_compat_symbols
     if: ${{ always() && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
@@ -524,6 +541,7 @@ jobs:
           RESULTS[vulture]="${{ needs.vulture.result }}"
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
+          RESULTS[retired_compat_symbols]="${{ needs.retired_compat_symbols.result }}"
 
           for gate in "${!RESULTS[@]}"; do
             result="${RESULTS[$gate]}"

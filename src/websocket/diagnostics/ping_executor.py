@@ -43,7 +43,7 @@ class PingDeviceExecutor:
         websocket_manager: WebSocketManager | None = None  # Tracked so finally can clean up
         try:  # Wrap entire workflow to mirror legacy try/except/finally
             websocket_manager = self._run_workflow(deps, debug_mode)  # Drive prompts + WS work
-        except Exception as ping_error:  # noqa: BLE001  # Mirror legacy broad catch for resilience
+        except Exception as ping_error:
             log_ws_error(f"WebSocket ping operation failed: {ping_error}", debug_mode)  # Legacy log
             logging.debug("EXIT: ping_device_websocket - error")  # Trace marker preserved
         finally:  # Always release WS resources on exit path
@@ -113,7 +113,7 @@ class PingDeviceExecutor:
             print(f"[DEBUG] Ping count = {ping_count}")
         return ping_count  # Chainable return keeps callers concise
 
-    def _issue_ping_and_render(  # noqa: PLR0913  # Six args mirror the prior method signature
+    def _issue_ping_and_render(
         self,
         deps: WebSocketCmdDeps,
         site_id: str,
@@ -142,7 +142,7 @@ class PingDeviceExecutor:
         )
         return websocket_manager  # Hand back for finally cleanup
 
-    def _post_ping_command(  # noqa: PLR0913  # Args mirror data needed to build the request
+    def _post_ping_command(
         self,
         deps: WebSocketCmdDeps,
         websocket_manager: WebSocketManager,

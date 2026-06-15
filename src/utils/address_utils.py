@@ -1,4 +1,3 @@
-# pylint: disable=too-many-lines,logging-fstring-interpolation,implicit-str-concat
 """Address parsing, normalization, and geocoding validation utilities.
 
 Extracted from MistHelper.py monolith. Contains:
@@ -22,25 +21,25 @@ from typing import Any
 
 try:
     import requests
-except ImportError:  # pragma: no cover
-    requests = None  # type: ignore[assignment]
+except ImportError:
+    requests = None
 
 try:
     import urllib3
 
     _has_urllib3 = True
-except ImportError:  # pragma: no cover
-    urllib3 = None  # type: ignore[assignment]
+except ImportError:
+    urllib3 = None
     _has_urllib3 = False
 
 try:
     from rapidfuzz import fuzz
-except ImportError:  # pragma: no cover
-    fuzz = None  # type: ignore[assignment]
+except ImportError:
+    fuzz = None
 
 try:
     from scourgify import normalize_address_record
-except ImportError:  # pragma: no cover
+except ImportError:
     normalize_address_record = None
 
 
@@ -53,8 +52,8 @@ class AddressValidationConfig:
     skip_ssl_verify: bool = False
     org_name: str | None = None
     site_name: str | None = None
-    mist_duplicates: dict | None = None  # type: ignore[type-arg]
-    ref_duplicates: dict | None = None  # type: ignore[type-arg]
+    mist_duplicates: dict | None = None
+    ref_duplicates: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -729,10 +728,6 @@ class NameNormalizationUtils:
         return min(1.0, (word_sim * 0.7) + (string_sim * 0.3))
 
 
-# Backward-compatible alias
-AddressBusinessNameUtils = NameNormalizationUtils
-
-
 # ============================================================================
 # NOMINATIM ADDRESS VALIDATOR
 # ============================================================================
@@ -832,7 +827,7 @@ class NominatimValidator:
                     time.sleep(self.RETRY_DELAY)
                 else:
                     return None
-        return None  # pragma: no cover
+        return None
 
     def _calculate_component_match(
         self,
@@ -1036,16 +1031,16 @@ class NominatimValidator:
         mist_dup, ref_dup = self._check_duplicate_status(mist_address, comparison_address)
         rec, reason = self._apply_duplicate_rules(mist_dup, ref_dup)
         if rec:
-            return rec, reason  # type: ignore[return-value]
+            return rec, reason
         rec, reason = self._apply_confidence_comparison(
             mist_result["confidence"],
             comp_result["confidence"],
         )
         if rec:
-            return rec, reason  # type: ignore[return-value]
+            return rec, reason
         rec, reason = self._apply_org_name_tiebreaker(mist_result, comp_result)
         if rec:
-            return rec, reason  # type: ignore[return-value]
+            return rec, reason
         return self._apply_business_context_tiebreaker(mist_result, comp_result)
 
     def _determine_recommendation(

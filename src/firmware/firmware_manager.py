@@ -4,7 +4,6 @@ Manages firmware upgrades for APs, switches, and SSR devices across
 Mist organization sites.
 """
 
-# pylint: disable=too-many-lines,logging-fstring-interpolation
 
 from __future__ import annotations
 
@@ -34,7 +33,7 @@ PROGRESS_EMITTER: Any = None
 
 try:
     import mistapi
-except ImportError:  # pragma: no cover
+except ImportError:
     mistapi = None
 
 
@@ -92,12 +91,12 @@ class FirmwareManager:
 
         # Populate module-level globals used by methods with 'global' declarations
         _mod = _sys.modules[__name__]
-        _mod.apisession = apisession  # type: ignore[attr-defined]
-        _mod.org_id = org_id  # type: ignore[attr-defined]
+        _mod.apisession = apisession
+        _mod.org_id = org_id
         _main = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
         if _main is not None:
-            _mod.msp_privileges = getattr(_main, "msp_privileges", [])  # type: ignore[attr-defined]
-            _mod.PROGRESS_EMITTER = getattr(_main, "PROGRESS_EMITTER", None)  # type: ignore[attr-defined]
+            _mod.msp_privileges = getattr(_main, "msp_privileges", [])
+            _mod.PROGRESS_EMITTER = getattr(_main, "PROGRESS_EMITTER", None)
 
         logging.info(f"FirmwareManager initialized for org_id: {org_id}")
 
@@ -117,7 +116,7 @@ class FirmwareManager:
                     return False
         return False
 
-    def _is_firmware_downgrade(self, current_version, target_version):  # type: ignore[no-untyped-def]
+    def _is_firmware_downgrade(self, current_version, target_version):
         """Check if the target version is a downgrade from the current version.
 
         This method performs a basic version comparison to detect potential downgrades.
@@ -179,7 +178,7 @@ class FirmwareManager:
                 print("\n Operation cancelled by user.")
                 return None
 
-    def check_firmware_upgrade_status(self, scope_choice=None, site_filter=None):  # type: ignore[no-untyped-def]
+    def check_firmware_upgrade_status(self, scope_choice=None, site_filter=None):
         """Check current firmware upgrade status across the organization.
 
         This method provides comprehensive upgrade status monitoring with:
@@ -231,17 +230,17 @@ class FirmwareManager:
         # Handle monitoring mode (option 5)
         if scope_choice == "5":
             logging.info("Entering continuous monitoring mode")
-            return self._continuous_monitoring_mode(site_filter)  # type: ignore[no-untyped-call]
+            return self._continuous_monitoring_mode(site_filter)
 
         # Handle org-level upgrade jobs (option 6)
         if scope_choice == "6":
             logging.info("Fetching org-level upgrade jobs")
-            return self._show_org_level_upgrade_jobs()  # type: ignore[no-untyped-call]
+            return self._show_org_level_upgrade_jobs()
 
         # Continue with the existing implementation...
-        return self._execute_status_check(scope_choice, site_filter)  # type: ignore[no-untyped-call]
+        return self._execute_status_check(scope_choice, site_filter)
 
-    def _continuous_monitoring_mode(self, site_filter=None):  # type: ignore[no-untyped-def]
+    def _continuous_monitoring_mode(self, site_filter=None):
         """Continuous monitoring mode that auto-refreshes upgrade status until complete or cancelled.
 
         Features:
@@ -292,7 +291,7 @@ class FirmwareManager:
                 # Execute status check for active upgrades only
                 # NOTE: This queries ALL devices each time, not just initial set
                 # New devices that start upgrading will be detected automatically
-                result = self._execute_monitoring_check(site_filter)  # type: ignore[no-untyped-call]
+                result = self._execute_monitoring_check(site_filter)
 
                 if result is None:
                     print("\n   Error fetching upgrade status. Retrying...")
@@ -318,7 +317,7 @@ class FirmwareManager:
 
     def _print_upgrade_job_timing_info(self, details: dict[str, Any]) -> None:
         """Print start and reboot time for an upgrade job, converting epoch to human-readable."""
-        from datetime import datetime as dt_module  # noqa: PLC0415
+        from datetime import datetime as dt_module
 
         start_time = details.get("start_time")
         if start_time:
@@ -380,7 +379,7 @@ class FirmwareManager:
             print(f"    Error fetching details: {e}")
             logging.error(f"Error fetching upgrade job {job_id}: {e}")
 
-    def _show_org_level_upgrade_jobs(self):  # type: ignore[no-untyped-def]
+    def _show_org_level_upgrade_jobs(self):
         """Display org-level upgrade jobs with full configuration details including P2P settings.
 
         Calls:
@@ -398,7 +397,7 @@ class FirmwareManager:
         print("=" * 70)
 
         try:
-            import mistapi.api.v1.orgs.devices as org_devices_api  # noqa: PLC0415
+            import mistapi.api.v1.orgs.devices as org_devices_api
 
             print("  Fetching org-level upgrade jobs...")
             list_response = org_devices_api.listOrgDeviceUpgrades(self.apisession, self.org_id)
@@ -477,7 +476,7 @@ class FirmwareManager:
         """Print a formatted table of devices currently upgrading."""
         if not active_upgrades:
             return
-        import sys as _sys  # noqa: PLC0415
+        import sys as _sys
 
         _main_d = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
         print("\n  Devices Currently Upgrading:")
@@ -495,7 +494,7 @@ class FirmwareManager:
             )
         print("  " + "=" * 86)
 
-    def _execute_monitoring_check(self, site_filter=None):  # type: ignore[no-untyped-def]
+    def _execute_monitoring_check(self, site_filter=None):
         """Execute a single monitoring check iteration.
 
         This method performs a FULL fresh query of all devices on each call.
@@ -519,7 +518,7 @@ class FirmwareManager:
             logging.error(f"Error in monitoring check: {e}", exc_info=True)
             return None
 
-    def _upgrade_ap_firmware_by_gateway_template(self):  # type: ignore[no-untyped-def]
+    def _upgrade_ap_firmware_by_gateway_template(self):
         """Advanced AP firmware upgrade organized by Gateway Template assignment.
 
         This method provides template-based firmware upgrades with:
@@ -550,7 +549,7 @@ class FirmwareManager:
             self._check_cache_fn("SiteList.csv", self._sites_fn)
 
         # Step 2: Load gateway templates and build template-to-sites mapping
-        template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()  # type: ignore[no-untyped-call]
+        template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()
 
         if not template_name_to_id:
             print(" No gateway templates found.")
@@ -558,7 +557,7 @@ class FirmwareManager:
             return
 
         # Step 3: Display template selection with site counts
-        selected_template_id, selected_template_name = self._prompt_template_selection(  # type: ignore[no-untyped-call]
+        selected_template_id, selected_template_name = self._prompt_template_selection(
             template_name_to_id, template_sites_mapping
         )
 
@@ -587,9 +586,9 @@ class FirmwareManager:
 
         # Step 5: Execute firmware upgrade using existing bulk upgrade logic
         # Convert sites_to_upgrade to the format expected by bulk_upgrade_ap_firmware_by_site
-        return self._execute_template_based_upgrade(sites_to_upgrade, selected_template_name)  # type: ignore[no-untyped-call]
+        return self._execute_template_based_upgrade(sites_to_upgrade, selected_template_name)
 
-    def _ensure_template_csv_freshness(self):  # type: ignore[no-untyped-def]
+    def _ensure_template_csv_freshness(self):
         """Ensure that required template and site CSV files are fresh and available.
 
         This method generates or refreshes the CSV files needed for template-based
@@ -628,7 +627,7 @@ class FirmwareManager:
             template_name = next((name for name, tid in template_name_to_id.items() if tid == template_id), "Unknown")
             logging.debug(f"Template '{template_name}': {len(sites)} sites")
 
-    def _load_template_sites_mapping(self):  # type: ignore[no-untyped-def]
+    def _load_template_sites_mapping(self):
         """Load gateway templates and create mapping of templates to their assigned sites.
 
         Returns:
@@ -659,7 +658,7 @@ class FirmwareManager:
             print(f"! Failed to load template and site data: {e}")
             return {}, {}
 
-    def _prompt_template_selection(self, template_name_to_id, template_sites_mapping):  # type: ignore[no-untyped-def]
+    def _prompt_template_selection(self, template_name_to_id, template_sites_mapping):
         """Present interactive template selection with site counts.
 
         Args:
@@ -709,14 +708,14 @@ class FirmwareManager:
 
                 # No match found
                 print(
-                    f"   Invalid selection. Please enter a valid index (1-{len(sorted_templates)}) or exact template name."  # noqa: E501
+                    f"   Invalid selection. Please enter a valid index (1-{len(sorted_templates)}) or exact template name."
                 )
 
             except KeyboardInterrupt:
                 print("\n   Template selection cancelled.")
                 return None, None
 
-    def _execute_template_based_upgrade(self, sites_to_upgrade, template_name):  # type: ignore[no-untyped-def]
+    def _execute_template_based_upgrade(self, sites_to_upgrade, template_name):
         """Execute firmware upgrade for all sites in a gateway template.
 
         This method reuses the existing bulk upgrade logic but with template context.
@@ -729,7 +728,7 @@ class FirmwareManager:
             Results of the upgrade operation
         """
         logging.info(
-            f"Executing template-based firmware upgrade for template '{template_name}' with {len(sites_to_upgrade)} sites"  # noqa: E501
+            f"Executing template-based firmware upgrade for template '{template_name}' with {len(sites_to_upgrade)} sites"
         )
 
         print("\n  Template-Based Upgrade Execution")
@@ -743,9 +742,9 @@ class FirmwareManager:
 
         # Use the existing bulk upgrade functionality
         # We'll call the refactored bulk_upgrade method with our site list
-        return self._bulk_upgrade_ap_firmware_by_site(sites_to_upgrade_override=sites_to_upgrade)  # type: ignore[no-untyped-call]
+        return self._bulk_upgrade_ap_firmware_by_site(sites_to_upgrade_override=sites_to_upgrade)
 
-    def execute_firmware_upgrade_with_mode_selection(self):  # type: ignore[no-untyped-def]
+    def execute_firmware_upgrade_with_mode_selection(self):
         """Main entry point for firmware upgrades with mode selection.
 
         Presents user with choice between:
@@ -789,15 +788,15 @@ class FirmwareManager:
                 if mode_choice == "1":
                     logging.info("User selected site-based upgrade mode")
                     print("\n  Site-based upgrade mode selected")
-                    return self._bulk_upgrade_ap_firmware_by_site()  # type: ignore[no-untyped-call]
+                    return self._bulk_upgrade_ap_firmware_by_site()
                 elif mode_choice == "2":
                     logging.info("User selected template-based upgrade mode")
                     print("\n  Template-based upgrade mode selected")
-                    return self._upgrade_ap_firmware_by_gateway_template()  # type: ignore[no-untyped-call]
+                    return self._upgrade_ap_firmware_by_gateway_template()
                 elif mode_choice == "3" and msp_mode_available:
                     logging.info("User selected MSP multi-org upgrade mode")
                     print("\n  MSP Multi-Organization upgrade mode selected")
-                    return self._execute_msp_multi_org_upgrade()  # type: ignore[no-untyped-call]
+                    return self._execute_msp_multi_org_upgrade()
                 else:
                     print(f"   Invalid selection. Please choose {'/'.join(valid_choices)}.")
                     logging.debug(f"Invalid mode selection: {mode_choice}")
@@ -817,7 +816,7 @@ class FirmwareManager:
         org_target_id = org_info["id"]
         org_name = org_info["name"]
         print(f"\n    Organization: {org_name}")
-        selected_sites = self._select_sites_for_org_upgrade(org_target_id, org_name)  # type: ignore[no-untyped-call]
+        selected_sites = self._select_sites_for_org_upgrade(org_target_id, org_name)
         if not selected_sites:
             print(f"      Skipping org {org_name} - no sites selected")
             return
@@ -838,7 +837,7 @@ class FirmwareManager:
             msp_id = msp_info["msp_id"]
             msp_name = msp_info.get("msp_name", "Unknown MSP")
             print(f"\n{'-' * 70}\n  MSP: {msp_name}\n{'-' * 70}")
-            selected_orgs = self._select_orgs_for_upgrade(msp_id, msp_name)  # type: ignore[no-untyped-call]
+            selected_orgs = self._select_orgs_for_upgrade(msp_id, msp_name)
             if not selected_orgs:
                 print(f"    Skipping MSP {msp_name} - no organizations selected")
                 continue
@@ -869,7 +868,7 @@ class FirmwareManager:
             return False
         return True
 
-    def _execute_msp_multi_org_upgrade(self):  # type: ignore[no-untyped-def]
+    def _execute_msp_multi_org_upgrade(self):
         """Execute firmware upgrade across multiple MSPs and organizations.
 
         This mode allows MSP administrators to:
@@ -891,7 +890,7 @@ class FirmwareManager:
         print("  WARNING: This will upgrade AP firmware across multiple organizations.")
         print("  Please review selections carefully before confirming.\n")
 
-        selected_msps = self._select_msps_for_upgrade()  # type: ignore[no-untyped-call]
+        selected_msps = self._select_msps_for_upgrade()
         if not selected_msps:
             print("  Cancelled - no MSP selected")
             return
@@ -903,7 +902,7 @@ class FirmwareManager:
             print("\n  No upgrade targets configured. Operation cancelled.")
             return
 
-        self._display_upgrade_plan_summary(upgrade_plan, dry_run)  # type: ignore[no-untyped-call]
+        self._display_upgrade_plan_summary(upgrade_plan, dry_run)
 
         if not dry_run:
             if not self._confirm_msp_upgrade(upgrade_plan):
@@ -911,11 +910,11 @@ class FirmwareManager:
         else:
             print("\n  >> DRY-RUN: Skipping confirmation - proceeding with simulation <<")
 
-        results = self._execute_msp_upgrade_plan(upgrade_plan, dry_run)  # type: ignore[no-untyped-call]
-        self._print_msp_upgrade_summary(results, dry_run)  # type: ignore[no-untyped-call]
+        results = self._execute_msp_upgrade_plan(upgrade_plan, dry_run)
+        self._print_msp_upgrade_summary(results, dry_run)
         return results
 
-    def _select_msps_for_upgrade(self):  # type: ignore[no-untyped-def]
+    def _select_msps_for_upgrade(self):
         """Select MSPs for multi-org upgrade with support for multi-selection.
 
         Supports:
@@ -977,7 +976,7 @@ class FirmwareManager:
         Returns:
             Sorted list of org dicts, or None if unavailable.
         """
-        import mistapi.api.v1.msps.orgs as msp_orgs_api  # noqa: PLC0415
+        import mistapi.api.v1.msps.orgs as msp_orgs_api
 
         global apisession
 
@@ -987,7 +986,7 @@ class FirmwareManager:
         orgs_data = response.data if isinstance(response.data, list) else [response.data]
         return sorted(orgs_data, key=lambda x: x.get("name", "").lower()) or None
 
-    def _select_orgs_for_upgrade(self, msp_id, msp_name):  # type: ignore[no-untyped-def]
+    def _select_orgs_for_upgrade(self, msp_id, msp_name):
         """Fetch orgs from MSP and let user select which to upgrade.
 
         Supports:
@@ -1053,7 +1052,7 @@ class FirmwareManager:
         Returns:
             Sorted list of site dicts, or None if unavailable.
         """
-        import mistapi.api.v1.orgs.sites as org_sites_api  # noqa: PLC0415
+        import mistapi.api.v1.orgs.sites as org_sites_api
 
         global apisession
 
@@ -1122,7 +1121,7 @@ class FirmwareManager:
                 return [sites_data[idx] for idx in selected_indices]
             print("      X Invalid selection - try again")
 
-    def _select_sites_for_org_upgrade(self, target_org_id, org_name):  # type: ignore[no-untyped-def]
+    def _select_sites_for_org_upgrade(self, target_org_id, org_name):
         """Fetch sites from org and let user select which to upgrade.
 
         Supports:
@@ -1185,7 +1184,7 @@ class FirmwareManager:
         except ValueError:
             logging.warning(f"Invalid index: {part}")
 
-    def _parse_selection_input(self, user_input: str, max_count: int) -> list:  # type: ignore[type-arg]
+    def _parse_selection_input(self, user_input: str, max_count: int) -> list:
         """Parse user selection input into list of 0-based indices.
 
         Supports:
@@ -1213,7 +1212,7 @@ class FirmwareManager:
         selected_indices.sort()
         return selected_indices
 
-    def _display_upgrade_plan_summary(self, upgrade_plan, dry_run):  # type: ignore[no-untyped-def]
+    def _display_upgrade_plan_summary(self, upgrade_plan, dry_run):
         """Display a summary of the planned upgrades."""
         print("")
         print("=" * 70)
@@ -1247,7 +1246,7 @@ class FirmwareManager:
         print(f"    Sites: {total_sites}")
         print("-" * 70)
 
-    def _execute_msp_upgrade_plan(self, upgrade_plan, dry_run):  # type: ignore[no-untyped-def]
+    def _execute_msp_upgrade_plan(self, upgrade_plan, dry_run):
         """Execute the upgrade plan across all orgs and sites."""
         global apisession, org_id
 
@@ -1379,7 +1378,7 @@ class FirmwareManager:
         for r in interrupted:
             print(f"    ! {r['org_name']}")
 
-    def _print_msp_upgrade_summary(self, results, dry_run=False):  # type: ignore[no-untyped-def]
+    def _print_msp_upgrade_summary(self, results, dry_run=False):
         """Print summary of MSP multi-org upgrade results."""
         print(f"\n{'=' * 70}\n  MSP UPGRADE SUMMARY{' (DRY-RUN)' if dry_run else ''}\n{'=' * 70}\n")
 
@@ -1398,15 +1397,15 @@ class FirmwareManager:
 
         mode_str = "DRY-RUN " if dry_run else ""
         logging.info(
-            f"MSP {mode_str}upgrade summary: {len(completed)} completed, {len(failed)} failed, {len(interrupted)} interrupted"  # noqa: E501
+            f"MSP {mode_str}upgrade summary: {len(completed)} completed, {len(failed)} failed, {len(interrupted)} interrupted"
         )
 
-    def _select_msp_for_upgrade(self):  # type: ignore[no-untyped-def]
+    def _select_msp_for_upgrade(self):
         """DEPRECATED: Use _select_msps_for_upgrade() instead. Kept for compatibility."""
-        msps = self._select_msps_for_upgrade()  # type: ignore[no-untyped-call]
+        msps = self._select_msps_for_upgrade()
         return msps[0] if msps and len(msps) == 1 else None
 
-    def _bulk_upgrade_ap_firmware_by_site(self, sites_to_upgrade_override=None):  # type: ignore[no-untyped-def]
+    def _bulk_upgrade_ap_firmware_by_site(self, sites_to_upgrade_override=None):
         """Advanced bulk upgrade AP firmware for APs at selected site(s).
 
         This method provides comprehensive firmware upgrade capabilities with:
@@ -1440,11 +1439,11 @@ class FirmwareManager:
         apisession = self.apisession
 
         try:
-            return self._execute_bulk_upgrade(sites_to_upgrade_override)  # type: ignore[no-untyped-call]
+            return self._execute_bulk_upgrade(sites_to_upgrade_override)
         finally:
             apisession = original_apisession
 
-    def _execute_bulk_upgrade(self, sites_to_upgrade_override):  # type: ignore[no-untyped-def]
+    def _execute_bulk_upgrade(self, sites_to_upgrade_override):
         """Execute the bulk firmware upgrade using BulkAPFirmwareUpgrader class."""
         import sys as _sys
 
@@ -1457,7 +1456,7 @@ class FirmwareManager:
         upgrader = BulkAPFirmwareUpgrader(self.org_id, sites_to_upgrade_override, dry_run=dry_run)
         upgrader.execute()
 
-    def _execute_status_check(self, scope_choice, site_filter):  # type: ignore[no-untyped-def]
+    def _execute_status_check(self, scope_choice, site_filter):
         """Execute the firmware status check using FirmwareUpgradeStatusChecker."""
         import sys as _sys
 
@@ -1479,7 +1478,7 @@ class FirmwareManager:
     # SWITCH FIRMWARE UPGRADE METHODS
     # ===============================================================================
 
-    def execute_switch_firmware_upgrade_with_mode_selection(self):  # type: ignore[no-untyped-def]
+    def execute_switch_firmware_upgrade_with_mode_selection(self):
         """Main entry point for switch firmware upgrades with mode selection.
 
         Presents user with choice between:
@@ -1515,11 +1514,11 @@ class FirmwareManager:
                 if mode_choice == "1":
                     logging.info("User selected site-based switch upgrade mode")
                     print("\n  Site-based switch upgrade mode selected")
-                    return self._bulk_upgrade_switch_firmware_by_site()  # type: ignore[no-untyped-call]
+                    return self._bulk_upgrade_switch_firmware_by_site()
                 elif mode_choice == "2":
                     logging.info("User selected template-based switch upgrade mode")
                     print("\n  Template-based switch upgrade mode selected")
-                    return self._upgrade_switch_firmware_by_gateway_template()  # type: ignore[no-untyped-call]
+                    return self._upgrade_switch_firmware_by_gateway_template()
                 else:
                     print("  Invalid selection. Please choose 1 or 2.")
                     logging.debug(f"Invalid mode selection: {mode_choice}")
@@ -1528,7 +1527,7 @@ class FirmwareManager:
                 logging.info("Switch firmware upgrade cancelled (EOF or interrupt) - SSH/container safe exit")
                 return
 
-    def _bulk_upgrade_switch_firmware_by_site(self, sites_to_upgrade_override=None):  # type: ignore[no-untyped-def]
+    def _bulk_upgrade_switch_firmware_by_site(self, sites_to_upgrade_override=None):
         """Advanced bulk switch firmware upgrade for switches at selected site(s).
 
         This method provides comprehensive switch firmware upgrade capabilities with:
@@ -1558,7 +1557,7 @@ class FirmwareManager:
         BulkSwitchFirmwareUpgrader = _main.BulkSwitchFirmwareUpgrader  # lazy import avoids circular
         BulkSwitchFirmwareUpgrader(self.org_id, sites_to_upgrade_override).execute()
 
-    def _upgrade_switch_firmware_by_gateway_template(self):  # type: ignore[no-untyped-def]
+    def _upgrade_switch_firmware_by_gateway_template(self):
         """Advanced switch firmware upgrade organized by Gateway Template assignment.
 
         This method provides template-based switch firmware upgrades with:
@@ -1584,10 +1583,10 @@ class FirmwareManager:
         print("=" * 70)
 
         # Step 1: Ensure required CSVs are fresh (reuse AP template infrastructure)
-        self._ensure_template_csv_freshness()  # type: ignore[no-untyped-call]
+        self._ensure_template_csv_freshness()
 
         # Step 2: Load template-to-sites mapping (same as AP system)
-        template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()  # type: ignore[no-untyped-call]
+        template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()
 
         if not template_sites_mapping:
             print("\n! No Gateway Templates with assigned sites found.")
@@ -1596,7 +1595,7 @@ class FirmwareManager:
             return
 
         # Step 3: Template selection (reuse AP template selection logic)
-        selected_template_id, selected_template_name = self._prompt_template_selection(  # type: ignore[no-untyped-call]
+        selected_template_id, selected_template_name = self._prompt_template_selection(
             template_name_to_id, template_sites_mapping
         )
 
@@ -1610,21 +1609,21 @@ class FirmwareManager:
         print(f"\n  Template '{selected_template_name}' includes {len(sites_to_upgrade)} sites")
         logging.info(f"Template {selected_template_name} has {len(sites_to_upgrade)} assigned sites")
 
-        return self._execute_template_based_switch_upgrade(sites_to_upgrade, selected_template_name)  # type: ignore[no-untyped-call]
+        return self._execute_template_based_switch_upgrade(sites_to_upgrade, selected_template_name)
 
-    def _execute_template_based_switch_upgrade(self, sites_to_upgrade, selected_template_name):  # type: ignore[no-untyped-def]
+    def _execute_template_based_switch_upgrade(self, sites_to_upgrade, selected_template_name):
         """Execute the template-based switch upgrade with the existing switch implementation."""
         print(f"  Proceeding with switch firmware upgrade for template: {selected_template_name}")
         print(f"  Target sites: {len(sites_to_upgrade)}")
 
         # Use the switch-specific bulk upgrade implementation
-        return self._bulk_upgrade_switch_firmware_by_site(sites_to_upgrade)  # type: ignore[no-untyped-call]
+        return self._bulk_upgrade_switch_firmware_by_site(sites_to_upgrade)
 
     # ===============================================================================
     # SSR FIRMWARE UPGRADE METHODS
     # ===============================================================================
 
-    def execute_ssr_firmware_upgrade_with_mode_selection(self):  # type: ignore[no-untyped-def]
+    def execute_ssr_firmware_upgrade_with_mode_selection(self):
         """Main entry point for SSR firmware upgrades with mode selection.
 
         Presents user with choice between:
@@ -1671,11 +1670,11 @@ class FirmwareManager:
                 if mode_choice == "1":
                     logging.info("User selected site-based SSR upgrade mode")
                     print("\n  Site-based SSR upgrade mode selected")
-                    return self._bulk_upgrade_ssr_firmware_by_site()  # type: ignore[no-untyped-call]
+                    return self._bulk_upgrade_ssr_firmware_by_site()
                 elif mode_choice == "2":
                     logging.info("User selected template-based SSR upgrade mode")
                     print("\n  Template-based SSR upgrade mode selected")
-                    return self._upgrade_ssr_firmware_by_gateway_template()  # type: ignore[no-untyped-call]
+                    return self._upgrade_ssr_firmware_by_gateway_template()
                 else:
                     print("  Invalid selection. Please choose 1 or 2.")
                     logging.debug(f"Invalid mode selection: {mode_choice}")
@@ -2131,7 +2130,7 @@ class FirmwareManager:
                 logger.info(f"Device {dev_id} already at target version {target_version} - skipping")
                 print(f"    -> Device {dev_id} already at version {target_version} - skipping")
                 skipped.append(dev_id)
-            elif self._is_firmware_downgrade(current, target_version):  # type: ignore[no-untyped-call]
+            elif self._is_firmware_downgrade(current, target_version):
                 logger.warning(f"Device {dev_id} downgrade rejected: {current} -> {target_version}")
                 print(f"    ! Downgrade detected: {info['model']} ({current} -> {target_version}) - skipping")
                 skipped.append(dev_id)
@@ -2206,7 +2205,7 @@ class FirmwareManager:
             upgrade_body["reboot_at"] = -1
         logger.info(f"SSR upgrade request: {upgrade_body}")
         print(
-            f"  -> channel='{upgrade_config['channel']}', version='{target_version}', strategy='{upgrade_config['strategy']}'"  # noqa: E501
+            f"  -> channel='{upgrade_config['channel']}', version='{target_version}', strategy='{upgrade_config['strategy']}'"
         )
         print(f"  -> Device IDs: {validated_ids}")
         response = mistapi.api.v1.orgs.ssr.upgradeOrgSsrs(self.apisession, self.org_id, body=upgrade_body)
@@ -2315,7 +2314,7 @@ class FirmwareManager:
             logger.error(f"Critical error in SSR firmware upgrade: {str(e)}")
         return results
 
-    def _bulk_upgrade_ssr_firmware_by_site(self, sites_to_upgrade_override=None):  # type: ignore[no-untyped-def]
+    def _bulk_upgrade_ssr_firmware_by_site(self, sites_to_upgrade_override=None):
         """DESTRUCTIVE: Execute firmware upgrades on Session Smart Routers across selected sites.
 
         This function performs bulk firmware upgrades on SSR routing infrastructure with comprehensive
@@ -2372,7 +2371,7 @@ class FirmwareManager:
 
         return self._run_ssr_site_upgrades(selected_sites, target_version, upgrade_config)
 
-    def _upgrade_ssr_firmware_by_gateway_template(self):  # type: ignore[no-untyped-def]
+    def _upgrade_ssr_firmware_by_gateway_template(self):
         """Advanced SSR firmware upgrade organized by Gateway Template assignment.
 
         This method provides template-based SSR firmware upgrades with:
@@ -2402,10 +2401,10 @@ class FirmwareManager:
         print("=" * 70)
 
         # Step 1: Ensure required CSVs are fresh (reuse AP/switch template infrastructure)
-        self._ensure_template_csv_freshness()  # type: ignore[no-untyped-call]
+        self._ensure_template_csv_freshness()
 
         # Step 2: Load template-to-sites mapping (same as AP/switch systems)
-        template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()  # type: ignore[no-untyped-call]
+        template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()
 
         if not template_sites_mapping:
             print("\n! No Gateway Templates with assigned sites found.")
@@ -2414,7 +2413,7 @@ class FirmwareManager:
             return
 
         # Step 3: Template selection (reuse AP/switch template selection logic)
-        selected_template_id, selected_template_name = self._prompt_template_selection(  # type: ignore[no-untyped-call]
+        selected_template_id, selected_template_name = self._prompt_template_selection(
             template_name_to_id, template_sites_mapping
         )
 
@@ -2428,15 +2427,15 @@ class FirmwareManager:
         print(f"\n  Template '{selected_template_name}' includes {len(sites_to_upgrade)} sites")
         logging.info(f"Template {selected_template_name} has {len(sites_to_upgrade)} assigned sites")
 
-        return self._execute_template_based_ssr_upgrade(sites_to_upgrade, selected_template_name)  # type: ignore[no-untyped-call]
+        return self._execute_template_based_ssr_upgrade(sites_to_upgrade, selected_template_name)
 
-    def _execute_template_based_ssr_upgrade(self, sites_to_upgrade, selected_template_name):  # type: ignore[no-untyped-def]
+    def _execute_template_based_ssr_upgrade(self, sites_to_upgrade, selected_template_name):
         """Execute the template-based SSR upgrade with the existing SSR implementation."""
         print(f"  Proceeding with SSR firmware upgrade for template: {selected_template_name}")
         print(f"  Target sites: {len(sites_to_upgrade)}")
 
         # Use the SSR-specific bulk upgrade implementation
-        return self._bulk_upgrade_ssr_firmware_by_site(sites_to_upgrade)  # type: ignore[no-untyped-call]
+        return self._bulk_upgrade_ssr_firmware_by_site(sites_to_upgrade)
 
 
-# NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager(apisession, org_id).check_firmware_upgrade_status() directly  # noqa: E501
+# NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager(apisession, org_id).check_firmware_upgrade_status() directly

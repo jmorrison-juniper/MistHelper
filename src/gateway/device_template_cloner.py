@@ -88,7 +88,7 @@ class DeviceConfigTemplateClonerManager:
     small private helper methods to satisfy the 25-line function limit.
     """
 
-    def __init__(  # noqa: PLR0913 — 6 injected dependencies, all required
+    def __init__(
         self,
         org_id: str,  # Mist org UUID used for all API calls
         apisession: object,  # Authenticated mistapi session object
@@ -273,7 +273,7 @@ class DeviceConfigTemplateClonerManager:
     # Payload construction
     # ------------------------------------------------------------------
 
-    def _build_template_payload(self, device_config: dict, name: str, ttype: str, model: str) -> dict:  # noqa: PLR0913
+    def _build_template_payload(self, device_config: dict, name: str, ttype: str, model: str) -> dict:
         """Build the gateway template payload by stripping metadata and injecting template fields."""
         raw_config = copy.deepcopy(device_config)  # Deep copy to avoid mutating caller's data
         payload = {  # Build payload dict excluding all device metadata and None values

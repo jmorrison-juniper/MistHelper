@@ -310,7 +310,7 @@ def remap_wave1_safety_baseline(lines: list[str]) -> tuple[list[str], int]:
                 continue
 
             # Replace each quoted number in the line's list values (not keys)
-            def replace_num(match: re.Match) -> str:  # type: ignore[type-arg]
+            def replace_num(match: re.Match) -> str:
                 """Replace a quoted number in a list value if it's a menu number."""
                 num_str = match.group(1)  # Extract the digit string from the match
                 if not num_str.isdigit():  # Skip non-numeric strings
@@ -352,7 +352,7 @@ def remap_menu_log_references(lines: list[str]) -> tuple[list[str], int]:
         if "Menu #" not in line:  # Fast skip for lines without any menu reference
             continue
 
-        def replace_log_num(match: re.Match) -> str:  # type: ignore[type-arg]
+        def replace_log_num(match: re.Match) -> str:
             """Replace a single Menu #N reference with the new number."""
             num_str = match.group(1)  # Extract the digit string from the match
             num = int(num_str)  # Convert to integer for lookup

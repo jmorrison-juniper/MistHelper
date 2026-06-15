@@ -9,7 +9,6 @@ TARGET_NAMES = {
     "_wait_and_download_pcap",
     "_wait_and_download_pcap_org",
     "wifi_clients",
-    "run_interactive_test",
 }
 
 
@@ -41,7 +40,7 @@ def test_parse_target_cc_values_extracts_known_targets() -> None:
     assert parsed["_wait_and_download_pcap"] == 15
     assert parsed["_wait_and_download_pcap_org"] == 15
     assert parsed["wifi_clients"] == 14
-    assert parsed["run_interactive_test"] == 13
+    assert "run_interactive_test" not in parsed
 
 
 def test_parse_target_cc_values_ignores_non_target_entries() -> None:

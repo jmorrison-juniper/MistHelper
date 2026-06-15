@@ -64,7 +64,7 @@ class SiteInventoryHealthAnalyzer:
             sites = deps.all_sites_fn(org_id)
             print(f"  Found {len(sites)} sites")
             return sites
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             logging.error("Failed to fetch sites: %s", error)
             return []
 
@@ -81,7 +81,7 @@ class SiteInventoryHealthAnalyzer:
             logging.debug("Fetched %d devices from organization inventory", len(devices))  # Post-action log
             SiteInventoryHealthAnalyzer._print_device_summary(devices)  # Print AP/switch/gateway/connected breakdown
             return devices
-        except Exception as error:  # noqa: BLE001 - Mist SDK raises bare Exception subclasses
+        except Exception as error:
             logging.error("Failed to fetch devices: %s", error)
             return []
 
@@ -95,7 +95,7 @@ class SiteInventoryHealthAnalyzer:
                 counts[device_type] += 1
             if device.get("connected") is True:  # Connected counter is independent of type
                 counts["connected"] += 1
-        print(  # noqa: E501
+        print(
             f"  Found {len(devices)} devices: {counts['ap']} APs, {counts['switch']} switches, "
             f"{counts['gateway']} gateways ({counts['connected']} connected)"
         )

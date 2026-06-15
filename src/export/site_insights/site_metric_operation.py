@@ -28,7 +28,7 @@ class SiteMetricOperation:
         )  # Sanitized output path mirroring legacy naming
 
         print("! Refreshing available insight metrics from Mist API...")  # User-facing progress preserved verbatim
-        _parent.InsightMetricsUtils.export_legacy()  # Refresh ConstInsightMetrics.csv cache before reading from it
+        _parent.SiteInsightsExporter.refresh_insight_metrics_cache()  # Refresh ConstInsightMetrics.csv via canonical site-insights exporter path
 
         site_metrics = _parent.InsightMetricsUtils.get_by_scope(
             "site"

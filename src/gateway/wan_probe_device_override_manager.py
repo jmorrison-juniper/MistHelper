@@ -22,7 +22,7 @@ mistapi: Any = None
 MIST_SITE_EXCLUDE_PREFIX = ""
 
 
-def configure_wan_probe_device_override_dependencies(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+def configure_wan_probe_device_override_dependencies(
     *,
     apisession_dependency: Any,
     config_utils: Any,
@@ -84,7 +84,7 @@ class WANProbeDeviceOverrideManager:
     ]
     DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")
 
-    def __init__(self):  # type: ignore[no-untyped-def]
+    def __init__(self):
         """Initialize the WAN Probe Device Override Manager."""
         self.org_id: str | None = None
         self.templates: list[dict[str, Any]] = []
@@ -293,7 +293,7 @@ class WANProbeDeviceOverrideManager:
     def _scan_template_sites_for_gateways(self) -> list[dict[str, Any]]:
         """Fetch gateway devices from every template site. Returns wrapped entries."""
         all_gateways: list[dict[str, Any]] = []  # Accumulator for {device, site_id, site_name} entries
-        for site_info in tqdm(self.template_sites, desc="Scanning sites", unit="site"):  # type: ignore[no-untyped-call]
+        for site_info in tqdm(self.template_sites, desc="Scanning sites", unit="site"):
             if ConfigUtils.check_stop_signal():  # Honour cooperative cancellation
                 break
             site_id = site_info["site_id"]  # Site UUID for API call + reporting
@@ -308,7 +308,7 @@ class WANProbeDeviceOverrideManager:
                 for device in devices:  # Iterate each gateway record
                     if isinstance(device, dict):  # Skip malformed entries silently
                         all_gateways.append({"device": device, "site_id": site_id, "site_name": site_name})
-            except Exception as error:  # pylint: disable=broad-exception-caught
+            except Exception as error:
                 logging.warning("Error scanning site %s: %s", site_name, error)  # Per-site failure
                 continue
         return all_gateways
@@ -402,7 +402,7 @@ class WANProbeDeviceOverrideManager:
         print("\n  Applying WAN probe configuration to device overrides...")
         results = []
 
-        for device in tqdm(devices_with_overrides, desc="Updating devices", unit="device"):  # type: ignore[no-untyped-call]
+        for device in tqdm(devices_with_overrides, desc="Updating devices", unit="device"):
             if ConfigUtils.check_stop_signal():
                 break
             result = self._update_single_device(device, dry_run)
@@ -429,7 +429,7 @@ class WANProbeDeviceOverrideManager:
             result["ports_updated"] = ports_modified  # Record names of mutated ports
             self._commit_device_update(device, device_config, dry_run, result)  # Push or dry-run
             logging.debug("Device %s update result: %s", result["device_name"], result["status"])  # Post-action log
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             result["status"] = "ERROR"  # Record any unexpected failure
             result["error"] = str(error)
             logging.error("Error updating device %s: %s", result["device_name"], error)
@@ -526,7 +526,7 @@ class WANProbeDeviceOverrideManager:
         report_data = self._build_report_rows(results)  # CSV-shaped rows per device
         output_file = "GatewayDevice_WAN_Probe_Override_Audit.csv"  # Stable audit filename
         logging.info("Saving WAN probe override audit CSV: %s", output_file)  # Pre-write log
-        DataExporter.save_data_to_output(report_data, output_file)  # type: ignore[no-untyped-call]
+        DataExporter.save_data_to_output(report_data, output_file)
         logging.debug("Audit CSV saved (rows=%s)", len(report_data))  # Post-write log
 
         total_ports = sum(len(r["ports_updated"]) for r in results)  # Aggregate ports modified

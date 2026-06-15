@@ -7,7 +7,6 @@ workflows with dry-run capability.
 Extracted from MistHelper.py for maintainability.
 """
 
-# pylint: disable=too-many-lines,logging-fstring-interpolation
 
 from __future__ import annotations
 
@@ -25,7 +24,7 @@ SelectMspsFn = Any  # Callable[..., Any]
 SelectOrgsFromMspFn = Any  # Callable[..., Any]
 
 
-class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attributes
+class SiteAutoUpgradeConfigurator:
     """Configure AP auto-upgrade settings at site level.
 
     Sets auto_upgrade configuration in site settings so that:

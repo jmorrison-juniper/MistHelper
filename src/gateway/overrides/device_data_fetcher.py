@@ -106,7 +106,7 @@ class DeviceDataFetcher:
             resp = _deps.mistapi.api.v1.sites.devices.getSiteDevice(_deps.apisession, site_id, device_id)  # API
             device_config_data = getattr(resp, "data", {})  # Defensive: SDK may return objects without .data
             return device_config_data.get("port_config", {})  # Missing key still returns the empty dict
-        except Exception as exception:  # noqa: BLE001  # Legacy contract: do not crash compliance report
+        except Exception as exception:  # Legacy contract: do not crash compliance report
             logging.warning(  # Legacy warning format preserved verbatim for downstream log parsers
                 "[WARN] Could not fetch device config for %s (%s): %s",
                 device_name,
@@ -125,7 +125,7 @@ class DeviceDataFetcher:
             )
             stats_data = getattr(stats_resp, "data", {})  # Defensive: SDK may return objects without .data
             return stats_data.get("if_stat", {})  # Missing key still returns the empty dict
-        except Exception as exception:  # noqa: BLE001  # Legacy contract: do not crash compliance report
+        except Exception as exception:  # Legacy contract: do not crash compliance report
             DeviceDataFetcher._log_stats_failure(device_name, device_id, exception)  # Specialized warning helper
             return {}  # Empty dict so third pass emits a row with blank values rather than aborting
 

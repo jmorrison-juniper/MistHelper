@@ -126,7 +126,7 @@ class PromptNetworkDeviceUtils:
                     logging.info(  # Log successful selection with both name and MAC for audit trail
                         "User selected AP index %d: name=%s mac=%s", idx, ap_name, ap_mac
                     )
-                    return ap_mac  # type: ignore[no-any-return]  # Return the MAC to the caller
+                    return ap_mac  # Return the MAC to the caller
                 else:
                     print("\n! Invalid index")
                     logging.error("Invalid AP index entered by user: %d", idx)  # Log bad index for diagnostics
@@ -202,7 +202,7 @@ class PromptNetworkDeviceUtils:
                     logging.info(  # Log successful selection for audit trail
                         "User selected gateway index %d: name=%s mac=%s", idx, gateway_name, gateway_mac
                     )
-                    return gateway_mac  # type: ignore[no-any-return]
+                    return gateway_mac
                 else:
                     print("\n! Invalid index")
                     logging.error("Invalid gateway index entered by user: %d", idx)  # Log bad index
@@ -276,7 +276,7 @@ class PromptNetworkDeviceUtils:
                     logging.info(  # Log successful selection for audit trail
                         "User selected switch index %d: name=%s mac=%s", idx, switch_name, switch_mac
                     )
-                    return switch_mac  # type: ignore[no-any-return]
+                    return switch_mac
                 else:
                     print("\n! Invalid index")
                     logging.error("Invalid switch index entered by user: %d", idx)  # Log bad index
@@ -291,7 +291,7 @@ class PromptNetworkDeviceUtils:
             logging.error("Exception in PromptNetworkDeviceUtils.select_switch_mac: %s", error, exc_info=True)
             return None
 
-    def select_ports_from_device(  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
+    def select_ports_from_device(
         self,
         site_id: str,
         device_mac: str,
@@ -593,7 +593,7 @@ class PromptNetworkDeviceUtils:
         logging.debug("Filtered to %d UP user-facing ports after exclusions", len(available_ports))
         return available_ports  # Sorted list of (name, info) tuples ready for display
 
-    def _prompt_port_selection(  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912
+    def _prompt_port_selection(
         self,
         available_ports: list[tuple[str, Any]],
         port_to_config: dict[str, Any],
@@ -714,7 +714,7 @@ class PromptNetworkDeviceUtils:
             return mapping.get(duplex_value.lower(), str(duplex_value).capitalize())  # Use mapping or capitalise
         return "Full" if full_duplex_flag else "Half"  # Fall back to bool flag when string is absent
 
-    def _handle_all_ports_selection(  # type: ignore[no-untyped-def]
+    def _handle_all_ports_selection(
         self,
         available_ports: list[tuple[str, Any]],
         return_available: bool,
@@ -770,7 +770,7 @@ class PromptNetworkDeviceUtils:
             return None  # Signal parse failure to caller
         return selected  # Set of all valid selected indices
 
-    def _parse_port_indices(  # type: ignore[no-untyped-def]
+    def _parse_port_indices(
         self,
         user_input: str,
         index_to_port: dict[int, str],

@@ -4,7 +4,6 @@ Extracts update_gateway_templates_wan2_variable (Menu #104) from
 MistHelper.py into a class with dependency injection for testability.
 """
 
-# pylint: disable=too-many-lines,logging-fstring-interpolation,implicit-str-concat
 
 from __future__ import annotations
 
@@ -20,7 +19,7 @@ from typing import Any
 from tqdm import tqdm
 
 
-class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attributes,too-few-public-methods
+class GatewayWan2VariableMigrator:
     """Migrate gateway templates between hardcoded ports and WAN2 variable.
 
     Supports bidirectional operation:
@@ -31,7 +30,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
     port_config keys on individual devices.
     """
 
-    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def __init__(
         self,
         org_id: str,
         apisession: Any,
@@ -316,7 +315,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         Returns:
             Dict with change details or None if no changes needed.
         """
-        import mistapi  # pylint: disable=import-outside-toplevel
+        import mistapi
 
         tid = template_info["id"]
         name = template_info["name"]
@@ -347,11 +346,11 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
                 "ports_to_replace": ports_to_replace,
             }
 
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except Exception as exc:
             logging.error(f"Error analyzing template {name}: {exc}")
             logging.error(traceback.format_exc())
             print(f"\n  !? Error analyzing template '{name}': {exc}")
-            return None  # pylint: disable=useless-return
+            return None
 
     def _find_matching_ports(
         self,
@@ -458,7 +457,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         Returns:
             List of result dicts with status information.
         """
-        import mistapi  # pylint: disable=import-outside-toplevel
+        import mistapi
 
         print("\n  Applying template modifications...")
         results: list[dict[str, Any]] = []
@@ -529,7 +528,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
                     result["error"] = f"API returned status {resp.status_code}"
                     logging.error(f"Failed to update template {name}:" f" status {resp.status_code}")
 
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except Exception as exc:
             result["status"] = "ERROR"
             result["error"] = str(exc)
             logging.error(f"Error updating template {name}: {exc}")
@@ -555,7 +554,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         Returns:
             List of device dicts needing migration.
         """
-        import mistapi  # pylint: disable=import-outside-toplevel
+        import mistapi
 
         print("\n  Step 7: Migrating device-level port overrides" f" ({self._operation_mode.upper()} mode)...")
         self._print_device_migration_header()
@@ -636,7 +635,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
                     match = self._check_device_override(device, sid, site_to_template, mistapi_mod)
                     if match:
                         devices.append(match)
-            except Exception as exc:  # pylint: disable=broad-exception-caught
+            except Exception as exc:
                 logging.error(f"Error checking devices at site {sid}: {exc}")
                 continue
 
@@ -674,7 +673,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
             }
         return None
 
-    def _migrate_single_device_override(  # noqa: C901
+    def _migrate_single_device_override(
         self,
         device_info: dict[str, Any],
         connection_semaphore: threading.Semaphore,
@@ -688,7 +687,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         Returns:
             Result dict with migration status.
         """
-        import mistapi  # pylint: disable=import-outside-toplevel
+        import mistapi
 
         did = device_info["device_id"]
         name = device_info["device_name"]
@@ -752,7 +751,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
                         result["error"] = f"API returned status" f" {update_resp.status_code}"
                         logging.error(f"Failed to update device {name}:" f" status {update_resp.status_code}")
 
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except Exception as exc:
             result["status"] = "ERROR"
             result["error"] = str(exc)
             logging.error(f"Error migrating device {name}: {exc}")
@@ -834,7 +833,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
 
     def _migrate_devices_fast(self, devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Migrate devices using connection pool (fast mode)."""
-        assert self._pool_fn is not None  # noqa: S101
+        assert self._pool_fn is not None
 
         count = len(devices)
         print(f"\n  !? Fast mode enabled: Processing {count}" " devices with connection pooling")

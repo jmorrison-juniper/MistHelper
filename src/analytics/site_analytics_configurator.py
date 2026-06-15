@@ -141,7 +141,7 @@ class SiteAnalyticsConfigurator:
                 if site_deviations["has_deviations"]:
                     deviations.append(site_deviations)
 
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 logging.warning("Error scanning %s: %s", site_name, error)
 
         print(f"! Found {len(deviations)} sites with configuration deviations")
@@ -302,7 +302,7 @@ class SiteAnalyticsConfigurator:
                         "current": "NOT SET",
                         "expected": expected_range,
                     }
-                )  # noqa: E501
+                )
             elif current_range != expected_range:
                 deviations.append(
                     {
@@ -311,7 +311,7 @@ class SiteAnalyticsConfigurator:
                         "current": current_range,
                         "expected": expected_range,
                     }
-                )  # noqa: E501
+                )
         return deviations
 
     @staticmethod
@@ -329,7 +329,7 @@ class SiteAnalyticsConfigurator:
                         "current": current_name,
                         "expected": expected_name,
                     }
-                )  # noqa: E501
+                )
         return deviations
 
     @staticmethod
@@ -347,7 +347,7 @@ class SiteAnalyticsConfigurator:
                         "current": current_day_hours,
                         "expected": expected_hours if expected_hours else "(empty)",
                     }
-                )  # noqa: E501
+                )
         return deviations
 
     @staticmethod
@@ -393,18 +393,18 @@ class SiteAnalyticsConfigurator:
         """Print the standard configuration to be applied."""
         print("\n[STANDARD CONFIGURATION TO BE APPLIED]")
         print(
-            f"  RTSA: enabled={SiteAnalyticsConfigurator.STANDARD_RTSA['enabled']}, track_asset={SiteAnalyticsConfigurator.STANDARD_RTSA['track_asset']}, app_waking={SiteAnalyticsConfigurator.STANDARD_RTSA['app_waking']}"  # noqa: E501
+            f"  RTSA: enabled={SiteAnalyticsConfigurator.STANDARD_RTSA['enabled']}, track_asset={SiteAnalyticsConfigurator.STANDARD_RTSA['track_asset']}, app_waking={SiteAnalyticsConfigurator.STANDARD_RTSA['app_waking']}"
         )
         print(
-            f"  Rogue: enabled={SiteAnalyticsConfigurator.STANDARD_ROGUE['enabled']}, min_rssi={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_rssi']}, min_duration={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_duration']}"  # noqa: E501
+            f"  Rogue: enabled={SiteAnalyticsConfigurator.STANDARD_ROGUE['enabled']}, min_rssi={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_rssi']}, min_duration={SiteAnalyticsConfigurator.STANDARD_ROGUE['min_duration']}"
         )
         print("  Engagement dwell_tags: passerby=1-300, bounce=301-14400, engaged=14401-36000, stationed=36001-86400")
         print(f"  Analytic: enabled={SiteAnalyticsConfigurator.STANDARD_ANALYTIC['enabled']}")
         print(
-            f"  Occupancy: min_duration={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['min_duration']}, clients_enabled={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['clients_enabled']}"  # noqa: E501
+            f"  Occupancy: min_duration={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['min_duration']}, clients_enabled={SiteAnalyticsConfigurator.STANDARD_OCCUPANCY['clients_enabled']}"
         )
         print(
-            f"  WiFi: enabled={SiteAnalyticsConfigurator.STANDARD_WIFI['enabled']}, locate_connected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_connected']}, locate_unconnected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_unconnected']}"  # noqa: E501
+            f"  WiFi: enabled={SiteAnalyticsConfigurator.STANDARD_WIFI['enabled']}, locate_connected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_connected']}, locate_unconnected={SiteAnalyticsConfigurator.STANDARD_WIFI['locate_unconnected']}"
         )
 
     @staticmethod
@@ -528,7 +528,7 @@ class SiteAnalyticsConfigurator:
                 result["status"] = "FAILED"
                 result["error"] = f"API returned {update_response.status_code}"
                 logging.error("Failed to update %s: HTTP %s", site_name, update_response.status_code)
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             result["status"] = "ERROR"
             result["error"] = str(error)
             logging.error("Error updating %s: %s", site_name, error)

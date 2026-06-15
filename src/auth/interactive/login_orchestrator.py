@@ -223,7 +223,7 @@ class LoginOrchestrator:
             from src.auth.session_timeout import configure_session_timeout  # Deferred import
 
             configure_session_timeout(apisession)  # Apply project-wide session timeout settings
-        except Exception:  # noqa: BLE001  Legacy behaviour: swallow any timeout setup error
+        except Exception:
             pass  # Silent fallback preserves the legacy code path exactly
 
     def _announce_msp_privileges(self) -> None:

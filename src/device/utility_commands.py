@@ -7,7 +7,6 @@ and hardware operations. Menu range: 123-157.
 Dependencies are injected via constructor for testability.
 """
 
-# pylint: disable=too-many-lines,logging-fstring-interpolation,implicit-str-concat
 
 from __future__ import annotations
 
@@ -76,7 +75,7 @@ class DeviceUtilityCommands:
         "snapshot": ["switch"],
     }
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         *,
         apisession: Any,
@@ -525,7 +524,7 @@ class DeviceUtilityCommands:
         result: dict[str, Any] | None = websocket_manager.wait_for_command_result(session_id, timeout_seconds=120)
         return result
 
-    def _run_streaming_command(  # noqa: PLR0913
+    def _run_streaming_command(
         self,
         site_id: str,
         device_id: str,
@@ -561,7 +560,7 @@ class DeviceUtilityCommands:
         finally:
             websocket_manager.disconnect()
 
-    def _stream_ws_output(  # noqa: PLR0913
+    def _stream_ws_output(
         self,
         site_id: str,
         device_id: str,
@@ -595,7 +594,7 @@ class DeviceUtilityCommands:
             if raw:
                 print(raw)
 
-    def _display_and_export_result(  # noqa: PLR0913
+    def _display_and_export_result(
         self,
         result: dict[str, Any] | None,
         command_name: str,
@@ -1293,7 +1292,7 @@ class DeviceUtilityCommands:
                 ztp_credential = data.get("password", str(response.data))
                 # Intentional: user-requested display of ZTP credential
                 # to console only. Not sent to logging framework.
-                print(f"\n-> ZTP Password: {ztp_credential}")  # noqa: T201
+                print(f"\n-> ZTP Password: {ztp_credential}")
                 print("-> (Password displayed on console only" " - not logged or saved)")
             else:
                 print("! No password data returned.")
@@ -1560,7 +1559,7 @@ class DeviceUtilityCommands:
                 print("  Provide a service name or a comma-separated" " list of session IDs, and retry.")
             else:
                 print(f"! Clear session failed: {error}")
-        except Exception:  # pylint: disable=broad-exception-caught
+        except Exception:
             print(f"! Clear session failed: {error}")
 
     def clear_mac_table(self) -> None:

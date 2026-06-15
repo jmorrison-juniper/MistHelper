@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 def test_device_events_52w_entrypoint_is_safe_callable() -> None:
     """device_events_52w entrypoint remains callable without prompt side effects at import time."""
-    from MistHelper import OrgAlarmEventExporter
+    from MistHelper import export_all_org_device_events_52w_to_csv
 
-    assert callable(OrgAlarmEventExporter.device_events_52w)
+    assert callable(export_all_org_device_events_52w_to_csv)
 
 
 def test_safe_input_guard_unchanged_signature() -> None:

@@ -128,7 +128,7 @@ class ShellExecutor:
             print(f"[STATUS] [{hostname}] Command completed in {command_time:.2f} seconds")  # Verbatim line
             self.logger.debug("ShellExecutor: command completed on %s in %.2fs", hostname, command_time)
             return success, cleaned_output, ""
-        except Exception as shell_error:  # noqa: BLE001 - top-level fallback mirrors original behavior
+        except Exception as shell_error:
             error_msg = f"Shell execution error: {type(shell_error).__name__}: {shell_error}"
             self.logger.error(error_msg, exc_info=True)
             return False, "", error_msg
@@ -167,7 +167,7 @@ class ShellExecutor:
             time.sleep(0.1)  # Small delay so the device has time to buffer the full line
             self.logger.debug("Sent command to shell: %s", command)
             return None  # Caller proceeds with phases 3+
-        except Exception as send_error:  # noqa: BLE001 - any send failure mirrors original handling
+        except Exception as send_error:
             self.logger.warning("Error sending command: %s", send_error)
             return False, "", f"Failed to send command: {send_error}"
 
@@ -310,14 +310,14 @@ class ShellExecutor:
         except KeyboardInterrupt:  # Ctrl+C during cleanup — force-close immediately
             print(f"X  [{hostname}] Ctrl+C during cleanup - forcing shell close")
             self.logger.warning("Command cleanup interrupted by user")
-        except Exception as cleanup_error:  # noqa: BLE001 - cleanup errors are best-effort
+        except Exception as cleanup_error:
             self.logger.debug("Warning during cleanup: %s", cleanup_error)
         cleanup_duration = time.time() - cleanup_start  # Final cleanup wall-clock
         if cleanup_duration > 1.0:  # Only log when cleanup was unusually slow
             self.logger.debug("Cleanup took %.2fs", cleanup_duration)
         try:
             shell.close()  # Force channel close to prevent hangs
-        except Exception as close_error:  # noqa: BLE001 - close errors are best-effort
+        except Exception as close_error:
             self.logger.debug("Warning during shell close: %s", close_error)
 
     def _drain_cleanup_tail(self, shell: Any) -> None:

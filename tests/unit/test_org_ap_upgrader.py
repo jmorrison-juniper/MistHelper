@@ -297,18 +297,17 @@ class TestAPDiscovery:
         assert result is False
 
     def test_selected_sites_aps(self):
-        u = _make_upgrader()
-        u.target_all_sites = False
-        u.selected_sites = [SAMPLE_SITE]
-        u.selected_site_ids = ["site-001"]
+        u = _make_upgrader()  # upgrader with standard test fixtures
+        u.target_all_sites = False  # use selected-sites code path
+        u.selected_sites = [SAMPLE_SITE]  # one site to discover APs from
+        u.selected_site_ids = ["site-001"]  # corresponding site id
 
-        import mistapi.api.v1.sites.devices as mock_site_devices
-
-        mock_site_devices.listSiteDevices.return_value = _make_api_response([SAMPLE_AP])
-
-        result = u._step2_discover_aps()
-        assert result is True
-        assert len(u.all_aps) == 1
+        # Patch the per-site fetch helper directly so this unit test remains
+        # focused on _step2_discover_aps control flow for selected-site mode.
+        with patch.object(u, "_fetch_site_aps", return_value=[SAMPLE_AP]):
+            result = u._step2_discover_aps()  # exercise site-scoped AP discovery
+        assert result is True  # discovery should succeed with one AP present
+        assert len(u.all_aps) == 1  # exactly one AP collected
 
     def test_api_session_none(self):
         u = _make_upgrader(apisession=None)

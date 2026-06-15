@@ -225,7 +225,7 @@ class GatewayExportUtils:
         return results, gateways_processed, gateways_with_mgmt_ip
 
     @staticmethod
-    def management_ips(fast: bool = False) -> None:  # noqa: PLR0915
+    def management_ips(fast: bool = False) -> None:
         """Export gateway management overlay IPs correlated with templates and site status."""
         logging.info("Menu #31: Starting gateway management IPs export")
         print("Gateway Management IP Export:")
@@ -452,7 +452,7 @@ class GatewayExportUtils:
     @staticmethod
     def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:
         """Update gateway template WAN2 variable through extracted migrator."""
-        from src.gateway.wan2_variable import GatewayWan2VariableMigrator  # noqa: PLC0415
+        from src.gateway.wan2_variable import GatewayWan2VariableMigrator
 
         migrator = GatewayWan2VariableMigrator(
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),

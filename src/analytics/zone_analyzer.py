@@ -133,7 +133,7 @@ class ZoneConfigurationAnalyzer:
         check_stop_fn: CheckStopFn,
     ) -> dict[str, Any]:
         """Collect engagement and occupancy settings from all sites."""
-        import mistapi  # noqa: F811
+        import mistapi
 
         logging.info("Fetching site settings for engagement/occupancy analysis...")
         sites = all_sites_fn(org_id)
@@ -210,7 +210,7 @@ class ZoneConfigurationAnalyzer:
         check_stop_fn: CheckStopFn,
     ) -> dict[str, Any]:
         """Collect zone configurations from all sites."""
-        import mistapi  # noqa: F811
+        import mistapi
 
         logging.info("Fetching all sites in organization...")
         sites = all_sites_fn(org_id)
@@ -261,7 +261,7 @@ class ZoneConfigurationAnalyzer:
     # Pattern analysis helpers
     # ------------------------------------------------------------------
     @staticmethod
-    def _analyze_zone_patterns(  # noqa: C901, PLR0912
+    def _analyze_zone_patterns(
         site_zones: dict[str, Any],
     ) -> dict[str, Any]:
         """Analyze zone patterns to identify deviations from the norm."""
@@ -302,7 +302,7 @@ class ZoneConfigurationAnalyzer:
         }
 
     @staticmethod
-    def _analyze_engagement_patterns(  # noqa: C901
+    def _analyze_engagement_patterns(
         site_settings: dict[str, Any],
     ) -> dict[str, Any]:
         """Analyze engagement dwell tag patterns to identify deviations."""
@@ -497,7 +497,7 @@ class ZoneConfigurationAnalyzer:
         save_data_fn: SaveDataFn,
     ) -> None:
         """Export analysis results to CSV files."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         zone_analysis = combined.get("zones", {})
         engagement_analysis = combined.get("engagement", {})
         occupancy_analysis = combined.get("occupancy", {})
@@ -895,7 +895,7 @@ def _display_occupancy_deviations(
 # ======================================================================
 
 
-def _export_summary(  # noqa: PLR0913
+def _export_summary(
     site_zones: dict[str, Any],
     site_settings: dict[str, Any],
     zone_analysis: dict[str, Any],
@@ -919,7 +919,7 @@ def _export_summary(  # noqa: PLR0913
     print(f"! Summary exported to {filename}")
 
 
-def _build_summary_rows(  # noqa: C901
+def _build_summary_rows(
     site_zones: dict[str, Any],
     site_settings: dict[str, Any],
     zone_analysis: dict[str, Any],
@@ -967,7 +967,7 @@ def _build_summary_rows(  # noqa: C901
     return rows
 
 
-def _build_one_summary_row(  # noqa: PLR0913
+def _build_one_summary_row(
     site_id: str,
     zone_data: dict[str, Any],
     settings_data: dict[str, Any],

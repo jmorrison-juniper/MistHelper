@@ -6,7 +6,6 @@ for massive efficiency improvements when upgrading APs across many sites.
 Extracted from MistHelper.py for maintainability.
 """
 
-# pylint: disable=too-many-lines,logging-fstring-interpolation
 
 from __future__ import annotations
 
@@ -18,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 
-class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
+class OrgLevelAPFirmwareUpgrader:
     """Org-Level AP Firmware Upgrade Manager.
 
     Uses the org-level upgrade API for efficiency:
@@ -38,7 +37,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
     - Upgrades take 5-15 minutes per device
     """
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(
         self,
         org_id: str,
         apisession: Any,
@@ -168,7 +167,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
     # MSP MULTI-ORG MODE
     # =========================================================================
 
-    def _execute_msp_mode(self) -> None:  # noqa: PLR0915
+    def _execute_msp_mode(self) -> None:
         """Execute MSP multi-organization upgrade mode."""
         logging.debug(f"Entering _execute_msp_mode(), dry_run={self.dry_run}")
         logging.info("Starting MSP Multi-Org AP firmware upgrade workflow")
@@ -298,7 +297,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
     # MSP / ORG SELECTION
     # =========================================================================
 
-    def _select_msps(self) -> list[Any]:  # noqa: C901, PLR0912, PLR0915
+    def _select_msps(self) -> list[Any]:
         """Select MSPs for upgrade."""
         logging.debug("Entering _select_msps()")
         print("")
@@ -405,7 +404,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         logging.info(f"User selected {len(selected)} MSP(s)")
         return selected
 
-    def _select_orgs_from_msp(self, msp: dict[str, Any]) -> list[Any]:  # noqa: C901, PLR0915
+    def _select_orgs_from_msp(self, msp: dict[str, Any]) -> list[Any]:
         """Select organizations from a specific MSP."""
         logging.debug(f"Entering _select_orgs_from_msp() for MSP: {msp.get('msp_name')}")
 
@@ -1596,7 +1595,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
                 print("      Relative to download: '+4h', '4 hours after', 'in 6 hours'")
         print("      Immediate (after download): blank or 'now'")
 
-    def _apply_default_settings(self) -> bool:  # noqa: PLR0912
+    def _apply_default_settings(self) -> bool:
         """Apply default upgrade settings with optional user prompts."""
         uses_canary = (
             self.upgrade_config.get("download_strategy") == "canary"
@@ -1664,7 +1663,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             self.upgrade_config["max_failure_percentage"] = 7
         return True
 
-    def _configure_p2p(self) -> bool:  # noqa: C901, PLR0912
+    def _configure_p2p(self) -> bool:
         """Configure peer-to-peer firmware distribution settings."""
         print("\n  Peer-to-Peer Configuration:")
         print("    P2P allows APs to share firmware with nearby APs to reduce bandwidth.")
@@ -1890,7 +1889,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
                 }
             )
 
-    def _execute_upgrades(self) -> bool:  # noqa: C901, PLR0912
+    def _execute_upgrades(self) -> bool:
         """Execute actual org-level upgrades."""
         logging.debug("Entering _execute_upgrades()")
         logging.info("Executing org-level AP firmware upgrades")

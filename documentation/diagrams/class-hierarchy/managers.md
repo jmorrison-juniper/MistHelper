@@ -1,6 +1,6 @@
-[<- Back to Diagram Index](../README.md) | [<- Back to Overview](overview.md)
-
 # Manager Classes
+
+[<- Back to Diagram Index](../README.md) | [<- Back to Overview](overview.md)
 
 The 28+ manager classes handle advanced operations: firmware upgrades, SSH execution, packet captures, WebSocket commands, maps, virtual chassis, and WAN migration.
 
@@ -98,19 +98,16 @@ classDiagram
     }
 
     class FirmwareManager {
-        +check_available_versions()
-        +schedule_upgrade()
-        +monitor_progress()
+        +check_firmware_upgrade_status()
+        +execute_firmware_upgrade_with_mode_selection()
     }
 
     class BulkAPFirmwareUpgrader {
-        +upgrade_site_aps()
-        +upgrade_template_aps()
+        +execute()
     }
 
     class BulkSwitchFirmwareUpgrader {
-        +upgrade_site_switches()
-        +validate_vc_status()
+        +execute()
     }
 
     class VirtualChassisManager {
@@ -122,8 +119,8 @@ classDiagram
     SSHRunnerManager --> EnhancedSSHRunner : creates
     EnhancedSSHRunner --> CLIShellManager : uses
     SSHRunnerManager --> ARPCommandManager : delegates
-    FirmwareManager <|-- BulkAPFirmwareUpgrader
-    FirmwareManager <|-- BulkSwitchFirmwareUpgrader
+    FirmwareManager --> BulkAPFirmwareUpgrader : delegates
+    FirmwareManager --> BulkSwitchFirmwareUpgrader : delegates
     FirmwareManager --> VirtualChassisManager : coordinates
 ```
 

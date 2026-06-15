@@ -7,7 +7,6 @@ upgrade configuration, execution, and tracking.
 Extracted from MistHelper.py for maintainability.
 """
 
-# pylint: disable=too-many-lines,logging-fstring-interpolation
 
 from __future__ import annotations
 
@@ -21,7 +20,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 
-class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
+class BulkAPFirmwareUpgrader:
     """Bulk AP Firmware Upgrade Manager.
 
     Manages the complete workflow for upgrading AP firmware across one or
@@ -291,7 +290,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         print(f"  Selected {len(self.sites_to_upgrade)} site(s): {names}")
         return True
 
-    def _parse_index_input(self, text: str, max_count: int) -> list[int]:  # noqa: C901
+    def _parse_index_input(self, text: str, max_count: int) -> list[int]:
         """Parse comma-separated index input."""
         indices = []
         for part in text.split(","):

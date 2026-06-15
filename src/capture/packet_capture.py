@@ -27,56 +27,56 @@ except ImportError:
 
 def _get_config_utils() -> Any:
     """Lazy import ConfigUtils to avoid circular imports."""
-    from MistHelper import ConfigUtils  # pylint: disable=import-outside-toplevel
+    from MistHelper import ConfigUtils
 
     return ConfigUtils
 
 
 def _get_input_utils() -> Any:
     """Lazy import InputUtils to avoid circular imports."""
-    from MistHelper import InputUtils  # pylint: disable=import-outside-toplevel
+    from MistHelper import InputUtils
 
     return InputUtils
 
 
 def _get_prompt_utils() -> Any:
     """Lazy import PromptUtils to avoid circular imports."""
-    from MistHelper import PromptUtils  # pylint: disable=import-outside-toplevel
+    from MistHelper import PromptUtils
 
     return PromptUtils
 
 
 def _get_prompt_client_utils() -> Any:
     """Lazy import PromptClientUtils to avoid circular imports."""
-    from MistHelper import PromptClientUtils  # pylint: disable=import-outside-toplevel
+    from MistHelper import PromptClientUtils
 
     return PromptClientUtils
 
 
 def _get_prompt_network_device_utils() -> Any:
     """Lazy import PromptNetworkDeviceUtils to avoid circular imports."""
-    from MistHelper import PromptNetworkDeviceUtils  # pylint: disable=import-outside-toplevel
+    from MistHelper import PromptNetworkDeviceUtils
 
     return PromptNetworkDeviceUtils
 
 
 def _get_data_exporter() -> Any:
     """Lazy import DataExporter to avoid circular imports."""
-    from MistHelper import DataExporter  # pylint: disable=import-outside-toplevel
+    from MistHelper import DataExporter
 
     return DataExporter
 
 
 def _get_device_utils() -> Any:
     """Lazy import DeviceUtils to avoid circular imports."""
-    from MistHelper import DeviceUtils  # pylint: disable=import-outside-toplevel
+    from MistHelper import DeviceUtils
 
     return DeviceUtils
 
 
 def _get_websocket_manager() -> Any:
     """Lazy import WebSocketManager to avoid circular imports."""
-    from MistHelper import WebSocketManager  # pylint: disable=import-outside-toplevel
+    from MistHelper import WebSocketManager
 
     return WebSocketManager
 
@@ -325,7 +325,7 @@ class PacketCaptureManager:
                 print("\n* Capture cancelled by user")
                 logging.info("User cancelled due to existing capture on AP")
                 return False
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             logging.warning("Failed to check for existing captures: %s", error)
         return True
 
@@ -343,7 +343,7 @@ class PacketCaptureManager:
             if existing:
                 logging.info("Found %s existing capture(s) at site %s", len(existing), site_id)
                 print(f"  Note: {len(existing)} existing capture(s) found at this site")
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             logging.warning("Failed to check existing site captures: %s", error)
 
     def _handle_multi_ap_capture_result(
@@ -923,7 +923,7 @@ class PacketCaptureManager:
             print("\n! Invalid choice")
             return
 
-    def _start_site_client_capture_wireless(self) -> None:  # noqa: C901, PLR0912, PLR0915
+    def _start_site_client_capture_wireless(self) -> None:
         """Start wireless client packet capture at site level."""
         logging.info("Starting site wireless client capture")
 
@@ -997,7 +997,7 @@ class PacketCaptureManager:
         # Start capture via API
         self._run_site_capture(site_id, payload, enable_loop)
 
-    def _start_site_client_capture_wired(self) -> None:  # noqa: C901, PLR0912, PLR0915
+    def _start_site_client_capture_wired(self) -> None:
         """Start wired client packet capture at site level."""
         logging.info("Starting site wired client capture")
 
@@ -1054,7 +1054,7 @@ class PacketCaptureManager:
 
         self._run_site_capture(site_id, payload, enable_loop)
 
-    def _start_site_gateway_capture(self) -> None:  # noqa: C901, PLR0912, PLR0915
+    def _start_site_gateway_capture(self) -> None:
         """Start gateway packet capture at site level."""
         logging.info("Starting site gateway capture")
 
@@ -1133,7 +1133,7 @@ class PacketCaptureManager:
         else:
             self._execute_site_capture(site_id, payload)
 
-    def _start_site_switch_capture(self) -> None:  # noqa: C901, PLR0912, PLR0915
+    def _start_site_switch_capture(self) -> None:
         """Start switch packet capture at site level."""
         logging.info("Starting site switch capture")
 
@@ -1305,7 +1305,7 @@ class PacketCaptureManager:
             "format": capture_format,
         }
 
-    def _start_site_scan_capture(self) -> None:  # noqa: C901, PLR0912
+    def _start_site_scan_capture(self) -> None:
         """Start scan radio packet capture at site level."""
         logging.info("Starting site scan capture")
 
@@ -1367,7 +1367,7 @@ class PacketCaptureManager:
         logging.info("User confirmed - executing site capture")
         self._run_site_capture(site_id, payload, enable_loop, check_ap_mac=ap_mac)
 
-    def _start_site_scan_capture_all_aps(self, site_id: str) -> None:  # noqa: C901, PLR0912, PLR0915
+    def _start_site_scan_capture_all_aps(self, site_id: str) -> None:
         """Start scan radio packet captures for ALL APs at a site simultaneously.
 
         Args:
@@ -1465,7 +1465,7 @@ class PacketCaptureManager:
         try:
             response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(self.mist_session, site_id, payload)
             self._handle_multi_ap_capture_result(response, site_id, duration, capture_format)
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"\n! Error starting multi-AP capture: {error}")
             logging.error("Exception launching multi-AP capture: %s", error, exc_info=True)
 
@@ -1526,7 +1526,7 @@ class PacketCaptureManager:
                 print(f"  Error details: {error_details}")
                 logging.error("Capture failed: %s - %s", response.status_code, error_details)
 
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"\n! Error starting capture: {error}")
             logging.error("Exception in _execute_site_capture: %s", error, exc_info=True)
 
@@ -1603,7 +1603,7 @@ class PacketCaptureManager:
 
         try:
             response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(self.mist_session, site_id, payload)
-        except Exception as capture_error:  # pylint: disable=broad-exception-caught
+        except Exception as capture_error:
             print(f"  Error starting capture: {capture_error}")
             logging.error("Exception starting capture: %s", capture_error, exc_info=True)
             return None
@@ -1640,7 +1640,7 @@ class PacketCaptureManager:
         runner = SiteCaptureLoopRunner(manager=self)
         try:
             runner.run(site_id, payload)
-        except Exception as loop_error:  # pylint: disable=broad-exception-caught
+        except Exception as loop_error:
             print(f"\n! Unexpected error in capture loop: {loop_error}")
             logging.error("Exception in capture loop: %s", loop_error, exc_info=True)
 
@@ -1750,7 +1750,7 @@ class PacketCaptureManager:
         site_id: str,
         capture_id: str,
         expected_duration: int,
-    ) -> bool:  # noqa: C901, PLR0912
+    ) -> bool:
         """Poll for capture completion status (separate from PCAP download availability).
 
         Returns as soon as capture completes, does not wait for PCAP file URL.
@@ -1786,7 +1786,7 @@ class PacketCaptureManager:
 
                 time.sleep(poll_interval)
 
-            except Exception as poll_error:  # pylint: disable=broad-exception-caught
+            except Exception as poll_error:
                 logging.error("Completion poll error: %s", poll_error, exc_info=True)
                 time.sleep(poll_interval)
 
@@ -1807,7 +1807,7 @@ class PacketCaptureManager:
                 print("\n! No MxEdges found for this organization")
                 logging.warning("Menu #10: No MxEdges found")
                 return None
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"\n! Error fetching MxEdges: {error}")
             logging.error("Menu #10: Failed to fetch MxEdges: %s", error)
             return None
@@ -1822,7 +1822,7 @@ class PacketCaptureManager:
                     mxedge_id = stat.get("id")
                     if mxedge_id:
                         stats_map[mxedge_id] = stat
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             logging.warning("Menu #10: Failed to fetch MxEdge stats: %s", error)
 
         return mxedges, stats_map
@@ -2003,7 +2003,7 @@ class PacketCaptureManager:
         mxedge_name: str = mxedge.get("name", "Unnamed MxEdge")
         try:
             stats_response = mistapi.api.v1.orgs.stats.getOrgMxEdgeStats(self.mist_session, self.org_id, mxedge_id)
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"\n  {mxedge_name} - Error fetching stats: {error}")
             logging.error("Menu #10: Failed to fetch stats for %s: %s", mxedge_name, error)
             return None
@@ -2232,7 +2232,7 @@ class PacketCaptureManager:
                 print(f"  Error details: {error_details}")
                 logging.error("Capture failed: %s - %s", response.status_code, error_details)
 
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"\n! Error starting capture: {error}")
             logging.error("Exception in _execute_org_capture: %s", error, exc_info=True)
 
@@ -2268,7 +2268,7 @@ class PacketCaptureManager:
 
             self._read_stream_packets(channel, capture_id)
 
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"\n! Error subscribing to stream: {error}")
             logging.error("Exception in _monitor_capture_stream: %s", error, exc_info=True)
 
@@ -2394,7 +2394,7 @@ class PacketCaptureManager:
             print(f"  Capture ID: {capture_id}")
             if pcap_url:
                 print(f"  Download manually from: {pcap_url}")
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"\n! Error downloading PCAP file: {error}")
             logging.error("Exception in poll_and_download_pcap for %s: %s", capture_id, error, exc_info=True)
             if pcap_url:
@@ -2489,5 +2489,5 @@ class PacketCaptureManager:
             print(f"\n* Capture info exported to: {filename}")
             logging.info("Capture info exported to %s", filename)
 
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             logging.error("Failed to export capture info: %s", error, exc_info=True)

@@ -4,7 +4,6 @@ Extracts GatewayTemplateConfigManager (Menu #105, #106, #111) from
 MistHelper.py into a class with dependency injection for testability.
 """
 
-# pylint: disable=too-many-lines,logging-fstring-interpolation,implicit-str-concat
 
 from __future__ import annotations
 
@@ -21,7 +20,7 @@ import mistapi
 from tqdm import tqdm
 
 
-class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attributes,too-few-public-methods
+class GatewayTemplateConfigManager:
     """Manage gateway template config extraction, application, and cloning.
 
     Supports three operations:
@@ -30,7 +29,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
     - clone_by_location (Menu 111): Clone template per state/country
     """
 
-    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def __init__(
         self,
         org_id: str,
         apisession: Any,
@@ -181,7 +180,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
                 templates,
                 key=lambda t: t.get("name", "Unnamed Template").lower(),
             )
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"  Error fetching gateway templates: {error}")
             logging.error(f"GatewayTemplateConfigManager: Failed to fetch templates: " f"{error}")
             return None
@@ -243,7 +242,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
                 return None
 
             return config
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"  Error fetching template configuration: {error}")
             logging.error(f"GatewayTemplateConfigManager: Failed to fetch " f"{template_name}: {error}")
             return None
@@ -302,7 +301,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             print(f"  -> {json_filepath}")
             print("\n  Use Menu Option 106 to apply this configuration " "to other templates.")
             logging.info(f"GatewayTemplateConfigManager: Saved extraction " f"to {json_filepath}")
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"\n  Error saving extraction file: {error}")
             logging.error(f"GatewayTemplateConfigManager: Failed to save JSON: " f"{error}")
 
@@ -321,7 +320,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             for filename in os.listdir(data_dir):
                 if filename.endswith("_extracted_config.json"):
                     extraction_files.append(filename)
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"  Error reading data directory: {error}")
             return None
 
@@ -360,7 +359,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             print(f"\n  Loaded: {selected_file}")
             print(f"  Source: {data.get('source_template_name', 'Unknown')}")
             return data
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"  Error loading file: {error}")
             return None
 
@@ -483,7 +482,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
                 result["status"] = "FAILED"
                 result["error"] = f"API status {update_resp.status_code}"
 
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             result["status"] = "FAILED"
             result["error"] = str(error)
 
@@ -550,7 +549,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
         try:
             with open(sites_path, encoding="utf-8") as fin:
                 all_sites = list(csv.DictReader(fin))
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"  Error loading sites: {error}")
             return None
 
@@ -678,7 +677,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             resp = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(self._api, self._org_id, limit=1000)
             templates = mistapi.get_all(response=resp, mist_session=self._api)
             return {t.get("name"): t.get("id") for t in templates if t.get("name")}
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             logging.error(f"GatewayTemplateConfigManager: Error fetching templates: " f"{error}")
             return {}
 
@@ -726,7 +725,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
                 new_id = resp.data.get("id") if hasattr(resp, "data") else ""
                 template_map[name] = new_id
                 logging.info(f"Created template {name} (ID: {new_id})")
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             logging.error(f"Error creating template {name}: {error}")
 
     def _assign_sites(
@@ -792,7 +791,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             else:
                 result["status"] = "FAILED"
                 result["error"] = f"API status {resp.status_code}"
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             result["status"] = "ERROR"
             result["error"] = str(error)
 

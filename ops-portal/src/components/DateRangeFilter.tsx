@@ -40,7 +40,7 @@ export default function DateRangeFilter({
       onStartChange(start);
       onEndChange(end);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, onStartChange, onEndChange]);
 
   function handlePreset(days: number) {
     const { start, end } = applyPreset(days);

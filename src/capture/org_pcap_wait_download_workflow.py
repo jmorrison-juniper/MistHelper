@@ -60,7 +60,10 @@ class OrgPcapWaitDownloadWorkflow:
         )  # Log workflow completion after polling/download returns.
 
     def run(self, org_id: str, capture_id: str, duration: int) -> None:
-        """Backward-compatible alias for existing unit tests."""
+        """Temporary compatibility adapter for legacy callsites.
+
+        Expiry: 2026-08-31 (remove after canonical execute()-path test migration closes).
+        """
         logging.info(
             "Running org PCAP wait/download compatibility alias"
         )  # Log alias entry so compatibility facade path is explicit.

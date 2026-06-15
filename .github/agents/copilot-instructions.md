@@ -1,4 +1,4 @@
-# MistHelper Development Guidelines
+﻿# MistHelper Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-03-03
 
@@ -64,6 +64,12 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - CSV and SQLite outputs under `data/` (plus optional ArangoDB/Redis via existing exporter paths) (feat/194-capture-bootstrap-session-refactor)
 - Python 3.13+ + `mistapi>=0.59`, `requests`, existing `src/*` extraction modules, `ruff`, `black`, `radon` (feat/194-capture-bootstrap-session-refactor)
 - CSV/SQLite (plus existing optional ArangoDB/Redis paths) under `data/` (feat/194-capture-bootstrap-session-refactor)
+- Python 3.13+ + `mistapi` 0.63.0 API surface via `mistapi.api.v1.orgs.*`, existing MistHelper helpers (`safe_input`, `DataExporter`, flatten utilities) (1001-site-marvis-config-actions)
+- CSV exports in `data/` and optional SQLite through existing exporter pipeline (1001-site-marvis-config-actions)
+- Python 3.13+ + `mistapi` 0.63.0+, existing MistHelper classes/utilities (`safe_input`, `DataExporter`, logging framework) (1001-site-marvis-config-actions)
+- CSV + SQLite + polyglot exporters through existing `DataExporter.write_with_format_selection()` flow (1001-site-marvis-config-actions)
+- Python 3.13 + mistapi 0.63.0+ (`mistapi.api.v1.sites.maps.confirmSiteApLocalizationData`) (204-ap-localization-acceptance)
+- CSV / SQLite via `DataExporter.write_with_format_selection` (204-ap-localization-acceptance)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -83,9 +89,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
-- feat/194-capture-bootstrap-session-refactor: Added Python 3.13+ + `mistapi>=0.59`, `requests`, existing `src/*` extraction modules, `ruff`, `black`, `radon`
-- feat/194-capture-bootstrap-session-refactor: Added Python 3.13+ + `mistapi>=0.59`, `requests`, `python-dotenv`, `ruff`, `black`, `radon`, existing `src/*` extracted modules
-- main: Added Python 3.13+ + mistapi 0.59+, pytest/pytest-cov, ruff, black, mypy, tqdm, PrettyTable
+- 204-ap-localization-acceptance: Added Python 3.13 + mistapi 0.63.0+ (`mistapi.api.v1.sites.maps.confirmSiteApLocalizationData`)
+- 1001-site-marvis-config-actions: Added Python 3.13+ + `mistapi` 0.63.0+, existing MistHelper classes/utilities (`safe_input`, `DataExporter`, logging framework)
+- 1001-site-marvis-config-actions: Added Python 3.13+ + `mistapi` 0.63.0 API surface via `mistapi.api.v1.orgs.*`, existing MistHelper helpers (`safe_input`, `DataExporter`, flatten utilities)
 
 
 <!-- MANUAL ADDITIONS START -->

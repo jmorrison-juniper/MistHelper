@@ -7,7 +7,6 @@ routing table operations: forwarding table (gateways), routing table
 Dependencies are injected via constructor for testability.
 """
 
-# pylint: disable=too-many-lines,logging-fstring-interpolation
 
 from __future__ import annotations
 
@@ -158,13 +157,13 @@ class RoutingUtils:
             if not line or line.startswith("#") or line.startswith("---"):
                 continue
             parts = line.split()
-            if len(parts) >= 2:  # noqa: PLR2004
+            if len(parts) >= 2:
                 entries.append(
                     {
                         "destination": parts[0],
                         "next_hop": parts[1] if len(parts) > 1 else "",
-                        "interface": parts[2] if len(parts) > 2 else "",  # noqa: PLR2004
-                        "service": parts[3] if len(parts) > 3 else "",  # noqa: PLR2004
+                        "interface": parts[2] if len(parts) > 2 else "",
+                        "service": parts[3] if len(parts) > 3 else "",
                         "table": "",
                         "type": "",
                     }
@@ -232,7 +231,7 @@ class RoutingUtils:
             if dest and "/" in dest:
                 prefix = dest.split("/")[0]
                 octets = prefix.split(".")
-                if len(octets) >= 2:  # noqa: PLR2004
+                if len(octets) >= 2:
                     group = f"{octets[0]}.{octets[1]}.0.0/16"
                     prefix_groups[group] = prefix_groups.get(group, 0) + 1
 
@@ -338,7 +337,7 @@ class RoutingUtils:
         if "BGP" in line or "OSPF" in line or "static" in line:
             return self._parse_protocol_route_line(line)
         parts = line.split()
-        if len(parts) >= 2:  # noqa: PLR2004
+        if len(parts) >= 2:
             return self._parse_tabular_route_line(line)
         return None
 
@@ -422,7 +421,7 @@ class RoutingUtils:
     def _parse_tabular_route_line(self, line: str) -> dict[str, Any] | None:
         """Parse a space-separated tabular route line."""
         parts = line.split()
-        if len(parts) < 2:  # noqa: PLR2004
+        if len(parts) < 2:
             return None
 
         entry: dict[str, Any] = {
@@ -444,11 +443,11 @@ class RoutingUtils:
 
         if len(parts) > 1:
             entry["next_hop"] = parts[1]
-        if len(parts) > 2:  # noqa: PLR2004
+        if len(parts) > 2:
             entry["interface"] = parts[2]
-        if len(parts) > 3:  # noqa: PLR2004
+        if len(parts) > 3:
             entry["protocol"] = parts[3]
-        if len(parts) > 4:  # noqa: PLR2004
+        if len(parts) > 4:
             entry["admin_distance"] = parts[4]
 
         return entry
@@ -1135,7 +1134,7 @@ class RoutingUtils:
             print(f"! Failed to issue show forwarding table command: {error_msg}")
             return None
 
-        print(f"-> Show forwarding table command issued (session: {session_id[:8]}...)")  # type: ignore[index]
+        print(f"-> Show forwarding table command issued (session: {session_id[:8]}...)")
         print("-> Waiting for forwarding table results...")
 
         if debug_mode:
@@ -1482,7 +1481,7 @@ class RoutingUtils:
             print(f"! Failed to issue show route command: {error_msg}")
             return None
 
-        print(f"-> Show route command issued (session: {session_id[:8]}...)")  # type: ignore[index]
+        print(f"-> Show route command issued (session: {session_id[:8]}...)")
         print("-> Waiting for routing table results...")
 
         if debug_mode:
@@ -1675,7 +1674,7 @@ class RoutingUtils:
         print("\nReal-time refresh options:")
         interval_input = self.safe_input_fn("Refresh interval in seconds" " (0-10, press Enter for one-time): ").strip()
         duration_input = ""
-        if interval_input and interval_input.isdigit() and 0 < int(interval_input) <= 10:  # noqa: PLR2004
+        if interval_input and interval_input.isdigit() and 0 < int(interval_input) <= 10:
             duration_input = self.safe_input_fn("Refresh duration in seconds" " (0-300, press Enter for 30): ").strip()
 
         return self._build_ssr_payload(
@@ -1723,14 +1722,14 @@ class RoutingUtils:
         if not (interval_input and interval_input.isdigit()):
             return
         interval_val = int(interval_input)
-        if not (0 <= interval_val <= 10):  # noqa: PLR2004
+        if not (0 <= interval_val <= 10):
             return
         request_body["interval"] = interval_val
         if interval_val == 0:
             return
         if duration_input and duration_input.isdigit():
             duration_val = int(duration_input)
-            if 0 <= duration_val <= 300:  # noqa: PLR2004
+            if 0 <= duration_val <= 300:
                 request_body["duration"] = duration_val
                 return
         request_body["duration"] = 30

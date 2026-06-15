@@ -24,6 +24,7 @@ Python hierarchy levels:
 ### Design Pattern
 - **Classes**: `GlobalImportManager`, `WebSocketManager`, `PacketCaptureManager`, `FirmwareManager`, `EnhancedSSHRunner`, `SFPTransceiverDataProcessor`
 - **No wrappers**: All functionality lives within appropriately named classes, never use standalone wrapper functions
+- **No legacy compatibility shims**: Do not keep pass-through aliases/facades for old call sites; update callers and remove obsolete compatibility paths
 
 ### Critical Dependencies
 - **Python**: 3.13 or newer required
@@ -291,6 +292,7 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 
 See `coding-standards.instructions.md` for naming standards and code readability rules.
 - **Class-based**: All features organized under semantic class names, no wrapper functions
+- **No compatibility shims**: Refactors must not add shim layers to preserve old behavior paths; migrate call sites directly
 
 ---
 
@@ -600,7 +602,7 @@ When implementing a Feature Spec, AI agents must follow this protocol:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/168-clone-gateway-template/plan.md
+at specs/1002-legacy-compat-shim-decomposition/plan.md
 <!-- SPECKIT END -->
 
 <!-- rtk-instructions v2 -->

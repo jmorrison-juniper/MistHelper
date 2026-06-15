@@ -22,7 +22,7 @@ mistapi: Any = None
 MIST_SITE_EXCLUDE_PREFIX = ""
 
 
-def configure_wan2_migration_dependencies(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+def configure_wan2_migration_dependencies(
     *,
     apisession_dependency: Any,
     config_utils: Any,
@@ -71,7 +71,7 @@ class WAN2MigrationManager:
     static IP overrides by properly handling port_config keys.
     """
 
-    def __init__(self):  # type: ignore[no-untyped-def]
+    def __init__(self):
         """Initialize the WAN2 migration manager."""
         self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
         self.sites = []
@@ -81,14 +81,14 @@ class WAN2MigrationManager:
         self.template_port_configs = {}
         self.site_overrides_map = {}
 
-    def set_site_variable(self):  # type: ignore[no-untyped-def]
+    def set_site_variable(self):
         """
         Menu #149: Set WAN2 Interface Site Variable.
 
         Creates and sets the {{wan2_interface}} site variable to 'ge-0/0/1' across selected sites.
         Reports sites with WAN2 port overrides requiring manual review.
         """
-        self._display_site_variable_header()  # type: ignore[no-untyped-call]
+        self._display_site_variable_header()
 
         if not self._load_required_data():
             return
@@ -104,11 +104,11 @@ class WAN2MigrationManager:
         if not self._confirm_site_variable_operation(len(sites_to_configure)):
             return
 
-        self._build_override_detection_map()  # type: ignore[no-untyped-call]
+        self._build_override_detection_map()
         results = self._process_sites_for_variable(sites_to_configure)
         self._generate_site_variable_report(results)
 
-    def _display_site_variable_header(self):  # type: ignore[no-untyped-def]
+    def _display_site_variable_header(self):
         """Display operation header for Menu #149."""
         print("\n  Set WAN2 Interface Site Variable")
         print("=" * 70)
@@ -246,27 +246,27 @@ class WAN2MigrationManager:
         )
         return True
 
-    def _build_override_detection_map(self):  # type: ignore[no-untyped-def]
+    def _build_override_detection_map(self):
         """Build map of sites with WAN2 port overrides for analysis."""
-        self._load_gateway_configs()  # type: ignore[no-untyped-call]
-        self._load_template_configs()  # type: ignore[no-untyped-call]
-        self._build_site_to_template_mapping()  # type: ignore[no-untyped-call]
-        self._extract_template_port_configs()  # type: ignore[no-untyped-call]
-        self._detect_device_overrides()  # type: ignore[no-untyped-call]
+        self._load_gateway_configs()
+        self._load_template_configs()
+        self._build_site_to_template_mapping()
+        self._extract_template_port_configs()
+        self._detect_device_overrides()
 
-    def _load_gateway_configs(self):  # type: ignore[no-untyped-def]
+    def _load_gateway_configs(self):
         """Load gateway device configurations from CSV."""
         gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")
         with open(gateway_configs_path, encoding="utf-8") as file_handle:
             self.gateway_configs = list(csv.DictReader(file_handle))
 
-    def _load_template_configs(self):  # type: ignore[no-untyped-def]
+    def _load_template_configs(self):
         """Load gateway template configurations from CSV."""
         template_configs_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
         with open(template_configs_path, encoding="utf-8") as file_handle:
             self.template_data = list(csv.DictReader(file_handle))
 
-    def _build_site_to_template_mapping(self):  # type: ignore[no-untyped-def]
+    def _build_site_to_template_mapping(self):
         """Build mapping from site_id to gateway template_id."""
         for site in self.sites:
             site_id = site.get("id", "").strip()
@@ -275,7 +275,7 @@ class WAN2MigrationManager:
                 self.site_to_template_id[site_id] = template_id
         logging.info("Mapped %s sites to gateway templates", len(self.site_to_template_id))
 
-    def _extract_template_port_configs(self):  # type: ignore[no-untyped-def]
+    def _extract_template_port_configs(self):
         """Extract IP configuration type from templates for ge-0/0/1 port."""
         for template_row in self.template_data:
             template_id = template_row.get("id", "").strip()
@@ -308,7 +308,7 @@ class WAN2MigrationManager:
 
         return result
 
-    def _detect_device_overrides(self):  # type: ignore[no-untyped-def]
+    def _detect_device_overrides(self):
         """Detect devices with WAN2 port overrides and classify severity."""
         for config_row in self.gateway_configs:
             site_id = config_row.get("site_id", "").strip()
@@ -431,10 +431,10 @@ class WAN2MigrationManager:
                     subif_col = f"port_config_{port_identifier}_ip_config_type"
                     subif_type = template_row.get(subif_col, "").strip().lower()
                     if subif_type:
-                        return subif_type  # type: ignore[no-any-return]
+                        return subif_type
                     break
 
-        return template_ip_type  # type: ignore[no-any-return]
+        return template_ip_type
 
     def _classify_override_severity(self, template_ip_type: str, device_ip_type: str) -> str:
         """Classify override severity based on IP type mismatch."""
@@ -451,7 +451,7 @@ class WAN2MigrationManager:
         results = []
         print("\n  Processing sites...")
 
-        for site in tqdm(sites_to_configure, desc="Configuring sites", unit="site"):  # type: ignore[no-untyped-call]
+        for site in tqdm(sites_to_configure, desc="Configuring sites", unit="site"):
             if ConfigUtils.check_stop_signal():
                 break
             result = self._set_variable_for_site(site)
@@ -469,7 +469,7 @@ class WAN2MigrationManager:
 
         try:
             self._update_site_settings(site_id, site_name, result)
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             result["status"] = "ERROR"
             result["error"] = str(error)
             logging.error("Error setting variable for site %s: %s", site_name, error)
@@ -493,7 +493,7 @@ class WAN2MigrationManager:
             "error": "",
         }
 
-    def _add_override_info_to_result(self, result: dict[str, Any], site_id: str):  # type: ignore[no-untyped-def]
+    def _add_override_info_to_result(self, result: dict[str, Any], site_id: str):
         """Add override detection info to result dictionary."""
         if site_id not in self.site_overrides_map:
             return
@@ -534,7 +534,7 @@ class WAN2MigrationManager:
 
         return "; ".join(summaries)
 
-    def _update_site_settings(self, site_id: str, site_name: str, result: dict[str, Any]):  # type: ignore[no-untyped-def]
+    def _update_site_settings(self, site_id: str, site_name: str, result: dict[str, Any]):
         """Update site settings with wan2_interface variable."""
         logging.debug("Fetching current settings for site %s (%s)", site_name, site_id)
         settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)
@@ -562,11 +562,11 @@ class WAN2MigrationManager:
             result["error"] = f"API returned status {update_resp.status_code}"
             logging.error("Failed to set variable for site %s: status %s", site_name, update_resp.status_code)
 
-    def _generate_site_variable_report(self, results: list[dict[str, Any]]):  # type: ignore[no-untyped-def]
+    def _generate_site_variable_report(self, results: list[dict[str, Any]]):
         """Generate and save the site variable report."""
         report_data = self._build_report_data(results)
         output_file = "WAN2_SiteVariable_Report.csv"
-        DataExporter.save_data_to_output(report_data, output_file)  # type: ignore[no-untyped-call]
+        DataExporter.save_data_to_output(report_data, output_file)
 
         self._print_site_variable_summary(results, output_file)
 
@@ -650,7 +650,7 @@ class WAN2MigrationManager:
         print(f"\n  Report saved to: {output_file}")  # Preserve report-location line.
         print("=" * 70)  # Preserve legacy divider.
 
-    def _print_site_variable_summary(self, results: list[dict[str, Any]], output_file: str):  # type: ignore[no-untyped-def]
+    def _print_site_variable_summary(self, results: list[dict[str, Any]], output_file: str):
         """Print summary of site variable operation."""
         counts = self._compute_severity_counts(results)  # Compute per-severity counters in one pass.
         self._print_summary_block(results, counts, output_file)  # Render the summary block to the operator.
@@ -667,7 +667,7 @@ class WAN2MigrationManager:
             counts["info"],
         )  # Preserve legacy breakdown log.
 
-    def _print_severity_warnings(self, critical_sites: int, warning_sites: int, info_sites: int):  # type: ignore[no-untyped-def]
+    def _print_severity_warnings(self, critical_sites: int, warning_sites: int, info_sites: int):
         """Print severity-specific warnings."""
         if critical_sites > 0:
             print(f"\n  !? CRITICAL ATTENTION: {critical_sites} sites have DHCP->Static IP conflicts")

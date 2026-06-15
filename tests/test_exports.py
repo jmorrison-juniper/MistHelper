@@ -8,6 +8,7 @@ import csv
 from unittest.mock import MagicMock
 
 import MistHelper
+from src.export.device_events_52w_exporter import DeviceEvents52wExporter
 
 
 def test_device_events_52w_streams_and_writes_csv(monkeypatch, tmp_path):
@@ -37,7 +38,17 @@ def test_device_events_52w_streams_and_writes_csv(monkeypatch, tmp_path):
     monkeypatch.setattr(MistHelper.mistapi.api.v1.orgs.devices, "searchOrgDeviceEvents", search_stub)
 
     # Act
-    MistHelper.OrgAlarmEventExporter.device_events_52w()
+    exporter = DeviceEvents52wExporter(
+        apisession=MistHelper.apisession,
+        mistapi=MistHelper.mistapi,
+        org_id="org1",
+        data_processing_utils=MistHelper.DataProcessingUtils,
+        data_exporter=MistHelper.DataExporter,
+        output_format=MistHelper.OUTPUT_FORMAT,
+        database_path=MistHelper.DATABASE_PATH,
+        logger=MistHelper.logging.getLogger("DeviceEvents52wExporterTest"),
+    )
+    exporter.export()
 
     # Assert file created and contains 3 rows
     csv_path = tmp_path / "data" / "OrgDeviceEvents_52w.csv"

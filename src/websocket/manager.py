@@ -237,7 +237,7 @@ class WebSocketManager:
             self.logger.error(f"Channel subscription failed: {subscription_error}")
             return False
 
-    def wait_for_subscription_confirmation(self, channel_path, timeout_seconds=10):  # type: ignore[no-untyped-def]
+    def wait_for_subscription_confirmation(self, channel_path, timeout_seconds=10):
         """Wait for WebSocket subscription confirmation for a specific channel.
 
         Args:
@@ -305,12 +305,12 @@ class WebSocketManager:
         self.logger.debug("wait_for_command_result returned has_result=%s", result is not None)  # Post-action log
         return result
 
-    def _on_open(self, websocket_connection):  # type: ignore[no-untyped-def]
+    def _on_open(self, websocket_connection):
         """Handle connection-opened event from stream."""
         self.connected = True
         self.logger.debug("WebSocket connection opened")
 
-    def _on_message(self, websocket_connection, message):  # type: ignore[no-untyped-def]
+    def _on_message(self, websocket_connection, message):
         r"""Handle incoming message from stream.
 
         Thin orchestrator over :class:`MessageRouter`. The router parses the
@@ -328,12 +328,12 @@ class WebSocketManager:
         router.route(message)  # Single-purpose call into the collaborator
         self.logger.debug("WebSocket message routed")  # Post-action log
 
-    def _on_error(self, websocket_connection, error):  # type: ignore[no-untyped-def]
+    def _on_error(self, websocket_connection, error):
         """Handle error events from connection."""
         self.logger.debug(f"WebSocket error type: {type(error).__name__}")
         self.logger.error(f"WebSocket error: {error}")
 
-    def _on_close(self, websocket_connection, close_status_code, close_message):  # type: ignore[no-untyped-def]
+    def _on_close(self, websocket_connection, close_status_code, close_message):
         """Handle closed connection event."""
         self.connected = False
         self.logger.debug(f"WebSocket close details: status_code={close_status_code}, message={close_message}")

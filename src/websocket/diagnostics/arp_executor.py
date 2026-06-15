@@ -39,7 +39,7 @@ class ArpDeviceExecutor:
         websocket_manager: WebSocketManager | None = None  # Tracked so finally can clean up
         try:  # Wrap entire workflow to mirror legacy try/except/finally
             websocket_manager = self._run_workflow(deps, debug_mode)  # Drive prompts + WS work
-        except Exception as arp_error:  # noqa: BLE001  # Mirror legacy broad catch for resilience
+        except Exception as arp_error:
             log_ws_error(f"WebSocket ARP operation failed: {arp_error}", False)  # Legacy log
             logging.debug("EXIT: arp_device_websocket - error")  # Trace marker preserved
         finally:  # Always release WS resources on exit path
@@ -78,7 +78,7 @@ class ArpDeviceExecutor:
             device_info = next(  # Walk list for the chosen device id
                 (entry for entry in rawdata if entry.get("id") == device_id), None
             )
-        except Exception as device_check_error:  # noqa: BLE001  # Match legacy broad catch
+        except Exception as device_check_error:
             logging.warning(  # Action log after failed lookup
                 f"Could not verify device compatibility: {device_check_error}"
             )
@@ -102,7 +102,7 @@ class ArpDeviceExecutor:
         self,
         deps: WebSocketCmdDeps,
         device_info: dict[str, Any] | None,
-        debug_mode: bool,  # noqa: ARG002  # Kept for symmetry with sibling helpers
+        debug_mode: bool,
     ) -> bool:
         """Print device-type compatibility notes; ask switches to confirm. Returns proceed."""
         if not device_info:  # No metadata available; nothing to warn about

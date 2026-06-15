@@ -4,8 +4,25 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+import pytest
 
 from src.export.site_insights_exporter import SiteInsightsExporter, configure_site_insights_exporter_dependencies
+
+
+@pytest.fixture(autouse=True)
+def clean_insights_dependencies():
+    """Isolate tests by restoring dependencies after each test run."""
+    yield
+    configure_site_insights_exporter_dependencies(
+        apisession_dependency=None,
+        prompt_utils=None,
+        data_processing_utils=None,
+        data_exporter=None,
+        enhanced_ssh_runner=None,
+        insight_metrics_utils=None,
+        packet_capture_manager=None,
+        mistapi_dependency=None,
+    )
 
 
 def _configure_dependencies() -> None:

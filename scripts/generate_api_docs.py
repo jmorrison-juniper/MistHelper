@@ -814,7 +814,7 @@ def _run_library_gap_analysis(operations: list[dict]) -> list[LibraryFunction]:
 _ENRICHMENT_PLACEHOLDER = "*To be enriched by AI agent.*"  # sentinel text written into fresh stub files
 
 
-def _safe_write(output_path: "Path", content: str) -> None:  # noqa: F821
+def _safe_write(output_path: "Path", content: str) -> None:
     """Write content to output_path only when safe to do so.
 
     Skips the write if the file already exists and contains content that

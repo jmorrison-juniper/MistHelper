@@ -23,7 +23,7 @@ classifiers = [
 requires-python = ">=3.13"
 dependencies = [
     # Core API and networking
-    "mistapi>=0.61.4",
+    "mistapi>=0.63.0",
     "requests>=2.28.0",
     "websocket-client>=1.8.0",
     
@@ -96,7 +96,6 @@ packages = ["."]
 [tool.ruff]
 line-length = 120
 target-version = "py313"
-extend-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "scripts", "specs", "src/maps"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
@@ -104,13 +103,12 @@ select = ["E", "F", "W", "I", "UP", "B"]
 #   E402: module-import-not-at-top (33) — intentional: version check runs before imports
 #   RESOLVED: F402, B007, PLR0913, E501, PLR0915/C901/PLR0912 (166 noqa annotations)
 # Phase 2 goal: re-enable T20 (print) after migrating prints to logging
-ignore = ["E402"]
+ignore = []
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["B011"]
 
 [tool.mypy]
 python_version = "3.13"
@@ -124,80 +122,16 @@ disallow_incomplete_defs = true
 disallow_untyped_calls = true
 disallow_any_generics = true
 warn_return_any = true
-ignore_missing_imports = true
+ignore_missing_imports = false
 warn_unused_configs = true
 warn_unused_ignores = true
 explicit_package_bases = true
-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "maps_manager", "scripts", "specs", "tests", "src/maps"]
+exclude = []
 
 [[tool.mypy.overrides]]
-# Dash dynamically generates HTML/DCC component classes (Div, Span, P, Button, etc.)
-# at runtime — mypy cannot resolve them statically, producing false attr-defined errors.
-# follow_imports = skip prevents mypy from analyzing dash internals at all.
-module = ["dash", "dash.*"]
-follow_imports = "skip"
-
-[[tool.mypy.overrides]]
-# Skip type-checking for imported modules that are not part of the CI target (MistHelper.py).
-# maps_manager: large module with its own type issues — Phase 2 target
-# web_portal: Flask app with its own type issues — Phase 2 target
-# Others: third-party or legacy code not under active development
-module = ["MistHelper", "MistHelper.*", "maps_manager", "maps_manager.*", "src.maps", "src.maps.*", "mist-ops-platform.*", "ops-portal.*", "web_portal.*", "scripts.*", "specs.*"]
-follow_imports = "skip"
-
-[[tool.mypy.overrides]]
-# src.db: polyglot database modules use python-arango and redis SDKs which have
-# untyped methods and return union types. Relax strict checks here; tighten in Phase 2.
-module = ["src.db", "src.db.*"]
-disallow_untyped_calls = false
-disallow_any_generics = false
-warn_return_any = false
-
-[[tool.mypy.overrides]]
-# Tests: relax strict mode — test functions rarely benefit from full type annotations.
-# Phase 2 target: incrementally add annotations to test helpers.
-module = [
-    "tests",
-    "tests.*",
-    "tests.unit.*",
-    "tests.e2e.*",
-]
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
-disallow_any_generics = false
-warn_return_any = false
-check_untyped_defs = false
-strict = false
-
-[[tool.mypy.overrides]]
-# Wave 2 extracted modules: legacy code extracted as-is from MistHelper.py monolith.
-# Uses module-level dependency injection (Any-typed globals) and mixin patterns that
-# produce attr-defined errors. Relax strict checks; tighten after type annotations are
-# added in a dedicated refactoring pass.
-module = [
-    "src.analytics.*",
-    "src.export.*",
-    "src.gateway.*",
-    "src.inventory.*",
-    "src.site.*",
-    "src.troubleshooting.*",
-    "src.websocket.*",
-    "src.ssh.ssh_runner",
-    "src.ssh.ssh_runner_manager",
-]
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
-disallow_any_generics = false
-warn_return_any = false
-check_untyped_defs = false
-warn_unused_ignores = false
-ignore_errors = true
-
 [tool.bandit]
 targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "web_portal", "src"]
-exclude_dirs = ["tests", ".venv", "node_modules", "mist-ops-platform", "ops-portal", "scripts", "specs"]
+exclude_dirs = [".venv", "node_modules"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -227,7 +161,6 @@ omit = [
 [tool.coverage.report]
 fail_under = 90
 exclude_lines = [
-    "pragma: no cover",
     "def __repr__",
     "if self.debug:",
     "if settings.DEBUG",
@@ -243,7 +176,7 @@ exclude_lines = [
 [tool.black]
 line-length = 120
 target-version = ["py313"]
-extend-exclude = "mist-ops-platform|ops-portal|web_portal|scripts|specs"
+extend-exclude = ""
 
 # --- Pylint ---
 [tool.pylint.main]
@@ -257,7 +190,7 @@ max-line-length = 120
 # W1203: logging-fstring-interpolation -- project uses f-strings throughout for readability
 # W0613: unused-argument -- WebSocket callback signatures are protocol-mandated
 # W0718: broad-exception-caught -- intentional in cleanup/error handlers
-disable = ["C0114", "C0115", "C0116", "W1203", "W0613", "W0718"]
+disable = []
 
 [tool.pylint.basic]
 good-names = ["i", "e", "f", "db", "ok"]

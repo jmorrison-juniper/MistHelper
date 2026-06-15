@@ -15,7 +15,7 @@ try:
 
     _has_numpy = True
 except ImportError:
-    np = None  # type: ignore[assignment]
+    np = None
     _has_numpy = False
 
 
@@ -41,7 +41,7 @@ class RateLimitingUtils:
     """
 
     @staticmethod
-    def _clean_error_values(error_list):  # type: ignore[no-untyped-def]
+    def _clean_error_values(error_list):
         """Remove non-finite or non-numeric entries from an error list."""
         cleaned = []
         for error_value in error_list:
@@ -50,7 +50,7 @@ class RateLimitingUtils:
         return cleaned
 
     @staticmethod
-    def _load_pid_tuning_data():  # type: ignore[no-untyped-def]
+    def _load_pid_tuning_data():
         """Load PID tuning data from file with comprehensive logging."""
         logging.debug("ENTRY: RateLimitingUtils._load_pid_tuning_data()")
         defaults = {"k_p": 0.1, "k_i": 0.0005, "error": [], "integral": 0.0}
@@ -68,7 +68,7 @@ class RateLimitingUtils:
             return defaults
 
         if "error" in data and isinstance(data["error"], list):
-            data["error"] = RateLimitingUtils._clean_error_values(data["error"])  # type: ignore[no-untyped-call]
+            data["error"] = RateLimitingUtils._clean_error_values(data["error"])
         else:
             data["error"] = []
 
@@ -76,7 +76,7 @@ class RateLimitingUtils:
         return data
 
     @staticmethod
-    def _save_pid_tuning_data(data):  # type: ignore[no-untyped-def]
+    def _save_pid_tuning_data(data):
         """Save PID tuning data to file with comprehensive logging."""
         logging.debug(
             "ENTRY: RateLimitingUtils._save_pid_tuning_data(data_keys=%s)",
@@ -91,7 +91,7 @@ class RateLimitingUtils:
             raise
 
     @staticmethod
-    def _adjust_gains(data):  # type: ignore[no-untyped-def]
+    def _adjust_gains(data):
         """Adjust PID gains based on the trend of recent errors."""
         recent_errors = data["error"][-10:]
         if not recent_errors:
@@ -110,14 +110,14 @@ class RateLimitingUtils:
         data["k_i"] = min(max(data["k_i"], 1e-8), 0.01)
 
     @staticmethod
-    def _compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):  # type: ignore[no-untyped-def]
+    def _compute_dynamic_alpha(errors, min_alpha=0.1, max_alpha=0.9):
         """Compute a dynamic smoothing factor alpha based on error standard deviation."""
         if len(errors) < 2:
             return 0.3
 
         try:
             recent_errors = errors[-10:]
-            standard_deviation = RateLimitingUtils._calculate_std_dev(recent_errors)  # type: ignore[no-untyped-call]
+            standard_deviation = RateLimitingUtils._calculate_std_dev(recent_errors)
             normalized = min(standard_deviation / 50, 1.0)
             alpha = min_alpha + (max_alpha - min_alpha) * normalized
             return round(alpha, 3)
@@ -126,7 +126,7 @@ class RateLimitingUtils:
             return 0.3
 
     @staticmethod
-    def _calculate_std_dev(values):  # type: ignore[no-untyped-def]
+    def _calculate_std_dev(values):
         """Calculate standard deviation of a list of numeric values."""
         if _has_numpy and np is not None:
             error_array = np.array(values, dtype=np.float64)
@@ -136,7 +136,7 @@ class RateLimitingUtils:
         return variance**0.5
 
     @staticmethod
-    def _resolve_metrics_filepath(filename):  # type: ignore[no-untyped-def]
+    def _resolve_metrics_filepath(filename):
         """Resolve the metrics log file path into the data/ directory."""
         if filename != "delay_metrics.json":
             return filename
@@ -149,7 +149,7 @@ class RateLimitingUtils:
             return filename
 
     @staticmethod
-    def _read_existing_entries(filepath):  # type: ignore[no-untyped-def]
+    def _read_existing_entries(filepath):
         """Read existing JSONL entries from a metrics log file."""
         if not os.path.exists(filepath):
             return []
@@ -167,7 +167,7 @@ class RateLimitingUtils:
             return []
 
     @staticmethod
-    def _append_delay_metrics_log(  # type: ignore[no-untyped-def]
+    def _append_delay_metrics_log(
         delay_metrics, api_cache, tuning_data, filename="delay_metrics.json", max_entries=100
     ):
         """Append delay metrics, API cache, and tuning data to a JSON file.
@@ -175,7 +175,7 @@ class RateLimitingUtils:
         Each call writes a new line with a timestamped entry. Maintains
         only the last max_entries (default 100) to prevent unlimited growth.
         """
-        filepath = RateLimitingUtils._resolve_metrics_filepath(filename)  # type: ignore[no-untyped-call]
+        filepath = RateLimitingUtils._resolve_metrics_filepath(filename)
         log_entry = {
             "timestamp": datetime.now(UTC).isoformat(),
             "delay_metrics": delay_metrics,
@@ -184,7 +184,7 @@ class RateLimitingUtils:
         }
 
         try:
-            existing_entries = RateLimitingUtils._read_existing_entries(filepath)  # type: ignore[no-untyped-call]
+            existing_entries = RateLimitingUtils._read_existing_entries(filepath)
             existing_entries.append(log_entry)
             if len(existing_entries) > max_entries:
                 existing_entries = existing_entries[-max_entries:]
@@ -198,7 +198,7 @@ class RateLimitingUtils:
             logging.error("File I/O: Failed to write delay metrics to %s: %s", filepath, write_error)
 
     @staticmethod
-    def _refresh_api_usage(apisession, api_usage_cache, current_time):  # type: ignore[no-untyped-def]
+    def _refresh_api_usage(apisession, api_usage_cache, current_time):
         """Refresh API usage data from the Mist API."""
         try:
             import mistapi
@@ -214,7 +214,7 @@ class RateLimitingUtils:
             logging.warning("Failed to refresh API usage data: %s. Using cached values.", api_error)
 
     @staticmethod
-    def _estimate_api_usage(api_usage_cache, elapsed, current_time):  # type: ignore[no-untyped-def]
+    def _estimate_api_usage(api_usage_cache, elapsed, current_time):
         """Estimate API usage growth when a refresh is not needed."""
         estimated_growth = round((api_usage_cache["limit"] / 3600) * elapsed)
         api_usage_cache["used"] += estimated_growth
@@ -227,7 +227,7 @@ class RateLimitingUtils:
         )
 
     @staticmethod
-    def _needs_refresh(api_usage_cache, elapsed, now):  # type: ignore[no-untyped-def]
+    def _needs_refresh(api_usage_cache, elapsed, now):
         """Determine whether the API usage cache needs a refresh."""
         return (
             not api_usage_cache["initialized"]
@@ -237,7 +237,7 @@ class RateLimitingUtils:
         )
 
     @staticmethod
-    def _calculate_pid_delay(  # type: ignore[no-untyped-def]
+    def _calculate_pid_delay(
         used, limit, seconds_elapsed, delay_integral, k_p, k_i, previous_elapsed
     ):
         """Calculate the PID-controlled delay value.
@@ -259,7 +259,7 @@ class RateLimitingUtils:
         unsat_delay = base_delay + k_p * error + k_i * delay_integral
         sat_delay = max(min(unsat_delay, 10), 0.01)
 
-        RateLimitingUtils._log_delay_level(sat_delay, base_delay, error, used, limit)  # type: ignore[no-untyped-call]
+        RateLimitingUtils._log_delay_level(sat_delay, base_delay, error, used, limit)
 
         back_calc_gain = min(max(abs(sat_delay - unsat_delay) / 10, 0.01), 0.5)
         decay_factor = 0.98
@@ -269,7 +269,7 @@ class RateLimitingUtils:
         return sat_delay, error, delay_integral, back_calc_gain, seconds_elapsed
 
     @staticmethod
-    def _log_delay_level(sat_delay, base_delay, error, used, limit):  # type: ignore[no-untyped-def]
+    def _log_delay_level(sat_delay, base_delay, error, used, limit):
         """Log the calculated delay at the appropriate severity level."""
         if sat_delay > 2.0:
             logging.warning(
@@ -286,7 +286,7 @@ class RateLimitingUtils:
             logging.debug("Normal delay: %.3fs (used: %d/%d)", sat_delay, used, limit)
 
     @staticmethod
-    def _compute_smoothed_delay(sat_delay, error, error_history, smoothed_delay):  # type: ignore[no-untyped-def]
+    def _compute_smoothed_delay(sat_delay, error, error_history, smoothed_delay):
         """Compute the final smoothed delay using dynamic alpha.
 
         Returns a tuple of (smoothed_delay, delay_in_seconds,
@@ -295,8 +295,8 @@ class RateLimitingUtils:
         if isinstance(error, (int, float)) and not (math.isnan(error) or math.isinf(error)):
             error_history.append(float(error))
 
-        cleaned = RateLimitingUtils._clean_error_values(error_history)  # type: ignore[no-untyped-call]
-        alpha = RateLimitingUtils._compute_dynamic_alpha(cleaned)  # type: ignore[no-untyped-call]
+        cleaned = RateLimitingUtils._clean_error_values(error_history)
+        alpha = RateLimitingUtils._compute_dynamic_alpha(cleaned)
 
         if not isinstance(alpha, (int, float)) or math.isnan(alpha) or math.isinf(alpha):
             logging.warning("Invalid alpha value: %s. Using fallback 0.3", alpha)
@@ -312,7 +312,7 @@ class RateLimitingUtils:
         return smoothed_delay, delay_in_seconds, cleaned
 
     @staticmethod
-    def _reset_gains_if_needed(tuning_data):  # type: ignore[no-untyped-def]
+    def _reset_gains_if_needed(tuning_data):
         """Reset PID gains to defaults if they are out of valid bounds."""
         if (
             tuning_data["k_p"] < 1e-6
@@ -329,7 +329,7 @@ class RateLimitingUtils:
             tuning_data["k_i"] = 0.001
 
     @staticmethod
-    def get_rate_limited_delay(  # type: ignore[no-untyped-def]
+    def get_rate_limited_delay(
         smoothed_delay=None, apisession=None, api_usage_cache=None
     ):
         """Calculate an appropriate delay for API rate limiting using PID control.
@@ -348,8 +348,8 @@ class RateLimitingUtils:
             logging.warning("api_usage_cache not provided, using fallback delay")
             return smoothed_delay, 0.5
 
-        tuning_data = RateLimitingUtils._load_pid_tuning_data()  # type: ignore[no-untyped-call]
-        RateLimitingUtils._reset_gains_if_needed(tuning_data)  # type: ignore[no-untyped-call]
+        tuning_data = RateLimitingUtils._load_pid_tuning_data()
+        RateLimitingUtils._reset_gains_if_needed(tuning_data)
 
         k_p = float(tuning_data["k_p"])
         k_i = float(tuning_data["k_i"])
@@ -362,24 +362,24 @@ class RateLimitingUtils:
             elapsed = current_time - api_usage_cache["last_updated"]
             previous_elapsed = float(api_usage_cache.get("previous_elapsed", elapsed))
 
-            if RateLimitingUtils._needs_refresh(api_usage_cache, elapsed, now):  # type: ignore[no-untyped-call]
-                RateLimitingUtils._refresh_api_usage(apisession, api_usage_cache, current_time)  # type: ignore[no-untyped-call]
+            if RateLimitingUtils._needs_refresh(api_usage_cache, elapsed, now):
+                RateLimitingUtils._refresh_api_usage(apisession, api_usage_cache, current_time)
             else:
-                RateLimitingUtils._estimate_api_usage(api_usage_cache, elapsed, current_time)  # type: ignore[no-untyped-call]
+                RateLimitingUtils._estimate_api_usage(api_usage_cache, elapsed, current_time)
 
             used = min(api_usage_cache["used"], api_usage_cache["limit"])
             limit = api_usage_cache["limit"]
             seconds_elapsed = now.minute * 60 + now.second + now.microsecond / 1_000_000
 
             sat_delay, error, delay_integral, back_calc_gain, seconds_elapsed = (
-                RateLimitingUtils._calculate_pid_delay(  # type: ignore[no-untyped-call]
+                RateLimitingUtils._calculate_pid_delay(
                     used, limit, seconds_elapsed, delay_integral, k_p, k_i, previous_elapsed
                 )
             )
             api_usage_cache["previous_elapsed"] = seconds_elapsed
 
             smoothed_delay, delay_in_seconds, cleaned_history = (
-                RateLimitingUtils._compute_smoothed_delay(  # type: ignore[no-untyped-call]
+                RateLimitingUtils._compute_smoothed_delay(
                     sat_delay, error, error_history, smoothed_delay
                 )
             )
@@ -387,8 +387,8 @@ class RateLimitingUtils:
             tuning_data["error"] = cleaned_history[-20:]
             tuning_data["integral"] = delay_integral
             tuning_data["back_calc_gain"] = back_calc_gain
-            RateLimitingUtils._adjust_gains(tuning_data)  # type: ignore[no-untyped-call]
-            RateLimitingUtils._save_pid_tuning_data(tuning_data)  # type: ignore[no-untyped-call]
+            RateLimitingUtils._adjust_gains(tuning_data)
+            RateLimitingUtils._save_pid_tuning_data(tuning_data)
 
             delay_metrics = {
                 "used": used,
@@ -397,7 +397,7 @@ class RateLimitingUtils:
                 "base_delay": sat_delay,
                 "final_delay": delay_in_seconds,
             }
-            RateLimitingUtils._append_delay_metrics_log(delay_metrics, api_usage_cache, tuning_data)  # type: ignore[no-untyped-call]
+            RateLimitingUtils._append_delay_metrics_log(delay_metrics, api_usage_cache, tuning_data)
 
             return smoothed_delay, delay_in_seconds
 

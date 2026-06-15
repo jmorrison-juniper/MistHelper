@@ -30,7 +30,7 @@ class PacketCaptureDownloadManager:
                 iteration,
                 getattr(pcaps_response, "status_code", "unknown"),
             )  # Log the status code returned by the callback.
-        except Exception as list_error:  # pylint: disable=broad-exception-caught
+        except Exception as list_error:
             print(
                 f"  Error fetching PCAP list: {list_error}"
             )  # Preserve the existing operator-facing error text for list failures.
@@ -162,7 +162,7 @@ class PacketCaptureDownloadManager:
                 "Downloaded PCAP %s: %.2f MB", capture_id, file_size_mb
             )  # Log the final size summary for audit evidence.
             return 1  # Preserve the prior success contract for callers aggregating download counts.
-        except Exception as download_error:  # pylint: disable=broad-exception-caught
+        except Exception as download_error:
             print(f"      Error downloading: {download_error}")  # Preserve the existing operator-facing exception text.
             logging.error(
                 "Download exception for %s: %s", capture_id, download_error, exc_info=True
@@ -220,7 +220,7 @@ class PacketCaptureDownloadManager:
                 print(
                     f"  Download manually from: {pcap_url}"
                 )  # Preserve the manual-download guidance for cancelled waits.
-        except Exception as error:  # pylint: disable=broad-exception-caught
+        except Exception as error:
             print(f"\n! Error downloading PCAP file: {error}")  # Preserve the existing high-level download error text.
             logging.error(
                 "Exception in poll_and_download_pcap for %s: %s", capture_id, error, exc_info=True
@@ -284,7 +284,7 @@ class PacketCaptureDownloadManager:
                     sleep_fn(
                         poll_interval
                     )  # Preserve the historic retry interval between successful-but-not-ready responses.
-            except Exception as poll_error:  # pylint: disable=broad-exception-caught
+            except Exception as poll_error:
                 logging.error(
                     "Poll attempt %s exception: %s", poll_attempt, poll_error, exc_info=True
                 )  # Log transient poll exceptions with full context before retrying.

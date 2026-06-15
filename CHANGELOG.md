@@ -7,6 +7,61 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Changed (2026-06-12)
+
+- **mistapi 0.63.0 dependency floor alignment (2026-06-12)**: Updated active dependency references to target the newly released SDK line.
+  - `requirements.txt`: `mistapi>=0.63.0` (was `>=0.61.0`).
+  - `pyproject.toml`: `mistapi>=0.63.0` (was `>=0.61.4`).
+  - `src/websocket/adapter.py`: raised `_MIN_MISTAPI_VERSION` to `(0, 63, 0)` and updated upgrade guidance messages.
+
+### Added (2026-06-12)
+
+- **Upstream audit refresh for v0.63.0**: Updated `docs/UPSTREAM_mistapi_changes.md` to include new endpoint families:
+  - Org Async Claim APIs (`list/create/status`),
+  - Org Marvis Client insights/events/stats,
+  - Site Marvis Config Action workflows,
+  - AP localization acceptance.
+  Also refreshed source range metadata from `v0.59.1..v0.62.0` to `v0.59.1..v0.63.0`.
+- **Org Async Claim menus (208-210)**: Added menu 208 (`list_org_async_claims`) for safe export of org async claims, menu 209 (`create_org_async_claim`) for destructive async-claim submission with exact `CREATE` confirmation, and menu 210 (`get_org_async_claim_status`) for claim-status export by claim ID. Added explicit SQLite PK strategies for `listOrgAsyncClaims`, `createOrgAsyncClaim`, and `getOrgAsyncClaimStatus`; updated README operation count from 125 to 128.
+- **Org Marvis Client menus (211-215)**: Added menu 211 (insights export), 212 (events count), 213 (events search), 214 (stats count), and 215 (stats search). Implemented SDK-resolved endpoint mapping for mistapi 0.63.0 (`orgs.insights`, `orgs.marvisclients`, `orgs.stats`), added shared duration/filter/pagination helpers, and registered explicit PK strategies for all five datasets. Updated README operation count from 128 to 133.
+
+### Added (tests & docs)
+
+- **version 26.06.11.20.33 — Upstream new endpoints (mistapi v0.60–0.62)**: Added 13 new menu operations (195–207) covering channel scores, IoT endpoints, NAC CoA, auto-map assignment, Zigbee join, SSO admin deletion, MxEdge upgrade. Spec: `specs/upstream-new-endpoints/`.
+  - **195** `export_site_channel_scores` — Export RF channel quality scores per site across 2.4/5/6 GHz bands (safe read-only CSV export via `getSiteChannelScores`).
+  - **196** `search_site_iot_endpoints` — Export discovered BLE/Zigbee IoT endpoints at a site (`searchSiteIotEndpoints`).
+  - **197** `start_site_auto_map_assignment` — Trigger automatic AP-to-floor-map placement (`startSiteAutoMapAssignment`).
+  - **198** `get_site_auto_map_status` — Poll auto-map assignment job (`getSiteAutoMapAssignmentStatus`).
+  - **199** `apply_site_auto_map_results` — Commit completed auto-map placements (`applySiteAutoMapAssignment`).
+  - **200** `clear_site_auto_map_results` — Discard pending auto-map results (`clearSiteAutoMapAssignment`).
+  - **201** `enable_site_zigbee_join` — Enable Zigbee pairing on an AP (`enableSiteDeviceZigbeeJoin`).
+  - **202** `send_org_nac_client_coa` — Force NAC reauthentication of client MAC(s) at org scope (`sendOrgNacClientCoA`), with MAC validation.
+  - **203** `send_site_nac_client_coa` — Site-scoped variant (`sendSiteNacClientCoA`).
+  - **204** `delete_org_sso_admins` — DESTRUCTIVE: Remove SSO admin account at org scope (`deleteOrgSsoAdmins`), requires typed `'DELETE'` confirmation.
+  - **205** `delete_msp_sso_admins` — DESTRUCTIVE: MSP-scope SSO admin deletion (`deleteMspSsoAdmins`), requires `'DELETE'` confirmation.
+  - **206** `manage_org_mxedge_upgrades` — DESTRUCTIVE sub-menu: list / get info / start / status / cancel MxEdge upgrades at org scope. Start requires `'UPGRADE'` confirmation.
+  - **207** `manage_site_mxedge_upgrades` — DESTRUCTIVE sub-menu: site-scope MxEdge upgrade lifecycle. Start requires `'UPGRADE'` confirmation.
+  - Added 12 new `ENDPOINT_PRIMARY_KEY_STRATEGIES` entries (natural / composite / auto-increment PK types as appropriate per data shape).
+  - Added shared helpers: `_normalize_mac()` (MAC validation), `_resolve_site_name()`, `_prompt_mac_list()`, `_auto_map_call()`, `_confirm_destructive()`, `_mxedge_sub_menu()` — each ≤25 lines per 5-Item Rule.
+  - Updated README operation count from 112 to 125.
+
+- **device_utils adapter (Phases 1-2 / T001-T012 partial)**: New `src/device/device_utils_adapter.py` providing `DeviceUtilsAdapter` — a dispatch layer that routes EX / SSR / SRX / AP device commands through `mistapi.device_utils.*` helpers with transparent fallback to a caller-supplied raw-API implementation. Built defensively: missing helpers, stubbed modules, and helper exceptions all degrade to fallback rather than crash. Includes module-level `DEVICE_UTILS_AVAILABLE` flag for runtime detection.
+- **Tests**: `tests/unit/test_device_utils_adapter.py` — 12 unit tests covering availability detection, dispatch behavior, response normalization (None / dict / list / scalar / nested list-of-dicts), and fallback wiring (both wired-up and missing-fallback cases). All tests pass under the project's mistapi-stubbing conftest.
+- **Dependencies**: Bumped `requirements.txt` constraint to `mistapi>=0.63.0` so the device_utils namespace is guaranteed available. (`pyproject.toml` now requires `mistapi>=0.63.0`.)
+
+### Notes
+
+- Phase 3+ (rewiring `src/device/utility_commands.py` menu operations to call the adapter) is intentionally deferred — those changes require per-command output verification against live devices to guarantee CSV column parity and are tracked in `specs/device-utils-adoption/tasks.md` T013-T041.
+
+### Changed
+
+- **Exception handling**: Updated `fetch_and_display_api_data()` to catch `ConnectionError` and `ValueError` from mistapi >= 0.59.5 (which no longer calls `sys.exit()` on failures). `ConnectionError` shows user-friendly network error message; `ValueError` reports invalid parameter input. Both re-raise for outer handler.
+
+### Added
+
+- **Tests**: New `tests/unit/test_api_data_fetcher_retry.py` — 7 tests covering ConnectionError retry, ValueError immediate raise, normal retry flow, and exhausted retries fallback.
+- **Documentation**: `docs/UPSTREAM_mistapi_changes.md` — comprehensive audit of upstream tmunzer/mistapi_python changes from v0.59 to v0.63, with findings status and SpecKit escalation recommendations for WebSocket migration, device_utils adoption, and new endpoint menu items.
+
 ## [26.06.09.22.10] - Fix E911BSSIDReportGenerator module-level access
 
 ### Fixed

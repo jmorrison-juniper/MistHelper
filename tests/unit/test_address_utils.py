@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from src.utils.address_utils import (
-    AddressBusinessNameUtils,
     AddressUtils,
     AddressValidationConfig,
     NameNormalizationUtils,
@@ -642,9 +641,6 @@ class TestNameNormalizationUtils:
     def test_calculate_org_name_similarity_match(self):
         sim = NameNormalizationUtils.calculate_org_name_similarity("acme", "Acme Corporation, Springfield IL")
         assert sim > 0.0
-
-    def test_backward_compat_alias(self):
-        assert AddressBusinessNameUtils is NameNormalizationUtils
 
 
 # ============================================================================

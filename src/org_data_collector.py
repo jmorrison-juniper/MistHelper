@@ -102,6 +102,9 @@ if TYPE_CHECKING:
 #                   (e.g. {"distinct": "mac"} for count endpoints)
 # ---------------------------------------------------------------------------
 
+# Note: keep registry entries idempotent and read-only; this module is used
+# for bulk data collection where any write operation would be unsafe.
+
 _LIST_OPERATIONS: list[dict[str, Any]] = [
     # -- Organization --------------------------------------------------------
     {
