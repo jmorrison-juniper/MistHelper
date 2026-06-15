@@ -12,7 +12,10 @@ def test_no_internal_export_legacy_callsites() -> None:  # Keep canonical callsi
 
     for python_file in repository_root.rglob("*.py"):  # Scan all Python files.
         path_text = python_file.as_posix()  # Normalize path form.
-        if "/specs/" in path_text or "/abandoned-specs/" in path_text or "/finished-specs/" in path_text:  # Skip spec artifacts.
+        is_spec_artifact = "/specs/" in path_text  # Match regular spec tree.
+        is_abandoned_spec = "/abandoned-specs/" in path_text  # Match abandoned spec tree.
+        is_finished_spec = "/finished-specs/" in path_text  # Match finished spec tree.
+        if is_spec_artifact or is_abandoned_spec or is_finished_spec:  # Skip spec artifacts.
             continue  # Ignore planning files.
         if "/data/" in path_text or "/.venv/" in path_text or "__pycache__" in path_text:  # Skip runtime/cache trees.
             continue  # Ignore non-source trees.
@@ -23,6 +26,7 @@ def test_no_internal_export_legacy_callsites() -> None:  # Keep canonical callsi
         if disallowed_token in content_text:  # Flag remaining direct callsites.
             for line_number, line_text in enumerate(content_text.splitlines(), start=1):  # Capture line evidence.
                 if disallowed_token in line_text:  # Match banned token in line.
-                    violations.append(f"{python_file.relative_to(repository_root)}:{line_number}")  # Record file:line hit.
+                    violation_location = f"{python_file.relative_to(repository_root)}:{line_number}"  # Build file:line hit.
+                    violations.append(violation_location)  # Store violation location.
 
     assert not violations, f"Legacy export shim callsites found: {violations}"  # Fail if banned callsites remain.
