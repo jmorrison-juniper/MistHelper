@@ -26,7 +26,7 @@ def test_no_internal_export_legacy_callsites() -> None:  # Keep canonical callsi
         if disallowed_token in content_text:  # Flag remaining direct callsites.
             for line_number, line_text in enumerate(content_text.splitlines(), start=1):  # Capture line evidence.
                 if disallowed_token in line_text:  # Match banned token in line.
-                    violation_location = f"{python_file.relative_to(repository_root)}:{line_number}"  # Build file:line hit.
+                    violation_location = f"{python_file.relative_to(repository_root)}:{line_number}"  # Build hit.
                     violations.append(violation_location)  # Store violation location.
 
     assert not violations, f"Legacy export shim callsites found: {violations}"  # Fail if banned callsites remain.
