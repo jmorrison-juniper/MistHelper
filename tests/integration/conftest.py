@@ -7,8 +7,8 @@ Usage:
     pytest tests/integration/ -m integration -v
 """
 
-import os
 import inspect
+import os
 
 import pytest
 
