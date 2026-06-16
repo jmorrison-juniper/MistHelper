@@ -60,11 +60,21 @@ def mist_api_session():
     Session-scoped so we authenticate once per pytest invocation.
     """
     _ensure_env()
+    import inspect
     import mistapi
 
     host = os.getenv("MIST_HOST", "api.mist.com")
     token = os.getenv("MIST_APITOKEN") or os.getenv("MIST_API_TOKEN")
-    session = mistapi.APISession(apitoken=token, host=host)
+
+    apisession_class = mistapi.APISession
+    apisession_module = inspect.getmodule(apisession_class)
+    apisession_module_name = getattr(apisession_module, "__name__", "")
+    if not apisession_module_name.startswith("mistapi"):
+        pytest.skip("Skipping integration tests: mistapi.APISession is mocked or monkeypatched")
+
+    session = apisession_class(apitoken=token, host=host)
+    if type(session).__module__.startswith("unittest.mock"):
+        pytest.skip("Skipping integration tests: APISession constructor returned mock object")
     return session
 
 
