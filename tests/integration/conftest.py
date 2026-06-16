@@ -8,6 +8,7 @@ Usage:
 """
 
 import os
+import inspect
 
 import pytest
 
@@ -60,7 +61,6 @@ def mist_api_session():
     Session-scoped so we authenticate once per pytest invocation.
     """
     _ensure_env()
-    import inspect
     import mistapi
 
     host = os.getenv("MIST_HOST", "api.mist.com")
