@@ -1,9 +1,6 @@
 """Unit tests for OrgAlarmEventExporter in-place 52w legacy decomposition."""
 
-import os
-import tempfile
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
 import MistHelper
 
@@ -97,9 +94,15 @@ class TestDevice52wLegacyOrchestration:
         """No rows → save_data_to_output called with empty list."""
         monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
         monkeypatch.setattr(MistHelper.OrgAlarmEventExporter, "_52w_load_checkpoint", lambda cp: None)
-        monkeypatch.setattr(MistHelper.OrgAlarmEventExporter, "_52w_preload_pages", lambda org_id, search_after, limit, duration, preload_count: ([], None))
+        monkeypatch.setattr(
+            MistHelper.OrgAlarmEventExporter,
+            "_52w_preload_pages",
+            lambda org_id, search_after, limit, duration, preload_count: ([], None),
+        )
         saved = {"rows": None}
-        monkeypatch.setattr(MistHelper.DataExporter, "save_data_to_output", lambda rows, fname: saved.__setitem__("rows", rows))
+        monkeypatch.setattr(
+            MistHelper.DataExporter, "save_data_to_output", lambda rows, fname: saved.__setitem__("rows", rows)
+        )
 
         MistHelper.OrgAlarmEventExporter.device_events_52w_legacy()
 
@@ -110,11 +113,23 @@ class TestDevice52wLegacyOrchestration:
         monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
         monkeypatch.setattr(MistHelper.os, "makedirs", lambda path, exist_ok=True: None)
         monkeypatch.setattr(MistHelper.OrgAlarmEventExporter, "_52w_load_checkpoint", lambda cp: None)
-        monkeypatch.setattr(MistHelper.OrgAlarmEventExporter, "_52w_preload_pages", lambda org_id, sa, limit, dur, preload_count: ([{"x": "1"}], None))
+        monkeypatch.setattr(
+            MistHelper.OrgAlarmEventExporter,
+            "_52w_preload_pages",
+            lambda org_id, sa, limit, dur, preload_count: ([{"x": "1"}], None),
+        )
         monkeypatch.setattr(MistHelper.DataProcessingUtils, "get_unique_keys", lambda rows: ["x"])
         calls = {"write": 0, "remove": 0}
-        monkeypatch.setattr(MistHelper.OrgAlarmEventExporter, "_52w_write_batch", lambda rows, header_fields, csv_file, table_name, append: calls.__setitem__("write", calls["write"] + 1))
-        monkeypatch.setattr(MistHelper.OrgAlarmEventExporter, "_52w_remove_checkpoint", lambda cp: calls.__setitem__("remove", calls["remove"] + 1))
+        monkeypatch.setattr(
+            MistHelper.OrgAlarmEventExporter,
+            "_52w_write_batch",
+            lambda rows, header_fields, csv_file, table_name, append: calls.__setitem__("write", calls["write"] + 1),
+        )
+        monkeypatch.setattr(
+            MistHelper.OrgAlarmEventExporter,
+            "_52w_remove_checkpoint",
+            lambda cp: calls.__setitem__("remove", calls["remove"] + 1),
+        )
 
         MistHelper.OrgAlarmEventExporter.device_events_52w_legacy()
 

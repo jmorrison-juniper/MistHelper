@@ -5,6 +5,7 @@ import importlib
 import logging
 import os
 import time
+from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 
@@ -32,7 +33,7 @@ class SecurityEventsService:
     """Owns organization security export flow formerly embedded in MistHelper."""
 
     @staticmethod
-    def execute(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
+    def execute(fast: bool = False) -> None:  # noqa: C901, PLR0912, PLR0915
         """Run the organization security export workflow."""
         deps = _resolve_runtime_dependencies()
         output_files = ["OrgSecurityPolicies.csv", "OrgSecIntelProfiles.csv", "OrgRogueData.csv"]
@@ -103,7 +104,7 @@ class SecurityEventsService:
         output_file: str,
         data_label: str,
         start_label: str,
-        fetcher,
+        fetcher: Callable[[], Any],
         empty_message: str,
         empty_suffix: str,
     ) -> None:
@@ -129,70 +130,84 @@ class SecurityEventsService:
             deps.DataExporter.save_data_to_output([], output_file)
 
     @staticmethod
+    def _fetch_site_rogue(
+        deps: SimpleNamespace, site_id: str, site_name: str, rogue_duration: str
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Fetch and tag rogue APs and clients for one site; return ([],[]) on failure."""
+        try:  # Per-site failures are non-fatal and yield empty lists
+            response_aps = deps.mistapi.api.v1.sites.insights.listSiteRogueAPs(
+                deps.apisession, site_id, duration=rogue_duration, limit=1000
+            )  # Query rogue APs for this site
+            site_rogue_aps = deps.mistapi.get_all(response=response_aps, mist_session=deps.apisession) or []  # Page all
+            for rogue_access_point in site_rogue_aps:  # Tag every rogue AP with site context
+                rogue_access_point["site_id"] = site_id  # Owning site id
+                rogue_access_point["site_name"] = site_name  # Owning site name
+                rogue_access_point["rogue_type"] = "AP"  # Mark as rogue AP
+
+            response_clients = deps.mistapi.api.v1.sites.insights.listSiteRogueClients(
+                deps.apisession, site_id, duration=rogue_duration, limit=1000
+            )  # Query rogue clients for this site
+            site_rogue_clients = (
+                deps.mistapi.get_all(response=response_clients, mist_session=deps.apisession) or []
+            )  # Page all rogue clients
+            for client in site_rogue_clients:  # Tag every rogue client with site context
+                client["site_id"] = site_id  # Owning site id
+                client["site_name"] = site_name  # Owning site name
+                client["rogue_type"] = "Client"  # Mark as rogue client
+            logging.info(
+                "! Fetched %d rogue APs and %d rogue clients from site: %s",
+                len(site_rogue_aps),
+                len(site_rogue_clients),
+                site_name,
+            )  # Trace per-site counts
+            return site_rogue_aps, site_rogue_clients  # Tagged rogue APs and clients
+        except Exception as error:  # Per-site API failure - warn and yield empties
+            logging.warning("! Failed to fetch rogue data from site %s: %s", site_name, error)  # Trace failure
+            return [], []  # Empty result for this site
+
+    @staticmethod
+    def _export_rogue_combined(deps: SimpleNamespace, all_rogue_data: list[dict[str, Any]]) -> None:
+        """Flatten and export combined rogue AP/client data, or write an empty file when none."""
+        if all_rogue_data:  # At least one rogue device found
+            processed = deps.DataProcessingUtils.flatten_nested_fields(all_rogue_data)  # Flatten nested structures
+            processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV
+            deps.DataExporter.save_data_to_output(processed, "OrgRogueData.csv")  # Write the export file
+            print(f"! {len(processed)} rogue devices exported to OrgRogueData.csv")  # User summary
+            logging.info("Exported %d rogue devices to OrgRogueData.csv", len(processed))  # Trace export volume
+        else:  # No rogue devices across any site
+            print("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")  # User summary
+            logging.info("No rogue devices found across all sites (OrgRogueData.csv written empty).")  # Trace empty
+            deps.DataExporter.save_data_to_output([], "OrgRogueData.csv")  # Write an empty export for consistency
+
+    @staticmethod
     def _export_rogue_data(deps: SimpleNamespace) -> None:
         """Fetch rogue AP and client data across all sites and export combined rows."""
-        lookback_hours = deps.TimeUtils.get_dynamic_lookback_hours(168, 1)
-        rogue_duration = f"{lookback_hours}h"
-        deps.TimeUtils.log_dynamic_lookback("rogue data fetch", lookback_hours)
-        logging.info("Fetching rogue APs and clients from all sites via insights...")
-        deps.CacheUtils.check_and_generate_csv("SiteList.csv", deps.OrgSiteExporter.sites)
+        lookback_hours = deps.TimeUtils.get_dynamic_lookback_hours(168, 1)  # Dynamic lookback (default 168h, test 1h)
+        rogue_duration = f"{lookback_hours}h"  # Duration string for the insights queries
+        deps.TimeUtils.log_dynamic_lookback("rogue data fetch", lookback_hours)  # Trace the chosen lookback
+        logging.info("Fetching rogue APs and clients from all sites via insights...")  # Trace workflow start
+        deps.CacheUtils.check_and_generate_csv("SiteList.csv", deps.OrgSiteExporter.sites)  # Ensure site list exists
 
-        all_rogue_aps: list[dict[str, Any]] = []
-        all_rogue_clients: list[dict[str, Any]] = []
-        try:
-            site_list_path = deps.FilePathUtils.get_csv_path("SiteList.csv")
-            with open(site_list_path, encoding="utf-8") as file_handle:
-                sites = list(csv.DictReader(file_handle))
-            for site in deps.tqdm(sites, desc="Sites", unit="site"):
-                if deps.ConfigUtils.check_stop_signal():
-                    break
-                site_id = site.get("id")
-                site_name = site.get("name", "Unknown Site")
-                if not site_id:
-                    continue
-                try:
-                    response_aps = deps.mistapi.api.v1.sites.insights.listSiteRogueAPs(
-                        deps.apisession, site_id, duration=rogue_duration, limit=1000
-                    )
-                    site_rogue_aps = deps.mistapi.get_all(response=response_aps, mist_session=deps.apisession) or []
-                    for rogue_access_point in site_rogue_aps:
-                        rogue_access_point["site_id"] = site_id
-                        rogue_access_point["site_name"] = site_name
-                        rogue_access_point["rogue_type"] = "AP"
-                    all_rogue_aps.extend(site_rogue_aps)
+        all_rogue_aps: list[dict[str, Any]] = []  # Accumulates tagged rogue APs across sites
+        all_rogue_clients: list[dict[str, Any]] = []  # Accumulates tagged rogue clients across sites
+        try:  # Guard site-list reading and iteration
+            site_list_path = deps.FilePathUtils.get_csv_path("SiteList.csv")  # Resolve the site list path
+            with open(site_list_path, encoding="utf-8") as file_handle:  # Open the generated site list
+                sites = list(csv.DictReader(file_handle))  # Read all sites as dict rows
+            for site in deps.tqdm(sites, desc="Sites", unit="site"):  # Iterate sites with a progress bar
+                if deps.ConfigUtils.check_stop_signal():  # Honor a user stop request
+                    break  # Stop iterating sites
+                site_id = site.get("id")  # Site id from the CSV row
+                site_name = site.get("name", "Unknown Site")  # Site name (or placeholder)
+                if not site_id:  # Skip rows without a site id
+                    continue  # Next site
+                site_rogue_aps, site_rogue_clients = SecurityEventsService._fetch_site_rogue(
+                    deps, site_id, site_name, rogue_duration
+                )  # Fetch + tag this site's rogue devices
+                all_rogue_aps.extend(site_rogue_aps)  # Accumulate this site's rogue APs
+                all_rogue_clients.extend(site_rogue_clients)  # Accumulate this site's rogue clients
+        except Exception as error:  # Failure reading/iterating the site list is fatal for this export
+            logging.error("Failed to process sites for rogue data: %s", error)  # Trace the failure
+            return  # Abort the rogue export
 
-                    response_clients = deps.mistapi.api.v1.sites.insights.listSiteRogueClients(
-                        deps.apisession, site_id, duration=rogue_duration, limit=1000
-                    )
-                    site_rogue_clients = (
-                        deps.mistapi.get_all(response=response_clients, mist_session=deps.apisession) or []
-                    )
-                    for client in site_rogue_clients:
-                        client["site_id"] = site_id
-                        client["site_name"] = site_name
-                        client["rogue_type"] = "Client"
-                    all_rogue_clients.extend(site_rogue_clients)
-                    logging.info(
-                        "! Fetched %d rogue APs and %d rogue clients from site: %s",
-                        len(site_rogue_aps),
-                        len(site_rogue_clients),
-                        site_name,
-                    )
-                except Exception as error:
-                    logging.warning("! Failed to fetch rogue data from site %s: %s", site_name, error)
-                    continue
-        except Exception as error:
-            logging.error("Failed to process sites for rogue data: %s", error)
-            return
-
-        all_rogue_data = all_rogue_aps + all_rogue_clients
-        if all_rogue_data:
-            processed = deps.DataProcessingUtils.flatten_nested_fields(all_rogue_data)
-            processed = deps.DataProcessingUtils.escape_multiline(processed)
-            deps.DataExporter.save_data_to_output(processed, "OrgRogueData.csv")
-            print(f"! {len(processed)} rogue devices exported to OrgRogueData.csv")
-            logging.info("Exported %d rogue devices to OrgRogueData.csv", len(processed))
-        else:
-            print("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")
-            logging.info("No rogue devices found across all sites (OrgRogueData.csv written empty).")
-            deps.DataExporter.save_data_to_output([], "OrgRogueData.csv")
+        SecurityEventsService._export_rogue_combined(deps, all_rogue_aps + all_rogue_clients)  # Export combined rows

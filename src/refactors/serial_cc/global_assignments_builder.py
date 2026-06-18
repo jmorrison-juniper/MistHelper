@@ -4,71 +4,100 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+# Per-module attribute re-exports: module name -> tuple of (global_name, source_attr).
+# Each entry copies module_obj.<source_attr> into global_vars[<global_name>] via getattr(default None).
+_ATTRIBUTE_EXPORTS: dict[str, tuple[tuple[str, str], ...]] = {
+    "datetime": (("timezone", "timezone"), ("timedelta", "timedelta")),  # datetime submembers used across module
+    "concurrent.futures": (
+        ("ThreadPoolExecutor", "ThreadPoolExecutor"),
+        ("as_completed", "as_completed"),
+    ),  # pool primitives
+    "prettytable": (("PrettyTable", "PrettyTable"),),  # table renderer class
+    "collections": (("defaultdict", "defaultdict"),),  # defaultdict helper
+    "difflib": (("SequenceMatcher", "SequenceMatcher"),),  # fuzzy string matcher
+}
+
+# Whole-module aliases: module name -> alternate global name the module object is also exposed under.
+_MODULE_ALIASES: dict[str, str] = {
+    "concurrent.futures": "concurrent",  # legacy code references bare `concurrent`
+    "numpy": "np",  # conventional numpy alias
+    "tqdm": "tqdm",  # progress-bar module exposed by its own name
+}
+
+# Modules added to the namespace only when present, each emitting a debug log line.
+_LOGGED_MODULES: tuple[str, ...] = ("mistapi", "paramiko", "redexpect")
+
+
+def _import_scourgify_normalizer(global_vars: dict[str, Any], module_obj: Any) -> None:
+    """Expose scourgify's normalize_address_record, falling back to a direct import."""
+    try:  # The shim module may not carry the attribute directly on all install paths
+        normalize_func = getattr(module_obj, "normalize_address_record", None)  # Prefer attribute already on module
+        if normalize_func:  # Attribute present - use it directly
+            global_vars["normalize_address_record"] = normalize_func  # Register the normalizer globally
+        else:  # Attribute missing - import from the real package
+            from scourgify import normalize_address_record  # Direct import fallback
+
+            global_vars["normalize_address_record"] = normalize_address_record  # Register the imported normalizer
+    except (ImportError, AttributeError):  # Package absent or attribute genuinely unavailable
+        logging.debug("Could not import normalize_address_record from scourgify, using fallback")  # Non-fatal
+
+
+def _import_rapidfuzz_matcher(global_vars: dict[str, Any], module_obj: Any) -> None:
+    """Expose rapidfuzz's fuzz matcher, falling back to a direct import."""
+    try:  # The module may not carry `fuzz` directly depending on import path
+        fuzz_module = getattr(module_obj, "fuzz", None)  # Prefer attribute already on module
+        if fuzz_module:  # Attribute present - use it directly
+            global_vars["fuzz"] = fuzz_module  # Register the fuzz matcher globally
+        else:  # Attribute missing - import from the real package
+            from rapidfuzz import fuzz  # Direct import fallback
+
+            global_vars["fuzz"] = fuzz  # Register the imported fuzz matcher
+    except (ImportError, AttributeError):  # Package absent or attribute genuinely unavailable
+        logging.debug("Could not import fuzz from rapidfuzz, using fallback")  # Non-fatal
+
 
 class GlobalAssignmentsBuilderService:
     """Build global name-to-object assignments from imported modules."""
 
     @staticmethod
-    def execute(imports: dict[str, Any], add_fallbacks_fn: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
+    def _apply_attribute_exports(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:
+        """Copy configured submember attributes from a module into the global namespace."""
+        for global_name, source_attr in _ATTRIBUTE_EXPORTS.get(module_name, ()):  # Empty tuple when not configured
+            global_vars[global_name] = getattr(module_obj, source_attr, None)  # Preserve original getattr(None) default
+
+    @staticmethod
+    def _apply_module_alias(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:
+        """Expose a module object under its conventional alias when one is configured."""
+        alias = _MODULE_ALIASES.get(module_name)  # None when this module has no alias
+        if alias:  # Only assign when an alias is configured
+            global_vars[alias] = module_obj  # Expose module under the alternate name
+
+    @staticmethod
+    def _apply_optional_imports(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:
+        """Handle modules that require conditional attribute import with package fallback."""
+        if module_name == "usaddress-scourgify" and module_obj:  # Address normalizer (optional dependency)
+            _import_scourgify_normalizer(global_vars, module_obj)  # Delegate to scourgify-specific handler
+        elif module_name == "rapidfuzz" and module_obj:  # Fuzzy matcher (optional dependency)
+            _import_rapidfuzz_matcher(global_vars, module_obj)  # Delegate to rapidfuzz-specific handler
+
+    @staticmethod
+    def _apply_logged_module(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:
+        """Register present-only modules and emit a debug log line for each."""
+        if module_name in _LOGGED_MODULES and module_obj:  # Only when configured and actually imported
+            global_vars[module_name] = module_obj  # Expose module under its own name
+            logging.debug("Added %s to global namespace", module_name)  # Trace which optional module loaded
+
+    @classmethod
+    def execute(cls, imports: dict[str, Any], add_fallbacks_fn: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
         """Build and return global assignments dictionary using existing fallback handler."""
-        global_vars: dict[str, Any] = {}
+        global_vars: dict[str, Any] = {}  # Accumulates every global name the rest of MistHelper expects
 
-        for module_name, module_obj in imports.items():
-            global_vars[module_name] = module_obj
+        for module_name, module_obj in imports.items():  # Walk each successfully imported module
+            global_vars[module_name] = module_obj  # Always expose the module under its own name first
+            cls._apply_attribute_exports(global_vars, module_name, module_obj)  # Submember re-exports (timezone, etc.)
+            cls._apply_module_alias(global_vars, module_name, module_obj)  # Whole-module aliases (np, concurrent)
+            cls._apply_optional_imports(global_vars, module_name, module_obj)  # Conditional optional-dep imports
+            cls._apply_logged_module(global_vars, module_name, module_obj)  # Present-only logged modules
 
-            if module_name == "datetime":
-                global_vars["timezone"] = getattr(module_obj, "timezone", None)
-                global_vars["timedelta"] = getattr(module_obj, "timedelta", None)
-            elif module_name == "concurrent.futures":
-                global_vars["ThreadPoolExecutor"] = getattr(module_obj, "ThreadPoolExecutor", None)
-                global_vars["as_completed"] = getattr(module_obj, "as_completed", None)
-                global_vars["concurrent"] = module_obj
-            elif module_name == "prettytable":
-                global_vars["PrettyTable"] = getattr(module_obj, "PrettyTable", None)
-            elif module_name == "numpy":
-                global_vars["np"] = module_obj
-            elif module_name == "tqdm":
-                global_vars["tqdm"] = module_obj
-            elif module_name == "collections":
-                global_vars["defaultdict"] = getattr(module_obj, "defaultdict", None)
-            elif module_name == "difflib":
-                global_vars["SequenceMatcher"] = getattr(module_obj, "SequenceMatcher", None)
-            elif module_name == "usaddress-scourgify":
-                if module_obj:
-                    try:
-                        normalize_func = getattr(module_obj, "normalize_address_record", None)
-                        if normalize_func:
-                            global_vars["normalize_address_record"] = normalize_func
-                        else:
-                            from scourgify import normalize_address_record
-
-                            global_vars["normalize_address_record"] = normalize_address_record
-                    except (ImportError, AttributeError):
-                        logging.debug("Could not import normalize_address_record from scourgify, using fallback")
-            elif module_name == "rapidfuzz":
-                if module_obj:
-                    try:
-                        fuzz_module = getattr(module_obj, "fuzz", None)
-                        if fuzz_module:
-                            global_vars["fuzz"] = fuzz_module
-                        else:
-                            from rapidfuzz import fuzz
-
-                            global_vars["fuzz"] = fuzz
-                    except (ImportError, AttributeError):
-                        logging.debug("Could not import fuzz from rapidfuzz, using fallback")
-            elif module_name == "mistapi":
-                if module_obj:
-                    global_vars["mistapi"] = module_obj
-                    logging.debug("Added mistapi to global namespace")
-            elif module_name == "paramiko":
-                if module_obj:
-                    global_vars["paramiko"] = module_obj
-                    logging.debug("Added paramiko to global namespace")
-            elif module_name == "redexpect":
-                if module_obj:
-                    global_vars["redexpect"] = module_obj
-                    logging.debug("Added redexpect to global namespace")
-
-        add_fallbacks_fn(global_vars)
-        return global_vars
+        add_fallbacks_fn(global_vars)  # Apply existing fallback handler for any missing names
+        return global_vars  # Hand back the fully populated global namespace

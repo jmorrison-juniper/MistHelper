@@ -28,7 +28,11 @@ class TestDevicePortStatsOrchestration:
         """Fast mode routes through decomposed fast helper and skips APIDataFetcher."""
         helper_called = {"count": 0}
         monkeypatch.setattr(MistHelper.OrgDeviceStatsExporter, "_port_stats_cache_hit", lambda output_file, fast: False)
-        monkeypatch.setattr(MistHelper.OrgDeviceStatsExporter, "_run_fast_device_port_stats", lambda output_file: helper_called.__setitem__("count", helper_called["count"] + 1))
+        monkeypatch.setattr(
+            MistHelper.OrgDeviceStatsExporter,
+            "_run_fast_device_port_stats",
+            lambda output_file: helper_called.__setitem__("count", helper_called["count"] + 1),
+        )
         monkeypatch.setattr(MistHelper.TimeUtils, "get_dynamic_lookback_hours", lambda default_hours, test_hours: 1)
         monkeypatch.setattr(MistHelper.TimeUtils, "log_dynamic_lookback", lambda context, hours: None)
         api_fetcher = MagicMock()
