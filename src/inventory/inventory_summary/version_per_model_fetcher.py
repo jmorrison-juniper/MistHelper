@@ -11,7 +11,7 @@ class VersionPerModelFetcher:
     """Decomposed replacement for the original `_fetch_versions_per_model` helper."""
 
     @staticmethod
-    def fetch(target_org_id: str, model_rows: list[dict]) -> list[dict]:
+    def fetch(target_org_id: str, model_rows: list[dict], unassigned_records: list[dict] | None = None) -> list[dict]:
         """Return per-model version count rows across AP / switch / gateway types."""
         logging.info(
             "Fetching version distribution per model, org=%s", target_org_id
@@ -33,6 +33,9 @@ class VersionPerModelFetcher:
                 )
             )
             all_rows.extend(rows)  # Append helper output verbatim; helper returns [] on skip
+        all_rows.extend(  # Add unassigned AP/switch stock so the pivot gains an "unassigned" version column
+            VersionPerModelFetcher._unassigned_rows(target_org_id, unassigned_records)
+        )
         all_rows.sort(  # Stable order for human-readable output: type, then model, then count desc
             key=lambda row: (row.get("device_type", ""), row.get("model", ""), -int(row.get("count", 0)))
         )
@@ -40,6 +43,28 @@ class VersionPerModelFetcher:
             "Total version-per-model rows after fetch and sort: %d", len(all_rows)
         )  # Record final row count for diagnostics
         return all_rows
+
+    @staticmethod
+    def _unassigned_rows(target_org_id: str, unassigned_records: list[dict] | None) -> list[dict]:
+        """Build per-model rows for unassigned AP/switch stock, bucketed under version 'unassigned'."""
+        # These devices are claimed but not assigned to a site, so the assigned-only count/search
+        # APIs never return them. We surface them under a dedicated "unassigned" version so the
+        # pivot renderer emits a clearly labelled column instead of silently undercounting.
+        if unassigned_records is None:  # Direct/test callers may omit the shared fetch; pull it ourselves
+            unassigned_records = _parent.OrgDeviceInventorySummaryCore._fetch_unassigned_inventory(target_org_id)
+        logging.info("Building unassigned version-per-model rows from %d records", len(unassigned_records))
+        counts: dict[tuple[str, str], int] = {}  # Running total per (device_type, model)
+        for record in unassigned_records:  # Walk each unassigned inventory record once
+            device_type = record.get("type") or "unknown"  # Inventory record carries its own ap/switch type
+            model_name = record.get("model") or "unknown"  # Keep real model so it lines up with assigned rows
+            key = (device_type, model_name)  # Compose grouping key
+            counts[key] = counts.get(key, 0) + 1  # Each unassigned record is one physical device
+        rows = [  # Materialize into standard rows with the synthetic "unassigned" version bucket
+            {"device_type": device_type, "model": model_name, "version": "unassigned", "count": count}
+            for (device_type, model_name), count in counts.items()
+        ]
+        logging.debug("Unassigned version-per-model produced %d rows", len(rows))  # Record outcome
+        return rows
 
     @staticmethod
     def _prefetch_switches(target_org_id: str, model_rows: list[dict]) -> list[dict]:

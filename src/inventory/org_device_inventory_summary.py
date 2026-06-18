@@ -131,7 +131,78 @@ class OrgDeviceInventorySummaryCore:
         return rows
 
     @staticmethod
-    def _fetch_all_counts(target_org_id: str, distinct: str) -> list[dict]:
+    def _fetch_unassigned_inventory(target_org_id: str) -> list[dict]:
+        """Fetch AP/switch inventory that is claimed but not assigned to any site."""
+        # Unassigned AP/switch are invisible to searchOrgDevices/countOrgDevices (assigned-only),
+        # so pull the full org inventory and keep only records that lack a site_id.
+        logging.info("Fetching unassigned AP/switch inventory via getOrgInventory, org=%s", target_org_id)
+        try:
+            response = mistapi.api.v1.orgs.inventory.getOrgInventory(  # Inventory API returns claimed stock
+                apisession,
+                target_org_id,
+                type="ap,switch",  # Gateways excluded: gateway path already counts unassigned via getOrgInventory
+                limit=1000,  # Large page size minimizes round trips for big inventories
+            )
+            all_records: list[dict] = mistapi.get_all(response=response, mist_session=apisession)  # Auto-paginate
+        except Exception as error:  # Inventory fetch errors must not abort the larger summary run
+            logging.error("getOrgInventory unassigned AP/switch failed: %s", error, exc_info=True)  # Traceback for ops
+            all_records = []  # Degrade gracefully so callers simply see no unassigned rows
+        unassigned = [record for record in all_records if not record.get("site_id")]  # site_id empty/None => unassigned
+        logging.debug(
+            "Unassigned AP/switch inventory: %d of %d records have no site_id",  # Show filter selectivity
+            len(unassigned),
+            len(all_records),
+        )
+        return unassigned
+
+    @staticmethod
+    def _aggregate_unassigned_counts(unassigned_records: list[dict], distinct: str) -> list[dict]:
+        """Aggregate unassigned device counts; firmware rows bucket under an 'unassigned' label."""
+        # For the version report we surface unassigned stock as its own bucket (distinct from
+        # "unknown", which means an assigned device that never reported firmware). For the model
+        # report we keep the real model so per-model totals stay accurate.
+        logging.info("Aggregating %d unassigned records by %s", len(unassigned_records), distinct)
+        counts: dict[tuple[str, str], int] = {}  # Key on (device_type, bucket) to keep types separate
+        for record in unassigned_records:  # Walk each unassigned inventory record once
+            device_type = record.get("type") or "unknown"  # Inventory record carries its own ap/switch type
+            if distinct == "version":  # Firmware report: collapse all unassigned stock into one column
+                value = "unassigned"  # New column the operator can see at a glance
+            else:  # Model report: preserve real model so totals merge correctly with assigned counts
+                value = record.get(distinct) or "unknown"  # Fall back to "unknown" only if model missing
+            key = (device_type, value)  # Compose the grouping key
+            counts[key] = counts.get(key, 0) + 1  # Each unassigned record is one physical device (no VC in stock)
+        rows = [  # Materialize accumulator into standard row dicts
+            {"device_type": device_type, distinct: value, "count": count}
+            for (device_type, value), count in counts.items()
+        ]
+        logging.debug("Unassigned %s aggregation produced %d rows", distinct, len(rows))  # Record outcome
+        return rows
+
+    @staticmethod
+    def _merge_counts(base_rows: list[dict], extra_rows: list[dict], distinct: str) -> list[dict]:
+        """Merge supplemental rows into base rows, summing counts by (device_type, value)."""
+        # Used to fold unassigned counts into the assigned-device rows so a model present in both
+        # assigned and unassigned states reports one combined total instead of duplicate rows.
+        logging.info("Merging %d base and %d supplemental %s rows", len(base_rows), len(extra_rows), distinct)
+        combined: dict[tuple[str, str], int] = {}  # Running total per (device_type, value)
+        order: list[tuple[str, str]] = []  # Preserve first-seen order for deterministic output
+        for row in [*base_rows, *extra_rows]:  # Iterate assigned rows first, then unassigned supplements
+            key = (row.get("device_type", ""), row.get(distinct, ""))  # Same grouping key both reports use
+            if key not in combined:  # First time we see this key
+                combined[key] = 0  # Initialize the bucket
+                order.append(key)  # Remember insertion order
+            combined[key] += int(row.get("count", 0) or 0)  # Accumulate this row's count
+        merged = [  # Rebuild rows from the merged totals in first-seen order
+            {"device_type": device_type, distinct: value, "count": combined[(device_type, value)]}
+            for (device_type, value) in order
+        ]
+        logging.debug("Merge produced %d combined %s rows", len(merged), distinct)  # Record outcome
+        return merged
+
+    @staticmethod
+    def _fetch_all_counts(
+        target_org_id: str, distinct: str, unassigned_records: list[dict] | None = None
+    ) -> list[dict]:
         """Fetch grouped counts for AP/switch/gateway by model or version."""
         logging.info("Fetching device %s counts for all types, org=%s", distinct, target_org_id)
         all_rows: list[dict] = []
@@ -180,6 +251,13 @@ class OrgDeviceInventorySummaryCore:
                     error,
                     exc_info=True,
                 )
+        if unassigned_records is None:  # Direct/test callers may omit the shared fetch; pull it ourselves
+            unassigned_records = OrgDeviceInventorySummaryCore._fetch_unassigned_inventory(target_org_id)
+        try:  # Fold unassigned AP/switch stock into the counts so totals are not understated
+            unassigned_rows = OrgDeviceInventorySummaryCore._aggregate_unassigned_counts(unassigned_records, distinct)
+            all_rows = OrgDeviceInventorySummaryCore._merge_counts(all_rows, unassigned_rows, distinct)
+        except Exception as error:  # Supplemental counting must never break the primary report
+            logging.error("Unassigned %s supplemental count failed: %s", distinct, error, exc_info=True)
         all_rows.sort(key=lambda row: (row.get("device_type", ""), -int(row.get("count", 0))))
         logging.info("Total %s count rows after fetch and sort: %d", distinct, len(all_rows))
         return all_rows
@@ -238,7 +316,11 @@ class OrgDeviceInventorySummaryCore:
         start_time = time.time()
         safe_org = OrgDeviceInventorySummaryCore._resolve_safe_org_name(target_org_id)
 
-        model_rows = OrgDeviceInventorySummaryCore._fetch_all_counts(target_org_id, "model")
+        # Fetch unassigned AP/switch inventory once and share it across every report below so the
+        # supplemental getOrgInventory call is not repeated three times per organization.
+        unassigned_records = OrgDeviceInventorySummaryCore._fetch_unassigned_inventory(target_org_id)
+
+        model_rows = OrgDeviceInventorySummaryCore._fetch_all_counts(target_org_id, "model", unassigned_records)
         OrgDeviceInventorySummaryCore._display_and_export(
             model_rows,
             "model",
@@ -246,7 +328,7 @@ class OrgDeviceInventorySummaryCore:
             "orgDeviceModelSummary",
         )
 
-        version_rows = OrgDeviceInventorySummaryCore._fetch_all_counts(target_org_id, "version")
+        version_rows = OrgDeviceInventorySummaryCore._fetch_all_counts(target_org_id, "version", unassigned_records)
         OrgDeviceInventorySummaryCore._display_and_export(
             version_rows,
             "version",
@@ -255,7 +337,7 @@ class OrgDeviceInventorySummaryCore:
         )
 
         ver_per_model = VersionPerModelFetcher.fetch(
-            target_org_id, model_rows
+            target_org_id, model_rows, unassigned_records
         )  # Decomposed: per-type version expansion lives in collaborator
         PivotRenderer.render(
             ver_per_model, f"{safe_org}_OrgDeviceVersionPerModel"
