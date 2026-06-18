@@ -251,16 +251,26 @@ class OrgDeviceInventorySummaryCore:
                     error,
                     exc_info=True,
                 )
-        if unassigned_records is None:  # Direct/test callers may omit the shared fetch; pull it ourselves
-            unassigned_records = OrgDeviceInventorySummaryCore._fetch_unassigned_inventory(target_org_id)
-        try:  # Fold unassigned AP/switch stock into the counts so totals are not understated
-            unassigned_rows = OrgDeviceInventorySummaryCore._aggregate_unassigned_counts(unassigned_records, distinct)
-            all_rows = OrgDeviceInventorySummaryCore._merge_counts(all_rows, unassigned_rows, distinct)
-        except Exception as error:  # Supplemental counting must never break the primary report
-            logging.error("Unassigned %s supplemental count failed: %s", distinct, error, exc_info=True)
+        all_rows = OrgDeviceInventorySummaryCore._with_unassigned(all_rows, target_org_id, distinct, unassigned_records)
         all_rows.sort(key=lambda row: (row.get("device_type", ""), -int(row.get("count", 0))))
         logging.info("Total %s count rows after fetch and sort: %d", distinct, len(all_rows))
         return all_rows
+
+    @staticmethod
+    def _with_unassigned(
+        all_rows: list[dict], target_org_id: str, distinct: str, unassigned_records: list[dict] | None
+    ) -> list[dict]:
+        """Merge unassigned AP/switch stock into assigned counts so totals are not understated."""
+        # Kept as its own method so the primary counting loop stays within the complexity budget.
+        if unassigned_records is None:  # Direct/test callers may omit the shared fetch; pull it ourselves
+            unassigned_records = OrgDeviceInventorySummaryCore._fetch_unassigned_inventory(target_org_id)
+        try:  # Supplemental counting must never break the primary report
+            unassigned_rows = OrgDeviceInventorySummaryCore._aggregate_unassigned_counts(unassigned_records, distinct)
+            merged = OrgDeviceInventorySummaryCore._merge_counts(all_rows, unassigned_rows, distinct)
+            return merged  # Combined assigned + unassigned rows
+        except Exception as error:  # Fall back to assigned-only rows on any aggregation/merge failure
+            logging.error("Unassigned %s supplemental count failed: %s", distinct, error, exc_info=True)
+            return all_rows  # Degrade gracefully to the assigned-only counts
 
     @staticmethod
     def _display_and_export(rows: list[dict], distinct: str, filename: str, api_func: str) -> None:
