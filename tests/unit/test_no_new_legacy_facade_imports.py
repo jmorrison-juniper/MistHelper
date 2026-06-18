@@ -10,6 +10,7 @@ def test_no_new_test_imports_of_selected_legacy_facades() -> None:  # Enforce mi
     allowed_existing_references = {  # Baseline exceptions tracked until corresponding canonical ports are complete.
         "tests/unit/test_exports.py",
         "tests/unit/test_menu_13_device_stats.py",
+        "tests/unit/test_menu_19_device_port_stats.py",
         "tests/integration/test_mistapi_sdk_compatibility.py",
         "tests/guardrails/test_wave1_safety_classification_guardrails.py",
         "tests/guardrails/test_wave1_entry_routing_guardrails.py",

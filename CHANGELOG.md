@@ -7,6 +7,34 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Dependency Updates
+
+- Raised Mist API dependency floors to `mistapi>=0.63.1` in `requirements.txt`, `pyproject.toml`, and the runtime import manager so documented, packaged, and auto-install paths stay aligned.
+
+### Compatibility Validation
+
+- Live compatibility validation against `mistapi 0.63.1` succeeded for MistHelper session initialization plus representative org/site read paths: self lookup, sites, inventory, wireless clients, alarms, events, SLE exports, audit logs, and support tickets.
+
+### Changed
+
+- **Serial CC refactor (offender #8)**: Extracted `OrgClientSecurityExporter.security_events` workflow into `src/refactors/serial_cc/security_events.py` (`SecurityEventsService`) and reduced `MistHelper.py` method to thin delegator. Post-refactor Radon complexity in `MistHelper.py` is now `A (1)` for this symbol.
+- **Serial CC refactor (offender #9)**: Extracted `OrgExportUtils.sle_metrics` workflow into `src/refactors/serial_cc/sle_metrics.py` (`SLEMetricsService`) and reduced `MistHelper.py` method to thin delegator. Post-refactor Radon complexity in `MistHelper.py` is now `A (1)` for this symbol.
+- **Serial CC refactor**: Delegated `_LegacyPacketCaptureManager._start_site_client_capture_wireless` to `src/refactors/serial_cc/start_site_client_capture_wireless.py` (`SiteWirelessClientCaptureService`) and reduced `MistHelper.py` method complexity to `A (1)`.
+- **Serial CC refactor**: Delegated `_LegacyPacketCaptureManager._start_site_scan_capture` to `src/refactors/serial_cc/start_site_scan_capture.py` (`SiteScanCaptureService`) and reduced `MistHelper.py` method complexity to `A (1)`.
+- **Serial CC refactor**: Extracted `GlobalImportManager._get_global_assignments` into `src/refactors/serial_cc/global_assignments_builder.py` (`GlobalAssignmentsBuilderService`) and reduced `MistHelper.py` method complexity to `A (1)`.
+- **Serial CC refactor**: Extracted `SiteClientExporter.client_insights` into `src/refactors/serial_cc/site_client_insights.py` (`SiteClientInsightsService`) and reduced `MistHelper.py` method complexity to `A (1)`.
+- **Serial CC refactor**: Extracted `GlobalImportManager.initialize_all_imports` into `src/refactors/serial_cc/import_initialization_service.py` (`ImportInitializationService`) and reduced `MistHelper.py` method complexity to `A (1)`.
+- **Serial CC refactor**: Decomposed `OrgInventoryExporter.combined_inventory_with_site_info` in place into class helper methods (no new delegates/wrappers) and reduced `MistHelper.py` method complexity to `A (1)`.
+- **Serial CC refactor**: Decomposed `OrgDeviceStatsExporter.device_port_stats` in place into class helper methods (no new delegates/wrappers) and reduced `MistHelper.py` method complexity to `A (3)`.
+- **Serial CC refactor**: Decomposed `_LegacyPacketCaptureManager._execute_site_capture_loop_legacy` in place into class helper methods (no new delegates/wrappers) and reduced `MistHelper.py` method complexity to `A (4)`.
+- **Serial CC refactor**: Decomposed `OrgAlarmEventExporter.device_events_52w_legacy` in place into 7 class helper methods (no new delegates/wrappers) and reduced `MistHelper.py` method complexity from `E (38)` to `B (8)`.
+- **Serial CC refactor**: Decomposed `execute_with_connection_pool_management` in place into 3 module-level helpers (`_pool_configure`, `_pool_process_batch_wait_loop`, `_pool_log_batch_exception`) and reduced complexity from `D (21)` to `B (6)`.
+- **Serial CC refactor**: Decomposed `run_systematic_test` in place into 4 module-level helpers (`_systematic_test_build_safe_list`, `_systematic_test_emit_skips`, `_systematic_test_run_option`, `_systematic_test_resolve_fast_mode`) and reduced complexity from `D (21)` to `B (8)`. No D or E grade offenders remain in `MistHelper.py`.
+
+### Removed
+
+- **Dead legacy classes**: Removed 5 orphaned `_Legacy*` classes (`_LegacyPacketCaptureManager`, `_LegacyGatewayStatsExporter`, `_LegacyGatewayExportUtils`, `_LegacyWAN2MigrationManager`, `_LegacyWANProbeDeviceOverrideManager`) from `MistHelper.py`. These were inline implementations retained for rollback safety after their logic was migrated to canonical classes (`PacketCaptureManager` -> `src/capture/`, `GatewayStatsExporter`, `GatewayExportUtils`, `WAN2MigrationManager`, `WANProbeDeviceOverrideManager`). Verified unreferenced (no instantiations, aliases, subclasses, or dynamic forwarders reach them). Deletion removed 3,939 lines (27,666 -> 23,722) and cleared the two worst CRITICAL complexity hotspots (`start_org_packet_capture_legacy` CC 53, `with_wan_overrides_legacy` CC 46). Compliance violations dropped 1440 -> 1214; classes 101 -> 96.
+
 ### Fixed
 
 - **Menu 13 still undercounted APs (claimed-but-never-connected APs dropped)** (#417): Even after #415, AP counts were short because the AP path used `countOrgDevices(distinct="version")`, which only returns version-keyed buckets. APs that are **claimed and assigned to a site but have never connected** report no firmware version and were silently dropped (e.g. T-Mobile_USA_Retail AP41 showed 9428 vs the portal's 9676). These APs have a `site_id`, so the #415 unassigned supplement did not catch them either. APs are now counted directly from `getOrgInventory(type="ap")` — the same source as the portal "Claim APs" screen — so every claimed AP is counted exactly once with a three-way version bucket: `unassigned` (no `site_id`), the real firmware version (assigned + connected), or `unknown` (assigned but never connected). Switches and gateways are unchanged, and the unassigned supplement is now switch-only to avoid double counting APs. Conservation is verified against real inventory data and four new unit tests cover every AP state.
