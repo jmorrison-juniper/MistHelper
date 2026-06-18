@@ -140,6 +140,68 @@ def test_merge_counts_sums_overlapping_keys() -> None:
     assert len(merged) == 2
 
 
+def test_ap_inventory_bucket_covers_four_states() -> None:
+    """AP bucketing must distinguish assigned-versioned, never-connected, and unassigned APs."""
+    _configure_dependencies()
+    bucket = OrgDeviceInventorySummaryCore._ap_inventory_bucket
+    # assigned + real firmware version -> the real version
+    assert bucket({"site_id": "s1", "version": "0.12.27139"}, "version") == "0.12.27139"
+    # assigned + never connected (no version) -> "unknown"
+    assert bucket({"site_id": "s1", "version": ""}, "version") == "unknown"
+    assert bucket({"site_id": "s1"}, "version") == "unknown"
+    # unassigned (no site_id), with or without version -> "unassigned"
+    assert bucket({"version": "0.12.27139"}, "version") == "unassigned"
+    assert bucket({}, "version") == "unassigned"
+    # model report always uses the real model regardless of assignment/connection state
+    assert bucket({"site_id": "s1", "model": "AP41"}, "model") == "AP41"
+    assert bucket({"model": "AP41"}, "model") == "AP41"
+
+
+def test_aggregate_ap_counts_version_buckets() -> None:
+    """AP version aggregation buckets assigned/never-connected/unassigned APs correctly."""
+    _configure_dependencies()
+    records = [
+        {"type": "ap", "model": "AP41", "site_id": "s1", "version": "0.12.27139"},  # assigned + version
+        {"type": "ap", "model": "AP41", "site_id": "s1", "version": "0.12.27139"},  # assigned + version
+        {"type": "ap", "model": "AP41", "site_id": "s1"},  # assigned + never connected
+        {"type": "ap", "model": "AP41"},  # unassigned
+        {"type": "ap", "model": "AP41", "version": "0.12.27139"},  # unassigned (even with a version)
+    ]
+    rows = OrgDeviceInventorySummaryCore._aggregate_ap_counts(records, "version")
+    by_ver = {row["version"]: row["count"] for row in rows}
+    assert by_ver["0.12.27139"] == 2  # only the two assigned-with-version APs
+    assert by_ver["unknown"] == 1  # assigned but never connected
+    assert by_ver["unassigned"] == 2  # both unassigned regardless of version
+    assert all(row["device_type"] == "ap" for row in rows)
+
+
+def test_aggregate_ap_counts_model_counts_all() -> None:
+    """AP model aggregation counts every claimed AP under its real model."""
+    _configure_dependencies()
+    records = [
+        {"type": "ap", "model": "AP41", "site_id": "s1", "version": "0.12.27139"},
+        {"type": "ap", "model": "AP41", "site_id": "s1"},  # never connected still counts
+        {"type": "ap", "model": "AP41"},  # unassigned still counts
+    ]
+    rows = OrgDeviceInventorySummaryCore._aggregate_ap_counts(records, "model")
+    assert rows == [{"device_type": "ap", "model": "AP41", "count": 3}]
+
+
+def test_fetch_ap_inventory_returns_all_claimed() -> None:
+    """AP inventory fetch returns every claimed AP (assigned and unassigned)."""
+    _configure_dependencies()
+    from src.inventory import org_device_inventory_summary as _mod
+
+    _mod.mistapi.get_all = MagicMock(
+        return_value=[
+            {"type": "ap", "model": "AP41", "site_id": "s1"},
+            {"type": "ap", "model": "AP41"},
+        ]
+    )
+    records = OrgDeviceInventorySummaryCore._fetch_ap_inventory("org-1")
+    assert len(records) == 2  # no client-side filtering; assigned + unassigned both returned
+
+
 def test_run_for_org_calls_all_export_steps(monkeypatch) -> None:
     """run_for_org should execute model, version, and pivot export flows."""
     _configure_dependencies()
@@ -152,7 +214,9 @@ def test_run_for_org_calls_all_export_steps(monkeypatch) -> None:
         OrgDeviceInventorySummaryCore,
         "_fetch_all_counts",
         staticmethod(
-            lambda target_org_id, distinct, unassigned_records=None: [{"device_type": "ap", distinct: "v", "count": 1}]
+            lambda target_org_id, distinct, unassigned_records=None, ap_records=None: [
+                {"device_type": "ap", distinct: "v", "count": 1}
+            ]
         ),
     )
     from src.inventory.inventory_summary import pivot_renderer as _pivot_mod
@@ -162,7 +226,7 @@ def test_run_for_org_calls_all_export_steps(monkeypatch) -> None:
         _vpm_mod.VersionPerModelFetcher,
         "fetch",
         staticmethod(
-            lambda target_org_id, model_rows, unassigned_records=None: [
+            lambda target_org_id, model_rows, unassigned_records=None, ap_records=None: [
                 {"device_type": "ap", "model": "A", "version": "1", "count": 1}
             ]
         ),
