@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from MistHelper import SiteClientExporter, _LegacyPacketCaptureManager, run_interactive_test
+from MistHelper import PacketCaptureManager, SiteClientExporter, run_interactive_test
 from tests.fixtures.next5_parity_baseline import NEXT5_TARGET_FUNCTIONS
 from tests.integration.helpers.compatibility_assertions import (
     assert_callable_entrypoint,
@@ -13,11 +13,11 @@ from tests.integration.helpers.compatibility_assertions import (
 def test_next5_entrypoints_remain_callable() -> None:
     """Verify next-five compatibility entrypoints remain callable from legacy module."""
     assert_callable_entrypoint(
-        _LegacyPacketCaptureManager._start_site_scan_capture_all_aps,
+        PacketCaptureManager._start_site_scan_capture_all_aps,
         "_start_site_scan_capture_all_aps",
     )
-    assert_callable_entrypoint(_LegacyPacketCaptureManager._wait_and_download_pcap, "_wait_and_download_pcap")
-    assert_callable_entrypoint(_LegacyPacketCaptureManager._wait_and_download_pcap_org, "_wait_and_download_pcap_org")
+    assert_callable_entrypoint(PacketCaptureManager._wait_and_download_pcap, "_wait_and_download_pcap")
+    assert_callable_entrypoint(PacketCaptureManager._wait_and_download_pcap_org, "_wait_and_download_pcap_org")
     assert_callable_entrypoint(SiteClientExporter.wifi_clients, "wifi_clients")
     assert_callable_entrypoint(run_interactive_test, "run_interactive_test")
 
@@ -25,9 +25,9 @@ def test_next5_entrypoints_remain_callable() -> None:
 def test_next5_target_name_matrix_is_fully_mapped() -> None:
     """Ensure required target names are represented by callable compatibility entrypoints."""
     target_mapping = {
-        "_start_site_scan_capture_all_aps": _LegacyPacketCaptureManager._start_site_scan_capture_all_aps,
-        "_wait_and_download_pcap": _LegacyPacketCaptureManager._wait_and_download_pcap,
-        "_wait_and_download_pcap_org": _LegacyPacketCaptureManager._wait_and_download_pcap_org,
+        "_start_site_scan_capture_all_aps": PacketCaptureManager._start_site_scan_capture_all_aps,
+        "_wait_and_download_pcap": PacketCaptureManager._wait_and_download_pcap,
+        "_wait_and_download_pcap_org": PacketCaptureManager._wait_and_download_pcap_org,
         "wifi_clients": SiteClientExporter.wifi_clients,
         "run_interactive_test": run_interactive_test,
     }

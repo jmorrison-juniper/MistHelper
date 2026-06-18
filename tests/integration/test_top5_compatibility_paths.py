@@ -3,16 +3,16 @@
 from MistHelper import (
     GatewayExportUtils,
     OrgAlarmEventExporter,
+    PacketCaptureManager,
     _early_dependency_check,
-    _LegacyPacketCaptureManager,
 )
 
 
 def test_top5_entrypoints_remain_callable() -> None:
     """Verify decomposed top-5 compatibility entrypoints are still callable."""
     assert callable(_early_dependency_check)
-    assert callable(_LegacyPacketCaptureManager._execute_site_capture_loop)
-    assert callable(_LegacyPacketCaptureManager.start_org_packet_capture)
+    assert callable(PacketCaptureManager._execute_site_capture_loop)
+    assert callable(PacketCaptureManager.start_org_packet_capture)
     assert callable(OrgAlarmEventExporter.device_events_52w)
     assert callable(GatewayExportUtils.with_wan_overrides)
 
@@ -28,8 +28,8 @@ def test_top5_target_name_matrix_is_fully_mapped() -> None:
     ]
     target_mapping = {
         "_early_dependency_check": _early_dependency_check,
-        "_execute_site_capture_loop": _LegacyPacketCaptureManager._execute_site_capture_loop,
-        "start_org_packet_capture": _LegacyPacketCaptureManager.start_org_packet_capture,
+        "_execute_site_capture_loop": PacketCaptureManager._execute_site_capture_loop,
+        "start_org_packet_capture": PacketCaptureManager.start_org_packet_capture,
         "device_events_52w": OrgAlarmEventExporter.device_events_52w,
         "with_wan_overrides": GatewayExportUtils.with_wan_overrides,
     }

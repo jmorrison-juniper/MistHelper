@@ -106,18 +106,9 @@ from src.bootstrap.dependency_check import (
 from src.bootstrap.package_installer import (
     PackageInstaller,
 )  # Duplicate import; harmless re-import of package installer
-from src.capture.multi_ap_scan_workflow import (
-    MultiApScanCaptureWorkflow,
-)  # Duplicate import; harmless re-import of multi-AP scan workflow
-from src.capture.org_pcap_wait_download_workflow import (
-    OrgPcapWaitDownloadWorkflow,
-)  # Duplicate import; harmless re-import of org pcap download workflow
 from src.capture.packet_capture import (
     PacketCaptureManager as ExtractedPacketCaptureManager,
 )  # Import packet capture manager (renamed to avoid conflicts)
-from src.capture.site_pcap_wait_download_workflow import (
-    SitePcapWaitDownloadWorkflow,
-)  # Import site-level packet capture download workflow
 from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # Import 52-week device events export handler
 from src.export.site_export_utils import (
     configure_site_export_utils_dependencies,
@@ -1392,9 +1383,9 @@ class GlobalImportManager:
         # Required packages (core functionality)
         self.required_packages = {  # Map of package name -> pip spec (None means stdlib, no install needed)
             # Core API and networking
-            "mistapi": "mistapi>=0.3.0",  # Official Mist API SDK (the core dependency)
+            "mistapi": "mistapi>=0.63.1",  # Official Mist API SDK floor aligned with latest validated upstream release
             "requests": "requests>=2.28.0",  # HTTP client used for API calls
-            "websocket-client": "websocket-client>=1.4.0",  # WebSocket client for device diagnostics
+            "websocket-client": "websocket-client>=1.8.0",  # WebSocket client minimum aligned to modern mistapi needs
             # CLI and user interface
             "prettytable": "prettytable>=3.5.0",  # ASCII table rendering for menus/reports
             "tqdm": "tqdm>=4.64.0",  # Progress bars for long-running operations
@@ -2039,7 +2030,6 @@ class GlobalImportManager:
             skip_deps: Whether to skip dependency installation
             max_workers: Maximum number of concurrent workers
         """
-        import concurrent.futures  # Thread pool for parallel imports
         import threading  # Lock primitive to serialize log output across threads
 
         # Thread-safe logging
@@ -2122,212 +2112,15 @@ class GlobalImportManager:
         Returns:
             Tuple of (success: bool, global_assignments: dict)
         """
-        # Check if already initialized to avoid duplicate work
-        if self._initialization_complete:
-            logging.debug("Import initialization already completed, returning cached results")
-            return self._initialization_success, self._cached_global_assignments
+        from src.refactors.serial_cc.import_initialization_service import ImportInitializationService
 
-        start_time = time.time()
-        logging.info("Initializing global import management system...")
-
-        if skip_deps:
-            logging.info("Dependency checking and installation skipped (--skip-deps flag)")
-        else:
-            # Only check UV if auto-upgrade is enabled
-            if self.auto_upgrade_uv:
-                if not self._check_uv_installation():
-                    self._install_uv()
-                else:
-                    self._upgrade_uv()
-
-        # Import all required packages (this will install missing ones automatically)
-        logging.info("Importing required dependencies...")
-
-        # Use concurrent processing for faster dependency resolution
-        if not skip_deps and len(self.required_packages) > 3:
-            self._import_packages_concurrently(self.required_packages, required=True, skip_deps=skip_deps)  # type: ignore[no-untyped-call]
-        else:
-            # Sequential for smaller loads or when skipping deps
-            for (
-                module_name,
-                package_spec,
-            ) in self.required_packages.items():  # Import each required package sequentially
-                logging.info(
-                    f"  Checking required dependency: {module_name} ({package_spec or 'built-in'})"
-                )  # Announce the check
-                result = self.import_module_safely(  # Import (and install if needed) this required package
-                    module_name,
-                    package_spec,
-                    required=True,
-                    skip_deps=skip_deps,
-                    skip_upgrade=True,  # Required path, defer upgrades for speed
-                )
-                if result:  # Import succeeded
-                    logging.info(f"  [OK] {module_name}: Available")  # Report availability
-                else:  # Import failed
-                    logging.error(f"  [FAIL] {module_name}: Failed to import")  # Log a hard failure for a required dep
-
-        # Import optional packages
-        logging.info("Importing optional dependencies...")  # Begin the optional dependency phase
-        if not skip_deps and len(self.optional_packages) > 3:  # Enough optional packages to benefit from concurrency
-            self._import_packages_concurrently(self.optional_packages, required=False, skip_deps=skip_deps)  # type: ignore[no-untyped-call]  # Import them in parallel
-        else:  # Few packages or deps skipped -- import serially
-            # Sequential for smaller loads or when skipping deps
-            for (
-                module_name,
-                package_spec,
-            ) in self.optional_packages.items():  # Import each optional package one at a time
-                logging.info(
-                    f"  Checking optional dependency: {module_name} ({package_spec or 'built-in'})"
-                )  # Announce the check
-                result = self.import_module_safely(  # Import (and optionally install) this optional package
-                    module_name,
-                    package_spec,
-                    required=False,
-                    skip_deps=skip_deps,
-                    skip_upgrade=True,  # Optional path, defer upgrades
-                )
-                if result:  # Import succeeded
-                    logging.info(f"  [OK] {module_name}: Available")  # Report availability
-                else:  # Import failed (acceptable for optional deps)
-                    logging.warning(f"  [WARN] {module_name}: Not available")  # Warn but continue
-
-        # Special imports for commonly used components
-        self._import_special_modules()  # type: ignore[no-untyped-call]  # Wire up modules needing bespoke import logic
-
-        # Report results
-        elapsed_time = time.time() - start_time  # Total seconds spent initializing imports
-        total_required = len(self.required_packages)  # How many required packages exist
-        failed_required = len(
-            [p for p in self.failed_imports if p in self.required_packages]
-        )  # Required packages that failed
-        successful_required = total_required - failed_required  # Required packages that succeeded
-        optional_imported = len(
-            [p for p in self.imports.keys() if p in self.optional_packages]
-        )  # Optional packages that loaded
-
-        logging.info(f"Import initialization completed in {elapsed_time:.2f} seconds")  # Report total elapsed time
-        logging.info(
-            f"Required dependencies: {successful_required}/{total_required} successful"
-        )  # Summarize required results
-        logging.info(
-            f"Optional dependencies: {optional_imported}/{len(self.optional_packages)} available"
-        )  # Summarize optional results
-
-        if self.installed_packages:  # Some packages were installed during this run
-            logging.info(f"Newly installed packages: {', '.join(self.installed_packages)}")  # List what was installed
-
-        if self.failed_imports:  # Some imports failed entirely
-            logging.error(f"Failed imports: {', '.join(self.failed_imports)}")  # List the failures for diagnosis
-
-        # Make imported modules available globally
-        global_assignments = self._get_global_assignments()  # type: ignore[no-untyped-call]  # Build the name->module map for globals()
-
-        # Cache results to avoid duplicate initialization
-        success = len(self.failed_imports) == 0  # Overall success means zero failed imports
-        self._initialization_complete = True  # Mark initialization as having run
-        self._initialization_success = success  # Remember whether it fully succeeded
-        self._cached_global_assignments = global_assignments  # Cache assignments so a repeat call is cheap
-
-        # Return success status and global assignments
-        return success, global_assignments  # Hand both the status flag and the assignment map to the caller
+        return ImportInitializationService.execute(self, skip_deps=skip_deps)
 
     def _get_global_assignments(self):  # noqa: C901, PLR0912, PLR0915
         """Get dictionary of global variable assignments for imported modules."""
-        global_vars = {}  # Accumulate name -> object pairs to inject into globals()
+        from src.refactors.serial_cc.global_assignments_builder import GlobalAssignmentsBuilderService
 
-        # Add all imported modules to globals
-        for module_name, module_obj in self.imports.items():  # Walk every successfully imported module
-            # Add to global namespace
-            global_vars[module_name] = module_obj  # Expose the module under its own name
-
-            # Handle special cases for commonly used attributes
-            if module_name == "datetime":  # datetime needs its helper symbols hoisted too
-                global_vars["timezone"] = getattr(
-                    module_obj, "timezone", None
-                )  # Expose timezone for tz-aware datetimes
-                global_vars["timedelta"] = getattr(module_obj, "timedelta", None)  # Expose timedelta for date math
-            elif module_name == "concurrent.futures":  # Hoist the thread-pool primitives
-                global_vars["ThreadPoolExecutor"] = getattr(
-                    module_obj, "ThreadPoolExecutor", None
-                )  # Expose the executor class
-                global_vars["as_completed"] = getattr(
-                    module_obj, "as_completed", None
-                )  # Expose the completion iterator
-                global_vars["concurrent"] = (
-                    module_obj  # For concurrent.futures references  # Also expose the package itself
-                )
-            elif module_name == "prettytable":  # Table-rendering helper
-                global_vars["PrettyTable"] = getattr(module_obj, "PrettyTable", None)  # Expose the PrettyTable class
-            elif module_name == "numpy":  # Numerical library
-                global_vars["np"] = module_obj  # Expose numpy under its conventional alias np
-            elif module_name == "tqdm":  # Progress-bar library
-                # tqdm is used directly throughout the script
-                global_vars["tqdm"] = module_obj  # Expose tqdm by name for progress bars
-            elif module_name == "collections":  # Standard collections module
-                global_vars["defaultdict"] = getattr(module_obj, "defaultdict", None)  # Expose defaultdict directly
-            elif module_name == "difflib":  # Sequence comparison library
-                global_vars["SequenceMatcher"] = getattr(
-                    module_obj, "SequenceMatcher", None
-                )  # Expose SequenceMatcher directly
-            elif module_name == "usaddress-scourgify":  # Optional address-normalization package
-                # Handle optional package - need to import the normalize function
-                if module_obj:  # Only proceed if the package actually loaded
-                    try:
-                        normalize_func = getattr(
-                            module_obj, "normalize_address_record", None
-                        )  # Look for the normalize function
-                        if normalize_func:  # The attribute exists on the module
-                            global_vars["normalize_address_record"] = normalize_func  # Expose it for address parsing
-                        else:  # Attribute missing -- import it directly from the subpackage
-                            # Try importing directly from scourgify
-                            from scourgify import normalize_address_record  # Direct import fallback
-
-                            global_vars["normalize_address_record"] = (
-                                normalize_address_record  # Expose the directly-imported function
-                            )
-                    except (ImportError, AttributeError):  # Package present but function unavailable
-                        logging.debug(
-                            "Could not import normalize_address_record from scourgify, using fallback"
-                        )  # Note we'll use a fallback
-            elif module_name == "rapidfuzz":  # Optional fuzzy-matching package
-                # Handle optional package - need to import the fuzz submodule
-                if module_obj:  # Only proceed if rapidfuzz loaded
-                    try:
-                        fuzz_module = getattr(module_obj, "fuzz", None)  # Look for the fuzz submodule attribute
-                        if fuzz_module:  # The submodule is accessible
-                            global_vars["fuzz"] = fuzz_module  # Expose fuzz for ratio scoring
-                        else:  # Attribute missing -- import it directly
-                            # Try importing fuzz directly from rapidfuzz
-                            from rapidfuzz import fuzz  # Direct import fallback
-
-                            global_vars["fuzz"] = fuzz  # Expose the directly-imported fuzz module
-                    except (ImportError, AttributeError):  # Package present but submodule unavailable
-                        logging.debug(
-                            "Could not import fuzz from rapidfuzz, using fallback"
-                        )  # Note we'll use a fallback
-            # Note: pynput handling removed for simplicity
-            elif module_name == "mistapi":  # The core Mist API SDK
-                # Handle mistapi module - make it globally available
-                if module_obj:  # Only expose if it loaded
-                    global_vars["mistapi"] = module_obj  # Expose the mistapi SDK by name
-                    logging.debug("Added mistapi to global namespace")  # Record the assignment
-            elif module_name == "paramiko":  # SSH client library
-                # Handle SSH client functionality
-                if module_obj:  # Only expose if it loaded
-                    global_vars["paramiko"] = module_obj  # Expose paramiko for SSH operations
-                    logging.debug("Added paramiko to global namespace")  # Record the assignment
-            # Note: pexpect handling removed for simplicity
-            elif module_name == "redexpect":  # Cross-platform SSH automation library
-                # Handle cross-platform SSH automation
-                if module_obj:  # Only expose if it loaded
-                    global_vars["redexpect"] = module_obj  # Expose redexpect for scripted SSH sessions
-                    logging.debug("Added redexpect to global namespace")  # Record the assignment
-
-        # Handle fallbacks for missing optional modules
-        self._add_fallbacks_to_globals(global_vars)  # type: ignore[no-untyped-call]  # Fill in shims for any optional deps that failed
-
-        return global_vars  # Return the complete name->object map for the caller to apply
+        return GlobalAssignmentsBuilderService.execute(self.imports, self._add_fallbacks_to_globals)
 
     def _make_modules_global(self):  # noqa: C901, PLR0912
         """Make all successfully imported modules available in the global namespace."""
@@ -2873,12 +2666,19 @@ msp_privileges: list[dict[str, Any]] = []  # List of {msp_id, msp_name, role, sc
 selected_msp: dict[str, Any] | None = None  # Currently selected MSP (from menu 115 or elsewhere)
 
 
-def detect_msp_privileges():
+def detect_msp_privileges(session=None):
     """Detect MSP-level privileges from the authenticated user's profile.
 
     Calls GET /api/v1/self to retrieve user privileges and extracts any MSP-level access.
     This enables MSP menu options when the user has appropriate permissions.
     If MSP names are not provided in the privileges, fetches them from the MSP API.
+
+    Args:
+        session: Optional live API session to detect against. The interactive login
+            orchestrator passes its freshly-authenticated session here because the
+            module-global apisession has not been published yet at detection time.
+            When provided it is also promoted to the global so later menus reuse it.
+            Falls back to the module-global apisession when omitted.
 
     Returns:
         list: List of MSP privilege dicts with keys: msp_id, msp_name, role, scope
@@ -2886,9 +2686,12 @@ def detect_msp_privileges():
     """
     global apisession, msp_privileges
 
-    if not apisession:
-        logging.warning("Cannot detect MSP privileges - no active session")
-        return []
+    if session is not None:  # Caller supplied an explicit session (interactive login, before the global is published)
+        apisession = session  # Promote it to the global now so getSelf and _fetch_msp_name use the same session
+
+    if not apisession:  # Still no usable session from either the argument or the global
+        logging.warning("Cannot detect MSP privileges - no active session")  # Warn that detection cannot proceed
+        return []  # Treat as no MSP access
 
     try:
         import mistapi.api.v1.self.self as self_api  # Import the "self" endpoint module lazily
@@ -2986,10 +2789,15 @@ def initialize_mist_session_interactive():
         "org_id": org_id,  # Currently selected org ID, if any
     }
 
+    def _detect_msp_for_login():  # DI adapter binding MSP detection to the freshly-authenticated session
+        return detect_msp_privileges(
+            state.get("apisession")
+        )  # Orchestrator stores the new session in state before this runs
+
     session_manager = LoginOrchestrator(  # Build the interactive login orchestrator with injected deps
         state=state,  # Pass the mutable state bag the orchestrator will update
         safe_input=InputUtils.safe_input,  # Inject the EOF-safe input function
-        detect_msp_privileges=detect_msp_privileges,  # Inject the MSP detection callback
+        detect_msp_privileges=_detect_msp_for_login,  # Inject MSP detection bound to the new login session
     )
     login_success = session_manager.execute()  # Run the interactive login workflow
 
@@ -6433,2166 +6241,7 @@ class DeviceDataFetcher:
         DisplayUtils.dict_list_as_pretty_table(processed)
 
 
-class _LegacyPacketCaptureManager:
-    """
-    Comprehensive packet capture management for Juniper Mist environments.
-
-    This class handles both organization-level and site-level packet captures with support
-    for multiple capture types:
-    - Client captures (wireless/wired)
-    - Gateway captures (wired/wireless)
-    - Scan captures (wireless radiotap)
-    - MxEdge captures (org-level only)
-
-    All captures stream output via WebSocket for real-time monitoring.
-
-    SECURITY:
-        - Validates all user inputs (MAC addresses, channels, durations)
-        - Enforces API constraints (max duration, packet counts)
-        - Requires explicit confirmation for capture initiation
-        - Logs all operations with full audit trail
-
-    ARCHITECTURE:
-        - Leverages existing WebSocketManager for streaming
-        - Follows NASA/JPL defensive programming patterns
-        - Class-based design eliminates wrapper functions
-    """
-
-    def __init__(self, mist_session, org_id=None):
-        """
-        Initialize packet capture manager.
-
-        Args:
-            mist_session: Active Mist API session
-            org_id (str, optional): Organization ID for operations
-        """
-        self.mist_session = mist_session
-        self.org_id = org_id or ConfigUtils.get_cached_or_prompted_org_id()
-        self.websocket_manager = None
-        logging.debug(f"PacketCaptureManager initialized for org_id: {self.org_id}")
-
-    @staticmethod
-    def validate_mac_address(mac_address: str) -> bool:
-        """
-        Validate MAC address format.
-
-        Args:
-            mac_address (str): MAC address to validate
-
-        Returns:
-            bool: True if valid, False otherwise
-
-        SECURITY: Prevents injection of malformed MAC addresses into API calls
-        """
-        if not mac_address:
-            return False
-
-        # Support common MAC formats: aa:bb:cc:dd:ee:ff, aa-bb-cc-dd-ee-ff, aabbccddeeff
-        mac_pattern = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$|^[0-9A-Fa-f]{12}$")
-        return bool(mac_pattern.match(mac_address))
-
-    @staticmethod
-    def normalize_mac_address(mac_address: str) -> str:
-        """
-        Normalize MAC address to colon-separated format.
-
-        Args:
-            mac_address (str): MAC address in any common format
-
-        Returns:
-            str: Normalized MAC address (aa:bb:cc:dd:ee:ff)
-        """
-        # Remove all separators
-        mac_clean = re.sub(r"[:-]", "", mac_address.lower())
-        # Insert colons every 2 characters
-        return ":".join(mac_clean[i : i + 2] for i in range(0, 12, 2))
-
-    def _get_tcpdump_expression_selection(self):  # noqa: PLR0915
-        """
-        Prompt user for tcpdump expression with comprehensive examples.
-        Based on Daniel Miessler's tcpdump tutorial (danielmiessler.com/blog/tcpdump)
-
-        Returns:
-            str: tcpdump expression or empty string to skip
-        """
-        print("\n" + "=" * 80)
-        print(" PACKET FILTER SELECTION (tcpdump expression)")
-        print("=" * 80)
-        print("\n--- BASIC FILTERS ---")
-        print("  1.  All traffic (no filter)")
-        print("  2.  HTTPS only (port 443)")
-        print("  3.  HTTP/HTTPS (port 80 or 443)")
-        print("  4.  DNS (port 53)")
-        print("  5.  SSH (port 22)")
-        print("  6.  FTP (port 21)")
-        print("  7.  SMTP Email (port 25)")
-        print("  8.  ICMP/ping")
-        print("  9.  ARP")
-
-        print("\n--- PROTOCOL FILTERS ---")
-        print("  10. TCP only")
-        print("  11. UDP only")
-        print("  12. Not ICMP (exclude ping)")
-
-        print("\n--- DIRECTION FILTERS ---")
-        print("  13. Outbound to port 443")
-        print("  14. Inbound from port 80")
-
-        print("\n--- COMBINED FILTERS ---")
-        print("  15. HTTP or HTTPS or DNS (port 80 or 443 or 53)")
-        print("  16. All except SSH (not port 22)")
-        print("  17. TCP SYN packets (connection attempts)")
-        print("  18. TCP SYN-ACK packets (connection replies)")
-        print("  19. TCP RST packets (connection resets)")
-        print("  20. TCP FIN packets (connection close)")
-
-        print("\n--- ADVANCED FILTERS ---")
-        print("  21. Non-standard ports (>1024)")
-        print("  22. All except ARP and DNS")
-        print("  23. TCP traffic on non-standard ports")
-        print("  24. Broadcast traffic")
-        print("  25. Multicast traffic")
-        print("  26. IPv6 only")
-        print("  27. VLAN tagged traffic")
-
-        print("\n--- APPLICATION PROTOCOLS ---")
-        print("  28. SMB/CIFS file sharing (port 445)")
-        print("  29. RDP Remote Desktop (port 3389)")
-        print("  30. NTP time sync (port 123)")
-        print("  31. SNMP monitoring (port 161)")
-        print("  32. Syslog (port 514)")
-        print("  33. DHCP (port 67 or 68)")
-        print("  34. LDAP directory (port 389)")
-        print("  35. MySQL database (port 3306)")
-
-        print("\n--- SECURITY & TROUBLESHOOTING ---")
-        print("  36. Port scans (SYN without ACK)")
-        print("  37. Fragmented packets")
-        print("  38. Large packets (>1500 bytes)")
-        print("  39. Retransmissions (duplicate SEQ)")
-        print("  40. Custom expression")
-
-        print("=" * 80)
-
-        choice = InputUtils.safe_input(
-            "\nEnter choice (default 1 - all traffic): ", default_value="1", context="tcpdump_filter"
-        )
-
-        expressions = {
-            # Basic filters
-            "1": "",  # No filter
-            "2": "port 443",
-            "3": "port 80 or port 443",
-            "4": "port 53",
-            "5": "port 22",
-            "6": "port 21",
-            "7": "port 25",
-            "8": "icmp",
-            "9": "arp",
-            # Protocol filters
-            "10": "tcp",
-            "11": "udp",
-            "12": "not icmp",
-            # Direction filters
-            "13": "dst port 443",
-            "14": "src port 80",
-            # Combined filters
-            "15": "port 80 or port 443 or port 53",
-            "16": "not port 22",
-            "17": "tcp[tcpflags] & tcp-syn != 0",
-            "18": "tcp[tcpflags] = 0x12",
-            "19": "tcp[tcpflags] & tcp-rst != 0",
-            "20": "tcp[tcpflags] & tcp-fin != 0",
-            # Advanced filters
-            "21": "tcp[0:2] > 1024 or udp[0:2] > 1024",
-            "22": "not arp and not port 53",
-            "23": "tcp and port > 1024",
-            "24": "ether broadcast",
-            "25": "ether multicast",
-            "26": "ip6",
-            "27": "vlan",
-            # Application protocols
-            "28": "port 445",
-            "29": "port 3389",
-            "30": "port 123",
-            "31": "port 161",
-            "32": "port 514",
-            "33": "port 67 or port 68",
-            "34": "port 389",
-            "35": "port 3306",
-            # Security & troubleshooting
-            "36": "tcp[tcpflags] & (tcp-syn) != 0 and tcp[tcpflags] & (tcp-ack) = 0",
-            "37": "ip[6:2] & 0x1fff != 0",
-            "38": "greater 1500",
-            "39": "tcp[tcpflags] & (tcp-syn|tcp-fin|tcp-rst|tcp-push|tcp-ack|tcp-urg) = 0",
-        }
-
-        if choice in expressions:  # The user picked one of the predefined filter numbers
-            expr = expressions[choice]  # Look up the corresponding tcpdump expression
-            if expr:  # A non-empty expression was selected
-                print(f"\n! Filter applied: {expr}")  # Confirm the active filter to the user
-            else:  # The empty expression means "capture everything"
-                print("\n! Filter: None (capturing all traffic)")  # Tell the user no filter is applied
-            return expr  # Return the chosen tcpdump expression (may be empty)
-        elif choice == "40":  # The user chose to enter a custom expression
-            print("\nEnter custom tcpdump expression:")  # Prompt header for the custom filter
-            print("  Examples: 'host 192.168.1.1', 'net 10.0.0.0/8', 'port 8080'")  # Show example syntax
-            custom_expr = InputUtils.safe_input(
-                "Expression: ", context="tcpdump_custom", allow_empty=True
-            )  # Read the custom filter
-            if custom_expr:  # The user typed a non-empty expression
-                print(f"\n! Filter applied: {custom_expr}")  # Confirm the custom filter
-                return custom_expr  # Use the custom expression
-            else:  # The user left it blank
-                print("\n! No filter applied")  # Note that no filter will be used
-                return ""  # Capture all traffic
-        else:  # The choice didn't match any known option
-            print("\n! Invalid choice, using no filter")  # Inform the user of the fallback
-            return ""  # Default to capturing all traffic
-
-    def _get_capture_format_selection(self):
-        """
-        Prompt user for capture format selection.
-
-        NOTE: API documentation shows switches/gateways only support "stream" format,
-        but testing confirms "pcap" format works and generates downloadable files.
-        We offer both options and let the API reject if unsupported.
-
-        Returns:
-            str: Selected format - 'pcap' or 'stream'
-        """
-        print("\nCapture format:")  # Header for the capture-format choices
-        print("  1. PCAP file - downloadable (default, recommended)")  # Option 1: downloadable pcap file
-        print("  2. Stream to Mist Cloud (WebSocket real-time)")  # Option 2: live WebSocket stream
-        format_choice = InputUtils.safe_input(
-            "Enter choice (default 1): ", default_value="1", context="format"
-        )  # Read the format choice (defaults to 1)
-        return "pcap" if format_choice == "1" else "stream"  # Map the choice to the API's format keyword
-
-    def start_site_packet_capture(self):
-        """
-        Interactive menu for starting site-level packet captures.
-
-        Presents user with capture type options and guides through configuration.
-        """
-        logging.info("Menu #134: Starting site packet capture manager")
-        logging.debug("ENTRY: PacketCaptureManager.start_site_packet_capture()")
-
-        print("\n" + "=" * 80)
-        print(" SITE PACKET CAPTURE MANAGER")
-        print("=" * 80)
-        print("\nSelect capture type:")
-        print("  1. Client Capture (Wireless) - Captures ongoing traffic from connected clients")
-        print("  2. Client Capture (Wired) - Captures wired client traffic")
-        print("  3. Gateway Capture - Captures WAN/LAN gateway port traffic")
-        print("  4. Switch Capture - Captures switch port traffic")
-        print("  5. New Association Capture - Captures NEW connection attempts (auth/assoc handshakes)")
-        print("  6. Scan Radio Capture - Captures raw 802.11 frames on specific channel")
-        print("  0. Cancel")
-        print("=" * 80)
-
-        choice = InputUtils.safe_input("\nEnter your choice: ", context="site_capture_menu")
-
-        if choice == "1":
-            self._start_site_client_capture_wireless()  # type: ignore[no-untyped-call]
-        elif choice == "2":
-            self._start_site_client_capture_wired()  # type: ignore[no-untyped-call]
-        elif choice == "3":
-            self._start_site_gateway_capture()  # type: ignore[no-untyped-call]
-        elif choice == "4":
-            self._start_site_switch_capture()  # type: ignore[no-untyped-call]
-        elif choice == "5":
-            self._start_site_new_association_capture()  # type: ignore[no-untyped-call]
-        elif choice == "6":
-            self._start_site_scan_capture()  # type: ignore[no-untyped-call]
-        elif choice == "0":
-            print("\n! Cancelled by user")
-            return
-        else:
-            print("\n! Invalid choice")
-            return
-
-    def _start_site_client_capture_wireless(self):  # noqa: C901, PLR0912, PLR0915
-        """Start wireless client packet capture at site level."""
-        logging.info("Starting site wireless client capture")
-
-        # Get site selection
-        site_id = PromptUtils.select_site_with_logging()
-        if not site_id:
-            return
-
-        # Get capture parameters
-        print("\n" + "-" * 80)
-        print(" WIRELESS CLIENT CAPTURE CONFIGURATION")
-        print("-" * 80)
-        print("\nThis capture type monitors ongoing traffic from ALREADY CONNECTED wireless clients.")
-        print("Note: To capture new connection attempts (auth/assoc handshakes), use New Association Capture instead.")
-
-        # Client MAC selection
-        print("\nClient selection:")
-        print("  1. Select from connected clients")
-        print("  2. Manually enter MAC address")
-        client_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="client_select")
-
-        client_mac = None
-        if client_choice == "1":
-            client_mac = PromptClientUtils.select_client_mac(site_id)
-            if not client_mac:
-                print("\n! No client selected")
-                return
-        else:
-            client_mac = InputUtils.safe_input("\nEnter client MAC address: ", context="client_mac")
-
-        if not self.validate_mac_address(client_mac):
-            print(f"\n! Invalid MAC address format: {client_mac}")
-            return
-        client_mac = self.normalize_mac_address(client_mac)
-
-        # Optional AP MAC filter
-        print("\nOptional: Filter by specific AP")
-        print("  1. Select AP from list")
-        print("  2. Enter MAC manually")
-        print("  3. Skip (capture from any AP)")
-        ap_choice = InputUtils.safe_input("Enter choice (default 3): ", default_value="3", context="ap_filter")
-
-        ap_mac = None
-        if ap_choice == "1":
-            _prompt_utils = PromptNetworkDeviceUtils(  # Instantiate with runtime session and helpers
-                self.mist_session, InputUtils.safe_input, DeviceUtils.expand_port_range_string
-            )
-            ap_mac = _prompt_utils.select_ap_mac(site_id)  # Prompt user to pick an AP from the site
-            if ap_mac:
-                ap_mac = self.normalize_mac_address(ap_mac)
-        elif ap_choice == "2":
-            ap_mac = InputUtils.safe_input("Enter AP MAC address: ", context="ap_mac")
-            if not self.validate_mac_address(ap_mac):
-                print(f"\n! Invalid AP MAC address format: {ap_mac}")
-                return
-            ap_mac = self.normalize_mac_address(ap_mac)
-
-        # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration"
-        )
-        try:
-            duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print("\n! Duration must be between 60 and 86400 seconds")
-                print("  (Mist API requires minimum 60 seconds for all packet captures)")
-                return
-        except ValueError:
-            print(f"\n! Invalid duration: {duration_str}")
-            return
-
-        # Number of packets
-        num_packets_str = InputUtils.safe_input(
-            "Enter number of packets (default 1024, max 10000, 0 for unlimited): ",
-            default_value="1024",
-            context="num_packets",
-        )
-        try:
-            num_packets = int(num_packets_str)
-            if num_packets < 0 or num_packets > 10000:
-                print("\n! Number of packets must be between 0 and 10000")
-                return
-        except ValueError:
-            print(f"\n! Invalid number of packets: {num_packets_str}")
-            return
-
-        # Max packet length
-        max_pkt_len_str = InputUtils.safe_input(
-            "Enter max packet length in bytes (default 1300, max 2048): ", default_value="1300", context="max_pkt_len"
-        )
-        try:
-            max_pkt_len = int(max_pkt_len_str)
-            if max_pkt_len < 64 or max_pkt_len > 2048:
-                print("\n! Max packet length must be between 64 and 2048 bytes")
-                return
-        except ValueError:
-            print(f"\n! Invalid max packet length: {max_pkt_len_str}")
-            return
-
-        # Multicast option
-        includes_mcast_input = InputUtils.safe_input(
-            "Include multicast traffic? (y/n, default n): ", default_value="n", context="includes_mcast"
-        )
-        includes_mcast = includes_mcast_input.lower() == "y"
-
-        # Tcpdump filter selection
-        tcpdump_expr = self._get_tcpdump_expression_selection()  # type: ignore[no-untyped-call]
-
-        # Format selection
-        capture_format = self._get_capture_format_selection()  # type: ignore[no-untyped-call]
-
-        # Loop mode option
-        print("\nLoop Mode:")
-        print("  Automatically start a new capture when the current one completes")
-        print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
-        enable_loop = loop_mode.lower() == "y"
-
-        # Build request payload
-        payload = {
-            "type": "client",
-            "client_mac": client_mac,
-            "duration": duration,
-            "num_packets": num_packets,
-            "max_pkt_len": max_pkt_len,
-            "includes_mcast": includes_mcast,
-            "format": capture_format,
-        }
-
-        if ap_mac:
-            payload["ap_mac"] = ap_mac
-
-        # Add tcpdump filter if specified
-        if tcpdump_expr:
-            payload["tcpdump_expression"] = tcpdump_expr
-
-        # Display configuration and confirm
-        print("\n" + "=" * 80)
-        print(" CAPTURE CONFIGURATION SUMMARY")
-        print("=" * 80)
-        print("  Capture Type: Wireless Client")
-        print(f"  Client MAC: {client_mac}")
-        if ap_mac:
-            print(f"  AP MAC Filter: {ap_mac}")
-        if tcpdump_expr:
-            print(f"  Packet Filter: {tcpdump_expr}")
-        else:
-            print("  Packet Filter: None (all traffic)")
-        print(f"  Duration: {duration} seconds")
-        print(f"  Packets: {num_packets} ({'unlimited' if num_packets == 0 else 'max'})")
-        print(f"  Max Packet Length: {max_pkt_len} bytes")
-        print(f"  Include Multicast: {'Yes' if includes_mcast else 'No'}")
-        print(f"  Format: {capture_format}")
-        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
-        print("=" * 80)
-
-        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
-
-        # Start capture via API
-        if enable_loop:
-            self._execute_site_capture_loop(site_id, payload)
-        else:
-            self._execute_site_capture(site_id, payload)
-
-    def _start_site_client_capture_wired(self):  # noqa: C901, PLR0912, PLR0915
-        """Start wired client packet capture at site level."""
-        logging.info("Starting site wired client capture")
-
-        # Get site selection
-        site_id = PromptUtils.select_site_with_logging()
-        if not site_id:
-            return
-
-        print("\n" + "-" * 80)
-        print(" WIRED CLIENT CAPTURE CONFIGURATION")
-        print("-" * 80)
-
-        # Client MAC selection
-        print("\nClient selection:")
-        print("  1. Select from connected clients")
-        print("  2. Manually enter MAC address")
-        client_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="client_select")
-
-        client_mac = None
-        if client_choice == "1":
-            client_mac = PromptClientUtils.select_client_mac(site_id)
-            if not client_mac:
-                print("\n! No client selected")
-                return
-        else:
-            client_mac = InputUtils.safe_input("\nEnter client MAC address: ", context="client_mac")
-
-        if not self.validate_mac_address(client_mac):
-            print(f"\n! Invalid MAC address format: {client_mac}")
-            return
-        client_mac = self.normalize_mac_address(client_mac)
-
-        # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration"
-        )
-        try:
-            duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print("\n! Duration must be between 60 and 86400 seconds")
-                print("  (Mist API requires minimum 60 seconds for all packet captures)")
-                return
-        except ValueError:
-            print(f"\n! Invalid duration: {duration_str}")
-            return
-
-        num_packets_str = InputUtils.safe_input(
-            "Enter number of packets (default 1024, max 10000, 0 for unlimited): ",
-            default_value="1024",
-            context="num_packets",
-        )
-        try:
-            num_packets = int(num_packets_str)
-            if num_packets < 0 or num_packets > 10000:
-                print("\n! Number of packets must be between 0 and 10000")
-                return
-        except ValueError:
-            print(f"\n! Invalid number of packets: {num_packets_str}")
-            return
-
-        # Multicast option
-        includes_mcast_input = InputUtils.safe_input(
-            "Include multicast traffic? (y/n, default n): ", default_value="n", context="includes_mcast"
-        )
-        includes_mcast = includes_mcast_input.lower() == "y"
-
-        # Tcpdump filter selection
-        tcpdump_expr = self._get_tcpdump_expression_selection()  # type: ignore[no-untyped-call]
-
-        # Format selection
-        capture_format = self._get_capture_format_selection()  # type: ignore[no-untyped-call]
-
-        # Loop mode option
-        print("\nLoop Mode:")
-        print("  Automatically start a new capture when the current one completes")
-        print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
-        enable_loop = loop_mode.lower() == "y"
-
-        # Build payload
-        payload = {
-            "type": "client",
-            "client_mac": client_mac,
-            "duration": duration,
-            "num_packets": num_packets,
-            "includes_mcast": includes_mcast,
-            "format": capture_format,
-        }
-
-        # Add tcpdump filter if specified
-        if tcpdump_expr:
-            payload["tcpdump_expression"] = tcpdump_expr
-
-        # Display and confirm
-        print("\n" + "=" * 80)
-        print(" CAPTURE CONFIGURATION SUMMARY")
-        print("=" * 80)
-        print("  Capture Type: Wired Client")
-        print(f"  Client MAC: {client_mac}")
-        if tcpdump_expr:
-            print(f"  Packet Filter: {tcpdump_expr}")
-        else:
-            print("  Packet Filter: None (all traffic)")
-        print(f"  Duration: {duration} seconds")
-        print(f"  Packets: {num_packets} ({'unlimited' if num_packets == 0 else 'max'})")
-        print(f"  Include Multicast: {'Yes' if includes_mcast else 'No'}")
-        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
-        print("=" * 80)
-
-        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
-
-        if enable_loop:
-            self._execute_site_capture_loop(site_id, payload)
-        else:
-            self._execute_site_capture(site_id, payload)
-
-    def _start_site_gateway_capture(self):  # noqa: C901, PLR0912, PLR0915
-        """Start gateway packet capture at site level."""
-        logging.info("Starting site gateway capture")
-
-        site_id = PromptUtils.select_site_with_logging()
-        if not site_id:
-            return
-
-        print("\n" + "-" * 80)
-        print(" GATEWAY CAPTURE CONFIGURATION")
-        print("-" * 80)
-
-        # Gateway selection - interactive list
-        logging.debug("Prompting for gateway selection from site inventory")
-        _prompt_utils = PromptNetworkDeviceUtils(  # Instantiate with runtime session and helpers
-            self.mist_session, InputUtils.safe_input, DeviceUtils.expand_port_range_string
-        )
-        gateway_mac = _prompt_utils.select_gateway_mac(site_id)  # Prompt user to pick a gateway
-        if not gateway_mac:
-            logging.warning("No gateway selected or gateway selection failed - aborting capture")
-            return
-
-        # Normalize MAC address (already validated by selection function)
-        gateway_mac = self.normalize_mac_address(gateway_mac)
-        logging.debug(f"Selected and normalized gateway MAC: {gateway_mac}")
-
-        # Port selection - now using interactive port selector with status information
-        logging.debug("Prompting for port selection from gateway")
-        port_selection_result = _prompt_utils.select_ports_from_device(  # Reuse instance for port prompt
-            site_id, gateway_mac, device_type="gateway", return_available=True
-        )
-
-        if port_selection_result is None:
-            logging.warning("Port selection failed or cancelled - aborting capture")
-            return
-
-        port_list, available_ports = port_selection_result
-
-        if port_list is None:
-            logging.warning("Port selection failed or cancelled - aborting capture")
-            return
-
-        # If port_list is empty (all ports), populate with all available port names
-        if not port_list and available_ports:
-            port_list = [port_name for port_name, _ in available_ports]
-            logging.debug(f"User selected all ports - expanded to: {port_list}")
-        else:
-            logging.debug(f"User selected specific ports: {port_list}")
-
-        # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration"
-        )
-        try:
-            duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print("\n! Duration must be between 60 and 86400 seconds")
-                print("  (Mist API requires minimum 60 seconds for all packet captures)")
-                return
-        except ValueError:
-            print(f"\n! Invalid duration: {duration_str}")
-            return
-
-        num_packets_str = InputUtils.safe_input(
-            "Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets"
-        )
-        try:
-            num_packets = int(num_packets_str)
-            if num_packets < 0 or num_packets > 10000:
-                print("\n! Number of packets must be between 0 and 10000")
-                return
-        except ValueError:
-            print(f"\n! Invalid number of packets: {num_packets_str}")
-            return
-
-        # Packet filter selection (applies to all selected ports)
-        tcpdump_expr = self._get_tcpdump_expression_selection()  # type: ignore[no-untyped-call]
-
-        # Format selection
-        capture_format = self._get_capture_format_selection()  # type: ignore[no-untyped-call]
-
-        # Loop mode option
-        print("\nLoop Mode:")
-        print("  Automatically start a new capture when the current one completes")
-        print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
-        enable_loop = loop_mode.lower() == "y"
-
-        # Build payload - CORRECT structure per API spec
-        payload = {
-            "type": "gateway",
-            "duration": duration,
-            "num_packets": num_packets,
-            "max_pkt_len": 1500,  # API example uses 1500 for gateways
-            "format": capture_format,
-        }
-
-        # Build gateways structure with actual port names
-        gateways_config: dict[str, Any] = {}
-        ports_config: dict[str, Any] = {}
-
-        # Always list actual port names (never empty dict)
-        for port in port_list:
-            ports_config[port] = {}
-            if tcpdump_expr:
-                ports_config[port]["tcpdump_expression"] = tcpdump_expr
-
-        gateways_config[gateway_mac] = {"ports": ports_config}
-        payload["gateways"] = gateways_config
-
-        # Display and confirm
-        print("\n" + "=" * 80)
-        print(" CAPTURE CONFIGURATION SUMMARY")
-        print("=" * 80)
-        print("  Capture Type: Gateway")
-        print(f"  Gateway MAC: {gateway_mac}")
-        if port_list:
-            print(f"  Ports: {', '.join(port_list)}")
-        else:
-            print("  Ports: All ports")
-        print(f"  Duration: {duration} seconds")
-        print(f"  Packets: {num_packets}")
-        print("  Max Packet Length: 1500 bytes")
-        if tcpdump_expr:
-            print(f"  Filter: {tcpdump_expr}")
-        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
-        print("=" * 80)
-
-        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
-
-        if enable_loop:
-            self._execute_site_capture_loop(site_id, payload)
-        else:
-            self._execute_site_capture(site_id, payload)
-
-    def _start_site_switch_capture(self):  # noqa: C901, PLR0912, PLR0915
-        """Start switch packet capture at site level."""
-        logging.info("Starting site switch capture")
-
-        site_id = PromptUtils.select_site_with_logging()
-        if not site_id:
-            return
-
-        print("\n" + "-" * 80)
-        print(" SWITCH CAPTURE CONFIGURATION")
-        print("-" * 80)
-
-        # Switch selection - interactive list
-        logging.debug("Prompting for switch selection from site inventory")
-        _prompt_utils = PromptNetworkDeviceUtils(  # Instantiate with runtime session and helpers
-            self.mist_session, InputUtils.safe_input, DeviceUtils.expand_port_range_string
-        )
-        switch_mac = _prompt_utils.select_switch_mac(site_id)  # Prompt user to pick a switch
-        if not switch_mac:
-            logging.warning("No switch selected or switch selection failed - aborting capture")
-            return
-
-        # Normalize MAC address (already validated by selection function)
-        switch_mac = self.normalize_mac_address(switch_mac)
-        logging.debug(f"Selected and normalized switch MAC: {switch_mac}")
-
-        # Port selection - now using interactive port selector with status information
-        logging.debug("Prompting for port selection from switch")
-        port_selection_result = _prompt_utils.select_ports_from_device(  # Reuse instance for port prompt
-            site_id, switch_mac, device_type="switch", return_available=True
-        )
-
-        if port_selection_result is None:
-            logging.warning("Port selection failed or cancelled - aborting capture")
-            return
-
-        port_list, available_ports = port_selection_result
-
-        if port_list is None:
-            logging.warning("Port selection failed or cancelled - aborting capture")
-            return
-
-        # If port_list is empty (all ports), populate with all available port names
-        if not port_list and available_ports:
-            port_list = [port_name for port_name, _ in available_ports]
-            logging.debug(f"User selected all ports - expanded to: {port_list}")
-        else:
-            logging.debug(f"User selected specific ports: {port_list}")
-
-        # Duration (Mist API enforces minimum 60 seconds for all captures)
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration"
-        )
-        try:
-            duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print("\n! Duration must be between 60 and 86400 seconds")
-                print("  (Mist API requires minimum 60 seconds for all packet captures)")
-                return
-        except ValueError:
-            print(f"\n! Invalid duration: {duration_str}")
-            return
-
-        num_packets_str = InputUtils.safe_input(
-            "Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets"
-        )
-        try:
-            num_packets = int(num_packets_str)
-            if num_packets < 0 or num_packets > 10000:
-                print("\n! Number of packets must be between 0 and 10000")
-                return
-        except ValueError:
-            print(f"\n! Invalid number of packets: {num_packets_str}")
-            return
-
-        # Packet filter selection (applies to all selected ports)
-        tcpdump_expr = self._get_tcpdump_expression_selection()  # type: ignore[no-untyped-call]
-
-        # Format selection
-        capture_format = self._get_capture_format_selection()  # type: ignore[no-untyped-call]
-
-        # Loop mode option
-        print("\nLoop Mode:")
-        print("  Automatically start a new capture when the current one completes")
-        print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
-        enable_loop = loop_mode.lower() == "y"
-
-        # Build payload
-        payload = {
-            "type": "switch",
-            "duration": duration,
-            "num_packets": num_packets,
-            "max_pkt_len": 1500,  # API example uses 1500 for switches
-            "format": capture_format,
-        }
-
-        # Build switches structure with actual port names
-        switches_config: dict[str, Any] = {}
-        ports_config: dict[str, Any] = {}
-
-        # Always list actual port names (never empty dict)
-        for port in port_list:
-            ports_config[port] = {}
-            if tcpdump_expr:
-                ports_config[port]["tcpdump_expression"] = tcpdump_expr
-
-        switches_config[switch_mac] = {"ports": ports_config}
-        payload["switches"] = switches_config
-
-        # Display and confirm
-        print("\n" + "=" * 80)
-        print(" CAPTURE CONFIGURATION SUMMARY")
-        print("=" * 80)
-        print("  Capture Type: Switch")
-        print(f"  Switch MAC: {switch_mac}")
-        if port_list:
-            print(f"  Ports: {', '.join(port_list)}")
-        else:
-            print("  Ports: All ports")
-        print(f"  Duration: {duration} seconds")
-        print(f"  Packets: {num_packets}")
-        print("  Max Packet Length: 1500 bytes")
-        if tcpdump_expr:
-            print(f"  Filter: {tcpdump_expr}")
-        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
-        print("=" * 80)
-
-        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
-
-        if enable_loop:
-            self._execute_site_capture_loop(site_id, payload)
-        else:
-            self._execute_site_capture(site_id, payload)
-
-    def _start_site_new_association_capture(self):
-        """Start new association packet capture at site level."""
-        logging.info("Starting site new association capture")
-
-        site_id = PromptUtils.select_site_with_logging()
-        if not site_id:
-            return
-
-        print("\n" + "-" * 80)
-        print(" NEW ASSOCIATION CAPTURE CONFIGURATION")
-        print("-" * 80)
-        print("\nThis capture type monitors NEW client connection attempts (802.11 auth/assoc handshakes).")
-        print("Note: To capture ongoing traffic from already-connected clients, use Client Capture (Wireless) instead.")
-
-        # Optional SSID filter
-        ssid = InputUtils.safe_input(
-            "\nEnter SSID to monitor (optional, press Enter for all): ", context="ssid", allow_empty=True
-        )
-
-        # Duration (Mist API enforces minimum 60 seconds for new_assoc captures)
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, max 86400): ", default_value="60", context="duration"
-        )
-        try:
-            duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print("\n! Duration must be between 60 and 86400 seconds")
-                print("  (Mist API requires minimum 60 seconds for new association captures)")
-                return
-        except ValueError:
-            print(f"\n! Invalid duration: {duration_str}")
-            return
-
-        # Format selection
-        capture_format = self._get_capture_format_selection()  # type: ignore[no-untyped-call]
-
-        # Loop mode option
-        print("\nLoop Mode:")
-        print("  Automatically start a new capture when the current one completes")
-        print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
-        enable_loop = loop_mode.lower() == "y"
-
-        # Build payload
-        payload = {"type": "new_assoc", "duration": duration, "format": capture_format}
-
-        if ssid:
-            payload["ssid"] = ssid
-
-        # Display and confirm
-        print("\n" + "=" * 80)
-        print(" CAPTURE CONFIGURATION SUMMARY")
-        print("=" * 80)
-        print("  Capture Type: New Association")
-        if ssid:
-            print(f"  SSID Filter: {ssid}")
-        else:
-            print("  SSID Filter: All SSIDs")
-        print(f"  Duration: {duration} seconds")
-        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
-        print("=" * 80)
-
-        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
-
-        if enable_loop:
-            self._execute_site_capture_loop(site_id, payload)
-        else:
-            self._execute_site_capture(site_id, payload)
-
-    def _start_site_scan_capture(self):  # noqa: C901, PLR0912, PLR0915
-        """Start scan radio packet capture at site level."""
-        logging.info("Starting site scan capture")
-
-        site_id = PromptUtils.select_site_with_logging()
-        logging.debug(f"Site selection returned: {site_id}")
-        if not site_id:
-            logging.warning("No site_id returned from selection - aborting capture")
-            return
-
-        logging.debug(f"Proceeding with scan capture configuration for site: {site_id}")
-        print("\n" + "-" * 80)
-        print(" SCAN RADIO CAPTURE CONFIGURATION")
-        print("-" * 80)
-
-        # AP Selection - interactive list
-        logging.debug("Prompting for AP selection from site inventory")
-        _prompt_utils = PromptNetworkDeviceUtils(  # Instantiate with runtime session and helpers
-            self.mist_session, InputUtils.safe_input, DeviceUtils.expand_port_range_string
-        )
-        ap_mac = _prompt_utils.select_ap_mac(site_id)  # Prompt user to pick an AP from the site
-        if not ap_mac:
-            logging.warning("No AP selected or AP selection failed - aborting capture")
-            return
-
-        # Check if user selected all APs
-        if ap_mac == "ALL_APS":
-            logging.info("User selected all APs - launching multi-AP captures")
-            self._start_site_scan_capture_all_aps(site_id)
-            return
-
-        # Normalize MAC address (already validated by selection function)
-        ap_mac = self.normalize_mac_address(ap_mac)
-        logging.debug(f"Selected and normalized AP MAC: {ap_mac}")
-
-        # Band selection
-        logging.debug("Prompting for band selection")
-        print("\nSelect band:")
-        print("  1. 2.4 GHz")
-        print("  2. 5 GHz (default)")
-        print("  3. 6 GHz")
-        band_choice = InputUtils.safe_input("Enter choice [1-3] (default 2): ", default_value="2", context="band")
-
-        # Support both menu numbers (1,2,3) and actual band values (24, 5, 6)
-        band_map = {
-            "1": "24",
-            "2": "5",
-            "3": "6",  # Menu choices
-            "24": "24",
-            "5": "5",
-            "6": "6",  # Direct band values
-        }
-        band = band_map.get(band_choice, "5")
-        logging.debug(f"Band selected: {band} (choice: {band_choice})")
-
-        # Channel
-        logging.debug("Prompting for channel")
-        if band == "24":
-            channel_str = InputUtils.safe_input(
-                "Enter channel (1-11, default 1): ", default_value="1", context="channel"
-            )
-        elif band == "5":
-            channel_str = InputUtils.safe_input(
-                "Enter channel (36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, default 36): ",  # noqa: E501
-                default_value="36",
-                context="channel",
-            )
-        else:  # band == "6"
-            channel_str = InputUtils.safe_input(
-                "Enter channel (1-233, default 1): ", default_value="1", context="channel"
-            )
-
-        try:
-            channel = int(channel_str)
-            logging.debug(f"Channel selected: {channel}")
-        except ValueError:
-            print(f"\n! Invalid channel: {channel_str}")
-            logging.error(f"Invalid channel value: {channel_str}")
-            return
-
-        # Bandwidth
-        logging.debug("Prompting for bandwidth")
-        print("\nSelect bandwidth:")
-        print("  1. 20 MHz")
-        print("  2. 40 MHz")
-        if band in ["5", "6"]:
-            print("  3. 80 MHz")
-        if band == "6":
-            print("  4. 160 MHz")
-        bw_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="bandwidth")
-        bw_map = {"1": "20", "2": "40", "3": "80", "4": "160"}
-        bandwidth = bw_map.get(bw_choice, "20")
-        logging.debug(f"Bandwidth selected: {bandwidth} MHz (choice: {bw_choice})")
-
-        # Validate bandwidth for band
-        if band == "24" and bandwidth not in ["20", "40"]:
-            print(f"\n! Invalid bandwidth {bandwidth} for 2.4 GHz band")
-            logging.error(f"Invalid bandwidth {bandwidth} for 2.4 GHz band")
-            return
-
-        # Duration
-        logging.debug("Prompting for duration")
-        duration_str = InputUtils.safe_input(
-            "Enter capture duration in seconds (default 60, min 60, max 86400): ",
-            default_value="60",
-            context="duration",
-        )
-        try:
-            duration = int(duration_str)
-            if duration < 60 or duration > 86400:
-                print("\n! Duration must be between 60 and 86400 seconds (API requirement)")
-                logging.error(f"Duration out of range: {duration}")
-                return
-            logging.debug(f"Duration set: {duration} seconds")
-        except ValueError:
-            print(f"\n! Invalid duration: {duration_str}")
-            logging.error(f"Invalid duration value: {duration_str}")
-            return
-
-        # Number of packets
-        logging.debug("Prompting for packet count")
-        num_packets_str = InputUtils.safe_input(
-            "Enter number of packets (default 1024, max 10000): ", default_value="1024", context="num_packets"
-        )
-        try:
-            num_packets = int(num_packets_str)
-            if num_packets < 0 or num_packets > 10000:
-                print("\n! Number of packets must be between 0 and 10000")
-                logging.error(f"Packet count out of range: {num_packets}")
-                return
-            logging.debug(f"Packet count set: {num_packets}")
-        except ValueError:
-            print(f"\n! Invalid number of packets: {num_packets_str}")
-            logging.error(f"Invalid packet count value: {num_packets_str}")
-            return
-
-        # Format selection
-        capture_format = self._get_capture_format_selection()  # type: ignore[no-untyped-call]
-
-        # Loop mode option
-        print("\nLoop Mode:")
-        print("  Automatically start a new capture when the current one completes")
-        print("  Downloads happen in background while next capture runs")
-        loop_mode = InputUtils.safe_input(
-            "Enable continuous loop mode? (y/n, default n): ", default_value="n", context="loop_mode"
-        )
-        enable_loop = loop_mode.lower() == "y"
-
-        # Build payload
-        logging.debug("Building capture payload")
-        payload = {
-            "type": "scan",
-            "ap_mac": ap_mac,
-            "band": band,
-            "channel": channel,
-            "bandwidth": bandwidth,
-            "duration": duration,
-            "num_packets": num_packets,
-            "format": capture_format,
-            "max_pkt_len": 1300,
-        }
-        logging.debug(f"Payload constructed: {payload}")
-
-        # Display and confirm
-        print("\n" + "=" * 80)
-        print(" CAPTURE CONFIGURATION SUMMARY")
-        print("=" * 80)
-        print("  Capture Type: Scan Radio")
-        print(f"  AP MAC: {ap_mac}")
-        print(f"  Band: {band} GHz")
-        print(f"  Channel: {channel}")
-        print(f"  Bandwidth: {bandwidth} MHz")
-        print(f"  Duration: {duration} seconds")
-        print(f"  Packets: {num_packets}")
-        print(f"  Loop Mode: {'ENABLED (continuous until Ctrl+C)' if enable_loop else 'Disabled (single capture)'}")
-        print("=" * 80)
-
-        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        logging.debug("Waiting for user confirmation")
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
-
-        # Check for existing captures on this AP
-        print(f"\n> Checking for existing captures on AP {ap_mac}...")
-        try:
-            response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(self.mist_session, site_id)
-
-            if response.status_code == 200:
-                existing_captures = response.data or []
-                ap_has_capture = any(
-                    cap.get("ap_mac", "").replace(":", "").replace("-", "").lower()
-                    == ap_mac.replace(":", "").replace("-", "").lower()
-                    for cap in existing_captures
-                )
-
-                if ap_has_capture:
-                    print("\n! WARNING: This AP already has a capture in progress or recently completed")
-                    print("  Mist only allows one capture per AP at a time")
-                    print("  The new capture may fail with 'Recording already in progress'")
-
-                    proceed = InputUtils.safe_input(
-                        "\nContinue anyway? (y/n, default n): ",
-                        default_value="n",
-                        context="capture_conflict_confirmation",
-                    ).lower()
-                    if proceed != "y":
-                        print("\n* Capture cancelled by user")
-                        logging.info("User cancelled capture due to existing capture on AP")
-                        return
-        except Exception as error:
-            logging.warning(f"Failed to check for existing captures: {error}")
-            # Continue anyway - this is just a courtesy check
-
-        logging.info("User confirmed - executing site capture")
-        if enable_loop:
-            self._execute_site_capture_loop(site_id, payload)
-        else:
-            self._execute_site_capture(site_id, payload)
-
-    def _start_site_scan_capture_all_aps(self, site_id: str):
-        """Compatibility facade that delegates multi-AP scan capture to extracted workflow."""
-        logging.info(
-            "Delegating _start_site_scan_capture_all_aps to MultiApScanCaptureWorkflow"
-        )  # Log before constructing extracted workflow dependency graph.
-        workflow = MultiApScanCaptureWorkflow(  # Build extracted workflow with legacy deps.
-            manager=self,
-            mistapi_module=mistapi,
-            input_utils=InputUtils,
-            device_utils=DeviceUtils,
-        )
-        logging.debug(
-            "Initialized MultiApScanCaptureWorkflow for site_id=%s", site_id
-        )  # Log workflow construction completion for traceability.
-        workflow.run(site_id)  # Delegate execution to extracted workflow while preserving facade signature.
-        logging.debug(
-            "Completed delegated _start_site_scan_capture_all_aps workflow"
-        )  # Log delegated workflow completion.
-
-    def _execute_site_capture(self, site_id: str, payload: dict):  # type: ignore[no-untyped-def, type-arg]
-        """
-        Execute site-level packet capture via API.
-
-        Args:
-            site_id (str): Site UUID
-            payload (dict): Capture configuration payload
-        """
-        try:
-            print(f"\n> Starting packet capture for site {site_id}...")
-            logging.info(f"Initiating site capture with payload: {payload}")
-
-            # Call Mist API to start capture
-            response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(self.mist_session, site_id, payload)
-
-            if response.status_code == 200:
-                result = response.data
-                capture_id = result.get("id", "unknown")
-                capture_format = result.get("format", "unknown")
-                print("\n* Capture started successfully!")
-                print(f"  Capture ID: {capture_id}")
-                print(f"  Format: {capture_format}")
-                print(f"  Duration: {result.get('duration', 0)} seconds")
-                print(f"  Expires: {result.get('expiry', 'unknown')}")
-
-                logging.info(f"Site capture started: capture_id={capture_id}, format={capture_format}")
-
-                # Handle based on format
-                if capture_format == "pcap":
-                    # PCAP file format - wait for file and download
-                    print("\n> Waiting for PCAP file to be ready...")
-                    print("  This may take a few moments after capture completes.")
-                    self._wait_and_download_pcap(site_id, capture_id, result.get("duration", 600))
-                elif capture_format == "stream":
-                    # Stream format - subscribe to WebSocket
-                    self._subscribe_to_site_capture_stream(site_id, capture_id)
-
-                # Export capture details to CSV
-                self._export_capture_info_to_csv(result, "site", site_id)
-
-            else:
-                error_details = response.data if hasattr(response, "data") else "No error details available"
-
-                # Check for specific "Recording already in progress" error
-                if response.status_code == 400 and isinstance(error_details, dict):
-                    if "Recording already in progress" in error_details.get("detail", ""):
-                        print("\n! Capture already in progress on this AP")
-                        print("  Only one capture per AP is allowed at a time")
-                        print("  Wait for the existing capture to complete or check the Mist portal to stop it")
-                        logging.error("Capture conflict: Recording already in progress on AP")
-                        return
-
-                print(f"\n! Failed to start capture: {response.status_code}")
-                print(f"  Error details: {error_details}")
-                logging.error(f"Capture failed: {response.status_code} - {error_details}")
-
-        except Exception as error:
-            print(f"\n! Error starting capture: {error}")
-            logging.error(f"Exception in _execute_site_capture: {error}", exc_info=True)
-
-    def _execute_site_capture_loop_legacy(self, site_id: str, payload: dict):  # type: ignore[no-untyped-def, type-arg]  # noqa: C901, PLR0912, PLR0915
-        """
-        Execute site-level packet captures in continuous loop mode.
-
-        New Strategy:
-        1. Check API for completed PCAPs (last 24 hours)
-        2. Download any we don't already have
-        3. Start new capture if minimum time has elapsed
-        4. Repeat
-
-        Args:
-            site_id (str): Site UUID
-            payload (dict): Capture configuration payload (reused for each iteration)
-        """
-        import os
-        import time
-
-        iteration = 0
-        last_capture_time = None
-        min_capture_interval = payload.get("duration", 60)  # Minimum time between captures
-        download_folder = os.path.join(os.getcwd(), "data")
-
-        print(f"\n{'=' * 80}")
-        print(" CONTINUOUS CAPTURE MODE ACTIVE")
-        print(f"{'=' * 80}")
-        print("  Press Ctrl+C to stop and exit gracefully")
-        print(f"  Capture duration: {payload.get('duration', 60)} seconds")
-        print("  Strategy: Download existing PCAPs, then start new captures")
-        print(f"{'=' * 80}\n")
-
-        try:
-            while True:
-                iteration += 1
-                loop_start_time = time.time()
-
-                print(f"\n{'=' * 60}")
-                print(f"Loop Iteration #{iteration}")
-                print(f"{'=' * 60}")
-
-                # Step 1: Get list of all PCAPs from last 24 hours
-                print("\n[Step 1/3] Checking for completed PCAPs in last 24 hours...")
-                logging.info(f"Loop iteration {iteration}: Fetching PCAP list from API")
-
-                try:
-                    pcaps_response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(
-                        self.mist_session,
-                        site_id,
-                        duration="1d",  # Last 24 hours
-                        limit=100,
-                    )
-
-                    if pcaps_response.status_code == 200:
-                        pcaps_data = pcaps_response.data
-
-                        # Handle pagination structure
-                        if isinstance(pcaps_data, dict) and "results" in pcaps_data:
-                            pcap_list = pcaps_data.get("results", [])
-                        else:
-                            pcap_list = pcaps_data if isinstance(pcaps_data, list) else []
-
-                        # Filter for completed PCAPs with download URLs
-                        completed_pcaps = [
-                            pcap for pcap in pcap_list if pcap.get("pcap_url") and pcap.get("format") == "pcap"
-                        ]
-
-                        print(f"  Found {len(completed_pcaps)} completed PCAP(s) with download URLs")
-                        logging.info(f"Loop iteration {iteration}: Found {len(completed_pcaps)} completed PCAPs")
-
-                        # Step 2: Download any PCAPs we don't have yet
-                        if completed_pcaps:
-                            print("\n[Step 2/3] Checking for new PCAPs to download...")
-                            downloads_this_round = 0
-
-                            for pcap in completed_pcaps:
-                                capture_id = pcap.get("id")
-                                pcap_url = pcap.get("pcap_url")
-
-                                # Check if we already have this file
-                                expected_filename = f"PacketCapture_{capture_id}.pcap"
-                                local_path = os.path.join(download_folder, expected_filename)
-
-                                if os.path.exists(local_path):
-                                    logging.debug(f"  Skipping {capture_id} - already downloaded")
-                                    continue
-
-                                # Download this PCAP
-                                print(f"\n  --> Downloading PCAP: {capture_id}")
-                                try:
-                                    download_response = requests.get(pcap_url, stream=True, timeout=300)
-
-                                    if download_response.status_code == 200:
-                                        with open(local_path, "wb") as pcap_file:
-                                            for chunk in download_response.iter_content(chunk_size=8192):
-                                                pcap_file.write(chunk)
-
-                                        file_size_mb = os.path.getsize(local_path) / (1024 * 1024)
-                                        print(f"      Downloaded: {expected_filename} ({file_size_mb:.2f} MB)")
-                                        logging.info(f"Downloaded PCAP {capture_id}: {file_size_mb:.2f} MB")
-                                        downloads_this_round += 1
-                                    else:
-                                        print(f"      Failed to download: HTTP {download_response.status_code}")
-                                        logging.error(
-                                            f"Download failed for {capture_id}: {download_response.status_code}"
-                                        )
-
-                                except Exception as download_error:
-                                    print(f"      Error downloading: {download_error}")
-                                    logging.error(
-                                        f"Download exception for {capture_id}: {download_error}", exc_info=True
-                                    )
-
-                            if downloads_this_round > 0:
-                                print(f"\n  Downloaded {downloads_this_round} new PCAP file(s) this round")
-                            else:
-                                print("\n  No new PCAPs to download (all already exist locally)")
-                        else:
-                            print("\n[Step 2/3] No completed PCAPs available for download")
-
-                    else:
-                        print(f"  Warning: Could not fetch PCAP list (HTTP {pcaps_response.status_code})")
-                        logging.warning(f"Failed to list PCAPs: {pcaps_response.status_code}")
-
-                except Exception as list_error:
-                    print(f"  Error fetching PCAP list: {list_error}")
-                    logging.error(f"Exception listing PCAPs: {list_error}", exc_info=True)
-
-                # Step 3: Determine if we should start a new capture
-                print("\n[Step 3/3] Checking if ready to start new capture...")
-
-                should_capture = False
-                wait_time: float = 0
-
-                if last_capture_time is None:
-                    should_capture = True
-                    print("  First capture of this session - starting now")
-                else:
-                    elapsed = time.time() - last_capture_time
-                    if elapsed >= min_capture_interval:
-                        should_capture = True
-                        print(f"  {elapsed:.0f}s elapsed since last capture (>= {min_capture_interval}s) - ready")
-                    else:
-                        wait_time = min_capture_interval - elapsed
-                        print(f"  Only {elapsed:.0f}s elapsed - waiting {wait_time:.0f}s more...")
-
-                if should_capture:
-                    print("\n  Starting new packet capture...")
-                    logging.info(f"Loop iteration {iteration}: Starting new capture with payload: {payload}")
-
-                    try:
-                        response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(
-                            self.mist_session, site_id, payload
-                        )
-
-                        if response.status_code == 200:
-                            result = response.data
-                            capture_id = result.get("id", "unknown")
-                            duration = result.get("duration", 600)
-
-                            print("  Capture started successfully!")
-                            print(f"    Capture ID: {capture_id}")
-                            print(f"    Duration: {duration} seconds")
-
-                            logging.info(f"Loop iteration {iteration}: Capture started - ID={capture_id}")
-                            last_capture_time = time.time()
-
-                            # Export capture metadata
-                            self._export_capture_info_to_csv(result, "site", site_id)
-
-                        else:
-                            error_details = response.data if hasattr(response, "data") else "No error details"
-                            print(f"  Failed to start capture: HTTP {response.status_code}")
-                            print(f"    Error: {error_details}")
-                            logging.error(
-                                f"Loop iteration {iteration} capture failed: {response.status_code} - {error_details}"
-                            )
-
-                            # Check for conflict
-                            if response.status_code == 400 and isinstance(error_details, dict):
-                                if "Recording already in progress" in error_details.get("detail", ""):
-                                    print("    Capture conflict detected - will retry next loop")
-
-                    except Exception as capture_error:
-                        print(f"  Error starting capture: {capture_error}")
-                        logging.error(f"Exception starting capture: {capture_error}", exc_info=True)
-
-                # Calculate sleep time for next iteration
-                loop_duration = time.time() - loop_start_time
-
-                if wait_time > 0:
-                    sleep_time = wait_time
-                elif loop_duration < 30:
-                    # If loop was very fast, wait at least 30 seconds before next check
-                    sleep_time = 30 - loop_duration
-                else:
-                    sleep_time = 10
-
-                print(f"\n{'=' * 60}")
-                print(f"Loop iteration #{iteration} complete")
-                print(f"Waiting {sleep_time:.0f} seconds before next check...")
-                print(f"{'=' * 60}\n")
-
-                time.sleep(sleep_time)
-
-        except KeyboardInterrupt:
-            print(f"\n\n{'=' * 80}")
-            print(" LOOP MODE INTERRUPTED BY USER")
-            print(f"{'=' * 80}")
-            print(f"  Completed {iteration} loop iteration(s)")
-            print("  All available PCAPs have been downloaded")
-            print("  Exiting gracefully...")
-            logging.info(f"Capture loop stopped by user after {iteration} iterations")
-
-        except Exception as loop_error:
-            print(f"\n! Unexpected error in capture loop: {loop_error}")
-            logging.error(f"Exception in capture loop: {loop_error}", exc_info=True)
-
-    def _execute_site_capture_loop(self, site_id: str, payload: dict):  # type: ignore[no-untyped-def, type-arg]
-        """Delegated site capture loop entrypoint preserved for compatibility."""
-        extracted_manager = ExtractedPacketCaptureManager(self.mist_session, self.org_id)
-        extracted_manager._execute_site_capture_loop(site_id, payload)
-
-    def _wait_for_capture_completion(
-        self,
-        site_id: str,
-        capture_id: str,
-        expected_duration: int,
-    ) -> bool:  # noqa: C901, PLR0912
-        """
-        Poll for capture completion status (separate from PCAP download availability).
-        Returns as soon as capture completes, does not wait for PCAP file URL.
-
-        Args:
-            site_id (str): Site UUID
-            capture_id (str): Capture session ID
-            expected_duration (int): Expected capture duration in seconds
-
-        Returns:
-            bool: True if capture confirmed complete, False if timeout/error
-        """
-        import time
-
-        # Poll more frequently for completion detection
-        poll_interval = 3  # Check every 3 seconds
-        max_wait = expected_duration + 30  # Duration + 30 second buffer
-        max_polls = max_wait // poll_interval
-
-        start_time = time.time()
-
-        for poll_attempt in range(1, max_polls + 1):
-            try:
-                elapsed = int(time.time() - start_time)
-
-                response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(self.mist_session, site_id)
-
-                if response.status_code == 200:
-                    raw_data = response.data
-
-                    # Extract results list
-                    if isinstance(raw_data, dict) and "results" in raw_data:
-                        captures = raw_data["results"]
-                    elif isinstance(raw_data, list):
-                        captures = raw_data
-                    else:
-                        logging.warning("Completion check: Unexpected data structure")
-                        time.sleep(poll_interval)
-                        continue
-
-                    # Find our capture
-                    for capture in captures:
-                        if not isinstance(capture, dict):
-                            continue
-
-                        if capture.get("id") == capture_id:
-                            # Check if capture is complete
-                            # Capture is complete when:
-                            # 1. It has been running for at least the expected duration
-                            # 2. The 'enabled' field is False (capture stopped)
-                            enabled = capture.get("enabled", True)
-                            timestamp = capture.get("timestamp", 0)
-
-                            # Check if enough time has passed
-                            time_running = time.time() - timestamp if timestamp else elapsed
-
-                            if not enabled:
-                                # Capture explicitly stopped
-                                logging.debug(f"Capture {capture_id} completed (enabled=False)")
-                                return True
-                            elif time_running >= expected_duration:
-                                # Capture has run for expected duration
-                                logging.debug(f"Capture {capture_id} completed (duration reached)")
-                                return True
-                            else:
-                                # Still running
-                                remaining = int(expected_duration - time_running)
-                                if poll_attempt % 5 == 0:  # Log every 15 seconds
-                                    print(f"  ...capture in progress (~{remaining}s remaining)", end="\r")
-                                logging.debug(f"Capture {capture_id} still running ({remaining}s remaining)")
-
-                    # Capture not found - might be very new or very old
-                    if elapsed < 10:
-                        # Give it time to appear in API
-                        logging.debug(f"Capture {capture_id} not found yet (elapsed={elapsed}s)")
-                    else:
-                        logging.warning(f"Capture {capture_id} not found in list (elapsed={elapsed}s)")
-
-                time.sleep(poll_interval)
-
-            except Exception as poll_error:
-                logging.error(f"Completion poll error: {poll_error}", exc_info=True)
-                time.sleep(poll_interval)
-
-        # Timeout reached
-        logging.warning(f"Capture {capture_id} completion check timed out after {max_wait}s")
-        return False
-
-    def start_org_packet_capture_legacy(self):  # noqa: C901, PLR0912, PLR0915
-        """
-        Interactive menu for starting org-level packet captures (MxEdge only).
-
-        NOTE: Organization-level captures are for Mist Edges only.
-        Site-level Mist Edges should use site captures (option 9).
-        """
-        logging.info("Menu #135: Starting organization packet capture manager")
-        logging.debug("ENTRY: PacketCaptureManager.start_org_packet_capture()")
-
-        print("\n" + "=" * 80)
-        print(" ORGANIZATION PACKET CAPTURE MANAGER")
-        print("=" * 80)
-        print("\n! NOTE: Org-level captures are for organization-level Mist Edges ONLY")
-        print("  For site-level Mist Edges, use Site Packet Capture (option 9)")
-        print("\n" + "=" * 80)
-
-        # Fetch list of MxEdges
-        print("\n  Fetching available MxEdges...")
-        try:
-            response = mistapi.api.v1.orgs.mxedges.listOrgMxEdges(self.mist_session, self.org_id, limit=1000)
-            mxedges = mistapi.get_all(response=response, mist_session=self.mist_session)
-
-            if not mxedges:
-                print("\n! No MxEdges found for this organization")
-                logging.warning("Menu #135: No MxEdges found")
-                return
-
-        except Exception as error:
-            print(f"\n! Error fetching MxEdges: {error}")
-            logging.error(f"Menu #135: Failed to fetch MxEdges: {error}")
-            return
-
-        # Fetch stats to get status information
-        print("  Fetching MxEdge status information...")
-        mxedge_stats_map = {}
-        try:
-            stats_response = mistapi.api.v1.orgs.stats.listOrgMxEdgesStats(self.mist_session, self.org_id, limit=1000)
-            stats_data = mistapi.get_all(response=stats_response, mist_session=self.mist_session)
-
-            if stats_data:
-                for stat in stats_data:
-                    mxedge_id = stat.get("id")
-                    if mxedge_id:
-                        mxedge_stats_map[mxedge_id] = stat
-        except Exception as error:
-            logging.warning(f"Menu #135: Failed to fetch MxEdge stats: {error}")
-            # Continue without status information
-
-        # Display indexed list of MxEdges with detailed status
-        print(f"\n  Available MxEdges ({len(mxedges)} found):")
-        print("=" * 120)
-
-        index_to_mxedge = {}
-        for index, mxedge in enumerate(mxedges):
-            mxedge_name = mxedge.get("name", "Unnamed MxEdge")
-            mxedge_id = mxedge.get("id", "No ID")
-            model = mxedge.get("model", "Unknown")
-
-            # Get detailed stats for this MxEdge
-            stat = mxedge_stats_map.get(mxedge_id, {})
-            status = stat.get("status", "unknown")
-            uptime = stat.get("uptime", 0)
-            service_stat = stat.get("service_stat", {})
-
-            # Format uptime
-            if uptime > 0:
-                uptime_days = uptime // 86400
-                uptime_hours = (uptime % 86400) // 3600
-                uptime_str = f"{uptime_days}d {uptime_hours}h"
-            else:
-                uptime_str = "N/A"
-
-            # Get service states
-            mxagent_stat = service_stat.get("mxagent", {})
-            tunterm_stat = service_stat.get("tunterm", {})
-
-            mxagent_state = mxagent_stat.get("running_state", "Unknown")
-            tunterm_state = tunterm_stat.get("running_state", "Unknown")
-
-            # Show online/offline status
-            if status == "connected":
-                status_marker = "ONLINE"
-            elif status == "disconnected":
-                status_marker = "OFFLINE"
-            else:
-                status_marker = status.upper()
-
-            print(
-                f"  [{index}] {mxedge_name:30} | Model: {model:10} | Status: {status_marker:8} | Uptime: {uptime_str:10}"  # noqa: E501
-            )
-            print(f"       mxagent: {mxagent_state:15} | tunterm: {tunterm_state:15}")
-            index_to_mxedge[index] = mxedge
-
-        # Get user selection (API limitation: only 1 MxEdge allowed for org-level captures)
-        print()
-        print("  ! API Limitation: Only 1 MxEdge can be captured at a time for organization-level captures")
-        try:
-            selection_input = InputUtils.safe_input(
-                f"Select MxEdge index [0-{len(mxedges) - 1}]: ", context="mxedge_selection"
-            ).strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\n! Operation cancelled")
-            logging.info("Menu #135: User cancelled MxEdge selection")
-            return
-
-        # Parse selection (single MxEdge only)
-        selected_mxedges = []
-        try:
-            idx = int(selection_input)
-            if idx in index_to_mxedge:
-                selected_mxedges.append(index_to_mxedge[idx])
-            else:
-                print(f"\n! Invalid index {idx}. Please select from 0-{len(mxedges) - 1}")  # nosec B608
-                logging.warning(f"Menu #135: Invalid MxEdge index: {idx}")
-                return
-        except ValueError:
-            print("\n! Invalid input format. Please enter a single numeric index.")
-            logging.warning(f"Menu #135: Invalid selection input: {selection_input}")
-            return
-
-        if not selected_mxedges:
-            print("\n! No valid MxEdge selected")
-            logging.warning("Menu #135: No valid MxEdge selected")
-            return
-
-        print("\n  Selected MxEdge:")
-        for mxedge in selected_mxedges:
-            print(f"    -> {mxedge.get('name', 'Unnamed')} (ID: {mxedge.get('id')})")
-
-        # Fetch and display interface status for selected MxEdges with indexed selection
-        print("\n  Fetching interface status for selected MxEdge(s)...")
-        mxedge_interfaces = {}
-        all_ports_by_mxedge = {}
-
-        for mxedge in selected_mxedges:
-            mxedge_id = mxedge.get("id")
-            mxedge_name = mxedge.get("name", "Unnamed MxEdge")
-
-            try:
-                stats_response = mistapi.api.v1.orgs.stats.getOrgMxEdgeStats(self.mist_session, self.org_id, mxedge_id)
-
-                if stats_response.status_code == 200:
-                    stats_data = stats_response.data if hasattr(stats_response, "data") else {}
-                    port_stat = stats_data.get("port_stat", {})
-
-                    if port_stat:
-                        mxedge_interfaces[mxedge_id] = {"name": mxedge_name, "ports": port_stat}
-
-                        # Build indexed port list for this MxEdge
-                        port_list = []
-                        print(f"\n  {mxedge_name} - Available Interfaces:")
-                        print(f"  {'-' * 70}")
-                        for port_index, (port_name, port_info) in enumerate(sorted(port_stat.items())):
-                            status = "UP" if port_info.get("up", False) else "DOWN"
-                            speed = port_info.get("speed", 0)
-                            speed_str = f"{speed}Mbps" if speed else "N/A"
-                            mac = port_info.get("mac", "N/A")
-                            print(
-                                f"    [{port_index}] {port_name:10} Status: {status:5} Speed: {speed_str:10} MAC: {mac}"
-                            )
-                            port_list.append(port_name)
-
-                        all_ports_by_mxedge[mxedge_id] = {"name": mxedge_name, "ports": port_list}
-                    else:
-                        print(f"\n  {mxedge_name} - No interface stats available")
-                        mxedge_interfaces[mxedge_id] = {"name": mxedge_name, "ports": {}}
-                        all_ports_by_mxedge[mxedge_id] = {"name": mxedge_name, "ports": []}
-                else:
-                    print(f"\n  {mxedge_name} - Failed to fetch stats (HTTP {stats_response.status_code})")
-                    mxedge_interfaces[mxedge_id] = {"name": mxedge_name, "ports": {}}
-                    all_ports_by_mxedge[mxedge_id] = {"name": mxedge_name, "ports": []}
-
-            except Exception as error:
-                print(f"\n  {mxedge_name} - Error fetching stats: {error}")
-                logging.error(f"Menu #135: Failed to fetch stats for {mxedge_name}: {error}")
-                mxedge_interfaces[mxedge_id] = {"name": mxedge_name, "ports": {}}
-                all_ports_by_mxedge[mxedge_id] = {"name": mxedge_name, "ports": []}
-
-        # Port selection using indices (API limitation: only 1 port allowed)
-        print("\n  Port Selection:")
-        print("  ! API Limitation: Only 1 port can be captured at a time")
-
-        selected_ports_by_mxedge: dict[str, list[str]] = {}
-        for mxedge_id, port_info in all_ports_by_mxedge.items():
-            mxedge_name = port_info["name"]
-            port_list = port_info["ports"]
-
-            if not port_list:
-                print(f"\n  {mxedge_name}: No ports available, skipping...")
-                selected_ports_by_mxedge[mxedge_id] = []
-                continue
-
-            try:
-                port_input = InputUtils.safe_input(
-                    f"\n  {mxedge_name} - Select a single port index [0-{len(port_list) - 1}]: ",
-                    context=f"port_selection_{mxedge_id}",
-                ).strip()
-            except (EOFError, KeyboardInterrupt):
-                print("\n! Operation cancelled")
-                logging.info("Menu #135: User cancelled port selection")
-                return
-
-            if not port_input:
-                print("\n! Port selection is required. Please select a port index.")
-                logging.warning("Menu #135: No port selected")
-                return
-            else:
-                # Parse single port index
-                try:
-                    idx = int(port_input)
-                    if 0 <= idx < len(port_list):
-                        selected_port = port_list[idx]
-                        selected_ports_by_mxedge[mxedge_id] = [selected_port]
-                        print(f"    -> Selected port: {selected_port}")
-                    else:
-                        print(f"\n! Invalid index {idx} (valid range: 0-{len(port_list) - 1})")
-                        logging.warning(f"Menu #135: Invalid port index: {idx}")
-                        return
-                except ValueError:
-                    print("\n! Invalid input format. Please enter a single numeric index.")
-                    logging.warning(f"Menu #135: Invalid port input: {port_input}")
-                    return
-
-        # Tcpdump filter selection
-        tcpdump_expr = self._get_tcpdump_expression_selection()  # type: ignore[no-untyped-call]
-
-        # Duration
-        duration_str = InputUtils.safe_input(
-            "\nEnter capture duration in seconds (default 30, max 86400): ", default_value="30", context="duration"
-        )
-        try:
-            duration = int(duration_str)
-            if duration < 30 or duration > 86400:
-                print("\n! Duration must be between 30 and 86400 seconds")
-                return
-        except ValueError:
-            print(f"\n! Invalid duration: {duration_str}")
-            return
-
-        # Number of packets
-        num_packets_str = InputUtils.safe_input(
-            "Enter number of packets (default 1024, max 10000, 0 for unlimited): ",
-            default_value="1024",
-            context="num_packets",
-        )
-        try:
-            num_packets = int(num_packets_str)
-            if num_packets < 0 or num_packets > 10000:
-                print("\n! Number of packets must be between 0 and 10000")
-                return
-        except ValueError:
-            print(f"\n! Invalid number of packets: {num_packets_str}")
-            return
-
-        # Max packet length
-        max_pkt_len_str = InputUtils.safe_input(
-            "Enter max packet length in bytes (default 128, max 2048): ", default_value="128", context="max_pkt_len"
-        )
-        try:
-            max_pkt_len = int(max_pkt_len_str)
-            if max_pkt_len < 64 or max_pkt_len > 2048:
-                print("\n! Max packet length must be between 64 and 2048 bytes")
-                return
-        except ValueError:
-            print(f"\n! Invalid max packet length: {max_pkt_len_str}")
-            return
-
-        # Format selection (moved to end of prompts)
-        print("\nCapture format:")
-        print("  1. Stream to Mist Cloud (default)")
-        print("  2. TZSP stream to remote host (Wireshark)")
-        format_choice = InputUtils.safe_input("Enter choice (default 1): ", default_value="1", context="format")
-
-        if format_choice == "2":
-            # TZSP configuration
-            tzsp_host = InputUtils.safe_input("Enter TZSP host (IP address or hostname): ", context="tzsp_host")
-            if not tzsp_host:
-                print("\n! TZSP host required")
-                return
-
-            tzsp_port_str = InputUtils.safe_input(
-                "Enter TZSP port (default 37008): ", default_value="37008", context="tzsp_port"
-            )
-            try:
-                tzsp_port = int(tzsp_port_str)
-                if tzsp_port < 1 or tzsp_port > 65535:
-                    print("\n! Port must be between 1 and 65535")
-                    return
-            except ValueError:
-                print(f"\n! Invalid port: {tzsp_port_str}")
-                return
-
-            capture_format = "tzsp"
-        else:
-            capture_format = "stream"
-            tzsp_host = None
-            tzsp_port = None
-
-        # Build payload for multiple MxEdges with selected ports
-        payload: dict[str, Any] = {
-            "type": "mxedge",
-            "duration": duration,
-            "num_packets": num_packets,
-            "max_pkt_len": max_pkt_len,
-            "format": capture_format,
-            "mxedges": {},
-        }
-
-        # Add tcpdump filter if specified
-        if tcpdump_expr:
-            payload["tcpdump_expression"] = tcpdump_expr
-
-        # Add each selected MxEdge to payload with their selected ports
-        for mxedge_id, port_names in selected_ports_by_mxedge.items():
-            payload["mxedges"][mxedge_id] = {}
-
-            if port_names:
-                # Build interfaces structure per API specification
-                # API expects: "interfaces": { "port_name": {} }
-                payload["mxedges"][mxedge_id]["interfaces"] = {}
-                for port_name in port_names:
-                    payload["mxedges"][mxedge_id]["interfaces"][port_name] = {}
-
-        if capture_format == "tzsp":
-            payload["tzsp_host"] = tzsp_host
-            payload["tzsp_port"] = tzsp_port
-
-        # Display configuration and confirm
-        print("\n" + "=" * 80)
-        print(" CAPTURE CONFIGURATION SUMMARY")
-        print("=" * 80)
-        print("  Capture Type: MxEdge (Organization Level)")
-        print(f"  MxEdge: {selected_mxedges[0].get('name', 'Unnamed')} (ID: {selected_mxedges[0].get('id')})")
-
-        mxedge_id = selected_mxedges[0].get("id")
-        selected_ports = selected_ports_by_mxedge.get(mxedge_id, [])
-        port_str = selected_ports[0] if selected_ports else "None"
-        print(f"  Port: {port_str}")
-
-        if tcpdump_expr:
-            print(f"  Packet Filter: {tcpdump_expr}")
-        else:
-            print("  Packet Filter: None (all traffic)")
-
-        print(f"  Duration: {duration} seconds")
-        print(f"  Packets: {num_packets} ({'unlimited' if num_packets == 0 else 'max'})")
-        print(f"  Max Packet Length: {max_pkt_len} bytes")
-        print(f"  Format: {capture_format}")
-        if capture_format == "tzsp":
-            print(f"  TZSP Host: {tzsp_host}:{tzsp_port}")
-        print("=" * 80)
-
-        # Prompt user to proceed (Enter to continue, Ctrl+C to cancel)
-        InputUtils.safe_input(
-            "\nPress Enter to start capture (Ctrl+C to cancel): ", context="confirmation", allow_empty=True
-        )
-
-        # Execute org capture
-        self._execute_org_capture(payload)
-
-    def start_org_packet_capture(self):
-        """Delegated org packet capture entrypoint preserved for compatibility."""
-        extracted_manager = ExtractedPacketCaptureManager(self.mist_session, self.org_id)
-        extracted_manager.start_org_packet_capture()
-
-    def _execute_org_capture(self, payload: dict):  # type: ignore[no-untyped-def, type-arg]
-        """
-        Execute org-level packet capture via API.
-
-        Args:
-            payload (dict): Capture configuration payload
-        """
-        try:
-            print("\n> Starting organization packet capture...")
-            logging.info(f"Initiating org capture with payload: {payload}")
-
-            # Call Mist API to start capture
-            response = mistapi.api.v1.orgs.pcaps.startOrgPacketCapture(self.mist_session, self.org_id, payload)
-
-            if response.status_code == 200:
-                result = response.data
-                capture_id = result.get("id", "unknown")
-                print("\n* Capture started successfully!")
-                print(f"  Capture ID: {capture_id}")
-                print(f"  Format: {result.get('format', 'unknown')}")
-                print(f"  Duration: {result.get('duration', 0)} seconds")
-                print(f"  Expires: {result.get('expiry', 'unknown')}")
-
-                logging.info(f"Org capture started: capture_id={capture_id}")
-
-                # Handle based on format type
-                capture_format = payload.get("format", "pcap")
-
-                if capture_format == "pcap":
-                    # Wait for PCAP file and download it
-                    # Note: For org captures, we need the org ID instead of site_id
-                    self._wait_and_download_pcap_org(self.org_id, capture_id, result.get("duration", 60))
-                elif capture_format == "stream":
-                    # Subscribe to WebSocket for streaming results
-                    self._subscribe_to_org_capture_stream(capture_id)
-
-                # Export capture details to CSV
-                self._export_capture_info_to_csv(result, "org", self.org_id)
-
-            else:
-                print(f"\n! Failed to start capture: {response.status_code}")
-                error_details = response.data if hasattr(response, "data") else "No error details available"
-                print(f"  Error details: {error_details}")
-                logging.error(f"Capture failed: {response.status_code} - {error_details}")
-
-        except Exception as error:
-            print(f"\n! Error starting capture: {error}")
-            logging.error(f"Exception in _execute_org_capture: {error}", exc_info=True)
-
-    def _subscribe_to_site_capture_stream(self, site_id: str, capture_id: str):  # noqa: C901
-        """
-        Subscribe to WebSocket stream for site capture results.
-
-        Args:
-            site_id (str): Site UUID
-            capture_id (str): Capture session ID
-        """
-        try:
-            print("\n> Subscribing to capture stream...")
-            print("  Press Ctrl+C to stop monitoring")
-
-            # Initialize WebSocket manager if needed
-            if not self.websocket_manager:
-                self.websocket_manager = WebSocketManager(self.mist_session)
-
-            # Connect and subscribe
-            if not self.websocket_manager.connected:
-                self.websocket_manager.connect()
-
-            channel = f"/sites/{site_id}/pcaps"
-            self.websocket_manager.subscribe_to_channel(channel)
-
-            # Wait for subscription confirmation
-            confirmed = self.websocket_manager.wait_for_subscription_confirmation(channel, timeout_seconds=10)
-            if confirmed:
-                print("\n* Subscribed to capture stream")
-                print(f"  Capture ID: {capture_id}")
-                print("  Monitoring for packets...")
-                print("-" * 80)
-
-                # Monitor for results (simplified - full implementation would parse pcap data)
-                packet_count = 0
-                start_time = time.time()
-
-                try:
-                    while True:
-                        # Check for messages
-                        with self.websocket_manager.results_lock:
-                            messages = list(self.websocket_manager.command_results.values())
-
-                        for msg in messages:
-                            if msg.get("channel") == channel:
-                                data = msg.get("data", {})
-                                if data.get("capture_id") == capture_id:
-                                    packet_count += 1
-                                    if packet_count % 10 == 0:
-                                        elapsed = time.time() - start_time
-                                        print(f"  Received {packet_count} packets ({elapsed:.1f}s elapsed)")
-
-                                    # Check for stop message
-                                    if data.get("pcap_dict") is None:
-                                        print(f"\n* Capture completed: {packet_count} packets received")
-                                        return
-
-                        time.sleep(0.1)
-
-                except KeyboardInterrupt:
-                    print("\n\n! Monitoring stopped by user")
-                    print(f"  Total packets received: {packet_count}")
-
-            else:
-                print("\n! Failed to subscribe to capture stream")
-
-        except Exception as error:
-            print(f"\n! Error subscribing to stream: {error}")
-            logging.error(f"Exception in _subscribe_to_site_capture_stream: {error}", exc_info=True)
-
-    def _subscribe_to_org_capture_stream(self, capture_id: str):  # noqa: C901
-        """
-        Subscribe to WebSocket stream for org capture results.
-
-        Args:
-            capture_id (str): Capture session ID
-        """
-        try:
-            print("\n> Subscribing to capture stream...")
-            print("  Press Ctrl+C to stop monitoring")
-
-            # Similar to site capture stream but uses org channel
-            if not self.websocket_manager:
-                self.websocket_manager = WebSocketManager(self.mist_session)
-
-            if not self.websocket_manager.connected:
-                self.websocket_manager.connect()
-
-            channel = f"/orgs/{self.org_id}/pcaps"
-            self.websocket_manager.subscribe_to_channel(channel)
-
-            confirmed = self.websocket_manager.wait_for_subscription_confirmation(channel, timeout_seconds=10)
-            if confirmed:
-                print("\n* Subscribed to capture stream")
-                print(f"  Capture ID: {capture_id}")
-                print("  Monitoring for packets...")
-                print("-" * 80)
-
-                packet_count = 0
-                start_time = time.time()
-
-                try:
-                    while True:
-                        with self.websocket_manager.results_lock:
-                            messages = list(self.websocket_manager.command_results.values())
-
-                        for msg in messages:
-                            if msg.get("channel") == channel:
-                                data = msg.get("data", {})
-                                if data.get("capture_id") == capture_id:
-                                    packet_count += 1
-                                    if packet_count % 10 == 0:
-                                        elapsed = time.time() - start_time
-                                        print(f"  Received {packet_count} packets ({elapsed:.1f}s elapsed)")
-
-                                    if data.get("pcap_dict") is None:
-                                        print(f"\n* Capture completed: {packet_count} packets received")
-                                        return
-
-                        time.sleep(0.1)
-
-                except KeyboardInterrupt:
-                    print("\n\n! Monitoring stopped by user")
-                    print(f"  Total packets received: {packet_count}")
-
-            else:
-                print("\n! Failed to subscribe to capture stream")
-
-        except Exception as error:
-            print(f"\n! Error subscribing to stream: {error}")
-            logging.error(f"Exception in _subscribe_to_org_capture_stream: {error}", exc_info=True)
-
-    def _wait_and_download_pcap(self, site_id: str, capture_id: str, duration: int):
-        """Compatibility facade that delegates site PCAP wait/download to extracted workflow."""
-        logging.info(
-            "Preparing site PCAP wait/download dependencies for capture_id=%s", capture_id
-        )  # Log before runtime dependency import.
-        import requests  # Import requests lazily to preserve existing startup behavior and test patching points.
-
-        logging.debug("Loaded requests module for site PCAP wait/download facade")  # Log successful dependency import.
-
-        logging.info(
-            "Delegating _wait_and_download_pcap to SitePcapWaitDownloadWorkflow"
-        )  # Log before constructing extracted wait/download workflow.
-        workflow = SitePcapWaitDownloadWorkflow(  # Build extracted workflow with manager/session/API dependencies.
-            manager=self,
-            mistapi_module=mistapi,
-            requests_module=requests,
-        )
-        logging.debug(
-            "Initialized SitePcapWaitDownloadWorkflow for capture_id=%s", capture_id
-        )  # Log workflow initialization completion.
-        workflow.execute(site_id, capture_id, duration)  # Delegate to extracted workflow preserving facade behavior.
-        logging.debug("Completed delegated _wait_and_download_pcap workflow")  # Log delegated workflow completion.
-
-    def _wait_and_download_pcap_org(self, org_id: str, capture_id: str, duration: int):
-        """Compatibility facade that delegates org PCAP wait/download to extracted workflow."""
-        logging.info(
-            "Preparing org PCAP wait/download dependencies for capture_id=%s", capture_id
-        )  # Log before runtime dependency import.
-        import requests  # Import requests lazily to preserve existing startup behavior and test patching points.
-
-        logging.debug("Loaded requests module for org PCAP wait/download facade")  # Log successful dependency import.
-
-        logging.info(
-            "Delegating _wait_and_download_pcap_org to OrgPcapWaitDownloadWorkflow"
-        )  # Log before constructing extracted org wait/download workflow.
-        workflow = OrgPcapWaitDownloadWorkflow(  # Build extracted org workflow with manager/session/API dependencies.
-            manager=self,
-            mistapi_module=mistapi,
-            requests_module=requests,
-        )
-        logging.debug(
-            "Initialized OrgPcapWaitDownloadWorkflow for capture_id=%s", capture_id
-        )  # Log workflow initialization completion.
-        workflow.execute(org_id, capture_id, duration)  # Delegate to extracted org workflow preserving facade behavior.
-        logging.debug("Completed delegated _wait_and_download_pcap_org workflow")  # Log delegated workflow completion.
-
-    def _export_capture_info_to_csv(self, capture_data: dict, scope: str, scope_id: str):  # type: ignore[no-untyped-def, type-arg]
-        """
-        Export capture session information to CSV.
-
-        Args:
-            capture_data (dict): Capture response from API
-            scope (str): 'site' or 'org'
-            scope_id (str): Site or org UUID
-        """
-        try:
-            filename = f"PacketCapture_{scope}_{capture_data.get('id', 'unknown')}.csv"
-
-            # Add scope context
-            export_data = {"scope": scope, "scope_id": scope_id, **capture_data}
-
-            DataExporter.write_with_format_selection(
-                [export_data],
-                filename,
-                api_function_name="startSitePacketCapture" if scope == "site" else "startOrgPacketCapture",
-            )
-
-            print(f"\n* Capture info exported to: {filename}")
-            logging.info(f"Capture info exported to {filename}")
-
-        except Exception as error:
-            logging.error(f"Failed to export capture info: {error}", exc_info=True)
-
-
-# Phase 9 canonical ownership: runtime PacketCaptureManager now resolves to src.capture.packet_capture.
-# Legacy class above is intentionally retained temporarily for rollback safety within this wave branch.
+# Canonical ownership: runtime PacketCaptureManager resolves to the extracted src.capture.packet_capture implementation.
 PacketCaptureManager = ExtractedPacketCaptureManager
 
 
@@ -10691,6 +8340,128 @@ class APIDataFetcher:
         return table
 
 
+def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int, threading.Semaphore, int, str]:
+    """Determine threading strategy, semaphore, and batch size for a pool run."""
+    if FAST_MODE_USE_CONNECTION_AWARE_THREADING:  # Connection-aware mode limits threads to API connection pool size.
+        max_threads = FAST_MODE_MAX_CONCURRENT_CONNECTIONS  # Cap threads at configured connection pool capacity.
+        threading_mode = "connection-aware"  # Label used in log output so operators can identify which strategy ran.
+        logging.info(
+            f"! Connection-aware threading: Using {max_threads} threads (respects connection pool limit)"
+        )  # Confirm strategy selection and thread limit.
+    else:  # CPU-aware mode maximizes parallelism up to available CPU cores.
+        max_threads = (
+            os.cpu_count() or FAST_MODE_FALLBACK_THREADS
+        )  # Use CPU count or configured fallback when cpu_count returns None.
+        threading_mode = "CPU-aware"  # Label used in log output so operators can identify which strategy ran.
+        logging.info(
+            f"! CPU-aware threading: Using {max_threads} threads (maximum CPU utilization)"
+        )  # Confirm strategy selection and thread limit.
+    connection_semaphore = threading.Semaphore(
+        FAST_MODE_MAX_CONCURRENT_CONNECTIONS
+    )  # Limit simultaneous API calls regardless of thread count.
+    logging.info(
+        f"* Connection pool protection: Maximum {FAST_MODE_MAX_CONCURRENT_CONNECTIONS} concurrent API calls"
+    )  # Log semaphore bound for observability.
+    batch_size = (
+        max_threads * FAST_MODE_DEVICES_PER_THREAD
+    )  # Scale batch size to thread count and items-per-thread setting.
+    logging.info(
+        f"* Processing {len(work_items)} {batch_description} with connection pool management..."
+    )  # Log total work-item count before batching begins.
+    return (
+        max_threads,
+        connection_semaphore,
+        batch_size,
+        threading_mode,
+    )  # Return all pool configuration values as a bundle.
+
+
+def _pool_process_batch_wait_loop(
+    batch: list[Any],
+    worker_function: Any,
+    connection_semaphore: threading.Semaphore,
+    max_threads: int,
+    batch_description: str,
+    batch_number: int,
+    total_batches: int,
+) -> tuple[list[Any], list[Any]]:
+    """Submit one batch to a thread pool and collect results via a wait loop."""
+    batch_successful: list[Any] = []  # Accumulate successful worker results for this batch.
+    batch_failed: list[Any] = []  # Accumulate items whose futures raised or returned empty for this batch.
+    first_result_logged = False  # Track whether the first-result debug log has fired to avoid repeated noise.
+    logging.info(
+        f"! Processing batch {batch_number}/{total_batches} ({len(batch)} {batch_description}, ~{len(batch) / max_threads:.0f} per thread)"  # noqa: E501
+    )  # Log batch progress before dispatching to the thread pool.
+    with ThreadPoolExecutor(max_workers=max_threads) as executor:  # Bound thread count to the configured pool size.
+        future_to_item = {
+            executor.submit(worker_function, item, connection_semaphore): item for item in batch
+        }  # Map each future back to its source item for error reporting.
+        batch_desc = (
+            f"Batch {batch_number}/{total_batches}"  # Build tqdm description once so progress bar label is consistent.
+        )
+        pending = set(future_to_item.keys())  # Track in-flight futures so the wait loop can detect completion.
+        with tqdm(total=len(pending), desc=batch_desc, unit=batch_description.rstrip("s")) as pbar:  # type: ignore[call-arg, no-untyped-call]  # Show per-batch progress to the operator.
+            while pending:  # Keep collecting futures until all have resolved.
+                done, pending = wait(pending, return_when=FIRST_COMPLETED)  # Wake up as soon as any future finishes.
+                for future in done:  # Inspect each completed future before moving on.
+                    item = future_to_item[future]  # Recover the original item for error logging.
+                    try:  # Future.result() can raise if the worker threw an exception.
+                        result = future.result()  # Retrieve the worker's return value or propagate its exception.
+                        if result:  # Truthy result means the worker succeeded and returned data.
+                            batch_successful.append(result)  # Collect successful result for the caller's output list.
+                            if (
+                                not first_result_logged
+                            ):  # Log the first result's type once to help debug unexpected worker outputs.
+                                logging.debug(
+                                    f"! First future result type: {type(result)}"
+                                )  # One-shot debug log to show actual result shape.
+                                first_result_logged = True  # Prevent repeated debug log on subsequent results.
+                        else:  # Falsy result means the worker returned an empty list or None.
+                            batch_failed.append(item)  # Track empty-result items for potential retry.
+                    except Exception as exc:  # Worker threw an exception; log and track as failed.
+                        logging.error(
+                            f"! Future exception for {batch_description.rstrip('s')} {item}: {exc}"
+                        )  # Log exception with item context for targeted debugging.
+                        batch_failed.append(item)  # Mark item as failed so retry logic can handle it.
+                    finally:  # Advance progress bar regardless of success or failure.
+                        try:  # tqdm.update can fail in some environments; isolate that error.
+                            pbar.update(1)  # Advance progress bar by one item for each completed future.
+                        except (
+                            Exception
+                        ) as upd_err:  # Progress bar update failure should not mask the real work result.
+                            logging.error(
+                                f"! Progress bar update failed: {upd_err}"
+                            )  # Log progress bar failure for environment-level debugging.
+    return batch_successful, batch_failed  # Return batch-level results so caller can accumulate them.
+
+
+def _pool_log_batch_exception(
+    batch_exc: Exception, batch_index: int, batch_size: int, max_threads: int, threading_mode: str
+) -> None:
+    """Log a batch-level exception with full context then re-raise it."""
+    logging.error(
+        f"! Batch-level exception in execute_with_connection_pool_management: {batch_exc}"
+    )  # Surface root exception message for immediate diagnosis.
+    logging.error(
+        f"! Batch context: batch_index={batch_index}, batch_size={batch_size}, max_threads={max_threads}, threading_mode={threading_mode}"  # noqa: E501
+    )  # Log batch configuration context to support post-mortem analysis.
+    try:  # Best-effort traceback capture preserves stack information in the log file.
+        import traceback as _tb2  # Import locally to avoid affecting module-level namespace.
+
+        formatted = "".join(
+            _tb2.format_exception(type(batch_exc), batch_exc, batch_exc.__traceback__)
+        )  # Render full traceback as a single string.
+        for (
+            line
+        ) in formatted.rstrip().splitlines():  # Log each traceback line separately for log-aggregation compatibility.
+            logging.error(line)  # Emit one traceback line per log record.
+    except Exception as trace_log_err:  # Traceback serialization failure should not suppress the re-raise.
+        logging.error(
+            f"! Failed to log batch exception traceback: {trace_log_err}"
+        )  # Surface traceback logging failure as a secondary error.
+    raise batch_exc  # Re-raise so outer handlers and the global excepthook can capture the original failure.
+
+
 def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
     work_items: list[Any], worker_function: Any, batch_description: str = "items", retry_function: Any | None = None
 ) -> tuple[list[Any], list[Any]]:
@@ -10714,123 +8485,67 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
     Returns:
         Tuple of (successful_results, failed_items)
     """
+    if not work_items:  # Empty work list is a valid fast-exit condition.
+        logging.info(f"* No {batch_description} to process.")  # Tell caller why nothing ran.
+        return [], []  # Return empty results without configuring a thread pool.
 
-    if not work_items:
-        logging.info(f"* No {batch_description} to process.")
-        return [], []
+    max_threads, connection_semaphore, batch_size, threading_mode = _pool_configure(
+        work_items, batch_description
+    )  # Resolve threading strategy and pool parameters from environment config.
+    successful_results: list[Any] = []  # Accumulate all successful worker results across all batches.
+    failed_items: list[Any] = []  # Accumulate all failed items across all batches for optional retry.
+    total_batches = (
+        len(work_items) + batch_size - 1
+    ) // batch_size  # Pre-compute total batch count for progress labels.
 
-    logging.info(f"* Processing {len(work_items)} {batch_description} with connection pool management...")
+    for batch_index in range(
+        0, len(work_items), batch_size
+    ):  # Split work items into equal-sized batches for bounded memory and predictable progress.
+        try:  # Isolate each batch so a single failure doesn't silently skip remaining batches.
+            batch = work_items[
+                batch_index : batch_index + batch_size
+            ]  # Slice the current batch from the full work-item list.
+            batch_number = (
+                batch_index // batch_size
+            ) + 1  # Compute 1-based batch number for human-readable progress logs.
+            batch_successful, batch_failed = _pool_process_batch_wait_loop(
+                batch,
+                worker_function,
+                connection_semaphore,
+                max_threads,
+                batch_description,
+                batch_number,
+                total_batches,
+            )  # Execute this batch through the bounded thread pool and collect per-future results.
+            successful_results.extend(batch_successful)  # Merge batch successes into the overall result list.
+            failed_items.extend(batch_failed)  # Merge batch failures into the overall failed list for retry handling.
+        except Exception as batch_exc:  # Batch-level exceptions need context logging before re-raise.
+            _pool_log_batch_exception(
+                batch_exc, batch_index, batch_size, max_threads, threading_mode
+            )  # Logs and re-raises with full context.
 
-    # Determine threading strategy from environment variables
-    if FAST_MODE_USE_CONNECTION_AWARE_THREADING:
-        # Connection-aware threading: limit threads to connection pool capacity
-        max_threads = FAST_MODE_MAX_CONCURRENT_CONNECTIONS
-        threading_mode = "connection-aware"
-        logging.info(f"! Connection-aware threading: Using {max_threads} threads (respects connection pool limit)")
-    else:
-        # CPU-aware threading: use maximum CPU threads available
-        max_threads = os.cpu_count() or FAST_MODE_FALLBACK_THREADS
-        threading_mode = "CPU-aware"
-        logging.info(f"! CPU-aware threading: Using {max_threads} threads (maximum CPU utilization)")
+    if (
+        failed_items and retry_function
+    ):  # Only invoke the retry path when failures exist and a retry function was provided.
+        logging.info(
+            f"! Retrying {len(failed_items)} failed {batch_description}..."
+        )  # Announce retry phase so operators can track it separately.
+        retry_results, still_failed = retry_function(
+            failed_items, connection_semaphore
+        )  # Run caller-provided retry logic with the same semaphore constraint.
+        successful_results.extend(retry_results)  # Merge recovered items into the success list.
+        failed_items = still_failed  # Replace failed list with items that still failed after retry.
 
-    # Create a semaphore to limit concurrent API connections
-    connection_semaphore = threading.Semaphore(FAST_MODE_MAX_CONCURRENT_CONNECTIONS)
-    logging.info(f"* Connection pool protection: Maximum {FAST_MODE_MAX_CONCURRENT_CONNECTIONS} concurrent API calls")
-
-    # Calculate optimal batch size using configurable devices per thread
-    devices_per_thread = FAST_MODE_DEVICES_PER_THREAD
-    batch_size = max_threads * devices_per_thread
-    successful_results = []
-    failed_items = []
-
-    # Process items in batches
-    for batch_index in range(0, len(work_items), batch_size):
-        try:
-            batch = work_items[batch_index : batch_index + batch_size]
-            batch_number = (batch_index // batch_size) + 1
-            total_batches = (len(work_items) + batch_size - 1) // batch_size
-            logging.info(
-                f"! Processing batch {batch_number}/{total_batches} ({len(batch)} {batch_description}, ~{len(batch) / max_threads:.0f} per thread)"  # noqa: E501
-            )
-            with ThreadPoolExecutor(max_workers=max_threads) as executor:
-                # Submit batch tasks with connection semaphore
-                future_to_item = {executor.submit(worker_function, item, connection_semaphore): item for item in batch}
-                batch_desc = f"Batch {batch_number}/{total_batches}"
-                # Strategy: optionally avoid as_completed entirely using wait loop for stability
-                use_wait_loop = True  # Default to True after repeated environment anomalies
-                first_result_logged = False
-                if use_wait_loop:
-                    pending = set(future_to_item.keys())
-                    pbar_total = len(pending)
-                    # tqdm(total=...) is valid pattern for manual progress updates
-                    with tqdm(total=pbar_total, desc=batch_desc, unit=batch_description.rstrip("s")) as pbar:  # type: ignore[call-arg, no-untyped-call]
-                        while pending:
-                            done, pending = wait(pending, return_when=FIRST_COMPLETED)
-                            for future in done:
-                                item = future_to_item[future]
-                                try:
-                                    result = future.result()
-                                    if result:
-                                        successful_results.append(result)
-                                        if not first_result_logged:
-                                            logging.debug(f"! First future result type: {type(result)}")
-                                            first_result_logged = True
-                                    else:
-                                        failed_items.append(item)
-                                except Exception as e:
-                                    logging.error(f"! Future exception for {batch_description.rstrip('s')} {item}: {e}")
-                                    failed_items.append(item)
-                                finally:
-                                    try:
-                                        pbar.update(1)
-                                    except Exception as upd_err:
-                                        logging.error(f"! Progress bar update failed: {upd_err}")
-                else:
-                    # Retained fallback path (not expected to be used now)
-                    for future in as_completed(future_to_item):
-                        item = future_to_item[future]
-                        try:
-                            result = future.result()
-                            if result:
-                                successful_results.append(result)
-                            else:
-                                failed_items.append(item)
-                        except Exception as e:
-                            logging.error(f"! Future exception for {batch_description.rstrip('s')} {item}: {e}")
-                            failed_items.append(item)
-        except Exception as batch_exc:
-            # Log detailed context about the batch to aid debugging (e.g., dict+float arithmetic errors outside futures)
-            logging.error(f"! Batch-level exception in execute_with_connection_pool_management: {batch_exc}")
-            logging.error(
-                f"! Batch context: batch_index={batch_index}, batch_size={batch_size}, max_threads={max_threads}, threading_mode={threading_mode}"  # noqa: E501
-            )
-            try:
-                import traceback as _tb2
-
-                formatted = "".join(_tb2.format_exception(type(batch_exc), batch_exc, batch_exc.__traceback__))
-                for line in formatted.rstrip().splitlines():
-                    logging.error(line)
-            except Exception as trace_log_err:
-                logging.error(f"! Failed to log batch exception traceback: {trace_log_err}")
-            # Re-raise to allow outer handlers / global excepthook to capture as well
-            raise
-
-    # Handle retries if retry function is provided
-    if failed_items and retry_function:
-        logging.info(f"! Retrying {len(failed_items)} failed {batch_description}...")
-        retry_results, still_failed = retry_function(failed_items, connection_semaphore)
-        successful_results.extend(retry_results)
-        failed_items = still_failed
-
-    logging.info(f"! Processed {len(successful_results)} {batch_description} successfully, {len(failed_items)} failed")
-    return successful_results, failed_items
+    logging.info(
+        f"! Processed {len(successful_results)} {batch_description} successfully, {len(failed_items)} failed"
+    )  # Log final success/failure tally for the whole pool run.
+    return successful_results, failed_items  # Return both result lists so callers can report or act on failures.
 
 
 # ============================================================================
 # PROMPT UTILITIES CLASS
 # ============================================================================
 # PromptNetworkDeviceUtils -- extracted to src/device/prompt_utils.py (issue #332)
-from src.device.prompt_utils import PromptNetworkDeviceUtils  # Interactive AP/gateway/switch/port selection prompts
 
 
 class PromptClientUtils:
@@ -12229,198 +9944,248 @@ class OrgAlarmEventExporter:
         exporter.export()
 
     @staticmethod
+    def _52w_load_checkpoint(checkpoint_file: str) -> str | None:
+        """Read search_after token from checkpoint file to resume a previous export."""
+        if not os.path.exists(checkpoint_file):  # No file means export hasn't run yet or completed cleanly.
+            return None  # Fresh start, no token to resume from.
+        try:  # File read can fail due to permissions or corruption; fall back to fresh export.
+            with open(checkpoint_file, encoding="utf-8") as fh:
+                token = fh.read().strip()  # Strip whitespace so malformed files don't produce bad tokens.
+            if token:  # Non-empty token means there is a valid resume point.
+                logging.info(
+                    f"Resuming OrgDeviceEvents_52w from checkpoint token: {token}"
+                )  # Log resume event for traceability.
+                return token  # Return token so caller can pass it to the first API request.
+        except Exception as exception:  # Checkpoint read failure should degrade gracefully to a fresh start.
+            logging.warning(
+                f"Could not read checkpoint file {checkpoint_file}: {exception}"
+            )  # Log why resume was skipped.
+        return None  # Fall back to full export when checkpoint is unreadable.
+
+    @staticmethod
+    def _52w_save_checkpoint(checkpoint_file: str, token: str) -> None:
+        """Persist current search_after token so export can resume after interruption."""
+        try:  # Checkpoint write failure is non-fatal but reduces resumability.
+            with open(checkpoint_file, "w", encoding="utf-8") as fh:
+                fh.write(str(token))  # Write token string so it can be read back on next run.
+        except Exception as exception:  # Log failure without aborting the ongoing export stream.
+            logging.warning(
+                f"Could not write checkpoint file {checkpoint_file}: {exception}"
+            )  # Surface write failure for operator awareness.
+
+    @staticmethod
+    def _52w_remove_checkpoint(checkpoint_file: str) -> None:
+        """Remove checkpoint file after a successful complete export."""
+        try:  # Cleanup is best-effort and should not raise even when the file is missing.
+            if os.path.exists(checkpoint_file):  # Avoid FileNotFoundError on double-cleanup.
+                os.remove(checkpoint_file)  # Delete checkpoint so next run starts fresh.
+        except Exception:  # Failure to delete is safe to swallow since the export already completed.
+            logging.debug("Could not remove checkpoint file after completion")  # Log silently; not an operator concern.
+
+    @staticmethod
+    def _52w_fetch_page(org_id: str, limit: int, duration: str, token: str | None) -> object:
+        """Fetch one page of device events from the Mist API using optional search_after token."""
+        if token:  # Passing search_after continues pagination from the saved cursor position.
+            return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+                apisession, org_id, device_type="all", limit=limit, duration=duration, search_after=token
+            )  # Resume from token for mid-export continuation.
+        return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+            apisession, org_id, device_type="all", limit=limit, duration=duration
+        )  # Initial fetch with no cursor returns events from the start of the 52-week window.
+
+    @staticmethod
+    def _52w_fetch_page_with_retries(
+        org_id: str, limit: int, duration: str, token: str | None, retries: int = 3, backoff: float = 1.0
+    ) -> object:
+        """Fetch one device-events page with exponential-backoff retries for transient failures."""
+        last_exc: Exception | None = None  # Track last exception so callers get a meaningful error on exhaustion.
+        for attempt in range(retries):  # Retry up to the configured limit before giving up.
+            try:  # Wrap each attempt so a transient API error can be retried rather than aborting.
+                return OrgAlarmEventExporter._52w_fetch_page(
+                    org_id, limit, duration, token
+                )  # Delegate to atomic fetch method.
+            except Exception as exception:  # Network errors and rate-limit responses are retryable.
+                last_exc = exception  # Remember last error for re-raise after exhaustion.
+                logging.warning(
+                    f"Attempt {attempt + 1}/{retries} to fetch device events page failed: {exception}"
+                )  # Log attempt number and cause for monitoring.
+                if attempt < retries - 1:  # Don't sleep after the final attempt since we're about to give up.
+                    sleep_time = backoff * (2**attempt)  # Exponential backoff reduces pressure on API during outages.
+                    logging.debug(
+                        f"Waiting {sleep_time}s before retrying 52w page fetch"
+                    )  # Log backoff duration for performance debugging.
+                    time.sleep(sleep_time)  # Pause before the next retry attempt.
+        logging.error("Exceeded maximum retries fetching device events page")  # Record terminal retry failure.
+        if last_exc is not None:  # Re-raise the real exception so callers can propagate it correctly.
+            raise last_exc
+        raise RuntimeError(
+            "All retries failed with no exception captured"
+        )  # Defensive fallback for unexpected exhaustion.
+
+    @staticmethod
+    def _52w_parse_page_data(response: object) -> tuple[list, str | None]:
+        """Extract results list and next search_after token from a raw API page response."""
+        page_data = getattr(response, "data", None)  # SDK wraps response body in .data attribute.
+        if not page_data:  # Missing data means end of stream or API error.
+            return [], None  # Caller should stop pagination when both are empty.
+        if isinstance(page_data, dict):  # Most Mist API pages return a dict with results and pagination metadata.
+            results = page_data.get("results", []) or page_data.get(
+                "data", []
+            )  # Handle both 'results' and 'data' key conventions.
+            next_token = page_data.get("search_after") or page_data.get(
+                "next"
+            )  # Support both pagination token key names.
+        else:  # Some SDK wrappers return the list directly without a wrapping dict.
+            results = page_data if isinstance(page_data, list) else []  # Normalize unexpected shapes to empty list.
+            next_token = None  # Flat list response means no cursor was returned.
+        return results, next_token  # Return row data and continuation token for the caller.
+
+    @staticmethod
+    def _52w_preload_pages(
+        org_id: str, search_after: str | None, limit: int, duration: str, preload_count: int
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Fetch and flatten the first N pages to build a stable CSV header before streaming."""
+        buffered_rows: list[dict[str, Any]] = []  # Accumulate flattened rows from preload pages for header derivation.
+        next_token = search_after  # Start from checkpoint position so preload respects resume state.
+        for _ in range(preload_count):  # Collect up to preload_count pages before switching to streaming mode.
+            response = OrgAlarmEventExporter._52w_fetch_page(
+                org_id, limit, duration, next_token
+            )  # Fetch next page using current cursor.
+            results, next_token = OrgAlarmEventExporter._52w_parse_page_data(
+                response
+            )  # Extract row list and next cursor.
+            if not results:  # Empty results means end of data; stop preloading.
+                break  # Exit early to avoid spurious empty pages in the buffered set.
+            processed = DataProcessingUtils.flatten_nested_fields(
+                results
+            )  # Normalize nested API fields for CSV compatibility.
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # Escape embedded newlines so CSV rows stay single-line.
+            buffered_rows.extend(processed)  # Merge this page's flattened rows into the preload buffer.
+            if not next_token:  # No next token means data is fully exhausted during preload.
+                break  # Stop preloading since there is nothing more to stream.
+        return buffered_rows, next_token  # Return all preloaded rows plus the cursor for the stream phase.
+
+    @staticmethod
+    def _52w_write_batch(
+        rows: list[dict[str, Any]], header_fields: list[str], csv_file: str, table_name: str, append: bool
+    ) -> None:
+        """Write or append a batch of device-event rows to CSV or SQLite based on global output format."""
+        if OUTPUT_FORMAT == "sqlite":  # SQLite path uses the shared DataExporter multi-backend writer.
+            try:  # SQLite write failure is fatal because data loss cannot be recovered without checkpoint replay.
+                DataExporter.write_with_format_selection(
+                    rows, table_name, format_override="sqlite", api_function_name="searchOrgDeviceEvents"
+                )  # Persist rows to the configured SQLite database using the endpoint name for PK strategy lookup.
+            except Exception as write_error:  # Re-raise immediately so callers can handle checkpoint cleanup.
+                mode = "append to" if append else "write initial"  # Log with operation context to aid debugging.
+                logging.error(
+                    f"Failed to {mode} OrgDeviceEvents_52w SQLite table {table_name}: {write_error}"
+                )  # Log failure before re-raise.
+                raise  # Propagate so the outer export aborts and checkpoint state is preserved.
+        else:  # CSV path writes using the stable header computed from preloaded pages.
+            file_mode = "a" if append else "w"  # Append for streaming pages; overwrite for the initial batch.
+            try:  # CSV write failure is fatal because a truncated file cannot be completed without full re-export.
+                with open(csv_file, file_mode, newline="", encoding="utf-8") as fh:
+                    writer = csv.DictWriter(
+                        fh, fieldnames=header_fields
+                    )  # Use precomputed stable header for all pages.
+                    if not append:  # Only write the header row for the initial batch.
+                        writer.writeheader()  # Emit column names once so every append page uses the same order.
+                    for row in rows:  # Write each row using get-with-default so missing fields produce empty cells.
+                        writer.writerow(
+                            {k: row.get(k, "") for k in header_fields}
+                        )  # Map every header field to a value or empty string.
+            except Exception as write_error:  # Re-raise immediately so callers can handle checkpoint cleanup.
+                mode = "append to" if append else "write initial"  # Log with operation context to aid debugging.
+                logging.error(
+                    f"Failed to {mode} OrgDeviceEvents_52w CSV file {csv_file}: {write_error}"
+                )  # Log before re-raise.
+                raise  # Propagate so the outer export aborts and checkpoint state is preserved.
+
+    @staticmethod
     def device_events_52w_legacy() -> None:
         """
         Export all org device events from the last 52 weeks to OrgDeviceEvents_52w.csv.
 
-        This implementation streams results using the search_after token and writes
-        to CSV in a memory-efficient manner with simple checkpointing so it can be
-        resumed if interrupted.
+        Streams results using search_after pagination with checkpoint resumability and
+        memory-efficient per-page writes to CSV or SQLite.
         """
-        logging.info("Exporting all org device events from the last 52 weeks...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not org_id:
-            logging.error("No org_id available. Exiting.")
-            return
+        logging.info(
+            "Exporting all org device events from the last 52 weeks..."
+        )  # Log entry point for operational traceability.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org context before any API or file operations.
+        if not org_id:  # Missing org ID blocks all API calls so abort early with a clear error.
+            logging.error("No org_id available. Exiting.")  # Surface missing org context as an error for operators.
+            return  # Cannot proceed without a valid org identifier.
 
-        data_dir = "data"
-        os.makedirs(data_dir, exist_ok=True)
-        checkpoint_file = os.path.join(data_dir, f"OrgDeviceEvents_52w.{org_id}.checkpoint")
-        csv_file = os.path.join(data_dir, "OrgDeviceEvents_52w.csv")
+        data_dir = "data"  # All output files live under the standard data directory.
+        os.makedirs(data_dir, exist_ok=True)  # Ensure data directory exists before writing any files.
+        checkpoint_file = os.path.join(
+            data_dir, f"OrgDeviceEvents_52w.{org_id}.checkpoint"
+        )  # Per-org checkpoint path so parallel runs don't collide.
+        csv_file = os.path.join(
+            data_dir, "OrgDeviceEvents_52w.csv"
+        )  # Stable output CSV path expected by downstream consumers.
+        table_name = "OrgDeviceEvents_52w"  # SQLite table name used by the DataExporter backend.
+        limit = 1000  # Page size balances memory usage against API round-trip count.
+        duration = "52w"  # 52-week lookback spans a full year of device event history.
 
-        limit = 1000
-        duration = "52w"
-        preload_pages = 3  # number of pages to fetch to build a robust header before streaming
+        search_after = OrgAlarmEventExporter._52w_load_checkpoint(
+            checkpoint_file
+        )  # Load prior position to resume interrupted exports.
+        buffered_rows, next_token = OrgAlarmEventExporter._52w_preload_pages(
+            org_id, search_after, limit, duration, 3
+        )  # Preload first 3 pages to derive a stable CSV header before streaming.
 
-        # Try to read an existing checkpoint token to resume
-        search_after = None
-        if os.path.exists(checkpoint_file):
-            try:
-                with open(checkpoint_file, encoding="utf-8") as fh:
-                    token = fh.read().strip()
-                    if token:
-                        search_after = token
-                        logging.info(f"Resuming OrgDeviceEvents_52w from checkpoint token: {search_after}")
-            except Exception as e:
-                logging.warning(f"Could not read checkpoint file {checkpoint_file}: {e}")
+        if not buffered_rows:  # No rows means the org has no device events in the 52-week window.
+            logging.info(
+                "No device events found for the 52-week period."
+            )  # Record empty result explicitly for monitoring.
+            DataExporter.save_data_to_output([], "OrgDeviceEvents_52w.csv")  # type: ignore[no-untyped-call]  # Write empty output so downstream expects a file.
+            return  # Nothing to stream; exit cleanly.
 
-        def _fetch_page(token: str | None) -> object:
-            # Always pass search_after as a keyword; mistapi may ignore None values but accept explicit token
-            if token:
-                return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-                    apisession, org_id, device_type="all", limit=limit, duration=duration, search_after=token
-                )
-            return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-                apisession, org_id, device_type="all", limit=limit, duration=duration
-            )
+        header_fields = DataProcessingUtils.get_unique_keys(buffered_rows)  # type: ignore[no-untyped-call]  # Derive stable column set from the preloaded sample.
+        logging.info(
+            f"Using CSV header with {len(header_fields)} fields for OrgDeviceEvents_52w.csv"
+        )  # Log header width for schema tracking.
+        OrgAlarmEventExporter._52w_write_batch(
+            buffered_rows, header_fields, csv_file, table_name, append=False
+        )  # Write preloaded pages as the initial output batch.
 
-        buffered_rows: list[dict[str, Any]] = []
-        page_count = 0
-        next_token = None
+        if next_token:  # Only save checkpoint when more pages remain after the preload phase.
+            OrgAlarmEventExporter._52w_save_checkpoint(
+                checkpoint_file, next_token
+            )  # Persist cursor so a crash here can be resumed.
 
-        # Preload a small number of pages to compute a stable CSV header
-        while page_count < preload_pages:
-            response = _fetch_page(search_after)
-            page_data = getattr(response, "data", None)
-            if not page_data:
-                break
+        while next_token:  # Stream all remaining pages until the API returns no continuation cursor.
+            response = OrgAlarmEventExporter._52w_fetch_page_with_retries(
+                org_id, limit, duration, next_token
+            )  # Fetch next page with exponential-backoff retry protection.
+            results, next_token = OrgAlarmEventExporter._52w_parse_page_data(
+                response
+            )  # Extract row data and updated cursor from response.
+            if not results:  # Empty results signals the end of the event stream.
+                break  # Exit streaming loop; all available events have been written.
+            processed = DataProcessingUtils.flatten_nested_fields(
+                results
+            )  # Flatten nested API fields for flat-file compatibility.
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # Escape newlines so CSV rows remain single-line.
+            OrgAlarmEventExporter._52w_write_batch(
+                processed, header_fields, csv_file, table_name, append=True
+            )  # Append this page's rows to the output file or SQLite table.
+            if next_token:  # Update checkpoint after each successful page write for fine-grained resume.
+                OrgAlarmEventExporter._52w_save_checkpoint(
+                    checkpoint_file, next_token
+                )  # Advance checkpoint so a crash loses at most one page.
 
-            if isinstance(page_data, dict):
-                results = page_data.get("results", []) or page_data.get("data", [])
-                next_token = page_data.get("search_after") or page_data.get("next")
-            else:
-                results = page_data if isinstance(page_data, list) else []
-                next_token = None
-
-            if not results:
-                break
-
-            processed = DataProcessingUtils.flatten_nested_fields(results)
-            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            buffered_rows.extend(processed)
-
-            if not next_token:
-                break
-
-            search_after = next_token
-            page_count += 1
-
-        if not buffered_rows:
-            logging.info("No device events found for the 52-week period.")
-            DataExporter.save_data_to_output([], "OrgDeviceEvents_52w.csv")  # type: ignore[no-untyped-call]
-            return
-
-        # Determine CSV header from preloaded rows and write them out
-        header_fields = DataProcessingUtils.get_unique_keys(buffered_rows)  # type: ignore[no-untyped-call]
-        logging.info(f"Using CSV header with {len(header_fields)} fields for OrgDeviceEvents_52w.csv")
-
-        # Helper: fetch with retries to handle transient API errors/rate limits
-        def _fetch_page_with_retries(token: str | None, retries: int = 3, backoff: float = 1.0) -> object:
-            last_exc = None
-            for attempt in range(retries):
-                try:
-                    return _fetch_page(token)
-                except Exception as exc:  # pragma: no cover - defensive network handling
-                    last_exc = exc
-                    logging.warning(f"Attempt {attempt + 1}/{retries} to fetch page failed: {exc}")
-                    if attempt < retries - 1:
-                        sleep_time = backoff * (2**attempt)
-                        logging.debug(f"Waiting {sleep_time}s before retrying")
-                        time.sleep(sleep_time)
-            # If we reach here, all retries failed
-            logging.error("Exceeded maximum retries fetching page")
-            if last_exc is not None:
-                raise last_exc
-            raise RuntimeError("All retries failed with no exception captured")
-
-        # Choose output path: CSV (default) or SQLite (streaming)
-        table_name = "OrgDeviceEvents_52w"
-        if OUTPUT_FORMAT == "sqlite":
-            try:
-                # Initial write of preloaded rows into SQLite table
-                DataExporter.write_with_format_selection(
-                    buffered_rows, table_name, format_override="sqlite", api_function_name="searchOrgDeviceEvents"
-                )
-            except Exception as write_err:
-                logging.error(f"Failed to write initial OrgDeviceEvents_52w batch to SQLite: {write_err}")
-                raise
-        else:
-            try:
-                with open(csv_file, "w", newline="", encoding="utf-8") as fh:
-                    writer = csv.DictWriter(fh, fieldnames=header_fields)
-                    writer.writeheader()
-                    for row in buffered_rows:
-                        writer.writerow({k: row.get(k, "") for k in header_fields})
-            except Exception as write_err:
-                logging.error(f"Failed to write initial OrgDeviceEvents_52w CSV file: {write_err}")
-                raise
-
-        # Persist checkpoint if there are more pages to fetch
-        if next_token:
-            try:
-                with open(checkpoint_file, "w", encoding="utf-8") as fh:
-                    fh.write(str(next_token))
-            except Exception as e:
-                logging.warning(f"Could not write checkpoint file {checkpoint_file}: {e}")
-
-        # Continue streaming remaining pages (if any)
-        while next_token:
-            # Use retry wrapper for robustness
-            response = _fetch_page_with_retries(next_token)
-            page_data = getattr(response, "data", None)
-            if not page_data:
-                break
-
-            if isinstance(page_data, dict):
-                results = page_data.get("results", []) or page_data.get("data", [])
-                next_token = page_data.get("search_after") or page_data.get("next")
-            else:
-                results = page_data if isinstance(page_data, list) else []
-                next_token = None
-
-            if not results:
-                break
-
-            processed = DataProcessingUtils.flatten_nested_fields(results)
-            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-
-            if OUTPUT_FORMAT == "sqlite":
-                try:
-                    DataExporter.write_with_format_selection(
-                        processed, table_name, format_override="sqlite", api_function_name="searchOrgDeviceEvents"
-                    )
-                except Exception as append_err:
-                    logging.error(f"Failed to append OrgDeviceEvents_52w to SQLite table {table_name}: {append_err}")
-                    raise
-            else:
-                try:
-                    with open(csv_file, "a", newline="", encoding="utf-8") as fh:
-                        writer = csv.DictWriter(fh, fieldnames=header_fields)
-                        for row in processed:
-                            writer.writerow({k: row.get(k, "") for k in header_fields})
-                except Exception as append_err:
-                    logging.error(f"Failed to append OrgDeviceEvents_52w CSV file: {append_err}")
-                    raise
-
-            # Update checkpoint for resume
-            if next_token:
-                try:
-                    with open(checkpoint_file, "w", encoding="utf-8") as fh:
-                        fh.write(str(next_token))
-                except Exception as e:
-                    logging.warning(f"Could not write checkpoint file {checkpoint_file}: {e}")
-
-        # Completed; remove checkpoint file (best-effort)
-        try:
-            if os.path.exists(checkpoint_file):
-                os.remove(checkpoint_file)
-        except Exception:
-            logging.debug("Could not remove checkpoint file after completion")
-
-        if OUTPUT_FORMAT == "sqlite":
-            logging.info(f"All org device events (52w) exported to SQLite table {table_name} (DB: {DATABASE_PATH})")
-        else:
-            logging.info(f"All org device events (52w) exported to {csv_file}.")
+        OrgAlarmEventExporter._52w_remove_checkpoint(
+            checkpoint_file
+        )  # Clean up checkpoint file after a successful full export.
+        if OUTPUT_FORMAT == "sqlite":  # Log final destination path based on configured output format.
+            logging.info(
+                f"All org device events (52w) exported to SQLite table {table_name} (DB: {DATABASE_PATH})"
+            )  # Confirm SQLite export completion.
+        else:  # CSV format is the default; log its output path.
+            logging.info(f"All org device events (52w) exported to {csv_file}.")  # Confirm CSV export completion.
 
 
 # ============================================================================
@@ -12596,6 +10361,292 @@ class OrgInventoryExporter:
             emitter.emit_progress_complete("17", "devices", 1, 1, False, time.time() - op_start)
 
     @staticmethod
+    def _resolve_combined_inventory_org_name(current_org_id: str | None, fallback_org_name: str | None) -> str:
+        """Resolve organization name used for combined inventory output filenames."""
+        org_name_for_filename = None  # Start with no resolved org name so API lookup can fill it in.
+        try:  # Resolve org name from live Mist API first so filenames follow authoritative naming.
+            org_response = mistapi.api.v1.orgs.orgs.getOrg(
+                apisession, current_org_id
+            )  # Fetch org details for filename metadata.
+            org_name_for_filename = getattr(org_response, "data", {}).get(
+                "name"
+            )  # Pull org name from the response payload if present.
+        except Exception as exception:  # API resolution failure should not block report generation.
+            logging.warning(
+                f"Unable to resolve org name from API for combined inventory filename: {exception}"
+            )  # Log fallback reason for operators.
+        if not org_name_for_filename:  # Fall back to customer name from environment when API name is unavailable.
+            org_name_for_filename = fallback_org_name  # Use configured customer-friendly name if present.
+        if not org_name_for_filename:  # Final fallback ensures a stable filename even with missing metadata.
+            org_name_for_filename = current_org_id or "UnknownOrg"  # Use org ID or sentinel value as a last resort.
+        return org_name_for_filename  # Return resolved display name for downstream filename sanitization.
+
+    @staticmethod
+    def _build_safe_org_name(org_name_for_filename: str) -> str:
+        """Sanitize organization name so generated filenames stay filesystem-safe."""
+        return "".join(  # Build safe filename character-by-character to preserve readable names.
+            character if character.isalnum() or character in "-_" else "_" for character in org_name_for_filename
+        )
+
+    @staticmethod
+    def _export_combined_inventory_raw_json(output_folder: str, current_org_id: str) -> None:
+        """Export raw inventory JSON variants used for VC delta analysis."""
+        logging.info(
+            "Saving raw inventory JSON for delta comparison..."
+        )  # Log start so operators know diagnostic exports are running.
+        try:  # Raw JSON export is diagnostic only and must never block the main report.
+            os.makedirs(
+                output_folder, exist_ok=True
+            )  # Ensure the shared output folder exists before writing JSON files.
+            request_specs = [  # Define each inventory query variant once to keep export loop consistent.
+                ("raw_inventory_vc_true.json", {"vc": True, "type": "switch", "limit": DEFAULT_API_PAGE_LIMIT}),
+                ("raw_inventory_vc_false.json", {"vc": False, "type": "switch", "limit": DEFAULT_API_PAGE_LIMIT}),
+                ("raw_inventory_no_vc_param.json", {"type": "switch", "limit": DEFAULT_API_PAGE_LIMIT}),
+            ]
+            counts_by_filename: dict[str, int] = {}  # Track row counts so user-facing summary can report all variants.
+            for filename, request_kwargs in request_specs:  # Fetch and persist each API view for later diff analysis.
+                logging.info(
+                    "Fetching raw inventory variant for %s...", filename
+                )  # Log before each API call for observability.
+                response = mistapi.api.v1.orgs.inventory.getOrgInventory(
+                    apisession, current_org_id, **request_kwargs
+                )  # Pull the requested inventory view.
+                raw_inventory = mistapi.get_all(
+                    response=response, mist_session=apisession
+                )  # Paginate all results so JSON captures complete data.
+                output_path = os.path.join(
+                    output_folder, filename
+                )  # Build deterministic file path for this diagnostic variant.
+                with open(
+                    output_path, "w", encoding="utf-8"
+                ) as json_file:  # Open output file in UTF-8 for portable JSON encoding.
+                    json.dump(
+                        raw_inventory, json_file, indent=2, default=str
+                    )  # Pretty-print JSON so humans can diff variants easily.
+                counts_by_filename[filename] = len(raw_inventory)  # Store count for end-of-step status reporting.
+                logging.info(
+                    "Saved %d entries to %s", len(raw_inventory), output_path
+                )  # Log successful export count per file.
+            print(  # Show concise operator summary once all diagnostic files are written.
+                f"  Raw JSON saved: vc=True ({counts_by_filename.get('raw_inventory_vc_true.json', 0)}), "
+                f"vc=False ({counts_by_filename.get('raw_inventory_vc_false.json', 0)}), "
+                f"no-vc ({counts_by_filename.get('raw_inventory_no_vc_param.json', 0)}) entries"
+            )
+        except Exception as json_save_error:  # Diagnostic failure is non-fatal by design.
+            logging.warning(
+                "Failed to save raw inventory JSON: %s", json_save_error
+            )  # Preserve root-cause detail without aborting menu 25.
+
+    @staticmethod
+    def _load_combined_inventory_rows() -> list[dict[str, str]]:
+        """Load enriched device rows from AllDevicesWithSiteInfo.csv."""
+        devices_with_site_info_path = FilePathUtils.get_csv_path(
+            "AllDevicesWithSiteInfo.csv"
+        )  # Resolve current CSV path through shared path utility.
+        with open(
+            devices_with_site_info_path, encoding="utf-8"
+        ) as file:  # Open generated enrichment CSV for downstream grouping logic.
+            return list(csv.DictReader(file))  # Materialize all rows so weekly grouping can iterate more than once.
+
+    @staticmethod
+    def _partition_combined_inventory_rows(
+        all_devices: list[dict[str, str]],
+    ) -> tuple[list[dict[str, str]], list[dict[str, str]], int]:
+        """Separate physical inventory rows from virtual VC placeholders and count duplicates."""
+        virtual_entries = [
+            device for device in all_devices if device.get("mac", "").startswith("020003")
+        ]  # Identify virtual VC identifiers that do not represent physical hardware.
+        site_configs = [
+            device for device in all_devices if not device.get("mac", "").startswith("020003")
+        ]  # Keep only physical chassis rows for reporting outputs.
+        physical_vc_mac_targets = {
+            device.get("vc_mac", "") for device in site_configs if device.get("vc_mac")
+        }  # Collect VC parent MACs referenced by physical members.
+        empty_vc_shells = [
+            entry for entry in virtual_entries if entry.get("mac") not in physical_vc_mac_targets
+        ]  # Find virtual shells that have no physical members mapped to them.
+        duplicate_vc_entries = len(virtual_entries) - len(
+            empty_vc_shells
+        )  # Remaining virtual entries mirror real hardware already counted elsewhere.
+        return (
+            site_configs,
+            empty_vc_shells,
+            duplicate_vc_entries,
+        )  # Return physical rows plus shell diagnostics for logging.
+
+    @staticmethod
+    def _log_combined_inventory_vc_summary(
+        all_devices: list[dict[str, str]],
+        site_configs: list[dict[str, str]],
+        empty_vc_shells: list[dict[str, str]],
+        duplicate_vc_entries: int,
+    ) -> None:
+        """Log and print the virtual chassis filtering summary for operators."""
+        logging.info(  # Explain how many rows were filtered to reach physical-hardware-only reporting.
+            "Loaded %d total devices, filtered to %d physical devices (excluded %d virtual VC identifiers)",
+            len(all_devices),
+            len(site_configs),
+            len(all_devices) - len(site_configs),
+        )
+        logging.info(  # Break down virtual rows into duplicates versus empty VC shells for troubleshooting parity gaps.
+            "Virtual VC breakdown: %d duplicate entries (real hardware counted elsewhere) + %d empty VC shells (provisioned but no physical members assigned)",  # noqa: E501
+            duplicate_vc_entries,
+            len(empty_vc_shells),
+        )
+        if empty_vc_shells:  # Surface dashboard/report parity nuance only when empty shells actually exist.
+            print(
+                f"  NOTE: {len(empty_vc_shells)} provisioned VC shells exist with no physical members."
+            )  # Explain why dashboard counts may exceed report counts.
+            print(  # Provide explicit comparison so operators trust the physical-only report totals.
+                f"        Dashboard shows {len(site_configs) + len(empty_vc_shells)} 'Physical Devices' "
+                f"but {len(empty_vc_shells)} are empty VC placeholders (020003* MAC, no serial/SKU)."
+            )
+            print(
+                f"        Report correctly includes only {len(site_configs)} devices with real hardware."
+            )  # Confirm report logic remains intentional.
+
+    @staticmethod
+    def _build_combined_inventory_weekly_row(
+        device: dict[str, str],
+        end_customer_name: str | None,
+        end_customer_account_id: str | None,
+    ) -> dict[str, str | None]:
+        """Build one weekly export row from a physical device record."""
+        return {  # Shape output row once so weekly writer can stay simple and deterministic.
+            "Full Site": device.get("site_name", ""),
+            "System Serial Number": device.get("serial", ""),
+            "System MAC Address": device.get("mac", ""),
+            "System Model Number": device.get("model", ""),
+            "End Customer Name": end_customer_name,
+            "Address Line 1": device.get("street", ""),
+            "Address Line 2": "",
+            "City": device.get("city", ""),
+            "State": device.get("state", ""),
+            "Country": device.get("country", "US"),
+            "Zip Code / Postal Code": device.get("zip_code", ""),
+            "End Customer Account ID": end_customer_account_id,
+        }
+
+    @staticmethod
+    def _build_combined_inventory_weekly_data(
+        site_configs: list[dict[str, str]],
+        end_customer_name: str | None,
+        end_customer_account_id: str | None,
+    ) -> tuple[defaultdict[str, list[dict[str, str | None]]], defaultdict[tuple[int, int], int]]:
+        """Group physical devices into ISO calendar-week buckets and summary counts."""
+        weekly_data: defaultdict[str, list[dict[str, str | None]]] = defaultdict(
+            list
+        )  # Group export rows by ISO year/week key for one-file-per-week outputs.
+        summary_data: defaultdict[tuple[int, int], int] = defaultdict(
+            int
+        )  # Count devices per ISO year/week for summary reporting.
+        for (
+            device
+        ) in site_configs:  # Process each physical device row exactly once for both detailed and summary outputs.
+            try:  # Skip malformed timestamps without aborting the full report generation.
+                created_time = int(
+                    device.get("created_time", 0)
+                )  # Convert API timestamp to integer epoch seconds for calendar bucketing.
+                created_date = datetime.fromtimestamp(
+                    created_time, tz=UTC
+                )  # Use UTC so weekly grouping is deterministic across hosts.
+                year, week, _ = created_date.isocalendar()  # Derive ISO calendar week used by downstream CSV naming.
+                week_key = f"{year}_Week_{week:02d}"  # Build stable filename segment for this ISO week.
+                weekly_data[week_key].append(  # Append detailed export row to the correct weekly bucket.
+                    OrgInventoryExporter._build_combined_inventory_weekly_row(
+                        device, end_customer_name, end_customer_account_id
+                    )
+                )
+                summary_data[(year, week)] += 1  # Increment summary counter for the same ISO week.
+            except Exception as exception:  # One bad device row must not derail the full export.
+                logging.warning(
+                    f"! Skipping device due to error: {exception}"
+                )  # Log row-level failure for later cleanup.
+        return weekly_data, summary_data  # Return both detailed buckets and summary counts for file writers.
+
+    @staticmethod
+    def _write_combined_inventory_weekly_csvs(
+        output_folder: str,
+        fieldnames: list[str],
+        weekly_data: defaultdict[str, list[dict[str, str | None]]],
+    ) -> None:
+        """Write one CSV file per ISO week bucket."""
+        for (
+            week_key,
+            rows,
+        ) in (
+            weekly_data.items()
+        ):  # Emit each week as its own CSV so downstream consumers can process incremental periods.
+            output_file = os.path.join(output_folder, f"{week_key}.csv")  # Build deterministic weekly CSV path.
+            with open(
+                output_file, mode="w", newline="", encoding="utf-8"
+            ) as file:  # Open weekly file for a clean rewrite each run.
+                writer = csv.DictWriter(
+                    file, fieldnames=fieldnames
+                )  # Use explicit field order so exports stay stable over time.
+                writer.writeheader()  # Always emit header row for spreadsheet compatibility.
+                writer.writerows(rows)  # Write all device rows for this ISO week.
+
+    @staticmethod
+    def _write_combined_inventory_summary(
+        output_folder: str,
+        summary_data: defaultdict[tuple[int, int], int],
+    ) -> None:
+        """Write summary CSV containing device counts per ISO year/week."""
+        summary_file = os.path.join(
+            output_folder, "CombinedInventory_Summary.csv"
+        )  # Use fixed summary filename for discoverability.
+        with open(
+            summary_file, mode="w", newline="", encoding="utf-8"
+        ) as file:  # Rewrite summary on each run so counts remain current.
+            summary_writer = csv.writer(file)  # Use plain CSV writer because summary rows are positional.
+            summary_writer.writerow(["Year", "Week", "Device Count"])  # Emit stable summary header.
+            for (year, week), count in sorted(summary_data.items()):  # Sort chronologically for human readability.
+                summary_writer.writerow([year, week, count])  # Persist per-week device totals.
+
+    @staticmethod
+    def _write_combined_inventory_master_csv(
+        output_folder: str,
+        safe_org_name: str,
+        site_configs: list[dict[str, str]],
+    ) -> tuple[str, int]:
+        """Write simplified master combined-inventory CSV and return filename plus row count."""
+        master_csv_data = [  # Build flattened master rows with simplified headers expected by downstream consumers.
+            {
+                "serial": device.get("serial", ""),
+                "mac": device.get("mac", ""),
+                "model": device.get("model", ""),
+                "Street Address": device.get("street", ""),
+                "City": device.get("city", ""),
+                "State": device.get("state", ""),
+                "Zip": device.get("zip_code", ""),
+            }
+            for device in site_configs
+        ]
+        master_csv_filename = f"{safe_org_name}_CombinedInventory_Master.csv"  # Include org name so multi-org runs remain distinguishable.  # noqa: E501
+        master_csv_file = os.path.join(
+            output_folder, master_csv_filename
+        )  # Build final path in the same weekly output folder.
+        master_csv_fieldnames = [
+            "serial",
+            "mac",
+            "model",
+            "Street Address",
+            "City",
+            "State",
+            "Zip",
+        ]  # Lock column order for stable exports.
+        with open(
+            master_csv_file, mode="w", newline="", encoding="utf-8"
+        ) as file:  # Rewrite master CSV on every run to reflect current inventory.
+            writer = csv.DictWriter(
+                file, fieldnames=master_csv_fieldnames
+            )  # Use explicit header ordering for consumers.
+            writer.writeheader()  # Emit column names expected by spreadsheet and ETL workflows.
+            writer.writerows(master_csv_data)  # Persist all physical-device rows in simplified layout.
+        return master_csv_filename, len(master_csv_data)  # Return metadata for final user-facing summary message.
+
+    @staticmethod
     def combined_inventory_with_site_info():
         """
         Combines fresh AllDevicesWithSiteInfo data into multiple CSV files
@@ -12608,156 +10659,40 @@ class OrgInventoryExporter:
             - Master CSV: data/CombinedInventory_ByWeek/<OrgName>_CombinedInventory_Master.csv
               (with simplified headers: serial, model, Street Address, City, State, Zip)
         """
-        print("Combined Inventory with Site Info by Calendar Week:")
-
-        # Load environment variables
-        load_dotenv()
-        END_CUSTOMER_NAME = os.getenv("END_CUSTOMER_NAME")
-        END_CUSTOMER_ACCOUNT_ID = os.getenv("END_CUSTOMER_ACCOUNT_ID")
-
-        # Resolve organization context for output naming and report metadata
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        org_name_for_filename = None
-        try:
-            org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, current_org_id)
-            org_name_for_filename = getattr(org_response, "data", {}).get("name")
-        except Exception as exception:
-            logging.warning(f"Unable to resolve org name from API for combined inventory filename: {exception}")
-        if not org_name_for_filename:
-            org_name_for_filename = END_CUSTOMER_NAME
-        if not org_name_for_filename:
-            org_name_for_filename = current_org_id or "UnknownOrg"
-        safe_org_name = "".join(
-            character if character.isalnum() or character in "-_" else "_" for character in org_name_for_filename
-        )  # noqa: E501
-
-        # Always regenerate fresh data (fast=True uses cached SiteList + OrgInventory CSVs)
-        OrgInventoryExporter.devices_with_site_info()
-
-        # Save raw JSON from all three inventory query modes for delta comparison
-        logging.info("Saving raw inventory JSON for delta comparison...")
-        try:
-            json_output_dir = os.path.join("data", "CombinedInventory_ByWeek")  # Same folder as weekly CSVs
-            os.makedirs(json_output_dir, exist_ok=True)  # Ensure output directory exists
-
-            # vc=True: expanded view showing all physical VC members individually
-            logging.info("Fetching raw inventory with vc=True for JSON export...")
-            resp_vc_true = mistapi.api.v1.orgs.inventory.getOrgInventory(
-                apisession, current_org_id, vc=True, type="switch", limit=DEFAULT_API_PAGE_LIMIT
-            )  # Fetch expanded inventory including physical VC members
-            raw_vc_true = mistapi.get_all(response=resp_vc_true, mist_session=apisession)  # Paginate all results
-            vc_true_path = os.path.join(json_output_dir, "raw_inventory_vc_true.json")  # Output path
-            with open(vc_true_path, "w", encoding="utf-8") as jf:  # Write JSON to disk
-                json.dump(raw_vc_true, jf, indent=2, default=str)  # Pretty-print for human readability
-            logging.info("Saved %d entries to %s", len(raw_vc_true), vc_true_path)
-
-            # vc=False: collapsed view (one logical entry per VC stack)
-            logging.info("Fetching raw inventory with vc=False for JSON export...")
-            resp_vc_false = mistapi.api.v1.orgs.inventory.getOrgInventory(
-                apisession, current_org_id, vc=False, type="switch", limit=DEFAULT_API_PAGE_LIMIT
-            )  # Fetch collapsed VC view (logical devices only)
-            raw_vc_false = mistapi.get_all(response=resp_vc_false, mist_session=apisession)  # Paginate all results
-            vc_false_path = os.path.join(json_output_dir, "raw_inventory_vc_false.json")  # Output path
-            with open(vc_false_path, "w", encoding="utf-8") as jf:  # Write JSON to disk
-                json.dump(raw_vc_false, jf, indent=2, default=str)  # Pretty-print for human readability
-            logging.info("Saved %d entries to %s", len(raw_vc_false), vc_false_path)
-
-            # No vc parameter: API default behavior (confirmed identical to vc=False)
-            logging.info("Fetching raw inventory with no vc parameter for JSON export...")
-            resp_no_vc = mistapi.api.v1.orgs.inventory.getOrgInventory(
-                apisession, current_org_id, type="switch", limit=DEFAULT_API_PAGE_LIMIT
-            )  # Fetch with API default (no vc flag = collapsed view)
-            raw_no_vc = mistapi.get_all(response=resp_no_vc, mist_session=apisession)  # Paginate all results
-            no_vc_path = os.path.join(json_output_dir, "raw_inventory_no_vc_param.json")  # Output path
-            with open(no_vc_path, "w", encoding="utf-8") as jf:  # Write JSON to disk
-                json.dump(raw_no_vc, jf, indent=2, default=str)  # Pretty-print for human readability
-            logging.info("Saved %d entries to %s", len(raw_no_vc), no_vc_path)
-
-            print(
-                f"  Raw JSON saved: vc=True ({len(raw_vc_true)}), "  # User-facing progress
-                f"vc=False ({len(raw_vc_false)}), no-vc ({len(raw_no_vc)}) entries"
-            )
-        except Exception as json_save_error:  # Don't let JSON export failure break menu 25
-            logging.warning("Failed to save raw inventory JSON: %s", json_save_error)
-
-        # Load the enriched device + site info.
-        # getOrgInventory with vc=True returns both physical chassis AND virtual VC identifiers.
-        # Virtual VC entries have MACs starting with '020003' and are NOT real hardware.
-        # Filter to only physical devices for the master report.
-        devices_with_site_info_path = FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")  # Enriched inventory CSV
-        with open(devices_with_site_info_path, encoding="utf-8") as file:  # Open CSV for reading
-            all_devices = list(csv.DictReader(file))  # Load all device rows into memory
-        # Exclude virtual chassis identifier entries (020003* MACs) - they aren't physical hardware
-        virtual_entries = [d for d in all_devices if d.get("mac", "").startswith("020003")]  # All 020003* entries
-        site_configs = [d for d in all_devices if not d.get("mac", "").startswith("020003")]  # Only real chassis
-
-        # Identify empty VC shells: 020003* entries not referenced by any physical device's vc_mac
-        physical_vc_mac_targets = {  # vc_mac values referenced by real hardware
-            d.get("vc_mac", "") for d in site_configs if d.get("vc_mac")
-        }
-        empty_vc_shells = [  # VCs with zero physical members
-            v for v in virtual_entries if v.get("mac") not in physical_vc_mac_targets
-        ]
-        duplicate_vc_entries = len(virtual_entries) - len(empty_vc_shells)  # Duplicates of real chassis
-
-        logging.info(
-            "Loaded %d total devices, filtered to %d physical devices (excluded %d virtual VC identifiers)",
-            len(all_devices),
-            len(site_configs),
-            len(all_devices) - len(site_configs),
-        )
-        logging.info(
-            "Virtual VC breakdown: %d duplicate entries (real hardware counted elsewhere) + "
-            "%d empty VC shells (provisioned but no physical members assigned)",
-            duplicate_vc_entries,
-            len(empty_vc_shells),
-        )
-        if empty_vc_shells:  # Call out the dashboard vs report delta explicitly
-            print(f"  NOTE: {len(empty_vc_shells)} provisioned VC shells exist with no physical members.")
-            print(
-                f"        Dashboard shows {len(site_configs) + len(empty_vc_shells)} 'Physical Devices' "
-                f"but {len(empty_vc_shells)} are empty VC placeholders (020003* MAC, no serial/SKU)."
-            )
-            print(f"        Report correctly includes only {len(site_configs)} devices with real hardware.")
-
-        # Create a subfolder for weekly CSV files in the data directory
-        output_folder = os.path.join("data", "CombinedInventory_ByWeek")
-        os.makedirs(output_folder, exist_ok=True)
-
-        # Initialize data structures for weekly grouping and summary
-        weekly_data: defaultdict[str, list] = defaultdict(list)  # type: ignore[type-arg]
-        summary_data: defaultdict[tuple[int, int], int] = defaultdict(int)
-
-        # Process each device entry (getOrgInventory already has one row per physical device)
-        for device in site_configs:
-            try:
-                created_time = int(device.get("created_time", 0))
-                created_date = datetime.fromtimestamp(created_time, tz=UTC)
-                year, week, _ = created_date.isocalendar()
-                week_key = f"{year}_Week_{week:02d}"
-
-                weekly_data[week_key].append(
-                    {
-                        "Full Site": device.get("site_name", ""),
-                        "System Serial Number": device.get("serial", ""),
-                        "System MAC Address": device.get("mac", ""),
-                        "System Model Number": device.get("model", ""),
-                        "End Customer Name": END_CUSTOMER_NAME,
-                        "Address Line 1": device.get("street", ""),
-                        "Address Line 2": "",
-                        "City": device.get("city", ""),
-                        "State": device.get("state", ""),
-                        "Country": device.get("country", "US"),
-                        "Zip Code / Postal Code": device.get("zip_code", ""),
-                        "End Customer Account ID": END_CUSTOMER_ACCOUNT_ID,
-                    }
-                )
-
-                summary_data[(year, week)] += 1
-            except Exception as exception:
-                logging.warning(f"! Skipping device due to error: {exception}")
-
-        # Define output CSV columns
+        print("Combined Inventory with Site Info by Calendar Week:")  # Announce menu 25 export scope to the operator.
+        load_dotenv()  # Load customer metadata from .env before generating weekly and master report fields.
+        end_customer_name = os.getenv("END_CUSTOMER_NAME")  # Capture customer name used in weekly export columns.
+        end_customer_account_id = os.getenv(
+            "END_CUSTOMER_ACCOUNT_ID"
+        )  # Capture account identifier used in weekly export columns.
+        current_org_id = (
+            ConfigUtils.get_cached_or_prompted_org_id()
+        )  # Resolve org context before naming and API fetches.
+        org_name_for_filename = OrgInventoryExporter._resolve_combined_inventory_org_name(
+            current_org_id, end_customer_name
+        )  # Resolve authoritative org name with safe fallbacks.
+        safe_org_name = OrgInventoryExporter._build_safe_org_name(
+            org_name_for_filename
+        )  # Sanitize org name so output filenames stay portable.
+        OrgInventoryExporter.devices_with_site_info()  # Regenerate enriched inventory CSV so weekly export always uses fresh site-enriched data.  # noqa: E501
+        output_folder = os.path.join(
+            "data", "CombinedInventory_ByWeek"
+        )  # Keep all derived files together in a predictable subfolder.
+        OrgInventoryExporter._export_combined_inventory_raw_json(
+            output_folder, current_org_id
+        )  # Persist raw API variants for VC delta investigation without changing report logic.
+        all_devices = (
+            OrgInventoryExporter._load_combined_inventory_rows()
+        )  # Load the enriched CSV rows that weekly and master outputs share.
+        site_configs, empty_vc_shells, duplicate_vc_entries = OrgInventoryExporter._partition_combined_inventory_rows(
+            all_devices
+        )  # Separate physical devices from virtual VC placeholders.
+        OrgInventoryExporter._log_combined_inventory_vc_summary(
+            all_devices, site_configs, empty_vc_shells, duplicate_vc_entries
+        )  # Surface physical-versus-virtual filtering details for operators.
+        weekly_data, summary_data = OrgInventoryExporter._build_combined_inventory_weekly_data(
+            site_configs, end_customer_name, end_customer_account_id
+        )  # Group physical devices into per-week export buckets and summary counts.
         fieldnames = [
             "Full Site",
             "System Serial Number",
@@ -12771,57 +10706,25 @@ class OrgInventoryExporter:
             "Country",
             "Zip Code / Postal Code",
             "End Customer Account ID",
-        ]
-
-        # Write weekly CSV files
-        for week_key, rows in weekly_data.items():
-            output_file = os.path.join(output_folder, f"{week_key}.csv")
-            with open(output_file, mode="w", newline="", encoding="utf-8") as file:
-                writer = csv.DictWriter(file, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(rows)
-
-        # Write summary report
-        summary_file = os.path.join(output_folder, "CombinedInventory_Summary.csv")
-        with open(summary_file, mode="w", newline="", encoding="utf-8") as file:
-            summary_writer = csv.writer(file)
-            summary_writer.writerow(["Year", "Week", "Device Count"])
-            for (year, week), count in sorted(summary_data.items()):
-                summary_writer.writerow([year, week, count])
-
-        # Export master CSV with simplified column headers
-        master_csv_data = []
-        for device in site_configs:
-            master_csv_data.append(
-                {
-                    "serial": device.get("serial", ""),
-                    "mac": device.get("mac", ""),
-                    "model": device.get("model", ""),
-                    "Street Address": device.get("street", ""),
-                    "City": device.get("city", ""),
-                    "State": device.get("state", ""),
-                    "Zip": device.get("zip_code", ""),
-                }
-            )
-
-        master_csv_filename = f"{safe_org_name}_CombinedInventory_Master.csv"
-        master_csv_file = os.path.join(output_folder, master_csv_filename)
-        master_csv_fieldnames = ["serial", "mac", "model", "Street Address", "City", "State", "Zip"]
-        with open(master_csv_file, mode="w", newline="", encoding="utf-8") as file:
-            writer = csv.DictWriter(file, fieldnames=master_csv_fieldnames)
-            writer.writeheader()
-            writer.writerows(master_csv_data)
-
-        # Count the total weekly files created
-        total_weeks = len(weekly_data)
-        total_devices = len(site_configs)
+        ]  # Keep weekly export column order stable for downstream consumers.
+        OrgInventoryExporter._write_combined_inventory_weekly_csvs(
+            output_folder, fieldnames, weekly_data
+        )  # Emit one detailed CSV per ISO week bucket.
+        OrgInventoryExporter._write_combined_inventory_summary(
+            output_folder, summary_data
+        )  # Emit compact year/week summary for planning and auditing.
+        master_csv_filename, master_row_count = OrgInventoryExporter._write_combined_inventory_master_csv(
+            output_folder, safe_org_name, site_configs
+        )  # Emit simplified master inventory CSV used by external consumers.
         print(
-            f"! {total_weeks} weekly CSV files created in data/CombinedInventory_ByWeek/ folder ({total_devices} total devices processed)"  # noqa: E501
-        )
-        print("! Summary report exported to data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv")
+            f"! {len(weekly_data)} weekly CSV files created in data/CombinedInventory_ByWeek/ folder ({len(site_configs)} total devices processed)"  # noqa: E501
+        )  # Summarize weekly export output counts for the operator.
         print(
-            f"! Master inventory exported to data/CombinedInventory_ByWeek/{master_csv_filename} ({len(master_csv_data)} devices)"  # noqa: E501
-        )
+            "! Summary report exported to data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv"
+        )  # Confirm summary report location.
+        print(
+            f"! Master inventory exported to data/CombinedInventory_ByWeek/{master_csv_filename} ({master_row_count} devices)"  # noqa: E501
+        )  # Confirm master report path and row count.
 
     @staticmethod
     def devices_with_site_info(fast: bool = False):  # noqa: PLR0915
@@ -13138,6 +11041,270 @@ class OrgDeviceStatsExporter:
             emitter.emit_progress_complete("13", "device_stats", 1, 1, False, time.time() - op_start)
 
     @staticmethod
+    def _port_stats_cache_hit(output_file: str, fast: bool) -> bool:
+        """Return True when fast mode can safely reuse a fresh cached CSV."""
+        if not fast or not os.path.exists(
+            output_file
+        ):  # Cache reuse only applies to fast mode with an existing CSV file.
+            return False  # No valid cache path exists, so the caller must fetch fresh data.
+        try:  # Filesystem metadata lookup should never crash the export path.
+            mtime = os.path.getmtime(output_file)  # Read last-modified time to compute cache age.
+            age_minutes = (
+                time.time() - mtime
+            ) / 60.0  # Convert file age to minutes for comparison against freshness policy.
+            if age_minutes < CSV_FRESHNESS_MINUTES:  # Fresh cache means a read-only export can safely skip API calls.
+                logging.info(
+                    f" Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch."  # noqa: E501
+                )  # Record why no API calls were made in fast mode.
+                print(
+                    f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)"
+                )  # Tell the operator cache reuse occurred.
+                return True  # Caller can return early because cache satisfies the request.
+        except Exception as exception:  # Cache metadata problems should degrade gracefully to a fresh fetch.
+            logging.debug(
+                f"Fast mode freshness check failed for {output_file}: {exception}"
+            )  # Log the fallback reason for troubleshooting.
+        return False  # Cache was missing, stale, or unreadable, so a fresh fetch is required.
+
+    @staticmethod
+    def _load_port_stats_sites(org_id: str) -> list[tuple[str | None, str]]:
+        """Load site identifiers and names for fast-mode per-site port stats collection."""
+        try:  # Prefer cached site CSV because it avoids one extra API call in fast mode.
+            CacheUtils.check_and_generate_csv(
+                "SiteList.csv", OrgSiteExporter.sites
+            )  # Ensure a site list CSV exists before reading it.
+            site_list_path = FilePathUtils.get_csv_path(
+                "SiteList.csv"
+            )  # Resolve the current CSV path through shared utility logic.
+            with open(site_list_path, encoding="utf-8") as file:  # Open cached site list for lightweight CSV parsing.
+                reader = csv.DictReader(file)  # Parse site rows using field names from the cache file.
+                sites = [
+                    (row.get("id"), row.get("name", "Unknown")) for row in reader if row.get("id")
+                ]  # Build tuple list used by pool workers.
+            logging.info(
+                f"* Loaded {len(sites)} sites from cached data"
+            )  # Confirm cached site count for operator visibility.
+            logging.debug(
+                f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}"  # noqa: E501
+            )  # Keep one sample for debugging malformed site rows.
+            return sites  # Return cached site tuples when CSV read succeeds.
+        except Exception as exception:  # Cache read failure should fall back to API immediately.
+            logging.warning(
+                f"* Could not use cached sites, fetching from API: {exception}"
+            )  # Explain why the slower fallback path is being used.
+        site_response = mistapi.api.v1.orgs.sites.listOrgSites(
+            apisession, org_id, limit=1000
+        )  # Fetch sites directly from the Mist API as fallback.
+        site_data = mistapi.get_all(
+            response=site_response, mist_session=apisession
+        )  # Paginate all site records from the API response.
+        sites = [
+            (site.get("id"), site.get("name", "Unknown")) for site in site_data if site.get("id")
+        ]  # Normalize API records into worker tuples.
+        logging.info(
+            f"* Fetched {len(sites)} sites from API"
+        )  # Record API fallback count so operators can spot cache misses.
+        logging.debug(
+            f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}"  # noqa: E501
+        )  # Provide one representative tuple for debug diagnostics.
+        return sites  # Return normalized site tuples for the fast-mode worker pool.
+
+    @staticmethod
+    def _fetch_site_port_stats(site_info, connection_semaphore):
+        """Fetch one site's switch/gateway port stats with bounded concurrency and retries."""
+        site_id, site_name = site_info  # Unpack tuple so logging and API calls have stable local names.
+        for attempt in range(
+            FAST_MODE_MAX_RETRIES + 1
+        ):  # Retry transient site fetch failures up to configured fast-mode limit.
+            try:  # Wrap each attempt so transient API failures can back off and retry.
+                with connection_semaphore:  # Bound concurrent API calls to protect session and upstream rate limits.
+                    response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
+                        apisession, site_id, limit=1000
+                    )  # Pull site-level port statistics from Mist.
+                    port_stats = mistapi.get_all(
+                        response=response, mist_session=apisession
+                    )  # Collect all paginated results for this site.
+                if not isinstance(
+                    port_stats, list
+                ):  # Defensive type check prevents malformed API payloads from poisoning downstream flattening.
+                    logging.error(
+                        f"! API returned non-list type for site {site_name}: type={type(port_stats)}, value={port_stats}"  # noqa: E501
+                    )  # Log malformed payload details for debugging.
+                    return []  # Return empty result for malformed sites so overall export can continue.
+                for stat in port_stats:  # Annotate each port row with site metadata for org-level export output.
+                    stat["site_id"] = site_id  # Persist site identifier on every row for downstream analysis.
+                    stat["site_name"] = site_name  # Persist site name on every row for human-readable reports.
+                if attempt > 0:  # Retries that later succeed should be visible in logs.
+                    logging.info(
+                        f"! Retry {attempt} successful for site {site_name} ({len(port_stats)} records)"
+                    )  # Record successful retry outcome with row count.
+                else:  # First-try success belongs at debug level to avoid noisy logs.
+                    logging.debug(
+                        f"! Collected {len(port_stats)} port stats from site {site_name}"
+                    )  # Record successful site harvest count.
+                return port_stats  # Return this site's fully annotated port rows to pool caller.
+            except Exception as exception:  # Retry transient API and network errors with controlled backoff.
+                if attempt < FAST_MODE_MAX_RETRIES:  # More retries remain, so back off and continue.
+                    backoff_delay = FAST_MODE_RETRY_DELAY * (
+                        FAST_MODE_BACKOFF_MULTIPLIER**attempt
+                    )  # Increase wait time per retry attempt to ease pressure on API.
+                    logging.warning(
+                        f"! Attempt {attempt + 1} failed for site {site_name}: {exception}"
+                    )  # Record failing attempt number and root cause.
+                    logging.info(
+                        f"! Retrying in {backoff_delay:.1f}s (attempt {attempt + 2}/{FAST_MODE_MAX_RETRIES + 1})"  # noqa: E501
+                    )  # Tell operators when next retry will occur.
+                    time.sleep(backoff_delay)  # Pause before retrying to reduce repeated immediate failures.
+                else:  # Final attempt failed, so this site will be reported as empty/failed.
+                    logging.error(
+                        f"! Final attempt failed for site {site_name}: {exception}"
+                    )  # Record terminal site failure for support review.
+                    return []  # Return empty list so caller can track failed sites cleanly.
+        return []  # Defensive fallback keeps return type stable even if retry loop exits unexpectedly.
+
+    @staticmethod
+    def _retry_failed_site_port_stats(failed_sites, connection_semaphore):
+        """Retry previously failed site fetches using a smaller worker pool."""
+        retry_results = []  # Accumulate successful retry rows so they can merge with first-pass results.
+        still_failed = []  # Track sites that remain failed after dedicated retry attempts.
+        retry_threads = min(
+            FAST_MODE_RETRY_THREADS, len(failed_sites), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
+        )  # Keep retry pool smaller to avoid saturating remaining connections.
+        if retry_threads <= 0:  # Defensive guard for pathological configuration values.
+            logging.warning(
+                " FAST MODE: No available threads for retry; skipping retries"
+            )  # Explain why retry stage is skipped.
+            return [], failed_sites  # Preserve failed sites list for summary reporting.
+        with ThreadPoolExecutor(max_workers=retry_threads) as executor:  # Use bounded concurrency for retry wave.
+            retry_futures = {
+                executor.submit(
+                    OrgDeviceStatsExporter._fetch_site_port_stats, site_info, connection_semaphore
+                ): site_info
+                for site_info in failed_sites
+            }  # Submit each failed site back through shared worker logic.
+            import concurrent.futures  # Import locally so main module import path stays unchanged.
+
+            retry_futures_list = list(retry_futures.keys())  # Materialize futures so tqdm has stable total length.
+            with tqdm(total=len(retry_futures_list), desc="Retrying Failed Sites", unit="site") as pbar:  # type: ignore[call-arg, no-untyped-call]  # Show retry progress to the operator.
+                for future in concurrent.futures.as_completed(
+                    retry_futures_list
+                ):  # Handle results as retries complete.
+                    site_info = retry_futures[future]  # Recover original site tuple for logging.
+                    try:  # Each future can still raise, so handle per-site safely.
+                        result = future.result()  # Resolve retried site rows from the worker.
+                        if result:  # Non-empty retry result means site recovered successfully.
+                            retry_results.extend(result)  # Merge recovered rows into retry result set.
+                            logging.info(f" FAST RETRY OK: {site_info[1]}")  # Record recovered site name in logs.
+                        else:  # Empty retry result means site still failed logically.
+                            still_failed.append(site_info)  # Keep site for final failure summary.
+                            logging.warning(f" FAST RETRY EMPTY: {site_info[1]}")  # Record unresolved site in logs.
+                    except Exception as exception:  # Future itself raised unexpectedly.
+                        still_failed.append(site_info)  # Preserve site in failure list for summary reporting.
+                        logging.error(
+                            f" FAST RETRY EXC: {site_info[1]} -> {exception}"
+                        )  # Log unexpected retry exception.
+                    finally:  # Progress bar should advance regardless of success or failure.
+                        pbar.update(1)  # Advance retry progress count for every completed future.
+        return retry_results, still_failed  # Return recovered rows and sites that remain unresolved.
+
+    @staticmethod
+    def _flatten_site_port_results(successful_results):
+        """Flatten pooled worker results into one list of port-stat rows."""
+        all_port_stats = []  # Accumulate all site-level rows into one export list.
+        for index, result_list in enumerate(
+            successful_results
+        ):  # Inspect each worker result for defensive type handling.
+            logging.debug(
+                f"Processing result {index}: type={type(result_list)}, is_list={isinstance(result_list, list)}"
+            )  # Log shape of each pooled result before flattening.
+            if isinstance(result_list, list):  # Only list payloads are valid worker outputs.
+                all_port_stats.extend(result_list)  # Merge valid site rows into the combined export list.
+            else:  # Unexpected worker payloads should be visible but not fatal.
+                logging.warning(
+                    f"Unexpected result type at index {index}: {type(result_list)}, value: {result_list}"
+                )  # Surface unexpected worker output for debugging.
+        return all_port_stats  # Return flattened org-wide port-stat list for sorting and export.
+
+    @staticmethod
+    def _save_device_port_stats_output(all_port_stats, output_file: str) -> None:
+        """Sort, sanitize, and persist collected port-stat rows."""
+        if not all_port_stats:  # Empty dataset should skip file creation and clearly tell the operator why.
+            logging.warning(" No port statistics collected. CSV not created.")  # Log absence of exportable data.
+            print("! No port statistics collected. CSV not created.")  # Tell operator no file was written.
+            return  # Nothing to sort or write.
+        try:  # Sorting is best-effort because some rows may lack MACs.
+            all_port_stats = sorted(
+                all_port_stats, key=lambda row: row.get("mac", "")
+            )  # Sort by MAC to produce deterministic CSV ordering.
+        except Exception as exception:  # Sorting failures should not block export.
+            logging.debug(f"Could not sort by MAC: {exception}")  # Record sort failure while continuing unsorted.
+        flattened = DataProcessingUtils.flatten_nested_fields(
+            all_port_stats
+        )  # Normalize nested API payloads into flat CSV-friendly records.
+        sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape embedded newlines so CSV stays row-stable.
+        DataExporter.save_data_to_output(sanitized, output_file, api_function_name="searchSiteSwOrGwPorts")  # type: ignore[no-untyped-call]  # Persist to configured backend with endpoint metadata.
+        print(
+            f"! {len(all_port_stats)} port stat records exported to {output_file}"
+        )  # Confirm output row count to the operator.
+        logging.info(
+            f"! Port statistics saved to {output_file} ({len(all_port_stats)} records)"
+        )  # Record successful export count in logs.
+
+    @staticmethod
+    def _run_fast_device_port_stats(output_file: str) -> None:
+        """Execute fast-mode site-parallel port stats collection and output."""
+        logging.info(
+            "* Fast mode: Parallelizing port stats retrieval across sites"
+        )  # Announce fast-mode collection strategy.
+        org_id = (
+            ConfigUtils.get_cached_or_prompted_org_id()
+        )  # Resolve org ID once before site discovery and API collection.
+        sites = OrgDeviceStatsExporter._load_port_stats_sites(org_id)  # Load normalized site tuples from cache or API.
+        start_time = time.time()  # Capture start time for performance summary logging.
+        if not isinstance(start_time, (int, float)):  # Defensive guard against accidental monkeypatch/type corruption.
+            logging.error(
+                f"! CRITICAL: start_time is not a number! type={type(start_time)}, value={start_time}"
+            )  # Surface impossible timing state for diagnosis.
+            logging.error(
+                f"! time module type: {type(time)}, time.time type: {type(time.time)}"
+            )  # Provide context for debugging patched modules.
+            raise TypeError(
+                f"start_time must be a number, got {type(start_time)}"
+            )  # Fail loudly because elapsed calculation would be invalid.
+        successful_results, failed_sites = (
+            execute_with_connection_pool_management(  # Run bounded-concurrency site collection with shared retry support.  # noqa: E501
+                work_items=sites,
+                worker_function=OrgDeviceStatsExporter._fetch_site_port_stats,
+                batch_description="sites",
+                retry_function=OrgDeviceStatsExporter._retry_failed_site_port_stats,
+            )
+        )
+        logging.debug(  # Log pooled result shape before flattening for easier troubleshooting of worker issues.
+            f"execute_with_connection_pool_management returned - successful_results type: {type(successful_results)}, length: {len(successful_results) if isinstance(successful_results, list) else 'N/A'}"  # noqa: E501
+        )
+        logging.debug(  # Log failed-site list shape for retry and summary debugging.
+            f"failed_sites type: {type(failed_sites)}, length: {len(failed_sites) if isinstance(failed_sites, list) else 'N/A'}"  # noqa: E501
+        )
+        all_port_stats = OrgDeviceStatsExporter._flatten_site_port_results(
+            successful_results
+        )  # Collapse per-site worker results into one export list.
+        end_time = time.time()  # Capture end time after all worker and retry processing completes.
+        logging.debug(
+            f"End time type: {type(end_time)}, value: {end_time}"
+        )  # Keep timing diagnostics visible during fast-mode tuning.
+        duration = end_time - start_time  # Compute elapsed seconds for operator summary.
+        logging.debug(f"Duration calculation successful: {duration}")  # Confirm elapsed calculation succeeded.
+        logging.info(  # Summarize site success/failure counts and total rows for fast-mode observability.
+            f" FAST MODE SUMMARY (port stats): sites_ok={len(sites) - len(failed_sites)} sites_fail={len(failed_sites)} records={len(all_port_stats)} elapsed={duration:.2f}s"  # noqa: E501
+        )
+        print(  # Provide concise operator-facing timing and record-count summary.
+            f"* Fast mode: Collected {len(all_port_stats)} port stat records from {len(sites) - len(failed_sites)}/{len(sites)} sites in {duration:.1f}s"  # noqa: E501
+        )
+        OrgDeviceStatsExporter._save_device_port_stats_output(
+            all_port_stats, output_file
+        )  # Persist collected rows through shared save helper.
+
+    @staticmethod
     def device_port_stats(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
         """Export port-level statistics for all switches and gateways to `OrgDevicePortStats.csv`.
 
@@ -13152,209 +11319,32 @@ class OrgDeviceStatsExporter:
 
         SECURITY: Read-only aggregation; caching is safe.
         """
-        output_file = "OrgDevicePortStats.csv"
-        if fast and os.path.exists(output_file):
-            try:
-                mtime = os.path.getmtime(output_file)
-                age_minutes = (time.time() - mtime) / 60.0
-                if age_minutes < CSV_FRESHNESS_MINUTES:
-                    logging.info(
-                        f" Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch."  # noqa: E501
-                    )
-                    print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
-                    return
-            except Exception as exception:
-                logging.debug(f"Fast mode freshness check failed for {output_file}: {exception}")
-
-        logging.info("Starting export of organization device port statistics...")
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("org device port statistics export", hours)
-
-        if fast:
-            # Fast mode: Parallelize by site for better performance
-            logging.info("* Fast mode: Parallelizing port stats retrieval across sites")
-
-            # Get org_id for API calls
-            org_id = ConfigUtils.get_cached_or_prompted_org_id()
-
-            # Get all sites (use cached CSV if available)
-            try:
-                CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-                site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-                with open(site_list_path, encoding="utf-8") as file:
-                    reader = csv.DictReader(file)
-                    sites = [(row.get("id"), row.get("name", "Unknown")) for row in reader if row.get("id")]
-                logging.info(f"* Loaded {len(sites)} sites from cached data")
-                logging.debug(
-                    f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}"  # noqa: E501
-                )
-            except Exception as exception:
-                logging.warning(f"* Could not use cached sites, fetching from API: {exception}")
-                site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
-                site_data = mistapi.get_all(response=site_response, mist_session=apisession)
-                sites = [(site.get("id"), site.get("name", "Unknown")) for site in site_data if site.get("id")]
-                logging.info(f"* Fetched {len(sites)} sites from API")
-                logging.debug(
-                    f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}"  # noqa: E501
-                )
-
-            # Worker function to fetch port stats for a single site
-            def fetch_site_port_stats(site_info, connection_semaphore):
-                """Fetch port statistics for a single site with retry logic."""
-                site_id, site_name = site_info
-
-                for attempt in range(FAST_MODE_MAX_RETRIES + 1):
-                    try:
-                        # Use semaphore to limit concurrent connections
-                        with connection_semaphore:
-                            response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(apisession, site_id, limit=1000)
-                            port_stats = mistapi.get_all(response=response, mist_session=apisession)
-
-                        # SAFETY: Validate that port_stats is a list, not a dict or other type
-                        if not isinstance(port_stats, list):
-                            logging.error(
-                                f"! API returned non-list type for site {site_name}: type={type(port_stats)}, value={port_stats}"  # noqa: E501
-                            )
-                            return []
-
-                        # Add site information to each record
-                        for stat in port_stats:
-                            stat["site_id"] = site_id
-                            stat["site_name"] = site_name
-
-                        if attempt > 0:
-                            logging.info(
-                                f"! Retry {attempt} successful for site {site_name} ({len(port_stats)} records)"
-                            )
-                        else:
-                            logging.debug(f"! Collected {len(port_stats)} port stats from site {site_name}")
-                        return port_stats
-
-                    except Exception as exception:
-                        if attempt < FAST_MODE_MAX_RETRIES:
-                            backoff_delay = FAST_MODE_RETRY_DELAY * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)
-                            logging.warning(f"! Attempt {attempt + 1} failed for site {site_name}: {exception}")
-                            logging.info(
-                                f"! Retrying in {backoff_delay:.1f}s (attempt {attempt + 2}/{FAST_MODE_MAX_RETRIES + 1})"  # noqa: E501
-                            )
-                            time.sleep(backoff_delay)
-                        else:
-                            logging.error(f"! Final attempt failed for site {site_name}: {exception}")
-                            return []
-                return []
-
-            # Retry function for failed sites
-            def retry_failed_sites(failed_sites, connection_semaphore):
-                retry_results = []
-                still_failed = []
-                retry_threads = min(
-                    FAST_MODE_RETRY_THREADS, len(failed_sites), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
-                )
-
-                if retry_threads <= 0:
-                    logging.warning(" FAST MODE: No available threads for retry; skipping retries")
-                    return [], failed_sites
-
-                with ThreadPoolExecutor(max_workers=retry_threads) as executor:
-                    retry_futures = {
-                        executor.submit(fetch_site_port_stats, site_info, connection_semaphore): site_info
-                        for site_info in failed_sites
-                    }
-                    import concurrent.futures
-
-                    retry_futures_list = list(retry_futures.keys())
-                    # Type ignore needed: tqdm stubs incorrectly require iterable param
-                    with tqdm(total=len(retry_futures_list), desc="Retrying Failed Sites", unit="site") as pbar:  # type: ignore[call-arg, no-untyped-call]
-                        for future in concurrent.futures.as_completed(retry_futures_list):
-                            site_info = retry_futures[future]
-                            try:
-                                result = future.result()
-                                if result:
-                                    retry_results.extend(result)
-                                    logging.info(f" FAST RETRY OK: {site_info[1]}")
-                                else:
-                                    still_failed.append(site_info)
-                                    logging.warning(f" FAST RETRY EMPTY: {site_info[1]}")
-                            except Exception as exception:
-                                still_failed.append(site_info)
-                                logging.error(f" FAST RETRY EXC: {site_info[1]} -> {exception}")
-                            finally:
-                                pbar.update(1)
-                return retry_results, still_failed
-
-            # Execute parallel site fetches
-            start_time = time.time()
-            logging.debug(f"Start time type: {type(start_time)}, value: {start_time}")
-
-            # SAFETY: Validate start_time is actually a float
-            if not isinstance(start_time, (int, float)):
-                logging.error(f"! CRITICAL: start_time is not a number! type={type(start_time)}, value={start_time}")
-                logging.error(f"! time module type: {type(time)}, time.time type: {type(time.time)}")
-                raise TypeError(f"start_time must be a number, got {type(start_time)}")
-
-            successful_results, failed_sites = execute_with_connection_pool_management(
-                work_items=sites,
-                worker_function=fetch_site_port_stats,
-                batch_description="sites",
-                retry_function=retry_failed_sites,
-            )
-
-            logging.debug(
-                f"execute_with_connection_pool_management returned - successful_results type: {type(successful_results)}, length: {len(successful_results) if isinstance(successful_results, list) else 'N/A'}"  # noqa: E501
-            )
-            logging.debug(
-                f"failed_sites type: {type(failed_sites)}, length: {len(failed_sites) if isinstance(failed_sites, list) else 'N/A'}"  # noqa: E501
-            )
-
-            # Flatten results (each successful result is a list of port stats)
-            all_port_stats = []
-            for idx, result_list in enumerate(successful_results):
-                logging.debug(
-                    f"Processing result {idx}: type={type(result_list)}, is_list={isinstance(result_list, list)}"
-                )
-                if isinstance(result_list, list):
-                    all_port_stats.extend(result_list)
-                else:
-                    logging.warning(f"Unexpected result type at index {idx}: {type(result_list)}, value: {result_list}")
-
-            end_time = time.time()
-            logging.debug(f"End time type: {type(end_time)}, value: {end_time}")
-            duration = end_time - start_time
-            logging.debug(f"Duration calculation successful: {duration}")
-
-            logging.info(
-                f" FAST MODE SUMMARY (port stats): sites_ok={len(sites) - len(failed_sites)} sites_fail={len(failed_sites)} records={len(all_port_stats)} elapsed={duration:.2f}s"  # noqa: E501
-            )
-            print(
-                f"* Fast mode: Collected {len(all_port_stats)} port stat records from {len(sites) - len(failed_sites)}/{len(sites)} sites in {duration:.1f}s"  # noqa: E501
-            )
-
-            # Save results
-            if all_port_stats:
-                # Sort by MAC address if available
-                try:
-                    all_port_stats = sorted(all_port_stats, key=lambda x: x.get("mac", ""))
-                except Exception as exception:
-                    logging.debug(f"Could not sort by MAC: {exception}")
-
-                # Process and save
-                flattened = DataProcessingUtils.flatten_nested_fields(all_port_stats)
-                sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(sanitized, output_file, api_function_name="searchSiteSwOrGwPorts")  # type: ignore[no-untyped-call]
-                print(f"! {len(all_port_stats)} port stat records exported to {output_file}")
-                logging.info(f"! Port statistics saved to {output_file} ({len(all_port_stats)} records)")
-            else:
-                logging.warning(" No port statistics collected. CSV not created.")
-                print("! No port statistics collected. CSV not created.")
-        else:
-            # Non-fast mode: Original org-level search (serial pagination)
-            APIDataFetcher(
-                title="Org Device Port Stats:",
-                api_call=mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts,
-                filename=output_file,
-                sort_key="mac",
-                limit=1000,
-            ).execute()
+        output_file = "OrgDevicePortStats.csv"  # Keep stable output filename for cache checks and downstream consumers.
+        if OrgDeviceStatsExporter._port_stats_cache_hit(
+            output_file, fast
+        ):  # Honor fast-mode cache reuse before making any API calls.
+            return  # Fresh cache satisfied the request, so no further processing is needed.
+        logging.info(
+            "Starting export of organization device port statistics..."
+        )  # Log export entry point before any dynamic lookback or fetch path selection.
+        hours = TimeUtils.get_dynamic_lookback_hours(
+            24, 1
+        )  # Resolve test-aware lookback for consistency with other stats exports.
+        TimeUtils.log_dynamic_lookback(
+            "org device port statistics export", hours
+        )  # Record chosen lookback window for operators and tests.
+        if fast:  # Fast mode uses site-parallel collection instead of a single org-level API call.
+            OrgDeviceStatsExporter._run_fast_device_port_stats(
+                output_file
+            )  # Execute decomposed fast-mode workflow with retries and bounded concurrency.
+            return  # Fast-mode path handled all export responsibilities already.
+        APIDataFetcher(  # Non-fast mode preserves original single org-level API fetch behavior.
+            title="Org Device Port Stats:",
+            api_call=mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts,
+            filename=output_file,
+            sort_key="mac",
+            limit=1000,
+        ).execute()  # Execute org-level pagination and export through the shared fetcher.
 
     @staticmethod
     def vpn_peer_stats(fast: bool = False):
@@ -14064,168 +12054,9 @@ class OrgClientSecurityExporter:
             - Cache hit: If all 3 output CSVs exist and are fresh, skip entirely.
             - Reduced lookback: Uses dynamic lookback (1h in test) instead of hardcoded 7d.
         """
-        output_files = ["OrgSecurityPolicies.csv", "OrgSecIntelProfiles.csv", "OrgRogueData.csv"]
-        if fast:
-            all_fresh = True
-            for output_file in output_files:
-                try:
-                    path = FilePathUtils.get_csv_path(output_file)
-                    if os.path.exists(path):  # The cached CSV exists on disk
-                        age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # How old the file is in minutes
-                        if age_minutes >= CSV_FRESHNESS_MINUTES:  # The file is older than the freshness window
-                            all_fresh = False  # Mark the cache as stale
-                            break  # Stop checking -- one stale file is enough to refetch
-                    else:  # The expected cache file is missing
-                        all_fresh = False  # Treat a missing file as not-fresh
-                        break  # Stop checking -- we must refetch
-                except Exception:  # Any error inspecting the file
-                    all_fresh = False  # Be conservative and refetch on error
-                    break  # Stop checking immediately
-            if all_fresh:  # Every required CSV was present and within the freshness window
-                logging.info(
-                    "Fast mode cache hit: All security data CSVs are fresh; skipping fetch."
-                )  # Log the cache hit
-                print("* Fast mode: Using cached security data (all files fresh)")  # Inform the user no fetch ran
-                return  # Skip the API calls entirely
-        print("Export Organization Security Data:")  # Header for this export operation
-        logging.info(
-            "Starting export of organization security policies, intelligence profiles, and rogue data..."
-        )  # Log the start
-        emitter = PROGRESS_EMITTER  # Grab the optional progress-telemetry sink
-        if emitter:  # Telemetry is enabled
-            emitter.emit_progress_start("42", "security_events", 3)  # Announce a 3-step operation to the UI
-        op_start = time.time()  # Record the operation start time for duration metrics
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org to export from
-        policies: list[dict[str, Any]] = []  # Accumulate fetched security policies
-        try:
-            logging.info("Fetching organization security policies (secpolicies)...")  # Log before the API call
-            resp = mistapi.api.v1.orgs.secpolicies.listOrgSecPolicies(
-                apisession, current_org_id, limit=1000
-            )  # Request security policies
-            policies = (
-                mistapi.get_all(response=resp, mist_session=apisession) or []
-            )  # Page through all results (empty list on None)
-            logging.debug(f"Security policies fetched: {len(policies)}")  # Log how many policies came back
-        except Exception as e:  # The policy fetch failed
-            logging.warning(f"Failed to fetch security policies: {e}")  # Warn but continue with other security data
-        if policies:  # At least one policy was retrieved
-            processed = DataProcessingUtils.flatten_nested_fields(policies)  # Flatten nested JSON into flat CSV rows
-            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # Escape newlines so CSV stays one-row-per-record
-            DataExporter.save_data_to_output(processed, "OrgSecurityPolicies.csv")  # type: ignore[no-untyped-call]  # Write to the chosen output backend
-            print(
-                f"! {len(processed)} security policies exported to OrgSecurityPolicies.csv"
-            )  # Tell the user the count
-            logging.info(f"Exported {len(processed)} security policies to OrgSecurityPolicies.csv")  # Log the export
-        else:  # No policies were returned
-            print("! 0 security policies exported to OrgSecurityPolicies.csv (no policies found)")  # Inform the user
-            logging.warning(
-                "No data to export for OrgSecurityPolicies.csv (zero policies returned)."
-            )  # Log the empty result
-            DataExporter.save_data_to_output([], "OrgSecurityPolicies.csv")  # type: ignore[no-untyped-call]  # Write an empty file for consistency
-        secintel_profiles: list[dict[str, Any]] = []  # Accumulate security intelligence profiles
-        try:
-            logging.info("Fetching organization security intelligence profiles...")  # Log before the API call
-            resp_secintel = mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles(
-                apisession, current_org_id
-            )  # Request secintel profiles
-            secintel_profiles = (
-                mistapi.get_all(response=resp_secintel, mist_session=apisession) or []
-            )  # Page through all results
-            logging.debug(f"Security intelligence profiles fetched: {len(secintel_profiles)}")  # Log the count
-        except Exception as e:  # The secintel fetch failed
-            logging.warning(f"Failed to fetch security intelligence profiles: {e}")  # Warn but continue
-        if secintel_profiles:  # At least one profile was retrieved
-            processed_si = DataProcessingUtils.flatten_nested_fields(
-                secintel_profiles
-            )  # Flatten nested JSON to CSV rows
-            processed_si = DataProcessingUtils.escape_multiline(processed_si)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
-            DataExporter.save_data_to_output(processed_si, "OrgSecIntelProfiles.csv")  # type: ignore[no-untyped-call]  # Write to the output backend
-            print(
-                f"! {len(processed_si)} security intelligence profiles exported to OrgSecIntelProfiles.csv"
-            )  # Report the count
-            logging.info(
-                f"Exported {len(processed_si)} security intelligence profiles to OrgSecIntelProfiles.csv"
-            )  # Log the export
-        else:  # No profiles were returned
-            print(
-                "! 0 security intelligence profiles exported to OrgSecIntelProfiles.csv (no profiles found)"
-            )  # Inform the user
-            logging.warning(
-                "No data to export for OrgSecIntelProfiles.csv (zero profiles returned)."
-            )  # Log the empty result
-            DataExporter.save_data_to_output([], "OrgSecIntelProfiles.csv")  # type: ignore[no-untyped-call]  # Write an empty file for consistency
-        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
-        rogue_duration = f"{lookback_hours}h"  # Format the lookback as the API's duration string
-        TimeUtils.log_dynamic_lookback("rogue data fetch", lookback_hours)  # Log which lookback window is in use
-        logging.info("Fetching rogue APs and clients from all sites via insights...")  # Log before the per-site loop
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure the site list CSV is fresh
-        all_rogue_aps: list[dict[str, Any]] = []  # Accumulate rogue APs across all sites
-        all_rogue_clients: list[dict[str, Any]] = []  # Accumulate rogue clients across all sites
-        try:
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve the path to the site list CSV
-            with open(site_list_path, encoding="utf-8") as f:  # Open the cached site list
-                sites = list(csv.DictReader(f))  # Read all sites as dictionaries
-            for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]  # Iterate sites with a progress bar
-                if ConfigUtils.check_stop_signal():  # The user requested an early stop
-                    break  # Exit the loop gracefully
-                site_id = site.get("id")  # The site's unique ID
-                site_name = site.get("name", "Unknown Site")  # The site's display name
-                if not site_id:  # Defensive: skip rows missing an ID
-                    continue  # Move to the next site
-                try:
-                    response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(  # Request rogue APs for this site
-                        apisession, site_id, duration=rogue_duration, limit=1000  # Use the chosen lookback window
-                    )
-                    site_rogue_aps = (
-                        mistapi.get_all(response=response_aps, mist_session=apisession) or []
-                    )  # Page through results
-                    for rogue_access_point in site_rogue_aps:  # Tag each rogue AP with site context
-                        rogue_access_point["site_id"] = site_id  # Record which site detected it
-                        rogue_access_point["site_name"] = site_name  # Record the site name for readability
-                        rogue_access_point["rogue_type"] = "AP"  # Mark the record type as an access point
-                    all_rogue_aps.extend(site_rogue_aps)  # Add this site's rogue APs to the aggregate
-                    response_clients = (
-                        mistapi.api.v1.sites.insights.listSiteRogueClients(  # Request rogue clients for this site
-                            apisession, site_id, duration=rogue_duration, limit=1000  # Use the chosen lookback window
-                        )
-                    )
-                    site_rogue_clients = (
-                        mistapi.get_all(response=response_clients, mist_session=apisession) or []
-                    )  # Page through results
-                    for client in site_rogue_clients:  # Tag each rogue client with site context
-                        client["site_id"] = site_id  # Record which site detected it
-                        client["site_name"] = site_name  # Record the site name for readability
-                        client["rogue_type"] = "Client"  # Mark the record type as a client
-                    all_rogue_clients.extend(site_rogue_clients)  # Add this site's rogue clients to the aggregate
-                    logging.info(
-                        f"! Fetched {len(site_rogue_aps)} rogue APs and {len(site_rogue_clients)} rogue clients from site: {site_name}"  # noqa: E501  # Per-site summary
-                    )
-                except Exception as e:  # This site's rogue fetch failed
-                    logging.warning(f"! Failed to fetch rogue data from site {site_name}: {e}")  # Warn but keep going
-                    continue  # Move to the next site
-        except Exception as e:  # Failure iterating the site list itself
-            logging.error(f"Failed to process sites for rogue data: {e}")  # Log the broader failure
-        all_rogue_data = all_rogue_aps + all_rogue_clients  # Combine APs and clients into one export set
-        if all_rogue_data:  # At least one rogue device was found
-            processed_r = DataProcessingUtils.flatten_nested_fields(all_rogue_data)  # Flatten nested JSON to CSV rows
-            processed_r = DataProcessingUtils.escape_multiline(processed_r)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
-            DataExporter.save_data_to_output(processed_r, "OrgRogueData.csv")  # type: ignore[no-untyped-call]  # Write to the output backend
-            print(f"! {len(processed_r)} rogue devices exported to OrgRogueData.csv")  # Report the count
-            logging.info(f"Exported {len(processed_r)} rogue devices to OrgRogueData.csv")  # Log the export
-        else:  # No rogue devices found anywhere
-            print("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")  # Inform the user
-            logging.info(
-                "No rogue devices found across all sites (OrgRogueData.csv written empty)."
-            )  # Log the empty result
-            DataExporter.save_data_to_output([], "OrgRogueData.csv")  # type: ignore[no-untyped-call]  # Write an empty file for consistency
-        print("Security data export completed (3 files generated)")  # Final user-facing summary
-        logging.info(
-            "Completed security policies, intelligence profiles, and rogue data export aggregate."
-        )  # Log completion
-        if emitter:  # Telemetry is enabled
-            emitter.emit_progress_complete(
-                "42", "security_events", 3, 3, False, time.time() - op_start
-            )  # Report completion and duration
+        from src.refactors.serial_cc.security_events import SecurityEventsService
+
+        SecurityEventsService.execute(fast)
 
     @staticmethod
     def rogue_clients(fast: bool = False):  # noqa: C901, PLR0915
@@ -15583,185 +13414,9 @@ class OrgExportUtils:
     @staticmethod
     def sle_metrics(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
-        print("Export Organization SLE Metrics:")
-        logging.info("Starting export of organization SLE metrics...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        from src.refactors.serial_cc.sle_metrics import SLEMetricsService
 
-        # Use the actual SLE service categories supported by the Mist platform.
-        # In systematic test fast mode, run a smoke path to reduce runtime.
-        sle_categories = [
-            "wifi",  # WiFi/wireless SLE metrics
-            "wan",  # WAN connectivity SLE metrics
-            "wired",  # Wired network SLE metrics
-        ]
-
-        # Specialized SLE aggregation metrics
-        org_sle_specialized_metrics = [
-            "summary",  # Org summary SLE data
-            "sites-sle",  # Sites SLE aggregation
-            "worst-sites-by-sle",  # Worst performing sites SLE analysis
-        ]
-        duration_value = "7d"
-        if fast:
-            sle_categories = ["wifi"]
-            org_sle_specialized_metrics = ["summary"]
-            duration_value = f"{TimeUtils.get_dynamic_lookback_hours(default_hours=24, test_hours=1)}h"
-            logging.info(
-                "Fast mode enabled for option 66: using smoke path (categories=%s, specialized=%s, duration=%s)",
-                sle_categories,
-                org_sle_specialized_metrics,
-                duration_value,
-            )
-
-        total_items = len(org_sle_specialized_metrics) + len(sle_categories)
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("66", "sle_metrics", total_items)
-        op_start = time.time()
-        items_done = 0
-
-        all_sle_data = []
-        metrics_retrieved = 0
-        metrics_failed = 0
-
-        print(f"! Retrieving organization SLE data using {len(sle_categories)} service categories...")
-        print(f"! Also attempting {len(org_sle_specialized_metrics)} specialized SLE aggregation metrics...")
-
-        try:
-            # First, try using the specialized SLE aggregation metrics with getOrgSle
-            for metric in org_sle_specialized_metrics:
-                try:
-                    logging.debug(f"Attempting to retrieve specialized SLE metric: {metric}")
-
-                    # For metrics that analyze sites by SLE, use getOrgSitesSle
-                    if "worst-sites" in metric or "sites-sle" in metric:
-                        for sle_category in sle_categories:
-                            try:
-                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                                    apisession, org_id, sle=sle_category, duration=duration_value, limit=1000
-                                )
-                                sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
-
-                                if sites_sle_data:
-                                    aggregated_result = {
-                                        "sle_metric_type": f"{metric}_{sle_category}",
-                                        "org_id": org_id,
-                                        "sle_category": sle_category,
-                                        "data_source": "org_sites_sle_aggregated",
-                                        "total_sites": len(sites_sle_data),
-                                        "sites_analyzed": sites_sle_data,
-                                        "metric_name": metric,
-                                    }
-
-                                    if "worst-sites" in metric:
-                                        aggregated_result["analysis_type"] = "worst_sites_identification"
-
-                                    all_sle_data.append(aggregated_result)
-                                    metrics_retrieved += 1
-                                    logging.debug(
-                                        f"Successfully retrieved sites SLE data for metric analysis: {metric} with SLE: {sle_category} ({len(sites_sle_data)} sites)"  # noqa: E501
-                                    )
-                                else:
-                                    logging.debug(
-                                        f"No sites SLE data available for metric: {metric} with SLE: {sle_category}"
-                                    )
-                            except Exception as sites_error:
-                                logging.debug(
-                                    f"Failed to get sites SLE data for metric '{metric}' with SLE '{sle_category}': {sites_error}"  # noqa: E501
-                                )
-                                continue
-                    else:
-                        response = mistapi.api.v1.orgs.insights.getOrgSle(
-                            apisession, org_id, metric, duration=duration_value
-                        )
-                        sle_data = getattr(response, "data", response) or {}
-
-                        if sle_data:
-                            sle_data["sle_metric_type"] = metric
-                            sle_data["org_id"] = org_id
-                            sle_data["data_source"] = "org_sle_specialized"
-                            all_sle_data.append(sle_data)
-                            metrics_retrieved += 1
-                            logging.debug(f"Successfully retrieved specialized SLE data for metric: {metric}")
-                        else:
-                            logging.debug(f"No data available for specialized SLE metric: {metric}")
-                            metrics_failed += 1
-
-                except Exception as metric_error:
-                    metrics_failed += 1
-                    logging.debug(f"Failed to get specialized SLE data for metric '{metric}': {metric_error}")
-                    continue
-                finally:
-                    items_done += 1
-                    if emitter:
-                        emitter.emit_progress_tick(
-                            "66", "sle_metrics", total_items, metric, items_done, total_items - items_done
-                        )
-
-            # Second, get aggregated SLE data for each service category
-            for sle_category in sle_categories:
-                try:
-                    logging.debug(f"Attempting to retrieve aggregated SLE data for category: {sle_category}")
-                    response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                        apisession, org_id, sle=sle_category, duration=duration_value, limit=1000
-                    )
-                    sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
-
-                    if sites_sle_data:
-                        org_aggregated = {
-                            "sle_category": sle_category,
-                            "org_id": org_id,
-                            "data_source": "org_aggregated_from_sites",
-                            "total_sites": len(sites_sle_data),
-                            "sites_data": sites_sle_data,
-                        }
-
-                        if sites_sle_data:
-                            org_aggregated["summary_calculated"] = True
-
-                        all_sle_data.append(org_aggregated)
-                        metrics_retrieved += 1
-                        logging.debug(
-                            f"Successfully aggregated SLE data for {len(sites_sle_data)} sites in category: {sle_category}"  # noqa: E501
-                        )
-                    else:
-                        logging.debug(f"No sites SLE data available for category: {sle_category}")
-                        metrics_failed += 1
-
-                except Exception as category_error:
-                    metrics_failed += 1
-                    logging.debug(f"Failed to get SLE data for category '{sle_category}': {category_error}")
-                    continue
-                finally:
-                    items_done += 1
-                    if emitter:
-                        emitter.emit_progress_tick(
-                            "66", "sle_metrics", total_items, sle_category, items_done, total_items - items_done
-                        )
-
-            # Report results
-            print(f"! SLE data retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")
-            logging.info(f"Org SLE data: {metrics_retrieved} retrieved successfully, {metrics_failed} failed")
-
-            if all_sle_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_sle_data)
-                processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, "OrgSLEMetrics.csv")  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} organization SLE data sources exported to OrgSLEMetrics.csv")
-                logging.info(
-                    f"Exported {len(processed)} org SLE data points from {metrics_retrieved} sources to OrgSLEMetrics.csv"  # noqa: E501
-                )
-            else:
-                print("! 0 organization SLE metrics exported to OrgSLEMetrics.csv (no data available)")
-                logging.warning("No org SLE data available - all sources failed or returned empty")
-                DataExporter.save_data_to_output([], "OrgSLEMetrics.csv")  # type: ignore[no-untyped-call]
-
-        except Exception as exception:
-            print(f"! Error exporting organization SLE metrics: {exception}")
-            logging.error(f"Failed to export org SLE metrics: {exception}")
-            DataExporter.save_data_to_output([], "OrgSLEMetrics.csv")  # type: ignore[no-untyped-call]
-        if emitter:
-            emitter.emit_progress_complete("66", "sle_metrics", total_items, items_done, False, time.time() - op_start)
+        SLEMetricsService.execute(fast)
 
     @staticmethod
     def ssid_template_consolidation() -> None:
@@ -16023,141 +13678,10 @@ class SiteClientExporter:
 
     @staticmethod
     def client_insights():  # noqa: C901, PLR0912, PLR0915
-        """Export client-specific insight metrics for a selected site to SiteClientInsights_[SiteName].csv."""
-        print("Export Site Client Insights:")
-        logging.info("Starting export of site client insights...")
+        """Delegated site client insights entrypoint preserved for compatibility."""
+        from src.refactors.serial_cc.site_client_insights import SiteClientInsightsService
 
-        # First, refresh the available metrics from the API
-        print("! Refreshing available insight metrics from Mist API...")
-        InsightMetricsUtils.export_legacy()
-
-        # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-
-        # Get site name for filename
-        try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception:
-            site_name = site_id
-
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name or site_id)
-
-        # Get available clients for the site to help user selection
-        clients: list[dict[str, Any]] = []
-        try:
-            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id)
-            clients = mistapi.get_all(response=response, mist_session=apisession) or []
-
-            if clients:
-                print(f"\n! Found {len(clients)} clients at site {site_name}")
-                print("Recent clients (showing first 5):")
-                for index, client in enumerate(clients[:5]):
-                    mac = client.get("mac", "Unknown")
-                    hostname = client.get("hostname", "Unknown")
-                    last_seen = client.get("last_seen", "Unknown")
-                    print(f"  [{index}] MAC: {mac}, Hostname: {hostname}, Last seen: {last_seen}")
-            else:
-                print(f"! No clients found at site {site_name}")
-        except Exception as exception:
-            logging.warning(f"Could not retrieve client list: {exception}")
-
-        # Prompt for client MAC address
-        print("\nEnter client MAC address or index number (or press Enter to skip):")
-        client_input = InputUtils.safe_input(
-            "Client MAC/Index: ",
-            context="site_client_insights_selection",
-        ).strip()
-
-        if not client_input:
-            print("! No client input provided. Skipping client insights export.")
-            return
-
-        # Check if input is a numeric index
-        client_mac = None
-        if client_input.isdigit():
-            try:
-                index = int(client_input)
-                if 0 <= index < len(clients):
-                    client_mac = clients[index].get("mac", "")
-                    print(f"! Selected client by index: {client_mac}")
-                else:
-                    print(f"! Invalid index {index}. Must be between 0 and {len(clients) - 1}")
-                    return
-            except (ValueError, IndexError):
-                print(f"! Invalid index: {client_input}")
-                return
-        else:
-            # Treat as MAC address
-            client_mac = client_input
-
-        if not client_mac:
-            print("! Could not determine client MAC address.")
-            return
-
-        normalized_client_mac = SiteClientExporter._normalize_client_mac_or_none(client_mac)
-        if not normalized_client_mac:
-            print(f"! Invalid client MAC address format: {client_mac}")
-            logging.error(f"Invalid client MAC address format provided for client insights: {client_mac}")
-            return
-
-        filename = f"SiteClientInsights_{sanitized_site_name}_{normalized_client_mac.replace(':', '')}.csv"
-
-        # Get all metrics that support "client" scope
-        client_metrics = InsightMetricsUtils.get_by_scope("client")
-
-        if not client_metrics:
-            print("! No metrics found for client scope. Check ConstInsightMetrics.csv file.")
-            logging.error("No client-scope metrics found in const insight metrics")
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-            return
-
-        all_client_data = []
-        metrics_retrieved = 0
-
-        print(f"! Retrieving {len(client_metrics)} different client insight metrics for selected client...")
-
-        try:
-            for metric in client_metrics:
-                try:
-                    response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(
-                        apisession, site_id, normalized_client_mac, metrics=metric
-                    )
-                    client_insight_data = getattr(response, "data", response) or {}
-
-                    if client_insight_data:
-                        # Add metric type identifier to each data point
-                        client_insight_data["metric_type"] = metric
-                        client_insight_data["site_id"] = site_id
-                        client_insight_data["site_name"] = site_name
-                        client_insight_data["client_mac"] = normalized_client_mac
-                        all_client_data.append(client_insight_data)
-                        metrics_retrieved += 1
-                        logging.debug(f"Retrieved client insight data for metric: {metric}")
-                    else:
-                        logging.debug(f"No data available for client metric: {metric}")
-                except Exception as metric_error:
-                    logging.debug(f"Failed to get client insight data for metric {metric}: {metric_error}")
-                    continue
-
-            if all_client_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_client_data)
-                processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} client insight metrics exported to {filename}")
-                logging.info(f"Exported {metrics_retrieved} client insight metrics at {site_name} to {filename}")
-            else:
-                print(f"! 0 client insights exported to {filename} (no data available)")
-                logging.warning(f"No client insight data available at {site_name}")
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
-        except Exception as exception:
-            print(f"! Error exporting client insights: {exception}")
-            logging.error(f"Failed to export client insights at {site_name}: {exception}")
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+        SiteClientInsightsService.execute()
 
     @staticmethod
     def _normalize_client_mac_or_none(client_mac: str) -> str | None:
@@ -18900,1070 +16424,6 @@ class GatewayTestExporter:
             print("! No gateway test results found. CSV not created.")
 
 
-class _LegacyGatewayStatsExporter:
-    """
-    Gateway Device Statistics Exports
-
-    Handles gateway device stats, stats with freshness tracking, and WAN port conflict analysis.
-    Extracted from GatewayExportUtils.
-    """
-
-    @staticmethod
-    def device_stats(fast=False):  # noqa: C901, PLR0912, PLR0915
-        """
-        Collects and exports detailed device statistics for all gateways in the organization.
-        Makes individual getSiteDeviceStats API calls for each gateway device.
-        Optimized to use cached inventory data and concurrent processing when fast=True.
-
-        Args:
-            fast (bool): If True, enables concurrent processing and uses cached inventory data
-                        to minimize API calls.
-        """
-        logging.info("[INFO] Collecting detailed device statistics for all gateways in the org...")
-        if fast:
-            logging.info(" Fast mode enabled: Using cached data and concurrent processing")
-
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        gateway_devices = GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)
-        all_stats = []
-
-        if not gateway_devices:
-            logging.warning("[WARN] No gateway devices found. Exiting gateway device stats export.")
-            return
-
-        def fetch_device_stats_with_retry(device_info, max_retries=None, retry_delay=None, connection_semaphore=None):
-            """
-            Fetch device statistics for a single gateway device with retry logic and connection pool management.
-
-            Args:
-                device_info: Tuple of (site_id, device_id, device_name, site_name)
-                max_retries: Maximum number of retry attempts (uses env var if None)
-                retry_delay: Base delay between retries (uses env var if None)
-                connection_semaphore: Semaphore to limit concurrent connections (optional)
-            """
-            # Use environment variables as defaults if not provided
-            if max_retries is None:
-                max_retries = FAST_MODE_MAX_RETRIES
-            if retry_delay is None:
-                retry_delay = FAST_MODE_RETRY_DELAY
-
-            site_id, device_id, device_name, site_name = device_info
-
-            for attempt in range(max_retries + 1):
-                try:
-                    # Validate inputs before making API calls
-                    ValidationUtils.validate_site_id(site_id, "device_stats")
-                    ValidationUtils.validate_device_id(device_id, "device_stats")
-
-                    # Use semaphore to limit concurrent connections if provided
-                    if connection_semaphore:
-                        with connection_semaphore:
-                            stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data
-                    else:
-                        stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data
-
-                    # Add contextual information to the stats
-                    stats["site_id"] = site_id
-                    stats["site_name"] = site_name
-                    stats["device_id"] = device_id
-                    stats["device_name"] = device_name
-
-                    if attempt > 0:
-                        logging.info(f"! Retry {attempt} successful for device {device_name} at site {site_name}")
-                    else:
-                        logging.debug(f"! Collected device stats for gateway {device_name} at site {site_name}")
-                    return stats
-
-                except Exception as exception:
-                    if attempt < max_retries:
-                        # Fast mode: reduced backoff delay for quicker retries
-                        backoff_delay = retry_delay * (2**attempt) if not fast else retry_delay
-                        logging.warning(
-                            f"! Attempt {attempt + 1} failed for device {device_name} at site {site_name}: {exception}"
-                        )
-                        logging.info(f"! Retrying in {backoff_delay} seconds...")
-                        time.sleep(backoff_delay)
-                    else:
-                        logging.error(
-                            f"! Failed to fetch device stats for {device_name} at site {site_name} after {max_retries + 1} attempts: {exception}"  # noqa: E501
-                        )
-                        # Return a minimal record with error information
-                        return {
-                            "site_id": site_id,
-                            "site_name": site_name,
-                            "device_id": device_id,
-                            "device_name": device_name,
-                            "error": str(exception),
-                            "status": "failed",
-                        }
-
-        # Process devices with appropriate threading based on fast mode
-        if fast and len(gateway_devices) > 10:
-            # Use concurrent processing for large numbers of devices
-            logging.info(f"! Fast mode: Processing {len(gateway_devices)} gateway devices concurrently...")
-
-            # Limit concurrent connections to prevent overwhelming the API
-            max_workers = min(10, len(gateway_devices))  # Cap at 10 concurrent requests
-            connection_semaphore = threading.Semaphore(max_workers)
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(
-                        fetch_device_stats_with_retry, device_info, connection_semaphore=connection_semaphore
-                    ): device_info
-                    for device_info in gateway_devices
-                }
-
-                # Progress bar for concurrent processing
-                for future in tqdm(  # type: ignore[no-untyped-call]
-                    concurrent.futures.as_completed(futures),
-                    total=len(futures),
-                    desc="Gateway Device Stats",
-                    unit="device",
-                ):
-                    device_info = futures[future]
-                    try:
-                        result = future.result()
-                        if result:
-                            all_stats.append(result)
-                    except Exception as exception:
-                        site_id, device_id, device_name, site_name = device_info
-                        logging.error(
-                            f"! Concurrent processing failed for device {device_name} at site {site_name}: {exception}"
-                        )
-        else:
-            # Sequential processing for smaller datasets or normal mode
-            logging.info(f"! Processing {len(gateway_devices)} gateway devices sequentially...")
-            for index, device_info in enumerate(tqdm(gateway_devices, desc="Gateway Device Stats", unit="device"), 1):  # type: ignore[no-untyped-call]
-                site_id, device_id, device_name, site_name = device_info
-                logging.debug(f"! Processing device {index}/{len(gateway_devices)}: {device_name} at {site_name}")
-
-                result = fetch_device_stats_with_retry(device_info)  # type: ignore[no-untyped-call]
-                if result:
-                    all_stats.append(result)
-
-        # Save results to CSV
-        if all_stats:
-            # Sanitize and flatten nested data structures
-            sanitized = []
-            for stats in all_stats:
-                flat_record = DataProcessingUtils.flatten_dict(stats)
-                sanitized.append(flat_record)
-
-            filename = "AllGatewayDeviceStats.csv"
-            DataExporter.save_data_to_output(sanitized, filename)  # type: ignore[no-untyped-call]
-            logging.info(f"! Gateway device statistics saved to {filename} ({len(all_stats)} records).")
-            logging.info(f"! API Optimization: Collected detailed stats for {len(gateway_devices)} gateways")
-
-            # Log summary of successful vs failed requests
-            successful_requests = len([stats for stats in all_stats if stats.get("status") != "failed"])
-            failed_requests = len(all_stats) - successful_requests
-            if failed_requests > 0:
-                logging.warning(f"! {failed_requests} requests failed out of {len(all_stats)} total")
-            else:
-                logging.info(f"! All {successful_requests} requests completed successfully")
-        else:
-            logging.warning(" No gateway device statistics found. CSV not created.")
-
-    @staticmethod
-    def device_stats_with_freshness(fast: bool = False) -> None:
-        """
-        Exports gateway device statistics with freshness check.
-        Checks if AllGatewayDeviceStats.csv exists and is fresh before generating it.
-        This ensures we don't unnecessarily regenerate data that's already current.
-
-        Args:
-            fast (bool): If True, enables concurrent processing
-        """
-        output_file = "AllGatewayDeviceStats.csv"
-
-        # Check if file exists and is fresh
-        if CacheUtils.check_and_generate_csv(output_file, lambda: GatewayStatsExporter.device_stats(fast=fast)):  # type: ignore[no-untyped-call]
-            logging.info(f"! {output_file} already exists and is fresh - using cached data")
-        else:
-            logging.info(f"! {output_file} was generated or refreshed")
-
-    @staticmethod
-    def wan_port_conflicts():
-        """
-        Orchestrates WAN port IP conflict analysis for gateway devices.
-        Delegates to helper methods for loading, analyzing, and exporting results.
-        """
-        logging.info(" Starting WAN port IP conflict analysis for individual gateway devices...")
-
-        gateway_data = GatewayExportUtils._load_gateway_stats_for_conflicts()  # type: ignore[no-untyped-call]
-        if not gateway_data:
-            return
-
-        conflicts_found = GatewayExportUtils._analyze_all_gateway_conflicts(gateway_data)  # type: ignore[no-untyped-call]
-        GatewayExportUtils._export_conflict_results(conflicts_found)  # type: ignore[no-untyped-call]
-
-
-class _LegacyGatewayExportUtils:
-    """
-    Centralized gateway data export utilities.
-    Groups all export_gateway_* functions for better code organization.
-    All methods are static to avoid unnecessary object instantiation.
-    """
-
-    # WAN port columns used for conflict analysis
-    WAN_PORT_COLUMNS = [f"if_stat_ge-{port}_ips" for port in ["0/0/0", "0/0/1", "0/0/2"]]
-
-    @staticmethod
-    def _load_gateway_stats_for_conflicts():
-        """Load gateway device stats CSV for conflict analysis."""
-        stats_file = "AllGatewayDeviceStats.csv"
-        CacheUtils.check_and_generate_csv(stats_file, lambda: GatewayStatsExporter.device_stats(fast=True))  # type: ignore[no-untyped-call]
-
-        stats_path = FilePathUtils.get_csv_path(stats_file)
-        try:
-            with open(stats_path, encoding="utf-8") as csvfile:
-                gateway_data = list(csv.DictReader(csvfile))
-            logging.info(f"! Loaded {len(gateway_data)} gateway device records for analysis")
-            return gateway_data
-        except Exception as exception:
-            logging.error(f"! Failed to load {stats_file}: {exception}")
-            print(f"! Failed to load {stats_file}: {exception}")
-            return None
-
-    @staticmethod
-    def _analyze_all_gateway_conflicts(gateway_data):
-        """Analyze all gateways for internal WAN port IP conflicts."""
-        logging.info(" Analyzing individual gateways for internal WAN port IP conflicts...")
-        conflicts_found = []
-
-        for index, row in enumerate(gateway_data):
-            device_conflicts = GatewayExportUtils._analyze_device_ip_conflicts(row, index)  # type: ignore[no-untyped-call]
-            conflicts_found.extend(device_conflicts)
-
-        return conflicts_found
-
-    @staticmethod
-    def _analyze_device_ip_conflicts(row, index):
-        """Analyze a single gateway device for WAN port IP conflicts."""
-        device_name = row.get("device_name", row.get("name", f"Device_{index}"))
-        site_name = row.get("site_name", "Unknown Site")
-
-        device_ips = GatewayExportUtils._collect_device_wan_ips(row)  # type: ignore[no-untyped-call]
-        conflicts = GatewayExportUtils._find_ip_conflicts(device_ips, device_name)  # type: ignore[no-untyped-call]
-
-        return GatewayExportUtils._build_conflict_records(conflicts, device_name, site_name)  # type: ignore[no-untyped-call]
-
-    @staticmethod
-    def _collect_device_wan_ips(row):
-        """Collect IP addresses from WAN ports for a device."""
-        device_ips: dict[str, list[str]] = {}
-        for col in GatewayExportUtils.WAN_PORT_COLUMNS:
-            if col in row and row[col] and str(row[col]).strip():
-                ip_value = str(row[col]).strip()
-                if ip_value not in ["", "nan", "None", "null"]:
-                    port = col.replace("if_stat_ge-", "").replace("_ips", "")
-                    device_ips.setdefault(ip_value, []).append(port)
-        return device_ips
-
-    @staticmethod
-    def _find_ip_conflicts(device_ips, device_name):
-        """Find IP addresses assigned to multiple WAN ports."""
-        conflicts = []
-        for ip_address, ports in device_ips.items():
-            if len(ports) > 1:
-                conflicts.append({"value": ip_address, "ports": ports})
-                logging.warning(f"! IP conflict in {device_name}: {ip_address} on ports {', '.join(ports)}")
-        return conflicts
-
-    @staticmethod
-    def _build_conflict_records(conflicts, device_name, site_name):
-        """Build conflict records for export."""
-        records = []
-        for conflict in conflicts:
-            for port in conflict["ports"]:
-                records.append(
-                    {
-                        "device_name": device_name,
-                        "site_name": site_name,
-                        "port_name": f"ge-{port}",
-                        "port_ip": conflict["value"],
-                        "conflict_type": "IP Address Conflict",
-                        "conflict_with_ports": ", ".join([p for p in conflict["ports"] if p != port]),
-                    }
-                )
-        return records
-
-    @staticmethod
-    def _export_conflict_results(conflicts_found):
-        """Export and display WAN port conflict results."""
-        if not conflicts_found:
-            logging.info(" No internal WAN port IP conflicts found")
-            print(" No internal WAN port IP conflicts found - healthy WAN port configurations")
-            return
-
-        output_file = "GatewayWANPortConflicts.csv"
-        conflicts_found.sort(key=lambda x: (x.get("device_name", ""), x.get("port_name", "")))
-        DataExporter.save_data_to_output(conflicts_found, output_file)  # type: ignore[no-untyped-call]
-
-        unique_gateways = {r.get("device_name", "Unknown") for r in conflicts_found}
-        logging.info(f"! Exported {len(conflicts_found)} conflicts from {len(unique_gateways)} gateways")
-        print(f"! WAN port IP conflicts exported to {output_file} ({len(conflicts_found)} records)")
-        print(f"! Summary: {len(unique_gateways)} gateways with IP conflicts")
-
-        GatewayExportUtils._display_conflict_samples(conflicts_found)  # type: ignore[no-untyped-call]
-
-    @staticmethod
-    def _display_conflict_samples(conflicts_found):
-        """Display sample of WAN port IP conflicts."""
-        print("\n  Sample WAN Port IP Conflicts Found:")
-        for idx, record in enumerate(conflicts_found[:10], 1):
-            print(f"{idx:2d}. {record.get('device_name', 'Unknown')} ({record.get('site_name', 'Unknown Site')})")
-            print(f"    Port {record.get('port_name', 'Unknown')} has IP {record.get('port_ip', 'Unknown')}")
-            print(f"    Conflicts with: {record.get('conflict_with_ports', 'Unknown')}\n")
-
-        if len(conflicts_found) > 10:
-            print(f"... and {len(conflicts_found) - 10} more conflicted ports")
-
-    @staticmethod
-    def _with_site_info():
-        """Exports gateways with their associated site information."""
-        OrgInventoryExporter.gateways_with_site_info()  # type: ignore[no-untyped-call]
-
-    @staticmethod
-    def management_ips(fast: bool = False) -> None:  # noqa: PLR0915
-        """
-        Exports gateway management overlay IPs grouped by gateway template association.
-        Creates a single CSV with gateway info, management IPs, status, and template names.
-
-        This function:
-        1. Gets current device inventory (calls existing function)
-        2. Gets gateway template mappings (calls existing function)
-        3. Gets gateway configurations with management IPs (calls existing function)
-        4. Outputs CSV with: Gateway Name, Gateway Template, Management IP, Online Status, Site Name
-
-        Args:
-            fast (bool): Enable fast mode for API calls
-        """
-        logging.info("Menu #31: Starting gateway management IPs export")
-        print("Gateway Management IP Export:")
-        print("Collecting data from inventory, templates, and configurations...")
-
-        ConfigUtils.get_cached_or_prompted_org_id()
-
-        # Ensure required CSVs are fresh by calling existing functions
-        print("  1. Ensuring site list with template mappings is current...")
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-
-        print("  2. Ensuring gateway templates are current...")
-        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-
-        print("  3. Ensuring gateway device data with connection status is current...")
-        CacheUtils.check_and_generate_csv("GatewaysWithSiteInfo.csv", OrgInventoryExporter.gateways_with_site_info)
-
-        print("  4. Ensuring gateway configurations with management IPs are current...")
-        CacheUtils.check_and_generate_csv(
-            "AllSiteGatewayConfigs.csv",
-            lambda: GatewayExportUtils.device_configs(fast=fast),
-        )
-
-        print("  5. Processing and correlating data...")
-
-        # Load required data
-        try:
-            # Load sites with gateway template associations
-            with open(FilePathUtils.get_csv_path("SiteList.csv"), encoding="utf-8") as csvfile:
-                sites = list(csv.DictReader(csvfile))
-
-            # Load gateway templates for name lookups
-            with open(FilePathUtils.get_csv_path("OrgGatewayTemplates.csv"), encoding="utf-8") as csvfile:
-                templates = list(csv.DictReader(csvfile))
-
-            # Load gateway device data with connection status
-            with open(FilePathUtils.get_csv_path("GatewaysWithSiteInfo.csv"), encoding="utf-8") as csvfile:
-                gateway_devices = list(csv.DictReader(csvfile))
-
-            # Load gateway configurations with management IPs
-            with open(FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
-                gateway_configs = list(csv.DictReader(csvfile))
-
-        except FileNotFoundError as exception:
-            logging.error(f"Required CSV file not found: {exception}")
-            print(f"! Error: Required CSV file not found: {exception}")
-            return
-
-        # Create lookup dictionaries
-        site_lookup = {site.get("id"): site for site in sites}
-        template_lookup = {template.get("id"): template.get("name", "Unknown Template") for template in templates}
-
-        # Create device lookup for connection status by device name
-        {dev.get("name"): dev for dev in gateway_devices}
-
-        # Create management IP lookup by device name
-        mgmt_ip_lookup = {
-            config.get("name"): config.get("gateway_mgmt_overlay_ip_ip", "") for config in gateway_configs
-        }
-
-        # Process gateway devices and correlate with template and management IP data
-        results = []
-        gateways_processed = 0
-        gateways_with_mgmt_ip = 0
-
-        for device in gateway_devices:
-            gateway_name = device.get("name", "Unknown Gateway")
-            site_id = device.get("site_id", "")
-            site_name = device.get("site_name", "Unknown Site")
-            connected_status = device.get("connected", "")
-
-            # Get management IP from configs
-            mgmt_ip = mgmt_ip_lookup.get(gateway_name, "")
-
-            # Determine connection status - simple online/offline based on connected field
-            connected_val = str(connected_status).strip().lower()
-
-            if connected_val in ["true", "1", "yes"]:
-                status = "Online"
-            elif connected_val in ["false", "0", "no"]:
-                status = "Offline"
-            else:
-                # Empty or unknown connection status
-                status = "Unknown"
-
-            # Get template information
-            site_info = site_lookup.get(site_id, {})
-            template_id = site_info.get("gatewaytemplate_id", "")
-            template_name = template_lookup.get(template_id, "No Template") if template_id else "No Template"
-
-            # Prepare result row
-            result_row = {
-                "gateway_name": gateway_name,
-                "management_ip": mgmt_ip if mgmt_ip else "Not Configured",
-                "status": status,
-                "site_name": site_name,
-                "gateway_template": template_name,
-                "template_id": template_id if template_id else "None",
-            }
-
-            results.append(result_row)
-            gateways_processed += 1
-
-            if mgmt_ip:
-                gateways_with_mgmt_ip += 1
-                logging.debug(
-                    f"Gateway {gateway_name}: Management IP {mgmt_ip}, Status: {status} (Template: {template_name})"
-                )
-            else:
-                logging.debug(
-                    f"Gateway {gateway_name}: No management IP configured, Status: {status} (Template: {template_name})"
-                )
-
-        # Sort results by template name, then gateway name
-        results.sort(key=lambda row: (row["gateway_template"], row["gateway_name"]))
-
-        # Create the final CSV with requested columns
-        final_results = [
-            {
-                "Gateway Name": row["gateway_name"],
-                "Gateway Template": row["gateway_template"],
-                "Management IP": row["management_ip"],
-                "Online Status": row["status"],
-                "Site Name": row["site_name"],
-            }
-            for row in results
-        ]
-
-        # Write CSV file
-        DataExporter.save_data_to_output(final_results, "GatewayManagementIPs.csv")  # type: ignore[no-untyped-call]
-
-        # Summary output
-        print("! Gateway management IP export completed:")
-        print(f"  - Total gateways processed: {gateways_processed}")
-        print(f"  - Gateways with management IPs: {gateways_with_mgmt_ip}")
-        print(f"  - Gateways without management IPs: {gateways_processed - gateways_with_mgmt_ip}")
-        print("  - Output CSV: GatewayManagementIPs.csv")
-
-        logging.info(
-            f"Gateway management IP export completed. {gateways_processed} gateways processed, {gateways_with_mgmt_ip} with management IPs."  # noqa: E501
-        )
-
-    @staticmethod
-    def device_configs(debug: bool = False, fast: bool = False) -> None:
-        """
-        Fetches and exports configuration details for all gateway devices across all sites in the organization
-        to AllSiteGatewayConfigs.csv. Also generates a filtered CSV with selected fields and port info.
-
-        Args:
-            debug (bool): If True, enables debug logging with sample output
-            fast (bool): If True, enables concurrent processing
-        """
-        logging.info("Starting export of all gateway device configurations...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        data = APIFetchUtils.gateway_device_configs(apisession, org_id, fast=fast)  # type: ignore[no-untyped-call]
-        if not data:
-            logging.warning(" No device configs found.")
-            return
-
-        # Flatten and sanitize the data
-        flattened = DataProcessingUtils.flatten_nested_fields(data)
-        sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-
-        # Write full dataset to CSV
-        DataExporter.save_data_to_output(sanitized, "AllSiteGatewayConfigs.csv")  # type: ignore[no-untyped-call]
-        logging.info(" Device configs saved to AllSiteGatewayConfigs.csv")
-
-        # Identify port config columns (excluding _vpn_paths_)
-        base_columns = ["mac", "name"]
-        port_columns = [
-            col
-            for col in sanitized[0].keys()
-            if re.match(r"(?i)port_config_ge-0/0/\d+_.*", col) and "_vpn_paths_" not in col
-        ]
-        columns_to_keep = base_columns + port_columns
-
-        # Filter rows where any port column has non-empty value
-        filtered_rows = [
-            {col: row.get(col, "") for col in columns_to_keep}
-            for row in sanitized
-            if any(row.get(col) not in [None, "", "null"] for col in port_columns)
-        ]
-
-        # Write filtered dataset to CSV
-        if not filtered_rows:
-            logging.warning(" No rows matched the port config filter. FilteredGatewayPortConfigs.csv will be empty.")
-            filtered_csv_path = FilePathUtils.get_csv_path("FilteredGatewayPortConfigs.csv")
-            with open(filtered_csv_path, "w", newline="", encoding="utf-8") as csvfile:
-                csvfile.write("No matching data found.\n")
-        else:
-            if debug:
-                logging.debug(f"Sample filtered row: {filtered_rows[0]}")
-            DataExporter.save_data_to_output(filtered_rows, "FilteredGatewayPortConfigs.csv")  # type: ignore[no-untyped-call]
-            logging.info(" Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")
-
-    @staticmethod
-    def templates():
-        """Exports gateway templates."""
-        print("Gateway Templates:")
-        logging.info("Exporting gateway templates for the organization...")
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, current_org_id)
-        templates = getattr(response, "data", [])
-        if not templates:
-            logging.warning("No gateway templates found for this organization.")
-            print("No gateway templates found for this organization.")
-            return
-        templates = DataProcessingUtils.flatten_nested_fields(templates)
-        templates = DataProcessingUtils.escape_multiline(templates)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(templates, "OrgGatewayTemplates.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(templates)} gateway templates exported to OrgGatewayTemplates.csv")
-        logging.info(" Gateway templates exported to OrgGatewayTemplates.csv")
-
-    @staticmethod
-    def with_wan_overrides_legacy(fast: bool = False) -> None:  # noqa: C901, PLR0912, PLR0915
-        """
-        Generates a CSV report of gateways with ports that are overridden from their template configuration.
-        This helps identify outliers that need to be corrected back to template compliance.
-
-        Report includes for OVERRIDDEN ports only:
-        - Gateway Router Device Name
-        - Port descriptions/labels for ge-0/0/0, ge-0/0/1, ge-0/0/2,
-          {{wan1_interface}}, {{wan2_interface}}, {{wan3_interface}}
-        - Port status (up/down)
-        - Port admin status (disabled/enabled)
-        - Port gateway IP address
-        - Port IP address
-        - Port netmask
-        - Port config type (DHCP or STATIC)
-        - Port name/number
-        - Whether port is overridden from template (always "Yes" for filtered results)
-
-        Searches 6 total ports: 3 hardcoded (ge-0/0/0, ge-0/0/1, ge-0/0/2) + 3 variable-based
-        ({{wan1_interface}}, {{wan2_interface}}, {{wan3_interface}}) for comprehensive coverage.
-
-        Args:
-            fast (bool): If True, enables concurrent processing
-        """
-        print("Gateway Ports Overridden from Template (Compliance Outliers):")
-        logging.info(" Identifying gateway ports with template overrides (outliers for compliance correction)...")
-
-        # Ensure required CSVs are fresh
-        CacheUtils.check_and_generate_csv(
-            "AllSiteGatewayConfigs.csv",
-            lambda: GatewayExportUtils.device_configs(fast=fast),
-        )
-        CacheUtils.check_and_generate_csv("SiteList_ListAPI.csv", OrgSiteExporter.sites_list_api)
-        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-
-        # Load data
-        with open(FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
-            configs = list(csv.DictReader(csvfile))
-        with open(FilePathUtils.get_csv_path("SiteList_ListAPI.csv"), encoding="utf-8") as csvfile:
-            sites = list(csv.DictReader(csvfile))
-        with open(FilePathUtils.get_csv_path("OrgGatewayTemplates.csv"), encoding="utf-8") as csvfile:
-            templates = list(csv.DictReader(csvfile))
-
-        # Create lookups for site and template names
-        site_lookup = {site.get("id"): site.get("name", "Unknown Site") for site in sites}
-        # Create site to gateway template ID mapping from SiteList
-        site_to_template_id = {site.get("id"): site.get("gatewaytemplate_id", "") for site in sites}
-        template_lookup = {template.get("id"): template.get("name", "Unknown Template") for template in templates}
-
-        # Debug template lookup
-        logging.debug(f"[DEBUG] Created template lookup with {len(template_lookup)} templates")
-        for template_id, template_name in list(template_lookup.items())[:3]:  # Show first 3 for debugging
-            logging.debug(f"[DEBUG] Template: {template_id} -> {template_name}")
-
-        overridden_port_info = []
-        # Target ports loaded from MIST_WAN_TARGET_PORTS environment variable
-        target_ports = MIST_WAN_TARGET_PORTS
-        if not target_ports:
-            print(" MIST_WAN_TARGET_PORTS not configured in .env - skipping port override analysis")
-            logging.warning("MIST_WAN_TARGET_PORTS environment variable not set")
-            return
-
-        # OPTIMIZATION: First pass - identify devices with overrides without fetching stats
-        logging.info(" First pass: Identifying devices with port overrides...")
-        devices_with_overrides = {}  # device_id -> (device_info, overridden_port_names)
-
-        for row in configs:
-            device_name = row.get("name", "").strip()
-            site_id = row.get("site_id", "").strip()
-            device_id = row.get("id", "").strip()
-            site_name = site_lookup.get(site_id, "Unknown Site")
-            # Get template ID from site-level gateway template assignment
-            template_id = site_to_template_id.get(site_id, "")
-            template_name = template_lookup.get(template_id, "No Template") if template_id else "No Template"
-
-            # Debug template lookup for this device
-            if template_id:
-                if template_id in template_lookup:
-                    logging.debug(
-                        f"[DEBUG] Device {device_name}: site_id='{site_id}' -> template_id='{template_id}' -> template_name='{template_name}'"  # noqa: E501
-                    )
-                else:
-                    logging.warning(
-                        f"[WARN] Device {device_name}: Template ID '{template_id}' not found in gateway templates (orphaned assignment)"  # noqa: E501
-                    )
-                    template_name = f"Missing Template ({template_id[:8]}...)"
-            else:
-                logging.debug(f"[DEBUG] Device {device_name}: No gatewaytemplate_id found for site {site_id}")
-
-            if not device_name or not site_id or not device_id:
-                continue
-
-            # Check each target port for overrides using CSV data only
-            device_overridden_ports = []
-            for port_name in target_ports:
-                # Check if port is overridden from template by looking for port_config fields in the CSV
-                # Need to check for both base port (port_config_{port}_*) and subinterfaces (port_config_{port}.*)
-                # to catch configurations like {{wan2_interface}}.70 or ge-0/0/1.100
-                port_config_fields = [
-                    col
-                    for col in row
-                    if col.startswith(f"port_config_{port_name}_") or col.startswith(f"port_config_{port_name}.")
-                ]
-
-                # Check for non-empty values (excluding vpn_paths which are template-inherited)
-                override_fields = []
-                for field_name in port_config_fields:
-                    value = row.get(field_name, "").strip().lower()
-                    if value not in ["", "null", "none"] and "_vpn_paths_" not in field_name:
-                        override_fields.append(f"{field_name}={value}")
-
-                is_overridden = len(override_fields) > 0
-                if is_overridden:
-                    device_overridden_ports.append(port_name)
-
-            # If this device has any overridden ports, mark it for API calls
-            if device_overridden_ports:
-                devices_with_overrides[device_id] = {
-                    "device_name": device_name,
-                    "site_id": site_id,
-                    "site_name": site_name,
-                    "template_id": template_id,
-                    "template_name": template_name,
-                    "row_data": row,
-                    "overridden_ports": device_overridden_ports,
-                }
-
-        logging.info(
-            f"! Found {len(devices_with_overrides)} devices with port overrides out of {len(configs)} total gateway devices"  # noqa: E501
-        )
-
-        if not devices_with_overrides:
-            logging.info(" No template overrides found - all gateways are compliant with their assigned templates!")
-            # Still create empty CSV file with proper headers
-            output_file = "GatewayOverriddenPorts.csv"
-            fieldnames = [
-                "gateway_device_name",
-                "site_name",
-                "template_name",
-                "port_name",
-                "recommended_variable",
-                "port_description",
-                "port_status",
-                "port_admin_status",
-                "port_gateway_ip",
-                "port_ip_address",
-                "port_netmask",
-                "port_config_type",
-                "port_usage",
-                "overridden_from_template",
-                "device_id",
-                "site_id",
-                "template_id",
-            ]
-            output_path = FilePathUtils.get_csv_path(output_file)
-            with open(output_path, mode="w", newline="", encoding="utf-8") as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writeheader()
-            print(f"! Gateway override report written to {output_file}")
-            print(" No template overrides found - all gateways are compliant with their assigned templates!")
-            return
-
-        # OPTIMIZATION: Second pass - fetch device configs and stats only for devices with overrides
-        logging.info(
-            f"! Second pass: Fetching device configs and stats for {len(devices_with_overrides)} devices with overrides..."  # noqa: E501
-        )
-
-        if fast and len(devices_with_overrides) > 5:  # Use connection pool management for fast mode with 5+ devices
-            logging.info(" Using fast mode with connection pool management for device data fetching...")
-
-            # Define worker function for fetching device configs and stats
-            def fetch_device_data(device_info, connection_semaphore):
-                """Worker function that fetches config and stats for a single device."""
-                device_id_inner = device_info[0]
-                device_data = device_info[1]
-                device_name_inner = device_data["device_name"]
-                site_id_inner = device_data["site_id"]
-
-                # Acquire connection semaphore before making API calls
-                with connection_semaphore:
-                    port_configs = {}
-                    interface_stats = {}
-
-                    # Fetch live device info from getSiteDevice API for current config
-                    try:
-                        resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id_inner, device_id_inner)
-                        device_config_data = getattr(resp, "data", {})
-                        port_configs = device_config_data.get("port_config", {})
-                    except Exception as exception:
-                        logging.warning(
-                            f"[WARN] Could not fetch device config for {device_name_inner} ({device_id_inner}): {exception}"  # noqa: E501
-                        )
-                        port_configs = {}
-
-                    # Fetch live device stats for current port status
-                    try:
-                        stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(
-                            apisession, site_id_inner, device_id_inner
-                        )
-                        stats_data = getattr(stats_resp, "data", {})
-                        interface_stats = stats_data.get("if_stat", {})
-                    except Exception as exception:
-                        # Handle 403 Forbidden and other errors gracefully
-                        if "403" in str(exception) or "Forbidden" in str(exception):
-                            logging.warning(
-                                f"[WARN] Insufficient permissions to fetch device stats for {device_name_inner} ({device_id_inner}): 403 Forbidden"  # noqa: E501
-                            )
-                        else:
-                            logging.warning(
-                                f"[WARN] Could not fetch device stats for {device_name_inner} ({device_id_inner}): {exception}"  # noqa: E501
-                            )
-                        interface_stats = {}
-
-                    return (device_id_inner, port_configs, interface_stats)
-
-            # Prepare work items for the helper
-            work_items = list(devices_with_overrides.items())
-
-            # Use the reusable connection pool management helper
-            successful_results, failed_devices = execute_with_connection_pool_management(
-                work_items=work_items,
-                worker_function=fetch_device_data,
-                batch_description="override devices",
-                retry_function=None,  # No retry for this use case
-            )
-
-            # Build device_data_cache from successful results
-            device_data_cache = {}
-            for device_id_result, port_configs, interface_stats in successful_results:
-                device_data_cache[device_id_result] = (port_configs, interface_stats)
-
-            # Handle failed devices (fallback to empty configs)
-            for failed_item in failed_devices:
-                device_id_failed = failed_item[0]
-                device_data_cache[device_id_failed] = ({}, {})
-
-            logging.info(
-                f"! Fast mode: Fetched data for {len(successful_results)}/{len(work_items)} devices with connection pool protection"  # noqa: E501
-            )
-
-        else:
-            # Regular sequential processing for non-fast mode or small datasets
-            device_data_cache = {}  # device_id -> (port_configs, interface_stats)
-
-            for device_id, device_info in devices_with_overrides.items():
-                device_name = device_info["device_name"]
-                site_id = device_info["site_id"]
-
-                # Fetch live device info from getSiteDevice API for current config
-                try:
-                    resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-                    device_data = getattr(resp, "data", {})
-                    port_configs = device_data.get("port_config", {})
-                except Exception as exception:
-                    logging.warning(
-                        f"[WARN] Could not fetch device config for {device_name} ({device_id}): {exception}"
-                    )
-                    port_configs = {}
-
-                # Fetch live device stats for current port status
-                try:
-                    stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)
-                    stats_data = getattr(stats_resp, "data", {})
-                    interface_stats = stats_data.get("if_stat", {})
-                except Exception as exception:
-                    # Handle 403 Forbidden and other errors gracefully
-                    if "403" in str(exception) or "Forbidden" in str(exception):
-                        logging.warning(
-                            f"[WARN] Insufficient permissions to fetch device stats for {device_name} ({device_id}): 403 Forbidden"  # noqa: E501
-                        )
-                    else:
-                        logging.warning(
-                            f"[WARN] Could not fetch device stats for {device_name} ({device_id}): {exception}"
-                        )
-                    interface_stats = {}
-
-                device_data_cache[device_id] = (port_configs, interface_stats)
-
-        # Third pass: Process only the overridden ports with their stats
-        logging.info(" Third pass: Processing overridden ports with live data...")
-        for device_id, device_info in devices_with_overrides.items():
-            device_name = device_info["device_name"]
-            site_id = device_info["site_id"]
-            site_name = device_info["site_name"]
-            template_id = device_info["template_id"]
-            template_name = device_info["template_name"]
-            row = device_info["row_data"]  # type: ignore[assignment]
-            overridden_ports = device_info["overridden_ports"]
-
-            port_configs, interface_stats = device_data_cache.get(device_id, ({}, {}))
-
-            # Process each overridden port
-            for port_name in overridden_ports:
-                port_config = port_configs.get(port_name, {})
-                interface_stat = interface_stats.get(port_name, {})
-
-                # Get port config fields from CSV for override details
-                port_config_fields = [col for col in row if col.startswith(f"port_config_{port_name}_")]
-
-                # Extract port configuration details
-                ip_config = port_config.get("ip_config", {})
-                usage = port_config.get("usage", "")
-                description = port_config.get("description", "")
-                disabled = port_config.get("disabled", False)
-
-                # Extract IP configuration details
-                port_ip = ip_config.get("ip", "")
-                netmask = ip_config.get("netmask", "")
-                gateway_ip = ip_config.get("gateway", "")
-                config_type = ip_config.get("type", "")
-
-                # Convert config type to human readable
-                if config_type == "dhcp":
-                    config_type_display = "DHCP"
-                elif config_type == "static":
-                    config_type_display = "STATIC"
-                else:
-                    config_type_display = config_type.upper() if config_type else "UNKNOWN"
-
-                # Extract port status from interface stats
-                port_status = "down"
-                if interface_stat:
-                    # Check the "up" field from if_stat which is the actual port status
-                    if interface_stat.get("up", False):
-                        port_status = "up"
-
-                # Admin status
-                admin_status = "disabled" if disabled else "enabled"
-
-                # Create detailed port entry for overridden port
-                port_entry = {
-                    "gateway_device_name": device_name,
-                    "site_name": site_name,
-                    "template_name": template_name,
-                    "port_name": port_name,
-                    "port_description": description,
-                    "port_status": port_status,
-                    "port_admin_status": admin_status,
-                    "port_gateway_ip": gateway_ip,
-                    "port_ip_address": port_ip,
-                    "port_netmask": netmask,
-                    "port_config_type": config_type_display,
-                    "port_usage": usage,
-                    "overridden_from_template": "Yes",
-                    "device_id": device_id,
-                    "site_id": site_id,
-                    "template_id": template_id,
-                }
-
-                # Add the overridden port to our results
-                overridden_port_info.append(port_entry)
-
-        # Write to CSV with only overridden port information
-        output_file = "GatewayOverriddenPorts.csv"
-        DataExporter.save_data_to_output(overridden_port_info, output_file)  # type: ignore[no-untyped-call]
-
-        # Calculate summary statistics
-        total_gateways_processed = len(configs)
-        devices_with_overrides_count = len(devices_with_overrides) if "devices_with_overrides" in locals() else 0
-        if overridden_port_info:
-            gateways_with_overrides = len(set(entry["device_id"] for entry in overridden_port_info))
-        else:
-            gateways_with_overrides = 0
-        total_overridden_ports = len(overridden_port_info)
-
-        logging.info(
-            f"! Gateway override report written to {output_file} with {total_overridden_ports} overridden ports from {gateways_with_overrides} gateway devices."  # noqa: E501
-        )
-        logging.info(
-            f"! API Optimization: Made device config/stats calls for only {devices_with_overrides_count} devices instead of all {total_gateways_processed} devices"  # noqa: E501
-        )
-        print(f"! Gateway override report written to {output_file}")
-        print(
-            f"! Found {total_overridden_ports} overridden ports across {gateways_with_overrides} of {total_gateways_processed} gateway devices"  # noqa: E501
-        )
-        print(
-            f"! API Optimization: Only fetched live data for {devices_with_overrides_count} devices with overrides (saved {total_gateways_processed - devices_with_overrides_count} unnecessary API calls)"  # noqa: E501
-        )
-        print(f"! Target ports analyzed: {', '.join(target_ports)}")
-        print("! These are outliers that may need correction to match template configuration")
-
-        if total_overridden_ports == 0:
-            print(" No template overrides found - all gateways are compliant with their assigned templates!")
-
-    @staticmethod
-    def with_wan_overrides(fast: bool = False) -> None:
-        """Delegated gateway WAN override analysis entrypoint preserved for compatibility."""
-        GatewayExportUtils.with_wan_overrides(fast=fast)
-
-    @staticmethod
-    def _get_devices_with_sites(org_id: str, fast: bool = False) -> list[tuple[str, str, str, str]]:
-        """
-        Efficiently fetches all gateway devices with their site information.
-        Uses cached data when fast=True to minimize API calls.
-
-        Args:
-            org_id: The organization ID.
-            fast: If True, uses cached CSV data instead of making fresh API calls.
-
-        Returns:
-            List of tuples: (site_id, device_id, device_name, site_name) for each gateway device.
-        """
-        logging.info("[INFO] Fetching gateway devices with site information...")
-
-        if fast:
-            return GatewayExportUtils._get_devices_from_cache()
-
-        return GatewayExportUtils._get_devices_from_api(org_id)
-
-    @staticmethod
-    def _get_devices_from_cache() -> list[tuple[str, str, str, str]]:
-        """Fetches gateway devices from cached CSV data."""
-        try:
-            CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgInventoryExporter.inventory)
-            CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-
-            inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
-            with open(inventory_path, encoding="utf-8") as csvfile:
-                reader = csv.DictReader(csvfile)
-                gateways = [
-                    row for row in reader if row.get("type") == "gateway" and row.get("site_id") and row.get("id")
-                ]
-
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-            with open(site_list_path, encoding="utf-8") as csvfile:
-                reader = csv.DictReader(csvfile)
-                site_name_lookup = {row.get("id"): row.get("name", "Unknown Site") for row in reader}
-
-            gateway_devices = []
-            for device in gateways:
-                site_id = device.get("site_id", "")
-                device_id = device.get("id", "")
-                device_name = device.get("name", "")
-                site_name = site_name_lookup.get(site_id, "Unknown Site")
-                gateway_devices.append((site_id, device_id, device_name, site_name))
-
-            logging.info(f"! Fast mode: Loaded {len(gateway_devices)} gateway devices from cached data")
-            return gateway_devices
-
-        except Exception as exception:
-            logging.warning(f"! Fast mode failed, falling back to API calls: {exception}")
-            org_id = ConfigUtils.get_cached_or_prompted_org_id()
-            return GatewayExportUtils._get_devices_from_api(org_id)
-
-    @staticmethod
-    def _get_devices_from_api(org_id: str) -> list[tuple[str, str, str, str]]:
-        """Fetches gateway devices directly from the API."""
-        logging.info("[INFO] Fetching org inventory to find gateway devices...")
-        devices = APICoreFetchUtils.all_inventory_with_limit(org_id)
-        logging.info(f"[INFO] Retrieved {len(devices)} devices from org inventory.")
-
-        site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
-        sites = mistapi.get_all(response=site_response, mist_session=apisession)
-        site_name_lookup = {site["id"]: site.get("name", "Unknown Site") for site in sites}
-
-        gateway_devices = []
-        for device in devices:
-            if device.get("type") == "gateway" and device.get("site_id") and device.get("id"):
-                site_id = device.get("site_id", "")
-                device_id = device.get("id", "")
-                device_name = device.get("name", "")
-                site_name = site_name_lookup.get(site_id, "Unknown Site")
-                gateway_devices.append((site_id, device_id, device_name, site_name))
-
-        logging.info(f"[INFO] Found {len(gateway_devices)} gateway devices across the organization.")
-        return gateway_devices
-
-    @staticmethod
-    def _get_site_ids_with_devices(org_id: str) -> list[str]:
-        """
-        Fetches all sites in the organization that have at least one gateway device.
-
-        Args:
-            org_id: The organization ID.
-
-        Returns:
-            List of site IDs that have at least one gateway device.
-        """
-        logging.info("[INFO] Fetching org inventory to find sites with gateways...")
-        devices = APICoreFetchUtils.all_inventory_with_limit(org_id)
-        logging.info(f"[INFO] Retrieved {len(devices)} devices from org inventory.")
-
-        gateway_sites = {
-            device["site_id"]
-            for device in devices
-            if device.get("type") == "gateway" and device.get("site_id") and str(device.get("site_id")).strip()
-        }
-        logging.info(f"[INFO] Found {len(gateway_sites)} sites with at least one gateway.")
-
-        return list(gateway_sites)
-
-    @staticmethod
-    def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:
-        """Update gateway templates WAN2 variable (Menu #163). Delegates to src.gateway.wan2_variable."""
-        from src.gateway.wan2_variable import GatewayWan2VariableMigrator  # noqa: PLC0415
-
-        migrator = GatewayWan2VariableMigrator(
-            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-            apisession=apisession,
-            site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-            generate_templates_fn=GatewayExportUtils.templates,
-            generate_sites_fn=OrgSiteExporter.sites,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.save_data_to_output,
-            input_fn=InputUtils.safe_input,
-            connection_pool_fn=execute_with_connection_pool_management,
-        )
-        migrator.execute(fast=fast, dry_run=dry_run)
-
-
 class GatewayStatsExporter:
     """Delegation wrapper for extracted gateway stats exporter implementation."""
 
@@ -20856,601 +17316,6 @@ class InventoryCSVComparator:
     def execute(self) -> None:
         """Execute the complete inventory comparison workflow."""
         self._impl.execute()
-
-
-class _LegacyWAN2MigrationManager:
-    """
-    Manages WAN2 interface variable migration for gateway templates and sites.
-
-    Consolidates Menu Options 103 and 104:
-    - set_site_variable(): Set wan2_interface site variable across sites (Menu 103)
-    - update_templates(): Migrate gateway templates to use {{wan2_interface}} variable (Menu 104)
-
-    Both operations support bidirectional migration (apply/revert) and preserve device-level
-    static IP overrides by properly handling port_config keys.
-    """
-
-    def __init__(self):
-        """Initialize the WAN2 migration manager."""
-        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        self.sites = []
-        self.gateway_configs = []
-        self.template_data = []
-        self.site_to_template_id = {}
-        self.template_port_configs = {}
-        self.site_overrides_map = {}
-
-    def set_site_variable(self):
-        """
-        Menu #149: Set WAN2 Interface Site Variable.
-
-        Creates and sets the {{wan2_interface}} site variable to 'ge-0/0/1' across selected sites.
-        Reports sites with WAN2 port overrides requiring manual review.
-        """
-        self._display_site_variable_header()  # type: ignore[no-untyped-call]
-
-        if not self._load_required_data():
-            return
-
-        sites_to_configure = self._get_site_selection()
-        if not sites_to_configure:
-            return
-
-        sites_to_configure = self._filter_excluded_sites(sites_to_configure)
-        if not sites_to_configure:
-            return
-
-        if not self._confirm_site_variable_operation(len(sites_to_configure)):
-            return
-
-        self._build_override_detection_map()  # type: ignore[no-untyped-call]
-        results = self._process_sites_for_variable(sites_to_configure)
-        self._generate_site_variable_report(results)
-
-    def _display_site_variable_header(self):
-        """Display operation header for Menu #149."""
-        print("\n  Set WAN2 Interface Site Variable")
-        print("=" * 70)
-        print("  This operation will set the 'wan2_interface' site variable to 'ge-0/0/1'")
-        print("  across selected sites, preparing them for template-based WAN migration.")
-        print("=" * 70)
-        logging.info("Menu #149: Set WAN2 Interface Site Variable operation started")
-
-    def _load_required_data(self) -> bool:
-        """Load site and gateway configuration data. Returns True on success."""
-        print("\n  Preparing site and gateway configuration data...")
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-        CacheUtils.check_and_generate_csv("AllSiteGatewayConfigs.csv", GatewayExportUtils.device_configs)
-        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-
-        site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-        with open(site_list_path, encoding="utf-8") as file_handle:
-            self.sites = list(csv.DictReader(file_handle))
-
-        if not self.sites:
-            print(" No sites found in organization.")
-            logging.warning("No sites available for WAN2 variable assignment")
-            return False
-
-        return True
-
-    def _get_site_selection(self) -> list[dict[str, Any]]:
-        """Prompt user for site selection. Returns selected sites or empty list."""
-        logging.info(  # Entry envelope — log scope before showing selection menu to user
-            "Entering WAN2MigrationManager._get_site_selection: %s sites available",
-            len(self.sites),
-        )
-        print(f"\n  Found {len(self.sites)} sites in organization")
-        print("  Site Selection:")
-        print("   1. Select individual sites")
-        print("   2. All sites in organization")
-        print("   3. Cancel")
-
-        selection_choice = InputUtils.safe_input(
-            "\n  Choose selection method (1-3): ",
-            context="wan2_site_selection_method",
-        ).strip()
-
-        if selection_choice == "1":
-            result = self._select_individual_sites()  # Delegate individual selection to helper
-            logging.info(  # Exit envelope on individual selection
-                "Exiting WAN2MigrationManager._get_site_selection: individual selection returned %s sites",
-                len(result),
-            )
-            return result
-        elif selection_choice == "2":
-            all_sites = self.sites.copy()  # Return copy of all sites to avoid mutation
-            logging.info(  # Exit envelope on all-sites selection
-                "Exiting WAN2MigrationManager._get_site_selection: all-sites selection returned %s sites",
-                len(all_sites),
-            )
-            return all_sites
-        else:
-            print(" Operation cancelled.")
-            logging.info("Menu #149 cancelled by user")
-            logging.info(  # Exit envelope on cancel
-                "Exiting WAN2MigrationManager._get_site_selection: cancelled by user"
-            )
-            return []
-
-    def _select_individual_sites(self) -> list[dict[str, Any]]:
-        """Display site list and get individual selections."""
-        print("\n  Available Sites:")
-        for index, site in enumerate(self.sites, start=1):
-            site_name = site.get("name", "Unnamed Site")
-            site_id = site.get("id", "")
-            print(f"   [{index}] {site_name} ({site_id})")
-
-        print("\n  Enter site numbers to configure (comma-separated, e.g., 1,3,5):")
-        site_indices_input = InputUtils.safe_input("  Site numbers: ", context="wan2_site_index_selection").strip()
-
-        try:
-            selected_indices = [int(idx.strip()) - 1 for idx in site_indices_input.split(",")]
-            return [self.sites[idx] for idx in selected_indices if 0 <= idx < len(self.sites)]
-        except (ValueError, IndexError) as error:
-            print(f" Invalid site selection: {error}")
-            logging.error(f"Invalid site selection in Menu #149: {error}")
-            return []
-
-    def _filter_excluded_sites(self, sites_to_configure: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Filter out excluded sites from configuration list based on MIST_SITE_EXCLUDE_PREFIX."""
-        if not MIST_SITE_EXCLUDE_PREFIX:
-            return sites_to_configure  # No prefix configured, include all sites
-
-        original_count = len(sites_to_configure)
-        filtered_sites = [
-            site for site in sites_to_configure if not site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX)
-        ]
-        filtered_count = original_count - len(filtered_sites)
-
-        if filtered_count > 0:
-            print(f"\n  !? SECURITY: Excluded {filtered_count} '{MIST_SITE_EXCLUDE_PREFIX}*' sites from configuration")
-            logging.info(
-                f"Menu #149: Excluded {filtered_count} sites matching prefix '{MIST_SITE_EXCLUDE_PREFIX}' from WAN2 variable operation"  # noqa: E501
-            )
-
-        if not filtered_sites:
-            print(f" No sites remaining after filtering '{MIST_SITE_EXCLUDE_PREFIX}*' sites.")
-            logging.warning(
-                f"Menu #149: All selected sites matched exclude prefix '{MIST_SITE_EXCLUDE_PREFIX}' - operation cancelled"  # noqa: E501
-            )
-
-        return filtered_sites
-
-    def _confirm_site_variable_operation(self, site_count: int) -> bool:
-        """Confirm the site variable operation with user."""
-        logging.info(  # Entry envelope — log scope before destructive confirmation prompt
-            "Entering WAN2MigrationManager._confirm_site_variable_operation: %s sites pending",
-            site_count,
-        )
-        print(f"\n  Will configure {site_count} sites with wan2_interface variable.")
-        confirm = (
-            InputUtils.safe_input(
-                "\n  Proceed with setting site variables? (yes/no): ",
-                context="wan2_site_variable_confirm",
-            )
-            .strip()
-            .lower()
-        )
-
-        if confirm not in ["yes", "y"]:
-            print(" Operation cancelled.")
-            logging.info("Menu #149 cancelled by user at confirmation prompt")
-            logging.info(  # Exit envelope on cancel
-                "Exiting WAN2MigrationManager._confirm_site_variable_operation: result=cancelled"
-            )
-            return False
-        logging.info(  # Exit envelope on confirm
-            "Exiting WAN2MigrationManager._confirm_site_variable_operation: result=confirmed for %s sites",
-            site_count,
-        )
-        return True
-
-    def _build_override_detection_map(self):
-        """Build map of sites with WAN2 port overrides for analysis."""
-        self._load_gateway_configs()  # type: ignore[no-untyped-call]
-        self._load_template_configs()  # type: ignore[no-untyped-call]
-        self._build_site_to_template_mapping()  # type: ignore[no-untyped-call]
-        self._extract_template_port_configs()  # type: ignore[no-untyped-call]
-        self._detect_device_overrides()  # type: ignore[no-untyped-call]
-
-    def _load_gateway_configs(self):
-        """Load gateway device configurations from CSV."""
-        gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")
-        with open(gateway_configs_path, encoding="utf-8") as file_handle:
-            self.gateway_configs = list(csv.DictReader(file_handle))
-
-    def _load_template_configs(self):
-        """Load gateway template configurations from CSV."""
-        template_configs_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
-        with open(template_configs_path, encoding="utf-8") as file_handle:
-            self.template_data = list(csv.DictReader(file_handle))
-
-    def _build_site_to_template_mapping(self):
-        """Build mapping from site_id to gateway template_id."""
-        for site in self.sites:
-            site_id = site.get("id", "").strip()
-            template_id = site.get("gatewaytemplate_id", "").strip()
-            if site_id and template_id:
-                self.site_to_template_id[site_id] = template_id
-        logging.info(f"Mapped {len(self.site_to_template_id)} sites to gateway templates")
-
-    def _extract_template_port_configs(self):
-        """Extract IP configuration type from templates for ge-0/0/1 port."""
-        for template_row in self.template_data:
-            template_id = template_row.get("id", "").strip()
-            if not template_id:
-                continue
-
-            ip_config = self._parse_template_ip_config(template_row)
-            self.template_port_configs[template_id] = ip_config
-
-        logging.info(f"Loaded port IP configs for {len(self.template_port_configs)} templates")
-
-    def _parse_template_ip_config(self, template_row: dict[str, Any]) -> dict[str, str]:
-        """Parse IP configuration from template row."""
-        ip_config_raw = template_row.get("port_config_ge-0/0/1_ip_config", "").strip()
-        result = {"ip_type": "not_configured", "ip": "", "netmask": "", "gateway": ""}
-
-        if not ip_config_raw:
-            return result
-
-        try:
-            ip_config_data = json.loads(ip_config_raw)
-            result["ip_type"] = ip_config_data.get("type", "").lower() or "not_configured"
-            if result["ip_type"] == "static":
-                result["ip"] = ip_config_data.get("ip", "")
-                result["netmask"] = ip_config_data.get("netmask", "")
-                result["gateway"] = ip_config_data.get("gateway", "")
-        except json.JSONDecodeError as error:
-            logging.warning(f"Failed to parse template IP config: {error}")
-            result["ip_type"] = "parse_error"
-
-        return result
-
-    def _detect_device_overrides(self):
-        """Detect devices with WAN2 port overrides and classify severity."""
-        for config_row in self.gateway_configs:
-            site_id = config_row.get("site_id", "").strip()
-            device_name = config_row.get("name", "").strip()
-
-            override_info = self._analyze_device_override(config_row, site_id)
-            if override_info:
-                if site_id not in self.site_overrides_map:
-                    self.site_overrides_map[site_id] = []
-                self.site_overrides_map[site_id].append({"device_name": device_name, **override_info})
-
-    def _analyze_device_override(self, config_row: dict[str, Any], site_id: str) -> dict[str, Any] | None:
-        """Analyze a device config for WAN2 port overrides. Returns override info or None."""
-        wan2_fields = self._get_wan2_override_fields(config_row)
-        has_override = self._check_has_meaningful_override(config_row, wan2_fields)
-
-        if not has_override:
-            return None
-
-        device_ip_info = self._extract_device_ip_config(config_row)
-        template_ip_type = self._get_template_ip_type_for_site(site_id, device_ip_info.get("port_identifier", ""))
-        severity = self._classify_override_severity(template_ip_type, device_ip_info.get("ip_type", ""))
-
-        return {
-            "port_identifier": device_ip_info.get("port_identifier", "ge-0/0/1"),
-            "template_ip_type": template_ip_type.upper(),
-            "device_ip_type": device_ip_info.get("ip_type", "").upper() or "NOT_CONFIGURED",
-            "device_static_ip": device_ip_info.get("ip", ""),
-            "device_netmask": device_ip_info.get("netmask", ""),
-            "device_gateway": device_ip_info.get("gateway", ""),
-            "override_severity": severity,
-            "ip_type_conflict": severity in ["CRITICAL", "WARNING"],
-        }
-
-    def _get_wan2_override_fields(self, config_row: dict[str, Any]) -> list[str]:
-        """Get list of WAN2-related port_config fields from config row."""
-        return [
-            col
-            for col in config_row
-            if col.startswith("port_config_ge-0/0/1_")
-            or col.startswith("port_config_ge-0/0/1.")
-            or col.startswith("port_config_{{wan2_interface}}_")
-            or col.startswith("port_config_{{wan2_interface}}.")
-        ]
-
-    def _check_has_meaningful_override(self, config_row: dict[str, Any], fields: list[str]) -> bool:
-        """Check if config row has meaningful WAN2 overrides (excluding VPN paths)."""
-        return any(
-            config_row.get(field, "").strip().lower() not in ["", "null", "none"]
-            for field in fields
-            if "_vpn_paths_" not in field
-        )
-
-    def _extract_device_ip_config(self, config_row: dict[str, Any]) -> dict[str, str]:
-        """Extract IP configuration from device config row."""
-        subinterface_configs = self._find_subinterface_ip_configs(config_row)
-        if subinterface_configs:
-            return subinterface_configs[0]
-
-        return self._extract_base_port_ip_config(config_row)
-
-    def _find_subinterface_ip_configs(self, config_row: dict[str, Any]) -> list[dict[str, str]]:
-        """Find and parse subinterface IP configurations."""
-        configs = []
-        for col in config_row:
-            if not (
-                (col.startswith("port_config_ge-0/0/1.") or col.startswith("port_config_{{wan2_interface}}."))
-                and col.endswith("_ip_config_type")
-            ):
-                continue
-
-            subif_ip_type = config_row.get(col, "").strip().lower()
-            if not subif_ip_type:
-                continue
-
-            subif_name = col.replace("port_config_", "").replace("_ip_config_type", "")
-            ip_col_base = f"port_config_{subif_name}_ip_config"
-
-            configs.append(
-                {
-                    "port_identifier": subif_name,
-                    "ip_type": subif_ip_type,
-                    "ip": config_row.get(f"{ip_col_base}_ip", "").strip(),
-                    "netmask": config_row.get(f"{ip_col_base}_netmask", "").strip(),
-                    "gateway": config_row.get(f"{ip_col_base}_gateway", "").strip(),
-                }
-            )
-
-        return configs
-
-    def _extract_base_port_ip_config(self, config_row: dict[str, Any]) -> dict[str, str]:
-        """Extract base port (ge-0/0/1) IP configuration from device config."""
-        result = {"port_identifier": "ge-0/0/1", "ip_type": "", "ip": "", "netmask": "", "gateway": ""}
-        ip_config_raw = config_row.get("port_config_ge-0/0/1_ip_config", "").strip()
-
-        if not ip_config_raw:
-            return result
-
-        try:
-            ip_data = json.loads(ip_config_raw)
-            result["ip_type"] = ip_data.get("type", "").lower()
-            if result["ip_type"] == "static":
-                result["ip"] = ip_data.get("ip", "")
-                result["netmask"] = ip_data.get("netmask", "")
-                result["gateway"] = ip_data.get("gateway", "")
-        except json.JSONDecodeError:
-            result["ip_type"] = "parse_error"
-
-        return result
-
-    def _get_template_ip_type_for_site(self, site_id: str, port_identifier: str) -> str:
-        """Get the template IP type for a site, checking subinterface if needed."""
-        template_id = self.site_to_template_id.get(site_id, "")
-        template_config = self.template_port_configs.get(template_id, {})
-        template_ip_type = template_config.get("ip_type", "unknown")
-
-        if "." in port_identifier:
-            for template_row in self.template_data:
-                if template_row.get("id", "").strip() == template_id:
-                    subif_col = f"port_config_{port_identifier}_ip_config_type"
-                    subif_type = template_row.get(subif_col, "").strip().lower()
-                    if subif_type:
-                        return subif_type  # type: ignore[no-any-return]
-                    break
-
-        return template_ip_type  # type: ignore[no-any-return]
-
-    def _classify_override_severity(self, template_ip_type: str, device_ip_type: str) -> str:
-        """Classify override severity based on IP type mismatch."""
-        if template_ip_type == "dhcp" and device_ip_type == "static":
-            return "CRITICAL"
-        elif template_ip_type == "static" and device_ip_type == "dhcp":
-            return "WARNING"
-        elif template_ip_type == device_ip_type and device_ip_type in ["dhcp", "static"]:
-            return "INFO"
-        return "UNKNOWN"
-
-    def _process_sites_for_variable(self, sites_to_configure: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Process each site to set the wan2_interface variable."""
-        results = []
-        print("\n  Processing sites...")
-
-        for site in tqdm(sites_to_configure, desc="Configuring sites", unit="site"):  # type: ignore[no-untyped-call]
-            if ConfigUtils.check_stop_signal():
-                break
-            result = self._set_variable_for_site(site)
-            results.append(result)
-
-        return results
-
-    def _set_variable_for_site(self, site: dict[str, Any]) -> dict[str, Any]:
-        """Set wan2_interface variable for a single site."""
-        site_id = site.get("id", "")
-        site_name = site.get("name", "Unnamed Site")
-
-        result = self._initialize_site_result(site_id, site_name)
-        self._add_override_info_to_result(result, site_id)
-
-        try:
-            self._update_site_settings(site_id, site_name, result)
-        except Exception as error:
-            result["status"] = "ERROR"
-            result["error"] = str(error)
-            logging.error(f"Error setting variable for site {site_name}: {error}")
-            logging.error(traceback.format_exc())
-
-        return result
-
-    def _initialize_site_result(self, site_id: str, site_name: str) -> dict[str, Any]:
-        """Initialize result dictionary for a site."""
-        return {
-            "site_id": site_id,
-            "site_name": site_name,
-            "variable_set": False,
-            "has_overrides": False,
-            "override_devices": [],
-            "critical_override_count": 0,
-            "warning_override_count": 0,
-            "info_override_count": 0,
-            "total_override_count": 0,
-            "status": "",
-            "error": "",
-        }
-
-    def _add_override_info_to_result(self, result: dict[str, Any], site_id: str):
-        """Add override detection info to result dictionary."""
-        if site_id not in self.site_overrides_map:
-            return
-
-        result["has_overrides"] = True
-        override_details = self.site_overrides_map[site_id]
-        result["override_devices"] = [d["device_name"] for d in override_details]
-
-        critical = [d for d in override_details if d["override_severity"] == "CRITICAL"]
-        warning = [d for d in override_details if d["override_severity"] == "WARNING"]
-        info = [d for d in override_details if d["override_severity"] == "INFO"]
-
-        result["critical_override_count"] = len(critical)
-        result["warning_override_count"] = len(warning)
-        result["info_override_count"] = len(info)
-        result["total_override_count"] = len(override_details)
-        result["override_details"] = self._format_override_details(override_details)
-
-    def _format_override_details(self, override_details: list[dict[str, Any]]) -> str:
-        """Format override details for CSV export."""
-        summaries = []
-        for detail in override_details:
-            device = detail["device_name"]
-            port = detail.get("port_identifier", "ge-0/0/1")
-            severity = detail["override_severity"]
-            template_ip = detail["template_ip_type"]
-            device_ip = detail["device_ip_type"]
-            static_ip = detail["device_static_ip"]
-            netmask = detail["device_netmask"]
-
-            if static_ip and netmask:
-                summary = f"{device}@{port}({severity}:{template_ip}->{device_ip}:{static_ip}{netmask})"
-            elif static_ip:
-                summary = f"{device}@{port}({severity}:{template_ip}->{device_ip}:{static_ip})"
-            else:
-                summary = f"{device}@{port}({severity}:{template_ip}->{device_ip})"
-            summaries.append(summary)
-
-        return "; ".join(summaries)
-
-    def _update_site_settings(self, site_id: str, site_name: str, result: dict[str, Any]):
-        """Update site settings with wan2_interface variable."""
-        logging.debug(f"Fetching current settings for site {site_name} ({site_id})")
-        settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)
-        current_settings = settings_resp.data if hasattr(settings_resp, "data") else {}
-
-        if not isinstance(current_settings, dict):
-            current_settings = {}
-
-        site_vars = current_settings.get("vars", {})
-        if not isinstance(site_vars, dict):
-            site_vars = {}
-
-        site_vars["wan2_interface"] = "ge-0/0/1"
-        current_settings["vars"] = site_vars
-
-        logging.debug(f"Updating site settings for {site_name} with wan2_interface variable")
-        update_resp = mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=current_settings)
-
-        if update_resp.status_code == 200:
-            result["variable_set"] = True
-            result["status"] = "SUCCESS"
-            logging.info(f"Successfully set wan2_interface variable for site {site_name}")
-        else:
-            result["status"] = "FAILED"
-            result["error"] = f"API returned status {update_resp.status_code}"
-            logging.error(f"Failed to set variable for site {site_name}: status {update_resp.status_code}")
-
-    def _generate_site_variable_report(self, results: list[dict[str, Any]]):
-        """Generate and save the site variable report."""
-        report_data = self._build_report_data(results)
-        output_file = "WAN2_SiteVariable_Report.csv"
-        DataExporter.save_data_to_output(report_data, output_file)  # type: ignore[no-untyped-call]
-
-        self._print_site_variable_summary(results, output_file)
-
-    def _build_report_data(self, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Build report data from results."""
-        report_data = []
-        for result in results:
-            requires_review = (
-                "CRITICAL"
-                if result.get("critical_override_count", 0) > 0
-                else (
-                    "WARNING"
-                    if result.get("warning_override_count", 0) > 0
-                    else ("INFO" if result.get("info_override_count", 0) > 0 else "No")
-                )
-            )
-
-            report_data.append(
-                {
-                    "site_name": result["site_name"],
-                    "site_id": result["site_id"],
-                    "wan2_variable_set": "Yes" if result["variable_set"] else "No",
-                    "status": result["status"],
-                    "has_wan2_overrides": "Yes" if result["has_overrides"] else "No",
-                    "total_override_count": result.get("total_override_count", 0),
-                    "critical_override_count": result.get("critical_override_count", 0),
-                    "warning_override_count": result.get("warning_override_count", 0),
-                    "info_override_count": result.get("info_override_count", 0),
-                    "override_devices": ", ".join(result["override_devices"]) if result["override_devices"] else "",
-                    "override_details": result.get("override_details", ""),
-                    "requires_manual_review": requires_review,
-                    "error": result["error"],
-                }
-            )
-        return report_data
-
-    def _print_site_variable_summary(self, results: list[dict[str, Any]], output_file: str):
-        """Print summary of site variable operation."""
-        success_count = sum(1 for r in results if r["variable_set"])
-        override_count = sum(1 for r in results if r["has_overrides"])
-        critical_sites = sum(1 for r in results if r.get("critical_override_count", 0) > 0)
-        warning_sites = sum(1 for r in results if r.get("warning_override_count", 0) > 0)
-        info_sites = sum(
-            1
-            for r in results
-            if r.get("has_overrides")
-            and r.get("critical_override_count", 0) == 0
-            and r.get("warning_override_count", 0) == 0
-        )
-
-        print("\n  Configuration Complete!")
-        print("=" * 70)
-        print(f"  Sites Processed: {len(results)}")
-        print(f"  Variables Set: {success_count}")
-        print(f"  Sites with WAN2 Overrides: {override_count}")
-        print(f"    -> CRITICAL (DHCP->Static IP conflicts): {critical_sites}")
-        print(f"    -> WARNING (Static->DHCP conflicts): {warning_sites}")
-        print(f"    -> INFO (Same IP type, other overrides): {info_sites}")
-        print(f"\n  Report saved to: {output_file}")
-        print("=" * 70)
-
-        self._print_severity_warnings(critical_sites, warning_sites, info_sites)
-
-        logging.info(f"Menu #149 complete: {success_count}/{len(results)} sites configured")
-        logging.info(f"Override breakdown - CRITICAL: {critical_sites}, WARNING: {warning_sites}, INFO: {info_sites}")
-
-    def _print_severity_warnings(self, critical_sites: int, warning_sites: int, info_sites: int):
-        """Print severity-specific warnings."""
-        if critical_sites > 0:
-            print(f"\n  !? CRITICAL ATTENTION: {critical_sites} sites have DHCP->Static IP conflicts")
-            print("  Template specifies DHCP but devices use locally unique static IPs")
-            print("  These MUST be manually reviewed before template migration (Menu #163)")
-            print("  Static IPs will be lost if template DHCP is applied without device overrides")
-            print("  Check 'override_details' column for device names and static IP addresses")
-
-        if warning_sites > 0:
-            print(f"\n  ! WARNING: {warning_sites} sites have Static->DHCP conflicts")
-            print("  Template specifies Static IP but devices configured for DHCP")
-            print("  Review recommended before template migration")
-
-        if info_sites > 0:
-            print(f"\n  INFO: {info_sites} sites have same-IP-type overrides (likely safe)")
-            print("  Template and device use same IP configuration type (both DHCP or both Static)")
-            print("  Overrides may be for description, usage, or other non-critical fields")
 
 
 # ============================================================================
@@ -22554,521 +18419,6 @@ class WANProbeConfigManager:
 
         logging.warning(
             f"Menu #166 DESTRUCTIVE operation complete: {sum(1 for r in results if r['status'] == 'SUCCESS')} templates updated"  # noqa: E501
-        )
-
-
-# ============================================================================
-# WAN PROBE DEVICE OVERRIDE MANAGER CLASS
-# ============================================================================
-class _LegacyWANProbeDeviceOverrideManager:
-    """
-    Manages WAN probe configuration for device-level port overrides.
-
-    Menu #167: Configure WAN probe override settings on gateway devices that
-    have device-level port overrides. This complements Menu #166 (template-level)
-    by targeting ONLY ports that have been overridden from their template.
-
-    Workflow:
-        1. User selects a gateway template
-        2. Find all sites using that template
-        3. Find all gateway devices in those sites
-        4. Identify devices with port-level WAN overrides
-        5. Apply ICMP probe configuration to ONLY overridden WAN ports
-
-    Default Configuration:
-        - probe IPs: ["192.151.29.254", "18.154.184.32"] (override via MIST_WAN_PROBE_IPS)
-        - probe_profile: "lte" (override via MIST_WAN_PROBE_PROFILE)
-    """
-
-    # Default probe configuration - loaded from environment variables (same as Menu 113)
-    # MIST_WAN_PROBE_IPS: Comma-separated list of probe IPs (e.g., "192.151.29.254,18.154.184.32")
-    # MIST_WAN_PROBE_PROFILE: Probe profile name (e.g., "lte")
-    DEFAULT_PROBE_IPS = [
-        ip.strip() for ip in os.getenv("MIST_WAN_PROBE_IPS", "192.151.29.254,18.154.184.32").split(",") if ip.strip()
-    ]
-    DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")
-
-    def __init__(self):
-        """Initialize the WAN Probe Device Override Manager."""
-        self.org_id: str | None = None
-        self.templates: list[dict[str, Any]] = []
-        self.sites: list[dict[str, Any]] = []
-        self.probe_ips = self.DEFAULT_PROBE_IPS.copy()
-        self.probe_profile = self.DEFAULT_PROBE_PROFILE
-        self.selected_template: dict[str, Any] | None = None
-        self.template_sites: list[dict[str, Any]] = []
-
-    @classmethod
-    def configure(cls, dry_run: bool = False) -> None:
-        """
-        Menu #167: Configure WAN Probe Override on Device Port Overrides (DESTRUCTIVE)
-
-        Updates wan_probe_override settings for WAN ports that have device-level
-        overrides from their gateway template.
-
-        Args:
-            dry_run: If True, show what would change without making modifications
-        """
-        manager = cls()
-        manager._execute(dry_run)
-
-    def _execute(self, dry_run: bool) -> None:
-        """Main execution flow for device-level WAN probe configuration."""
-        self._display_header(dry_run)
-
-        if not self._initialize():
-            return
-
-        if not self._load_data():
-            return
-
-        if not self._select_template():
-            return
-
-        if not self._find_template_sites():
-            return
-
-        devices_with_overrides = self._find_devices_with_overrides()
-        if not devices_with_overrides:
-            return
-
-        self._show_preview(devices_with_overrides, dry_run)
-
-        if not dry_run:
-            if not self._confirm_operation(len(devices_with_overrides)):
-                return
-
-        results = self._apply_changes(devices_with_overrides, dry_run)
-        self._generate_report(results, dry_run)
-
-    def _display_header(self, dry_run: bool) -> None:
-        """Display operation header with configuration details."""
-        print("\n  DESTRUCTIVE: Configure WAN Probe on Device Port Overrides")
-        print("=" * 70)
-        if dry_run:
-            print("  >> DRY-RUN MODE: No changes will be made to devices")
-            print("  >> This will show what WOULD be changed without modifying anything")
-        else:
-            print("  !? WARNING: This operation modifies gateway device configurations")
-            print("  !? Only device-level overridden WAN ports will be modified")
-        print("=" * 70)
-        print("\n  Probe Configuration:")
-        print(f"    Probe IPs: {self.probe_ips}")
-        print(f"    Probe Profile: {self.probe_profile}")
-        print("=" * 70)
-        logging.warning("Menu #167 DESTRUCTIVE: Configure WAN Probe on Device Port Overrides started")
-
-    def _initialize(self) -> bool:
-        """Initialize org_id. Returns True on success."""
-        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not self.org_id:
-            print(" Failed to get organization ID.")
-            logging.error("Menu #167: Could not obtain org_id")
-            return False
-        return True
-
-    def _load_data(self) -> bool:
-        """Load gateway templates and site data. Returns True on success."""
-        print("\n  Loading gateway template and site data...")
-        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
-
-        templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
-        with open(templates_path, encoding="utf-8") as file_handle:
-            self.templates = list(csv.DictReader(file_handle))
-
-        if not self.templates:
-            print(" No gateway templates found.")
-            logging.warning("Menu #167: No gateway templates available")
-            return False
-
-        sites_path = FilePathUtils.get_csv_path("SiteList.csv")
-        with open(sites_path, encoding="utf-8") as file_handle:
-            self.sites = list(csv.DictReader(file_handle))
-
-        logging.info(f"Loaded {len(self.templates)} gateway templates and {len(self.sites)} sites")
-        return True
-
-    def _select_template(self) -> bool:
-        """Display templates and get user selection. Returns True if selected."""
-        templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())
-
-        # Build site counts per template (excluding sites matching MIST_SITE_EXCLUDE_PREFIX)
-        template_site_counts: dict[str, int] = {}
-        for site in self.sites:
-            if MIST_SITE_EXCLUDE_PREFIX and site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX):
-                continue
-            template_id = site.get("gatewaytemplate_id", "").strip()
-            if template_id:
-                template_site_counts[template_id] = template_site_counts.get(template_id, 0) + 1
-
-        print(f"\n  Available Gateway Templates ({len(templates_sorted)}):")
-        template_list = []
-        for idx, template in enumerate(templates_sorted, start=1):
-            template_id = template.get("id", "")
-            template_name = template.get("name", "Unnamed Template")
-            site_count = template_site_counts.get(template_id, 0)
-            template_list.append({"id": template_id, "name": template_name, "site_count": site_count})
-            print(f"   [{idx}] {template_name} ({site_count} sites)")
-
-        print("\n  Template Selection:")
-        print("   Enter a template number to select")
-        print("   Or 'cancel' to abort")
-
-        selection = (
-            InputUtils.safe_input(
-                "\n  Selection: ",
-                context="wan_probe_device_template_selection",
-            )
-            .strip()
-            .lower()
-        )
-
-        if selection == "cancel":
-            print(" Operation cancelled.")
-            logging.info("Menu #167 cancelled by user at template selection")
-            return False
-
-        try:
-            idx = int(selection) - 1
-            if 0 <= idx < len(template_list):  # nosec B101
-                self.selected_template = template_list[idx]
-                assert self.selected_template is not None  # Type narrowing for Pylance  # nosec B101
-                template_name = self.selected_template["name"]
-                print(f"\n  Selected template: {template_name}")
-                logging.info(f"Menu #167: Selected template {template_name}")
-                return True
-            else:
-                print(" Invalid selection.")
-                return False
-        except ValueError:
-            print(f" Invalid selection: {selection}")
-            logging.error(f"Menu #167: Invalid template selection: {selection}")
-            return False
-
-    def _find_template_sites(self) -> bool:  # nosec B101
-        """Find all sites using the selected template. Returns True if found."""
-        assert self.selected_template is not None, "Template must be selected before finding sites"  # nosec B101
-        template_id = self.selected_template["id"]
-        template_name = self.selected_template["name"]
-
-        self.template_sites = []
-        for site in self.sites:
-            if MIST_SITE_EXCLUDE_PREFIX and site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX):
-                continue
-            if site.get("gatewaytemplate_id", "").strip() == template_id:
-                self.template_sites.append(
-                    {"site_id": site.get("id", ""), "site_name": site.get("name", "Unknown Site")}
-                )
-
-        if not self.template_sites:
-            print(f"\n  No sites found using template '{template_name}'.")
-            logging.warning(f"Menu #167: No sites using template {template_name}")
-            return False
-
-        print(f"\n  Found {len(self.template_sites)} sites using template '{template_name}'")
-        logging.info(f"Found {len(self.template_sites)} sites using template {template_name}")
-        return True
-
-    def _find_devices_with_overrides(self) -> list[dict[str, Any]]:  # noqa: C901, PLR0912
-        """Find gateway devices with WAN port overrides. Returns list of devices."""
-        print(f"\n  Scanning {len(self.template_sites)} sites for gateway devices...")
-
-        # First pass: Find all gateway devices in template sites
-        all_gateways = []
-        for site_info in tqdm(self.template_sites, desc="Scanning sites", unit="site"):  # type: ignore[no-untyped-call]
-            if ConfigUtils.check_stop_signal():
-                break
-            site_id = site_info["site_id"]
-            site_name = site_info["site_name"]
-
-            try:
-                resp = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="gateway", limit=1000)
-                devices = resp.data if hasattr(resp, "data") else []
-
-                for device in devices:
-                    if isinstance(device, dict):
-                        all_gateways.append({"device": device, "site_id": site_id, "site_name": site_name})
-            except Exception as error:
-                logging.warning(f"Error scanning site {site_name}: {error}")
-                continue
-
-        # Check if any gateways exist
-        if not all_gateways:
-            print(f"\n  No gateway devices found in the {len(self.template_sites)} sites using this template.")
-            print("  Gateways must be assigned to sites before checking for port overrides.")
-            logging.info("Menu #167: No gateway devices found in template sites")
-            return []
-
-        print(f"\n  Found {len(all_gateways)} gateway devices. Checking for WAN port overrides...")
-
-        # Second pass: Check each gateway for WAN port overrides
-        devices_with_overrides = []
-        for gateway_info in all_gateways:
-            device = gateway_info["device"]
-            site_id = gateway_info["site_id"]
-            site_name = gateway_info["site_name"]
-
-            device_id = device.get("id", "")
-            device_name = device.get("name", "Unknown Device")
-            port_config = device.get("port_config", {})
-
-            if not isinstance(port_config, dict) or not port_config:
-                continue
-
-            # Find WAN ports with device-level overrides
-            overridden_wan_ports = []
-            for port_name, port_settings in port_config.items():
-                if not isinstance(port_settings, dict):
-                    continue
-
-                # Check if this is a WAN port (usage == "wan")
-                if port_settings.get("usage") != "wan":
-                    continue
-
-                # This WAN port has a device-level override - collect its current probe config
-                current_probe = port_settings.get("wan_probe_override", {})
-                current_ips = current_probe.get("ips", []) if isinstance(current_probe, dict) else []
-                current_profile = current_probe.get("probe_profile", "") if isinstance(current_probe, dict) else ""
-
-                overridden_wan_ports.append(
-                    {
-                        "port_name": port_name,
-                        "current_ips": current_ips,
-                        "current_profile": current_profile,
-                        "port_settings": port_settings,
-                    }
-                )
-
-            if overridden_wan_ports:
-                devices_with_overrides.append(
-                    {
-                        "device_id": device_id,
-                        "device_name": device_name,
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "overridden_wan_ports": overridden_wan_ports,
-                    }
-                )
-
-        if not devices_with_overrides:
-            print(f"\n  No WAN port overrides found on the {len(all_gateways)} gateway devices.")
-            print("  All devices are using template-level WAN configuration.")
-            logging.info("Menu #167: No devices with WAN port overrides found")
-            return []
-
-        total_ports = sum(len(d["overridden_wan_ports"]) for d in devices_with_overrides)
-        print(f"\n  Found {len(devices_with_overrides)} devices with {total_ports} overridden WAN ports")
-        logging.info(f"Found {len(devices_with_overrides)} devices with {total_ports} overridden WAN ports")
-        return devices_with_overrides
-
-    def _show_preview(self, devices_with_overrides: list[dict[str, Any]], dry_run: bool) -> None:  # nosec B101
-        """Display preview of changes to be made."""
-        assert self.selected_template is not None, "Template must be selected"  # nosec B101
-        total_ports = sum(len(d["overridden_wan_ports"]) for d in devices_with_overrides)
-
-        print("\n  Preview of Changes:")
-        print(f"  Template: {self.selected_template['name']}")
-        print(f"  Devices: {len(devices_with_overrides)}")
-        print(f"  Overridden WAN Ports: {total_ports}")
-
-        # Show first 5 devices as preview
-        preview_count = min(5, len(devices_with_overrides))
-        print(f"\n  Sample devices (showing {preview_count} of {len(devices_with_overrides)}):")
-
-        for device in devices_with_overrides[:preview_count]:
-            print(f"\n   Device: {device['device_name']} ({device['site_name']})")
-            for wan_port in device["overridden_wan_ports"]:
-                port = wan_port["port_name"]
-                current_ips = wan_port["current_ips"] or ["(none)"]
-                current_profile = wan_port["current_profile"] or "(none)"
-                print(f"     {port}:")
-                print(f"       Current: ips={current_ips}, profile={current_profile}")
-                print(f"       New:     ips={self.probe_ips}, profile={self.probe_profile}")
-
-        if len(devices_with_overrides) > preview_count:
-            print(f"\n   ... and {len(devices_with_overrides) - preview_count} more devices")
-
-    def _confirm_operation(self, device_count: int) -> bool:
-        """Prompt for confirmation. Returns True if confirmed."""
-        print(f"\n  {'=' * 70}")
-        print(f"  !? CRITICAL: This will modify {device_count} gateway devices")
-        print("  !? Type 'APPLY' (all caps) to proceed or anything else to cancel")
-        print(f"  {'=' * 70}")
-
-        confirmation = InputUtils.safe_input(
-            "\n  Confirmation: ",
-            context="wan_probe_device_apply_confirmation",
-        ).strip()
-        if confirmation != "APPLY":
-            print(" Operation cancelled.")
-            logging.info("Menu #167 cancelled by user at final confirmation")
-            return False
-        return True
-
-    def _apply_changes(self, devices_with_overrides: list[dict[str, Any]], dry_run: bool) -> list[dict[str, Any]]:
-        """Apply probe configuration changes to devices. Returns results."""
-        print("\n  Applying WAN probe configuration to device overrides...")
-        results = []
-
-        for device in tqdm(devices_with_overrides, desc="Updating devices", unit="device"):  # type: ignore[no-untyped-call]
-            if ConfigUtils.check_stop_signal():
-                break
-            result = self._update_single_device(device, dry_run)
-            results.append(result)
-
-        return results
-
-    def _update_single_device(self, device: dict[str, Any], dry_run: bool) -> dict[str, Any]:  # nosec B101
-        """Update a single device's overridden WAN port probe configuration."""
-        assert self.selected_template is not None, "Template must be selected"  # nosec B101
-        device_id = device["device_id"]
-        device_name = device["device_name"]
-        site_id = device["site_id"]
-        site_name = device["site_name"]
-
-        result = {
-            "device_name": device_name,
-            "device_id": device_id,
-            "site_name": site_name,
-            "site_id": site_id,
-            "template_name": self.selected_template["name"],
-            "ports_updated": [],
-            "status": "",
-            "error": "",
-        }
-
-        try:
-            # Fetch current device configuration
-            logging.debug(f"Fetching device config for {device_name}")
-            resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)
-            device_config = resp.data if hasattr(resp, "data") else {}
-
-            if not isinstance(device_config, dict):
-                result["status"] = "SKIPPED"
-                result["error"] = "Invalid device config structure"
-                return result
-
-            port_config = device_config.get("port_config", {})
-            if not isinstance(port_config, dict):
-                result["status"] = "SKIPPED"
-                result["error"] = "No port_config found"
-                return result
-
-            # Update probe config for each overridden WAN port
-            ports_modified = []
-            for wan_port in device["overridden_wan_ports"]:
-                port_name = wan_port["port_name"]
-
-                if port_name in port_config:
-                    # Ensure port_config[port_name] is a dict
-                    if not isinstance(port_config[port_name], dict):
-                        port_config[port_name] = {}
-
-                    # Set wan_probe_override
-                    port_config[port_name]["wan_probe_override"] = {
-                        "ips": self.probe_ips.copy(),
-                        "probe_profile": self.probe_profile,
-                    }
-                    ports_modified.append(port_name)
-                    logging.debug(f"Device {device_name}: Updated {port_name} probe config")
-
-            if ports_modified:
-                device_config["port_config"] = port_config
-                result["ports_updated"] = ports_modified
-
-                if dry_run:
-                    result["status"] = "DRY-RUN"
-                    logging.info(f"DRY-RUN: Would update device {device_name} ports: {ports_modified}")
-                else:
-                    logging.debug(f"Updating device {device_name} via API")
-                    update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(
-                        apisession, site_id, device_id, body=device_config
-                    )
-
-                    if update_resp.status_code == 200:
-                        result["status"] = "SUCCESS"
-                        logging.info(f"Successfully updated device {device_name}")
-                    else:
-                        result["status"] = "FAILED"
-                        result["error"] = f"API returned status {update_resp.status_code}"
-                        logging.error(f"Failed to update device {device_name}: {update_resp.status_code}")
-            else:
-                result["status"] = "SKIPPED"
-                result["error"] = "No matching ports found in current config"
-
-        except Exception as error:
-            result["status"] = "ERROR"
-            result["error"] = str(error)
-            logging.error(f"Error updating device {device_name}: {error}")
-            logging.error(traceback.format_exc())
-
-        return result
-
-    def _generate_report(self, results: list[dict[str, Any]], dry_run: bool) -> None:  # nosec B101
-        """Generate and display final report."""
-        assert self.selected_template is not None, "Template must be selected"  # nosec B101
-        template_name = self.selected_template["name"]  # Extract once after assertion
-
-        # Prepare report data
-        report_data = []
-        for result in results:
-            report_data.append(
-                {
-                    "device_name": result["device_name"],
-                    "device_id": result["device_id"],
-                    "site_name": result["site_name"],
-                    "site_id": result["site_id"],
-                    "template_name": result["template_name"],
-                    "ports_updated": ", ".join(result["ports_updated"]) if result["ports_updated"] else "",
-                    "port_count": len(result["ports_updated"]),
-                    "status": result["status"],
-                    "error": result["error"],
-                    "new_probe_ips": ", ".join(self.probe_ips),
-                    "new_probe_profile": self.probe_profile,
-                }
-            )
-
-        output_file = "GatewayDevice_WAN_Probe_Override_Audit.csv"
-        DataExporter.save_data_to_output(report_data, output_file)  # type: ignore[no-untyped-call]
-
-        # Calculate summary
-        total_ports = sum(len(r["ports_updated"]) for r in results)
-
-        if dry_run:
-            dry_run_count = sum(1 for r in results if r["status"] == "DRY-RUN")
-            print("\n  WAN Probe Device Override DRY-RUN Complete!")
-            print("=" * 70)
-            print("  >> DRY-RUN MODE: No actual changes were made")
-            print(f"  Template: {template_name}")
-            print(f"  Devices Analyzed: {len(results)}")
-            print(f"  Would Update: {dry_run_count} devices")
-            print(f"  WAN Ports: {total_ports}")
-            print("\n  >> To apply changes, run without --dry-run flag")
-        else:
-            success_count = sum(1 for r in results if r["status"] == "SUCCESS")
-            failure_count = len(results) - success_count
-
-            print("\n  WAN Probe Device Override Complete!")
-            print("=" * 70)
-            print(f"  Template: {template_name}")
-            print(f"  Devices Updated: {success_count}")
-            print(f"  Devices Failed: {failure_count}")
-            print(f"  WAN Ports Configured: {total_ports}")
-
-            if success_count > 0:
-                print("\n  Configuration Applied:")
-                print(f"    Probe IPs: {self.probe_ips}")
-                print(f"    Probe Profile: {self.probe_profile}")
-
-            if failure_count > 0:
-                print(f"\n  !? {failure_count} devices failed - check audit report")
-
-        print(f"\n  Report saved to: {output_file}")
-        print("=" * 70)
-
-        logging.warning(
-            f"Menu #167 DESTRUCTIVE operation complete: {sum(1 for r in results if r['status'] == 'SUCCESS')} devices updated"  # noqa: E501
         )
 
 
@@ -27910,6 +23260,115 @@ class OperationRegistry:
         return {key: list(values) for key, values in cls.WAVE1_SAFETY_CLASSIFICATION_BASELINE.items()}
 
 
+def _systematic_test_build_safe_list(
+    all_options: list[str], optimized_test_order: list[str]
+) -> tuple[list[str], list[str]]:
+    """Build the ordered safe-options list and compute the unsafe skip list for systematic tests."""
+    unsafe_list = OperationRegistry.unsafe_options(
+        all_options
+    )  # Delegate classification to OperationRegistry so business rules stay centralized.
+    safe_options_set = set(
+        OperationRegistry.safe_options(all_options)
+    )  # Build a set for O(1) membership tests during ordering.
+    safe_options: list[str] = []  # Will hold options in optimized execution order followed by unordered remainder.
+    remaining = set(safe_options_set)  # Clone set so we can discard items as we process them.
+    for opt in optimized_test_order:  # Place optimized-order options first to minimize total test run time.
+        if opt in remaining:  # Only include options present in the actual safe set.
+            safe_options.append(opt)  # Add to the ordered result.
+            remaining.discard(opt)  # Remove so it won't appear in the remainder block.
+    safe_options.extend(
+        sorted(remaining, key=lambda x: float(x.replace("a", ".1")))
+    )  # Append all remaining safe options in natural numeric order.
+    return safe_options, unsafe_list  # Return both lists so caller can emit skips and run tests.
+
+
+def _systematic_test_emit_skips(emitter: Any, unsafe_list: list[str]) -> int:
+    """Emit a skip event for each unsafe operation and print an explanation."""
+    print(" Skipping unsafe operations:")  # Announce the skip section before listing individual items.
+    for opt in unsafe_list:  # Iterate every unsafe option so none are silently omitted.
+        if opt in menu_actions:  # Guard against stale unsafe lists that reference removed options.
+            _, description = menu_actions[opt]  # Unpack action tuple to get the display description.
+            reason = OperationRegistry.skip_reason(opt)  # Retrieve structured skip reason text from registry.
+            print(
+                f"   {opt:>3}: {description[:60]}... (Reason: {reason})"
+            )  # Print padded option number with truncated description and reason.
+            emitter.emit_test_skip(
+                opt, description, reason, OperationRegistry.skip_category(opt), "systematic"
+            )  # Record skip in telemetry for coverage reporting.
+    print()  # Blank line after skip list for readability.
+    return len([opt for opt in unsafe_list if opt in menu_actions])  # Return actual skip count for summary reporting.
+
+
+def _systematic_test_run_option(
+    emitter: Any,
+    option: str,
+    func: Any,
+    description: str,
+    i: int,
+    total_safe: int,
+    fast_enabled: bool,
+) -> tuple[bool, float]:
+    """Run one menu option in the systematic test harness and return (success, duration)."""
+    print(
+        f"   [{i:2}/{total_safe}] Testing option {option:>3}: {description[:60]}..."
+    )  # Show current progress position before invoking.
+    emitter.emit_test_start(
+        option, description, "systematic"
+    )  # Record test start in telemetry for elapsed-time tracking.
+    op_start = time.time()  # Capture start time before any invocation overhead.
+    supports_fast = False  # Default to no fast-mode support until introspection confirms it.
+    try:  # inspect.signature can raise on built-in callables; degrade gracefully.
+        sig = inspect.signature(func)  # type: ignore[arg-type]  # Inspect function signature to detect optional 'fast' parameter.
+        supports_fast = "fast" in sig.parameters  # True when the operation accepts fast-mode acceleration.
+    except Exception:  # Signature inspection failure is non-fatal; fall back to standard invocation.
+        supports_fast = False  # Treat as non-fast-capable when signature is uninspectable.
+    invoke_kwargs = {}  # Build kwargs dict so fast-mode flag is only passed when the function supports it.
+    if supports_fast and fast_enabled:  # Only pass fast=True when both the function and global mode agree.
+        invoke_kwargs["fast"] = True  # Activate fast mode for this operation to reduce test time.
+    logging.info(
+        f"SYSTEMATIC_TEST: INVOKE option={option} fast_supported={supports_fast} fast_enabled={fast_enabled} test_mode=True description='{description}'"  # noqa: E501
+    )  # Log invocation details before calling so post-mortem analysis can match events to options.
+    try:  # Each option runs independently so one failure does not abort remaining tests.
+        func(**invoke_kwargs)  # type: ignore[operator, no-untyped-call]  # Call menu action with resolved kwargs.
+        duration = time.time() - op_start  # Compute elapsed seconds for telemetry and summary.
+        print(f"   [SUCCESS] Option {option} completed successfully")  # Confirm success immediately after call returns.
+        emitter.emit_test_pass(option, description, duration, "systematic")  # Record pass event in telemetry.
+        logging.info(
+            f"SYSTEMATIC_TEST: Successfully completed menu option {option}"
+        )  # Log success for log-correlation.
+        return True, duration  # Signal success to the caller for count tracking.
+    except Exception as exc:  # Catch all exceptions so the test harness can continue to the next option.
+        duration = time.time() - op_start  # Still record elapsed time for failed options.
+        print(
+            f"   [FAILED]  Option {option} failed: {str(exc)[:100]}..."
+        )  # Surface failure immediately without crashing the loop.
+        emitter.emit_test_fail(
+            option, description, duration, exc, "systematic"
+        )  # Record failure in telemetry for coverage reporting.
+        logging.error(
+            f"SYSTEMATIC_TEST: Failed menu option {option}: {exc}"
+        )  # Log full error for detailed investigation.
+        return False, duration  # Signal failure to the caller for count tracking.
+
+
+def _systematic_test_resolve_fast_mode() -> bool:
+    """Return whether fast mode is active for the current systematic test run."""
+    try:  # Global flag is the primary source; evaluate it first before falling back to CLI args.
+        if globals().get("FAST_MODE_ENABLED", False):  # Module-level flag set by CLI arg parsing at startup.
+            return True  # Global fast mode is active.
+    except Exception:  # globals() access failure is non-fatal.
+        pass  # Fall through to CLI args check.
+    cli_args = (
+        globals().get("args") if "args" in globals() else None
+    )  # Retrieve parsed CLI args if they exist in globals.
+    try:  # CLI args access can fail; degrade safely.
+        if cli_args and getattr(cli_args, "fast", False):  # Check --fast on parsed args.
+            return True  # CLI explicitly requested fast mode.
+    except Exception:  # Ignore all failures from args inspection.
+        pass  # Return False as safe default.
+    return False  # Neither global nor CLI source enabled fast mode.
+
+
 def run_systematic_test():  # noqa: C901, PLR0912, PLR0915
     """
     Run systematic test of all safe menu options.
@@ -27926,188 +23385,107 @@ def run_systematic_test():  # noqa: C901, PLR0912, PLR0915
     Returns:
         bool: True if all tests passed, False if any failed
     """
-    start_time = time.time()
-    print(" Starting systematic test of MistHelper menu options...")
-    print("  Note: This will skip interactive, websocket, POST, and destructive operations")
-    print(f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 80)
+    start_time = time.time()  # Record start time before any setup work for accurate total duration.
+    print(" Starting systematic test of MistHelper menu options...")  # Announce test start to the operator.
+    print(
+        "  Note: This will skip interactive, websocket, POST, and destructive operations"
+    )  # Set expectations about what will run.
+    print(
+        f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )  # Emit timestamped start marker for log correlation.
+    print("=" * 80)  # Visual separator before first section.
 
-    # DEPRECATED: Operation classification now centralized in OperationRegistry class.
-    # This dict is preserved for reference only; all runtime logic uses OperationRegistry.
-
-    # Get all available menu options
-    all_options = sorted(menu_actions.keys(), key=lambda x: float(x.replace("a", ".1")))
-
-    # Define optimized test order based on execution time analysis (shortest to longest)
-    # This ordering minimizes total test time by running quick tests first
-    optimized_test_order = [
-        # Fast tests (~0.6-3.5 seconds)
-        "22",  # Audit Logs (~0.6s)
-        "9",  # All Devices List (~3s)
-        "1",  # All Sites List (~3.5s)
-        # Medium tests (~18-30 seconds)
-        "8",  # Device Inventory (~18s)
-        "51",  # Organization SLE Metrics (new)
-        "52",  # Organization Sites SLE Summary (new)
-        "20",  # Organization Alarms (~30s)
-        # Slower tests (~1-5 minutes)
-        "15",  # Device Stats (~97s)
-        "16",  # VPN Peer Stats (~257s)
-        # Slow tests (~8+ minutes)
-        "21",  # Device Events (~485s)
-        "33",  # Gateway Synthetic Tests (~1115s)
-        # Note: Options 14 (Port-level Statistics) and 18 (Site Configurations)
-        # have been moved to unsafe_options due to excessive resource consumption
+    optimized_test_order = [  # Execute shortest-running operations first to surface failures early.
+        "22",
+        "9",
+        "1",  # Fast tests (~0.6-3.5 seconds)
+        "8",
+        "51",
+        "52",
+        "20",  # Medium tests (~18-30 seconds)
+        "15",
+        "16",  # Slower tests (~1-5 minutes)
+        "21",
+        "33",  # Slow tests (~8+ minutes)
     ]
 
-    # Create optimized safe options list using OperationRegistry
-    unsafe_list = OperationRegistry.unsafe_options(all_options)
-    safe_options_set = set(OperationRegistry.safe_options(all_options))
-    safe_options = []
-    remaining = set(safe_options_set)
+    all_options = sorted(
+        menu_actions.keys(), key=lambda x: float(x.replace("a", ".1"))
+    )  # Sort option keys numerically for consistent ordering.
+    safe_options, unsafe_list = _systematic_test_build_safe_list(
+        all_options, optimized_test_order
+    )  # Classify all options and order safe ones optimally.
 
-    # Add options in optimized order first
-    for opt in optimized_test_order:
-        if opt in remaining:
-            safe_options.append(opt)
-            remaining.discard(opt)
+    print(f"! Found {len(all_options)} total menu options")  # Report total option count before filtering.
+    print(f"! {len(safe_options)} safe options will be tested")  # Confirm how many options will run.
+    print(f"!  {len(unsafe_list)} unsafe options will be skipped")  # Confirm how many options will be skipped.
+    print()  # Blank line before skip listing.
 
-    # Add any remaining safe options at the end (for future additions)
-    safe_options.extend(sorted(remaining, key=lambda x: float(x.replace("a", ".1"))))
+    telemetry_path = TelemetryEmitter.timestamped_path(
+        "data"
+    )  # Compute timestamped telemetry file path before starting events.
+    emitter = TelemetryEmitter(telemetry_path)  # Open telemetry emitter so all events land in one timestamped file.
+    skip_count = _systematic_test_emit_skips(
+        emitter, unsafe_list
+    )  # Print skip list and emit skip events; returns actual skip count.
 
-    print(f"! Found {len(all_options)} total menu options")
-    print(f"! {len(safe_options)} safe options will be tested")
-    print(f"!  {len(unsafe_list)} unsafe options will be skipped")
-    print()
+    print(" Testing safe operations:")  # Announce test execution phase.
+    success_count = 0  # Track how many options completed without raising.
+    error_count = 0  # Track how many options raised an exception.
 
-    # Show which options will be skipped and why
-    print(" Skipping unsafe operations:")
-    for opt in unsafe_list:
-        if opt in menu_actions:
-            _, description = menu_actions[opt]
-            reason = OperationRegistry.skip_reason(opt)
-            print(f"   {opt:>3}: {description[:60]}... (Reason: {reason})")
-    print()
+    global org_id  # Access module-level org_id so tests inherit the resolved org context.
+    if not org_id:  # Resolve org_id once before the test loop so every option shares the same org.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Prompt or use cached org identifier.
 
-    # Open telemetry emitter with timestamped path
-    telemetry_path = TelemetryEmitter.timestamped_path("data")
-    emitter = TelemetryEmitter(telemetry_path)
+    fast_enabled = (
+        _systematic_test_resolve_fast_mode()
+    )  # Resolve fast-mode flag once before the test loop so every option uses the same setting.
 
-    # Emit skip events for all non-safe operations
-    skip_count = 0
-    for opt in unsafe_list:
-        if opt in menu_actions:
-            _, op_name = menu_actions[opt]
-            emitter.emit_test_skip(
-                opt,
-                op_name,
-                OperationRegistry.skip_reason(opt),
-                OperationRegistry.skip_category(opt),
-                "systematic",
-            )
-            skip_count += 1
+    for i, option in enumerate(safe_options, 1):  # Iterate options in optimized order, 1-indexed for display.
+        func, description = menu_actions[option]  # Unpack the callable and display name for this option.
+        success, _duration = _systematic_test_run_option(
+            emitter, option, func, description, i, len(safe_options), fast_enabled
+        )  # Execute option with telemetry and return result.
+        if success:  # Count success and failure separately for the final summary.
+            success_count += 1  # Increment on successful option execution.
+        else:  # Non-success means the option raised or returned an error.
+            error_count += 1  # Increment on failed option execution.
+        if not fast_enabled:  # API-respectful delay between test runs in normal mode.
+            time.sleep(1)  # One-second pause so the API isn't hammered by rapid-fire requests.
 
-    # Test safe options
-    print(" Testing safe operations:")
-    success_count = 0
-    error_count = 0
+    total_time = time.time() - start_time  # Total elapsed time includes setup, option execution, and delays.
+    total_ops = len(all_options)  # Use total option count (including skipped) as denominator for coverage %.
+    emitter.emit_test_summary(
+        total_ops, success_count, error_count, skip_count, total_time, "systematic"
+    )  # Emit aggregate telemetry summary.
+    emitter.close()  # Flush and close telemetry file before printing summary.
+    emitter.enforce_retention()  # Clean up old telemetry files per configured retention policy.
 
-    global org_id
-    if not org_id:
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+    print()  # Blank line before summary.
+    print("=" * 80)  # Visual separator for summary section.
+    print(" Systematic Test Summary:")  # Label the results block.
+    print(f"   Successful operations: {success_count}")  # Show successful count.
+    print(f"   Failed operations: {error_count}")  # Show failure count.
+    print(f"   Skipped unsafe operations: {skip_count}")  # Show skip count.
+    print(
+        f"   Total coverage: {success_count}/{total_ops} ({success_count / total_ops * 100:.1f}%)"
+    )  # Show coverage percentage.
+    print(f"    Total execution time: {total_time:.2f} seconds")  # Show total elapsed time.
+    print(f"   Telemetry written to: {telemetry_path}")  # Tell operator where telemetry landed.
+    print("   Detailed logs in: script.log")  # Remind operator of the log file location.
 
-    for i, option in enumerate(safe_options, 1):
-        func, description = menu_actions[option]
-        print(f"   [{i:2}/{len(safe_options)}] Testing option {option:>3}: {description[:60]}...")
-        emitter.emit_test_start(option, description, "systematic")
-        op_start = time.time()
-        # Determine if fast mode is globally enabled and if function supports it
-        fast_enabled = False
-        try:
-            fast_enabled = bool(globals().get("FAST_MODE_ENABLED", False))
-        except Exception:
-            fast_enabled = False
-
-        # Defensive fallback: if global not set but original CLI args indicate fast, force enable
-        if not fast_enabled:
-            cli_args = globals().get("args") if "args" in globals() else None
-            try:
-                if cli_args and getattr(cli_args, "fast", False):
-                    fast_enabled = True
-                    logging.debug(
-                        f"SYSTEMATIC_TEST: Forcing fast_enabled=True for option {option} based on CLI args.fast"  # nosec B110
-                    )
-            except Exception:  # nosec B110
-                pass
-
-        # Introspect signature to see if 'fast' is accepted
-        supports_fast = False
-        try:
-            sig = inspect.signature(func)  # type: ignore[arg-type]  # inspect.signature accepts any callable
-            supports_fast = "fast" in sig.parameters
-        except Exception:
-            supports_fast = False
-
-        # Log harness invocation detail
-        logging.info(
-            f"SYSTEMATIC_TEST: INVOKE option={option} fast_supported={supports_fast} fast_enabled={fast_enabled} test_mode=True description='{description}'"  # noqa: E501
-        )
-
-        # Build kwargs dynamically
-        invoke_kwargs = {}
-        if supports_fast and fast_enabled:
-            invoke_kwargs["fast"] = True
-        try:
-            logging.info(
-                f"SYSTEMATIC_TEST: Starting test of menu option {option} (fast_applied={invoke_kwargs.get('fast', False)})"  # noqa: E501
-            )
-            func(**invoke_kwargs)  # type: ignore[operator, no-untyped-call]  # func is a callable from menu_actions
-            duration = time.time() - op_start
-            print(f"   [SUCCESS] Option {option} completed successfully")
-            success_count += 1
-            emitter.emit_test_pass(option, description, duration, "systematic")
-            logging.info(f"SYSTEMATIC_TEST: Successfully completed menu option {option}")
-        except Exception as e:
-            duration = time.time() - op_start
-            print(f"   [FAILED]  Option {option} failed: {str(e)[:100]}...")
-            error_count += 1
-            emitter.emit_test_fail(option, description, duration, e, "systematic")
-            logging.error(f"SYSTEMATIC_TEST: Failed menu option {option}: {e}")
-
-        # Small delay between tests to be respectful to the API.
-        # In --test --fast mode, skip the harness pause to reduce total runtime.
-        if not fast_enabled:
-            time.sleep(1)
-
-    # Emit summary and clean up telemetry
-    total_time = time.time() - start_time
-    total_ops = len(all_options)
-    emitter.emit_test_summary(total_ops, success_count, error_count, skip_count, total_time, "systematic")
-    emitter.close()
-    emitter.enforce_retention()
-    print()
-    print("=" * 80)
-    print(" Systematic Test Summary:")
-    print(f"   Successful operations: {success_count}")
-    print(f"   Failed operations: {error_count}")
-    print(f"   Skipped unsafe operations: {skip_count}")
-    print(f"   Total coverage: {success_count}/{total_ops} ({success_count / total_ops * 100:.1f}%)")
-    print(f"    Total execution time: {total_time:.2f} seconds")
-    print(f"   Telemetry written to: {telemetry_path}")
-    print("   Detailed logs in: script.log")
-
-    if error_count == 0:
-        # All tests passed - provide a clear success message and a concise telemetry summary
-        print("   All tested operations completed successfully!")
+    if error_count == 0:  # All-pass outcome deserves an explicit success message.
+        print("   All tested operations completed successfully!")  # Confirm all-green result to the operator.
         logging.info(
             f"SYSTEMATIC_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s"
-        )
-        return True  # Caller can use this boolean to change control flow (e.g., exit code)
-    else:
-        # Some operations failed: print a short summary and surface telemetry in the logs for investigation
-        print(f"    {error_count} operations failed - check logs for details")
-        logging.warning(f"SYSTEMATIC_TEST: {error_count} operations failed out of {len(safe_options)} tested")
-        return False  # False indicates failures occurred during the systematic test
+        )  # Record all-pass event for monitoring.
+        return True  # Signal all-pass to callers (e.g., for exit-code logic).
+    else:  # Some failures occurred; surface them without hiding the partial success.
+        print(f"    {error_count} operations failed - check logs for details")  # Prompt operator to review logs.
+        logging.warning(
+            f"SYSTEMATIC_TEST: {error_count} operations failed out of {len(safe_options)} tested"
+        )  # Log failure count for alerting systems.
+        return False  # Signal partial failure to callers.
 
 
 def run_interactive_test():
@@ -28621,7 +23999,7 @@ def _run_interactive_mode(args: argparse.Namespace) -> None:  # noqa: C901, PLR0
                     logging.info("Exit option selected by user.")  # Log user-requested exit
                     logging.debug("EXIT: _run_interactive_mode - user requested exit")  # Log exit point
                     sys.exit(0)  # Exit cleanly on user selection of option 0
-                session_management_options = {"115"}  # Operations that change auth context require menu return
+                session_management_options = {"115", "143"}  # ops that re-enter menu
                 func()  # type: ignore[operator, no-untyped-call]  # Execute the selected menu function
                 logging.info("Menu option '%s' execution complete.", iwant)  # Log completion after function returns
                 if not container_mode:  # Direct mode: exit after each operation (unless session management)
