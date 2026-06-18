@@ -6,8 +6,6 @@ import logging  # Standard library structured logging
 from collections.abc import Callable  # Typing for the injected callbacks
 from typing import Any  # Generic typing for the shared state bag
 
-_PAGE_SIZE = 20  # Number of orgs displayed per page in the paginated picker
-
 
 class MspOrgSelector:
     """Drive the MSP + organization selection flow after a successful login."""
@@ -151,9 +149,9 @@ class MspOrgSelector:
         return mistapi_fallback  # Hand the SDK reference back to the caller
 
     def _paginated_pick(self, orgs: list[dict[str, Any]]) -> dict[str, Any] | None:
-        """Render the paginated org picker loop and return the chosen org (or None)."""
-        current_page = 0  # Start at the first page
-        total_pages = (len(orgs) + _PAGE_SIZE - 1) // _PAGE_SIZE  # Ceil division for page count
+        """Render the full-index org picker loop and return the chosen org (or None)."""
+        current_page = 0  # Single-page index: the entire org list always renders at once
+        total_pages = 1  # Force single-page rendering so the full org list shows as one index
         while True:  # Loop until the user picks an org, skips, or aborts
             self._render_page(orgs, current_page, total_pages)  # Print the current page contents
             try:
@@ -175,10 +173,10 @@ class MspOrgSelector:
         current_page: int,
         total_pages: int,
     ) -> None:
-        """Print one page of orgs and the navigation hint line."""
-        start_index = current_page * _PAGE_SIZE  # First org index for this page
-        end_index = min(start_index + _PAGE_SIZE, len(orgs))  # Stop before list end
-        for org_index in range(start_index, end_index):  # Iterate this page's org indices
+        """Print the full org list as a single numbered index plus the skip hint."""
+        start_index = 0  # Always start at the first org so the entire list renders as one index
+        end_index = len(orgs)  # Render every org in a single full index (no pagination)
+        for org_index in range(start_index, end_index):  # Iterate every org index in the full list
             org = orgs[org_index]  # Current org dict
             org_name = org.get("name", "Unknown")  # Preserve legacy fallback label
             org_id_preview = org.get("id", "N/A")[:8]  # Preserve legacy 8-char id preview
