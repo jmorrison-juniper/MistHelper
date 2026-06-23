@@ -1,0 +1,42 @@
+{
+  "L11634": {
+    "line": 11634,
+    "pattern": "format_spec_1f",
+    "rendered": "Offline device report completed in 4.6 seconds"
+  },
+  "L1343": {
+    "line": 1343,
+    "pattern": "attribute_access",
+    "rendered": "Python executable: /usr/bin/python3"
+  },
+  "L315": {
+    "line": 315,
+    "pattern": "plain_fstring",
+    "rendered": "Python 3.10.0 detected. MistHelper requires Python 3.13+. Some features may not work correctly."
+  },
+  "L6120": {
+    "line": 6120,
+    "pattern": "g003_concat",
+    "rendered": "\nrow1\nrow2"
+  },
+  "L6988": {
+    "line": 6988,
+    "pattern": "format_spec_2f_with_arithmetic",
+    "rendered": "Retrying device dev-abc in 2.50s (attempt 2/4)"
+  },
+  "L801": {
+    "line": 801,
+    "pattern": "already_lazy_negative_control",
+    "rendered": "UV package manager not found in PATH or Python environment"
+  },
+  "L8151": {
+    "line": 8151,
+    "pattern": "format_spec_2f",
+    "rendered": "Applying rate limit delay: 1.23s"
+  },
+  "L8684": {
+    "line": 8684,
+    "pattern": "g201_exc_info_in_except",
+    "rendered": "Exception in PromptClientUtils.select_client_mac: fixture-error"
+  }
+}

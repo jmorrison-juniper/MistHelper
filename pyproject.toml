@@ -70,6 +70,7 @@ dev = [
     "pydocstyle[toml]>=6.3.0",
     "interrogate>=1.7.0",
     "hypothesis>=6.151.12",
+    "libcst>=1.5",              # AST-based codemod for #429 logging f-string sweep
     "playwright>=1.40.0",
     "pre-commit>=3.0.0",
 ]
