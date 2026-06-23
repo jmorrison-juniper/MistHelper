@@ -313,8 +313,9 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimu
     )
     required_str = f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"  # Format minimum required version
     logging.warning(  # Log warning (will be written to script.log after handler setup)
-        f"Python {version_str} detected. MistHelper requires Python {required_str}+. "
-        f"Some features may not work correctly."
+        "Python %s detected. MistHelper requires Python %s+. Some features may not work correctly.",
+        version_str,
+        required_str,
     )
 
 
@@ -610,15 +611,17 @@ def _parse_requirements_file(filepath="requirements.txt"):  # Read dependency sp
 
                 packages.append((package_name, package_spec))  # Record this dependency for the caller
 
-        logging.debug(f"Parsed {len(packages)} packages from {filepath}")  # Debug aid: how many specs were parsed
+        logging.debug("Parsed %s packages from %s", len(packages), filepath)  # Debug aid: how many specs were parsed
         return packages  # Return the collected dependency list
     except FileNotFoundError:  # requirements.txt does not exist at the given path
         logging.warning(
-            f"Requirements file not found: {filepath}"
+            "Requirements file not found: %s", filepath
         )  # Warn so the operator knows auto-install is skipped
         return []  # No packages to check
     except Exception as parse_error:  # Any other read/parse error
-        logging.warning(f"Error parsing requirements file: {parse_error}")  # Log the failure reason for troubleshooting
+        logging.warning(
+            "Error parsing requirements file: %s", parse_error
+        )  # Log the failure reason for troubleshooting
         return []  # Fail safe with an empty list rather than crashing startup
 
 
@@ -684,7 +687,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
             ):  # Installed but too old for the spec
                 outdated_packages.append((package_name, package_spec, installed_version))  # Queue it for upgrade
                 logging.info(
-                    f"Outdated dependency: {package_name} {installed_version} (requires {package_spec})"
+                    "Outdated dependency: %s %s (requires %s)", package_name, installed_version, package_spec
                 )  # Log the version gap
             elif auto_upgrade_to_latest and installed_version:  # Meets the spec, but we may still chase a newer release
                 # Check PyPI for newer version (best-effort, skip on any error)
@@ -699,25 +702,25 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                 ):  # A strictly newer version exists
                     outdated_packages.append((package_name, package_spec, installed_version))  # Queue it for upgrade
                     logging.info(
-                        f"Newer version available: {package_name} {installed_version} -> {latest_version}"
+                        "Newer version available: %s %s -> %s", package_name, installed_version, latest_version
                     )  # Log the available upgrade
         except ImportError:  # The module could not be imported at all
             missing_packages.append((package_name, package_spec))  # Queue it for installation
-            logging.info(f"Missing dependency detected: {package_name}")  # Log the missing package
+            logging.info("Missing dependency detected: %s", package_name)  # Log the missing package
 
     if not missing_packages and not outdated_packages:  # Everything is present and current
         logging.debug(
-            f"All {len(all_packages)} dependencies from requirements.txt present and up-to-date"
+            "All %s dependencies from requirements.txt present and up-to-date", len(all_packages)
         )  # Nothing to do
         return  # Early exit; no install work needed
 
     if missing_packages:  # There are packages to install
         logging.info(
-            f"Attempting to auto-install {len(missing_packages)} missing dependencies..."
+            "Attempting to auto-install %s missing dependencies...", len(missing_packages)
         )  # Announce the install plan
     if outdated_packages:  # There are packages to upgrade
         logging.info(
-            f"Attempting to upgrade {len(outdated_packages)} outdated dependencies..."
+            "Attempting to upgrade %s outdated dependencies...", len(outdated_packages)
         )  # Announce the upgrade plan
 
     # Helper function to find UV executable in various locations
@@ -783,7 +786,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                     cmd + ["--version"], capture_output=True, text=True, timeout=5
                 )  # nosec B603  # Run 'uv --version' to confirm it works
                 if result.returncode == 0:  # Exit code 0 means uv ran successfully
-                    logging.debug(f"Found UV at: {cmd}")  # Record which candidate worked
+                    logging.debug("Found UV at: %s", cmd)  # Record which candidate worked
                     return cmd, result.stdout.strip()  # Return the working command and its version string
             except (FileNotFoundError, subprocess.SubprocessError, OSError):  # Candidate missing or failed to execute
                 continue  # Move on to the next candidate
@@ -796,7 +799,9 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
     uv_cmd, uv_version = find_uv_executable()  # type: ignore[no-untyped-call]  # Probe for an existing uv install
     if uv_cmd:  # A working uv was found
         use_uv = True  # Prefer UV for installs (much faster than pip)
-        logging.info(f"UV package manager detected: {uv_version} (cmd: {' '.join(uv_cmd)})")  # Log which uv we'll use
+        logging.info(
+            "UV package manager detected: %s (cmd: %s)", uv_version, " ".join(uv_cmd)
+        )  # Log which uv we'll use
     else:  # No uv present yet
         logging.info("UV package manager not found in PATH or Python environment")  # Note that we'll try to install it
 
@@ -817,7 +822,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                 if uv_cmd:  # uv is now usable
                     use_uv = True  # Switch to the faster UV path
                     logging.info(
-                        f"UV verified after install: {uv_version} (cmd: {' '.join(uv_cmd)})"
+                        "UV verified after install: %s (cmd: %s)", uv_version, " ".join(uv_cmd)
                     )  # Log the verified uv
                 else:  # Install claimed success but binary not found
                     logging.warning(
@@ -826,10 +831,10 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                     use_uv = False  # Fall back to pip to be safe
             else:  # pip returned a non-zero exit code
                 logging.warning(
-                    f"Failed to install UV with pip: {install_result.stderr.strip()}"
+                    "Failed to install UV with pip: %s", install_result.stderr.strip()
                 )  # Log the pip error output
         except Exception as install_error:  # Subprocess raised (timeout, OS error, etc.)
-            logging.warning(f"Could not install UV: {install_error}")  # Log why the bootstrap failed
+            logging.warning("Could not install UV: %s", install_error)  # Log why the bootstrap failed
 
     # Log installation strategy
     if use_uv:  # We have a working uv
@@ -869,24 +874,24 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                         sys.executable,
                         package_spec,
                     ]  # Still target the current interpreter
-                logging.info(f"Installing {package_spec} with UV...")  # Announce the UV install attempt
+                logging.info("Installing %s with UV...", package_spec)  # Announce the UV install attempt
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=60
                 )  # nosec B603  # 60s cap prevents hangs
 
                 if result.returncode == 0:  # UV reported success
-                    logging.info(f"Successfully installed {package_spec} with UV")  # Confirm the install
+                    logging.info("Successfully installed %s with UV", package_spec)  # Confirm the install
                     success_count += 1  # Tally a successful install
                     installed = True  # Mark done so we skip the pip fallback
                 else:  # UV failed for this package
                     # UV failed - log and try pip fallback
                     logging.warning(
-                        f"UV installation failed for {package_spec}: {result.stderr.strip()}"
+                        "UV installation failed for %s: %s", package_spec, result.stderr.strip()
                     )  # Log UV's error
-                    logging.info(f"Retrying {package_spec} with pip fallback...")  # Announce the pip retry
+                    logging.info("Retrying %s with pip fallback...", package_spec)  # Announce the pip retry
             except Exception as uv_error:  # UV process raised (timeout, OS error)
-                logging.warning(f"UV installation error for {package_spec}: {uv_error}")  # Log the exception
-                logging.info(f"Retrying {package_spec} with pip fallback...")  # Fall through to pip
+                logging.warning("UV installation error for %s: %s", package_spec, uv_error)  # Log the exception
+                logging.info("Retrying %s with pip fallback...", package_spec)  # Fall through to pip
 
         # Try pip if UV not available or UV failed
         if not installed:  # Only use pip if UV didn't already install it
@@ -898,22 +903,22 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                     "install",
                     package_spec,
                 ]  # Standard pip install for the current interpreter
-                logging.info(f"Installing {package_spec} with pip...")  # Announce the pip install
+                logging.info("Installing %s with pip...", package_spec)  # Announce the pip install
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=60
                 )  # nosec B603  # 60s cap prevents hangs
 
                 if result.returncode == 0:  # pip reported success
-                    logging.info(f"Successfully installed {package_spec} with pip")  # Confirm the install
+                    logging.info("Successfully installed %s with pip", package_spec)  # Confirm the install
                     success_count += 1  # Tally a successful install
                     installed = True  # Mark this package done
                 else:  # pip failed
                     logging.error(
-                        f"Pip installation failed for {package_spec}: {result.stderr.strip()}"
+                        "Pip installation failed for %s: %s", package_spec, result.stderr.strip()
                     )  # Log pip's error output
                     failure_count += 1  # Tally a failed install
             except Exception as pip_error:  # pip process raised (timeout, OS error)
-                logging.error(f"Could not install {package_spec} with pip: {pip_error}")  # Log the exception
+                logging.error("Could not install %s with pip: %s", package_spec, pip_error)  # Log the exception
                 failure_count += 1  # Tally a failed install
 
     # Step 5: Upgrade outdated packages
@@ -944,7 +949,9 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                         sys.executable,
                         package_spec,
                     ]  # Upgrade for current interpreter
-                logging.info(f"Upgrading {package_name} from {installed_version} with UV...")  # Announce the UV upgrade
+                logging.info(
+                    "Upgrading %s from %s with UV...", package_name, installed_version
+                )  # Announce the UV upgrade
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=60
                 )  # nosec B603  # 60s cap prevents hangs
@@ -952,16 +959,18 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                 if result.returncode == 0:  # UV upgrade succeeded
                     new_version = _get_installed_version(package_name)  # Read the version after upgrade for logging
                     logging.info(
-                        f"Successfully upgraded {package_name}: {installed_version} -> {new_version}"
+                        "Successfully upgraded %s: %s -> %s", package_name, installed_version, new_version
                     )  # Log the version change
                     upgrade_count += 1  # Tally a successful upgrade
                     upgraded = True  # Mark done so we skip the pip fallback
                 else:  # UV upgrade failed
-                    logging.warning(f"UV upgrade failed for {package_name}: {result.stderr.strip()}")  # Log UV's error
-                    logging.info(f"Retrying {package_name} upgrade with pip fallback...")  # Announce the pip retry
+                    logging.warning(
+                        "UV upgrade failed for %s: %s", package_name, result.stderr.strip()
+                    )  # Log UV's error
+                    logging.info("Retrying %s upgrade with pip fallback...", package_name)  # Announce the pip retry
             except Exception as uv_error:  # UV process raised
-                logging.warning(f"UV upgrade error for {package_name}: {uv_error}")  # Log the exception
-                logging.info(f"Retrying {package_name} upgrade with pip fallback...")  # Fall through to pip
+                logging.warning("UV upgrade error for %s: %s", package_name, uv_error)  # Log the exception
+                logging.info("Retrying %s upgrade with pip fallback...", package_name)  # Fall through to pip
 
         # Try pip if UV not available or UV failed
         if not upgraded:  # Only use pip if UV didn't already upgrade it
@@ -975,7 +984,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                     package_spec,
                 ]  # Standard pip upgrade for the current interpreter
                 logging.info(
-                    f"Upgrading {package_name} from {installed_version} with pip..."
+                    "Upgrading %s from %s with pip...", package_name, installed_version
                 )  # Announce the pip upgrade
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=60
@@ -984,7 +993,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                 if result.returncode == 0:  # pip upgrade succeeded
                     new_version = _get_installed_version(package_name)  # Read the post-upgrade version for logging
                     logging.info(
-                        f"Successfully upgraded {package_name}: {installed_version} -> {new_version}"
+                        "Successfully upgraded %s: %s -> %s", package_name, installed_version, new_version
                     )  # Log the version change
                     upgrade_count += 1  # Tally a successful upgrade
                     upgraded = True  # Mark this package done
@@ -994,7 +1003,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                         "no-record-file" in result.stderr or "RECORD" in result.stderr
                     ):  # Broken install metadata (missing RECORD)
                         logging.warning(
-                            f"Package {package_name} has corrupted state - attempting force reinstall..."
+                            "Package %s has corrupted state - attempting force reinstall...", package_name
                         )  # Explain the recovery attempt
                         force_cmd = [  # Build a force-reinstall command to repair the broken package
                             sys.executable,  # Use the current interpreter
@@ -1014,22 +1023,25 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                         if force_result.returncode == 0:  # Repair succeeded
                             new_version = _get_installed_version(package_name)  # Read the repaired version for logging
                             logging.info(  # Log the successful repair and version change
-                                f"Successfully force-reinstalled {package_name}: {installed_version} -> {new_version}"
+                                "Successfully force-reinstalled %s: %s -> %s",
+                                package_name,
+                                installed_version,
+                                new_version,
                             )
                             upgrade_count += 1  # Tally the repair as a successful upgrade
                             upgraded = True  # Mark this package done
                         else:  # Repair also failed
                             logging.error(
-                                f"Force reinstall failed for {package_name}: {force_result.stderr.strip()}"
+                                "Force reinstall failed for %s: %s", package_name, force_result.stderr.strip()
                             )  # Log the repair error
                             upgrade_failure_count += 1  # Tally a failed upgrade
                     else:  # Failure was not a corrupted-state issue
                         logging.error(
-                            f"Pip upgrade failed for {package_name}: {result.stderr.strip()}"
+                            "Pip upgrade failed for %s: %s", package_name, result.stderr.strip()
                         )  # Log the generic pip error
                         upgrade_failure_count += 1  # Tally a failed upgrade
             except Exception as pip_error:  # pip process raised (timeout, OS error)
-                logging.error(f"Could not upgrade {package_name} with pip: {pip_error}")  # Log the exception
+                logging.error("Could not upgrade %s with pip: %s", package_name, pip_error)  # Log the exception
                 upgrade_failure_count += 1  # Tally a failed upgrade
 
     # Summary
@@ -1042,7 +1054,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
         summary_parts.append(f"{failure_count + upgrade_failure_count} failed")  # Add the combined failure count
 
     logging.info(
-        f"Early dependency check completed: {', '.join(summary_parts) if summary_parts else 'all up-to-date'}"
+        "Early dependency check completed: %s", ", ".join(summary_parts) if summary_parts else "all up-to-date"
     )  # Final one-line summary
 
 
@@ -1205,11 +1217,11 @@ except Exception:  # Missing or non-numeric value
 DEFAULT_API_PAGE_LIMIT = max(1, min(_parsed_limit, 1000))  # Clamp to the 1..1000 range the Mist API accepts
 if _parsed_limit != DEFAULT_API_PAGE_LIMIT:  # The configured value was out of range and had to be clamped
     logging.warning(
-        f"MIST_PAGE_LIMIT value {_parsed_limit} adjusted to {DEFAULT_API_PAGE_LIMIT} (valid range 1..1000)"
+        "MIST_PAGE_LIMIT value %s adjusted to %s (valid range 1..1000)", _parsed_limit, DEFAULT_API_PAGE_LIMIT
     )  # Warn about the adjustment
 
 logging.debug(
-    f"API Page Size Configuration Active: DEFAULT_API_PAGE_LIMIT={DEFAULT_API_PAGE_LIMIT}"
+    "API Page Size Configuration Active: DEFAULT_API_PAGE_LIMIT=%s", DEFAULT_API_PAGE_LIMIT
 )  # Record the effective page size for debugging
 
 
@@ -1226,7 +1238,7 @@ def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dot
     except FileNotFoundError:  # No .env file present
         logging.debug("No .env file found")  # Not an error; just note it at debug level
     except Exception as e:  # Any other read/parse problem
-        logging.debug(f"Error loading .env file: {e}")  # Log the reason without crashing startup
+        logging.debug("Error loading .env file: %s", e)  # Log the reason without crashing startup
 
 
 try:  # Prefer the full-featured python-dotenv loader when available
@@ -1339,11 +1351,11 @@ class GlobalImportManager:
 
         if self.in_venv:  # Running inside a virtual environment
             venv_path = getattr(sys, "prefix", "unknown")  # Path to the active venv
-            logging.info(f"Running in virtual environment: {venv_path}")  # Log the venv location
-            logging.info(f"Python executable: {sys.executable}")  # Log which interpreter is in use
+            logging.info("Running in virtual environment: %s", venv_path)  # Log the venv location
+            logging.info("Python executable: %s", sys.executable)  # Log which interpreter is in use
         else:  # Running against the system Python
             logging.info("Running in system Python environment")  # Note the non-venv environment
-            logging.info(f"Python executable: {sys.executable}")  # Log which interpreter is in use
+            logging.info("Python executable: %s", sys.executable)  # Log which interpreter is in use
 
     def _setup_logging(self):  # Build console+file handlers with env-driven levels
         """Setup basic logging configuration with environment-specific levels."""
@@ -1448,13 +1460,13 @@ class GlobalImportManager:
                 ["uv", "--version"], capture_output=True, text=True, timeout=10
             )  # nosec B603 B607  # Run 'uv --version'
             if result.returncode == 0:  # UV ran successfully
-                logging.info(f"UV package manager found: {result.stdout.strip()}")  # Log the detected UV version
+                logging.info("UV package manager found: %s", result.stdout.strip())  # Log the detected UV version
                 self._uv_available = True  # Cache that UV is usable
             else:  # UV exists but returned an error
                 logging.warning("UV package manager not found or not working properly")  # Note the problem
                 self._uv_available = False  # Cache that UV is not usable
         except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:  # UV missing or hung
-            logging.warning(f"UV package manager check failed: {e}")  # Log why the probe failed
+            logging.warning("UV package manager check failed: %s", e)  # Log why the probe failed
             self._uv_available = False  # Cache that UV is not usable
 
         # Cache the result
@@ -1480,10 +1492,10 @@ class GlobalImportManager:
                 logging.info("UV package manager installed successfully via pip")  # Confirm the install
                 return True  # UV is now available
             else:  # pip returned an error
-                logging.error(f"Failed to install UV via pip: {result.stderr}")  # Log pip's error output
+                logging.error("Failed to install UV via pip: %s", result.stderr)  # Log pip's error output
                 return False  # UV remains unavailable
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # pip process hung or failed to launch
-            logging.error(f"Failed to install UV package manager: {e}")  # Log the exception
+            logging.error("Failed to install UV package manager: %s", e)  # Log the exception
             return False  # UV remains unavailable
 
     def _upgrade_uv(self) -> bool:  # Keep UV up to date, throttled to once per configured interval
@@ -1497,7 +1509,9 @@ class GlobalImportManager:
             hours_since_last_check = (now - self._last_uv_update_check) / 3600  # Convert elapsed seconds to hours
             if hours_since_last_check < self.uv_update_check_hours:  # Still inside the throttle window
                 logging.debug(  # Skip the check to avoid frequent network calls
-                    f"UV update check skipped (last check {hours_since_last_check:.1f} hours ago, threshold: {self.uv_update_check_hours} hours)"  # noqa: E501
+                    "UV update check skipped (last check %.1f hours ago, threshold: %s hours)",
+                    hours_since_last_check,
+                    self.uv_update_check_hours,
                 )
                 return True  # No update needed yet
 
@@ -1536,21 +1550,21 @@ class GlobalImportManager:
                         logging.info("UV package manager updated successfully via pip")  # Confirm the upgrade
                         return True  # Done
                     else:  # pip upgrade failed
-                        logging.warning(f"Failed to upgrade UV via pip: {pip_result.stderr}")  # Log the error
+                        logging.warning("Failed to upgrade UV via pip: %s", pip_result.stderr)  # Log the error
                         return True  # Non-critical failure  # Continue anyway; the current UV still works
                 else:  # Self-update failed for some other reason
-                    logging.warning(f"UV self-update returned non-zero: {result.stderr}")  # Log the error
+                    logging.warning("UV self-update returned non-zero: %s", result.stderr)  # Log the error
                     return True  # Non-critical failure  # Continue anyway; the current UV still works
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # Update process hung or failed to launch
             # Still update the last check time to avoid repeated failures
             self._last_uv_update_check = now  # Record the attempt so we don't retry immediately
-            logging.warning(f"UV self-update failed: {e}")  # Log the exception
+            logging.warning("UV self-update failed: %s", e)  # Log the exception
             return True  # Non-critical failure  # Continue anyway; the current UV still works
 
     def _install_package_with_uv(self, package_spec: str) -> bool:
         """Install a package using UV package manager with fast resolution and virtual environment awareness."""
         try:
-            logging.debug(f"Installing package with UV: {package_spec}")  # Log which package is being installed
+            logging.debug("Installing package with UV: %s", package_spec)  # Log which package is being installed
 
             # Check if we're in a virtual environment and prefer venv's UV if available
             uv_cmd = "uv"  # Default to the UV binary found on PATH
@@ -1559,7 +1573,7 @@ class GlobalImportManager:
                 venv_uv = os.path.join(os.path.dirname(sys.executable), "uv.exe")  # Build the venv-local UV path
                 if os.path.exists(venv_uv):  # The venv ships its own UV binary
                     uv_cmd = venv_uv  # Prefer the venv's UV to stay environment-consistent
-                    logging.debug(f"Using venv UV: {venv_uv}")  # Record which UV binary was chosen
+                    logging.debug("Using venv UV: %s", venv_uv)  # Record which UV binary was chosen
 
                 # Use UV with the current Python environment
                 cmd = [
@@ -1582,7 +1596,7 @@ class GlobalImportManager:
                 timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
             )
             if result.returncode == 0:  # UV reported a successful install
-                logging.info(f"Successfully installed {package_spec} with UV")  # Confirm success
+                logging.info("Successfully installed %s with UV", package_spec)  # Confirm success
                 return True  # Installation done
             else:  # First attempt failed -- retry without build isolation
                 # Try without --no-build-isolation if it failed
@@ -1607,20 +1621,22 @@ class GlobalImportManager:
                 )
                 if result.returncode == 0:  # The fallback install succeeded
                     logging.info(
-                        f"Successfully installed {package_spec} with UV (fallback)"
+                        "Successfully installed %s with UV (fallback)", package_spec
                     )  # Confirm fallback success
                     return True  # Installation done
                 else:  # Both UV attempts failed
-                    logging.warning(f"UV install failed for {package_spec}: {result.stderr}")  # Log the UV error output
+                    logging.warning(
+                        "UV install failed for %s: %s", package_spec, result.stderr
+                    )  # Log the UV error output
                     return False  # Signal failure so the caller can fall back to pip
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # UV hung or failed to launch
-            logging.warning(f"Failed to install {package_spec} with UV: {e}")  # Log the exception detail
+            logging.warning("Failed to install %s with UV: %s", package_spec, e)  # Log the exception detail
             return False  # Signal failure so the caller can fall back to pip
 
     def _install_package_with_pip(self, package_spec: str) -> bool:
         """Install a package using pip as fallback with virtual environment awareness."""
         try:
-            logging.info(f"Installing package with pip: {package_spec}")  # Log the pip install attempt
+            logging.info("Installing package with pip: %s", package_spec)  # Log the pip install attempt
             # Always use the current Python executable to ensure installation in the right environment
             result = subprocess.run(  # nosec B603  # Run pip against this exact interpreter (trusted argv)
                 [sys.executable, "-m", "pip", "install", package_spec],  # Invoke pip as a module of this Python
@@ -1629,13 +1645,15 @@ class GlobalImportManager:
                 timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
             )
             if result.returncode == 0:  # pip reported a successful install
-                logging.info(f"Successfully installed {package_spec} with pip")  # Confirm success
+                logging.info("Successfully installed %s with pip", package_spec)  # Confirm success
                 return True  # Installation done
             else:  # pip install failed
-                logging.error(f"Failed to install {package_spec} with pip: {result.stderr}")  # Log pip's error output
+                logging.error(
+                    "Failed to install %s with pip: %s", package_spec, result.stderr
+                )  # Log pip's error output
                 return False  # Signal failure to the caller
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # pip hung or failed to launch
-            logging.error(f"Failed to install {package_spec} with pip: {e}")  # Log the exception detail
+            logging.error("Failed to install %s with pip: %s", package_spec, e)  # Log the exception detail
             return False  # Signal failure to the caller
 
     def _should_check_uv_update(self) -> bool:
@@ -1684,7 +1702,9 @@ class GlobalImportManager:
             logging.info("No packages to process")  # Note there is nothing to do
             return True  # Success by default -- no work means no failures
 
-        logging.info(f"Processing {len(packages_to_process)} packages...")  # Announce how many packages will be handled
+        logging.info(
+            "Processing %s packages...", len(packages_to_process)
+        )  # Announce how many packages will be handled
 
         # Process packages individually for better error handling
         uv_available = self._check_uv_installation()  # Detect whether UV can be used as the fast installer
@@ -1712,12 +1732,16 @@ class GlobalImportManager:
                 if self._install_package_with_pip(pkg_spec):  # pip install succeeded
                     success_count += 1  # Count this package as done
                 else:  # pip install failed
-                    logging.warning(f"Failed to install/upgrade {pkg_spec}")  # Warn but keep processing others
+                    logging.warning("Failed to install/upgrade %s", pkg_spec)  # Warn but keep processing others
 
             except Exception as e:  # Any unexpected error during install of this package
-                logging.warning(f"Error processing package {pkg_spec}: {e}")  # Log and continue with remaining packages
+                logging.warning(
+                    "Error processing package %s: %s", pkg_spec, e
+                )  # Log and continue with remaining packages
 
-        logging.info(f"Successfully processed {success_count}/{len(packages_to_process)} packages")  # Summarize results
+        logging.info(
+            "Successfully processed %s/%s packages", success_count, len(packages_to_process)
+        )  # Summarize results
         return success_count > 0  # Report success if at least one package installed
 
     def _import_concurrent_futures(self):
@@ -1773,9 +1797,9 @@ class GlobalImportManager:
                 unit = kwargs.get("unit", "item")  # Unit noun for the progress message
                 if hasattr(iterable, "__len__"):  # The iterable has a known length
                     total = len(iterable)  # Compute total item count for the message
-                    logging.info(f"{desc}: {total} {unit}s to process")  # Log a one-shot progress summary
+                    logging.info("%s: %s %ss to process", desc, total, unit)  # Log a one-shot progress summary
                 else:  # Length is unknown (e.g. a generator)
-                    logging.info(f"{desc}: processing {unit}s...")  # Log an indefinite progress message
+                    logging.info("%s: processing %ss...", desc, unit)  # Log an indefinite progress message
                 return iterable  # Pass the iterable through unchanged (no live bar)
 
             return tqdm_fallback  # Provide the no-op progress shim to callers
@@ -1801,7 +1825,7 @@ class GlobalImportManager:
 
             if result.returncode != 0:  # pip could not find the package
                 logging.debug(
-                    f"Package {package_name} not found, skipping upgrade check"
+                    "Package %s not found, skipping upgrade check", package_name
                 )  # Nothing installed to upgrade
                 return True  # Treat as success -- not an error condition
 
@@ -1813,11 +1837,11 @@ class GlobalImportManager:
                     break  # Stop scanning once found
 
             if current_version:  # We successfully determined the installed version
-                logging.debug(f"Current version of {package_name}: {current_version}")  # Record the current version
+                logging.debug("Current version of %s: %s", package_name, current_version)  # Record the current version
 
                 # Try to upgrade the package
                 logging.info(
-                    f"  Checking for updates to {package_name}..."
+                    "  Checking for updates to %s...", package_name
                 )  # Inform the user an upgrade check is running
 
                 # Use UV if available, otherwise pip
@@ -1874,24 +1898,24 @@ class GlobalImportManager:
 
                     if new_version and new_version != current_version:  # The version actually advanced
                         logging.info(
-                            f"  [OK] {package_name}: Upgraded from {current_version} to {new_version}"
+                            "  [OK] %s: Upgraded from %s to %s", package_name, current_version, new_version
                         )  # Report the upgrade
                         return True  # Upgrade succeeded
                     else:  # Version did not change
                         logging.debug(
-                            f"  [OK] {package_name}: Already up to date ({current_version})"
+                            "  [OK] %s: Already up to date (%s)", package_name, current_version
                         )  # Already current
                         return True  # Nothing to do, still success
                 else:  # The upgrade command failed
                     logging.debug(
-                        f"  [WARN] {package_name}: Upgrade check failed: {upgrade_result.stderr}"
+                        "  [WARN] %s: Upgrade check failed: %s", package_name, upgrade_result.stderr
                     )  # Log the failure detail
                     return True  # Non-critical failure -- continue without blocking startup
 
             return True  # Reached when version could not be parsed -- treat as non-fatal
 
         except Exception as e:  # Any unexpected error during the check/upgrade
-            logging.debug(f"Error checking/upgrading {module_name}: {e}")  # Log for diagnostics
+            logging.debug("Error checking/upgrading %s: %s", module_name, e)  # Log for diagnostics
             return True  # Non-critical failure -- never block startup on upgrade issues
 
     def _get_actual_import_name(self, module_name: str) -> str:
@@ -1931,7 +1955,7 @@ class GlobalImportManager:
                 module = __import__(actual_import_name)  # Import the module by its real import name
 
             self.imports[module_name] = module  # Cache the imported module for later global assignment
-            logging.debug(f"Successfully imported {module_name}")  # Record the successful import
+            logging.debug("Successfully imported %s", module_name)  # Record the successful import
 
             # Check if we should upgrade existing packages (only if auto-upgrade is enabled and not skipping)
             if (
@@ -1944,14 +1968,14 @@ class GlobalImportManager:
             return module  # Hand the imported module back to the caller
 
         except ImportError as e:  # The module is not installed or failed to load
-            logging.warning(f"Failed to import {module_name}: {e}")  # Note the import failure
+            logging.warning("Failed to import %s: %s", module_name, e)  # Note the import failure
 
             # Attempt to install if package spec is provided and auto-installation is enabled
             if (
                 package_spec and self.auto_upgrade_dependencies and not skip_deps and not self.disable_auto_install
             ):  # Auto-install is permitted
                 logging.info(
-                    f"Attempting to install missing dependency: {package_spec}"
+                    "Attempting to install missing dependency: %s", package_spec
                 )  # Announce the install attempt
 
                 # Try installing the package
@@ -1959,12 +1983,12 @@ class GlobalImportManager:
 
                 # Try UV first if available (using cached check)
                 if self._check_uv_installation():  # UV is the preferred fast installer
-                    logging.debug(f"Trying UV installation for {package_spec}")  # Note the UV attempt
+                    logging.debug("Trying UV installation for %s", package_spec)  # Note the UV attempt
                     installed = self._install_package_with_uv(package_spec)  # Attempt the UV install
 
                 # Fallback to pip if UV failed or not available
                 if not installed:  # UV either failed or is unavailable
-                    logging.debug(f"Trying pip installation for {package_spec}")  # Note the pip attempt
+                    logging.debug("Trying pip installation for %s", package_spec)  # Note the pip attempt
                     installed = self._install_package_with_pip(package_spec)  # Attempt the pip install
 
                 if installed:  # A package was successfully installed
@@ -1979,7 +2003,7 @@ class GlobalImportManager:
                     for mod_name in modules_to_clear:  # Purge each possibly-cached name
                         if mod_name in sys.modules:  # A stale/failed entry exists in the module cache
                             del sys.modules[mod_name]  # Remove it so the retry re-imports cleanly
-                            logging.debug(f"Cleared cached module: {mod_name}")  # Record the cache purge
+                            logging.debug("Cleared cached module: %s", mod_name)  # Record the cache purge
 
                     # Wait a moment for installation to complete
                     time.sleep(0.5)  # Brief pause to let filesystem writes settle before retrying
@@ -1994,29 +2018,30 @@ class GlobalImportManager:
 
                         self.imports[module_name] = module  # Cache the now-successful import
                         self.installed_packages.append(package_spec)  # Record that we installed this package this run
-                        logging.info(f"Successfully imported {module_name} after installation")  # Confirm recovery
+                        logging.info("Successfully imported %s after installation", module_name)  # Confirm recovery
                         return module  # Return the freshly imported module
 
                     except ImportError as retry_e:  # Import still fails even after a successful install
                         logging.error(
-                            f"Import still failed after installation for {module_name}: {retry_e}"
+                            "Import still failed after installation for %s: %s", module_name, retry_e
                         )  # Log the persistent failure
                         # For optional packages, this is not critical
                         if not required:  # Optional dependency -- degrade gracefully
                             logging.info(
-                                f"Optional package {module_name} installation succeeded but import failed - likely needs system restart or different Python session"  # noqa: E501  # Explain the likely cause
+                                "Optional package %s installation succeeded but import failed - likely needs system restart or different Python session",  # noqa: E501
+                                module_name,
                             )
                 else:  # No installer succeeded
-                    logging.error(f"Failed to install {package_spec}")  # Report the install failure
+                    logging.error("Failed to install %s", package_spec)  # Report the install failure
 
             # Handle failure
             if required:  # This dependency is mandatory for the program to run
                 self.failed_imports.append(module_name)  # Track it among hard failures
                 logging.error(
-                    f"Required dependency {module_name} could not be imported or installed"
+                    "Required dependency %s could not be imported or installed", module_name
                 )  # Log a hard error
             else:  # Optional dependency
-                logging.warning(f"Optional dependency {module_name} not available")  # Warn but allow continuation
+                logging.warning("Optional dependency %s not available", module_name)  # Warn but allow continuation
 
             return None  # Signal to the caller that the import was unavailable
 
@@ -2041,7 +2066,7 @@ class GlobalImportManager:
 
             with log_lock:  # Serialize this log line against other worker threads
                 logging.info(
-                    f"  Checking {package_type} dependency: {module_name} ({package_spec or 'built-in'})"
+                    "  Checking %s dependency: %s (%s)", package_type, module_name, package_spec or "built-in"
                 )  # Announce the check
 
             result = self.import_module_safely(  # Perform the actual import/install for this package
@@ -2054,12 +2079,12 @@ class GlobalImportManager:
 
             with log_lock:  # Serialize the result log line
                 if result:  # Import succeeded
-                    logging.info(f"  [OK] {module_name}: Available")  # Report availability
+                    logging.info("  [OK] %s: Available", module_name)  # Report availability
                 else:  # Import failed
                     if required:  # Mandatory dependency missing
-                        logging.error(f"  [FAIL] {module_name}: Failed to import")  # Log a hard failure
+                        logging.error("  [FAIL] %s: Failed to import", module_name)  # Log a hard failure
                     else:  # Optional dependency missing
-                        logging.warning(f"  [WARN] {module_name}: Not available")  # Log a soft warning
+                        logging.warning("  [WARN] %s: Not available", module_name)  # Log a soft warning
 
             return module_name, result  # Return the outcome for aggregation by the caller
 
@@ -2096,7 +2121,7 @@ class GlobalImportManager:
                     except Exception as exc:  # A worker raised an unexpected exception
                         with log_lock:  # Serialize the error log line
                             logging.error(
-                                f"Package {package_info[0]} import generated an exception: {exc}"
+                                "Package %s import generated an exception: %s", package_info[0], exc
                             )  # Log the worker failure
 
     def initialize_all_imports(
@@ -2296,10 +2321,10 @@ class GlobalImportManager:
                         )  # Warn about likely failures
                 except Exception as sub_e:  # Sub-module wiring hit an unexpected issue
                     logging.debug(
-                        f"Note: mistapi sub-modules handled dynamically: {sub_e}"
+                        "Note: mistapi sub-modules handled dynamically: %s", sub_e
                     )  # Non-fatal; handled at call sites
             except Exception as e:  # Failed to even access the cached mistapi object
-                logging.warning(f"Error accessing mistapi: {e}")  # Warn -- API features may be unavailable
+                logging.warning("Error accessing mistapi: %s", e)  # Warn -- API features may be unavailable
         else:  # The base SDK never imported
             logging.debug("mistapi not imported, skipping sub-module imports")  # Nothing to wire up
 
@@ -2407,16 +2432,16 @@ if _initialize_imports_now:  # Eager path: set up all imports now
             # Special handling for tqdm to ensure it overrides the fallback
             if var_name == "tqdm" and var_value is not None:  # Real tqdm must replace any earlier fallback
                 logging.info(
-                    f"Successfully imported real tqdm: {type(var_value)}"
+                    "Successfully imported real tqdm: %s", type(var_value)
                 )  # Confirm the real progress bar is active
         logging.debug(
-            f"Applied {len(global_assignments)} global variable assignments"
+            "Applied %s global variable assignments", len(global_assignments)
         )  # Report how many bindings were applied
 
         # Verify tqdm was properly imported
         if "tqdm" in global_assignments:  # tqdm binding is present
             logging.info(
-                f"tqdm is available in global namespace: {type(globals().get('tqdm'))}"
+                "tqdm is available in global namespace: %s", type(globals().get("tqdm"))
             )  # Confirm availability and type
         else:  # tqdm binding is missing
             logging.warning(
@@ -2480,7 +2505,7 @@ class TimeUtils:
                 return 1  # Clamp to the minimum sensible window
             return default_hours  # Normal path: use the standard production window
         except Exception as error:  # Never let lookback math crash a caller
-            logging.debug(f"get_dynamic_lookback_hours fallback due to error: {error}")  # Log the unexpected failure
+            logging.debug("get_dynamic_lookback_hours fallback due to error: %s", error)  # Log the unexpected failure
             return test_hours if IS_TEST_MODE else default_hours  # Fall back to a sensible default per mode
 
     @staticmethod
@@ -2488,10 +2513,10 @@ class TimeUtils:
         """Helper to produce a consistent log line when dynamic lookback applies."""
         if IS_TEST_MODE:  # Surface the reduced window prominently during tests
             logging.info(
-                f"[TEST MODE] Using reduced lookback window of {hours}h for {context} (normally 24h)"
+                "[TEST MODE] Using reduced lookback window of %sh for %s (normally 24h)", hours, context
             )  # Visible test-mode notice
         else:  # Production: keep the note at debug level
-            logging.debug(f"Using standard lookback window of {hours}h for {context}")  # Quiet production notice
+            logging.debug("Using standard lookback window of %sh for %s", hours, context)  # Quiet production notice
 
 
 # ============================================================================
@@ -2553,7 +2578,7 @@ class InputUtils:
             # If user provided empty input and we have a default value, use it
             if not user_input and default_value:  # Blank entry but a default is configured
                 logging.debug(
-                    f"Empty input for {context}, using default: '{default_value}'"
+                    "Empty input for %s, using default: '%s'", context, default_value
                 )  # Note the default substitution
                 return default_value  # Return the caller-supplied default
 
@@ -2564,7 +2589,7 @@ class InputUtils:
             # If user provided empty input, no default, and empty not allowed
             if not user_input and not allow_empty:  # Blank entry is not acceptable and no default exists
                 logging.warning(
-                    f"Empty input not allowed for {context}, returning empty string"
+                    "Empty input not allowed for %s, returning empty string", context
                 )  # Warn about the rejected blank
                 return ""  # Signal an invalid/empty response to the caller
 
@@ -2577,13 +2602,13 @@ class InputUtils:
                 f"\n[EOF] Input stream closed during {context}. Using default value: '{default_value}'"
             )  # Inform the user
             logging.info(
-                f"EOF encountered on input during {context} - returning default: '{default_value}'"
+                "EOF encountered on input during %s - returning default: '%s'", context, default_value
             )  # Log the disconnect
             return default_value  # Degrade gracefully to the default instead of crashing
         except KeyboardInterrupt:  # User pressed Ctrl+C
             # Handle Ctrl+C
             print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")  # Acknowledge the cancellation
-            logging.info(f"KeyboardInterrupt encountered during {context}")  # Log the interrupt
+            logging.info("KeyboardInterrupt encountered during %s", context)  # Log the interrupt
             return ""  # Return empty to signal the caller should abort this prompt
 
 
@@ -2706,17 +2731,17 @@ def detect_msp_privileges(session=None):
 
         user_data = response.data  # Extract the decoded JSON body
         if not isinstance(user_data, dict):  # The body should be a JSON object
-            logging.warning(f"getSelf returned unexpected type: {type(user_data)}")  # Warn about the malformed shape
+            logging.warning("getSelf returned unexpected type: %s", type(user_data))  # Warn about the malformed shape
             return []  # Cannot parse privileges from this
 
         privileges = user_data.get("privileges", [])  # Pull the list of privilege grants
         detected_msps = []  # Accumulate any MSP-scoped privileges we find
-        logging.debug(f"MSP detection: parsing {len(privileges)} privilege entries")  # Log how many grants we'll scan
+        logging.debug("MSP detection: parsing %s privilege entries", len(privileges))  # Log how many grants we'll scan
 
         for priv in privileges:  # Examine each privilege grant
             if isinstance(priv, dict) and priv.get("msp_id"):  # This grant is MSP-scoped
                 logging.debug(
-                    f"MSP privilege found: scope={priv.get('scope')}, role={priv.get('role')}"
+                    "MSP privilege found: scope=%s, role=%s", priv.get("scope"), priv.get("role")
                 )  # Log the grant details
                 msp_id = priv.get("msp_id")  # Extract the MSP identifier
                 if not msp_id or not isinstance(msp_id, str):  # Guard against missing/invalid IDs
@@ -2738,19 +2763,23 @@ def detect_msp_privileges(session=None):
                 }
                 detected_msps.append(msp_info)  # Record this MSP grant
                 logging.info(
-                    f"Detected MSP privilege: {msp_info['msp_name']} (ID: {msp_info['msp_id'][:8]}..., role: {msp_info['role']}, scope: {msp_info['scope']})"  # noqa: E501  # Surface the detected grant to the operator
+                    "Detected MSP privilege: %s (ID: %s..., role: %s, scope: %s)",
+                    msp_info["msp_name"],
+                    msp_info["msp_id"][:8],
+                    msp_info["role"],
+                    msp_info["scope"],
                 )
 
         if detected_msps:  # At least one MSP grant was found
             msp_privileges = detected_msps  # Cache the grants in the module-level global
-            logging.info(f"User has MSP-level access to {len(detected_msps)} MSP(s)")  # Report the count
+            logging.info("User has MSP-level access to %s MSP(s)", len(detected_msps))  # Report the count
         else:  # No MSP grants present
             logging.debug("No MSP privileges detected for current user")  # Note the absence at debug level
 
         return detected_msps  # Hand the parsed MSP list back to the caller
 
     except Exception as e:  # Any API or parsing failure
-        logging.warning(f"Failed to detect MSP privileges: {e}")  # Warn but don't crash the session
+        logging.warning("Failed to detect MSP privileges: %s", e)  # Warn but don't crash the session
         return []  # Treat as no MSP access on error
 
 
@@ -2773,7 +2802,7 @@ def _fetch_msp_name(msp_id: str) -> str | None:
             name = response.data.get("name")  # Extract the MSP's name field
             return name if isinstance(name, str) else None  # Return the name only if it's a valid string
     except Exception as e:  # Lookup failed (network, permissions, etc.)
-        logging.debug(f"Could not fetch MSP name for {msp_id[:8]}...: {e}")  # Note the failure at debug level
+        logging.debug("Could not fetch MSP name for %s...: %s", msp_id[:8], e)  # Note the failure at debug level
     return None  # Default to None when the name can't be resolved
 
 
@@ -2827,7 +2856,7 @@ def _print_switch_login_header():
     print("    - Select and switch between MSPs and Organizations")  # Benefit: MSP/org switching
     print("")  # Blank spacer line
     if msp_privileges:  # The user already has MSP grants detected
-        logging.debug(f"MSP privileges already detected: {len(msp_privileges)} MSP(s)")  # Trace the existing grants
+        logging.debug("MSP privileges already detected: %s MSP(s)", len(msp_privileges))  # Trace the existing grants
         print(
             f"  Note: You already have MSP access to {len(msp_privileges)} MSP(s)"
         )  # Inform the user of existing access
@@ -2869,7 +2898,7 @@ def _handle_interactive_login_success():
     if msp_privileges:  # The new session has MSP grants
         print(f"  + MSP access available: {len(msp_privileges)} MSP(s)")  # Report how many MSPs are accessible
         logging.info(
-            f"Successfully switched to interactive login session with {len(msp_privileges)} MSP(s)"
+            "Successfully switched to interactive login session with %s MSP(s)", len(msp_privileges)
         )  # Log the success with MSP count
     else:  # No MSP grants on the new session
         logging.info(
@@ -2903,7 +2932,7 @@ def switch_to_interactive_login():
         logging.debug("SystemExit during confirmation prompt")
         return True
 
-    logging.debug(f"User confirmation received: '{confirm}'")
+    logging.debug("User confirmation received: '%s'", confirm)
 
     if confirm != "y":
         print("  Cancelled.")
@@ -2969,13 +2998,13 @@ def _select_org_from_session():
         if org_id_list and len(org_id_list) > 0:  # The user selected at least one org
             org_id = org_id_list[0]  # Use the first selected org ID
             print(f"  + Organization ID set: {org_id}")  # Confirm the selection to the user
-            logging.info(f"User selected org from session: {org_id}")  # Log the chosen org
+            logging.info("User selected org from session: %s", org_id)  # Log the chosen org
         else:  # Nothing was selected
             print("  X No organization selected")  # Inform the user no org was chosen
             logging.warning("No organization selected from session privileges")  # Log the empty selection
     except Exception as e:  # The SDK picker raised an error
         print(f"  X Error selecting organization: {e}")  # Show the error to the user
-        logging.error(f"Failed to select org from session: {e}")  # nosec B608  # Log the failure detail
+        logging.error("Failed to select org from session: %s", e)  # nosec B608  # Log the failure detail
 
 
 def _load_mistapi_module(current_mistapi: Any) -> Any:
@@ -3453,9 +3482,9 @@ def _configure_session_timeout(session_obj: Any) -> None:
         adapter = TimeoutAdapter(default_timeout=API_REQUEST_TIMEOUT)
         inner.mount("https://", adapter)
         inner.mount("http://", adapter)
-        logging.info(f"Configured API request timeout: {API_REQUEST_TIMEOUT}s")
+        logging.info("Configured API request timeout: %ss", API_REQUEST_TIMEOUT)
     except Exception as timeout_err:
-        logging.warning(f"Failed to configure session timeout: {timeout_err}")
+        logging.warning("Failed to configure session timeout: %s", timeout_err)
 
 
 # ============================================================================
@@ -5805,7 +5834,10 @@ class CacheUtils:
             bool: True if file exists and is fresh or was generated successfully
         """
         logging.debug(
-            f"ENTRY: CacheUtils.check_and_generate_csv(file_name={file_name}, generate_function={generate_function.__name__}, freshness_minutes={freshness_minutes})"  # noqa: E501
+            "ENTRY: CacheUtils.check_and_generate_csv(file_name=%s, generate_function=%s, freshness_minutes=%s)",
+            file_name,
+            generate_function.__name__,
+            freshness_minutes,
         )
 
         if freshness_minutes is None:
@@ -5819,33 +5851,33 @@ class CacheUtils:
             try:
                 # Get the last modified time of the file
                 file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path))
-                logging.debug(f"File I/O: Successfully read modification time for {full_file_path}: {file_mtime}")
+                logging.debug("File I/O: Successfully read modification time for %s: %s", full_file_path, file_mtime)
 
                 # Check if the file is still fresh
                 if datetime.now() - file_mtime < timedelta(minutes=freshness_minutes):
                     # Log that the cached file is being used
-                    logging.info(f"! Using cached {file_name} (fresh)")
+                    logging.info("! Using cached %s (fresh)", file_name)
                     logging.debug("EXIT: check_and_generate_csv - using cached file")
                     return True
                 else:
                     # Log that the file is stale and will be regenerated
-                    logging.info(f"* {file_name} is older than {freshness_minutes} minutes. Regenerating...")
+                    logging.info("* %s is older than %s minutes. Regenerating...", file_name, freshness_minutes)
             except OSError as error:
-                logging.error(f"File I/O: Failed to read modification time for {full_file_path}: {error}")
-                logging.info(f"* {file_name} exists but cannot read metadata. Regenerating...")
+                logging.error("File I/O: Failed to read modification time for %s: %s", full_file_path, error)
+                logging.info("* %s exists but cannot read metadata. Regenerating...", file_name)
         else:
             # Log that the file does not exist and will be generated
-            logging.info(f"* {file_name} not found. Generating...")
+            logging.info("* %s not found. Generating...", file_name)
 
         # Call the function to generate the file
-        logging.info(f"* Running {generate_function.__name__} to generate {file_name}...")
+        logging.info("* Running %s to generate %s...", generate_function.__name__, file_name)
         try:
             generate_function()
-            logging.info(f"! {file_name} generated or refreshed.")
+            logging.info("! %s generated or refreshed.", file_name)
             logging.debug("EXIT: check_and_generate_csv - file generated successfully")
             return True
         except Exception as error:
-            logging.error(f"Failed to generate {file_name} using {generate_function.__name__}: {error}")
+            logging.error("Failed to generate %s using %s: %s", file_name, generate_function.__name__, error)
             logging.debug("EXIT: check_and_generate_csv - generation failed")
             return False
 
@@ -5864,7 +5896,7 @@ class CacheUtils:
                   and values are lists of row dictionaries
         """
         logging.info(
-            f"Loading CSV file '{filename}' into dictionary keyed by '{key}'..."
+            "Loading CSV file '%s' into dictionary keyed by '%s'...", filename, key
         )  # Log before reading the file
         csv_file_path = FilePathUtils.get_csv_path(filename)  # Resolve the CSV path under the data/ directory
         with open(csv_file_path, encoding="utf-8") as file:  # Open the CSV for reading
@@ -5874,14 +5906,14 @@ class CacheUtils:
             for row in reader:  # Process each CSV row
                 data_key = row.get(key)  # Extract the grouping key value from this row
                 if data_key is None:  # The key column is missing on this row
-                    logging.warning(f"Row missing key '{key}': {row}")  # Warn about the malformed row
+                    logging.warning("Row missing key '%s': %s", key, row)  # Warn about the malformed row
                     continue  # Skip rows that can't be grouped
                 if data_key not in data_dict:  # First time we've seen this key value
                     data_dict[data_key] = []  # Start a new bucket for it
                 data_dict[data_key].append(row)  # Add this row to its key's bucket
                 row_count += 1  # Tally the ingested row
             logging.info(
-                f"Loaded {row_count} rows from '{filename}'. Found {len(data_dict)} unique keys for '{key}'."
+                "Loaded %s rows from '%s'. Found %s unique keys for '%s'.", row_count, filename, len(data_dict), key
             )  # Summary log
         return data_dict  # Return the grouped-by-key dictionary
 
@@ -5895,17 +5927,17 @@ class CacheUtils:
             data: Dictionary where keys are section names and values are lists of row dictionaries
             filename: Name of the output CSV file
         """
-        logging.debug(f"Preparing to write support package to {filename}...")
+        logging.debug("Preparing to write support package to %s...", filename)
 
         fieldnames: set = set()  # type: ignore[type-arg]
         # Collect all unique field names from all sections
         for section_name, section in data.items():
-            logging.debug(f"Processing section '{section_name}' with {len(section)} rows.")
+            logging.debug("Processing section '%s' with %s rows.", section_name, len(section))
             for row in section:
                 fieldnames.update(row.keys())
         fieldnames_sorted = sorted(fieldnames)
 
-        logging.debug(f"Final CSV fieldnames: {fieldnames_sorted}")
+        logging.debug("Final CSV fieldnames: %s", fieldnames_sorted)
 
         # SECURITY: Use proper file path handling to ensure files go to data/ directory
         csv_file_path = FilePathUtils.get_csv_path(filename)
@@ -5917,9 +5949,9 @@ class CacheUtils:
                 for row in section:
                     writer.writerow(row)
                     row_count += 1
-            logging.info(f"Wrote {row_count} rows to {csv_file_path} for support package.")
+            logging.info("Wrote %s rows to %s for support package.", row_count, csv_file_path)
 
-        logging.info(f"Support package written to {csv_file_path}")
+        logging.info("Support package written to %s", csv_file_path)
 
     # Known generated cache CSV filenames -- cleared by Menu 175
     GENERATED_FILES: set[str] = {  # Explicit list of MistHelper-generated cache CSVs to protect non-data files
@@ -6033,11 +6065,11 @@ class CacheUtils:
                 for failure in parse_failures:
                     writer.writerow(failure)
 
-            logging.info(f"Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
+            logging.info("Address parsing failures documented in: %s (%s records)", filename, len(parse_failures))
             print(f"! Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
 
         except Exception as e:
-            logging.error(f"Failed to create address parse failures CSV: {e}")
+            logging.error("Failed to create address parse failures CSV: %s", e)
             print(f"! Failed to create address parse failures CSV: {e}")
 
     @staticmethod
@@ -6117,7 +6149,7 @@ class DisplayUtils:
             table.add_row(row)
 
         # Log the table as a string (debug mode only)
-        logging.debug("\n" + table.get_string())
+        logging.debug("\n%s", table.get_string())
 
     @staticmethod
     def create_progress_bar(progress_percentage: float | None, bar_length: int = 20) -> str:
@@ -6222,7 +6254,7 @@ class DeviceDataFetcher:
 
     def _log_action(self) -> None:
         """Log the action being performed."""
-        logging.info(f"{self.description} for device ID: {self.device_id}")
+        logging.info("%s for device ID: %s", self.description, self.device_id)
 
     def _fetch_data(self) -> list[dict[str, Any]] | None:
         """Fetch data using the configured API function."""
@@ -6230,7 +6262,7 @@ class DeviceDataFetcher:
             response = self.fetch_function(apisession, self.site_id, self.device_id)
             return [response.data] if response.data else None
         except Exception as error:
-            logging.error(f"Failed to fetch device data: {error}")
+            logging.error("Failed to fetch device data: %s", error)
             return None
 
     def _process_and_output(self, data: list[dict[str, Any]]) -> None:
@@ -6291,7 +6323,7 @@ class SFPTransceiverDataProcessor:
 
         try:
             # Load context keyed by MAC
-            logging.debug(f"File I/O: Reading {devices_with_site_info_path}")
+            logging.debug("File I/O: Reading %s", devices_with_site_info_path)
             with open(devices_with_site_info_path, encoding="utf-8") as file:
                 reader = csv.DictReader(file)
                 site_info = {
@@ -6302,7 +6334,7 @@ class SFPTransceiverDataProcessor:
                     }
                     for row in reader
                 }
-            logging.info(f"Loaded {len(site_info)} device entries from {devices_with_site_info_path}")
+            logging.info("Loaded %s device entries from %s", len(site_info), devices_with_site_info_path)
 
             merged_data = []
             total_rows = 0
@@ -6310,7 +6342,7 @@ class SFPTransceiverDataProcessor:
             matched_rows = 0  # rows contributing to merged output
             unique_devices_with_transceivers: set[str] = set()
 
-            logging.debug(f"File I/O: Reading {org_port_stats_path}")
+            logging.debug("File I/O: Reading %s", org_port_stats_path)
             with open(org_port_stats_path, encoding="utf-8") as file:
                 reader = csv.DictReader(file)
                 for row in reader:
@@ -6357,26 +6389,26 @@ class SFPTransceiverDataProcessor:
 
             DataExporter.save_data_to_output(merged_data, SFPTransceiverDataProcessor.OUTPUT_FILENAME)  # type: ignore[no-untyped-call]  # Write the merged rows to the output backend
             logging.info(
-                f"Wrote {len(merged_data)} rows to {SFPTransceiverDataProcessor.OUTPUT_FILENAME}"
+                "Wrote %s rows to %s", len(merged_data), SFPTransceiverDataProcessor.OUTPUT_FILENAME
             )  # Log the row count written
             print(
                 f"! Merged data written to {SFPTransceiverDataProcessor.OUTPUT_FILENAME}"
             )  # Tell the user where the file landed
             logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - success")  # Trace successful exit
         except FileNotFoundError as e:  # A required input CSV was missing
-            logging.error(f"File I/O: Required CSV file not found: {e}")  # Log which file was absent
+            logging.error("File I/O: Required CSV file not found: %s", e)  # Log which file was absent
             logging.debug(
                 "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - file not found"
             )  # Trace the failure exit
             raise  # Re-raise so the caller knows the merge could not run
         except csv.Error as e:  # The CSV parser hit malformed data
-            logging.error(f"File I/O: CSV processing error: {e}")  # Log the parsing error
+            logging.error("File I/O: CSV processing error: %s", e)  # Log the parsing error
             logging.debug(
                 "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - CSV error"
             )  # Trace the failure exit
             raise  # Re-raise so the caller can handle the bad input
         except Exception as e:  # Any other unexpected failure during the merge
-            logging.error(f"File I/O: Unexpected error during transceiver merge: {e}")  # Log the unexpected error
+            logging.error("File I/O: Unexpected error during transceiver merge: %s", e)  # Log the unexpected error
             logging.debug(
                 "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - unexpected error"
             )  # Trace the failure exit
@@ -6437,10 +6469,10 @@ class FilePathUtils:
                     writer.writerow(headers)
                 # Don't write sample data - user will add their own content
 
-            logging.info(f"Created template file: {file_path}")
+            logging.info("Created template file: %s", file_path)
             return file_path
         except Exception as error:
-            logging.error(f"Failed to create template file {filename}: {error}")
+            logging.error("Failed to create template file %s: %s", filename, error)
             raise
 
 
@@ -6471,7 +6503,7 @@ class EnvironmentUtils:
         for explicit_var in EnvironmentUtils.OVERRIDE_ENV_VARS:
             value = os.environ.get(explicit_var, "").strip().lower()
             if value in EnvironmentUtils.TRUE_VALUES:
-                logging.debug(f"Container detection: override via {explicit_var}={value}")
+                logging.debug("Container detection: override via %s=%s", explicit_var, value)
                 return True
         return None
 
@@ -6488,7 +6520,7 @@ class EnvironmentUtils:
         """Check for well-known container environment variables."""
         for env_var in EnvironmentUtils.CONTAINER_ENV_VARS:
             if os.environ.get(env_var):
-                logging.debug(f"Container detection: environment variable {env_var} present")
+                logging.debug("Container detection: environment variable %s present", env_var)
                 return True
         return False
 
@@ -6500,7 +6532,7 @@ class EnvironmentUtils:
                 cgroup_content = cgroup_file.read().lower()
                 for indicator in EnvironmentUtils.CGROUP_INDICATORS:
                     if indicator in cgroup_content:
-                        logging.debug(f"Container detection: cgroup indicator '{indicator}' found")
+                        logging.debug("Container detection: cgroup indicator '%s' found", indicator)
                         return True
         except (FileNotFoundError, PermissionError):
             pass
@@ -6571,7 +6603,7 @@ class EnvironmentUtils:
                     return True
 
         except Exception as container_detection_error:
-            logging.debug(f"Container detection failed with exception: {container_detection_error}")
+            logging.debug("Container detection failed with exception: %s", container_detection_error)
 
         logging.debug("Container detection: no container indicators found - running in direct mode")
         return False
@@ -6705,13 +6737,13 @@ class ConfigUtils:
         global org_id
         # 1. Check global variable
         if org_id:
-            logging.info(f"! Using org_id from global variable: {org_id}")
+            logging.info("! Using org_id from global variable: %s", org_id)
             return org_id  # type: ignore[no-any-return]
         # 2. Check environment variable (set by dotenv or OS)
         org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")
         if org_id_env:
             org_id = org_id_env
-            logging.info(f"! Loaded org_id from environment: {org_id}")
+            logging.info("! Loaded org_id from environment: %s", org_id)
             return org_id
         # 3. Fallback: Try to load from .env manually (rarely needed)
         try:
@@ -6720,7 +6752,7 @@ class ConfigUtils:
                     if line.strip().startswith("org_id="):
                         org_id = line.strip().split("=", 1)[1].strip().strip('"')
             if org_id:
-                logging.info(f"! Loaded org_id from .env: {org_id}")
+                logging.info("! Loaded org_id from .env: %s", org_id)
                 return org_id
         except FileNotFoundError:
             logging.warning("! .env file not found.")
@@ -6828,14 +6860,14 @@ class APIFetchUtils:
         """
         try:
             org_id = ConfigUtils.get_cached_or_prompted_org_id()
-            logging.info(f"Fetching organization services for org_id: {org_id}")
+            logging.info("Fetching organization services for org_id: %s", org_id)
 
             # Call the Mist API to get organization services
             response = mistapi.api.v1.orgs.services.listOrgServices(apisession, org_id, limit=1000)
 
             if hasattr(response, "data") and response.data:
                 services_data = response.data
-                logging.info(f"Successfully retrieved {len(services_data)} organization services")
+                logging.info("Successfully retrieved %s organization services", len(services_data))
 
                 # Extract service names and types for easier display
                 services_list = []
@@ -6860,7 +6892,7 @@ class APIFetchUtils:
                 return []
 
         except Exception as error:
-            logging.error(f"Failed to fetch organization services: {error}")
+            logging.error("Failed to fetch organization services: %s", error)
             return []
 
     @staticmethod
@@ -6893,11 +6925,11 @@ class APIFetchUtils:
                 config["site_id"] = site_id
                 config["site_name"] = site_name
                 all_configs.append(config)
-                logging.info(f"! Fetched config for site: {site_name} (ID: {site_id})")
+                logging.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)
             except Exception as error:
-                logging.warning(f"! Failed to fetch config for {site_name} (ID: {site_id}): {error}")
+                logging.warning("! Failed to fetch config for %s (ID: %s): %s", site_name, site_id, error)
 
-        logging.info(f"Fetched settings for {len(all_configs)} sites.")
+        logging.info("Fetched settings for %s sites.", len(all_configs))
         return all_configs
 
     @staticmethod
@@ -6920,10 +6952,10 @@ class APIFetchUtils:
             response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
             inventory = mistapi.get_all(response=response, mist_session=apisession)
         except Exception as error:
-            logging.error(f"! Failed to fetch org inventory: {error}")
+            logging.error("! Failed to fetch org inventory: %s", error)
             return []
 
-        logging.info(f"Found {len(inventory)} total devices in org inventory.")
+        logging.info("Found %s total devices in org inventory.", len(inventory))
 
         # Load site names from SiteList.csv for enrichment
         site_name_lookup = {}
@@ -6933,7 +6965,7 @@ class APIFetchUtils:
                 reader = csv.DictReader(file_handle)
                 site_name_lookup = {row.get("id"): row.get("name", "Unnamed Site") for row in reader}
         except Exception as error:
-            logging.warning(f"! Failed to load SiteList.csv for site names: {error}")
+            logging.warning("! Failed to load SiteList.csv for site names: %s", error)
 
         # Filter for gateway devices and build work list
         work_items = []
@@ -6945,7 +6977,7 @@ class APIFetchUtils:
                     site_name = site_name_lookup.get(site_id, "Unknown")
                     work_items.append((site_id, device_id, site_name))
 
-        logging.info(f"Prepared {len(work_items)} gateway device config API calls.")
+        logging.info("Prepared %s gateway device config API calls.", len(work_items))
 
         def fetch_config(work_item, connection_semaphore):
             """Fetch configuration for a single device with retry logic."""
@@ -6953,7 +6985,7 @@ class APIFetchUtils:
 
             with connection_semaphore:  # Limit concurrent connections
                 try:
-                    logging.debug(f"Fetching config for {work_device_id} ({work_site_name})")
+                    logging.debug("Fetching config for %s (%s)", work_device_id, work_site_name)
                     config_response = mistapi.api.v1.sites.devices.getSiteDevice(
                         apisession, work_site_id, work_device_id
                     )
@@ -6962,12 +6994,12 @@ class APIFetchUtils:
                         # Add site metadata for enrichment
                         config["site_name"] = work_site_name
                         config["site_id"] = work_site_id
-                        logging.debug(f"! Config fetched for {work_device_id}")
+                        logging.debug("! Config fetched for %s", work_device_id)
                         return config
                     else:
-                        logging.warning(f"! Empty config for device {work_device_id}")
+                        logging.warning("! Empty config for device %s", work_device_id)
                 except Exception as inner_error:
-                    logging.error(f"! Failed to fetch config for device {work_device_id}: {inner_error}")
+                    logging.error("! Failed to fetch config for device %s: %s", work_device_id, inner_error)
                     return None
 
         def retry_fetch_config(failed_items, connection_semaphore):
