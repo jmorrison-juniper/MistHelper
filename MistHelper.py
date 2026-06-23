@@ -15155,7 +15155,7 @@ class ConstDefinitionsExporter:
             return "all_countries"
 
         print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")
-        logging.info(f"Skipping {endpoint_name}.{api_function}() - requires parameters: {param_names}")
+        logging.info("Skipping %s.%s() - requires parameters: %s", endpoint_name, api_function, param_names)
         return "skip"
 
     def _process_all_endpoints(self) -> None:
@@ -15178,7 +15178,7 @@ class ConstDefinitionsExporter:
 
         except Exception as error:
             print(f"! Critical error processing {config.endpoint_name}: {error}")
-            logging.error(f"Critical error processing {config.endpoint_name}: {error}")
+            logging.error("Critical error processing %s: %s", config.endpoint_name, error)
             self.endpoints_failed += 1
             self.endpoints_processed += 1
 
@@ -15191,7 +15191,7 @@ class ConstDefinitionsExporter:
         file_path = os.path.join("data", config.filename)
         if not os.path.exists(file_path):
             print(f"  ! {config.filename} not found - fetching fresh data from API...")
-            logging.info(f"{config.filename} not found, fetching from API")
+            logging.info("%s not found, fetching from API", config.filename)
             return False
 
         try:
@@ -15202,17 +15202,17 @@ class ConstDefinitionsExporter:
             if file_age_hours < self.CACHE_MAX_AGE_HOURS:
                 print(f"  ! Found fresh {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
                 print(f"  ! Skipping API call - using cached data (cache valid for {self.CACHE_MAX_AGE_HOURS}h)")
-                logging.info(f"Using cached {config.endpoint_name} file (age: {file_age_hours:.1f}h)")
+                logging.info("Using cached %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
                 return True
             else:
                 print(f"  ! Found stale {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
                 print(f"  ! File is older than {self.CACHE_MAX_AGE_HOURS}h threshold - fetching fresh data from API...")
-                logging.info(f"Refreshing stale {config.endpoint_name} file (age: {file_age_hours:.1f}h)")
+                logging.info("Refreshing stale %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
                 return False
 
         except Exception as error:
             print(f"  ! Error checking file timestamp: {error}")
-            logging.warning(f"Could not check {config.endpoint_name} file timestamp, will fetch fresh data: {error}")
+            logging.warning("Could not check %s file timestamp, will fetch fresh data: %s", config.endpoint_name, error)
             return False
 
     def _fetch_and_export_endpoint(self, config: EndpointConfig) -> None:
@@ -15224,7 +15224,7 @@ class ConstDefinitionsExporter:
             self._export_data(config, const_data)
         except Exception as error:
             print(f"  ! Error exporting {config.description.lower()}: {error}")
-            logging.error(f"Failed to export {config.description.lower()} from {config.endpoint_name}: {error}")
+            logging.error("Failed to export %s from %s: %s", config.description.lower(), config.endpoint_name, error)
             DataExporter.save_data_to_output([], config.filename)  # type: ignore[no-untyped-call]
             self.endpoints_failed += 1
 
@@ -15266,7 +15266,7 @@ class ConstDefinitionsExporter:
                     all_configs.extend(records)
                     successful += 1
             except Exception as error:
-                logging.warning(f"Failed to get gateway config for model {model}: {error}")
+                logging.warning("Failed to get gateway config for model %s: %s", model, error)
                 failed += 1
 
         print(f"    ! Successfully retrieved configs for {successful} models, {failed} failed")
@@ -15289,7 +15289,7 @@ class ConstDefinitionsExporter:
                 return gateway_models
 
         except Exception as error:
-            logging.warning(f"Failed to get gateway models list: {error}")
+            logging.warning("Failed to get gateway models list: %s", error)
 
         print(f"    ! Using fallback gateway models: {len(self.FALLBACK_GATEWAY_MODELS)} models")
         return self.FALLBACK_GATEWAY_MODELS
@@ -15352,7 +15352,7 @@ class ConstDefinitionsExporter:
                     all_states.extend(records)
                     successful += 1
             except Exception as error:
-                logging.warning(f"Failed to get states for country {country_code}: {error}")
+                logging.warning("Failed to get states for country %s: %s", country_code, error)
                 failed += 1
 
         print(f"    ! Successfully retrieved states for {successful} countries, {failed} failed")
@@ -15374,12 +15374,12 @@ class ConstDefinitionsExporter:
                 original_count = len(country_codes)
                 country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
                 if len(country_codes) < original_count:
-                    logging.debug(f"Filtered out {original_count - len(country_codes)} invalid country codes")
+                    logging.debug("Filtered out %s invalid country codes", original_count - len(country_codes))
                 print(f"    ! Discovered {len(country_codes)} country codes from country definitions")
                 return country_codes
 
         except Exception as error:
-            logging.warning(f"Failed to get countries list: {error}")
+            logging.warning("Failed to get countries list: %s", error)
 
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_COUNTRIES)} countries")
         return self.FALLBACK_COUNTRIES
@@ -15440,7 +15440,7 @@ class ConstDefinitionsExporter:
                     all_channels.extend(records)
                     successful += 1
             except Exception as error:
-                logging.debug(f"Failed to get AP channels for country {country_code}: {error}")
+                logging.debug("Failed to get AP channels for country %s: %s", country_code, error)
                 failed += 1
 
         print(f"    ! Successfully retrieved AP channels for {successful} countries, {failed} failed")
@@ -15463,13 +15463,13 @@ class ConstDefinitionsExporter:
                 country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
                 if len(country_codes) < original_count:
                     logging.debug(
-                        f"Filtered out {original_count - len(country_codes)} invalid country codes for ap_channels"
+                        "Filtered out %s invalid country codes for ap_channels", original_count - len(country_codes)
                     )
                 print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")
                 return country_codes
 
         except Exception as error:
-            logging.warning(f"Failed to get countries list for AP channels: {error}")
+            logging.warning("Failed to get countries list for AP channels: %s", error)
 
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_CHANNEL_COUNTRIES)} countries")
         return self.FALLBACK_CHANNEL_COUNTRIES
@@ -15508,7 +15508,7 @@ class ConstDefinitionsExporter:
         """Convert data to list format and export to file."""
         if not const_data:
             print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
-            logging.warning(f"No {config.description.lower()} data available from {config.endpoint_name} endpoint")
+            logging.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)
             DataExporter.save_data_to_output([], config.filename)  # type: ignore[no-untyped-call]
             self.endpoints_updated += 1
             return
@@ -15518,7 +15518,7 @@ class ConstDefinitionsExporter:
         DataExporter.save_data_to_output(processed, config.filename)  # type: ignore[no-untyped-call]
 
         print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")
-        logging.info(f"Exported {len(processed)} fresh {config.description.lower()} to {config.filename}")
+        logging.info("Exported %s fresh %s to %s", len(processed), config.description.lower(), config.filename)
         self.endpoints_updated += 1
 
     def _convert_to_list(self, endpoint_name: str, const_data) -> list:  # type: ignore[no-untyped-def, type-arg]
@@ -15601,9 +15601,12 @@ class ConstDefinitionsExporter:
         print(f"  ! Failed endpoints: {self.endpoints_failed}")
 
         logging.info(
-            f"Dynamic const export completed: {len(self.discovered_endpoints)} discovered, "
-            f"{self.endpoints_processed} processed, {self.endpoints_skipped_fresh} skipped (fresh), "
-            f"{self.endpoints_updated} updated, {self.endpoints_failed} failed"
+            "Dynamic const export completed: %s discovered, %s processed, %s skipped (fresh), %s updated, %s failed",
+            len(self.discovered_endpoints),
+            self.endpoints_processed,
+            self.endpoints_skipped_fresh,
+            self.endpoints_updated,
+            self.endpoints_failed,
         )
 
 
@@ -15656,7 +15659,7 @@ class InsightMetricsUtils:
 
         try:
             if not os.path.exists(csv_path):
-                logging.warning(f"ConstInsightMetrics.csv not found at {csv_path}")
+                logging.warning("ConstInsightMetrics.csv not found at %s", csv_path)
                 return []
 
             with open(csv_path, encoding="utf-8") as csvfile:
@@ -15679,11 +15682,13 @@ class InsightMetricsUtils:
                     if normalized_target_scope in parsed_scopes:
                         metrics_for_scope.append(metric_name)
 
-            logging.debug(f"Found {len(metrics_for_scope)} metrics for scope '{target_scope}': {metrics_for_scope}")
+            logging.debug(
+                "Found %s metrics for scope '%s': %s", len(metrics_for_scope), target_scope, metrics_for_scope
+            )
             return metrics_for_scope
 
         except Exception as exception:
-            logging.error(f"Error reading ConstInsightMetrics.csv: {exception}")
+            logging.error("Error reading ConstInsightMetrics.csv: %s", exception)
             return []
 
     @staticmethod
@@ -15727,15 +15732,17 @@ class InsightMetricsUtils:
             normalized_data["sites_data"] = sites
 
             logging.debug(
-                f"Normalized metric {metric_type}: {len(normalized_data['summary'])} summary, "
-                f"{len(normalized_data['time_series'])} time series, "
-                f"{len(normalized_data['results'])} results, "
-                f"{len(normalized_data['sites_data'])} sites"
+                "Normalized metric %s: %s summary, %s time series, %s results, %s sites",
+                metric_type,
+                len(normalized_data["summary"]),
+                len(normalized_data["time_series"]),
+                len(normalized_data["results"]),
+                len(normalized_data["sites_data"]),
             )
 
         except Exception as exception:
-            logging.error(f"Error parsing insight metric data: {exception}")
-            logging.debug(f"Failed metric data structure: {metric_data}")
+            logging.error("Error parsing insight metric data: %s", exception)
+            logging.debug("Failed metric data structure: %s", metric_data)
 
         return normalized_data
 
@@ -15945,7 +15952,7 @@ class DataCollectionManager:
         except KeyboardInterrupt:
             print("\n  Continuous data collection loop stopped by user.")
         except Exception as e:
-            logging.error(f"Fatal error in continuous loop: {e}")
+            logging.error("Fatal error in continuous loop: %s", e)
             print(f"! Fatal error in continuous loop: {e}")
 
         print(" Continuous data collection loop ended.")
@@ -15984,7 +15991,7 @@ class DataCollectionManager:
         except KeyboardInterrupt:
             raise  # Re-raise to outer handler
         except Exception as e:
-            logging.error(f"Error in collection cycle {loop_count}: {e}")
+            logging.error("Error in collection cycle %s: %s", loop_count, e)
             print(f"  Error in loop {loop_count}: {e}")
             print("  Continuing to next iteration...")
             time.sleep(5)
@@ -16059,7 +16066,7 @@ class DataCollectionManager:
             has_events = bool(data_sources["events_data"].get(site_id))
 
             if not has_alarms and not has_events:
-                logging.info(f"Skipping site {site_id} - no alarms or events")
+                logging.info("Skipping site %s - no alarms or events", site_id)
                 continue
 
             support_data = {
@@ -16073,7 +16080,7 @@ class DataCollectionManager:
 
             filename = f"SupportPackage_{site_id}.csv"
             CacheUtils.write_support_data_to_csv(support_data, filename)
-            logging.info(f"Support package written for site {site_id}")
+            logging.info("Support package written for site %s", site_id)
 
 
 # ============================================================================
@@ -16095,7 +16102,7 @@ class InteractiveDisplayUtils:
         print("Select a Site to View Device Inventory:")
         site_id = PromptUtils.select_site_id_from_csv()
         if site_id:
-            logging.info(f"User selected site_id: {site_id} for inventory display.")
+            logging.info("User selected site_id: %s for inventory display.", site_id)
             SiteDeviceExporter.device_inventory(site_id)  # type: ignore[no-untyped-call]
         else:
             logging.warning("No site selected or invalid input provided for site selection.")
@@ -16169,7 +16176,7 @@ class GatewayTestExporter:
                         to minimize API calls.
         """
         # DEBUG: Log invocation context early so harness vs direct calls can be distinguished
-        logging.debug(f"[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast={fast}")
+        logging.debug("[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast=%s", fast)
         logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")
         if fast:
             logging.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
@@ -16230,9 +16237,11 @@ class GatewayTestExporter:
                     stats["device_name"] = device_name
 
                     if attempt > 0:
-                        logging.info(f"! Retry {attempt} successful for device {device_name} at site {site_name}")
+                        logging.info("! Retry %s successful for device %s at site %s", attempt, device_name, site_name)
                     else:
-                        logging.info(f"! Collected synthetic test stats for device {device_name} at site {site_name}")
+                        logging.info(
+                            "! Collected synthetic test stats for device %s at site %s", device_name, site_name
+                        )
                     return stats
 
                 except Exception as exception:
@@ -16240,12 +16249,20 @@ class GatewayTestExporter:
                         # Fast mode: reduced backoff delay for quicker retries
                         backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)
                         logging.warning(
-                            f"! Attempt {attempt + 1} failed for device {device_id} at site {site_id}: {exception}"
+                            "! Attempt %s failed for device %s at site %s: %s",
+                            attempt + 1,
+                            device_id,
+                            site_id,
+                            exception,
                         )
-                        logging.info(f"! Fast retry in {backoff_delay:.1f}s (attempt {attempt + 2}/{max_retries + 1})")
+                        logging.info(
+                            "! Fast retry in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, max_retries + 1
+                        )
                         time.sleep(backoff_delay)
                     else:
-                        logging.error(f"! Final attempt failed for device {device_id} at site {site_id}: {exception}")
+                        logging.error(
+                            "! Final attempt failed for device %s at site %s: %s", device_id, site_id, exception
+                        )
                         return None
 
             return None
@@ -16287,13 +16304,13 @@ class GatewayTestExporter:
                             result = future.result()
                             if result:
                                 retry_results.append(result)
-                                logging.info(f" FAST RETRY OK: {device_info[2]}")
+                                logging.info(" FAST RETRY OK: %s", device_info[2])
                             else:
                                 still_failed.append(device_info)
-                                logging.error(f" FAST RETRY FAIL: {device_info[2]}")
+                                logging.error(" FAST RETRY FAIL: %s", device_info[2])
                         except Exception as exception:
                             still_failed.append(device_info)
-                            logging.error(f" FAST RETRY EXC: {device_info[2]} -> {exception}")
+                            logging.error(" FAST RETRY EXC: %s -> %s", device_info[2], exception)
                 return retry_results, still_failed
 
             successful_results, failed_devices = execute_with_connection_pool_management(
@@ -16306,7 +16323,11 @@ class GatewayTestExporter:
             duration = time.time() - start_time
             all_stats.extend(successful_results)
             logging.info(
-                f" FAST MODE SUMMARY (synthetic tests): ok={len(successful_results)} fail={len(failed_devices)} total={len(gateway_devices)} elapsed={duration:.2f}s"  # noqa: E501
+                " FAST MODE SUMMARY (synthetic tests): ok=%s fail=%s total=%s elapsed=%.2fs",
+                len(successful_results),
+                len(failed_devices),
+                len(gateway_devices),
+                duration,
             )
         else:
             # Sequential processing with rate limiting (original behavior)
@@ -16320,7 +16341,7 @@ class GatewayTestExporter:
 
                 # Apply rate limiting only in non-fast mode
                 smoothed, delay = RateLimitingUtils.get_rate_limited_delay(smoothed, apisession, _api_usage_cache)  # type: ignore[no-untyped-call]
-                logging.info(f"[INFO] Sleeping for {delay:.2f}s.")
+                logging.info("[INFO] Sleeping for %.2fs.", delay)
                 time.sleep(delay)
 
         if all_stats:
@@ -16329,9 +16350,9 @@ class GatewayTestExporter:
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
             DataExporter.save_data_to_output(sanitized, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")
-            logging.info(f"! Synthetic test results saved to {filename} ({len(all_stats)} records).")
+            logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
             logging.info(
-                f"! API Optimization: Saved {len(gateway_devices)} listSiteDevices calls by using cached inventory"
+                "! API Optimization: Saved %s listSiteDevices calls by using cached inventory", len(gateway_devices)
             )
         else:
             logging.warning(" No synthetic test results found. CSV not created.")
@@ -17000,7 +17021,7 @@ class ARPCommandManager:
             ARPCommandManager._handle_close(output_lines, debug)  # type: ignore[no-untyped-call]
 
         def on_error(ws, error):
-            logging.error(f"! WebSocket error: {error}")
+            logging.error("! WebSocket error: %s", error)
 
         def on_open(ws):
             logging.info(" WebSocket opened. Subscribing...")
@@ -17034,7 +17055,7 @@ class ARPCommandManager:
         last_message_time = time.time()
         try:
             if debug:
-                logging.debug(f"WebSocket raw message received: {message}")
+                logging.debug("WebSocket raw message received: %s", message)
 
             msg = json.loads(message)
             data_str = msg.get("data", "{}")
@@ -17050,14 +17071,14 @@ class ARPCommandManager:
                     line, buffer = buffer.split("\n", 1)
                     output_lines.append(line)
                 if debug:
-                    logging.debug(f"Processed WebSocket data: {len(raw_output)} chars")
+                    logging.debug("Processed WebSocket data: %s chars", len(raw_output))
 
         except json.JSONDecodeError as e:
-            logging.error(f"WebSocket message JSON decode error: {e}")
+            logging.error("WebSocket message JSON decode error: %s", e)
         except KeyError as e:
-            logging.warning(f"WebSocket message missing expected key: {e}")
+            logging.warning("WebSocket message missing expected key: %s", e)
         except Exception as e:
-            logging.error(f"Unexpected error parsing WebSocket message: {e}")
+            logging.error("Unexpected error parsing WebSocket message: %s", e)
 
         return last_message_time, buffer
 
@@ -17086,7 +17107,7 @@ class ARPCommandManager:
 
                 if debug:
                     print(table)
-                    logging.debug("\n" + table.get_string())
+                    logging.debug("\n%s", table.get_string())
                 else:
                     print(f"! ARP output received with {len(parsed_rows)} rows.")
         else:
@@ -17100,9 +17121,9 @@ class ARPCommandManager:
             file_path = FilePathUtils.get_csv_path(filename)
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(compiled_output)
-            logging.info(f"! ARP output saved to {file_path}")
+            logging.info("! ARP output saved to %s", file_path)
         except Exception as e:
-            logging.error(f"! Failed to save ARP output to file: {e}")
+            logging.error("! Failed to save ARP output to file: %s", e)
 
     @staticmethod
     def _export_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
@@ -18051,7 +18072,7 @@ class WANProbeConfigManager:
             if template_id:
                 self.template_site_counts[template_id] = self.template_site_counts.get(template_id, 0) + 1
 
-        logging.info(f"Loaded {len(self.templates)} gateway templates and {len(self.sites)} sites")
+        logging.info("Loaded %s gateway templates and %s sites", len(self.templates), len(self.sites))
         return True
 
     def _select_templates(self) -> list[dict[str, Any]]:
@@ -18098,7 +18119,7 @@ class WANProbeConfigManager:
             return selected
         except (ValueError, IndexError) as error:
             print(f" Invalid selection: {error}")
-            logging.error(f"Menu #166: Invalid template selection: {error}")
+            logging.error("Menu #166: Invalid template selection: %s", error)
             return []
 
     def _analyze_templates(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -18112,19 +18133,19 @@ class WANProbeConfigManager:
             template_name = template_info["name"]
 
             try:
-                logging.debug(f"Fetching template configuration for {template_name}")
+                logging.debug("Fetching template configuration for %s", template_name)
                 response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(
                     apisession, self.org_id, template_id
                 )
                 config = response.data if hasattr(response, "data") else {}
 
                 if not isinstance(config, dict):
-                    logging.warning(f"Template {template_name} returned invalid structure")
+                    logging.warning("Template %s returned invalid structure", template_name)
                     return None
 
                 port_config = config.get("port_config", {})
                 if not isinstance(port_config, dict):
-                    logging.debug(f"Template {template_name} has no port_config")
+                    logging.debug("Template %s has no port_config", template_name)
                     return None
 
                 # Find all WAN interfaces
@@ -18152,14 +18173,14 @@ class WANProbeConfigManager:
                 return None
 
             except Exception as error:
-                logging.error(f"Error analyzing template {template_name}: {error}")
+                logging.error("Error analyzing template %s: %s", template_name, error)
                 logging.error(traceback.format_exc())
                 print(f"\n  !? Error analyzing template '{template_name}': {error}")
                 return None
 
         # Parallel fetch with ThreadPoolExecutor
         max_workers = min(10, len(templates_to_modify))
-        logging.info(f"Fetching {len(templates_to_modify)} templates in parallel (max {max_workers} workers)")
+        logging.info("Fetching %s templates in parallel (max %s workers)", len(templates_to_modify), max_workers)
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             import concurrent.futures
@@ -18253,7 +18274,7 @@ class WANProbeConfigManager:
                         "probe_profile": self.probe_profile,
                     }
                     interfaces_modified.append(port_name)
-                    logging.debug(f"Template {template_name}: Updated {port_name} probe config")
+                    logging.debug("Template %s: Updated %s probe config", template_name, port_name)
 
             if interfaces_modified:
                 config["port_config"] = port_config
@@ -18261,20 +18282,20 @@ class WANProbeConfigManager:
 
                 if dry_run:
                     result["status"] = "DRY-RUN"
-                    logging.info(f"DRY-RUN: Would update template {template_name} interfaces: {interfaces_modified}")
+                    logging.info("DRY-RUN: Would update template %s interfaces: %s", template_name, interfaces_modified)
                 else:
-                    logging.debug(f"Updating template {template_name} via API")
+                    logging.debug("Updating template %s via API", template_name)
                     update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
                         apisession, self.org_id, template_id, body=config
                     )
 
                     if update_resp.status_code == 200:
                         result["status"] = "SUCCESS"
-                        logging.info(f"Successfully updated template {template_name}")
+                        logging.info("Successfully updated template %s", template_name)
                     else:
                         result["status"] = "FAILED"
                         result["error"] = f"API returned status {update_resp.status_code}"
-                        logging.error(f"Failed to update template {template_name}: status {update_resp.status_code}")
+                        logging.error("Failed to update template %s: status %s", template_name, update_resp.status_code)
             else:
                 result["status"] = "SKIPPED"
                 result["error"] = "No WAN interfaces found in port_config"
@@ -18282,7 +18303,7 @@ class WANProbeConfigManager:
         except Exception as error:
             result["status"] = "ERROR"
             result["error"] = str(error)
-            logging.error(f"Error updating template {template_name}: {error}")
+            logging.error("Error updating template %s: %s", template_name, error)
             logging.error(traceback.format_exc())
 
         return result
@@ -18348,7 +18369,8 @@ class WANProbeConfigManager:
         print("=" * 70)
 
         logging.warning(
-            f"Menu #166 DESTRUCTIVE operation complete: {sum(1 for r in results if r['status'] == 'SUCCESS')} templates updated"  # noqa: E501
+            "Menu #166 DESTRUCTIVE operation complete: %s templates updated",
+            sum(1 for r in results if r["status"] == "SUCCESS"),
         )
 
 
@@ -18604,9 +18626,9 @@ class DeviceRebootManager:
                     tid = row.get("id", "").strip()
                     if name and tid:
                         template_name_to_id[name] = tid
-            logging.info(f"Loaded {len(template_name_to_id)} gateway templates")
+            logging.info("Loaded %s gateway templates", len(template_name_to_id))
         except Exception as error:
-            logging.error(f"! Failed to load gateway templates: {error}")
+            logging.error("! Failed to load gateway templates: %s", error)
             print(f"! Failed to load gateway templates: {error}")
             return None
 
@@ -18628,9 +18650,9 @@ class DeviceRebootManager:
                 for row in reader:
                     if row and row[0].strip():
                         reboot_template_names.add(row[0].strip())
-            logging.info(f"Loaded {len(reboot_template_names)} template names from reboot list")
+            logging.info("Loaded %s template names from reboot list", len(reboot_template_names))
         except Exception as error:
-            logging.error(f"! Failed to load reboot template list: {error}")
+            logging.error("! Failed to load reboot template list: %s", error)
             print(f"! Failed to load reboot template list: {error}")
             return None
         return reboot_template_names if reboot_template_names else None
@@ -18642,9 +18664,9 @@ class DeviceRebootManager:
         for name in names:
             if name in mapping:
                 reboot_template_ids.add(mapping[name])
-                logging.info(f"! Found template '{name}' with ID '{mapping[name]}'")
+                logging.info("! Found template '%s' with ID '%s'", name, mapping[name])
             else:
-                logging.warning(f"! Template '{name}' not found in OrgGatewayTemplates.csv")
+                logging.warning("! Template '%s' not found in OrgGatewayTemplates.csv", name)
                 print(f"! Template '{name}' not found in available templates")
 
         if not reboot_template_ids:
@@ -18693,9 +18715,9 @@ class DeviceRebootManager:
                                 "template_name": template_name,
                             }
                         )
-                        logging.info(f"Found gateway '{device_name}' at site '{site_name}'")
+                        logging.info("Found gateway '%s' at site '%s'", device_name, site_name)
         except Exception as error:
-            logging.error(f"! Failed to load gateway configs: {error}")
+            logging.error("! Failed to load gateway configs: %s", error)
             print(f"! Failed to load gateway configs: {error}")
             return None
 
@@ -18704,7 +18726,7 @@ class DeviceRebootManager:
             print(" No gateway devices found in sites using the specified templates")
             return None
 
-        logging.info(f"Found {len(reboot_targets)} gateway devices to reboot")
+        logging.info("Found %s gateway devices to reboot", len(reboot_targets))
         return reboot_targets
 
     @staticmethod
@@ -18724,9 +18746,9 @@ class DeviceRebootManager:
                         site_name = row.get("name", "").strip()  # The site's display name
                         template_name = id_to_name.get(gateway_template_id, "Unknown")  # Resolve the template's name
                         site_to_template[site_id] = (gateway_template_id, template_name, site_name)  # Record the match
-                        logging.info(f"Found site '{site_name}' using template '{template_name}'")  # Log the match
+                        logging.info("Found site '%s' using template '%s'", site_name, template_name)  # Log the match
         except Exception as error:  # Reading or parsing the site list failed
-            logging.error(f"! Failed to load site list: {error}")  # Log the failure detail
+            logging.error("! Failed to load site list: %s", error)  # Log the failure detail
             print(f"! Failed to load site list: {error}")  # Inform the user
         return site_to_template  # Return the site-to-template mapping
 
@@ -18775,7 +18797,7 @@ class DeviceRebootManager:
                 return False
 
             print(" User confirmed reboot operation. Proceeding...")
-            logging.info(f"LIABILITY WAIVER ACCEPTED: User confirmed reboot for {len(targets)} devices")
+            logging.info("LIABILITY WAIVER ACCEPTED: User confirmed reboot for %s devices", len(targets))
             return True
 
         except (KeyboardInterrupt, EOFError):
@@ -18809,7 +18831,7 @@ class DeviceRebootManager:
         for device in targets:
             status = ""
             try:
-                logging.info(f"Rebooting device '{device['device_name']}'")
+                logging.info("Rebooting device '%s'", device["device_name"])
                 print(f"! Rebooting {device['device_name']} at {device['site_name']}...")
 
                 response = mistapi.api.v1.sites.devices.restartSiteDevice(
@@ -18821,12 +18843,12 @@ class DeviceRebootManager:
 
                 status = DeviceRebootManager._parse_reboot_response(response)
                 print("   Reboot command sent successfully")
-                logging.info(f"! Reboot sent for '{device['device_name']}': {status}")
+                logging.info("! Reboot sent for '%s': %s", device["device_name"], status)
 
             except Exception as error:
                 status = f"ERROR: {error}"
                 print(f"   Failed to send reboot: {error}")
-                logging.error(f"! Failed to reboot '{device['device_name']}': {error}")
+                logging.error("! Failed to reboot '%s': %s", device["device_name"], error)
 
             results.append(
                 {
@@ -18875,9 +18897,9 @@ class DeviceRebootManager:
             print("\n  Operation completed!")
             print(f"   Reboot commands sent to {len(results)} devices")
             print("   Results logged to GatewayTemplateRebootResults.CSV")
-            logging.info(f"! Reboot results exported ({len(results)} entries)")
+            logging.info("! Reboot results exported (%s entries)", len(results))
         except Exception as error:
-            logging.error(f"! Failed to write results to CSV: {error}")
+            logging.error("! Failed to write results to CSV: %s", error)
             print(f"! Failed to write results to CSV: {error}")
 
 
@@ -18995,7 +19017,7 @@ class FirmwareUpgradeStatusChecker:
     def check(self) -> None:
         """Main entry point - execute firmware upgrade status check."""
         logging.info("Starting firmware upgrade status check...")
-        logging.debug(f"Scope: {self.scope_choice}, Site filter: {self.site_filter}")
+        logging.debug("Scope: %s, Site filter: %s", self.scope_choice, self.site_filter)
 
         if not self._resolve_site_filter():
             return
@@ -19022,13 +19044,13 @@ class FirmwareUpgradeStatusChecker:
                 print(" No site selected. Exiting.")
                 logging.warning("No site selected in specific site mode")
                 return False
-            logging.debug(f"Selected site filter: {self.site_filter}")
+            logging.debug("Selected site filter: %s", self.site_filter)
         return True
 
     def _fetch_device_stats(self) -> bool:
         """Fetch device statistics from API."""
         print("\n  Fetching device statistics...")
-        logging.debug(f"Scope: {self.scope_choice}, site_filter: {self.site_filter}")
+        logging.debug("Scope: %s, site_filter: %s", self.scope_choice, self.site_filter)
 
         try:
             if self.site_filter:
@@ -19037,7 +19059,7 @@ class FirmwareUpgradeStatusChecker:
                 return self._fetch_org_stats()
         except Exception as exception:
             print(f"! Failed to fetch device statistics: {exception}")
-            logging.error(f"Failed to fetch device statistics: {exception}")
+            logging.error("Failed to fetch device statistics: %s", exception)
             return False
 
     def _fetch_site_stats(self) -> bool:
@@ -19050,7 +19072,7 @@ class FirmwareUpgradeStatusChecker:
         self.all_device_stats.extend(site_stats)
 
         print(f"   Retrieved stats for {len(site_stats)} devices at selected site")
-        logging.info(f"Retrieved stats for {len(site_stats)} devices at site {self.site_filter}")
+        logging.info("Retrieved stats for %s devices at site %s", len(site_stats), self.site_filter)
         return len(self.all_device_stats) > 0 or self._handle_empty_stats()
 
     def _fetch_org_stats(self) -> bool:
@@ -19063,7 +19085,7 @@ class FirmwareUpgradeStatusChecker:
         self.all_device_stats.extend(org_stats)
 
         print(f"   Retrieved stats for {len(org_stats)} devices organization-wide")
-        logging.info(f"Retrieved stats for {len(org_stats)} devices organization-wide")
+        logging.info("Retrieved stats for %s devices organization-wide", len(org_stats))
         return len(self.all_device_stats) > 0 or self._handle_empty_stats()
 
     def _handle_empty_stats(self) -> bool:
@@ -19082,7 +19104,7 @@ class FirmwareUpgradeStatusChecker:
                 if site_id:
                     self.site_lookup[site_id] = site_name
         except Exception as exception:
-            logging.warning(f"Failed to fetch site information: {exception}")
+            logging.warning("Failed to fetch site information: %s", exception)
             self.site_lookup.clear()
 
     def _process_all_devices(self) -> None:
@@ -19426,7 +19448,7 @@ class FirmwareUpgradeStatusChecker:
 
         except Exception as exception:
             print(f"   -> Error checking SSR upgrade operations: {exception}")
-            logging.warning(f"Failed to check SSR upgrade operations: {exception}")
+            logging.warning("Failed to check SSR upgrade operations: %s", exception)
 
     def _process_ssr_upgrade(self, upgrade: dict[str, Any]) -> None:
         """Process a single SSR upgrade record."""
@@ -19503,7 +19525,7 @@ class FirmwareUpgradeStatusChecker:
 
         except Exception as exception:
             print(f"   -> Failed to read stored upgrade tracking data: {exception}")
-            logging.warning(f"Failed to read stored upgrade tracking: {exception}")
+            logging.warning("Failed to read stored upgrade tracking: %s", exception)
 
     def _check_stored_upgrade(self, record: dict[str, Any]) -> None:
         """Check status of a stored upgrade record."""
@@ -19566,7 +19588,7 @@ class FirmwareUpgradeStatusChecker:
 
         except Exception as exception:
             print(f"   -> Error checking audit logs: {exception}")
-            logging.warning(f"Failed to search org audit logs: {exception}")
+            logging.warning("Failed to search org audit logs: %s", exception)
 
     def _is_upgrade_event(self, log_entry: dict[str, Any]) -> bool:
         """Check if log entry is upgrade-related."""
@@ -19609,7 +19631,7 @@ class FirmwareUpgradeStatusChecker:
 
         except Exception as exception:
             print(f"   -> Error checking device events: {exception}")
-            logging.warning(f"Failed to search device upgrade events: {exception}")
+            logging.warning("Failed to search device upgrade events: %s", exception)
 
     def _display_device_events(self, events: list[dict[str, Any]]) -> None:
         """Display device events grouped by type."""
@@ -19659,7 +19681,7 @@ class FirmwareUpgradeStatusChecker:
 
         except Exception as exception:
             print(f"   Site '{site_name}': -> Error checking upgrades: {exception}")
-            logging.warning(f"Failed to check upgrades for site {site_id}: {exception}")
+            logging.warning("Failed to check upgrades for site %s: %s", site_id, exception)
             return False
 
     def _process_site_upgrade(self, upgrade: dict[str, Any], site_id: str, site_name: str) -> None:
@@ -19720,10 +19742,10 @@ class FirmwareUpgradeStatusChecker:
             DataExporter.save_data_to_output(self.upgrade_results, filename)  # type: ignore[no-untyped-call]
             print(f"\n[SUCCESS] Device firmware status exported to: data/{filename}")
             print(f"   [DATA] {len(self.upgrade_results)} device records exported")
-            logging.info(f"Exported {len(self.upgrade_results)} device status records")
+            logging.info("Exported %s device status records", len(self.upgrade_results))
         except Exception as exception:
             print(f"! Failed to export device status: {exception}")
-            logging.error(f"Failed to export device status: {exception}")
+            logging.error("Failed to export device status: %s", exception)
 
     def _export_active_operations(self, timestamp: str) -> None:
         """Export active upgrade operations to CSV."""
@@ -19760,10 +19782,10 @@ class FirmwareUpgradeStatusChecker:
 
             print(f"! Active upgrade operations exported to: {filename}")
             print(f"   {len(self.active_upgrades)} upgrade operations exported")
-            logging.info(f"Exported {len(self.active_upgrades)} active upgrade operations")
+            logging.info("Exported %s active upgrade operations", len(self.active_upgrades))
         except Exception as exception:
             print(f"! Failed to export upgrade operations: {exception}")
-            logging.error(f"Failed to export upgrade operations: {exception}")
+            logging.error("Failed to export upgrade operations: %s", exception)
 
     def _map_upgrade_for_export(self, upgrade: dict[str, Any]) -> dict[str, Any]:
         """Map upgrade record for CSV export."""
@@ -19904,7 +19926,10 @@ class MSPInventoryExporter:
         self._process_all_msps()  # type: ignore[no-untyped-call]
         self._finalize_export()  # type: ignore[no-untyped-call]
         logging.info(
-            f"Menu #144 complete: {self.device_count} devices exported from {self.org_count} orgs across {self.msp_count} MSPs"  # noqa: E501
+            "Menu #144 complete: %s devices exported from %s orgs across %s MSPs",
+            self.device_count,
+            self.org_count,
+            self.msp_count,
         )
 
     def _print_header(self):
@@ -20056,7 +20081,7 @@ class MSPInventoryExporter:
         except Exception as e:
             print(f"    X Error processing MSP {msp_name}: {e}")
             self.errors.append(f"MSP {msp_name}: {e}")
-            logging.error(f"MSP inventory export error for {msp_name}: {e}")
+            logging.error("MSP inventory export error for %s: %s", msp_name, e)
 
     def _fetch_org_inventory(self, org_id: str, org_name: str) -> list:  # type: ignore[type-arg]
         """Fetch all devices from org inventory. Returns empty list on failure."""
@@ -20132,7 +20157,7 @@ class MSPInventoryExporter:
         except Exception as e:
             print(f"      {org_name}: Error - {e}")
             self.errors.append(f"Org {org_name}: {e}")
-            logging.error(f"MSP inventory export error for org {org_name}: {e}")
+            logging.error("MSP inventory export error for org %s: %s", org_name, e)
 
     def _build_site_lookup(self, org_id: str) -> dict:  # type: ignore[type-arg]
         """Build a site_id -> site_name lookup for an org."""
@@ -20140,7 +20165,7 @@ class MSPInventoryExporter:
             sites = APICoreFetchUtils.all_sites_with_limit(org_id)
             return {s.get("id"): s.get("name", "Unknown") for s in sites}
         except Exception as e:
-            logging.debug(f"Failed to build site lookup for org {org_id}: {e}")
+            logging.debug("Failed to build site lookup for org %s: %s", org_id, e)
             return {}
 
     def _get_priority_fields(self) -> list:  # type: ignore[type-arg]
@@ -20408,7 +20433,7 @@ class AnomalyMetricsDiscovery:
             return cls._parse_metrics_csv(metrics_path)
 
         except Exception as exception:
-            logging.error(f"Error reading ConstInsightMetrics.csv: {str(exception)}")
+            logging.error("Error reading ConstInsightMetrics.csv: %s", str(exception))
             return cls.FALLBACK_METRICS.copy()
 
     @classmethod
@@ -20452,7 +20477,7 @@ class AnomalyMetricsDiscovery:
     def _sort_by_priority(cls, metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Sort metrics with priority items first, then alphabetically."""
         metrics.sort(key=lambda x: (not x.get("priority", False), x["metric_name"]))
-        logging.info(f"Found {len(metrics)} potential anomaly metrics from ConstInsightMetrics.csv")
+        logging.info("Found %s potential anomaly metrics from ConstInsightMetrics.csv", len(metrics))
         return metrics
 
 
@@ -20564,11 +20589,11 @@ class WLANRadiusTimerManager:
 
     def _fetch_site_info(self) -> bool:
         """Fetch site information from API."""
-        logging.info(f"Fetching site information for site ID: {self.site_id}")  # Log before the API call
+        logging.info("Fetching site information for site ID: %s", self.site_id)  # Log before the API call
         try:
             response = mistapi.api.v1.sites.sites.getSiteInfo(apisession, self.site_id)  # Request the site's details
             if response.status_code != 200:  # The API returned a non-success status
-                logging.error(f"Failed to fetch site info: HTTP {response.status_code}")  # Log the HTTP error
+                logging.error("Failed to fetch site info: HTTP %s", response.status_code)  # Log the HTTP error
                 print("\n[!] Failed to fetch site information. Exiting.")  # Inform the user
                 return False  # Abort -- we cannot proceed without site info
             self.site_info = response.data  # Cache the decoded site record
@@ -20577,15 +20602,15 @@ class WLANRadiusTimerManager:
             self._log_site_info()  # Log the resolved site details
             return True  # Site info loaded successfully
         except Exception as error:  # Network or parsing failure
-            logging.error(f"Error fetching site info: {error}")  # Log the exception detail
+            logging.error("Error fetching site info: %s", error)  # Log the exception detail
             print(f"\n[!] Error fetching site information: {error}")  # Inform the user
             return False  # Abort on error
 
     def _log_site_info(self) -> None:
         """Log site information details."""
-        logging.info(f"Site: {self.site_name}")  # Record the resolved site name
+        logging.info("Site: %s", self.site_name)  # Record the resolved site name
         if self.site_template_id:  # A site template is assigned
-            logging.info(f"Site Template ID: {self.site_template_id}")  # Log the template ID for traceability
+            logging.info("Site Template ID: %s", self.site_template_id)  # Log the template ID for traceability
         else:  # No template is assigned to this site
             logging.info("No site template assigned")  # Note the absence of a template
 
@@ -20602,11 +20627,11 @@ class WLANRadiusTimerManager:
             response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, self.site_id)  # Request site-level WLANs
             if response.status_code == 200:  # The request succeeded
                 self.site_wlans = response.data  # Cache the returned WLAN list
-                logging.info(f"Found {len(self.site_wlans)} site-level WLANs")  # Report how many were found
+                logging.info("Found %s site-level WLANs", len(self.site_wlans))  # Report how many were found
             else:  # Non-success status
-                logging.warning(f"Failed to fetch site WLANs: HTTP {response.status_code}")  # Warn but continue
+                logging.warning("Failed to fetch site WLANs: HTTP %s", response.status_code)  # Warn but continue
         except Exception as error:  # Network or parsing failure
-            logging.error(f"Error fetching site WLANs: {error}")  # Log the exception detail
+            logging.error("Error fetching site WLANs: %s", error)  # Log the exception detail
 
     def _fetch_site_template_wlans(self) -> None:
         """Fetch WLANs from site template if assigned."""
@@ -20622,11 +20647,13 @@ class WLANRadiusTimerManager:
                 self.template_name = template_data.get("name", "Unknown Template")  # Capture a display name
                 if "wlans" in template_data and template_data["wlans"]:  # The template embeds WLAN definitions
                     self.site_template_wlans = list(template_data["wlans"].values())  # Flatten the WLAN map to a list
-                    logging.info(f"Found {len(self.site_template_wlans)} site template-level WLANs")  # Report the count
+                    logging.info(
+                        "Found %s site template-level WLANs", len(self.site_template_wlans)
+                    )  # Report the count
             else:  # Non-success status
-                logging.warning(f"Failed to fetch site template: HTTP {response.status_code}")  # Warn but continue
+                logging.warning("Failed to fetch site template: HTTP %s", response.status_code)  # Warn but continue
         except Exception as error:  # Network or parsing failure
-            logging.error(f"Error fetching site template: {error}")  # Log the exception detail
+            logging.error("Error fetching site template: %s", error)  # Log the exception detail
 
     def _fetch_org_wlans(self) -> None:
         """Fetch org-level WLANs using templates assigned to this site."""
@@ -20636,7 +20663,7 @@ class WLANRadiusTimerManager:
             self._determine_assigned_templates()  # Work out which templates apply to this site
             self._fetch_and_filter_org_wlans()  # Pull org WLANs and keep only those on assigned templates
         except Exception as error:  # Any failure across the multi-step fetch
-            logging.error(f"Error fetching org WLANs or templates: {error}")  # Log the exception detail
+            logging.error("Error fetching org WLANs or templates: %s", error)  # Log the exception detail
 
     def _fetch_wlan_templates(self) -> None:
         """Fetch all WLAN templates from the organization."""
@@ -20644,9 +20671,9 @@ class WLANRadiusTimerManager:
         response = mistapi.api.v1.orgs.templates.listOrgTemplates(apisession, self.org_id)  # Request all org templates
         if response.status_code == 200:  # The request succeeded
             self.wlan_templates = response.data  # Cache the template list
-            logging.info(f"Found {len(self.wlan_templates)} org-level WLAN templates")  # Report the count
+            logging.info("Found %s org-level WLAN templates", len(self.wlan_templates))  # Report the count
         else:  # Non-success status
-            logging.warning(f"Failed to fetch WLAN templates: HTTP {response.status_code}")  # Warn but continue
+            logging.warning("Failed to fetch WLAN templates: HTTP %s", response.status_code)  # Warn but continue
 
     def _determine_assigned_templates(self) -> None:
         """Determine which templates are assigned to the selected site."""
@@ -20654,7 +20681,7 @@ class WLANRadiusTimerManager:
             if self._is_template_assigned_to_site(wlan_template):  # The template applies to this site
                 self.assigned_template_ids.add(wlan_template.get("id"))  # Remember its ID for WLAN filtering
         logging.info(
-            f"Found {len(self.assigned_template_ids)} WLAN templates assigned to this site"
+            "Found %s WLAN templates assigned to this site", len(self.assigned_template_ids)
         )  # Report the count
 
     def _is_template_assigned_to_site(self, wlan_template: dict[str, Any]) -> bool:
@@ -20678,10 +20705,10 @@ class WLANRadiusTimerManager:
         """Fetch org WLANs and filter to those using assigned templates."""
         response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)  # Request every WLAN in the org
         if response.status_code != 200:  # The request failed
-            logging.warning(f"Failed to fetch org WLANs: HTTP {response.status_code}")  # Warn but continue
+            logging.warning("Failed to fetch org WLANs: HTTP %s", response.status_code)  # Warn but continue
             return  # Nothing to filter without data
         all_org_wlans = response.data  # Decode the full org WLAN list
-        logging.info(f"Found {len(all_org_wlans)} total org WLANs")  # Report the total count
+        logging.info("Found %s total org WLANs", len(all_org_wlans))  # Report the total count
         for wlan in all_org_wlans:  # Examine each org WLAN
             wlan_template_id = wlan.get("template_id")  # The template this WLAN belongs to
             if (
@@ -20691,7 +20718,7 @@ class WLANRadiusTimerManager:
                 self.org_wlans.append(wlan)  # Keep it as a relevant org WLAN
         if self.org_wlans:  # At least one relevant org WLAN was kept
             logging.info(
-                f"Found {len(self.org_wlans)} org WLANs using templates assigned to this site"
+                "Found %s org WLANs using templates assigned to this site", len(self.org_wlans)
             )  # Report the count
 
     def _add_org_wlan_metadata(self, wlan: dict[str, Any], template_id: str) -> None:
@@ -21104,26 +21131,24 @@ class WLANRadiusTimerManager:
                 logging.error("Unknown inheritance level for WLAN")  # Log the error for diagnosis
         except Exception as error:  # Any API failure during the write
             print(f"\n[!] Error applying changes: {error}")  # Inform the user of the failure
-            logging.error(
-                f"Error applying WLAN authentication timer changes: {error}", exc_info=True
-            )  # Log with traceback
+            logging.exception("Error applying WLAN authentication timer changes: %s", error)  # Log with traceback
 
     def _update_site_wlan(self) -> None:
         """Update a site-level WLAN."""
         wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
         print("\n[*] Updating site-level WLAN...")  # Inform the user the write is starting
         payload = self._build_update_payload()  # Build the timer-only update body
-        logging.info(f"Updating site WLAN {wlan.get('id')} with payload: {payload}")  # Log before the API call
+        logging.info("Updating site WLAN %s with payload: %s", wlan.get("id"), payload)  # Log before the API call
         response = mistapi.api.v1.sites.wlans.updateSiteWlan(
             apisession, self.site_id, wlan.get("id"), payload
         )  # Push the update
         if response.status_code == 200:  # The update succeeded
             print(f"[+] Successfully updated WLAN: {wlan.get('ssid')}")  # Confirm success to the user
-            logging.info(f"Successfully updated site WLAN {wlan.get('id')}")  # Log the success
+            logging.info("Successfully updated site WLAN %s", wlan.get("id"))  # Log the success
         else:  # The update failed
             print(f"[!] Failed to update WLAN: HTTP {response.status_code}")  # Report the HTTP error
             logging.error(
-                f"Failed to update site WLAN: HTTP {response.status_code}, Response: {response.data}"
+                "Failed to update site WLAN: HTTP %s, Response: %s", response.status_code, response.data
             )  # Log the detail
 
     def _update_site_template_wlan(self) -> None:
@@ -21133,7 +21158,7 @@ class WLANRadiusTimerManager:
         template_id = wlan.get("_template_id")  # The template that owns this WLAN
         wlan_id = wlan.get("id")  # The WLAN's unique ID within the template
         logging.info(
-            f"Updating site template WLAN {wlan_id} in template {template_id}"
+            "Updating site template WLAN %s in template %s", wlan_id, template_id
         )  # Log before the read-modify-write
         template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
             apisession, self.org_id, template_id
@@ -21141,7 +21166,7 @@ class WLANRadiusTimerManager:
         if template_response.status_code != 200:  # Could not load the template to modify
             print(f"[!] Failed to fetch site template: HTTP {template_response.status_code}")  # Report the error
             logging.error(
-                f"Failed to fetch site template for update: HTTP {template_response.status_code}"
+                "Failed to fetch site template for update: HTTP %s", template_response.status_code
             )  # Log the failure
             return  # Abort -- cannot safely update without the current state
         template_data = template_response.data  # The full template document to mutate
@@ -21157,7 +21182,7 @@ class WLANRadiusTimerManager:
                 break  # Stop scanning once updated
         if not wlan_found:  # The WLAN was not present in the template
             print("[!] WLAN not found in site template")  # Report the miss
-            logging.error(f"WLAN {wlan_id} not found in site template {template_id}")  # Log the failure
+            logging.error("WLAN %s not found in site template %s", wlan_id, template_id)  # Log the failure
             return  # Abort -- nothing was changed
         update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(  # Write the modified template back
             apisession, self.org_id, template_id, template_data  # Send the full mutated document
@@ -21166,12 +21191,14 @@ class WLANRadiusTimerManager:
             print(f"[+] Successfully updated site template WLAN: {wlan.get('ssid')}")  # Confirm success
             print("[+] All sites using this template will inherit these changes")  # Remind the user of the blast radius
             logging.info(
-                f"Successfully updated site template WLAN {wlan_id} in template {template_id}"
+                "Successfully updated site template WLAN %s in template %s", wlan_id, template_id
             )  # Log the success
         else:  # The template write failed
             print(f"[!] Failed to update site template: HTTP {update_response.status_code}")  # Report the HTTP error
             logging.error(  # Log the failure detail
-                f"Failed to update site template: HTTP {update_response.status_code}, Response: {update_response.data}"
+                "Failed to update site template: HTTP %s, Response: %s",
+                update_response.status_code,
+                update_response.data,
             )
 
     def _update_org_wlan(self) -> None:
@@ -21184,7 +21211,7 @@ class WLANRadiusTimerManager:
             logging.error("Missing WLAN id for org WLAN update")  # Log the failure
             return  # Abort -- cannot target the update
         payload = self._build_update_payload()  # Build the timer-only update body
-        logging.info(f"Updating org WLAN {wlan_id} with payload: {payload}")  # Log before the API call
+        logging.info("Updating org WLAN %s with payload: %s", wlan_id, payload)  # Log before the API call
         response = mistapi.api.v1.orgs.wlans.updateOrgWlan(apisession, self.org_id, wlan_id, payload)  # Push the update
         if response.status_code == 200:  # The update succeeded
             print(f"[+] Successfully updated org WLAN: {wlan.get('ssid')}")  # Confirm success to the user
@@ -21192,11 +21219,11 @@ class WLANRadiusTimerManager:
             print(
                 f"[+] WLAN uses template '{template_name}' for its base configuration"
             )  # Clarify the template relationship
-            logging.info(f"Successfully updated org WLAN {wlan_id}")  # Log the success
+            logging.info("Successfully updated org WLAN %s", wlan_id)  # Log the success
         else:  # The update failed
             print(f"[!] Failed to update org WLAN: HTTP {response.status_code}")  # Report the HTTP error
             logging.error(
-                f"Failed to update org WLAN: HTTP {response.status_code}, Response: {response.data}"
+                "Failed to update org WLAN: HTTP %s, Response: %s", response.status_code, response.data
             )  # Log the detail
 
     def _print_completion_message(self) -> None:
@@ -21252,7 +21279,10 @@ class BulkRadiusWLANConfigManager:
         self.target_retries = int(os.getenv("RADIUS_AUTH_RETRIES", "2"))
         self.target_fast_dot1x = os.getenv("RADIUS_FAST_DOT1X", "true").lower() == "true"
         logging.debug(
-            f"Loaded RADIUS config: timeout={self.target_timeout}, retries={self.target_retries}, fast_dot1x={self.target_fast_dot1x}"  # noqa: E501
+            "Loaded RADIUS config: timeout=%s, retries=%s, fast_dot1x=%s",
+            self.target_timeout,
+            self.target_retries,
+            self.target_fast_dot1x,
         )
 
     def _display_config(self) -> None:
@@ -21286,21 +21316,21 @@ class BulkRadiusWLANConfigManager:
     def _scan_org_wlans(self) -> bool:
         """Fetch all WLANs in the organization using listOrgWlans API."""
         print("[*] Scanning organization for WLANs...")
-        logging.info(f"Fetching org WLANs for org_id: {self.org_id}")
+        logging.info("Fetching org WLANs for org_id: %s", self.org_id)
         try:
             response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)
             if response.status_code != 200:
-                logging.error(f"Failed to fetch org WLANs: HTTP {response.status_code}")
+                logging.error("Failed to fetch org WLANs: HTTP %s", response.status_code)
                 print(f"\n[!] Failed to fetch WLANs: HTTP {response.status_code}")
                 return False
             self.all_wlans = response.data
             if is_debug_mode():  # type: ignore[no-untyped-call]
-                logging.debug(f"API response data ({len(self.all_wlans)} WLANs): {self.all_wlans}")
-            logging.info(f"Found {len(self.all_wlans)} total WLANs in organization")
+                logging.debug("API response data (%s WLANs): %s", len(self.all_wlans), self.all_wlans)
+            logging.info("Found %s total WLANs in organization", len(self.all_wlans))
             print(f"[+] Found {len(self.all_wlans)} total WLANs in organization")
             return True
         except Exception as e:
-            logging.error(f"Exception fetching org WLANs: {e}")
+            logging.error("Exception fetching org WLANs: %s", e)
             print(f"\n[!] Error fetching WLANs: {e}")
             return False
 
@@ -21337,18 +21367,29 @@ class BulkRadiusWLANConfigManager:
                 self.compliant_wlans.append(wlan)
                 if is_debug_mode():  # type: ignore[no-untyped-call]
                     logging.debug(
-                        f"COMPLIANT: {wlan.get('ssid')} - timeout={wlan.get('auth_servers_timeout', 5)}, retries={wlan.get('auth_servers_retries', 2)}, fast={wlan.get('fast_dot1x_timers', False)}"  # noqa: E501
+                        "COMPLIANT: %s - timeout=%s, retries=%s, fast=%s",
+                        wlan.get("ssid"),
+                        wlan.get("auth_servers_timeout", 5),
+                        wlan.get("auth_servers_retries", 2),
+                        wlan.get("fast_dot1x_timers", False),
                     )
             else:
                 wlan["_compliance_status"] = "NEEDS_UPDATE"
                 self.radius_wlans.append(wlan)
                 if is_debug_mode():  # type: ignore[no-untyped-call]
                     logging.debug(
-                        f"NEEDS_UPDATE: {wlan.get('ssid')} - timeout={wlan.get('auth_servers_timeout', 5)}, retries={wlan.get('auth_servers_retries', 2)}, fast={wlan.get('fast_dot1x_timers', False)}"  # noqa: E501
+                        "NEEDS_UPDATE: %s - timeout=%s, retries=%s, fast=%s",
+                        wlan.get("ssid"),
+                        wlan.get("auth_servers_timeout", 5),
+                        wlan.get("auth_servers_retries", 2),
+                        wlan.get("fast_dot1x_timers", False),
                     )
         total_radius = len(self.radius_wlans) + len(self.compliant_wlans)
         logging.info(
-            f"Found {total_radius} RADIUS WLANs: {len(self.radius_wlans)} needing config, {len(self.compliant_wlans)} compliant"  # noqa: E501
+            "Found %s RADIUS WLANs: %s needing config, %s compliant",
+            total_radius,
+            len(self.radius_wlans),
+            len(self.compliant_wlans),
         )
         print(
             f"[+] Found {total_radius} RADIUS WLANs ({len(self.radius_wlans)} needing configuration, {len(self.compliant_wlans)} already compliant)"  # noqa: E501
@@ -21428,7 +21469,7 @@ class BulkRadiusWLANConfigManager:
                             elif idx >= max_count:  # Index beyond the list
                                 print(f"    [!] Index {idx + 1} out of range (max: {max_count})")  # Warn the user
                 except ValueError:  # A non-numeric range piece
-                    logging.warning(f"Invalid range format: {part}")  # Log and skip it
+                    logging.warning("Invalid range format: %s", part)  # Log and skip it
             else:  # This piece is a single index
                 try:
                     idx = int(part) - 1  # Convert to 0-based
@@ -21437,7 +21478,7 @@ class BulkRadiusWLANConfigManager:
                     elif idx >= max_count:  # Index beyond the list
                         print(f"    [!] Index {idx + 1} out of range (max: {max_count})")  # Warn the user
                 except ValueError:  # A non-numeric single piece
-                    logging.warning(f"Invalid index: {part}")  # Log and skip it
+                    logging.warning("Invalid index: %s", part)  # Log and skip it
 
         selected_indices.sort()  # Present the chosen indices in ascending order
         return selected_indices  # Hand the parsed indices back to the caller
@@ -21476,7 +21517,7 @@ class BulkRadiusWLANConfigManager:
             ssid = wlan.get("ssid", "Unknown")  # The WLAN's SSID for user-facing messages
 
             if not wlan_id:  # Defensive: the WLAN record lacks an ID
-                logging.error(f"Missing WLAN ID for {ssid}")  # Log the missing identifier
+                logging.error("Missing WLAN ID for %s", ssid)  # Log the missing identifier
                 self._record_change(wlan, "failed", "Missing WLAN ID")  # Record the failure in the audit trail
                 fail_count += 1  # Count this as a failure
                 continue  # Skip to the next WLAN
@@ -21489,7 +21530,11 @@ class BulkRadiusWLANConfigManager:
 
             print(f"  [{idx}/{len(self.selected_wlans)}] Updating {ssid}...", end=" ")  # Progress line (no newline yet)
             logging.info(  # Log before the update, noting dry-run vs real
-                f"{'DRY-RUN: Would update' if self.dry_run else 'Updating'} org WLAN {wlan_id} ({ssid}) with payload: {payload}"  # noqa: E501
+                "%s org WLAN %s (%s) with payload: %s",
+                "DRY-RUN: Would update" if self.dry_run else "Updating",
+                wlan_id,
+                ssid,
+                payload,
             )
 
             if self.dry_run:  # In dry-run mode we simulate instead of calling the API
@@ -21497,7 +21542,7 @@ class BulkRadiusWLANConfigManager:
                 self._record_change(wlan, "DRY-RUN", "")  # Record the simulated change
                 success_count += 1  # Count the simulation as a success
                 if is_debug_mode():  # type: ignore[no-untyped-call]  # Only dump payload when debugging
-                    logging.debug(f"DRY-RUN payload for {ssid}: {payload}")  # Log the would-be payload
+                    logging.debug("DRY-RUN payload for %s: %s", ssid, payload)  # Log the would-be payload
                 continue  # Skip the real API call
 
             try:
@@ -21509,23 +21554,23 @@ class BulkRadiusWLANConfigManager:
                     self._record_change(wlan, "success", "")  # Record the successful change
                     success_count += 1  # Count the success
                     if is_debug_mode():  # type: ignore[no-untyped-call]  # Only dump response when debugging
-                        logging.debug(f"API response for {ssid}: {response.data}")  # Log the API response body
+                        logging.debug("API response for %s: %s", ssid, response.data)  # Log the API response body
                 else:  # The API returned a non-success status
                     print(f"FAILED (HTTP {response.status_code})")  # Complete the progress line with failure
                     self._record_change(wlan, "failed", f"HTTP {response.status_code}")  # Record the failure
                     fail_count += 1  # Count the failure
-                    logging.error(f"Failed to update {ssid}: HTTP {response.status_code}")  # Log the HTTP error
+                    logging.error("Failed to update %s: HTTP %s", ssid, response.status_code)  # Log the HTTP error
             except Exception as e:  # The update call raised an exception
                 print(f"ERROR ({e})")  # Complete the progress line with the error
                 self._record_change(wlan, "failed", str(e))  # Record the exception in the audit trail
                 fail_count += 1  # Count the failure
-                logging.error(f"Exception updating {ssid}: {e}")  # Log the exception detail
+                logging.error("Exception updating %s: %s", ssid, e)  # Log the exception detail
 
             time.sleep(0.3)  # Brief pause between writes to respect API rate limits
 
         result_label = "DRY-RUN complete" if self.dry_run else "Update complete"  # Final summary verb
         print(f"\n[+] {result_label}: {success_count} successful, {fail_count} failed")  # Show the run totals
-        logging.info(f"{result_label}: {success_count} success, {fail_count} failed")  # Log the run totals
+        logging.info("%s: %s success, %s failed", result_label, success_count, fail_count)  # Log the run totals
 
     def _record_change(self, wlan: dict[str, Any], status: str, error_msg: str) -> None:
         """Record a change for the audit trail."""
@@ -21582,11 +21627,11 @@ class BulkRadiusWLANConfigManager:
                 writer.writerows(self.change_records)  # Write every recorded change
             print(f"\n[+] Audit trail exported to: {filepath}")  # Tell the user where the file landed
             logging.info(
-                f"Audit trail exported to {filepath} with {len(self.change_records)} records"
+                "Audit trail exported to %s with %s records", filepath, len(self.change_records)
             )  # Log the export
         except Exception as e:  # Writing the CSV failed (permissions, disk, etc.)
             print(f"\n[!] Failed to export audit trail: {e}")  # Inform the user of the failure
-            logging.error(f"Failed to export audit trail: {e}")  # Log the error detail
+            logging.error("Failed to export audit trail: %s", e)  # Log the error detail
 
     def manage(self, dry_run: bool = False) -> None:
         """Main entry point - orchestrates the bulk RADIUS WLAN configuration."""
@@ -21709,7 +21754,7 @@ class AuditAnalysisOps:
         try:
             time_range = parser.parse(time_input)  # Convert input to TimeRange object
         except ValueError as exc:
-            logging.error(f"Invalid time range: {exc}")  # Log parse failure
+            logging.error("Invalid time range: %s", exc)  # Log parse failure
             return
 
         print(f"\nFetching audit logs for: {time_range.description}")
@@ -21727,7 +21772,7 @@ class AuditAnalysisOps:
             entries = mistapi.get_all(response=response, mist_session=apisession) or []  # Paginate all results
             logging.debug("Retrieved %d raw audit log entries", len(entries))  # Log result count
         except Exception as exc:
-            logging.error(f"API call failed: {exc}")  # Log API failure with context
+            logging.error("API call failed: %s", exc)  # Log API failure with context
             return
 
         print(f"Retrieved {len(entries)} raw entries")
@@ -22353,7 +22398,7 @@ class MapsManagerLauncher:
 
     def _handle_import_error(self, error: ImportError) -> None:
         """Log and display import failure message."""
-        logging.error(f"Failed to import MapsManager from src/maps/maps_manager.py: {error}")
+        logging.error("Failed to import MapsManager from src/maps/maps_manager.py: %s", error)
         print("\nERROR: Could not load Maps Manager module.")
         print("Ensure src/maps/maps_manager.py exists")
 
@@ -22376,7 +22421,7 @@ class MapsManagerLauncher:
 
     def _handle_fatal_error(self, error: Exception) -> None:
         """Log and display fatal error message."""
-        logging.error(f"Error running Maps Manager: {error}", exc_info=True)
+        logging.error("Error running Maps Manager: %s", error, exc_info=True)
         print(f"\nERROR: {error}")
 
 
@@ -22478,7 +22523,7 @@ class TUILauncher:
 
     def _handle_fatal_error(self, error: Exception) -> None:
         """Handle fatal TUI errors."""
-        logging.error(f"TUI_MODE: Fatal error - {error}", exc_info=True)
+        logging.error("TUI_MODE: Fatal error - %s", error, exc_info=True)
         print(f"\n[ERROR] TUI mode crashed: {error}")
 
     def _restore_console_logging(self) -> None:
@@ -22494,7 +22539,7 @@ class TUILauncher:
 
         if self.debug_mode:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-            logging.debug(f"TUI_DEBUG: [{timestamp}] TUI_MODE function completed - returning to caller")
+            logging.debug("TUI_DEBUG: [%s] TUI_MODE function completed - returning to caller", timestamp)
 
         logging.info("TUI_MODE: TUI mode completed successfully")
         print("\n>> Returned from TUI mode to main menu")
@@ -22527,7 +22572,7 @@ class TelemetryEmitter:
                 os.makedirs(parent, exist_ok=True)
             self._handle = open(file_path, "a", encoding="utf-8")
         except OSError as exc:
-            logging.warning(f"TelemetryEmitter: cannot open {file_path}: {exc}")
+            logging.warning("TelemetryEmitter: cannot open %s: %s", file_path, exc)
 
     # -- core write ----------------------------------------------------------
 
@@ -22539,7 +22584,7 @@ class TelemetryEmitter:
             self._handle.write(json.dumps(event, default=str) + "\n")
             self._handle.flush()
         except OSError as exc:
-            logging.warning(f"TelemetryEmitter: write failed: {exc}")
+            logging.warning("TelemetryEmitter: write failed: %s", exc)
 
     def close(self) -> None:
         """Flush and close the underlying file handle."""
@@ -22712,9 +22757,9 @@ class TelemetryEmitter:
             while len(files) > limit:
                 oldest = files.pop(0)
                 os.remove(oldest)
-                logging.info(f"TelemetryEmitter: removed old file {oldest}")
+                logging.info("TelemetryEmitter: removed old file %s", oldest)
         except OSError as exc:
-            logging.warning(f"TelemetryEmitter: retention cleanup failed: {exc}")
+            logging.warning("TelemetryEmitter: retention cleanup failed: %s", exc)
 
     # -- timestamped filename helper -----------------------------------------
 
@@ -23132,7 +23177,7 @@ class OperationRegistry:
         entry = cls._REGISTRY.get(str(option))
         if entry is not None:
             return entry  # type: ignore[no-any-return]
-        logging.warning(f"OperationRegistry: option {option} not registered, defaulting to safe")
+        logging.warning("OperationRegistry: option %s not registered, defaulting to safe", option)
         return {"category": "safe"}
 
     @classmethod
@@ -23256,7 +23301,11 @@ def _systematic_test_run_option(
     if supports_fast and fast_enabled:  # Only pass fast=True when both the function and global mode agree.
         invoke_kwargs["fast"] = True  # Activate fast mode for this operation to reduce test time.
     logging.info(
-        f"SYSTEMATIC_TEST: INVOKE option={option} fast_supported={supports_fast} fast_enabled={fast_enabled} test_mode=True description='{description}'"  # noqa: E501
+        "SYSTEMATIC_TEST: INVOKE option=%s fast_supported=%s fast_enabled=%s test_mode=True description='%s'",
+        option,
+        supports_fast,
+        fast_enabled,
+        description,
     )  # Log invocation details before calling so post-mortem analysis can match events to options.
     try:  # Each option runs independently so one failure does not abort remaining tests.
         func(**invoke_kwargs)  # type: ignore[operator, no-untyped-call]  # Call menu action with resolved kwargs.
@@ -23264,7 +23313,7 @@ def _systematic_test_run_option(
         print(f"   [SUCCESS] Option {option} completed successfully")  # Confirm success immediately after call returns.
         emitter.emit_test_pass(option, description, duration, "systematic")  # Record pass event in telemetry.
         logging.info(
-            f"SYSTEMATIC_TEST: Successfully completed menu option {option}"
+            "SYSTEMATIC_TEST: Successfully completed menu option %s", option
         )  # Log success for log-correlation.
         return True, duration  # Signal success to the caller for count tracking.
     except Exception as exc:  # Catch all exceptions so the test harness can continue to the next option.
@@ -23276,7 +23325,7 @@ def _systematic_test_run_option(
             option, description, duration, exc, "systematic"
         )  # Record failure in telemetry for coverage reporting.
         logging.error(
-            f"SYSTEMATIC_TEST: Failed menu option {option}: {exc}"
+            "SYSTEMATIC_TEST: Failed menu option %s: %s", option, exc
         )  # Log full error for detailed investigation.
         return False, duration  # Signal failure to the caller for count tracking.
 
@@ -23407,13 +23456,13 @@ def run_systematic_test():  # noqa: C901, PLR0912, PLR0915
     if error_count == 0:  # All-pass outcome deserves an explicit success message.
         print("   All tested operations completed successfully!")  # Confirm all-green result to the operator.
         logging.info(
-            f"SYSTEMATIC_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s"
+            "SYSTEMATIC_TEST: All %s tested operations completed successfully in %.2fs", success_count, total_time
         )  # Record all-pass event for monitoring.
         return True  # Signal all-pass to callers (e.g., for exit-code logic).
     else:  # Some failures occurred; surface them without hiding the partial success.
         print(f"    {error_count} operations failed - check logs for details")  # Prompt operator to review logs.
         logging.warning(
-            f"SYSTEMATIC_TEST: {error_count} operations failed out of {len(safe_options)} tested"
+            "SYSTEMATIC_TEST: %s operations failed out of %s tested", error_count, len(safe_options)
         )  # Log failure count for alerting systems.
         return False  # Signal partial failure to callers.
 
@@ -23487,7 +23536,7 @@ def _launch_web_portal(args):
         print(">> For production, use: gunicorn wsgi:app")
         app.run(host=host, port=port, debug=False)
     else:
-        logging.info(f"WEB_PORTAL: Local mode - Flask dev server on {host}:{port}")
+        logging.info("WEB_PORTAL: Local mode - Flask dev server on %s:%s", host, port)
         print(f">> Web portal starting at http://127.0.0.1:{port}")
         app.run(host=host, port=port, debug=args.debug)
 
@@ -23774,7 +23823,7 @@ def _run_tui_mode(args: argparse.Namespace) -> None:
             logging.debug(
                 "TUI_DEBUG: [%s] Exception caught in TUI mode: %s: %s", timestamp, type(error).__name__, error
             )  # Log error  # noqa: E501
-        logging.error("TUI_MODE: Fatal error - %s", error, exc_info=True)  # Log full traceback to file
+        logging.exception("TUI_MODE: Fatal error - %s", error)  # Log full traceback to file
         print(f"\n[ERROR] TUI mode crashed: {error}")  # Inform user of crash
         sys.exit(1)  # Exit with error code after TUI crash
     if args.debug:
@@ -24047,21 +24096,21 @@ if __name__ == "__main__":
                 for line in formatted.rstrip().splitlines():
                     logging.error(line)
             except Exception as hook_err:
-                logging.error(f"Exception in global excepthook: {hook_err}")
+                logging.error("Exception in global excepthook: %s", hook_err)
 
         try:
             import sys as _sys_mod
 
             _sys_mod.excepthook = _global_excepthook
         except Exception as hook_setup_err:
-            logging.warning(f"Failed to install global excepthook: {hook_setup_err}")
+            logging.warning("Failed to install global excepthook: %s", hook_setup_err)
         main()  # type: ignore[no-untyped-call]
     except KeyboardInterrupt:
         logging.info("Application interrupted by user (Ctrl+C)")
         logging.debug("EXIT: __main__ - user interrupt")
         sys.exit(130)  # Standard exit code for SIGINT
     except Exception as e:
-        logging.error(f"Unhandled exception in main application: {e}")
+        logging.error("Unhandled exception in main application: %s", e)
         try:
             import traceback
 
@@ -24069,7 +24118,7 @@ if __name__ == "__main__":
             for line in traceback_details.rstrip().splitlines():
                 logging.error(line)
         except Exception as trace_err:
-            logging.error(f"Failed to log exception traceback: {trace_err}")
+            logging.error("Failed to log exception traceback: %s", trace_err)
         logging.debug("EXIT: __main__ - unhandled exception")
         sys.exit(1)
     finally:
