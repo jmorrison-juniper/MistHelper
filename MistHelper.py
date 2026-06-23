@@ -313,8 +313,9 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimu
     )
     required_str = f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"  # Format minimum required version
     logging.warning(  # Log warning (will be written to script.log after handler setup)
-        f"Python {version_str} detected. MistHelper requires Python {required_str}+. "
-        f"Some features may not work correctly."
+        "Python %s detected. MistHelper requires Python %s+. Some features may not work correctly.",
+        version_str,
+        required_str,
     )
 
 
@@ -610,15 +611,17 @@ def _parse_requirements_file(filepath="requirements.txt"):  # Read dependency sp
 
                 packages.append((package_name, package_spec))  # Record this dependency for the caller
 
-        logging.debug(f"Parsed {len(packages)} packages from {filepath}")  # Debug aid: how many specs were parsed
+        logging.debug("Parsed %s packages from %s", len(packages), filepath)  # Debug aid: how many specs were parsed
         return packages  # Return the collected dependency list
     except FileNotFoundError:  # requirements.txt does not exist at the given path
         logging.warning(
-            f"Requirements file not found: {filepath}"
+            "Requirements file not found: %s", filepath
         )  # Warn so the operator knows auto-install is skipped
         return []  # No packages to check
     except Exception as parse_error:  # Any other read/parse error
-        logging.warning(f"Error parsing requirements file: {parse_error}")  # Log the failure reason for troubleshooting
+        logging.warning(
+            "Error parsing requirements file: %s", parse_error
+        )  # Log the failure reason for troubleshooting
         return []  # Fail safe with an empty list rather than crashing startup
 
 
@@ -684,7 +687,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
             ):  # Installed but too old for the spec
                 outdated_packages.append((package_name, package_spec, installed_version))  # Queue it for upgrade
                 logging.info(
-                    f"Outdated dependency: {package_name} {installed_version} (requires {package_spec})"
+                    "Outdated dependency: %s %s (requires %s)", package_name, installed_version, package_spec
                 )  # Log the version gap
             elif auto_upgrade_to_latest and installed_version:  # Meets the spec, but we may still chase a newer release
                 # Check PyPI for newer version (best-effort, skip on any error)
@@ -699,25 +702,25 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                 ):  # A strictly newer version exists
                     outdated_packages.append((package_name, package_spec, installed_version))  # Queue it for upgrade
                     logging.info(
-                        f"Newer version available: {package_name} {installed_version} -> {latest_version}"
+                        "Newer version available: %s %s -> %s", package_name, installed_version, latest_version
                     )  # Log the available upgrade
         except ImportError:  # The module could not be imported at all
             missing_packages.append((package_name, package_spec))  # Queue it for installation
-            logging.info(f"Missing dependency detected: {package_name}")  # Log the missing package
+            logging.info("Missing dependency detected: %s", package_name)  # Log the missing package
 
     if not missing_packages and not outdated_packages:  # Everything is present and current
         logging.debug(
-            f"All {len(all_packages)} dependencies from requirements.txt present and up-to-date"
+            "All %s dependencies from requirements.txt present and up-to-date", len(all_packages)
         )  # Nothing to do
         return  # Early exit; no install work needed
 
     if missing_packages:  # There are packages to install
         logging.info(
-            f"Attempting to auto-install {len(missing_packages)} missing dependencies..."
+            "Attempting to auto-install %s missing dependencies...", len(missing_packages)
         )  # Announce the install plan
     if outdated_packages:  # There are packages to upgrade
         logging.info(
-            f"Attempting to upgrade {len(outdated_packages)} outdated dependencies..."
+            "Attempting to upgrade %s outdated dependencies...", len(outdated_packages)
         )  # Announce the upgrade plan
 
     # Helper function to find UV executable in various locations
@@ -783,7 +786,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                     cmd + ["--version"], capture_output=True, text=True, timeout=5
                 )  # nosec B603  # Run 'uv --version' to confirm it works
                 if result.returncode == 0:  # Exit code 0 means uv ran successfully
-                    logging.debug(f"Found UV at: {cmd}")  # Record which candidate worked
+                    logging.debug("Found UV at: %s", cmd)  # Record which candidate worked
                     return cmd, result.stdout.strip()  # Return the working command and its version string
             except (FileNotFoundError, subprocess.SubprocessError, OSError):  # Candidate missing or failed to execute
                 continue  # Move on to the next candidate
@@ -796,7 +799,9 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
     uv_cmd, uv_version = find_uv_executable()  # type: ignore[no-untyped-call]  # Probe for an existing uv install
     if uv_cmd:  # A working uv was found
         use_uv = True  # Prefer UV for installs (much faster than pip)
-        logging.info(f"UV package manager detected: {uv_version} (cmd: {' '.join(uv_cmd)})")  # Log which uv we'll use
+        logging.info(
+            "UV package manager detected: %s (cmd: %s)", uv_version, " ".join(uv_cmd)
+        )  # Log which uv we'll use
     else:  # No uv present yet
         logging.info("UV package manager not found in PATH or Python environment")  # Note that we'll try to install it
 
@@ -817,7 +822,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                 if uv_cmd:  # uv is now usable
                     use_uv = True  # Switch to the faster UV path
                     logging.info(
-                        f"UV verified after install: {uv_version} (cmd: {' '.join(uv_cmd)})"
+                        "UV verified after install: %s (cmd: %s)", uv_version, " ".join(uv_cmd)
                     )  # Log the verified uv
                 else:  # Install claimed success but binary not found
                     logging.warning(
@@ -826,10 +831,10 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                     use_uv = False  # Fall back to pip to be safe
             else:  # pip returned a non-zero exit code
                 logging.warning(
-                    f"Failed to install UV with pip: {install_result.stderr.strip()}"
+                    "Failed to install UV with pip: %s", install_result.stderr.strip()
                 )  # Log the pip error output
         except Exception as install_error:  # Subprocess raised (timeout, OS error, etc.)
-            logging.warning(f"Could not install UV: {install_error}")  # Log why the bootstrap failed
+            logging.warning("Could not install UV: %s", install_error)  # Log why the bootstrap failed
 
     # Log installation strategy
     if use_uv:  # We have a working uv
@@ -869,24 +874,24 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                         sys.executable,
                         package_spec,
                     ]  # Still target the current interpreter
-                logging.info(f"Installing {package_spec} with UV...")  # Announce the UV install attempt
+                logging.info("Installing %s with UV...", package_spec)  # Announce the UV install attempt
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=60
                 )  # nosec B603  # 60s cap prevents hangs
 
                 if result.returncode == 0:  # UV reported success
-                    logging.info(f"Successfully installed {package_spec} with UV")  # Confirm the install
+                    logging.info("Successfully installed %s with UV", package_spec)  # Confirm the install
                     success_count += 1  # Tally a successful install
                     installed = True  # Mark done so we skip the pip fallback
                 else:  # UV failed for this package
                     # UV failed - log and try pip fallback
                     logging.warning(
-                        f"UV installation failed for {package_spec}: {result.stderr.strip()}"
+                        "UV installation failed for %s: %s", package_spec, result.stderr.strip()
                     )  # Log UV's error
-                    logging.info(f"Retrying {package_spec} with pip fallback...")  # Announce the pip retry
+                    logging.info("Retrying %s with pip fallback...", package_spec)  # Announce the pip retry
             except Exception as uv_error:  # UV process raised (timeout, OS error)
-                logging.warning(f"UV installation error for {package_spec}: {uv_error}")  # Log the exception
-                logging.info(f"Retrying {package_spec} with pip fallback...")  # Fall through to pip
+                logging.warning("UV installation error for %s: %s", package_spec, uv_error)  # Log the exception
+                logging.info("Retrying %s with pip fallback...", package_spec)  # Fall through to pip
 
         # Try pip if UV not available or UV failed
         if not installed:  # Only use pip if UV didn't already install it
@@ -898,22 +903,22 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                     "install",
                     package_spec,
                 ]  # Standard pip install for the current interpreter
-                logging.info(f"Installing {package_spec} with pip...")  # Announce the pip install
+                logging.info("Installing %s with pip...", package_spec)  # Announce the pip install
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=60
                 )  # nosec B603  # 60s cap prevents hangs
 
                 if result.returncode == 0:  # pip reported success
-                    logging.info(f"Successfully installed {package_spec} with pip")  # Confirm the install
+                    logging.info("Successfully installed %s with pip", package_spec)  # Confirm the install
                     success_count += 1  # Tally a successful install
                     installed = True  # Mark this package done
                 else:  # pip failed
                     logging.error(
-                        f"Pip installation failed for {package_spec}: {result.stderr.strip()}"
+                        "Pip installation failed for %s: %s", package_spec, result.stderr.strip()
                     )  # Log pip's error output
                     failure_count += 1  # Tally a failed install
             except Exception as pip_error:  # pip process raised (timeout, OS error)
-                logging.error(f"Could not install {package_spec} with pip: {pip_error}")  # Log the exception
+                logging.error("Could not install %s with pip: %s", package_spec, pip_error)  # Log the exception
                 failure_count += 1  # Tally a failed install
 
     # Step 5: Upgrade outdated packages
@@ -944,7 +949,9 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                         sys.executable,
                         package_spec,
                     ]  # Upgrade for current interpreter
-                logging.info(f"Upgrading {package_name} from {installed_version} with UV...")  # Announce the UV upgrade
+                logging.info(
+                    "Upgrading %s from %s with UV...", package_name, installed_version
+                )  # Announce the UV upgrade
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=60
                 )  # nosec B603  # 60s cap prevents hangs
@@ -952,16 +959,18 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                 if result.returncode == 0:  # UV upgrade succeeded
                     new_version = _get_installed_version(package_name)  # Read the version after upgrade for logging
                     logging.info(
-                        f"Successfully upgraded {package_name}: {installed_version} -> {new_version}"
+                        "Successfully upgraded %s: %s -> %s", package_name, installed_version, new_version
                     )  # Log the version change
                     upgrade_count += 1  # Tally a successful upgrade
                     upgraded = True  # Mark done so we skip the pip fallback
                 else:  # UV upgrade failed
-                    logging.warning(f"UV upgrade failed for {package_name}: {result.stderr.strip()}")  # Log UV's error
-                    logging.info(f"Retrying {package_name} upgrade with pip fallback...")  # Announce the pip retry
+                    logging.warning(
+                        "UV upgrade failed for %s: %s", package_name, result.stderr.strip()
+                    )  # Log UV's error
+                    logging.info("Retrying %s upgrade with pip fallback...", package_name)  # Announce the pip retry
             except Exception as uv_error:  # UV process raised
-                logging.warning(f"UV upgrade error for {package_name}: {uv_error}")  # Log the exception
-                logging.info(f"Retrying {package_name} upgrade with pip fallback...")  # Fall through to pip
+                logging.warning("UV upgrade error for %s: %s", package_name, uv_error)  # Log the exception
+                logging.info("Retrying %s upgrade with pip fallback...", package_name)  # Fall through to pip
 
         # Try pip if UV not available or UV failed
         if not upgraded:  # Only use pip if UV didn't already upgrade it
@@ -975,7 +984,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                     package_spec,
                 ]  # Standard pip upgrade for the current interpreter
                 logging.info(
-                    f"Upgrading {package_name} from {installed_version} with pip..."
+                    "Upgrading %s from %s with pip...", package_name, installed_version
                 )  # Announce the pip upgrade
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=60
@@ -984,7 +993,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                 if result.returncode == 0:  # pip upgrade succeeded
                     new_version = _get_installed_version(package_name)  # Read the post-upgrade version for logging
                     logging.info(
-                        f"Successfully upgraded {package_name}: {installed_version} -> {new_version}"
+                        "Successfully upgraded %s: %s -> %s", package_name, installed_version, new_version
                     )  # Log the version change
                     upgrade_count += 1  # Tally a successful upgrade
                     upgraded = True  # Mark this package done
@@ -994,7 +1003,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                         "no-record-file" in result.stderr or "RECORD" in result.stderr
                     ):  # Broken install metadata (missing RECORD)
                         logging.warning(
-                            f"Package {package_name} has corrupted state - attempting force reinstall..."
+                            "Package %s has corrupted state - attempting force reinstall...", package_name
                         )  # Explain the recovery attempt
                         force_cmd = [  # Build a force-reinstall command to repair the broken package
                             sys.executable,  # Use the current interpreter
@@ -1014,22 +1023,25 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
                         if force_result.returncode == 0:  # Repair succeeded
                             new_version = _get_installed_version(package_name)  # Read the repaired version for logging
                             logging.info(  # Log the successful repair and version change
-                                f"Successfully force-reinstalled {package_name}: {installed_version} -> {new_version}"
+                                "Successfully force-reinstalled %s: %s -> %s",
+                                package_name,
+                                installed_version,
+                                new_version,
                             )
                             upgrade_count += 1  # Tally the repair as a successful upgrade
                             upgraded = True  # Mark this package done
                         else:  # Repair also failed
                             logging.error(
-                                f"Force reinstall failed for {package_name}: {force_result.stderr.strip()}"
+                                "Force reinstall failed for %s: %s", package_name, force_result.stderr.strip()
                             )  # Log the repair error
                             upgrade_failure_count += 1  # Tally a failed upgrade
                     else:  # Failure was not a corrupted-state issue
                         logging.error(
-                            f"Pip upgrade failed for {package_name}: {result.stderr.strip()}"
+                            "Pip upgrade failed for %s: %s", package_name, result.stderr.strip()
                         )  # Log the generic pip error
                         upgrade_failure_count += 1  # Tally a failed upgrade
             except Exception as pip_error:  # pip process raised (timeout, OS error)
-                logging.error(f"Could not upgrade {package_name} with pip: {pip_error}")  # Log the exception
+                logging.error("Could not upgrade %s with pip: %s", package_name, pip_error)  # Log the exception
                 upgrade_failure_count += 1  # Tally a failed upgrade
 
     # Summary
@@ -1042,7 +1054,7 @@ def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
         summary_parts.append(f"{failure_count + upgrade_failure_count} failed")  # Add the combined failure count
 
     logging.info(
-        f"Early dependency check completed: {', '.join(summary_parts) if summary_parts else 'all up-to-date'}"
+        "Early dependency check completed: %s", ", ".join(summary_parts) if summary_parts else "all up-to-date"
     )  # Final one-line summary
 
 
@@ -1205,11 +1217,11 @@ except Exception:  # Missing or non-numeric value
 DEFAULT_API_PAGE_LIMIT = max(1, min(_parsed_limit, 1000))  # Clamp to the 1..1000 range the Mist API accepts
 if _parsed_limit != DEFAULT_API_PAGE_LIMIT:  # The configured value was out of range and had to be clamped
     logging.warning(
-        f"MIST_PAGE_LIMIT value {_parsed_limit} adjusted to {DEFAULT_API_PAGE_LIMIT} (valid range 1..1000)"
+        "MIST_PAGE_LIMIT value %s adjusted to %s (valid range 1..1000)", _parsed_limit, DEFAULT_API_PAGE_LIMIT
     )  # Warn about the adjustment
 
 logging.debug(
-    f"API Page Size Configuration Active: DEFAULT_API_PAGE_LIMIT={DEFAULT_API_PAGE_LIMIT}"
+    "API Page Size Configuration Active: DEFAULT_API_PAGE_LIMIT=%s", DEFAULT_API_PAGE_LIMIT
 )  # Record the effective page size for debugging
 
 
@@ -1226,7 +1238,7 @@ def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dot
     except FileNotFoundError:  # No .env file present
         logging.debug("No .env file found")  # Not an error; just note it at debug level
     except Exception as e:  # Any other read/parse problem
-        logging.debug(f"Error loading .env file: {e}")  # Log the reason without crashing startup
+        logging.debug("Error loading .env file: %s", e)  # Log the reason without crashing startup
 
 
 try:  # Prefer the full-featured python-dotenv loader when available
@@ -1339,11 +1351,11 @@ class GlobalImportManager:
 
         if self.in_venv:  # Running inside a virtual environment
             venv_path = getattr(sys, "prefix", "unknown")  # Path to the active venv
-            logging.info(f"Running in virtual environment: {venv_path}")  # Log the venv location
-            logging.info(f"Python executable: {sys.executable}")  # Log which interpreter is in use
+            logging.info("Running in virtual environment: %s", venv_path)  # Log the venv location
+            logging.info("Python executable: %s", sys.executable)  # Log which interpreter is in use
         else:  # Running against the system Python
             logging.info("Running in system Python environment")  # Note the non-venv environment
-            logging.info(f"Python executable: {sys.executable}")  # Log which interpreter is in use
+            logging.info("Python executable: %s", sys.executable)  # Log which interpreter is in use
 
     def _setup_logging(self):  # Build console+file handlers with env-driven levels
         """Setup basic logging configuration with environment-specific levels."""
@@ -1448,13 +1460,13 @@ class GlobalImportManager:
                 ["uv", "--version"], capture_output=True, text=True, timeout=10
             )  # nosec B603 B607  # Run 'uv --version'
             if result.returncode == 0:  # UV ran successfully
-                logging.info(f"UV package manager found: {result.stdout.strip()}")  # Log the detected UV version
+                logging.info("UV package manager found: %s", result.stdout.strip())  # Log the detected UV version
                 self._uv_available = True  # Cache that UV is usable
             else:  # UV exists but returned an error
                 logging.warning("UV package manager not found or not working properly")  # Note the problem
                 self._uv_available = False  # Cache that UV is not usable
         except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:  # UV missing or hung
-            logging.warning(f"UV package manager check failed: {e}")  # Log why the probe failed
+            logging.warning("UV package manager check failed: %s", e)  # Log why the probe failed
             self._uv_available = False  # Cache that UV is not usable
 
         # Cache the result
@@ -1480,10 +1492,10 @@ class GlobalImportManager:
                 logging.info("UV package manager installed successfully via pip")  # Confirm the install
                 return True  # UV is now available
             else:  # pip returned an error
-                logging.error(f"Failed to install UV via pip: {result.stderr}")  # Log pip's error output
+                logging.error("Failed to install UV via pip: %s", result.stderr)  # Log pip's error output
                 return False  # UV remains unavailable
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # pip process hung or failed to launch
-            logging.error(f"Failed to install UV package manager: {e}")  # Log the exception
+            logging.error("Failed to install UV package manager: %s", e)  # Log the exception
             return False  # UV remains unavailable
 
     def _upgrade_uv(self) -> bool:  # Keep UV up to date, throttled to once per configured interval
@@ -1497,7 +1509,9 @@ class GlobalImportManager:
             hours_since_last_check = (now - self._last_uv_update_check) / 3600  # Convert elapsed seconds to hours
             if hours_since_last_check < self.uv_update_check_hours:  # Still inside the throttle window
                 logging.debug(  # Skip the check to avoid frequent network calls
-                    f"UV update check skipped (last check {hours_since_last_check:.1f} hours ago, threshold: {self.uv_update_check_hours} hours)"  # noqa: E501
+                    "UV update check skipped (last check %.1f hours ago, threshold: %s hours)",
+                    hours_since_last_check,
+                    self.uv_update_check_hours,
                 )
                 return True  # No update needed yet
 
@@ -1536,21 +1550,21 @@ class GlobalImportManager:
                         logging.info("UV package manager updated successfully via pip")  # Confirm the upgrade
                         return True  # Done
                     else:  # pip upgrade failed
-                        logging.warning(f"Failed to upgrade UV via pip: {pip_result.stderr}")  # Log the error
+                        logging.warning("Failed to upgrade UV via pip: %s", pip_result.stderr)  # Log the error
                         return True  # Non-critical failure  # Continue anyway; the current UV still works
                 else:  # Self-update failed for some other reason
-                    logging.warning(f"UV self-update returned non-zero: {result.stderr}")  # Log the error
+                    logging.warning("UV self-update returned non-zero: %s", result.stderr)  # Log the error
                     return True  # Non-critical failure  # Continue anyway; the current UV still works
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # Update process hung or failed to launch
             # Still update the last check time to avoid repeated failures
             self._last_uv_update_check = now  # Record the attempt so we don't retry immediately
-            logging.warning(f"UV self-update failed: {e}")  # Log the exception
+            logging.warning("UV self-update failed: %s", e)  # Log the exception
             return True  # Non-critical failure  # Continue anyway; the current UV still works
 
     def _install_package_with_uv(self, package_spec: str) -> bool:
         """Install a package using UV package manager with fast resolution and virtual environment awareness."""
         try:
-            logging.debug(f"Installing package with UV: {package_spec}")  # Log which package is being installed
+            logging.debug("Installing package with UV: %s", package_spec)  # Log which package is being installed
 
             # Check if we're in a virtual environment and prefer venv's UV if available
             uv_cmd = "uv"  # Default to the UV binary found on PATH
@@ -1559,7 +1573,7 @@ class GlobalImportManager:
                 venv_uv = os.path.join(os.path.dirname(sys.executable), "uv.exe")  # Build the venv-local UV path
                 if os.path.exists(venv_uv):  # The venv ships its own UV binary
                     uv_cmd = venv_uv  # Prefer the venv's UV to stay environment-consistent
-                    logging.debug(f"Using venv UV: {venv_uv}")  # Record which UV binary was chosen
+                    logging.debug("Using venv UV: %s", venv_uv)  # Record which UV binary was chosen
 
                 # Use UV with the current Python environment
                 cmd = [
@@ -1582,7 +1596,7 @@ class GlobalImportManager:
                 timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
             )
             if result.returncode == 0:  # UV reported a successful install
-                logging.info(f"Successfully installed {package_spec} with UV")  # Confirm success
+                logging.info("Successfully installed %s with UV", package_spec)  # Confirm success
                 return True  # Installation done
             else:  # First attempt failed -- retry without build isolation
                 # Try without --no-build-isolation if it failed
@@ -1607,20 +1621,22 @@ class GlobalImportManager:
                 )
                 if result.returncode == 0:  # The fallback install succeeded
                     logging.info(
-                        f"Successfully installed {package_spec} with UV (fallback)"
+                        "Successfully installed %s with UV (fallback)", package_spec
                     )  # Confirm fallback success
                     return True  # Installation done
                 else:  # Both UV attempts failed
-                    logging.warning(f"UV install failed for {package_spec}: {result.stderr}")  # Log the UV error output
+                    logging.warning(
+                        "UV install failed for %s: %s", package_spec, result.stderr
+                    )  # Log the UV error output
                     return False  # Signal failure so the caller can fall back to pip
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # UV hung or failed to launch
-            logging.warning(f"Failed to install {package_spec} with UV: {e}")  # Log the exception detail
+            logging.warning("Failed to install %s with UV: %s", package_spec, e)  # Log the exception detail
             return False  # Signal failure so the caller can fall back to pip
 
     def _install_package_with_pip(self, package_spec: str) -> bool:
         """Install a package using pip as fallback with virtual environment awareness."""
         try:
-            logging.info(f"Installing package with pip: {package_spec}")  # Log the pip install attempt
+            logging.info("Installing package with pip: %s", package_spec)  # Log the pip install attempt
             # Always use the current Python executable to ensure installation in the right environment
             result = subprocess.run(  # nosec B603  # Run pip against this exact interpreter (trusted argv)
                 [sys.executable, "-m", "pip", "install", package_spec],  # Invoke pip as a module of this Python
@@ -1629,13 +1645,15 @@ class GlobalImportManager:
                 timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
             )
             if result.returncode == 0:  # pip reported a successful install
-                logging.info(f"Successfully installed {package_spec} with pip")  # Confirm success
+                logging.info("Successfully installed %s with pip", package_spec)  # Confirm success
                 return True  # Installation done
             else:  # pip install failed
-                logging.error(f"Failed to install {package_spec} with pip: {result.stderr}")  # Log pip's error output
+                logging.error(
+                    "Failed to install %s with pip: %s", package_spec, result.stderr
+                )  # Log pip's error output
                 return False  # Signal failure to the caller
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # pip hung or failed to launch
-            logging.error(f"Failed to install {package_spec} with pip: {e}")  # Log the exception detail
+            logging.error("Failed to install %s with pip: %s", package_spec, e)  # Log the exception detail
             return False  # Signal failure to the caller
 
     def _should_check_uv_update(self) -> bool:
@@ -1684,7 +1702,9 @@ class GlobalImportManager:
             logging.info("No packages to process")  # Note there is nothing to do
             return True  # Success by default -- no work means no failures
 
-        logging.info(f"Processing {len(packages_to_process)} packages...")  # Announce how many packages will be handled
+        logging.info(
+            "Processing %s packages...", len(packages_to_process)
+        )  # Announce how many packages will be handled
 
         # Process packages individually for better error handling
         uv_available = self._check_uv_installation()  # Detect whether UV can be used as the fast installer
@@ -1712,12 +1732,16 @@ class GlobalImportManager:
                 if self._install_package_with_pip(pkg_spec):  # pip install succeeded
                     success_count += 1  # Count this package as done
                 else:  # pip install failed
-                    logging.warning(f"Failed to install/upgrade {pkg_spec}")  # Warn but keep processing others
+                    logging.warning("Failed to install/upgrade %s", pkg_spec)  # Warn but keep processing others
 
             except Exception as e:  # Any unexpected error during install of this package
-                logging.warning(f"Error processing package {pkg_spec}: {e}")  # Log and continue with remaining packages
+                logging.warning(
+                    "Error processing package %s: %s", pkg_spec, e
+                )  # Log and continue with remaining packages
 
-        logging.info(f"Successfully processed {success_count}/{len(packages_to_process)} packages")  # Summarize results
+        logging.info(
+            "Successfully processed %s/%s packages", success_count, len(packages_to_process)
+        )  # Summarize results
         return success_count > 0  # Report success if at least one package installed
 
     def _import_concurrent_futures(self):
@@ -1773,9 +1797,9 @@ class GlobalImportManager:
                 unit = kwargs.get("unit", "item")  # Unit noun for the progress message
                 if hasattr(iterable, "__len__"):  # The iterable has a known length
                     total = len(iterable)  # Compute total item count for the message
-                    logging.info(f"{desc}: {total} {unit}s to process")  # Log a one-shot progress summary
+                    logging.info("%s: %s %ss to process", desc, total, unit)  # Log a one-shot progress summary
                 else:  # Length is unknown (e.g. a generator)
-                    logging.info(f"{desc}: processing {unit}s...")  # Log an indefinite progress message
+                    logging.info("%s: processing %ss...", desc, unit)  # Log an indefinite progress message
                 return iterable  # Pass the iterable through unchanged (no live bar)
 
             return tqdm_fallback  # Provide the no-op progress shim to callers
@@ -1801,7 +1825,7 @@ class GlobalImportManager:
 
             if result.returncode != 0:  # pip could not find the package
                 logging.debug(
-                    f"Package {package_name} not found, skipping upgrade check"
+                    "Package %s not found, skipping upgrade check", package_name
                 )  # Nothing installed to upgrade
                 return True  # Treat as success -- not an error condition
 
@@ -1813,11 +1837,11 @@ class GlobalImportManager:
                     break  # Stop scanning once found
 
             if current_version:  # We successfully determined the installed version
-                logging.debug(f"Current version of {package_name}: {current_version}")  # Record the current version
+                logging.debug("Current version of %s: %s", package_name, current_version)  # Record the current version
 
                 # Try to upgrade the package
                 logging.info(
-                    f"  Checking for updates to {package_name}..."
+                    "  Checking for updates to %s...", package_name
                 )  # Inform the user an upgrade check is running
 
                 # Use UV if available, otherwise pip
@@ -1874,24 +1898,24 @@ class GlobalImportManager:
 
                     if new_version and new_version != current_version:  # The version actually advanced
                         logging.info(
-                            f"  [OK] {package_name}: Upgraded from {current_version} to {new_version}"
+                            "  [OK] %s: Upgraded from %s to %s", package_name, current_version, new_version
                         )  # Report the upgrade
                         return True  # Upgrade succeeded
                     else:  # Version did not change
                         logging.debug(
-                            f"  [OK] {package_name}: Already up to date ({current_version})"
+                            "  [OK] %s: Already up to date (%s)", package_name, current_version
                         )  # Already current
                         return True  # Nothing to do, still success
                 else:  # The upgrade command failed
                     logging.debug(
-                        f"  [WARN] {package_name}: Upgrade check failed: {upgrade_result.stderr}"
+                        "  [WARN] %s: Upgrade check failed: %s", package_name, upgrade_result.stderr
                     )  # Log the failure detail
                     return True  # Non-critical failure -- continue without blocking startup
 
             return True  # Reached when version could not be parsed -- treat as non-fatal
 
         except Exception as e:  # Any unexpected error during the check/upgrade
-            logging.debug(f"Error checking/upgrading {module_name}: {e}")  # Log for diagnostics
+            logging.debug("Error checking/upgrading %s: %s", module_name, e)  # Log for diagnostics
             return True  # Non-critical failure -- never block startup on upgrade issues
 
     def _get_actual_import_name(self, module_name: str) -> str:
@@ -1931,7 +1955,7 @@ class GlobalImportManager:
                 module = __import__(actual_import_name)  # Import the module by its real import name
 
             self.imports[module_name] = module  # Cache the imported module for later global assignment
-            logging.debug(f"Successfully imported {module_name}")  # Record the successful import
+            logging.debug("Successfully imported %s", module_name)  # Record the successful import
 
             # Check if we should upgrade existing packages (only if auto-upgrade is enabled and not skipping)
             if (
@@ -1944,14 +1968,14 @@ class GlobalImportManager:
             return module  # Hand the imported module back to the caller
 
         except ImportError as e:  # The module is not installed or failed to load
-            logging.warning(f"Failed to import {module_name}: {e}")  # Note the import failure
+            logging.warning("Failed to import %s: %s", module_name, e)  # Note the import failure
 
             # Attempt to install if package spec is provided and auto-installation is enabled
             if (
                 package_spec and self.auto_upgrade_dependencies and not skip_deps and not self.disable_auto_install
             ):  # Auto-install is permitted
                 logging.info(
-                    f"Attempting to install missing dependency: {package_spec}"
+                    "Attempting to install missing dependency: %s", package_spec
                 )  # Announce the install attempt
 
                 # Try installing the package
@@ -1959,12 +1983,12 @@ class GlobalImportManager:
 
                 # Try UV first if available (using cached check)
                 if self._check_uv_installation():  # UV is the preferred fast installer
-                    logging.debug(f"Trying UV installation for {package_spec}")  # Note the UV attempt
+                    logging.debug("Trying UV installation for %s", package_spec)  # Note the UV attempt
                     installed = self._install_package_with_uv(package_spec)  # Attempt the UV install
 
                 # Fallback to pip if UV failed or not available
                 if not installed:  # UV either failed or is unavailable
-                    logging.debug(f"Trying pip installation for {package_spec}")  # Note the pip attempt
+                    logging.debug("Trying pip installation for %s", package_spec)  # Note the pip attempt
                     installed = self._install_package_with_pip(package_spec)  # Attempt the pip install
 
                 if installed:  # A package was successfully installed
@@ -1979,7 +2003,7 @@ class GlobalImportManager:
                     for mod_name in modules_to_clear:  # Purge each possibly-cached name
                         if mod_name in sys.modules:  # A stale/failed entry exists in the module cache
                             del sys.modules[mod_name]  # Remove it so the retry re-imports cleanly
-                            logging.debug(f"Cleared cached module: {mod_name}")  # Record the cache purge
+                            logging.debug("Cleared cached module: %s", mod_name)  # Record the cache purge
 
                     # Wait a moment for installation to complete
                     time.sleep(0.5)  # Brief pause to let filesystem writes settle before retrying
@@ -1994,29 +2018,30 @@ class GlobalImportManager:
 
                         self.imports[module_name] = module  # Cache the now-successful import
                         self.installed_packages.append(package_spec)  # Record that we installed this package this run
-                        logging.info(f"Successfully imported {module_name} after installation")  # Confirm recovery
+                        logging.info("Successfully imported %s after installation", module_name)  # Confirm recovery
                         return module  # Return the freshly imported module
 
                     except ImportError as retry_e:  # Import still fails even after a successful install
                         logging.error(
-                            f"Import still failed after installation for {module_name}: {retry_e}"
+                            "Import still failed after installation for %s: %s", module_name, retry_e
                         )  # Log the persistent failure
                         # For optional packages, this is not critical
                         if not required:  # Optional dependency -- degrade gracefully
                             logging.info(
-                                f"Optional package {module_name} installation succeeded but import failed - likely needs system restart or different Python session"  # noqa: E501  # Explain the likely cause
+                                "Optional package %s installation succeeded but import failed - likely needs system restart or different Python session",  # noqa: E501
+                                module_name,
                             )
                 else:  # No installer succeeded
-                    logging.error(f"Failed to install {package_spec}")  # Report the install failure
+                    logging.error("Failed to install %s", package_spec)  # Report the install failure
 
             # Handle failure
             if required:  # This dependency is mandatory for the program to run
                 self.failed_imports.append(module_name)  # Track it among hard failures
                 logging.error(
-                    f"Required dependency {module_name} could not be imported or installed"
+                    "Required dependency %s could not be imported or installed", module_name
                 )  # Log a hard error
             else:  # Optional dependency
-                logging.warning(f"Optional dependency {module_name} not available")  # Warn but allow continuation
+                logging.warning("Optional dependency %s not available", module_name)  # Warn but allow continuation
 
             return None  # Signal to the caller that the import was unavailable
 
@@ -2041,7 +2066,7 @@ class GlobalImportManager:
 
             with log_lock:  # Serialize this log line against other worker threads
                 logging.info(
-                    f"  Checking {package_type} dependency: {module_name} ({package_spec or 'built-in'})"
+                    "  Checking %s dependency: %s (%s)", package_type, module_name, package_spec or "built-in"
                 )  # Announce the check
 
             result = self.import_module_safely(  # Perform the actual import/install for this package
@@ -2054,12 +2079,12 @@ class GlobalImportManager:
 
             with log_lock:  # Serialize the result log line
                 if result:  # Import succeeded
-                    logging.info(f"  [OK] {module_name}: Available")  # Report availability
+                    logging.info("  [OK] %s: Available", module_name)  # Report availability
                 else:  # Import failed
                     if required:  # Mandatory dependency missing
-                        logging.error(f"  [FAIL] {module_name}: Failed to import")  # Log a hard failure
+                        logging.error("  [FAIL] %s: Failed to import", module_name)  # Log a hard failure
                     else:  # Optional dependency missing
-                        logging.warning(f"  [WARN] {module_name}: Not available")  # Log a soft warning
+                        logging.warning("  [WARN] %s: Not available", module_name)  # Log a soft warning
 
             return module_name, result  # Return the outcome for aggregation by the caller
 
@@ -2096,7 +2121,7 @@ class GlobalImportManager:
                     except Exception as exc:  # A worker raised an unexpected exception
                         with log_lock:  # Serialize the error log line
                             logging.error(
-                                f"Package {package_info[0]} import generated an exception: {exc}"
+                                "Package %s import generated an exception: %s", package_info[0], exc
                             )  # Log the worker failure
 
     def initialize_all_imports(
@@ -2296,10 +2321,10 @@ class GlobalImportManager:
                         )  # Warn about likely failures
                 except Exception as sub_e:  # Sub-module wiring hit an unexpected issue
                     logging.debug(
-                        f"Note: mistapi sub-modules handled dynamically: {sub_e}"
+                        "Note: mistapi sub-modules handled dynamically: %s", sub_e
                     )  # Non-fatal; handled at call sites
             except Exception as e:  # Failed to even access the cached mistapi object
-                logging.warning(f"Error accessing mistapi: {e}")  # Warn -- API features may be unavailable
+                logging.warning("Error accessing mistapi: %s", e)  # Warn -- API features may be unavailable
         else:  # The base SDK never imported
             logging.debug("mistapi not imported, skipping sub-module imports")  # Nothing to wire up
 
@@ -2407,16 +2432,16 @@ if _initialize_imports_now:  # Eager path: set up all imports now
             # Special handling for tqdm to ensure it overrides the fallback
             if var_name == "tqdm" and var_value is not None:  # Real tqdm must replace any earlier fallback
                 logging.info(
-                    f"Successfully imported real tqdm: {type(var_value)}"
+                    "Successfully imported real tqdm: %s", type(var_value)
                 )  # Confirm the real progress bar is active
         logging.debug(
-            f"Applied {len(global_assignments)} global variable assignments"
+            "Applied %s global variable assignments", len(global_assignments)
         )  # Report how many bindings were applied
 
         # Verify tqdm was properly imported
         if "tqdm" in global_assignments:  # tqdm binding is present
             logging.info(
-                f"tqdm is available in global namespace: {type(globals().get('tqdm'))}"
+                "tqdm is available in global namespace: %s", type(globals().get("tqdm"))
             )  # Confirm availability and type
         else:  # tqdm binding is missing
             logging.warning(
@@ -2480,7 +2505,7 @@ class TimeUtils:
                 return 1  # Clamp to the minimum sensible window
             return default_hours  # Normal path: use the standard production window
         except Exception as error:  # Never let lookback math crash a caller
-            logging.debug(f"get_dynamic_lookback_hours fallback due to error: {error}")  # Log the unexpected failure
+            logging.debug("get_dynamic_lookback_hours fallback due to error: %s", error)  # Log the unexpected failure
             return test_hours if IS_TEST_MODE else default_hours  # Fall back to a sensible default per mode
 
     @staticmethod
@@ -2488,10 +2513,10 @@ class TimeUtils:
         """Helper to produce a consistent log line when dynamic lookback applies."""
         if IS_TEST_MODE:  # Surface the reduced window prominently during tests
             logging.info(
-                f"[TEST MODE] Using reduced lookback window of {hours}h for {context} (normally 24h)"
+                "[TEST MODE] Using reduced lookback window of %sh for %s (normally 24h)", hours, context
             )  # Visible test-mode notice
         else:  # Production: keep the note at debug level
-            logging.debug(f"Using standard lookback window of {hours}h for {context}")  # Quiet production notice
+            logging.debug("Using standard lookback window of %sh for %s", hours, context)  # Quiet production notice
 
 
 # ============================================================================
@@ -2553,7 +2578,7 @@ class InputUtils:
             # If user provided empty input and we have a default value, use it
             if not user_input and default_value:  # Blank entry but a default is configured
                 logging.debug(
-                    f"Empty input for {context}, using default: '{default_value}'"
+                    "Empty input for %s, using default: '%s'", context, default_value
                 )  # Note the default substitution
                 return default_value  # Return the caller-supplied default
 
@@ -2564,7 +2589,7 @@ class InputUtils:
             # If user provided empty input, no default, and empty not allowed
             if not user_input and not allow_empty:  # Blank entry is not acceptable and no default exists
                 logging.warning(
-                    f"Empty input not allowed for {context}, returning empty string"
+                    "Empty input not allowed for %s, returning empty string", context
                 )  # Warn about the rejected blank
                 return ""  # Signal an invalid/empty response to the caller
 
@@ -2577,13 +2602,13 @@ class InputUtils:
                 f"\n[EOF] Input stream closed during {context}. Using default value: '{default_value}'"
             )  # Inform the user
             logging.info(
-                f"EOF encountered on input during {context} - returning default: '{default_value}'"
+                "EOF encountered on input during %s - returning default: '%s'", context, default_value
             )  # Log the disconnect
             return default_value  # Degrade gracefully to the default instead of crashing
         except KeyboardInterrupt:  # User pressed Ctrl+C
             # Handle Ctrl+C
             print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")  # Acknowledge the cancellation
-            logging.info(f"KeyboardInterrupt encountered during {context}")  # Log the interrupt
+            logging.info("KeyboardInterrupt encountered during %s", context)  # Log the interrupt
             return ""  # Return empty to signal the caller should abort this prompt
 
 
@@ -2706,17 +2731,17 @@ def detect_msp_privileges(session=None):
 
         user_data = response.data  # Extract the decoded JSON body
         if not isinstance(user_data, dict):  # The body should be a JSON object
-            logging.warning(f"getSelf returned unexpected type: {type(user_data)}")  # Warn about the malformed shape
+            logging.warning("getSelf returned unexpected type: %s", type(user_data))  # Warn about the malformed shape
             return []  # Cannot parse privileges from this
 
         privileges = user_data.get("privileges", [])  # Pull the list of privilege grants
         detected_msps = []  # Accumulate any MSP-scoped privileges we find
-        logging.debug(f"MSP detection: parsing {len(privileges)} privilege entries")  # Log how many grants we'll scan
+        logging.debug("MSP detection: parsing %s privilege entries", len(privileges))  # Log how many grants we'll scan
 
         for priv in privileges:  # Examine each privilege grant
             if isinstance(priv, dict) and priv.get("msp_id"):  # This grant is MSP-scoped
                 logging.debug(
-                    f"MSP privilege found: scope={priv.get('scope')}, role={priv.get('role')}"
+                    "MSP privilege found: scope=%s, role=%s", priv.get("scope"), priv.get("role")
                 )  # Log the grant details
                 msp_id = priv.get("msp_id")  # Extract the MSP identifier
                 if not msp_id or not isinstance(msp_id, str):  # Guard against missing/invalid IDs
@@ -2738,19 +2763,23 @@ def detect_msp_privileges(session=None):
                 }
                 detected_msps.append(msp_info)  # Record this MSP grant
                 logging.info(
-                    f"Detected MSP privilege: {msp_info['msp_name']} (ID: {msp_info['msp_id'][:8]}..., role: {msp_info['role']}, scope: {msp_info['scope']})"  # noqa: E501  # Surface the detected grant to the operator
+                    "Detected MSP privilege: %s (ID: %s..., role: %s, scope: %s)",
+                    msp_info["msp_name"],
+                    msp_info["msp_id"][:8],
+                    msp_info["role"],
+                    msp_info["scope"],
                 )
 
         if detected_msps:  # At least one MSP grant was found
             msp_privileges = detected_msps  # Cache the grants in the module-level global
-            logging.info(f"User has MSP-level access to {len(detected_msps)} MSP(s)")  # Report the count
+            logging.info("User has MSP-level access to %s MSP(s)", len(detected_msps))  # Report the count
         else:  # No MSP grants present
             logging.debug("No MSP privileges detected for current user")  # Note the absence at debug level
 
         return detected_msps  # Hand the parsed MSP list back to the caller
 
     except Exception as e:  # Any API or parsing failure
-        logging.warning(f"Failed to detect MSP privileges: {e}")  # Warn but don't crash the session
+        logging.warning("Failed to detect MSP privileges: %s", e)  # Warn but don't crash the session
         return []  # Treat as no MSP access on error
 
 
@@ -2773,7 +2802,7 @@ def _fetch_msp_name(msp_id: str) -> str | None:
             name = response.data.get("name")  # Extract the MSP's name field
             return name if isinstance(name, str) else None  # Return the name only if it's a valid string
     except Exception as e:  # Lookup failed (network, permissions, etc.)
-        logging.debug(f"Could not fetch MSP name for {msp_id[:8]}...: {e}")  # Note the failure at debug level
+        logging.debug("Could not fetch MSP name for %s...: %s", msp_id[:8], e)  # Note the failure at debug level
     return None  # Default to None when the name can't be resolved
 
 
@@ -2827,7 +2856,7 @@ def _print_switch_login_header():
     print("    - Select and switch between MSPs and Organizations")  # Benefit: MSP/org switching
     print("")  # Blank spacer line
     if msp_privileges:  # The user already has MSP grants detected
-        logging.debug(f"MSP privileges already detected: {len(msp_privileges)} MSP(s)")  # Trace the existing grants
+        logging.debug("MSP privileges already detected: %s MSP(s)", len(msp_privileges))  # Trace the existing grants
         print(
             f"  Note: You already have MSP access to {len(msp_privileges)} MSP(s)"
         )  # Inform the user of existing access
@@ -2869,7 +2898,7 @@ def _handle_interactive_login_success():
     if msp_privileges:  # The new session has MSP grants
         print(f"  + MSP access available: {len(msp_privileges)} MSP(s)")  # Report how many MSPs are accessible
         logging.info(
-            f"Successfully switched to interactive login session with {len(msp_privileges)} MSP(s)"
+            "Successfully switched to interactive login session with %s MSP(s)", len(msp_privileges)
         )  # Log the success with MSP count
     else:  # No MSP grants on the new session
         logging.info(
@@ -2903,7 +2932,7 @@ def switch_to_interactive_login():
         logging.debug("SystemExit during confirmation prompt")
         return True
 
-    logging.debug(f"User confirmation received: '{confirm}'")
+    logging.debug("User confirmation received: '%s'", confirm)
 
     if confirm != "y":
         print("  Cancelled.")
@@ -2969,13 +2998,13 @@ def _select_org_from_session():
         if org_id_list and len(org_id_list) > 0:  # The user selected at least one org
             org_id = org_id_list[0]  # Use the first selected org ID
             print(f"  + Organization ID set: {org_id}")  # Confirm the selection to the user
-            logging.info(f"User selected org from session: {org_id}")  # Log the chosen org
+            logging.info("User selected org from session: %s", org_id)  # Log the chosen org
         else:  # Nothing was selected
             print("  X No organization selected")  # Inform the user no org was chosen
             logging.warning("No organization selected from session privileges")  # Log the empty selection
     except Exception as e:  # The SDK picker raised an error
         print(f"  X Error selecting organization: {e}")  # Show the error to the user
-        logging.error(f"Failed to select org from session: {e}")  # nosec B608  # Log the failure detail
+        logging.error("Failed to select org from session: %s", e)  # nosec B608  # Log the failure detail
 
 
 def _load_mistapi_module(current_mistapi: Any) -> Any:
@@ -3453,9 +3482,9 @@ def _configure_session_timeout(session_obj: Any) -> None:
         adapter = TimeoutAdapter(default_timeout=API_REQUEST_TIMEOUT)
         inner.mount("https://", adapter)
         inner.mount("http://", adapter)
-        logging.info(f"Configured API request timeout: {API_REQUEST_TIMEOUT}s")
+        logging.info("Configured API request timeout: %ss", API_REQUEST_TIMEOUT)
     except Exception as timeout_err:
-        logging.warning(f"Failed to configure session timeout: {timeout_err}")
+        logging.warning("Failed to configure session timeout: %s", timeout_err)
 
 
 # ============================================================================
@@ -5805,7 +5834,10 @@ class CacheUtils:
             bool: True if file exists and is fresh or was generated successfully
         """
         logging.debug(
-            f"ENTRY: CacheUtils.check_and_generate_csv(file_name={file_name}, generate_function={generate_function.__name__}, freshness_minutes={freshness_minutes})"  # noqa: E501
+            "ENTRY: CacheUtils.check_and_generate_csv(file_name=%s, generate_function=%s, freshness_minutes=%s)",
+            file_name,
+            generate_function.__name__,
+            freshness_minutes,
         )
 
         if freshness_minutes is None:
@@ -5819,33 +5851,33 @@ class CacheUtils:
             try:
                 # Get the last modified time of the file
                 file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path))
-                logging.debug(f"File I/O: Successfully read modification time for {full_file_path}: {file_mtime}")
+                logging.debug("File I/O: Successfully read modification time for %s: %s", full_file_path, file_mtime)
 
                 # Check if the file is still fresh
                 if datetime.now() - file_mtime < timedelta(minutes=freshness_minutes):
                     # Log that the cached file is being used
-                    logging.info(f"! Using cached {file_name} (fresh)")
+                    logging.info("! Using cached %s (fresh)", file_name)
                     logging.debug("EXIT: check_and_generate_csv - using cached file")
                     return True
                 else:
                     # Log that the file is stale and will be regenerated
-                    logging.info(f"* {file_name} is older than {freshness_minutes} minutes. Regenerating...")
+                    logging.info("* %s is older than %s minutes. Regenerating...", file_name, freshness_minutes)
             except OSError as error:
-                logging.error(f"File I/O: Failed to read modification time for {full_file_path}: {error}")
-                logging.info(f"* {file_name} exists but cannot read metadata. Regenerating...")
+                logging.error("File I/O: Failed to read modification time for %s: %s", full_file_path, error)
+                logging.info("* %s exists but cannot read metadata. Regenerating...", file_name)
         else:
             # Log that the file does not exist and will be generated
-            logging.info(f"* {file_name} not found. Generating...")
+            logging.info("* %s not found. Generating...", file_name)
 
         # Call the function to generate the file
-        logging.info(f"* Running {generate_function.__name__} to generate {file_name}...")
+        logging.info("* Running %s to generate %s...", generate_function.__name__, file_name)
         try:
             generate_function()
-            logging.info(f"! {file_name} generated or refreshed.")
+            logging.info("! %s generated or refreshed.", file_name)
             logging.debug("EXIT: check_and_generate_csv - file generated successfully")
             return True
         except Exception as error:
-            logging.error(f"Failed to generate {file_name} using {generate_function.__name__}: {error}")
+            logging.error("Failed to generate %s using %s: %s", file_name, generate_function.__name__, error)
             logging.debug("EXIT: check_and_generate_csv - generation failed")
             return False
 
@@ -5864,7 +5896,7 @@ class CacheUtils:
                   and values are lists of row dictionaries
         """
         logging.info(
-            f"Loading CSV file '{filename}' into dictionary keyed by '{key}'..."
+            "Loading CSV file '%s' into dictionary keyed by '%s'...", filename, key
         )  # Log before reading the file
         csv_file_path = FilePathUtils.get_csv_path(filename)  # Resolve the CSV path under the data/ directory
         with open(csv_file_path, encoding="utf-8") as file:  # Open the CSV for reading
@@ -5874,14 +5906,14 @@ class CacheUtils:
             for row in reader:  # Process each CSV row
                 data_key = row.get(key)  # Extract the grouping key value from this row
                 if data_key is None:  # The key column is missing on this row
-                    logging.warning(f"Row missing key '{key}': {row}")  # Warn about the malformed row
+                    logging.warning("Row missing key '%s': %s", key, row)  # Warn about the malformed row
                     continue  # Skip rows that can't be grouped
                 if data_key not in data_dict:  # First time we've seen this key value
                     data_dict[data_key] = []  # Start a new bucket for it
                 data_dict[data_key].append(row)  # Add this row to its key's bucket
                 row_count += 1  # Tally the ingested row
             logging.info(
-                f"Loaded {row_count} rows from '{filename}'. Found {len(data_dict)} unique keys for '{key}'."
+                "Loaded %s rows from '%s'. Found %s unique keys for '%s'.", row_count, filename, len(data_dict), key
             )  # Summary log
         return data_dict  # Return the grouped-by-key dictionary
 
@@ -5895,17 +5927,17 @@ class CacheUtils:
             data: Dictionary where keys are section names and values are lists of row dictionaries
             filename: Name of the output CSV file
         """
-        logging.debug(f"Preparing to write support package to {filename}...")
+        logging.debug("Preparing to write support package to %s...", filename)
 
         fieldnames: set = set()  # type: ignore[type-arg]
         # Collect all unique field names from all sections
         for section_name, section in data.items():
-            logging.debug(f"Processing section '{section_name}' with {len(section)} rows.")
+            logging.debug("Processing section '%s' with %s rows.", section_name, len(section))
             for row in section:
                 fieldnames.update(row.keys())
         fieldnames_sorted = sorted(fieldnames)
 
-        logging.debug(f"Final CSV fieldnames: {fieldnames_sorted}")
+        logging.debug("Final CSV fieldnames: %s", fieldnames_sorted)
 
         # SECURITY: Use proper file path handling to ensure files go to data/ directory
         csv_file_path = FilePathUtils.get_csv_path(filename)
@@ -5917,9 +5949,9 @@ class CacheUtils:
                 for row in section:
                     writer.writerow(row)
                     row_count += 1
-            logging.info(f"Wrote {row_count} rows to {csv_file_path} for support package.")
+            logging.info("Wrote %s rows to %s for support package.", row_count, csv_file_path)
 
-        logging.info(f"Support package written to {csv_file_path}")
+        logging.info("Support package written to %s", csv_file_path)
 
     # Known generated cache CSV filenames -- cleared by Menu 175
     GENERATED_FILES: set[str] = {  # Explicit list of MistHelper-generated cache CSVs to protect non-data files
@@ -6033,11 +6065,11 @@ class CacheUtils:
                 for failure in parse_failures:
                     writer.writerow(failure)
 
-            logging.info(f"Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
+            logging.info("Address parsing failures documented in: %s (%s records)", filename, len(parse_failures))
             print(f"! Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
 
         except Exception as e:
-            logging.error(f"Failed to create address parse failures CSV: {e}")
+            logging.error("Failed to create address parse failures CSV: %s", e)
             print(f"! Failed to create address parse failures CSV: {e}")
 
     @staticmethod
@@ -6117,7 +6149,7 @@ class DisplayUtils:
             table.add_row(row)
 
         # Log the table as a string (debug mode only)
-        logging.debug("\n" + table.get_string())
+        logging.debug("\n%s", table.get_string())
 
     @staticmethod
     def create_progress_bar(progress_percentage: float | None, bar_length: int = 20) -> str:
@@ -6222,7 +6254,7 @@ class DeviceDataFetcher:
 
     def _log_action(self) -> None:
         """Log the action being performed."""
-        logging.info(f"{self.description} for device ID: {self.device_id}")
+        logging.info("%s for device ID: %s", self.description, self.device_id)
 
     def _fetch_data(self) -> list[dict[str, Any]] | None:
         """Fetch data using the configured API function."""
@@ -6230,7 +6262,7 @@ class DeviceDataFetcher:
             response = self.fetch_function(apisession, self.site_id, self.device_id)
             return [response.data] if response.data else None
         except Exception as error:
-            logging.error(f"Failed to fetch device data: {error}")
+            logging.error("Failed to fetch device data: %s", error)
             return None
 
     def _process_and_output(self, data: list[dict[str, Any]]) -> None:
@@ -6291,7 +6323,7 @@ class SFPTransceiverDataProcessor:
 
         try:
             # Load context keyed by MAC
-            logging.debug(f"File I/O: Reading {devices_with_site_info_path}")
+            logging.debug("File I/O: Reading %s", devices_with_site_info_path)
             with open(devices_with_site_info_path, encoding="utf-8") as file:
                 reader = csv.DictReader(file)
                 site_info = {
@@ -6302,7 +6334,7 @@ class SFPTransceiverDataProcessor:
                     }
                     for row in reader
                 }
-            logging.info(f"Loaded {len(site_info)} device entries from {devices_with_site_info_path}")
+            logging.info("Loaded %s device entries from %s", len(site_info), devices_with_site_info_path)
 
             merged_data = []
             total_rows = 0
@@ -6310,7 +6342,7 @@ class SFPTransceiverDataProcessor:
             matched_rows = 0  # rows contributing to merged output
             unique_devices_with_transceivers: set[str] = set()
 
-            logging.debug(f"File I/O: Reading {org_port_stats_path}")
+            logging.debug("File I/O: Reading %s", org_port_stats_path)
             with open(org_port_stats_path, encoding="utf-8") as file:
                 reader = csv.DictReader(file)
                 for row in reader:
@@ -6357,26 +6389,26 @@ class SFPTransceiverDataProcessor:
 
             DataExporter.save_data_to_output(merged_data, SFPTransceiverDataProcessor.OUTPUT_FILENAME)  # type: ignore[no-untyped-call]  # Write the merged rows to the output backend
             logging.info(
-                f"Wrote {len(merged_data)} rows to {SFPTransceiverDataProcessor.OUTPUT_FILENAME}"
+                "Wrote %s rows to %s", len(merged_data), SFPTransceiverDataProcessor.OUTPUT_FILENAME
             )  # Log the row count written
             print(
                 f"! Merged data written to {SFPTransceiverDataProcessor.OUTPUT_FILENAME}"
             )  # Tell the user where the file landed
             logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - success")  # Trace successful exit
         except FileNotFoundError as e:  # A required input CSV was missing
-            logging.error(f"File I/O: Required CSV file not found: {e}")  # Log which file was absent
+            logging.error("File I/O: Required CSV file not found: %s", e)  # Log which file was absent
             logging.debug(
                 "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - file not found"
             )  # Trace the failure exit
             raise  # Re-raise so the caller knows the merge could not run
         except csv.Error as e:  # The CSV parser hit malformed data
-            logging.error(f"File I/O: CSV processing error: {e}")  # Log the parsing error
+            logging.error("File I/O: CSV processing error: %s", e)  # Log the parsing error
             logging.debug(
                 "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - CSV error"
             )  # Trace the failure exit
             raise  # Re-raise so the caller can handle the bad input
         except Exception as e:  # Any other unexpected failure during the merge
-            logging.error(f"File I/O: Unexpected error during transceiver merge: {e}")  # Log the unexpected error
+            logging.error("File I/O: Unexpected error during transceiver merge: %s", e)  # Log the unexpected error
             logging.debug(
                 "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - unexpected error"
             )  # Trace the failure exit
@@ -6437,10 +6469,10 @@ class FilePathUtils:
                     writer.writerow(headers)
                 # Don't write sample data - user will add their own content
 
-            logging.info(f"Created template file: {file_path}")
+            logging.info("Created template file: %s", file_path)
             return file_path
         except Exception as error:
-            logging.error(f"Failed to create template file {filename}: {error}")
+            logging.error("Failed to create template file %s: %s", filename, error)
             raise
 
 
@@ -6471,7 +6503,7 @@ class EnvironmentUtils:
         for explicit_var in EnvironmentUtils.OVERRIDE_ENV_VARS:
             value = os.environ.get(explicit_var, "").strip().lower()
             if value in EnvironmentUtils.TRUE_VALUES:
-                logging.debug(f"Container detection: override via {explicit_var}={value}")
+                logging.debug("Container detection: override via %s=%s", explicit_var, value)
                 return True
         return None
 
@@ -6488,7 +6520,7 @@ class EnvironmentUtils:
         """Check for well-known container environment variables."""
         for env_var in EnvironmentUtils.CONTAINER_ENV_VARS:
             if os.environ.get(env_var):
-                logging.debug(f"Container detection: environment variable {env_var} present")
+                logging.debug("Container detection: environment variable %s present", env_var)
                 return True
         return False
 
@@ -6500,7 +6532,7 @@ class EnvironmentUtils:
                 cgroup_content = cgroup_file.read().lower()
                 for indicator in EnvironmentUtils.CGROUP_INDICATORS:
                     if indicator in cgroup_content:
-                        logging.debug(f"Container detection: cgroup indicator '{indicator}' found")
+                        logging.debug("Container detection: cgroup indicator '%s' found", indicator)
                         return True
         except (FileNotFoundError, PermissionError):
             pass
@@ -6571,7 +6603,7 @@ class EnvironmentUtils:
                     return True
 
         except Exception as container_detection_error:
-            logging.debug(f"Container detection failed with exception: {container_detection_error}")
+            logging.debug("Container detection failed with exception: %s", container_detection_error)
 
         logging.debug("Container detection: no container indicators found - running in direct mode")
         return False
@@ -6705,13 +6737,13 @@ class ConfigUtils:
         global org_id
         # 1. Check global variable
         if org_id:
-            logging.info(f"! Using org_id from global variable: {org_id}")
+            logging.info("! Using org_id from global variable: %s", org_id)
             return org_id  # type: ignore[no-any-return]
         # 2. Check environment variable (set by dotenv or OS)
         org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")
         if org_id_env:
             org_id = org_id_env
-            logging.info(f"! Loaded org_id from environment: {org_id}")
+            logging.info("! Loaded org_id from environment: %s", org_id)
             return org_id
         # 3. Fallback: Try to load from .env manually (rarely needed)
         try:
@@ -6720,7 +6752,7 @@ class ConfigUtils:
                     if line.strip().startswith("org_id="):
                         org_id = line.strip().split("=", 1)[1].strip().strip('"')
             if org_id:
-                logging.info(f"! Loaded org_id from .env: {org_id}")
+                logging.info("! Loaded org_id from .env: %s", org_id)
                 return org_id
         except FileNotFoundError:
             logging.warning("! .env file not found.")
@@ -6828,14 +6860,14 @@ class APIFetchUtils:
         """
         try:
             org_id = ConfigUtils.get_cached_or_prompted_org_id()
-            logging.info(f"Fetching organization services for org_id: {org_id}")
+            logging.info("Fetching organization services for org_id: %s", org_id)
 
             # Call the Mist API to get organization services
             response = mistapi.api.v1.orgs.services.listOrgServices(apisession, org_id, limit=1000)
 
             if hasattr(response, "data") and response.data:
                 services_data = response.data
-                logging.info(f"Successfully retrieved {len(services_data)} organization services")
+                logging.info("Successfully retrieved %s organization services", len(services_data))
 
                 # Extract service names and types for easier display
                 services_list = []
@@ -6860,7 +6892,7 @@ class APIFetchUtils:
                 return []
 
         except Exception as error:
-            logging.error(f"Failed to fetch organization services: {error}")
+            logging.error("Failed to fetch organization services: %s", error)
             return []
 
     @staticmethod
@@ -6893,11 +6925,11 @@ class APIFetchUtils:
                 config["site_id"] = site_id
                 config["site_name"] = site_name
                 all_configs.append(config)
-                logging.info(f"! Fetched config for site: {site_name} (ID: {site_id})")
+                logging.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)
             except Exception as error:
-                logging.warning(f"! Failed to fetch config for {site_name} (ID: {site_id}): {error}")
+                logging.warning("! Failed to fetch config for %s (ID: %s): %s", site_name, site_id, error)
 
-        logging.info(f"Fetched settings for {len(all_configs)} sites.")
+        logging.info("Fetched settings for %s sites.", len(all_configs))
         return all_configs
 
     @staticmethod
@@ -6920,10 +6952,10 @@ class APIFetchUtils:
             response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
             inventory = mistapi.get_all(response=response, mist_session=apisession)
         except Exception as error:
-            logging.error(f"! Failed to fetch org inventory: {error}")
+            logging.error("! Failed to fetch org inventory: %s", error)
             return []
 
-        logging.info(f"Found {len(inventory)} total devices in org inventory.")
+        logging.info("Found %s total devices in org inventory.", len(inventory))
 
         # Load site names from SiteList.csv for enrichment
         site_name_lookup = {}
@@ -6933,7 +6965,7 @@ class APIFetchUtils:
                 reader = csv.DictReader(file_handle)
                 site_name_lookup = {row.get("id"): row.get("name", "Unnamed Site") for row in reader}
         except Exception as error:
-            logging.warning(f"! Failed to load SiteList.csv for site names: {error}")
+            logging.warning("! Failed to load SiteList.csv for site names: %s", error)
 
         # Filter for gateway devices and build work list
         work_items = []
@@ -6945,7 +6977,7 @@ class APIFetchUtils:
                     site_name = site_name_lookup.get(site_id, "Unknown")
                     work_items.append((site_id, device_id, site_name))
 
-        logging.info(f"Prepared {len(work_items)} gateway device config API calls.")
+        logging.info("Prepared %s gateway device config API calls.", len(work_items))
 
         def fetch_config(work_item, connection_semaphore):
             """Fetch configuration for a single device with retry logic."""
@@ -6953,7 +6985,7 @@ class APIFetchUtils:
 
             with connection_semaphore:  # Limit concurrent connections
                 try:
-                    logging.debug(f"Fetching config for {work_device_id} ({work_site_name})")
+                    logging.debug("Fetching config for %s (%s)", work_device_id, work_site_name)
                     config_response = mistapi.api.v1.sites.devices.getSiteDevice(
                         apisession, work_site_id, work_device_id
                     )
@@ -6962,12 +6994,12 @@ class APIFetchUtils:
                         # Add site metadata for enrichment
                         config["site_name"] = work_site_name
                         config["site_id"] = work_site_id
-                        logging.debug(f"! Config fetched for {work_device_id}")
+                        logging.debug("! Config fetched for %s", work_device_id)
                         return config
                     else:
-                        logging.warning(f"! Empty config for device {work_device_id}")
+                        logging.warning("! Empty config for device %s", work_device_id)
                 except Exception as inner_error:
-                    logging.error(f"! Failed to fetch config for device {work_device_id}: {inner_error}")
+                    logging.error("! Failed to fetch config for device %s: %s", work_device_id, inner_error)
                     return None
 
         def retry_fetch_config(failed_items, connection_semaphore):
@@ -6986,12 +7018,16 @@ class APIFetchUtils:
                     if attempt < max_retries:
                         delay = 0.5 * (1.5**attempt)  # Exponential backoff
                         logging.debug(
-                            f"Retrying device {failed_device_id} in {delay:.2f}s (attempt {attempt + 2}/{max_retries + 1})"  # noqa: E501
+                            "Retrying device %s in %.2fs (attempt %s/%s)",
+                            failed_device_id,
+                            delay,
+                            attempt + 2,
+                            max_retries + 1,
                         )
                         time.sleep(delay)
                 else:
                     logging.warning(
-                        f"! Failed to fetch config for device {failed_device_id} after {max_retries + 1} attempts"
+                        "! Failed to fetch config for device %s after %s attempts", failed_device_id, max_retries + 1
                     )
 
             return retry_results
@@ -7019,7 +7055,7 @@ class APIFetchUtils:
         # Filter out None results
         all_device_configs = [config for config in all_device_configs if config is not None]
 
-        logging.info(f"! Completed fetching {len(all_device_configs)} gateway device configs.")
+        logging.info("! Completed fetching %s gateway device configs.", len(all_device_configs))
         return all_device_configs
 
 
@@ -7087,7 +7123,7 @@ class DataProcessingUtils:
         flattened = []
         for entry in data:
             if not isinstance(entry, dict):
-                logging.debug(f"Skipping non-dictionary entry: {type(entry).__name__}")
+                logging.debug("Skipping non-dictionary entry: %s", type(entry).__name__)
                 continue
 
             new_entry = {}
@@ -7131,7 +7167,7 @@ class DataProcessingUtils:
         for entry in data:
             for key, value in entry.items():
                 if isinstance(value, (list, tuple, set)):
-                    logging.debug(f"Converting list/tuple/set at key '{key}' to string")
+                    logging.debug("Converting list/tuple/set at key '%s' to string", key)
                     entry[key] = ",".join(map(str, value))
         return data
 
@@ -7212,11 +7248,11 @@ class DatabaseSchemaUtils:
                     pattern in function_name
                     for pattern in ["getOrg", "listOrg", "searchOrg", "getSite", "listSite", "searchSite"]
                 ):
-                    logging.debug(f"Detected API function name from stack: {function_name}")
+                    logging.debug("Detected API function name from stack: %s", function_name)
                     return function_name
                 frame = frame.f_back
         except Exception as error:
-            logging.debug(f"Error determining API function name: {error}")
+            logging.debug("Error determining API function name: %s", error)
         finally:
             del frame
 
@@ -7237,7 +7273,7 @@ class DatabaseSchemaUtils:
         # First check if we have a specific strategy for this endpoint
         if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:
             strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()
-            logging.debug(f"Using configured strategy for {api_function_name}: {strategy['type']}")
+            logging.debug("Using configured strategy for %s: %s", api_function_name, strategy["type"])
             return strategy
 
         # If no specific strategy, use intelligent defaults based on data structure
@@ -7248,7 +7284,7 @@ class DatabaseSchemaUtils:
             # If data has an 'id' field, use it as unique constraint
             strategy["unique_constraints"] = ["id"]
             strategy["indexes"] = ["id"]
-            logging.debug(f"Enhanced default strategy for {api_function_name}: adding unique constraint on 'id'")
+            logging.debug("Enhanced default strategy for %s: adding unique constraint on 'id'", api_function_name)
 
         # Add common indexes for frequently queried fields
         common_index_fields = ["org_id", "site_id", "device_id", "timestamp", "mac", "serial"]
@@ -7256,7 +7292,7 @@ class DatabaseSchemaUtils:
             if field_name in data_fields and field_name not in strategy["indexes"]:
                 strategy["indexes"].append(field_name)  # type: ignore[attr-defined]
 
-        logging.debug(f"Using enhanced default strategy for {api_function_name}: {strategy}")
+        logging.debug("Using enhanced default strategy for %s: %s", api_function_name, strategy)
         return strategy
 
     @staticmethod
@@ -7365,7 +7401,7 @@ class DatabaseSchemaUtils:
             sql_parts.append(")")
             create_sql = "".join(sql_parts)
 
-        logging.debug(f"Generated CREATE TABLE SQL for {safe_table_name}: {create_sql[:100]}...")
+        logging.debug("Generated CREATE TABLE SQL for %s: %s...", safe_table_name, create_sql[:100])
         return create_sql
 
     @staticmethod
@@ -7441,7 +7477,11 @@ class SQLiteDatabaseWriter:
         """Log entry point with input parameters."""
         row_count = len(self.data) if self.data else 0
         logging.debug(
-            f"ENTRY: SQLiteDatabaseWriter.write(data_rows={row_count}, table_name={self.table_name}, api_function_name={self.api_function_name}) at {self.timestamp}"  # noqa: E501
+            "ENTRY: SQLiteDatabaseWriter.write(data_rows=%s, table_name=%s, api_function_name=%s) at %s",
+            row_count,
+            self.table_name,
+            self.api_function_name,
+            self.timestamp,
         )
 
     def _validate_inputs(self) -> bool:
@@ -7453,11 +7493,11 @@ class SQLiteDatabaseWriter:
     def _validate_data(self) -> bool:
         """Validate that data is a non-empty list."""
         if not self.data:
-            logging.warning(f"No data provided to write to table {self.table_name} at {self.timestamp}")
+            logging.warning("No data provided to write to table %s at %s", self.table_name, self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - no data to write")
             return False
         if not isinstance(self.data, list):
-            logging.error(f"Invalid data type: expected list, got {type(self.data)} at {self.timestamp}")
+            logging.error("Invalid data type: expected list, got %s at %s", type(self.data), self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid data type")
             return False
         return True
@@ -7465,7 +7505,7 @@ class SQLiteDatabaseWriter:
     def _validate_table_name(self) -> bool:
         """Validate that table name is a non-empty string."""
         if not self.table_name or not isinstance(self.table_name, str):
-            logging.error(f"Invalid table name: {self.table_name} at {self.timestamp}")
+            logging.error("Invalid table name: %s at %s", self.table_name, self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid table name")
             return False
         return True
@@ -7475,7 +7515,11 @@ class SQLiteDatabaseWriter:
         if not self.api_function_name:
             self.api_function_name = DatabaseSchemaUtils.determine_api_function_name_from_context()
         logging.debug(
-            f"Processing {len(self.data)} rows for table {self.table_name} using API function {self.api_function_name} at {self.timestamp}"  # noqa: E501
+            "Processing %s rows for table %s using API function %s at %s",
+            len(self.data),
+            self.table_name,
+            self.api_function_name,
+            self.timestamp,
         )
 
     def _ensure_database_directory(self) -> bool:
@@ -7485,10 +7529,10 @@ class SQLiteDatabaseWriter:
             return True
         try:
             os.makedirs(db_dir, exist_ok=True)
-            logging.info(f"Created database directory: {db_dir} at {self.timestamp}")
+            logging.info("Created database directory: %s at %s", db_dir, self.timestamp)
             return True
         except OSError as error:
-            logging.error(f"Failed to create database directory {db_dir}: {error} at {self.timestamp}")
+            logging.error("Failed to create database directory %s: %s at %s", db_dir, error, self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - directory creation failed")
             return False
 
@@ -7496,10 +7540,10 @@ class SQLiteDatabaseWriter:
         """Process data to handle formatting for database storage."""
         try:
             self.processed_data = DataProcessingUtils.escape_multiline(self.data)  # type: ignore[no-untyped-call]
-            logging.debug(f"Successfully processed data for SQLite compatibility at {self.timestamp}")
+            logging.debug("Successfully processed data for SQLite compatibility at %s", self.timestamp)
             return True
         except Exception as error:
-            logging.error(f"Failed to process data: {error} at {self.timestamp}")
+            logging.error("Failed to process data: %s at %s", error, self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - data processing failed")
             return False
 
@@ -7508,7 +7552,7 @@ class SQLiteDatabaseWriter:
         try:
             self.fields = DataProcessingUtils.get_unique_keys(self.processed_data)  # type: ignore[no-untyped-call]
             if not self.fields:
-                logging.error(f"No fields found in data for table {self.table_name} at {self.timestamp}")
+                logging.error("No fields found in data for table %s at %s", self.table_name, self.timestamp)
                 logging.debug("EXIT: SQLiteDatabaseWriter.write - no fields")
                 return False
             api_func_name = self.api_function_name if self.api_function_name else ""
@@ -7516,18 +7560,23 @@ class SQLiteDatabaseWriter:
             self._log_strategy_info()
             return True
         except Exception as error:
-            logging.error(f"Failed to determine fields and strategy: {error} at {self.timestamp}")
+            logging.error("Failed to determine fields and strategy: %s at %s", error, self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - field determination failed")
             return False
 
     def _log_strategy_info(self) -> None:
         """Log strategy selection details."""
         logging.info(
-            f"Using hybrid SQLite strategy '{self.strategy['type']}' for table {self.table_name}: {self.strategy['description']}"  # noqa: E501
+            "Using hybrid SQLite strategy '%s' for table %s: %s",
+            self.strategy["type"],
+            self.table_name,
+            self.strategy["description"],
         )
-        logging.debug(f"Database fields determined: {self.fields} at {self.timestamp}")
+        logging.debug("Database fields determined: %s at %s", self.fields, self.timestamp)
         logging.debug(
-            f"Endpoint {self.api_function_name} mapped to {self.strategy['type']} strategy - eliminates need for artificial api_id fields"  # noqa: E501
+            "Endpoint %s mapped to %s strategy - eliminates need for artificial api_id fields",
+            self.api_function_name,
+            self.strategy["type"],
         )
 
     def _execute_database_operations(self) -> bool:
@@ -7552,10 +7601,10 @@ class SQLiteDatabaseWriter:
 
     def _connect_to_database(self) -> None:
         """Connect to SQLite database."""
-        logging.debug(f"Attempting to connect to database: {DATABASE_PATH} at {self.timestamp}")
+        logging.debug("Attempting to connect to database: %s at %s", DATABASE_PATH, self.timestamp)
         self.connection = sqlite3.connect(DATABASE_PATH)
         self.cursor = self.connection.cursor()
-        logging.info(f"Successfully connected to database: {DATABASE_PATH} at {self.timestamp}")
+        logging.info("Successfully connected to database: %s at %s", DATABASE_PATH, self.timestamp)
 
     def _create_table_and_indexes(self) -> None:
         """Create table with strategy-appropriate schema and indexes."""
@@ -7566,14 +7615,19 @@ class SQLiteDatabaseWriter:
         create_table_sql = DatabaseSchemaUtils.build_create_table_sql(self.table_name, self.fields, self.strategy)
         self.cursor.execute(create_table_sql)  # Execute DDL to create or verify the table structure
         logging.debug(
-            f"Table {self.table_name} created/verified with hybrid {self.strategy['type']} schema - using natural business keys from API"  # noqa: E501
+            "Table %s created/verified with hybrid %s schema - using natural business keys from API",
+            self.table_name,
+            self.strategy["type"],
         )
         index_sqls = DatabaseSchemaUtils.build_indexes_sql(self.table_name, self.fields, self.strategy)
         for index_sql in index_sqls:
             self.cursor.execute(index_sql)
         if index_sqls:
             logging.debug(
-                f"Created {len(index_sqls)} performance indexes for table {self.table_name} with {self.strategy['type']} strategy"  # noqa: E501
+                "Created %s performance indexes for table %s with %s strategy",
+                len(index_sqls),
+                self.table_name,
+                self.strategy["type"],
             )
 
     def _determine_insert_mode(self) -> str:
@@ -7581,7 +7635,8 @@ class SQLiteDatabaseWriter:
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
         if self.strategy["type"] in ["natural_pk", "composite_pk"]:
             logging.debug(
-                f"Using REPLACE mode for {self.strategy['type']} strategy - enables efficient upsert operations with natural keys"  # noqa: E501
+                "Using REPLACE mode for %s strategy - enables efficient upsert operations with natural keys",
+                self.strategy["type"],
             )
             return "INSERT OR REPLACE"
         safe_table = self._get_safe_table_name()
@@ -7621,10 +7676,12 @@ class SQLiteDatabaseWriter:
             insert_sql = self._build_insert_sql(insert_mode, safe_fields, len(values))
             self.cursor.execute(insert_sql, values)
             if idx < 3:
-                logging.debug(f"Row {idx} inserted into {self.table_name} using {insert_mode} at {self.timestamp}")
+                logging.debug(
+                    "Row %s inserted into %s using %s at %s", idx, self.table_name, insert_mode, self.timestamp
+                )
             return True
         except Exception as error:
-            logging.error(f"Failed to insert row {idx} into {self.table_name}: {error} at {self.timestamp}")
+            logging.error("Failed to insert row %s into %s: %s at %s", idx, self.table_name, error, self.timestamp)
             return False
 
     def _prepare_row_values(self, row: dict[str, Any], current_time: str) -> list[str]:
@@ -7648,24 +7705,30 @@ class SQLiteDatabaseWriter:
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
         self.connection.commit()
         logging.info(
-            f"Successfully wrote {successful_inserts}/{len(self.processed_data)} rows to table {self.table_name} in database {DATABASE_PATH} using {self.strategy['type']} strategy at {self.timestamp}"  # noqa: E501
+            "Successfully wrote %s/%s rows to table %s in database %s using %s strategy at %s",
+            successful_inserts,
+            len(self.processed_data),
+            self.table_name,
+            DATABASE_PATH,
+            self.strategy["type"],
+            self.timestamp,
         )
         safe_table_name = self._get_safe_table_name()
         self.cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")  # nosec B608
         row_count = self.cursor.fetchone()[0]
         logging.info(
-            f"Database verification: {row_count} rows confirmed in table {self.table_name} at {self.timestamp}"
+            "Database verification: %s rows confirmed in table %s at %s", row_count, self.table_name, self.timestamp
         )
 
     def _handle_sqlite_error(self, error: sqlite3.Error) -> None:
         """Handle SQLite-specific errors with rollback."""
-        logging.error(f"SQLite error when writing to {self.table_name}: {error} at {self.timestamp}")
+        logging.error("SQLite error when writing to %s: %s at %s", self.table_name, error, self.timestamp)
         self._rollback_transaction()
         logging.debug("EXIT: SQLiteDatabaseWriter.write - SQLite error")
 
     def _handle_unexpected_error(self, error: Exception) -> None:
         """Handle unexpected errors with rollback."""
-        logging.error(f"Unexpected error when writing to table {self.table_name}: {error} at {self.timestamp}")
+        logging.error("Unexpected error when writing to table %s: %s at %s", self.table_name, error, self.timestamp)
         self._rollback_transaction()
         logging.debug("EXIT: SQLiteDatabaseWriter.write - unexpected error")
 
@@ -7675,9 +7738,9 @@ class SQLiteDatabaseWriter:
             return
         try:
             self.connection.rollback()
-            logging.debug(f"Transaction rolled back for table {self.table_name} at {self.timestamp}")
+            logging.debug("Transaction rolled back for table %s at %s", self.table_name, self.timestamp)
         except Exception as rollback_error:
-            logging.error(f"Failed to rollback transaction: {rollback_error} at {self.timestamp}")
+            logging.error("Failed to rollback transaction: %s at %s", rollback_error, self.timestamp)
 
     def _close_connection(self) -> None:
         """Close database connection (safety-critical: resource cleanup)."""
@@ -7685,9 +7748,9 @@ class SQLiteDatabaseWriter:
             return
         try:
             self.connection.close()
-            logging.debug(f"Database connection closed for table {self.table_name} at {self.timestamp}")
+            logging.debug("Database connection closed for table %s at %s", self.table_name, self.timestamp)
         except Exception as error:
-            logging.error(f"Failed to close database connection: {error} at {self.timestamp}")
+            logging.error("Failed to close database connection: %s at %s", error, self.timestamp)
 
 
 class DataExporter:
@@ -7719,7 +7782,7 @@ class DataExporter:
             )
             logging.info("Polyglot DatabaseRouter initialized")
         except Exception as error:
-            logging.warning(f"DatabaseRouter init failed, CSV/SQLite only: {error}")
+            logging.warning("DatabaseRouter init failed, CSV/SQLite only: %s", error)
             cls._router = None
 
     @staticmethod
@@ -7748,7 +7811,11 @@ class DataExporter:
         """
         output_format = format_override if format_override else OUTPUT_FORMAT
         logging.debug(
-            f"DataExporter.write_with_format_selection: rows={len(data) if data else 0}, target={filename_or_table}, format={output_format}, api_func={api_function_name}"  # noqa: E501
+            "DataExporter.write_with_format_selection: rows=%s, target=%s, format=%s, api_func=%s",
+            len(data) if data else 0,
+            filename_or_table,
+            output_format,
+            api_function_name,
         )
 
         if not DataExporter._validate_write_inputs(data, filename_or_table, output_format):
@@ -7760,7 +7827,7 @@ class DataExporter:
             else:
                 csv_ok = DataExporter._write_sqlite_format(data, filename_or_table, api_function_name)
         except Exception as error:
-            logging.error(f"Failed to write data to {filename_or_table} in {output_format} format: {error}")
+            logging.error("Failed to write data to %s in %s format: %s", filename_or_table, output_format, error)
             return False
 
         DataExporter._route_to_polyglot(data, api_function_name, raw_data=raw_data)
@@ -7801,12 +7868,13 @@ class DataExporter:
             polyglot_data = raw_data or data
             result = DataExporter._router.write(polyglot_data, api_function_name)
             logging.info(
-                f"Polyglot write: backend={result.backend}, "
-                f"written={result.records_written}, "
-                f"failed={result.records_failed}"
+                "Polyglot write: backend=%s, written=%s, failed=%s",
+                result.backend,
+                result.records_written,
+                result.records_failed,
             )
         except Exception as error:
-            logging.warning(f"Polyglot write failed (CSV preserved): {error}")
+            logging.warning("Polyglot write failed (CSV preserved): %s", error)
 
     @classmethod
     def _check_periodic_snapshot(
@@ -7830,11 +7898,11 @@ class DataExporter:
     def _validate_write_inputs(data: list[dict[str, Any]], filename_or_table: str, output_format: str) -> bool:
         """Validate inputs for write operation. Returns True if valid."""
         if not data:
-            logging.warning(f"No data provided for output to {filename_or_table}")
+            logging.warning("No data provided for output to %s", filename_or_table)
             return False
 
         if output_format not in ["csv", "sqlite"]:
-            logging.error(f"Invalid output format: {output_format}. Must be 'csv' or 'sqlite'")
+            logging.error("Invalid output format: %s. Must be 'csv' or 'sqlite'", output_format)
             return False
 
         return True
@@ -7847,7 +7915,7 @@ class DataExporter:
     ) -> bool:
         """Write data to CSV format.  Pass fieldnames to preserve a specific column order."""
         csv_filename = filename_or_table if filename_or_table.endswith(".csv") else f"{filename_or_table}.csv"
-        logging.info(f"Writing {len(data)} rows to CSV file: {csv_filename}")
+        logging.info("Writing %s rows to CSV file: %s", len(data), csv_filename)
         DataExporter.write_to_csv(data, csv_filename, fieldnames=fieldnames)  # Thread explicit column order through
         return True
 
@@ -7855,8 +7923,10 @@ class DataExporter:
     def _write_sqlite_format(data: list[dict[str, Any]], filename_or_table: str, api_function_name: str | None) -> bool:
         """Write data to SQLite format. Returns True on success."""
         table_name = filename_or_table[:-4] if filename_or_table.endswith(".csv") else filename_or_table
-        logging.debug(f"SQLite write: table={table_name}, api_function={api_function_name}, strategy lookup initiated")
-        logging.info(f"Writing {len(data)} rows to SQLite table: {table_name}")
+        logging.debug(
+            "SQLite write: table=%s, api_function=%s, strategy lookup initiated", table_name, api_function_name
+        )
+        logging.info("Writing %s rows to SQLite table: %s", len(data), table_name)
         return SQLiteDatabaseWriter(data, table_name, api_function_name).write()
 
     @staticmethod
@@ -7878,10 +7948,10 @@ class DataExporter:
             fieldnames: Optional explicit column order.  When provided the columns are written
                 in exactly this order instead of being sorted alphabetically by get_unique_keys().
         """
-        logging.debug(f"ENTRY: DataExporter.write_to_csv(data_rows={len(data) if data else 0}, csv_file={csv_file})")
+        logging.debug("ENTRY: DataExporter.write_to_csv(data_rows=%s, csv_file=%s)", len(data) if data else 0, csv_file)
 
         if not data:
-            logging.warning(f"No data provided to write to {csv_file}")
+            logging.warning("No data provided to write to %s", csv_file)
             logging.debug("EXIT: DataExporter.write_to_csv - no data to write")
             return
 
@@ -7895,40 +7965,40 @@ class DataExporter:
         else:
             csv_file_path = csv_file
 
-        logging.debug(f"Preparing to write {len(data)} rows to {csv_file_path}...")
+        logging.debug("Preparing to write %s rows to %s...", len(data), csv_file_path)
         escaped_data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
         if fieldnames is not None:  # Caller supplied an explicit column order — use it as-is
             fields = fieldnames  # Preserve the requested column sequence without sorting
         else:
             fields = DataProcessingUtils.get_unique_keys(escaped_data)  # type: ignore[no-untyped-call]
-        logging.debug(f"CSV fields determined: {fields}")
+        logging.debug("CSV fields determined: %s", fields)
 
         try:
-            logging.debug(f"File I/O: Attempting to open {csv_file_path} for writing")
+            logging.debug("File I/O: Attempting to open %s for writing", csv_file_path)
             with open(csv_file_path, "w", newline="", encoding="utf-8") as file_handle:
                 writer = csv.DictWriter(file_handle, fieldnames=fields)
                 writer.writeheader()
-                logging.debug(f"File I/O: Successfully wrote CSV header to {csv_file_path}")
+                logging.debug("File I/O: Successfully wrote CSV header to %s", csv_file_path)
 
                 for idx, row in enumerate(escaped_data):
                     writer.writerow({field: row.get(field, "") for field in fields})
                     if idx < 3:  # Log the first few rows for debugging
-                        logging.debug(f"Row {idx} written: {row}")
+                        logging.debug("Row %s written: %s", idx, row)
 
-            logging.info(f"File I/O: Successfully wrote {len(escaped_data)} rows to {csv_file_path}")
+            logging.info("File I/O: Successfully wrote %s rows to %s", len(escaped_data), csv_file_path)
             logging.debug("EXIT: DataExporter.write_to_csv - success")
 
         except PermissionError as perm_error:
-            logging.error(f"File I/O: Permission denied when writing to {csv_file_path}: {perm_error}")
+            logging.error("File I/O: Permission denied when writing to %s: %s", csv_file_path, perm_error)
             print(f"! Cannot write to {csv_file_path}. Is it open in another program?")
             logging.debug("EXIT: DataExporter.write_to_csv - permission error")
             raise
         except OSError as os_error:
-            logging.error(f"File I/O: OS error when writing to {csv_file_path}: {os_error}")
+            logging.error("File I/O: OS error when writing to %s: %s", csv_file_path, os_error)
             logging.debug("EXIT: DataExporter.write_to_csv - OS error")
             raise
         except Exception as unexpected_error:
-            logging.error(f"File I/O: Unexpected error when writing to {csv_file}: {unexpected_error}")
+            logging.error("File I/O: Unexpected error when writing to %s: %s", csv_file, unexpected_error)
             logging.debug("EXIT: DataExporter.write_to_csv - unexpected error")
             raise
 
@@ -7964,7 +8034,7 @@ class DataExporter:
             int: Number of records processed
         """
         if not data:
-            logging.warning(f"No data to export for {filename}")
+            logging.warning("No data to export for %s", filename)
             return 0
 
         # Filter to dict entries only (defensive)
@@ -7973,7 +8043,7 @@ class DataExporter:
         # Sort if requested
         if sort_key:
             raw_data = sorted(raw_data, key=lambda x: x.get(sort_key, ""))
-            logging.debug(f"Data sorted by key: {sort_key}")
+            logging.debug("Data sorted by key: %s", sort_key)
 
         # Apply standard processing for CSV/SQLite (flatten + escape)
         processed_data = DataProcessingUtils.flatten_nested_fields(raw_data)
@@ -7988,10 +8058,10 @@ class DataExporter:
         )
 
         if success:
-            logging.info(f"Exported {len(processed_data)} records to {filename}")
+            logging.info("Exported %s records to %s", len(processed_data), filename)
             return len(processed_data)
         else:
-            logging.error(f"Failed to export data to {filename}")
+            logging.error("Failed to export data to %s", filename)
             return 0
 
 
@@ -8049,7 +8119,7 @@ class APIDataFetcher:
             self._fetch_api_data()
 
             if self.rawdata is None or len(self.rawdata) == 0:
-                logging.warning(f"! No data returned from API for {self.title}. Skipping.")
+                logging.warning("! No data returned from API for %s. Skipping.", self.title)
                 logging.debug("EXIT: APIDataFetcher.execute - no data")
                 return
 
@@ -8068,10 +8138,14 @@ class APIDataFetcher:
         """Log entry point with parameters."""
         api_name = self.api_call.__name__
         logging.debug(
-            f"ENTRY: APIDataFetcher(title={self.title}, api_call={api_name}, "
-            f"filename={self.filename}, sort_key={self.sort_key}, kwargs={self.kwargs})"
+            "ENTRY: APIDataFetcher(title=%s, api_call=%s, filename=%s, sort_key=%s, kwargs=%s)",
+            self.title,
+            api_name,
+            self.filename,
+            self.sort_key,
+            self.kwargs,
         )
-        logging.info(f"Starting data fetch: {self.title}")
+        logging.info("Starting data fetch: %s", self.title)
         print(self.title)
 
     # =========================================================================
@@ -8081,7 +8155,7 @@ class APIDataFetcher:
     def _fetch_api_data(self) -> None:
         """Make API call and retrieve paginated results with retry on timeout."""
         api_name = self.api_call.__name__
-        logging.debug(f"Making API call: {api_name} with kwargs: {self.kwargs}")
+        logging.debug("Making API call: %s with kwargs: %s", api_name, self.kwargs)
 
         response = self._call_api_with_retry(api_name)
         self._apply_rate_limiting()
@@ -8090,7 +8164,7 @@ class APIDataFetcher:
         try:
             self.rawdata = mistapi.get_all(response=response, mist_session=apisession)
             record_count = len(self.rawdata) if self.rawdata else 0
-            logging.debug(f"API call successful, retrieved {record_count} raw records")
+            logging.debug("API call successful, retrieved %s raw records", record_count)
         except KeyError as error:
             self._handle_key_error(response, error)
         except Exception as error:
@@ -8120,15 +8194,18 @@ class APIDataFetcher:
             if attempt < API_REQUEST_MAX_RETRIES:
                 delay = API_REQUEST_RETRY_DELAY * (2**attempt)
                 logging.warning(
-                    f"API call {api_name} failed (attempt {attempt + 1}/{API_REQUEST_MAX_RETRIES + 1}) "
-                    f"- retrying in {delay:.0f}s"
+                    "API call %s failed (attempt %s/%s) - retrying in %.0fs",
+                    api_name,
+                    attempt + 1,
+                    API_REQUEST_MAX_RETRIES + 1,
+                    delay,
                 )
                 print(
                     f"! API call timed out - retrying in {delay:.0f}s (attempt {attempt + 2}/{API_REQUEST_MAX_RETRIES + 1})"  # noqa: E501
                 )
                 time.sleep(delay)
 
-        logging.error(f"API call {api_name} failed after {API_REQUEST_MAX_RETRIES + 1} attempts")
+        logging.error("API call %s failed after %s attempts", api_name, API_REQUEST_MAX_RETRIES + 1)
         return last_response
 
     @staticmethod
@@ -8148,20 +8225,20 @@ class APIDataFetcher:
     def _apply_rate_limiting(self) -> None:
         """Apply rate limiting delay between API calls."""
         self.smoothed, delay = RateLimitingUtils.get_rate_limited_delay(self.smoothed, apisession, _api_usage_cache)  # type: ignore[no-untyped-call]
-        logging.debug(f"Applying rate limit delay: {delay:.2f}s")
+        logging.debug("Applying rate limit delay: %.2fs", delay)
         time.sleep(delay)
 
     def _log_response_structure(self, response: Any) -> None:
         """Log API response structure for debugging."""
-        logging.debug(f"API response type: {type(response)}")
+        logging.debug("API response type: %s", type(response))
         if not hasattr(response, "data"):
             return
 
-        logging.debug(f"Response.data type: {type(response.data)}")
+        logging.debug("Response.data type: %s", type(response.data))
         if isinstance(response.data, dict):
-            logging.debug(f"Response.data keys: {list(response.data.keys())}")
+            logging.debug("Response.data keys: %s", list(response.data.keys()))
         elif isinstance(response.data, list):
-            logging.debug(f"Response.data is list with {len(response.data)} items")
+            logging.debug("Response.data is list with %s items", len(response.data))
 
     # =========================================================================
     # ERROR HANDLING METHODS
@@ -8169,7 +8246,7 @@ class APIDataFetcher:
 
     def _handle_key_error(self, response: Any, error: KeyError) -> None:
         """Handle missing 'results' key or other structure issues."""
-        logging.error(f"API response structure error - missing key: {error}")
+        logging.error("API response structure error - missing key: %s", error)
         self._log_response_error_details(response)
 
         recovered_data = self._attempt_data_recovery(response)
@@ -8183,12 +8260,12 @@ class APIDataFetcher:
     def _log_response_error_details(self, response: Any) -> None:
         """Log detailed response information during error handling."""
         has_data = hasattr(response, "data")
-        logging.error(f"Response details: type={type(response)}, hasattr(data)={has_data}")
+        logging.error("Response details: type=%s, hasattr(data)=%s", type(response), has_data)
 
         if has_data:
-            logging.error(f"Response.data type={type(response.data)}")
+            logging.error("Response.data type=%s", type(response.data))
             if isinstance(response.data, dict):
-                logging.error(f"Available keys: {list(response.data.keys())}")
+                logging.error("Available keys: %s", list(response.data.keys()))
 
     def _attempt_data_recovery(self, response: Any) -> list[dict[str, Any]] | None:
         """Attempt to recover data from alternate response structures."""
@@ -8198,11 +8275,11 @@ class APIDataFetcher:
         if isinstance(response.data, dict):
             if "data" in response.data:
                 recovered = response.data.get("data", [])
-                logging.info(f"Recovered {len(recovered)} records from response.data['data']")
+                logging.info("Recovered %s records from response.data['data']", len(recovered))
                 return recovered  # type: ignore[no-any-return]
 
         if isinstance(response.data, list):
-            logging.info(f"Recovered {len(response.data)} records from response.data (list)")
+            logging.info("Recovered %s records from response.data (list)", len(response.data))
             return response.data
 
         return None
@@ -8212,18 +8289,18 @@ class APIDataFetcher:
         print(f"! API returned unexpected structure. Recovered {len(self.rawdata)} records.")
         api_name = self.api_call.__name__
         DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-        logging.info(f"Recovered data saved to {self.filename} ({len(self.rawdata)} rows)")
+        logging.info("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))
 
     def _handle_no_recovery(self) -> None:
         """Handle case where no data could be recovered."""
         print("! API response missing expected 'results' key. No data could be recovered.")
-        logging.error(f"Unable to recover any data from malformed response for {self.title}")
+        logging.error("Unable to recover any data from malformed response for %s", self.title)
         logging.debug("EXIT: APIDataFetcher - structure error, no recovery")
 
     def _handle_api_exception(self, error: Exception) -> None:
         """Handle exceptions during API data retrieval."""
-        logging.error(f"Exception occurred during API data retrieval: {error}")
-        logging.error(f"Exception type: {type(error).__name__}")
+        logging.error("Exception occurred during API data retrieval: %s", error)
+        logging.error("Exception type: %s", type(error).__name__)
         print(f"! Exception occurred during API call: {error}")
 
         if self._is_rate_limit_error(error):
@@ -8244,7 +8321,7 @@ class APIDataFetcher:
         if self.rawdata:
             api_name = self.api_call.__name__
             DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-            logging.info(f"Partial results saved to {self.filename} ({len(self.rawdata)} rows)")
+            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
             print(f"* Partial data saved: {len(self.rawdata)} records written to {self.filename}")
 
         logging.debug("EXIT: APIDataFetcher - rate limited")
@@ -8255,18 +8332,18 @@ class APIDataFetcher:
             try:
                 api_name = self.api_call.__name__
                 DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-                logging.info(f"Emergency save: {len(self.rawdata)} partial records saved before error exit")
+                logging.info("Emergency save: %s partial records saved before error exit", len(self.rawdata))
                 print(f"* Emergency save: {len(self.rawdata)} partial records written to {self.filename}")
             except Exception as save_error:
-                logging.error(f"Failed to save partial data during error handling: {save_error}")
+                logging.error("Failed to save partial data during error handling: %s", save_error)
 
         logging.debug("EXIT: APIDataFetcher - API error")
         raise error
 
     def _handle_outer_exception(self, error: Exception) -> None:
         """Handle exceptions at the top level."""
-        logging.error(f"! Error during data fetch for {self.title}: {error}")
-        logging.error(f"Exception type: {type(error).__name__}, Traceback info available in logs")
+        logging.error("! Error during data fetch for %s: %s", self.title, error)
+        logging.error("Exception type: %s, Traceback info available in logs", type(error).__name__)
 
         if self.rawdata:
             self._save_partial_data_on_error(error)
@@ -8280,14 +8357,14 @@ class APIDataFetcher:
         try:
             api_name = self.api_call.__name__
             DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-            logging.info(f"Partial results saved to {self.filename} ({len(self.rawdata)} rows)")
+            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
 
             print("\n!! PARTIAL DATA SAVED !!")
             print(f"   * Despite the error, {len(self.rawdata)} records were successfully saved to {self.filename}")
             print(f"   * Error: {str(error)}")
             print("   * You can retry the operation later to get remaining data")
         except Exception as save_error:
-            logging.error(f"Failed to save partial data in outer exception handler: {save_error}")
+            logging.error("Failed to save partial data in outer exception handler: %s", save_error)
             print(f"! Critical: Could not save partial data. Error: {save_error}")
 
     # =========================================================================
@@ -8296,7 +8373,7 @@ class APIDataFetcher:
 
     def _export_and_display_data(self) -> None:
         """Export data and display in table format."""
-        logging.info(f"Fetched {len(self.rawdata)} raw records from API.")
+        logging.info("Fetched %s raw records from API.", len(self.rawdata))
 
         api_name = self.api_call.__name__
         DataExporter.export_with_processing(  # type: ignore[no-untyped-call]
@@ -8310,10 +8387,10 @@ class APIDataFetcher:
         """Prepare and display data in PrettyTable format."""
         data = self._prepare_data_for_display()
         fields = DataProcessingUtils.get_unique_keys(data)  # type: ignore[no-untyped-call]
-        logging.debug(f"Unique fields for table: {fields}")
+        logging.debug("Unique fields for table: %s", fields)
 
         table = self._build_pretty_table(data, fields)
-        logging.debug("\n" + table.get_string())
+        logging.debug("\n%s", table.get_string())
 
     def _prepare_data_for_display(self) -> list[dict[str, Any]]:
         """Prepare raw data for table display."""
@@ -8346,7 +8423,7 @@ def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int,
         max_threads = FAST_MODE_MAX_CONCURRENT_CONNECTIONS  # Cap threads at configured connection pool capacity.
         threading_mode = "connection-aware"  # Label used in log output so operators can identify which strategy ran.
         logging.info(
-            f"! Connection-aware threading: Using {max_threads} threads (respects connection pool limit)"
+            "! Connection-aware threading: Using %s threads (respects connection pool limit)", max_threads
         )  # Confirm strategy selection and thread limit.
     else:  # CPU-aware mode maximizes parallelism up to available CPU cores.
         max_threads = (
@@ -8354,19 +8431,19 @@ def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int,
         )  # Use CPU count or configured fallback when cpu_count returns None.
         threading_mode = "CPU-aware"  # Label used in log output so operators can identify which strategy ran.
         logging.info(
-            f"! CPU-aware threading: Using {max_threads} threads (maximum CPU utilization)"
+            "! CPU-aware threading: Using %s threads (maximum CPU utilization)", max_threads
         )  # Confirm strategy selection and thread limit.
     connection_semaphore = threading.Semaphore(
         FAST_MODE_MAX_CONCURRENT_CONNECTIONS
     )  # Limit simultaneous API calls regardless of thread count.
     logging.info(
-        f"* Connection pool protection: Maximum {FAST_MODE_MAX_CONCURRENT_CONNECTIONS} concurrent API calls"
+        "* Connection pool protection: Maximum %s concurrent API calls", FAST_MODE_MAX_CONCURRENT_CONNECTIONS
     )  # Log semaphore bound for observability.
     batch_size = (
         max_threads * FAST_MODE_DEVICES_PER_THREAD
     )  # Scale batch size to thread count and items-per-thread setting.
     logging.info(
-        f"* Processing {len(work_items)} {batch_description} with connection pool management..."
+        "* Processing %s %s with connection pool management...", len(work_items), batch_description
     )  # Log total work-item count before batching begins.
     return (
         max_threads,
@@ -8390,7 +8467,12 @@ def _pool_process_batch_wait_loop(
     batch_failed: list[Any] = []  # Accumulate items whose futures raised or returned empty for this batch.
     first_result_logged = False  # Track whether the first-result debug log has fired to avoid repeated noise.
     logging.info(
-        f"! Processing batch {batch_number}/{total_batches} ({len(batch)} {batch_description}, ~{len(batch) / max_threads:.0f} per thread)"  # noqa: E501
+        "! Processing batch %s/%s (%s %s, ~%.0f per thread)",
+        batch_number,
+        total_batches,
+        len(batch),
+        batch_description,
+        len(batch) / max_threads,
     )  # Log batch progress before dispatching to the thread pool.
     with ThreadPoolExecutor(max_workers=max_threads) as executor:  # Bound thread count to the configured pool size.
         future_to_item = {
@@ -8413,14 +8495,14 @@ def _pool_process_batch_wait_loop(
                                 not first_result_logged
                             ):  # Log the first result's type once to help debug unexpected worker outputs.
                                 logging.debug(
-                                    f"! First future result type: {type(result)}"
+                                    "! First future result type: %s", type(result)
                                 )  # One-shot debug log to show actual result shape.
                                 first_result_logged = True  # Prevent repeated debug log on subsequent results.
                         else:  # Falsy result means the worker returned an empty list or None.
                             batch_failed.append(item)  # Track empty-result items for potential retry.
                     except Exception as exc:  # Worker threw an exception; log and track as failed.
                         logging.error(
-                            f"! Future exception for {batch_description.rstrip('s')} {item}: {exc}"
+                            "! Future exception for %s %s: %s", batch_description.rstrip("s"), item, exc
                         )  # Log exception with item context for targeted debugging.
                         batch_failed.append(item)  # Mark item as failed so retry logic can handle it.
                     finally:  # Advance progress bar regardless of success or failure.
@@ -8430,7 +8512,7 @@ def _pool_process_batch_wait_loop(
                             Exception
                         ) as upd_err:  # Progress bar update failure should not mask the real work result.
                             logging.error(
-                                f"! Progress bar update failed: {upd_err}"
+                                "! Progress bar update failed: %s", upd_err
                             )  # Log progress bar failure for environment-level debugging.
     return batch_successful, batch_failed  # Return batch-level results so caller can accumulate them.
 
@@ -8440,10 +8522,14 @@ def _pool_log_batch_exception(
 ) -> None:
     """Log a batch-level exception with full context then re-raise it."""
     logging.error(
-        f"! Batch-level exception in execute_with_connection_pool_management: {batch_exc}"
+        "! Batch-level exception in execute_with_connection_pool_management: %s", batch_exc
     )  # Surface root exception message for immediate diagnosis.
     logging.error(
-        f"! Batch context: batch_index={batch_index}, batch_size={batch_size}, max_threads={max_threads}, threading_mode={threading_mode}"  # noqa: E501
+        "! Batch context: batch_index=%s, batch_size=%s, max_threads=%s, threading_mode=%s",
+        batch_index,
+        batch_size,
+        max_threads,
+        threading_mode,
     )  # Log batch configuration context to support post-mortem analysis.
     try:  # Best-effort traceback capture preserves stack information in the log file.
         import traceback as _tb2  # Import locally to avoid affecting module-level namespace.
@@ -8457,7 +8543,7 @@ def _pool_log_batch_exception(
             logging.error(line)  # Emit one traceback line per log record.
     except Exception as trace_log_err:  # Traceback serialization failure should not suppress the re-raise.
         logging.error(
-            f"! Failed to log batch exception traceback: {trace_log_err}"
+            "! Failed to log batch exception traceback: %s", trace_log_err
         )  # Surface traceback logging failure as a secondary error.
     raise batch_exc  # Re-raise so outer handlers and the global excepthook can capture the original failure.
 
@@ -8486,7 +8572,7 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
         Tuple of (successful_results, failed_items)
     """
     if not work_items:  # Empty work list is a valid fast-exit condition.
-        logging.info(f"* No {batch_description} to process.")  # Tell caller why nothing ran.
+        logging.info("* No %s to process.", batch_description)  # Tell caller why nothing ran.
         return [], []  # Return empty results without configuring a thread pool.
 
     max_threads, connection_semaphore, batch_size, threading_mode = _pool_configure(
@@ -8528,7 +8614,7 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
         failed_items and retry_function
     ):  # Only invoke the retry path when failures exist and a retry function was provided.
         logging.info(
-            f"! Retrying {len(failed_items)} failed {batch_description}..."
+            "! Retrying %s failed %s...", len(failed_items), batch_description
         )  # Announce retry phase so operators can track it separately.
         retry_results, still_failed = retry_function(
             failed_items, connection_semaphore
@@ -8537,7 +8623,7 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
         failed_items = still_failed  # Replace failed list with items that still failed after retry.
 
     logging.info(
-        f"! Processed {len(successful_results)} {batch_description} successfully, {len(failed_items)} failed"
+        "! Processed %s %s successfully, %s failed", len(successful_results), batch_description, len(failed_items)
     )  # Log final success/failure tally for the whole pool run.
     return successful_results, failed_items  # Return both result lists so callers can report or act on failures.
 
@@ -8567,7 +8653,7 @@ class PromptClientUtils:
         Returns:
             str: The selected client MAC address (normalized) or None if no selection made
         """
-        logging.debug(f"Fetching connected clients for site: {site_id}")
+        logging.debug("Fetching connected clients for site: %s", site_id)
 
         try:
             # Fetch wireless clients using search endpoint (from clients module)
@@ -8600,11 +8686,14 @@ class PromptClientUtils:
 
             if not all_clients:
                 print("\n! No connected clients found at the selected site.")
-                logging.warning(f"No clients found for site_id: {site_id}")
+                logging.warning("No clients found for site_id: %s", site_id)
                 return None
 
             logging.info(
-                f"Found {len(all_clients)} connected clients at site ({len(wireless_clients or [])} wireless, {len(wired_clients or [])} wired)"  # noqa: E501
+                "Found %s connected clients at site (%s wireless, %s wired)",
+                len(all_clients),
+                len(wireless_clients or []),
+                len(wired_clients or []),
             )
 
             # Sort by hostname/username for easier selection
@@ -8643,12 +8732,12 @@ class PromptClientUtils:
             print("  - Enter 'c' to cancel")
 
             user_input = InputUtils.safe_input("\nEnter your choice: ", context="client_selection").strip()
-            logging.debug(f"User input for client selection: {user_input}")
+            logging.debug("User input for client selection: %s", user_input)
 
             # Check for manual entry
             if user_input.lower() == "m":
                 manual_mac = InputUtils.safe_input("Enter client MAC address: ", context="manual_mac")
-                logging.info(f"User chose manual MAC entry: {manual_mac}")
+                logging.info("User chose manual MAC entry: %s", manual_mac)
                 return manual_mac
 
             # Check for cancel
@@ -8667,21 +8756,25 @@ class PromptClientUtils:
                     conn_type = index_to_client[idx].get("connection_type", "Unknown")
                     print(f"\n! Selected: {client_hostname} ({conn_type}) - MAC: {client_mac}")
                     logging.info(
-                        f"User selected client by index: {idx} (hostname: {client_hostname}, mac: {client_mac}, type: {conn_type})"  # noqa: E501
+                        "User selected client by index: %s (hostname: %s, mac: %s, type: %s)",
+                        idx,
+                        client_hostname,
+                        client_mac,
+                        conn_type,
                     )
                     return client_mac  # type: ignore[no-any-return]
                 else:
                     print("\n! Invalid index")
-                    logging.error(f"Invalid client index: {idx}")
+                    logging.error("Invalid client index: %s", idx)
                     return None
             else:
                 print("\n! Please enter a valid index number, 'm' for manual, or 'c' to cancel")
-                logging.error(f"Invalid client selection input: {user_input}")
+                logging.error("Invalid client selection input: %s", user_input)
                 return None
 
         except Exception as error:
             print(f"\n! Error fetching clients: {error}")
-            logging.error(f"Exception in PromptClientUtils.select_client_mac: {error}", exc_info=True)
+            logging.exception("Exception in PromptClientUtils.select_client_mac: %s", error)
             return None
 
     @staticmethod
@@ -8717,7 +8810,7 @@ class PromptClientUtils:
             return PromptUtils._handle_client_selection(all_clients, sites_cache, site_id)
 
         except Exception as exception:
-            logging.error(f"Error during client selection: {exception}")
+            logging.error("Error during client selection: %s", exception)
             print(f"! Error searching for clients: {exception}")
             return None, None, None
 
@@ -8783,7 +8876,7 @@ class PromptUtils:
         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
         if not rawdata:
             print("No devices found for the selected site.")
-            logging.warning(f"No devices found for site_id: {site_id}")
+            logging.warning("No devices found for site_id: %s", site_id)
             return None
 
         # Filter devices locally based on requested device types
@@ -8798,7 +8891,7 @@ class PromptUtils:
 
             if not rawdata:
                 print(f"No devices of type '{device_type}' found at the selected site.")
-                logging.warning(f"No devices of type '{device_type}' found for site_id: {site_id}")
+                logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)
                 return None
 
         # Sort, flatten, and sanitize the inventory data for display and CSV export
@@ -8806,7 +8899,7 @@ class PromptUtils:
         inventory = DataProcessingUtils.flatten_nested_fields(inventory)
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
         DataExporter.save_data_to_output(inventory, csv_filename)  # type: ignore[no-untyped-call]
-        logging.info(f"Device inventory for site_id {site_id} written to {csv_filename}")
+        logging.info("Device inventory for site_id %s written to %s", site_id, csv_filename)
 
         # Prepare PrettyTable for user selection
         table = PrettyTable()
@@ -8829,7 +8922,7 @@ class PromptUtils:
             "Enter the index or name of the device to view device: ",
             context="device_inventory_selection",
         ).strip()
-        logging.debug(f"User input for device selection: {user_input}")
+        logging.debug("User input for device selection: %s", user_input)
 
         # Accept common dotted-index input (e.g., ".2") from interactive tests/operators.
         normalized_input = user_input[1:] if user_input.startswith(".") else user_input
@@ -8839,7 +8932,7 @@ class PromptUtils:
             idx = int(normalized_input)
             if idx in index_to_device:
                 device_id = index_to_device[idx].get("id")
-                logging.info(f"User selected device by index: {idx} (device_id: {device_id})")
+                logging.info("User selected device by index: %s (device_id: %s)", idx, device_id)
                 return device_id  # type: ignore[no-any-return]
             else:
                 logging.error(" Invalid index.")
@@ -8848,7 +8941,7 @@ class PromptUtils:
         # Try name selection
         if normalized_input in name_to_device:
             device_id = name_to_device[normalized_input].get("id")
-            logging.info(f"User selected device by name: {normalized_input} (device_id: {device_id})")
+            logging.info("User selected device by name: %s (device_id: %s)", normalized_input, device_id)
             return device_id  # type: ignore[no-any-return]
 
         logging.error(" Device not found by name or index.")
@@ -8884,7 +8977,7 @@ class PromptUtils:
             print(f"[{idx}] {row.get('name', 'Unnamed')}")
 
         user_input = InputUtils.safe_input("\nEnter site index or name: ", context="site_selection").strip()
-        logging.debug(f"User input for site selection: {user_input}")
+        logging.debug("User input for site selection: %s", user_input)
 
         global LAST_SELECTED_SITE_ID
 
@@ -8894,24 +8987,24 @@ class PromptUtils:
             if idx in index_to_site:
                 site_id = index_to_site[idx].get("id")
                 print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")
-                logging.info(f"User selected site by index: {idx} (site_id: {site_id})")
+                logging.info("User selected site by index: %s (site_id: %s)", idx, site_id)
                 LAST_SELECTED_SITE_ID = site_id
                 return site_id
             else:
                 print(" Invalid index.")
-                logging.warning(f"Invalid site index entered: {idx}")
+                logging.warning("Invalid site index entered: %s", idx)
                 return None
 
         # Try name selection
         if user_input in name_to_site:
             site_id = name_to_site[user_input].get("id")
             print(f"! Selected site: {user_input} (ID: {site_id})")
-            logging.info(f"User selected site by name: {user_input} (site_id: {site_id})")
+            logging.info("User selected site by name: %s (site_id: %s)", user_input, site_id)
             LAST_SELECTED_SITE_ID = site_id
             return site_id
 
         print(" Site not found by name or index.")
-        logging.warning(f"Site not found by name or index: {user_input}")
+        logging.warning("Site not found by name or index: %s", user_input)
         return None
 
     @staticmethod
@@ -8936,7 +9029,7 @@ class PromptUtils:
         logging.info("Prompting user to select a site from SiteList.csv...")
         site_id = PromptUtils.select_site_id_from_csv()
         if site_id:
-            logging.info(f"! Selected site ID: {site_id}")
+            logging.info("! Selected site ID: %s", site_id)
         else:
             logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
         return site_id
@@ -9018,10 +9111,10 @@ class PromptUtils:
             for client in clients:
                 client["client_type"] = "wireless"
                 client["source_site_id"] = site_id
-            logging.info(f"Found {len(clients)} wireless clients in site")
+            logging.info("Found %s wireless clients in site", len(clients))
             return clients
         except Exception as exception:
-            logging.warning(f"Could not fetch wireless clients for site: {exception}")
+            logging.warning("Could not fetch wireless clients for site: %s", exception)
             return []
 
     @staticmethod
@@ -9033,10 +9126,10 @@ class PromptUtils:
             for client in clients:
                 client["client_type"] = "wired"
                 client["source_site_id"] = site_id
-            logging.info(f"Found {len(clients)} wired clients in site")
+            logging.info("Found %s wired clients in site", len(clients))
             return clients
         except Exception as exception:
-            logging.warning(f"Could not fetch wired clients for site: {exception}")
+            logging.warning("Could not fetch wired clients for site: %s", exception)
             return []
 
     @staticmethod
@@ -9047,10 +9140,10 @@ class PromptUtils:
             clients = mistapi.get_all(response=response, mist_session=apisession) or []
             for client in clients:
                 client["client_type"] = "wireless"
-            logging.info(f"Found {len(clients)} wireless clients in organization")
+            logging.info("Found %s wireless clients in organization", len(clients))
             return clients
         except Exception as exception:
-            logging.warning(f"Could not fetch wireless clients for org: {exception}")
+            logging.warning("Could not fetch wireless clients for org: %s", exception)
             return []
 
     @staticmethod
@@ -9061,10 +9154,10 @@ class PromptUtils:
             clients = mistapi.get_all(response=response, mist_session=apisession) or []
             for client in clients:
                 client["client_type"] = "wired"
-            logging.info(f"Found {len(clients)} wired clients in organization")
+            logging.info("Found %s wired clients in organization", len(clients))
             return clients
         except Exception as exception:
-            logging.warning(f"Could not fetch wired clients for org: {exception}")
+            logging.warning("Could not fetch wired clients for org: %s", exception)
             return []
 
     @staticmethod
@@ -9074,10 +9167,10 @@ class PromptUtils:
             print(" Loading site information...")
             sites = APICoreFetchUtils.all_sites_with_limit(org_id)
             cache = {site["id"]: site["name"] for site in sites}
-            logging.info(f"Cached {len(cache)} sites for client display")
+            logging.info("Cached %s sites for client display", len(cache))
             return cache
         except Exception as exception:
-            logging.warning(f"Could not fetch sites for display: {exception}")
+            logging.warning("Could not fetch sites for display: %s", exception)
             return {}
 
     @staticmethod
@@ -9241,7 +9334,7 @@ class PromptUtils:
         if client_site_id and client_site_id in sites_cache:
             print(f"   Site: {sites_cache[client_site_id]}")
 
-        logging.info(f"User selected client: MAC={client_mac}, type={client_type}, site={client_site_id}")
+        logging.info("User selected client: MAC=%s, type=%s, site=%s", client_mac, client_type, client_site_id)
         return client_mac, client_type, client_site_id
 
 
@@ -9270,20 +9363,20 @@ class DeviceUtils:
         Returns:
             list: List of AP MAC addresses, or empty list if error/none found
         """
-        logging.debug(f"Fetching all AP MACs for site: {site_id}")
+        logging.debug("Fetching all AP MACs for site: %s", site_id)
 
         try:
             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
             if not rawdata:
-                logging.warning(f"No APs found for site_id: {site_id}")
+                logging.warning("No APs found for site_id: %s", site_id)
                 return []
 
             ap_macs = [ap.get("mac") for ap in rawdata if ap.get("mac")]
-            logging.info(f"Found {len(ap_macs)} AP MACs at site")
+            logging.info("Found %s AP MACs at site", len(ap_macs))
             return ap_macs
 
         except Exception as error:
-            logging.error(f"Exception in DeviceUtils.get_all_ap_macs_from_site: {error}", exc_info=True)
+            logging.exception("Exception in DeviceUtils.get_all_ap_macs_from_site: %s", error)
             return []
 
     @staticmethod
@@ -9351,14 +9444,14 @@ class DeviceUtils:
         serial = device.get("serial", "").strip()
         if serial:
             if warn_on_missing:
-                logging.warning(f"Device {serial} missing name field, using serial as identifier")
+                logging.warning("Device %s missing name field, using serial as identifier", serial)
             return serial  # type: ignore[no-any-return]
 
         # Fall back to device_id
         device_id = device.get("id", "").strip()
         if device_id:
             if warn_on_missing:
-                logging.warning(f"Device {device_id} missing name and serial, using device_id as identifier")
+                logging.warning("Device %s missing name and serial, using device_id as identifier", device_id)
             return device_id  # type: ignore[no-any-return]
 
         # Last resort
@@ -9846,7 +9939,7 @@ class OrgAlarmEventExporter:
             sort_key: Field to sort results by
             **api_kwargs: Additional arguments for the API call
         """
-        logging.info(f"Starting export of organization {data_type}...")
+        logging.info("Starting export of organization %s...", data_type)
         safe_data_type = data_type.replace(" ", "").replace("-", "").title()
         filename = f"Org{safe_data_type}.csv"
         APIDataFetcher(
@@ -9879,7 +9972,7 @@ class OrgAlarmEventExporter:
             logging.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
             logging.debug("EXIT: OrgAlarmEventExporter.alarms - success")
         except Exception as error:
-            logging.error(f"Failed to export open org alarms: {error}")
+            logging.error("Failed to export open org alarms: %s", error)
             logging.debug("EXIT: OrgAlarmEventExporter.alarms - error")
             raise
 
@@ -9920,11 +10013,13 @@ class OrgAlarmEventExporter:
         )
         rawdata = mistapi.get_all(response=response, mist_session=apisession)
         events = rawdata
-        logging.info(f"Fetched {len(events)} device events from the past {hours} hours (duration={duration_param}).")
+        logging.info(
+            "Fetched %s device events from the past %s hours (duration=%s).", len(events), hours, duration_param
+        )
         DataExporter.save_data_to_output(events, "OrgDeviceEvents.csv")  # type: ignore[no-untyped-call]
-        logging.info(f"Device events written to OrgDeviceEvents.csv ({len(events)} rows).")
+        logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))
         print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
-        logging.info(f"Menu #21: Device events export completed - {len(events)} events")
+        logging.info("Menu #21: Device events export completed - %s events", len(events))
         if events:
             logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
 
@@ -9953,12 +10048,12 @@ class OrgAlarmEventExporter:
                 token = fh.read().strip()  # Strip whitespace so malformed files don't produce bad tokens.
             if token:  # Non-empty token means there is a valid resume point.
                 logging.info(
-                    f"Resuming OrgDeviceEvents_52w from checkpoint token: {token}"
+                    "Resuming OrgDeviceEvents_52w from checkpoint token: %s", token
                 )  # Log resume event for traceability.
                 return token  # Return token so caller can pass it to the first API request.
         except Exception as exception:  # Checkpoint read failure should degrade gracefully to a fresh start.
             logging.warning(
-                f"Could not read checkpoint file {checkpoint_file}: {exception}"
+                "Could not read checkpoint file %s: %s", checkpoint_file, exception
             )  # Log why resume was skipped.
         return None  # Fall back to full export when checkpoint is unreadable.
 
@@ -9970,7 +10065,7 @@ class OrgAlarmEventExporter:
                 fh.write(str(token))  # Write token string so it can be read back on next run.
         except Exception as exception:  # Log failure without aborting the ongoing export stream.
             logging.warning(
-                f"Could not write checkpoint file {checkpoint_file}: {exception}"
+                "Could not write checkpoint file %s: %s", checkpoint_file, exception
             )  # Surface write failure for operator awareness.
 
     @staticmethod
@@ -10007,12 +10102,12 @@ class OrgAlarmEventExporter:
             except Exception as exception:  # Network errors and rate-limit responses are retryable.
                 last_exc = exception  # Remember last error for re-raise after exhaustion.
                 logging.warning(
-                    f"Attempt {attempt + 1}/{retries} to fetch device events page failed: {exception}"
+                    "Attempt %s/%s to fetch device events page failed: %s", attempt + 1, retries, exception
                 )  # Log attempt number and cause for monitoring.
                 if attempt < retries - 1:  # Don't sleep after the final attempt since we're about to give up.
                     sleep_time = backoff * (2**attempt)  # Exponential backoff reduces pressure on API during outages.
                     logging.debug(
-                        f"Waiting {sleep_time}s before retrying 52w page fetch"
+                        "Waiting %ss before retrying 52w page fetch", sleep_time
                     )  # Log backoff duration for performance debugging.
                     time.sleep(sleep_time)  # Pause before the next retry attempt.
         logging.error("Exceeded maximum retries fetching device events page")  # Record terminal retry failure.
@@ -10078,7 +10173,7 @@ class OrgAlarmEventExporter:
             except Exception as write_error:  # Re-raise immediately so callers can handle checkpoint cleanup.
                 mode = "append to" if append else "write initial"  # Log with operation context to aid debugging.
                 logging.error(
-                    f"Failed to {mode} OrgDeviceEvents_52w SQLite table {table_name}: {write_error}"
+                    "Failed to %s OrgDeviceEvents_52w SQLite table %s: %s", mode, table_name, write_error
                 )  # Log failure before re-raise.
                 raise  # Propagate so the outer export aborts and checkpoint state is preserved.
         else:  # CSV path writes using the stable header computed from preloaded pages.
@@ -10097,7 +10192,7 @@ class OrgAlarmEventExporter:
             except Exception as write_error:  # Re-raise immediately so callers can handle checkpoint cleanup.
                 mode = "append to" if append else "write initial"  # Log with operation context to aid debugging.
                 logging.error(
-                    f"Failed to {mode} OrgDeviceEvents_52w CSV file {csv_file}: {write_error}"
+                    "Failed to %s OrgDeviceEvents_52w CSV file %s: %s", mode, csv_file, write_error
                 )  # Log before re-raise.
                 raise  # Propagate so the outer export aborts and checkpoint state is preserved.
 
@@ -10145,7 +10240,7 @@ class OrgAlarmEventExporter:
 
         header_fields = DataProcessingUtils.get_unique_keys(buffered_rows)  # type: ignore[no-untyped-call]  # Derive stable column set from the preloaded sample.
         logging.info(
-            f"Using CSV header with {len(header_fields)} fields for OrgDeviceEvents_52w.csv"
+            "Using CSV header with %s fields for OrgDeviceEvents_52w.csv", len(header_fields)
         )  # Log header width for schema tracking.
         OrgAlarmEventExporter._52w_write_batch(
             buffered_rows, header_fields, csv_file, table_name, append=False
@@ -10182,10 +10277,10 @@ class OrgAlarmEventExporter:
         )  # Clean up checkpoint file after a successful full export.
         if OUTPUT_FORMAT == "sqlite":  # Log final destination path based on configured output format.
             logging.info(
-                f"All org device events (52w) exported to SQLite table {table_name} (DB: {DATABASE_PATH})"
+                "All org device events (52w) exported to SQLite table %s (DB: %s)", table_name, DATABASE_PATH
             )  # Confirm SQLite export completion.
         else:  # CSV format is the default; log its output path.
-            logging.info(f"All org device events (52w) exported to {csv_file}.")  # Confirm CSV export completion.
+            logging.info("All org device events (52w) exported to %s.", csv_file)  # Confirm CSV export completion.
 
 
 # ============================================================================
@@ -10219,7 +10314,7 @@ class OrgSiteExporter:
             limit=1000,
         ).execute()
         output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"
-        logging.info(f"Completed site list export and wrote results to {output_desc}.")
+        logging.info("Completed site list export and wrote results to %s.", output_desc)
         if emitter:
             emitter.emit_progress_complete("11", "sites", 1, 1, False, time.time() - op_start)
 
@@ -10231,7 +10326,7 @@ class OrgSiteExporter:
         """
         output_file = "SiteList_ListAPI.csv"
         if os.path.exists(output_file):
-            logging.info(f"! Using cached {output_file} (already exists)")
+            logging.info("! Using cached %s (already exists)", output_file)
             print(f"! Using cached {output_file} (already exists)")
             return
         logging.info("Fetching all sites using the 'list' sites API endpoint...")
@@ -10248,7 +10343,7 @@ class OrgSiteExporter:
         sites = DataProcessingUtils.escape_multiline(sites)  # type: ignore[no-untyped-call]
         # Write to the configured output backend (CSV or SQLite) via the DataExporter abstraction
         DataExporter.save_data_to_output(sites, output_file)  # type: ignore[no-untyped-call]
-        logging.info(f"! Sites exported to {output_file}")  # Log the successful export
+        logging.info("! Sites exported to %s", output_file)  # Log the successful export
         print(f"! Sites exported to {output_file}")  # Inform the user on stdout
 
     @staticmethod
@@ -10259,9 +10354,9 @@ class OrgSiteExporter:
         print("Sites with Location and Timezone Info:")
         logging.info("Listing Sites with Full Info:")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug(f"Using org_id: {org_id} for site location export.")
+        logging.debug("Using org_id: %s for site location export.", org_id)
         sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-        logging.info(f"Fetched {len(sites)} sites from the organization.")
+        logging.info("Fetched %s sites from the organization.", len(sites))
         flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)
         sanitized_sites = DataProcessingUtils.escape_multiline(flattened_sites)  # type: ignore[no-untyped-call]
         DataExporter.save_data_to_output(sanitized_sites, "SitesWithLocations.csv")  # type: ignore[no-untyped-call]
@@ -10276,10 +10371,10 @@ class OrgSiteExporter:
         print("Current and Historical Guest Users:")
         logging.info("Exporting all current guest users in the org...")
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug(f"Using org_id: {org_id} for current guest export.")
+        logging.debug("Using org_id: %s for current guest export.", org_id)
         response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(apisession, org_id, limit=1000)
         guests = mistapi.get_all(response=response, mist_session=apisession)
-        logging.info(f"Fetched {len(guests)} current guest users from API.")
+        logging.info("Fetched %s current guest users from API.", len(guests))
         guests = DataProcessingUtils.flatten_nested_fields(guests)
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
         DataExporter.save_data_to_output(guests, "OrgCurrentGuests.csv")  # type: ignore[no-untyped-call]
@@ -10295,12 +10390,12 @@ class OrgSiteExporter:
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
         end_time = int(time.time())
         start_time = end_time - 7 * 24 * 3600
-        logging.debug(f"Fetching guest authorizations from {start_time} to {end_time} (epoch seconds).")
+        logging.debug("Fetching guest authorizations from %s to %s (epoch seconds).", start_time, end_time)
         response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(
             apisession, org_id, limit=1000, start=start_time, end=end_time
         )
         guests = mistapi.get_all(response=response, mist_session=apisession)
-        logging.info(f"Fetched {len(guests)} historical guest users from API.")
+        logging.info("Fetched %s historical guest users from API.", len(guests))
         guests = DataProcessingUtils.flatten_nested_fields(guests)
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
         DataExporter.save_data_to_output(guests, "OrgHistoricalGuests.csv")  # type: ignore[no-untyped-call]
@@ -10373,7 +10468,7 @@ class OrgInventoryExporter:
             )  # Pull org name from the response payload if present.
         except Exception as exception:  # API resolution failure should not block report generation.
             logging.warning(
-                f"Unable to resolve org name from API for combined inventory filename: {exception}"
+                "Unable to resolve org name from API for combined inventory filename: %s", exception
             )  # Log fallback reason for operators.
         if not org_name_for_filename:  # Fall back to customer name from environment when API name is unavailable.
             org_name_for_filename = fallback_org_name  # Use configured customer-friendly name if present.
@@ -10560,7 +10655,7 @@ class OrgInventoryExporter:
                 summary_data[(year, week)] += 1  # Increment summary counter for the same ISO week.
             except Exception as exception:  # One bad device row must not derail the full export.
                 logging.warning(
-                    f"! Skipping device due to error: {exception}"
+                    "! Skipping device due to error: %s", exception
                 )  # Log row-level failure for later cleanup.
         return weekly_data, summary_data  # Return both detailed buckets and summary counts for file writers.
 
@@ -10758,15 +10853,15 @@ class OrgInventoryExporter:
                     site_lookup = {
                         row["id"]: {"name": row.get("name", ""), "address": row.get("address", "")} for row in reader
                     }
-                logging.debug(f"Loaded {len(site_lookup)} sites from cached SiteList.csv")
+                logging.debug("Loaded %s sites from cached SiteList.csv", len(site_lookup))
             except Exception as exception:
-                logging.warning(f"Failed to load from cached SiteList.csv, falling back to API: {exception}")
+                logging.warning("Failed to load from cached SiteList.csv, falling back to API: %s", exception)
                 # Fallback to API if cached data fails
                 sites = APICoreFetchUtils.all_sites_with_limit(org_id)
                 site_lookup = {
                     site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
                 }
-                logging.debug(f"Loaded {len(site_lookup)} sites from API fallback")
+                logging.debug("Loaded %s sites from API fallback", len(site_lookup))
 
             # Load inventory from cached CSV
             inventory = []
@@ -10775,12 +10870,12 @@ class OrgInventoryExporter:
                 with open(inventory_path, encoding="utf-8") as file:
                     reader = csv.DictReader(file)
                     inventory = list(reader)
-                logging.debug(f"Loaded {len(inventory)} devices from cached OrgInventory.csv")
+                logging.debug("Loaded %s devices from cached OrgInventory.csv", len(inventory))
             except Exception as exception:
-                logging.warning(f"Failed to load from cached OrgInventory.csv, falling back to API: {exception}")
+                logging.warning("Failed to load from cached OrgInventory.csv, falling back to API: %s", exception)
                 # Fallback to API if cached data fails
                 inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
-                logging.debug(f"Loaded {len(inventory)} devices from API fallback")
+                logging.debug("Loaded %s devices from API fallback", len(inventory))
         else:
             # Original behavior: fetch directly from API
             # Fetch all sites and build a lookup dictionary for site info
@@ -10788,11 +10883,11 @@ class OrgInventoryExporter:
             site_lookup = {
                 site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
             }
-            logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
+            logging.debug("Loaded %s sites for lookup.", len(site_lookup))
 
             # Fetch org inventory (all devices)
             inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
-            logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
+            logging.debug("Loaded %s devices from org inventory.", len(inventory))
 
         def split_address(address):
             """
@@ -10809,7 +10904,7 @@ class OrgInventoryExporter:
                 country = parts[3]
                 return street, city, state, zip_code, country
             except Exception as exception:
-                logging.debug(f"Failed to split address '{address}': {exception}")
+                logging.debug("Failed to split address '%s': %s", address, exception)
                 return address, "", "", "", ""
 
         # Build mac -> site_id lookup for VC member site inheritance.
@@ -10849,7 +10944,7 @@ class OrgInventoryExporter:
             device["zip_code"] = zip_code  # Set postal/zip code component
             device["country"] = country  # Set country component
             enriched_devices.append(device)  # Add enriched device to output list
-            logging.debug(f"Enriched device {device.get('name', '')} ({device.get('mac', '')}) with site info.")
+            logging.debug("Enriched device %s (%s) with site info.", device.get("name", ""), device.get("mac", ""))
         if vc_inherited_count:  # Log inheritance summary if any members were fixed
             logging.info(
                 "%d physical VC members inherited site info from their VC parent",
@@ -10862,7 +10957,7 @@ class OrgInventoryExporter:
         enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))
         DataExporter.save_data_to_output(enriched_devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(enriched_devices)} devices exported to AllDevicesWithSiteInfo.csv")
-        logging.info(f"All device data written to AllDevicesWithSiteInfo.csv ({len(enriched_devices)} records).")
+        logging.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(enriched_devices))
 
         # Display a summary table in logs
         table = PrettyTable()
@@ -10895,7 +10990,7 @@ class OrgInventoryExporter:
                     dev.get("country", ""),
                 ]
             )
-        logging.debug("\n" + table.get_string())
+        logging.debug("\n%s", table.get_string())
 
     @staticmethod
     def gateways_with_site_info():
@@ -10910,11 +11005,11 @@ class OrgInventoryExporter:
         # Fetch site list and build a lookup dictionary for site info
         sites = APICoreFetchUtils.all_sites_with_limit(org_id)
         site_lookup = {site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites}
-        logging.debug(f"Loaded {len(site_lookup)} sites for lookup.")
+        logging.debug("Loaded %s sites for lookup.", len(site_lookup))
 
         # Fetch org inventory (all devices)
         inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
-        logging.debug(f"Loaded {len(inventory)} devices from org inventory.")
+        logging.debug("Loaded %s devices from org inventory.", len(inventory))
 
         def split_address(address):
             """
@@ -10931,7 +11026,7 @@ class OrgInventoryExporter:
                 country = parts[3]
                 return street, city, state, zip_code, country
             except Exception as exception:
-                logging.debug(f"Failed to split address '{address}': {exception}")
+                logging.debug("Failed to split address '%s': %s", address, exception)
                 return address, "", "", "", ""
 
         # Filter for gateways and enrich with site info
@@ -10949,7 +11044,7 @@ class OrgInventoryExporter:
                 device["zip_code"] = zip_code
                 device["country"] = country
                 gateways.append(device)
-        logging.info(f"Enriched {len(gateways)} gateway devices with site info.")
+        logging.info("Enriched %s gateway devices with site info.", len(gateways))
 
         # Flatten nested fields and escape multiline strings for CSV compatibility
         gateways = DataProcessingUtils.flatten_nested_fields(gateways)
@@ -10988,7 +11083,7 @@ class OrgInventoryExporter:
                     gateway.get("country", ""),
                 ]
             )
-        logging.debug("\n" + table.get_string())
+        logging.debug("\n%s", table.get_string())
 
 
 class OrgDeviceStatsExporter:
@@ -11015,12 +11110,15 @@ class OrgDeviceStatsExporter:
                 age_minutes = (time.time() - mtime) / 60.0
                 if age_minutes < CSV_FRESHNESS_MINUTES:
                     logging.info(
-                        f" Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch."  # noqa: E501
+                        " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
+                        output_file,
+                        age_minutes,
+                        CSV_FRESHNESS_MINUTES,
                     )
                     print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
                     return
             except Exception as e:
-                logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
+                logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)
         logging.info("Starting export of organization device statistics...")
         emitter = PROGRESS_EMITTER
         if emitter:
@@ -11054,7 +11152,10 @@ class OrgDeviceStatsExporter:
             ) / 60.0  # Convert file age to minutes for comparison against freshness policy.
             if age_minutes < CSV_FRESHNESS_MINUTES:  # Fresh cache means a read-only export can safely skip API calls.
                 logging.info(
-                    f" Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch."  # noqa: E501
+                    " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
+                    output_file,
+                    age_minutes,
+                    CSV_FRESHNESS_MINUTES,
                 )  # Record why no API calls were made in fast mode.
                 print(
                     f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)"
@@ -11062,7 +11163,7 @@ class OrgDeviceStatsExporter:
                 return True  # Caller can return early because cache satisfies the request.
         except Exception as exception:  # Cache metadata problems should degrade gracefully to a fresh fetch.
             logging.debug(
-                f"Fast mode freshness check failed for {output_file}: {exception}"
+                "Fast mode freshness check failed for %s: %s", output_file, exception
             )  # Log the fallback reason for troubleshooting.
         return False  # Cache was missing, stale, or unreadable, so a fresh fetch is required.
 
@@ -11082,15 +11183,15 @@ class OrgDeviceStatsExporter:
                     (row.get("id"), row.get("name", "Unknown")) for row in reader if row.get("id")
                 ]  # Build tuple list used by pool workers.
             logging.info(
-                f"* Loaded {len(sites)} sites from cached data"
+                "* Loaded %s sites from cached data", len(sites)
             )  # Confirm cached site count for operator visibility.
             logging.debug(
-                f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}"  # noqa: E501
+                "First site sample: %s, type: %s", sites[0] if sites else "No sites", type(sites[0]) if sites else "N/A"
             )  # Keep one sample for debugging malformed site rows.
             return sites  # Return cached site tuples when CSV read succeeds.
         except Exception as exception:  # Cache read failure should fall back to API immediately.
             logging.warning(
-                f"* Could not use cached sites, fetching from API: {exception}"
+                "* Could not use cached sites, fetching from API: %s", exception
             )  # Explain why the slower fallback path is being used.
         site_response = mistapi.api.v1.orgs.sites.listOrgSites(
             apisession, org_id, limit=1000
@@ -11102,10 +11203,10 @@ class OrgDeviceStatsExporter:
             (site.get("id"), site.get("name", "Unknown")) for site in site_data if site.get("id")
         ]  # Normalize API records into worker tuples.
         logging.info(
-            f"* Fetched {len(sites)} sites from API"
+            "* Fetched %s sites from API", len(sites)
         )  # Record API fallback count so operators can spot cache misses.
         logging.debug(
-            f"First site sample: {sites[0] if sites else 'No sites'}, type: {type(sites[0]) if sites else 'N/A'}"  # noqa: E501
+            "First site sample: %s, type: %s", sites[0] if sites else "No sites", type(sites[0]) if sites else "N/A"
         )  # Provide one representative tuple for debug diagnostics.
         return sites  # Return normalized site tuples for the fast-mode worker pool.
 
@@ -11128,7 +11229,10 @@ class OrgDeviceStatsExporter:
                     port_stats, list
                 ):  # Defensive type check prevents malformed API payloads from poisoning downstream flattening.
                     logging.error(
-                        f"! API returned non-list type for site {site_name}: type={type(port_stats)}, value={port_stats}"  # noqa: E501
+                        "! API returned non-list type for site %s: type=%s, value=%s",
+                        site_name,
+                        type(port_stats),
+                        port_stats,
                     )  # Log malformed payload details for debugging.
                     return []  # Return empty result for malformed sites so overall export can continue.
                 for stat in port_stats:  # Annotate each port row with site metadata for org-level export output.
@@ -11136,11 +11240,11 @@ class OrgDeviceStatsExporter:
                     stat["site_name"] = site_name  # Persist site name on every row for human-readable reports.
                 if attempt > 0:  # Retries that later succeed should be visible in logs.
                     logging.info(
-                        f"! Retry {attempt} successful for site {site_name} ({len(port_stats)} records)"
+                        "! Retry %s successful for site %s (%s records)", attempt, site_name, len(port_stats)
                     )  # Record successful retry outcome with row count.
                 else:  # First-try success belongs at debug level to avoid noisy logs.
                     logging.debug(
-                        f"! Collected {len(port_stats)} port stats from site {site_name}"
+                        "! Collected %s port stats from site %s", len(port_stats), site_name
                     )  # Record successful site harvest count.
                 return port_stats  # Return this site's fully annotated port rows to pool caller.
             except Exception as exception:  # Retry transient API and network errors with controlled backoff.
@@ -11149,15 +11253,15 @@ class OrgDeviceStatsExporter:
                         FAST_MODE_BACKOFF_MULTIPLIER**attempt
                     )  # Increase wait time per retry attempt to ease pressure on API.
                     logging.warning(
-                        f"! Attempt {attempt + 1} failed for site {site_name}: {exception}"
+                        "! Attempt %s failed for site %s: %s", attempt + 1, site_name, exception
                     )  # Record failing attempt number and root cause.
                     logging.info(
-                        f"! Retrying in {backoff_delay:.1f}s (attempt {attempt + 2}/{FAST_MODE_MAX_RETRIES + 1})"  # noqa: E501
+                        "! Retrying in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, FAST_MODE_MAX_RETRIES + 1
                     )  # Tell operators when next retry will occur.
                     time.sleep(backoff_delay)  # Pause before retrying to reduce repeated immediate failures.
                 else:  # Final attempt failed, so this site will be reported as empty/failed.
                     logging.error(
-                        f"! Final attempt failed for site {site_name}: {exception}"
+                        "! Final attempt failed for site %s: %s", site_name, exception
                     )  # Record terminal site failure for support review.
                     return []  # Return empty list so caller can track failed sites cleanly.
         return []  # Defensive fallback keeps return type stable even if retry loop exits unexpectedly.
@@ -11194,14 +11298,14 @@ class OrgDeviceStatsExporter:
                         result = future.result()  # Resolve retried site rows from the worker.
                         if result:  # Non-empty retry result means site recovered successfully.
                             retry_results.extend(result)  # Merge recovered rows into retry result set.
-                            logging.info(f" FAST RETRY OK: {site_info[1]}")  # Record recovered site name in logs.
+                            logging.info(" FAST RETRY OK: %s", site_info[1])  # Record recovered site name in logs.
                         else:  # Empty retry result means site still failed logically.
                             still_failed.append(site_info)  # Keep site for final failure summary.
-                            logging.warning(f" FAST RETRY EMPTY: {site_info[1]}")  # Record unresolved site in logs.
+                            logging.warning(" FAST RETRY EMPTY: %s", site_info[1])  # Record unresolved site in logs.
                     except Exception as exception:  # Future itself raised unexpectedly.
                         still_failed.append(site_info)  # Preserve site in failure list for summary reporting.
                         logging.error(
-                            f" FAST RETRY EXC: {site_info[1]} -> {exception}"
+                            " FAST RETRY EXC: %s -> %s", site_info[1], exception
                         )  # Log unexpected retry exception.
                     finally:  # Progress bar should advance regardless of success or failure.
                         pbar.update(1)  # Advance retry progress count for every completed future.
@@ -11215,13 +11319,13 @@ class OrgDeviceStatsExporter:
             successful_results
         ):  # Inspect each worker result for defensive type handling.
             logging.debug(
-                f"Processing result {index}: type={type(result_list)}, is_list={isinstance(result_list, list)}"
+                "Processing result %s: type=%s, is_list=%s", index, type(result_list), isinstance(result_list, list)
             )  # Log shape of each pooled result before flattening.
             if isinstance(result_list, list):  # Only list payloads are valid worker outputs.
                 all_port_stats.extend(result_list)  # Merge valid site rows into the combined export list.
             else:  # Unexpected worker payloads should be visible but not fatal.
                 logging.warning(
-                    f"Unexpected result type at index {index}: {type(result_list)}, value: {result_list}"
+                    "Unexpected result type at index %s: %s, value: %s", index, type(result_list), result_list
                 )  # Surface unexpected worker output for debugging.
         return all_port_stats  # Return flattened org-wide port-stat list for sorting and export.
 
@@ -11237,7 +11341,7 @@ class OrgDeviceStatsExporter:
                 all_port_stats, key=lambda row: row.get("mac", "")
             )  # Sort by MAC to produce deterministic CSV ordering.
         except Exception as exception:  # Sorting failures should not block export.
-            logging.debug(f"Could not sort by MAC: {exception}")  # Record sort failure while continuing unsorted.
+            logging.debug("Could not sort by MAC: %s", exception)  # Record sort failure while continuing unsorted.
         flattened = DataProcessingUtils.flatten_nested_fields(
             all_port_stats
         )  # Normalize nested API payloads into flat CSV-friendly records.
@@ -11247,7 +11351,7 @@ class OrgDeviceStatsExporter:
             f"! {len(all_port_stats)} port stat records exported to {output_file}"
         )  # Confirm output row count to the operator.
         logging.info(
-            f"! Port statistics saved to {output_file} ({len(all_port_stats)} records)"
+            "! Port statistics saved to %s (%s records)", output_file, len(all_port_stats)
         )  # Record successful export count in logs.
 
     @staticmethod
@@ -11263,10 +11367,10 @@ class OrgDeviceStatsExporter:
         start_time = time.time()  # Capture start time for performance summary logging.
         if not isinstance(start_time, (int, float)):  # Defensive guard against accidental monkeypatch/type corruption.
             logging.error(
-                f"! CRITICAL: start_time is not a number! type={type(start_time)}, value={start_time}"
+                "! CRITICAL: start_time is not a number! type=%s, value=%s", type(start_time), start_time
             )  # Surface impossible timing state for diagnosis.
             logging.error(
-                f"! time module type: {type(time)}, time.time type: {type(time.time)}"
+                "! time module type: %s, time.time type: %s", type(time), type(time.time)
             )  # Provide context for debugging patched modules.
             raise TypeError(
                 f"start_time must be a number, got {type(start_time)}"
@@ -11280,22 +11384,30 @@ class OrgDeviceStatsExporter:
             )
         )
         logging.debug(  # Log pooled result shape before flattening for easier troubleshooting of worker issues.
-            f"execute_with_connection_pool_management returned - successful_results type: {type(successful_results)}, length: {len(successful_results) if isinstance(successful_results, list) else 'N/A'}"  # noqa: E501
+            "execute_with_connection_pool_management returned - successful_results type: %s, length: %s",
+            type(successful_results),
+            len(successful_results) if isinstance(successful_results, list) else "N/A",
         )
         logging.debug(  # Log failed-site list shape for retry and summary debugging.
-            f"failed_sites type: {type(failed_sites)}, length: {len(failed_sites) if isinstance(failed_sites, list) else 'N/A'}"  # noqa: E501
+            "failed_sites type: %s, length: %s",
+            type(failed_sites),
+            len(failed_sites) if isinstance(failed_sites, list) else "N/A",
         )
         all_port_stats = OrgDeviceStatsExporter._flatten_site_port_results(
             successful_results
         )  # Collapse per-site worker results into one export list.
         end_time = time.time()  # Capture end time after all worker and retry processing completes.
         logging.debug(
-            f"End time type: {type(end_time)}, value: {end_time}"
+            "End time type: %s, value: %s", type(end_time), end_time
         )  # Keep timing diagnostics visible during fast-mode tuning.
         duration = end_time - start_time  # Compute elapsed seconds for operator summary.
-        logging.debug(f"Duration calculation successful: {duration}")  # Confirm elapsed calculation succeeded.
+        logging.debug("Duration calculation successful: %s", duration)  # Confirm elapsed calculation succeeded.
         logging.info(  # Summarize site success/failure counts and total rows for fast-mode observability.
-            f" FAST MODE SUMMARY (port stats): sites_ok={len(sites) - len(failed_sites)} sites_fail={len(failed_sites)} records={len(all_port_stats)} elapsed={duration:.2f}s"  # noqa: E501
+            " FAST MODE SUMMARY (port stats): sites_ok=%s sites_fail=%s records=%s elapsed=%.2fs",
+            len(sites) - len(failed_sites),
+            len(failed_sites),
+            len(all_port_stats),
+            duration,
         )
         print(  # Provide concise operator-facing timing and record-count summary.
             f"* Fast mode: Collected {len(all_port_stats)} port stat records from {len(sites) - len(failed_sites)}/{len(sites)} sites in {duration:.1f}s"  # noqa: E501
@@ -11362,12 +11474,15 @@ class OrgDeviceStatsExporter:
                 age_minutes = (time.time() - mtime) / 60.0
                 if age_minutes < CSV_FRESHNESS_MINUTES:
                     logging.info(
-                        f" Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m < {CSV_FRESHNESS_MINUTES}m); skipping fetch."  # noqa: E501
+                        " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
+                        output_file,
+                        age_minutes,
+                        CSV_FRESHNESS_MINUTES,
                     )
                     print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
                     return
             except Exception as e:
-                logging.debug(f"Fast mode freshness check failed for {output_file}: {e}")
+                logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)
         logging.info("Starting export of organization VPN peer path statistics...")
         emitter = PROGRESS_EMITTER
         if emitter:
@@ -11463,7 +11578,7 @@ class OfflineDeviceReporter:
             apisession, current_org_id, type="all", status="all", fields="*", limit=1000
         )
         all_devices: list[dict[str, Any]] = mistapi.get_all(response=stats_resp, mist_session=apisession)
-        logging.info(f"Retrieved stats for {len(all_devices)} devices")
+        logging.info("Retrieved stats for %s devices", len(all_devices))
         print(f"  Retrieved {len(all_devices)} devices from API")
         return site_lookup, all_devices
 
@@ -11590,7 +11705,7 @@ class OfflineDeviceReporter:
             filename_or_table=filename,
             api_function_name="listOrgDevicesStats",
         )
-        logging.info(f"CSV saved: data/{filename} ({total_count} devices)")
+        logging.info("CSV saved: data/%s (%s devices)", filename, total_count)
         print(f"\nCSV saved: data/{filename} ({total_count} devices)")
 
     @staticmethod
@@ -11611,7 +11726,7 @@ class OfflineDeviceReporter:
         try:
             site_lookup, all_devices = OfflineDeviceReporter._fetch_data(current_org_id)
         except Exception as error:
-            logging.error(f"Failed to fetch data from Mist API: {error}")
+            logging.error("Failed to fetch data from Mist API: %s", error)
             print("! Failed to fetch data. Please check your API credentials and network connection.")
             return
 
@@ -11624,14 +11739,14 @@ class OfflineDeviceReporter:
 
         if not offline_records:
             print(f"No devices found offline for more than {threshold_hours} hours. All clear!")
-            logging.info(f"No devices offline beyond {threshold_hours}h threshold")
+            logging.info("No devices offline beyond %sh threshold", threshold_hours)
             return
 
         OfflineDeviceReporter._display_summary(len(all_devices), offline_records, threshold_hours)
         OfflineDeviceReporter._present_results(offline_records)
 
         elapsed = time.time() - start_time
-        logging.info(f"Offline device report completed in {elapsed:.1f} seconds")
+        logging.info("Offline device report completed in %.1f seconds", elapsed)
         print(f"\nReport completed in {elapsed:.1f} seconds")
 
 
@@ -11796,7 +11911,7 @@ class OrgTemplateExporter:
                 limit=1000,
             ).execute()
         except Exception as e:
-            logging.error(f"Failed to export gateway templates: {e}")
+            logging.error("Failed to export gateway templates: %s", e)
         try:
             APIDataFetcher(
                 title="Network Templates:",
@@ -11806,7 +11921,7 @@ class OrgTemplateExporter:
                 limit=1000,
             ).execute()
         except Exception as e:
-            logging.error(f"Failed to export network templates: {e}")
+            logging.error("Failed to export network templates: %s", e)
         try:
             APIDataFetcher(
                 title="RF Templates:",
@@ -11816,7 +11931,7 @@ class OrgTemplateExporter:
                 limit=1000,
             ).execute()
         except Exception as e:
-            logging.error(f"Failed to export RF templates: {e}")
+            logging.error("Failed to export RF templates: %s", e)
         try:
             APIDataFetcher(
                 title="Site Templates:",
@@ -11826,7 +11941,7 @@ class OrgTemplateExporter:
                 limit=1000,
             ).execute()
         except Exception as e:
-            logging.error(f"Failed to export site templates: {e}")
+            logging.error("Failed to export site templates: %s", e)
         try:
             APIDataFetcher(
                 title="AP Templates:",
@@ -11836,7 +11951,7 @@ class OrgTemplateExporter:
                 limit=1000,
             ).execute()
         except Exception as e:
-            logging.error(f"Failed to export AP templates: {e}")
+            logging.error("Failed to export AP templates: %s", e)
         logging.info(" Organization templates export completed")
 
     @staticmethod
@@ -11885,9 +12000,9 @@ class OrgTemplateExporter:
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(processed)} AP templates exported to {filename}")
-            logging.info(f"Exported {len(processed)} AP templates to {filename}.")
+            logging.info("Exported %s AP templates to %s.", len(processed), filename)
         except Exception as e:
-            logging.error(f"Failed to export AP templates: {e}")
+            logging.error("Failed to export AP templates: %s", e)
             try:
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
@@ -11915,9 +12030,9 @@ class OrgTemplateExporter:
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(processed)} switch templates exported to {filename}")
-            logging.info(f"Exported {len(processed)} switch templates to {filename}.")
+            logging.info("Exported %s switch templates to %s.", len(processed), filename)
         except Exception as e:
-            logging.error(f"Failed to export switch templates: {e}")
+            logging.error("Failed to export switch templates: %s", e)
             try:
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
@@ -11976,13 +12091,15 @@ class OrgClientSecurityExporter:
                     if age_minutes < CSV_FRESHNESS_MINUTES:  # The file is still within the freshness window
                         logging.info(
                             # Log the cache hit with file freshness info
-                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."
+                            "Fast mode cache hit: %s is fresh (%.1fm); skipping fetch.",
+                            output_file,
+                            age_minutes,
                         )
                         print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform user
                         return  # Skip the API calls entirely
             except Exception as cache_error:  # Inspecting the cache failed
                 logging.debug(
-                    f"Fast mode freshness check failed for {output_file}: {cache_error}"
+                    "Fast mode freshness check failed for %s: %s", output_file, cache_error
                 )  # Note and fall through to fetch
         logging.info("Starting export of rogue clients from all sites...")  # Log the start of the export
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
@@ -12012,20 +12129,22 @@ class OrgClientSecurityExporter:
                         client["site_id"] = site_id  # Record which site detected it
                         client["site_name"] = site_name  # Record the site name for readability
                     all_rogue_clients.extend(clients)  # Add this site's rogue clients to the aggregate
-                    logging.info(f"! Fetched {len(clients)} rogue clients from site: {site_name}")  # Per-site summary
+                    logging.info(
+                        "! Fetched %s rogue clients from site: %s", len(clients), site_name
+                    )  # Per-site summary
                 except Exception as e:  # This site's fetch failed
                     logging.warning(
-                        f"! Failed to fetch rogue clients from site {site_name}: {e}"
+                        "! Failed to fetch rogue clients from site %s: %s", site_name, e
                     )  # Warn but keep going
                     continue  # Move to the next site
         except Exception as e:  # Failure iterating the site list itself
-            logging.error(f"Failed to process sites for rogue clients: {e}")  # Log the broader failure
+            logging.error("Failed to process sites for rogue clients: %s", e)  # Log the broader failure
             return  # Abort the export
         if all_rogue_clients:  # At least one rogue client was found
             flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_clients)  # Flatten nested JSON to CSV rows
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
             DataExporter.save_data_to_output(sanitized, "OrgRogueClients")  # type: ignore[no-untyped-call]  # Write to the output backend
-            logging.info(f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients")  # Log the export
+            logging.info("! %s rogue clients exported to OrgRogueClients", len(all_rogue_clients))  # Log the export
             print(
                 f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients"
             )  # Report the count to the user
@@ -12050,13 +12169,15 @@ class OrgClientSecurityExporter:
                     if age_minutes < CSV_FRESHNESS_MINUTES:  # The file is still within the freshness window
                         logging.info(
                             # Log the cache hit with file freshness info
-                            f"Fast mode cache hit: {output_file} is fresh ({age_minutes:.1f}m); skipping fetch."
+                            "Fast mode cache hit: %s is fresh (%.1fm); skipping fetch.",
+                            output_file,
+                            age_minutes,
                         )
                         print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform user
                         return  # Skip the API calls entirely
             except Exception as cache_error:  # Inspecting the cache failed
                 logging.debug(
-                    f"Fast mode freshness check failed for {output_file}: {cache_error}"
+                    "Fast mode freshness check failed for %s: %s", output_file, cache_error
                 )  # Note and fall through to fetch
         logging.info("Starting export of rogue APs from all sites...")  # Log the start of the export
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
@@ -12084,18 +12205,18 @@ class OrgClientSecurityExporter:
                         access_point["site_id"] = site_id  # Record which site detected it
                         access_point["site_name"] = site_name  # Record the site name for readability
                     all_rogue_aps.extend(aps)  # Add this site's rogue APs to the aggregate
-                    logging.info(f"! Fetched {len(aps)} rogue APs from site: {site_name}")  # Per-site summary
+                    logging.info("! Fetched %s rogue APs from site: %s", len(aps), site_name)  # Per-site summary
                 except Exception as e:  # This site's fetch failed
-                    logging.warning(f"! Failed to fetch rogue APs from site {site_name}: {e}")  # Warn but keep going
+                    logging.warning("! Failed to fetch rogue APs from site %s: %s", site_name, e)  # Warn but keep going
                     continue  # Move to the next site
         except Exception as e:  # Failure iterating the site list itself
-            logging.error(f"Failed to process sites for rogue APs: {e}")  # Log the broader failure
+            logging.error("Failed to process sites for rogue APs: %s", e)  # Log the broader failure
             return  # Abort the export
         if all_rogue_aps:  # At least one rogue AP was found
             flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_aps)  # Flatten nested JSON to CSV rows
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
             DataExporter.save_data_to_output(sanitized, "OrgRogueAPs")  # type: ignore[no-untyped-call]  # Write to the output backend
-            logging.info(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")  # Log the export
+            logging.info("! %s rogue APs exported to OrgRogueAPs", len(all_rogue_aps))  # Log the export
             print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")  # Report the count to the user
         else:  # No rogue APs found anywhere
             logging.info("No rogue APs found across all sites")
@@ -12168,7 +12289,7 @@ class FilterOperatorEngine:
         """Validate that value-required operators have non-empty normalized values."""
         if operator in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:
             if not value or not value.strip():
-                logging.warning(f"Operator '{operator}' for {field_name} requires a non-empty value")
+                logging.warning("Operator '%s' for %s requires a non-empty value", operator, field_name)
                 print(f"\n  Operator '{operator}' requires a value for {field_name}. Please try again.")
                 return False
         return True
@@ -12273,7 +12394,7 @@ class GlobalWiredClientReportGenerator:
             index = int(choice) - 1
             if 0 <= index < len(FilterOperatorEngine.OPERATOR_CATALOG):
                 selected = FilterOperatorEngine.OPERATOR_CATALOG[index]
-                logging.info(f"Selected {field_name} operator: {selected}")
+                logging.info("Selected %s operator: %s", field_name, selected)
                 return selected
         except ValueError:
             pass
@@ -12296,11 +12417,11 @@ class GlobalWiredClientReportGenerator:
                 **remote_params,
             )
             records = mistapi.get_all(response=response, mist_session=apisession) or []
-            logging.info(f"Retrieved {len(records)} wired client records")
+            logging.info("Retrieved %s wired client records", len(records))
             print(f"  Retrieved {len(records)} wired client records")
             return records, remote_used
         except Exception as exception:
-            logging.error(f"Failed to fetch wired clients: {exception}", exc_info=True)
+            logging.exception("Failed to fetch wired clients: %s", exception)
             print(f"\n  Error retrieving wired clients: {exception}")
             return [], False
 
@@ -12316,14 +12437,14 @@ class GlobalWiredClientReportGenerator:
             if mac_value:  # A non-empty value was provided
                 params["mac"] = mac_value  # Add the MAC prefilter to the API query params
                 remote_used = True  # Note that a remote prefilter was applied
-                logging.info(f"Remote prefilter: mac={mac_value}")  # Log the applied prefilter
+                logging.info("Remote prefilter: mac=%s", mac_value)  # Log the applied prefilter
         mfg_operator = criteria.get("mfg_operator", "")  # The chosen manufacturer comparison operator
         if mfg_operator in FilterOperatorEngine.REMOTE_PREFILTER_OPERATORS:  # Only push API-supported operators
             mfg_value = criteria.get("mfg_value", "")  # The manufacturer value to prefilter on
             if mfg_value:  # A non-empty value was provided
                 params["manufacture"] = mfg_value  # Add the manufacturer prefilter to the API query params
                 remote_used = True  # Note that a remote prefilter was applied
-                logging.info(f"Remote prefilter: manufacture={mfg_value}")  # Log the applied prefilter
+                logging.info("Remote prefilter: manufacture=%s", mfg_value)  # Log the applied prefilter
         return remote_used  # Report whether any server-side prefilter was used
 
     @staticmethod
@@ -12427,7 +12548,7 @@ class GlobalWiredClientReportGenerator:
             "GlobalWiredClientReport",
             api_function_name="globalWiredClientReport",
         )
-        logging.info(f"Standard export: {len(sanitized)} records to GlobalWiredClientReport")
+        logging.info("Standard export: %s records to GlobalWiredClientReport", len(sanitized))
 
     @staticmethod
     def _write_local_report(matched: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
@@ -12440,10 +12561,10 @@ class GlobalWiredClientReportGenerator:
         try:
             with open(report_path, "w", encoding="utf-8") as report_file:
                 json.dump(report_payload, report_file, indent=2, default=str)
-            logging.info(f"Local report artifact written to {report_path}")
+            logging.info("Local report artifact written to %s", report_path)
             print(f"  Report summary written to {report_path}")
         except OSError as error:
-            logging.error(f"Failed to write local report artifact: {error}")
+            logging.error("Failed to write local report artifact: %s", error)
             print(f"  Warning: Could not write report summary to {report_path}")
 
 
@@ -12479,11 +12600,11 @@ class WiredClientManufacturerReportGenerator:
                 limit=1000,
             )
             records = mistapi.get_all(response=response, mist_session=apisession) or []
-            logging.info(f"Retrieved {len(records)} wired client records")
+            logging.info("Retrieved %s wired client records", len(records))
             print(f"  Retrieved {len(records)} wired client records")
             return records
         except Exception as exception:
-            logging.error(f"Failed to fetch wired clients: {exception}", exc_info=True)
+            logging.exception("Failed to fetch wired clients: %s", exception)
             print(f"\n  Error retrieving wired clients: {exception}")
             return []
 
@@ -12522,7 +12643,7 @@ class WiredClientManufacturerReportGenerator:
             return None
         if 1 <= selection_index <= len(summary):
             selected_manufacturer = summary[selection_index - 1][0]
-            logging.info(f"User selected manufacturer: {selected_manufacturer}")
+            logging.info("User selected manufacturer: %s", selected_manufacturer)
             return selected_manufacturer
         print("  Selection out of range.")
         return None
@@ -12565,7 +12686,7 @@ class WiredClientManufacturerReportGenerator:
             api_function_name="wiredClientManufacturerReport",
         )
         print(f"  Exported to: data/{filename}.csv")
-        logging.info(f"Manufacturer report exported: {len(sanitized)} records for {label} -> {filename}")
+        logging.info("Manufacturer report exported: %s records for %s -> %s", len(sanitized), label, filename)
 
 
 class OrgAdminExporter:
@@ -12631,9 +12752,9 @@ class OrgAdminExporter:
             processed = DataProcessingUtils.flatten_nested_fields(raw_items)
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.save_data_to_output(processed, filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
-            logging.info(f"Exported {len(processed)} license records to {filename}.")
+            logging.info("Exported %s license records to %s.", len(processed), filename)
         except Exception as e:
-            logging.error(f"Failed to export licenses: {e}")
+            logging.error("Failed to export licenses: %s", e)
             try:
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
@@ -12692,7 +12813,7 @@ class SelfExportUtils:
             )  # Write to configured backend
             logging.info("Exported %d self audit log records to %s", len(rows), filename)  # Log success
         except Exception as exception:  # Catch any API or processing error
-            logging.error("Failed to export self audit logs: %s", exception, exc_info=True)  # Log full traceback
+            logging.exception("Failed to export self audit logs: %s", exception)  # Log full traceback
 
 
 class OrgConfigExporter:
@@ -12798,7 +12919,7 @@ class OrgConfigExporter:
         msp_id = selected_msp["msp_id"]
         msp_name = selected_msp["msp_name"]
         print(f"  Fetching organizations for MSP: {msp_name}...")
-        logging.info(f"Fetching MSP organizations for {msp_name} (ID: {msp_id})")
+        logging.info("Fetching MSP organizations for %s (ID: %s)", msp_name, msp_id)
 
         # Verify session is valid before API call
         if apisession is None:
@@ -12837,7 +12958,7 @@ class OrgConfigExporter:
 
             DataExporter.save_data_to_output(processed, "MspOrganizations.csv")  # type: ignore[no-untyped-call]
             print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")
-            logging.info(f"Exported {len(processed)} MSP organizations to MspOrganizations.csv")
+            logging.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))
 
             # Show summary
             print("")
@@ -12852,7 +12973,7 @@ class OrgConfigExporter:
 
         except Exception as e:
             print(f"X Error fetching MSP organizations: {e}")
-            logging.error(f"Failed to fetch MSP organizations: {e}")
+            logging.error("Failed to fetch MSP organizations: %s", e)
 
 
 class OrgExportUtils:
@@ -12877,7 +12998,7 @@ class OrgExportUtils:
         Returns:
             None
         """
-        logging.info(f"Starting export of organization {data_type}...")
+        logging.info("Starting export of organization %s...", data_type)
 
         # Create filename from data_type
         safe_data_type = data_type.replace(" ", "").replace("-", "").title()
@@ -12923,9 +13044,9 @@ class OrgExportUtils:
                     site_data["sle_type"] = sle_type
                     all_sites_sle_data.append(site_data)
 
-                logging.debug(f"Retrieved SLE data for {len(sites_sle_data)} sites with SLE type: {sle_type}")
+                logging.debug("Retrieved SLE data for %s sites with SLE type: %s", len(sites_sle_data), sle_type)
             except Exception as exception:
-                logging.warning(f"Failed to get sites SLE data for type {sle_type}: {exception}")
+                logging.warning("Failed to get sites SLE data for type %s: %s", sle_type, exception)
                 continue
             finally:
                 items_done += 1
@@ -12939,7 +13060,7 @@ class OrgExportUtils:
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.save_data_to_output(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
             print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")
-            logging.info(f"Exported {len(processed)} sites SLE summary to OrgSitesSLESummary.csv")
+            logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))
         else:
             print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")
             logging.warning("No sites SLE data available for organization")
@@ -12991,7 +13112,7 @@ class OrgExportUtils:
             # Iterate through each org-scoped metric and retrieve it individually
             for metric in org_metrics:
                 try:
-                    logging.debug(f"Attempting to retrieve org insight metric: {metric}")
+                    logging.debug("Attempting to retrieve org insight metric: %s", metric)
 
                     # For metrics that analyze sites, use getOrgSitesSle instead of getOrgSle
                     if "worst-sites" in metric or metric in ["sites-sle", "sites-sle-filtered"]:
@@ -13020,15 +13141,23 @@ class OrgExportUtils:
                                     all_insight_data.append(insight_result)
                                     metrics_retrieved += 1
                                     logging.debug(
-                                        f"Successfully retrieved sites data for insight metric: {metric} with SLE: {sle_category} ({len(sites_data)} sites)"  # noqa: E501
+                                        "Successfully retrieved sites data for insight metric: %s with SLE: %s (%s sites)",  # noqa: E501
+                                        metric,
+                                        sle_category,
+                                        len(sites_data),
                                     )
                                 else:
                                     logging.debug(
-                                        f"No sites data available for insight metric: {metric} with SLE: {sle_category}"
+                                        "No sites data available for insight metric: %s with SLE: %s",
+                                        metric,
+                                        sle_category,
                                     )
                             except Exception as sites_error:
                                 logging.debug(
-                                    f"Failed to get sites data for insight metric '{metric}' with SLE '{sle_category}': {sites_error}"  # noqa: E501
+                                    "Failed to get sites data for insight metric '%s' with SLE '%s': %s",
+                                    metric,
+                                    sle_category,
+                                    sites_error,
                                 )
                                 continue
                     else:
@@ -13042,14 +13171,14 @@ class OrgExportUtils:
                             insight_data["org_id"] = org_id
                             all_insight_data.append(insight_data)
                             metrics_retrieved += 1
-                            logging.debug(f"Successfully retrieved org insight data for metric: {metric}")
+                            logging.debug("Successfully retrieved org insight data for metric: %s", metric)
                         else:
-                            logging.debug(f"No data available for org metric: {metric}")
+                            logging.debug("No data available for org metric: %s", metric)
                             metrics_failed += 1
 
                 except Exception as metric_error:
                     metrics_failed += 1
-                    logging.debug(f"Failed to get org insight data for metric '{metric}': {metric_error}")
+                    logging.debug("Failed to get org insight data for metric '%s': %s", metric, metric_error)
                     # Continue with next metric instead of failing entirely
                     continue
 
@@ -13064,14 +13193,14 @@ class OrgExportUtils:
                         item["org_id"] = org_id
                         all_insight_data.append(item)
                     metrics_retrieved += 1
-                    logging.debug(f"Successfully retrieved org sites SLE data for {len(sites_data)} sites")
+                    logging.debug("Successfully retrieved org sites SLE data for %s sites", len(sites_data))
             except Exception as sites_error:
                 metrics_failed += 1
-                logging.debug(f"Failed to get org sites SLE summary: {sites_error}")
+                logging.debug("Failed to get org sites SLE summary: %s", sites_error)
 
             # Report results
             print(f"! Metric retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")
-            logging.info(f"Org insight metrics: {metrics_retrieved} retrieved successfully, {metrics_failed} failed")
+            logging.info("Org insight metrics: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed)
 
             if all_insight_data:
                 print("! Parsing metrics into normalized data structures...")
@@ -13111,7 +13240,9 @@ class OrgExportUtils:
                     f"\n! Successfully exported {metrics_retrieved} organization insight metrics to 4 normalized CSV files"  # noqa: E501
                 )
                 logging.info(
-                    f"Exported {len(all_insight_data)} org insight data points from {metrics_retrieved} metrics to normalized CSV files"  # noqa: E501
+                    "Exported %s org insight data points from %s metrics to normalized CSV files",
+                    len(all_insight_data),
+                    metrics_retrieved,
                 )
 
                 # Also save a legacy combined file for compatibility
@@ -13132,7 +13263,7 @@ class OrgExportUtils:
 
         except Exception as exception:
             print(f"! Error exporting organization insight metrics: {exception}")
-            logging.error(f"Failed to export org insight metrics: {exception}")
+            logging.error("Failed to export org insight metrics: %s", exception)
             # Create empty normalized files in case of error
             DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
             DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
@@ -13278,22 +13409,22 @@ class OrgExportUtils:
         If duration is provided, uses it as the duration parameter.
         """
         logging.info("Menu #22: Starting audit logs export")
-        logging.debug(f"ENTRY: OrgExportUtils.audit_logs(full_history={full_history}, duration={duration})")
+        logging.debug("ENTRY: OrgExportUtils.audit_logs(full_history=%s, duration=%s)", full_history, duration)
         try:
             org_id = ConfigUtils.get_cached_or_prompted_org_id()
             kwargs: dict[str, Any] = {"limit": 1000}
             if duration:
                 kwargs["duration"] = duration
-                logging.info(f"Exporting audit logs for duration: {duration}")
+                logging.info("Exporting audit logs for duration: %s", duration)
             elif not full_history:
                 hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
                 TimeUtils.log_dynamic_lookback("audit logs export", hours)
                 kwargs["duration"] = f"{hours}h"
-                logging.info(f"Exporting only last {hours} hours of audit logs (duration={hours}h).")
+                logging.info("Exporting only last %s hours of audit logs (duration=%sh).", hours, hours)
             else:
                 kwargs["start"] = 0
                 logging.info("Exporting full audit log history (start=0).")
-            logging.debug(f"Making API call with parameters: {kwargs}")
+            logging.debug("Making API call with parameters: %s", kwargs)
             response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)
             rawdata = mistapi.get_all(response=response, mist_session=apisession)
             if not rawdata:
@@ -13305,10 +13436,10 @@ class OrgExportUtils:
             DataExporter.save_data_to_output(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
             print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")
             logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")
-            logging.info(f"Menu #22: Audit logs export completed - {len(data)} records")
+            logging.info("Menu #22: Audit logs export completed - %s records", len(data))
             logging.debug("EXIT: OrgExportUtils.audit_logs - success")
         except Exception as e:
-            logging.error(f"Failed to export audit logs: {e}")
+            logging.error("Failed to export audit logs: %s", e)
             logging.debug("EXIT: OrgExportUtils.audit_logs - error")
             raise
 
@@ -13376,13 +13507,13 @@ class SiteDeviceExporter:
         SECURITY: Always fetch all device types from API first (type=all), then filter locally
         to avoid Mist API's default behavior of only returning APs.
         """
-        logging.info(f"Fetching device inventory for site_id={site_id}, device_type={device_type}")
+        logging.info("Fetching device inventory for site_id=%s, device_type=%s", site_id, device_type)
 
         # IMPORTANT: Always use type=all to get all device types (APs, switches, gateways)
         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
         if not rawdata:
             print("No devices found for the selected site.")
-            logging.warning(f"No devices found for site_id={site_id}")
+            logging.warning("No devices found for site_id=%s", site_id)
             return
 
         # Filter devices locally based on requested device types
@@ -13392,7 +13523,7 @@ class SiteDeviceExporter:
 
             if not rawdata:
                 print(f"No devices of type '{device_type}' found at the selected site.")
-                logging.warning(f"No devices of type '{device_type}' found for site_id: {site_id}")
+                logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)
                 return
 
         # Sort inventory by model for easier viewing
@@ -13402,7 +13533,7 @@ class SiteDeviceExporter:
         fields = DataProcessingUtils.get_unique_keys(inventory)  # type: ignore[no-untyped-call]
 
         DataExporter.save_data_to_output(inventory, csv_filename)  # type: ignore[no-untyped-call]
-        logging.info(f"Device inventory written to {csv_filename} ({len(inventory)} rows)")
+        logging.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))
 
         # Prepare PrettyTable for display
         table = PrettyTable()
@@ -13412,13 +13543,13 @@ class SiteDeviceExporter:
             try:
                 table.sortby = "model"
             except Exception as error:
-                logging.warning(f"! Could not sort table by 'model': {error}")
+                logging.warning("! Could not sort table by 'model': %s", error)
 
         for item in inventory:
             row = [item.get(field, "") for field in fields]
             table.add_row(row)
 
-        logging.debug("\n" + table.get_string())
+        logging.debug("\n%s", table.get_string())
 
     @staticmethod
     def device_stats():
@@ -13435,7 +13566,7 @@ class SiteDeviceExporter:
             return
         sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
         site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        logging.info(f"Exporting device statistics for site: {site_name}")
+        logging.info("Exporting device statistics for site: %s", site_name)
         try:
             response = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="all", limit=1000)
             rawdata = mistapi.get_all(response=response, mist_session=apisession)
@@ -13448,7 +13579,7 @@ class SiteDeviceExporter:
             else:
                 print("! No device statistics found for this site")
         except Exception as e:
-            logging.error(f"Error fetching device stats for site {site_name}: {e}")
+            logging.error("Error fetching device stats for site %s: %s", site_name, e)
             print(f"! Error fetching device statistics: {e}")
 
     @staticmethod
@@ -13480,7 +13611,7 @@ class SiteDeviceExporter:
         response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
         devices = mistapi.get_all(response=response, mist_session=apisession)
         device_name = next((dev["name"] for dev in devices if dev["id"] == device_id), device_id)
-        logging.info(f"Exporting virtual chassis information for device: {device_name}")
+        logging.info("Exporting virtual chassis information for device: %s", device_name)
         try:
             response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)
             if response.data:
@@ -13489,7 +13620,7 @@ class SiteDeviceExporter:
                 sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
                 filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"
                 DataExporter.save_data_to_output(sanitized, filename)  # type: ignore[no-untyped-call]
-                logging.info(f"! Virtual chassis information exported to {filename}")
+                logging.info("! Virtual chassis information exported to %s", filename)
                 if sanitized:
                     print(f"\n!! Virtual Chassis Summary for {device_name}:")
                     print(f"   * Records exported: {len(sanitized)}")
@@ -13500,10 +13631,10 @@ class SiteDeviceExporter:
                         print(f"   * Preprovisioned: {sanitized[0].get('preprovisioned', 'N/A')}")
                     print(f"   * Data saved to: {filename}")
             else:
-                logging.warning(f"! No virtual chassis data returned for device {device_name}")
+                logging.warning("! No virtual chassis data returned for device %s", device_name)
                 print(f"! No virtual chassis data found for device {device_name}")
         except Exception as e:
-            logging.error(f"! Failed to export virtual chassis information: {e}")
+            logging.error("! Failed to export virtual chassis information: %s", e)
             print(f"! Failed to export virtual chassis information: {e}")
 
     @staticmethod
@@ -13521,7 +13652,7 @@ class SiteDeviceExporter:
             return
         sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
         site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        logging.info(f"Exporting device list for site: {site_name}")
+        logging.info("Exporting device list for site: %s", site_name)
         try:
             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
             rawdata = getattr(response, "data", [])
@@ -13534,7 +13665,7 @@ class SiteDeviceExporter:
             else:
                 print("! No devices found for this site")
         except Exception as e:
-            logging.error(f"Error fetching devices for site {site_name}: {e}")
+            logging.error("Error fetching devices for site %s: %s", site_name, e)
             print(f"! Error fetching device data: {e}")
 
 
@@ -13561,7 +13692,7 @@ class SiteClientExporter:
             return
         sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
         site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        logging.info(f"Exporting client statistics for site: {site_name}")
+        logging.info("Exporting client statistics for site: %s", site_name)
         try:
             response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=1000)
             rawdata = mistapi.get_all(response=response, mist_session=apisession)
@@ -13574,7 +13705,7 @@ class SiteClientExporter:
             else:
                 print("! No client data found for this site")
         except Exception as e:
-            logging.error(f"Error fetching client stats for site {site_name}: {e}")
+            logging.error("Error fetching client stats for site %s: %s", site_name, e)
             print(f"! Error fetching client data: {e}")
 
     @staticmethod
@@ -13655,7 +13786,7 @@ class SiteConfigExporter:
                 site_id,
             )
         except Exception as exception:
-            logging.error(f"Error getting site name for WLAN export: {exception}")
+            logging.error("Error getting site name for WLAN export: %s", exception)
             site_name = site_id
 
         filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"
@@ -13670,13 +13801,13 @@ class SiteConfigExporter:
             rawdata = mistapi.get_all(response=derived_response, mist_session=apisession)
         except Exception as exception:
             logging.warning(
-                f"Failed to fetch derived WLANs for site {site_id}, " f"falling back to site-local WLANs: {exception}"
+                "Failed to fetch derived WLANs for site %s, falling back to site-local WLANs: %s", site_id, exception
             )
             local_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=1000)
             rawdata = mistapi.get_all(response=local_response, mist_session=apisession)
 
         if not rawdata:
-            logging.warning(f"No data provided for output to {filename}")
+            logging.warning("No data provided for output to %s", filename)
             DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
             print(f"! 0 records exported to data\\{filename}")
             return
@@ -13686,7 +13817,7 @@ class SiteConfigExporter:
         processed = sorted(processed, key=lambda row: row.get("ssid", ""))
         DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
         print(f"! {len(processed)} records exported to data\\{filename}")
-        logging.info(f"Exported {len(processed)} WLAN records for site {site_name} to {filename}")
+        logging.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
 
     @staticmethod
     def maps():
@@ -13706,10 +13837,10 @@ class SiteConfigExporter:
         print("Site Configuration Settings:")
         logging.info("Starting export of all site configuration settings...")
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug(f"Using org_id: {current_org_id} for site settings export.")
+        logging.debug("Using org_id: %s for site settings export.", current_org_id)
         data = APIFetchUtils.all_site_settings(apisession, current_org_id, limit=1000)  # type: ignore[no-untyped-call]
         if data:
-            logging.info(f"Fetched settings for {len(data)} sites. Flattening and sanitizing data...")
+            logging.info("Fetched settings for %s sites. Flattening and sanitizing data...", len(data))
             data = DataProcessingUtils.flatten_nested_fields(data)
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
             DataExporter.save_data_to_output(data, "AllSiteConfigs.csv")  # type: ignore[no-untyped-call]
@@ -13803,13 +13934,13 @@ class SiteAnomalyExporter:
                         all_anomaly_data.append(anomaly_data)
                         metrics_retrieved += 1
                         print(f"!? Retrieved {metric} anomaly events")
-                        logging.debug(f"Successfully retrieved {metric} anomaly events for site {site_id}")
+                        logging.debug("Successfully retrieved %s anomaly events for site %s", metric, site_id)
                     else:
                         print(f"! No {metric} anomaly events available")
-                        logging.info(f"No {metric} anomaly events available for site {site_id}")
+                        logging.info("No %s anomaly events available for site %s", metric, site_id)
                 except Exception as metric_error:
                     print(f"! Error retrieving {metric} anomaly events: {metric_error}")
-                    logging.warning(f"Error retrieving {metric} anomaly events for site {site_id}: {metric_error}")
+                    logging.warning("Error retrieving %s anomaly events for site %s: %s", metric, site_id, metric_error)
 
             # Process and save all collected anomaly data
             if all_anomaly_data:
@@ -13817,15 +13948,17 @@ class SiteAnomalyExporter:
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
                 DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} site anomaly event types exported to {filename}")
-                logging.info(f"Exported {metrics_retrieved} site anomaly event types for {site_name} to {filename}")
+                logging.info(
+                    "Exported %s site anomaly event types for %s to %s", metrics_retrieved, site_name, filename
+                )
             else:
                 print(f"! 0 anomaly events exported to {filename} (no data available)")
-                logging.warning(f"No anomaly events available for site {site_name}")
+                logging.warning("No anomaly events available for site %s", site_name)
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
 
         except Exception as exception:
             print(f"! Error exporting site anomaly events: {exception}")
-            logging.error(f"Failed to export site anomaly events for {site_name}: {exception}")
+            logging.error("Failed to export site anomaly events for %s: %s", site_name, exception)
         finally:
             # Restore original logging levels
             for logger_name, original_level in original_levels.items():
@@ -13905,13 +14038,15 @@ class SiteAnomalyExporter:
                         all_device_anomaly_data.append(device_anomaly_data)
                         metrics_retrieved += 1
                         print(f"!? Retrieved {metric} device anomaly data")
-                        logging.debug(f"Successfully retrieved {metric} device anomaly data for {device_mac}")
+                        logging.debug("Successfully retrieved %s device anomaly data for %s", metric, device_mac)
                     else:
                         print(f"! No {metric} device anomaly data available")
-                        logging.info(f"No {metric} device anomaly data available for {device_mac}")
+                        logging.info("No %s device anomaly data available for %s", metric, device_mac)
                 except Exception as metric_error:
                     print(f"! Error retrieving {metric} device anomaly data: {metric_error}")
-                    logging.warning(f"Error retrieving {metric} device anomaly data for {device_mac}: {metric_error}")
+                    logging.warning(
+                        "Error retrieving %s device anomaly data for %s: %s", metric, device_mac, metric_error
+                    )
 
             # Process and save all collected device anomaly data
             if all_device_anomaly_data:
@@ -13919,15 +14054,17 @@ class SiteAnomalyExporter:
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
                 DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} device anomaly event types exported to {filename}")
-                logging.info(f"Exported {metrics_retrieved} device anomaly event types for {device_name} to {filename}")
+                logging.info(
+                    "Exported %s device anomaly event types for %s to %s", metrics_retrieved, device_name, filename
+                )
             else:
                 print(f"! 0 device anomaly events exported to {filename} (no data available)")
-                logging.warning(f"No device anomaly events available for {device_name}")
+                logging.warning("No device anomaly events available for %s", device_name)
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
 
         except Exception as exception:
             print(f"! Error exporting device anomaly events: {exception}")
-            logging.error(f"Failed to export device anomaly events for {device_name}: {exception}")
+            logging.error("Failed to export device anomaly events for %s: %s", device_name, exception)
         finally:
             # Restore original logging levels
             for logger_name, original_level in original_levels.items():
@@ -13979,7 +14116,7 @@ class SiteAnomalyExporter:
                     break
 
         except Exception as exception:
-            logging.warning(f"Could not retrieve client hostname for {client_mac}: {exception}")
+            logging.warning("Could not retrieve client hostname for %s: %s", client_mac, exception)
             client_hostname = client_mac  # Fallback to MAC address
 
         # Clean names for filename
@@ -14028,13 +14165,15 @@ class SiteAnomalyExporter:
                         all_client_anomaly_data.append(client_anomaly_data)
                         metrics_retrieved += 1
                         print(f"!? Retrieved {metric} client anomaly data")
-                        logging.debug(f"Successfully retrieved {metric} client anomaly data for {client_mac}")
+                        logging.debug("Successfully retrieved %s client anomaly data for %s", metric, client_mac)
                     else:
                         print(f"! No {metric} client anomaly data available")
-                        logging.info(f"No {metric} client anomaly data available for {client_mac}")
+                        logging.info("No %s client anomaly data available for %s", metric, client_mac)
                 except Exception as metric_error:
                     print(f"! Error retrieving {metric} client anomaly data: {metric_error}")
-                    logging.warning(f"Error retrieving {metric} client anomaly data for {client_mac}: {metric_error}")
+                    logging.warning(
+                        "Error retrieving %s client anomaly data for %s: %s", metric, client_mac, metric_error
+                    )
 
             # Process and save all collected client anomaly data
             if all_client_anomaly_data:
@@ -14042,15 +14181,17 @@ class SiteAnomalyExporter:
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
                 DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")
-                logging.info(f"Exported {metrics_retrieved} client anomaly event types for {client_mac} to {filename}")
+                logging.info(
+                    "Exported %s client anomaly event types for %s to %s", metrics_retrieved, client_mac, filename
+                )
             else:
                 print(f"! 0 client anomaly events exported to {filename} (no data available)")
-                logging.warning(f"No client anomaly events available for {client_mac}")
+                logging.warning("No client anomaly events available for %s", client_mac)
                 DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
 
         except Exception as exception:
             print(f"! Error exporting client anomaly events: {exception}")
-            logging.error(f"Failed to export client anomaly events for {client_mac}: {exception}")
+            logging.error("Failed to export client anomaly events for %s: %s", client_mac, exception)
         finally:
             # Restore original logging levels
             for logger_name, original_level in original_levels.items():
@@ -14108,7 +14249,7 @@ class SitesByAPModelExporter:
             country = parts[3]
             return street, city, state, zip_code, country
         except Exception as exception:
-            logging.debug(f"Failed to split address '{address}': {exception}")
+            logging.debug("Failed to split address '%s': %s", address, exception)
             return address, "", "", "", ""
 
     @staticmethod
@@ -14173,7 +14314,7 @@ class SitesByAPModelExporter:
         filename = f"SitesByAPModel_{safe_model}.csv"
         DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")
         print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")
-        logging.info(f"Exported {len(rows)} sites with AP model {model}")
+        logging.info("Exported %s sites with AP model %s", len(rows), model)
 
 
 # ============================================================================
@@ -14396,9 +14537,7 @@ class GatewayHaExporter:
             )  # Write to configured backend (CSV, SQLite, ArangoDB, etc.)
             logging.info("Exported %d HA gateway records to %s", len(flat_rows), filename)  # Log export success
         except Exception as exception:  # Catch any API or processing error
-            logging.error(
-                "Failed to export HA gateway cluster info: %s", exception, exc_info=True
-            )  # Log full traceback
+            logging.exception("Failed to export HA gateway cluster info: %s", exception)  # Log full traceback
 
     @staticmethod
     def _build_ha_rows(ha_gateways: list, site_id: str) -> list:
@@ -14847,7 +14986,7 @@ class ConstDefinitionsExporter:
 
         except Exception as error:
             print(f"! Critical error during dynamic const discovery: {error}")
-            logging.error(f"Critical error during dynamic const discovery: {error}")
+            logging.error("Critical error during dynamic const discovery: %s", error)
 
     def _discover_endpoints(self) -> None:
         """Discover all const modules in mistapi.api.v1.const package."""
@@ -14864,7 +15003,7 @@ class ConstDefinitionsExporter:
             self._inspect_module(modname)
 
         print(f"! Successfully discovered {len(self.discovered_endpoints)} const endpoints dynamically")
-        logging.info(f"Dynamic discovery completed: {len(self.discovered_endpoints)} endpoints found")
+        logging.info("Dynamic discovery completed: %s endpoints found", len(self.discovered_endpoints))
 
     def _inspect_module(self, modname: str) -> None:
         """Inspect a single const module for API functions."""
@@ -14882,7 +15021,7 @@ class ConstDefinitionsExporter:
 
             if not functions:
                 print(f"    ! No API functions found in {endpoint_name}")
-                logging.warning(f"No functions found in {endpoint_name}")
+                logging.warning("No functions found in %s", endpoint_name)
                 return
 
             api_function = self._select_best_function(functions)
@@ -14890,12 +15029,12 @@ class ConstDefinitionsExporter:
                 self._register_endpoint(endpoint_name, module, api_function, modname)
             else:
                 print(f"    ! No suitable API functions found in {endpoint_name}")
-                logging.warning(f"No API functions with mist_session parameter found in {endpoint_name}")
+                logging.warning("No API functions with mist_session parameter found in %s", endpoint_name)
 
         except Exception as error:
             module_display_name = modname.split(".")[-1] if modname else "unknown"
             print(f"    ! Error inspecting {module_display_name}: {error}")
-            logging.error(f"Error inspecting const module {module_display_name}: {error}")
+            logging.error("Error inspecting const module %s: %s", module_display_name, error)
 
     def _find_api_functions(self, module, endpoint_name: str) -> list[str]:
         """Find all callable API functions in a module."""
@@ -14912,7 +15051,7 @@ class ConstDefinitionsExporter:
 
             if has_session_param and len(param_names) >= 1:
                 functions.append(name)
-                logging.debug(f"Found potential API function in {endpoint_name}: {name}{sig}")
+                logging.debug("Found potential API function in %s: %s%s", endpoint_name, name, sig)
 
         return functions
 
@@ -14958,7 +15097,7 @@ class ConstDefinitionsExporter:
         self.discovered_endpoints[endpoint_name] = config
 
         print(f"    ! Found API function: {api_function}() -> {filename}")
-        logging.debug(f"Discovered {endpoint_name}: {api_function}() -> {filename}")
+        logging.debug("Discovered %s: %s() -> %s", endpoint_name, api_function, filename)
 
     def _build_filename(self, endpoint_name: str) -> str:
         """Convert endpoint_name to ConstTitleCase.csv filename."""
@@ -15016,7 +15155,7 @@ class ConstDefinitionsExporter:
             return "all_countries"
 
         print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")
-        logging.info(f"Skipping {endpoint_name}.{api_function}() - requires parameters: {param_names}")
+        logging.info("Skipping %s.%s() - requires parameters: %s", endpoint_name, api_function, param_names)
         return "skip"
 
     def _process_all_endpoints(self) -> None:
@@ -15039,7 +15178,7 @@ class ConstDefinitionsExporter:
 
         except Exception as error:
             print(f"! Critical error processing {config.endpoint_name}: {error}")
-            logging.error(f"Critical error processing {config.endpoint_name}: {error}")
+            logging.error("Critical error processing %s: %s", config.endpoint_name, error)
             self.endpoints_failed += 1
             self.endpoints_processed += 1
 
@@ -15052,7 +15191,7 @@ class ConstDefinitionsExporter:
         file_path = os.path.join("data", config.filename)
         if not os.path.exists(file_path):
             print(f"  ! {config.filename} not found - fetching fresh data from API...")
-            logging.info(f"{config.filename} not found, fetching from API")
+            logging.info("%s not found, fetching from API", config.filename)
             return False
 
         try:
@@ -15063,17 +15202,17 @@ class ConstDefinitionsExporter:
             if file_age_hours < self.CACHE_MAX_AGE_HOURS:
                 print(f"  ! Found fresh {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
                 print(f"  ! Skipping API call - using cached data (cache valid for {self.CACHE_MAX_AGE_HOURS}h)")
-                logging.info(f"Using cached {config.endpoint_name} file (age: {file_age_hours:.1f}h)")
+                logging.info("Using cached %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
                 return True
             else:
                 print(f"  ! Found stale {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
                 print(f"  ! File is older than {self.CACHE_MAX_AGE_HOURS}h threshold - fetching fresh data from API...")
-                logging.info(f"Refreshing stale {config.endpoint_name} file (age: {file_age_hours:.1f}h)")
+                logging.info("Refreshing stale %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
                 return False
 
         except Exception as error:
             print(f"  ! Error checking file timestamp: {error}")
-            logging.warning(f"Could not check {config.endpoint_name} file timestamp, will fetch fresh data: {error}")
+            logging.warning("Could not check %s file timestamp, will fetch fresh data: %s", config.endpoint_name, error)
             return False
 
     def _fetch_and_export_endpoint(self, config: EndpointConfig) -> None:
@@ -15085,7 +15224,7 @@ class ConstDefinitionsExporter:
             self._export_data(config, const_data)
         except Exception as error:
             print(f"  ! Error exporting {config.description.lower()}: {error}")
-            logging.error(f"Failed to export {config.description.lower()} from {config.endpoint_name}: {error}")
+            logging.error("Failed to export %s from %s: %s", config.description.lower(), config.endpoint_name, error)
             DataExporter.save_data_to_output([], config.filename)  # type: ignore[no-untyped-call]
             self.endpoints_failed += 1
 
@@ -15127,7 +15266,7 @@ class ConstDefinitionsExporter:
                     all_configs.extend(records)
                     successful += 1
             except Exception as error:
-                logging.warning(f"Failed to get gateway config for model {model}: {error}")
+                logging.warning("Failed to get gateway config for model %s: %s", model, error)
                 failed += 1
 
         print(f"    ! Successfully retrieved configs for {successful} models, {failed} failed")
@@ -15150,7 +15289,7 @@ class ConstDefinitionsExporter:
                 return gateway_models
 
         except Exception as error:
-            logging.warning(f"Failed to get gateway models list: {error}")
+            logging.warning("Failed to get gateway models list: %s", error)
 
         print(f"    ! Using fallback gateway models: {len(self.FALLBACK_GATEWAY_MODELS)} models")
         return self.FALLBACK_GATEWAY_MODELS
@@ -15213,7 +15352,7 @@ class ConstDefinitionsExporter:
                     all_states.extend(records)
                     successful += 1
             except Exception as error:
-                logging.warning(f"Failed to get states for country {country_code}: {error}")
+                logging.warning("Failed to get states for country %s: %s", country_code, error)
                 failed += 1
 
         print(f"    ! Successfully retrieved states for {successful} countries, {failed} failed")
@@ -15235,12 +15374,12 @@ class ConstDefinitionsExporter:
                 original_count = len(country_codes)
                 country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
                 if len(country_codes) < original_count:
-                    logging.debug(f"Filtered out {original_count - len(country_codes)} invalid country codes")
+                    logging.debug("Filtered out %s invalid country codes", original_count - len(country_codes))
                 print(f"    ! Discovered {len(country_codes)} country codes from country definitions")
                 return country_codes
 
         except Exception as error:
-            logging.warning(f"Failed to get countries list: {error}")
+            logging.warning("Failed to get countries list: %s", error)
 
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_COUNTRIES)} countries")
         return self.FALLBACK_COUNTRIES
@@ -15301,7 +15440,7 @@ class ConstDefinitionsExporter:
                     all_channels.extend(records)
                     successful += 1
             except Exception as error:
-                logging.debug(f"Failed to get AP channels for country {country_code}: {error}")
+                logging.debug("Failed to get AP channels for country %s: %s", country_code, error)
                 failed += 1
 
         print(f"    ! Successfully retrieved AP channels for {successful} countries, {failed} failed")
@@ -15324,13 +15463,13 @@ class ConstDefinitionsExporter:
                 country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
                 if len(country_codes) < original_count:
                     logging.debug(
-                        f"Filtered out {original_count - len(country_codes)} invalid country codes for ap_channels"
+                        "Filtered out %s invalid country codes for ap_channels", original_count - len(country_codes)
                     )
                 print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")
                 return country_codes
 
         except Exception as error:
-            logging.warning(f"Failed to get countries list for AP channels: {error}")
+            logging.warning("Failed to get countries list for AP channels: %s", error)
 
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_CHANNEL_COUNTRIES)} countries")
         return self.FALLBACK_CHANNEL_COUNTRIES
@@ -15369,7 +15508,7 @@ class ConstDefinitionsExporter:
         """Convert data to list format and export to file."""
         if not const_data:
             print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
-            logging.warning(f"No {config.description.lower()} data available from {config.endpoint_name} endpoint")
+            logging.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)
             DataExporter.save_data_to_output([], config.filename)  # type: ignore[no-untyped-call]
             self.endpoints_updated += 1
             return
@@ -15379,7 +15518,7 @@ class ConstDefinitionsExporter:
         DataExporter.save_data_to_output(processed, config.filename)  # type: ignore[no-untyped-call]
 
         print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")
-        logging.info(f"Exported {len(processed)} fresh {config.description.lower()} to {config.filename}")
+        logging.info("Exported %s fresh %s to %s", len(processed), config.description.lower(), config.filename)
         self.endpoints_updated += 1
 
     def _convert_to_list(self, endpoint_name: str, const_data) -> list:  # type: ignore[no-untyped-def, type-arg]
@@ -15462,9 +15601,12 @@ class ConstDefinitionsExporter:
         print(f"  ! Failed endpoints: {self.endpoints_failed}")
 
         logging.info(
-            f"Dynamic const export completed: {len(self.discovered_endpoints)} discovered, "
-            f"{self.endpoints_processed} processed, {self.endpoints_skipped_fresh} skipped (fresh), "
-            f"{self.endpoints_updated} updated, {self.endpoints_failed} failed"
+            "Dynamic const export completed: %s discovered, %s processed, %s skipped (fresh), %s updated, %s failed",
+            len(self.discovered_endpoints),
+            self.endpoints_processed,
+            self.endpoints_skipped_fresh,
+            self.endpoints_updated,
+            self.endpoints_failed,
         )
 
 
@@ -15517,7 +15659,7 @@ class InsightMetricsUtils:
 
         try:
             if not os.path.exists(csv_path):
-                logging.warning(f"ConstInsightMetrics.csv not found at {csv_path}")
+                logging.warning("ConstInsightMetrics.csv not found at %s", csv_path)
                 return []
 
             with open(csv_path, encoding="utf-8") as csvfile:
@@ -15540,11 +15682,13 @@ class InsightMetricsUtils:
                     if normalized_target_scope in parsed_scopes:
                         metrics_for_scope.append(metric_name)
 
-            logging.debug(f"Found {len(metrics_for_scope)} metrics for scope '{target_scope}': {metrics_for_scope}")
+            logging.debug(
+                "Found %s metrics for scope '%s': %s", len(metrics_for_scope), target_scope, metrics_for_scope
+            )
             return metrics_for_scope
 
         except Exception as exception:
-            logging.error(f"Error reading ConstInsightMetrics.csv: {exception}")
+            logging.error("Error reading ConstInsightMetrics.csv: %s", exception)
             return []
 
     @staticmethod
@@ -15588,15 +15732,17 @@ class InsightMetricsUtils:
             normalized_data["sites_data"] = sites
 
             logging.debug(
-                f"Normalized metric {metric_type}: {len(normalized_data['summary'])} summary, "
-                f"{len(normalized_data['time_series'])} time series, "
-                f"{len(normalized_data['results'])} results, "
-                f"{len(normalized_data['sites_data'])} sites"
+                "Normalized metric %s: %s summary, %s time series, %s results, %s sites",
+                metric_type,
+                len(normalized_data["summary"]),
+                len(normalized_data["time_series"]),
+                len(normalized_data["results"]),
+                len(normalized_data["sites_data"]),
             )
 
         except Exception as exception:
-            logging.error(f"Error parsing insight metric data: {exception}")
-            logging.debug(f"Failed metric data structure: {metric_data}")
+            logging.error("Error parsing insight metric data: %s", exception)
+            logging.debug("Failed metric data structure: %s", metric_data)
 
         return normalized_data
 
@@ -15806,7 +15952,7 @@ class DataCollectionManager:
         except KeyboardInterrupt:
             print("\n  Continuous data collection loop stopped by user.")
         except Exception as e:
-            logging.error(f"Fatal error in continuous loop: {e}")
+            logging.error("Fatal error in continuous loop: %s", e)
             print(f"! Fatal error in continuous loop: {e}")
 
         print(" Continuous data collection loop ended.")
@@ -15845,7 +15991,7 @@ class DataCollectionManager:
         except KeyboardInterrupt:
             raise  # Re-raise to outer handler
         except Exception as e:
-            logging.error(f"Error in collection cycle {loop_count}: {e}")
+            logging.error("Error in collection cycle %s: %s", loop_count, e)
             print(f"  Error in loop {loop_count}: {e}")
             print("  Continuing to next iteration...")
             time.sleep(5)
@@ -15920,7 +16066,7 @@ class DataCollectionManager:
             has_events = bool(data_sources["events_data"].get(site_id))
 
             if not has_alarms and not has_events:
-                logging.info(f"Skipping site {site_id} - no alarms or events")
+                logging.info("Skipping site %s - no alarms or events", site_id)
                 continue
 
             support_data = {
@@ -15934,7 +16080,7 @@ class DataCollectionManager:
 
             filename = f"SupportPackage_{site_id}.csv"
             CacheUtils.write_support_data_to_csv(support_data, filename)
-            logging.info(f"Support package written for site {site_id}")
+            logging.info("Support package written for site %s", site_id)
 
 
 # ============================================================================
@@ -15956,7 +16102,7 @@ class InteractiveDisplayUtils:
         print("Select a Site to View Device Inventory:")
         site_id = PromptUtils.select_site_id_from_csv()
         if site_id:
-            logging.info(f"User selected site_id: {site_id} for inventory display.")
+            logging.info("User selected site_id: %s for inventory display.", site_id)
             SiteDeviceExporter.device_inventory(site_id)  # type: ignore[no-untyped-call]
         else:
             logging.warning("No site selected or invalid input provided for site selection.")
@@ -16030,7 +16176,7 @@ class GatewayTestExporter:
                         to minimize API calls.
         """
         # DEBUG: Log invocation context early so harness vs direct calls can be distinguished
-        logging.debug(f"[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast={fast}")
+        logging.debug("[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast=%s", fast)
         logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")
         if fast:
             logging.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
@@ -16091,9 +16237,11 @@ class GatewayTestExporter:
                     stats["device_name"] = device_name
 
                     if attempt > 0:
-                        logging.info(f"! Retry {attempt} successful for device {device_name} at site {site_name}")
+                        logging.info("! Retry %s successful for device %s at site %s", attempt, device_name, site_name)
                     else:
-                        logging.info(f"! Collected synthetic test stats for device {device_name} at site {site_name}")
+                        logging.info(
+                            "! Collected synthetic test stats for device %s at site %s", device_name, site_name
+                        )
                     return stats
 
                 except Exception as exception:
@@ -16101,12 +16249,20 @@ class GatewayTestExporter:
                         # Fast mode: reduced backoff delay for quicker retries
                         backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)
                         logging.warning(
-                            f"! Attempt {attempt + 1} failed for device {device_id} at site {site_id}: {exception}"
+                            "! Attempt %s failed for device %s at site %s: %s",
+                            attempt + 1,
+                            device_id,
+                            site_id,
+                            exception,
                         )
-                        logging.info(f"! Fast retry in {backoff_delay:.1f}s (attempt {attempt + 2}/{max_retries + 1})")
+                        logging.info(
+                            "! Fast retry in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, max_retries + 1
+                        )
                         time.sleep(backoff_delay)
                     else:
-                        logging.error(f"! Final attempt failed for device {device_id} at site {site_id}: {exception}")
+                        logging.error(
+                            "! Final attempt failed for device %s at site %s: %s", device_id, site_id, exception
+                        )
                         return None
 
             return None
@@ -16148,13 +16304,13 @@ class GatewayTestExporter:
                             result = future.result()
                             if result:
                                 retry_results.append(result)
-                                logging.info(f" FAST RETRY OK: {device_info[2]}")
+                                logging.info(" FAST RETRY OK: %s", device_info[2])
                             else:
                                 still_failed.append(device_info)
-                                logging.error(f" FAST RETRY FAIL: {device_info[2]}")
+                                logging.error(" FAST RETRY FAIL: %s", device_info[2])
                         except Exception as exception:
                             still_failed.append(device_info)
-                            logging.error(f" FAST RETRY EXC: {device_info[2]} -> {exception}")
+                            logging.error(" FAST RETRY EXC: %s -> %s", device_info[2], exception)
                 return retry_results, still_failed
 
             successful_results, failed_devices = execute_with_connection_pool_management(
@@ -16167,7 +16323,11 @@ class GatewayTestExporter:
             duration = time.time() - start_time
             all_stats.extend(successful_results)
             logging.info(
-                f" FAST MODE SUMMARY (synthetic tests): ok={len(successful_results)} fail={len(failed_devices)} total={len(gateway_devices)} elapsed={duration:.2f}s"  # noqa: E501
+                " FAST MODE SUMMARY (synthetic tests): ok=%s fail=%s total=%s elapsed=%.2fs",
+                len(successful_results),
+                len(failed_devices),
+                len(gateway_devices),
+                duration,
             )
         else:
             # Sequential processing with rate limiting (original behavior)
@@ -16181,7 +16341,7 @@ class GatewayTestExporter:
 
                 # Apply rate limiting only in non-fast mode
                 smoothed, delay = RateLimitingUtils.get_rate_limited_delay(smoothed, apisession, _api_usage_cache)  # type: ignore[no-untyped-call]
-                logging.info(f"[INFO] Sleeping for {delay:.2f}s.")
+                logging.info("[INFO] Sleeping for %.2fs.", delay)
                 time.sleep(delay)
 
         if all_stats:
@@ -16190,9 +16350,9 @@ class GatewayTestExporter:
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
             DataExporter.save_data_to_output(sanitized, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")
-            logging.info(f"! Synthetic test results saved to {filename} ({len(all_stats)} records).")
+            logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
             logging.info(
-                f"! API Optimization: Saved {len(gateway_devices)} listSiteDevices calls by using cached inventory"
+                "! API Optimization: Saved %s listSiteDevices calls by using cached inventory", len(gateway_devices)
             )
         else:
             logging.warning(" No synthetic test results found. CSV not created.")
@@ -16861,7 +17021,7 @@ class ARPCommandManager:
             ARPCommandManager._handle_close(output_lines, debug)  # type: ignore[no-untyped-call]
 
         def on_error(ws, error):
-            logging.error(f"! WebSocket error: {error}")
+            logging.error("! WebSocket error: %s", error)
 
         def on_open(ws):
             logging.info(" WebSocket opened. Subscribing...")
@@ -16895,7 +17055,7 @@ class ARPCommandManager:
         last_message_time = time.time()
         try:
             if debug:
-                logging.debug(f"WebSocket raw message received: {message}")
+                logging.debug("WebSocket raw message received: %s", message)
 
             msg = json.loads(message)
             data_str = msg.get("data", "{}")
@@ -16911,14 +17071,14 @@ class ARPCommandManager:
                     line, buffer = buffer.split("\n", 1)
                     output_lines.append(line)
                 if debug:
-                    logging.debug(f"Processed WebSocket data: {len(raw_output)} chars")
+                    logging.debug("Processed WebSocket data: %s chars", len(raw_output))
 
         except json.JSONDecodeError as e:
-            logging.error(f"WebSocket message JSON decode error: {e}")
+            logging.error("WebSocket message JSON decode error: %s", e)
         except KeyError as e:
-            logging.warning(f"WebSocket message missing expected key: {e}")
+            logging.warning("WebSocket message missing expected key: %s", e)
         except Exception as e:
-            logging.error(f"Unexpected error parsing WebSocket message: {e}")
+            logging.error("Unexpected error parsing WebSocket message: %s", e)
 
         return last_message_time, buffer
 
@@ -16947,7 +17107,7 @@ class ARPCommandManager:
 
                 if debug:
                     print(table)
-                    logging.debug("\n" + table.get_string())
+                    logging.debug("\n%s", table.get_string())
                 else:
                     print(f"! ARP output received with {len(parsed_rows)} rows.")
         else:
@@ -16961,9 +17121,9 @@ class ARPCommandManager:
             file_path = FilePathUtils.get_csv_path(filename)
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(compiled_output)
-            logging.info(f"! ARP output saved to {file_path}")
+            logging.info("! ARP output saved to %s", file_path)
         except Exception as e:
-            logging.error(f"! Failed to save ARP output to file: {e}")
+            logging.error("! Failed to save ARP output to file: %s", e)
 
     @staticmethod
     def _export_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
@@ -17912,7 +18072,7 @@ class WANProbeConfigManager:
             if template_id:
                 self.template_site_counts[template_id] = self.template_site_counts.get(template_id, 0) + 1
 
-        logging.info(f"Loaded {len(self.templates)} gateway templates and {len(self.sites)} sites")
+        logging.info("Loaded %s gateway templates and %s sites", len(self.templates), len(self.sites))
         return True
 
     def _select_templates(self) -> list[dict[str, Any]]:
@@ -17959,7 +18119,7 @@ class WANProbeConfigManager:
             return selected
         except (ValueError, IndexError) as error:
             print(f" Invalid selection: {error}")
-            logging.error(f"Menu #166: Invalid template selection: {error}")
+            logging.error("Menu #166: Invalid template selection: %s", error)
             return []
 
     def _analyze_templates(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -17973,19 +18133,19 @@ class WANProbeConfigManager:
             template_name = template_info["name"]
 
             try:
-                logging.debug(f"Fetching template configuration for {template_name}")
+                logging.debug("Fetching template configuration for %s", template_name)
                 response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(
                     apisession, self.org_id, template_id
                 )
                 config = response.data if hasattr(response, "data") else {}
 
                 if not isinstance(config, dict):
-                    logging.warning(f"Template {template_name} returned invalid structure")
+                    logging.warning("Template %s returned invalid structure", template_name)
                     return None
 
                 port_config = config.get("port_config", {})
                 if not isinstance(port_config, dict):
-                    logging.debug(f"Template {template_name} has no port_config")
+                    logging.debug("Template %s has no port_config", template_name)
                     return None
 
                 # Find all WAN interfaces
@@ -18013,14 +18173,14 @@ class WANProbeConfigManager:
                 return None
 
             except Exception as error:
-                logging.error(f"Error analyzing template {template_name}: {error}")
+                logging.error("Error analyzing template %s: %s", template_name, error)
                 logging.error(traceback.format_exc())
                 print(f"\n  !? Error analyzing template '{template_name}': {error}")
                 return None
 
         # Parallel fetch with ThreadPoolExecutor
         max_workers = min(10, len(templates_to_modify))
-        logging.info(f"Fetching {len(templates_to_modify)} templates in parallel (max {max_workers} workers)")
+        logging.info("Fetching %s templates in parallel (max %s workers)", len(templates_to_modify), max_workers)
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             import concurrent.futures
@@ -18114,7 +18274,7 @@ class WANProbeConfigManager:
                         "probe_profile": self.probe_profile,
                     }
                     interfaces_modified.append(port_name)
-                    logging.debug(f"Template {template_name}: Updated {port_name} probe config")
+                    logging.debug("Template %s: Updated %s probe config", template_name, port_name)
 
             if interfaces_modified:
                 config["port_config"] = port_config
@@ -18122,20 +18282,20 @@ class WANProbeConfigManager:
 
                 if dry_run:
                     result["status"] = "DRY-RUN"
-                    logging.info(f"DRY-RUN: Would update template {template_name} interfaces: {interfaces_modified}")
+                    logging.info("DRY-RUN: Would update template %s interfaces: %s", template_name, interfaces_modified)
                 else:
-                    logging.debug(f"Updating template {template_name} via API")
+                    logging.debug("Updating template %s via API", template_name)
                     update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
                         apisession, self.org_id, template_id, body=config
                     )
 
                     if update_resp.status_code == 200:
                         result["status"] = "SUCCESS"
-                        logging.info(f"Successfully updated template {template_name}")
+                        logging.info("Successfully updated template %s", template_name)
                     else:
                         result["status"] = "FAILED"
                         result["error"] = f"API returned status {update_resp.status_code}"
-                        logging.error(f"Failed to update template {template_name}: status {update_resp.status_code}")
+                        logging.error("Failed to update template %s: status %s", template_name, update_resp.status_code)
             else:
                 result["status"] = "SKIPPED"
                 result["error"] = "No WAN interfaces found in port_config"
@@ -18143,7 +18303,7 @@ class WANProbeConfigManager:
         except Exception as error:
             result["status"] = "ERROR"
             result["error"] = str(error)
-            logging.error(f"Error updating template {template_name}: {error}")
+            logging.error("Error updating template %s: %s", template_name, error)
             logging.error(traceback.format_exc())
 
         return result
@@ -18209,7 +18369,8 @@ class WANProbeConfigManager:
         print("=" * 70)
 
         logging.warning(
-            f"Menu #166 DESTRUCTIVE operation complete: {sum(1 for r in results if r['status'] == 'SUCCESS')} templates updated"  # noqa: E501
+            "Menu #166 DESTRUCTIVE operation complete: %s templates updated",
+            sum(1 for r in results if r["status"] == "SUCCESS"),
         )
 
 
@@ -18465,9 +18626,9 @@ class DeviceRebootManager:
                     tid = row.get("id", "").strip()
                     if name and tid:
                         template_name_to_id[name] = tid
-            logging.info(f"Loaded {len(template_name_to_id)} gateway templates")
+            logging.info("Loaded %s gateway templates", len(template_name_to_id))
         except Exception as error:
-            logging.error(f"! Failed to load gateway templates: {error}")
+            logging.error("! Failed to load gateway templates: %s", error)
             print(f"! Failed to load gateway templates: {error}")
             return None
 
@@ -18489,9 +18650,9 @@ class DeviceRebootManager:
                 for row in reader:
                     if row and row[0].strip():
                         reboot_template_names.add(row[0].strip())
-            logging.info(f"Loaded {len(reboot_template_names)} template names from reboot list")
+            logging.info("Loaded %s template names from reboot list", len(reboot_template_names))
         except Exception as error:
-            logging.error(f"! Failed to load reboot template list: {error}")
+            logging.error("! Failed to load reboot template list: %s", error)
             print(f"! Failed to load reboot template list: {error}")
             return None
         return reboot_template_names if reboot_template_names else None
@@ -18503,9 +18664,9 @@ class DeviceRebootManager:
         for name in names:
             if name in mapping:
                 reboot_template_ids.add(mapping[name])
-                logging.info(f"! Found template '{name}' with ID '{mapping[name]}'")
+                logging.info("! Found template '%s' with ID '%s'", name, mapping[name])
             else:
-                logging.warning(f"! Template '{name}' not found in OrgGatewayTemplates.csv")
+                logging.warning("! Template '%s' not found in OrgGatewayTemplates.csv", name)
                 print(f"! Template '{name}' not found in available templates")
 
         if not reboot_template_ids:
@@ -18554,9 +18715,9 @@ class DeviceRebootManager:
                                 "template_name": template_name,
                             }
                         )
-                        logging.info(f"Found gateway '{device_name}' at site '{site_name}'")
+                        logging.info("Found gateway '%s' at site '%s'", device_name, site_name)
         except Exception as error:
-            logging.error(f"! Failed to load gateway configs: {error}")
+            logging.error("! Failed to load gateway configs: %s", error)
             print(f"! Failed to load gateway configs: {error}")
             return None
 
@@ -18565,7 +18726,7 @@ class DeviceRebootManager:
             print(" No gateway devices found in sites using the specified templates")
             return None
 
-        logging.info(f"Found {len(reboot_targets)} gateway devices to reboot")
+        logging.info("Found %s gateway devices to reboot", len(reboot_targets))
         return reboot_targets
 
     @staticmethod
@@ -18585,9 +18746,9 @@ class DeviceRebootManager:
                         site_name = row.get("name", "").strip()  # The site's display name
                         template_name = id_to_name.get(gateway_template_id, "Unknown")  # Resolve the template's name
                         site_to_template[site_id] = (gateway_template_id, template_name, site_name)  # Record the match
-                        logging.info(f"Found site '{site_name}' using template '{template_name}'")  # Log the match
+                        logging.info("Found site '%s' using template '%s'", site_name, template_name)  # Log the match
         except Exception as error:  # Reading or parsing the site list failed
-            logging.error(f"! Failed to load site list: {error}")  # Log the failure detail
+            logging.error("! Failed to load site list: %s", error)  # Log the failure detail
             print(f"! Failed to load site list: {error}")  # Inform the user
         return site_to_template  # Return the site-to-template mapping
 
@@ -18636,7 +18797,7 @@ class DeviceRebootManager:
                 return False
 
             print(" User confirmed reboot operation. Proceeding...")
-            logging.info(f"LIABILITY WAIVER ACCEPTED: User confirmed reboot for {len(targets)} devices")
+            logging.info("LIABILITY WAIVER ACCEPTED: User confirmed reboot for %s devices", len(targets))
             return True
 
         except (KeyboardInterrupt, EOFError):
@@ -18670,7 +18831,7 @@ class DeviceRebootManager:
         for device in targets:
             status = ""
             try:
-                logging.info(f"Rebooting device '{device['device_name']}'")
+                logging.info("Rebooting device '%s'", device["device_name"])
                 print(f"! Rebooting {device['device_name']} at {device['site_name']}...")
 
                 response = mistapi.api.v1.sites.devices.restartSiteDevice(
@@ -18682,12 +18843,12 @@ class DeviceRebootManager:
 
                 status = DeviceRebootManager._parse_reboot_response(response)
                 print("   Reboot command sent successfully")
-                logging.info(f"! Reboot sent for '{device['device_name']}': {status}")
+                logging.info("! Reboot sent for '%s': %s", device["device_name"], status)
 
             except Exception as error:
                 status = f"ERROR: {error}"
                 print(f"   Failed to send reboot: {error}")
-                logging.error(f"! Failed to reboot '{device['device_name']}': {error}")
+                logging.error("! Failed to reboot '%s': %s", device["device_name"], error)
 
             results.append(
                 {
@@ -18736,9 +18897,9 @@ class DeviceRebootManager:
             print("\n  Operation completed!")
             print(f"   Reboot commands sent to {len(results)} devices")
             print("   Results logged to GatewayTemplateRebootResults.CSV")
-            logging.info(f"! Reboot results exported ({len(results)} entries)")
+            logging.info("! Reboot results exported (%s entries)", len(results))
         except Exception as error:
-            logging.error(f"! Failed to write results to CSV: {error}")
+            logging.error("! Failed to write results to CSV: %s", error)
             print(f"! Failed to write results to CSV: {error}")
 
 
@@ -18856,7 +19017,7 @@ class FirmwareUpgradeStatusChecker:
     def check(self) -> None:
         """Main entry point - execute firmware upgrade status check."""
         logging.info("Starting firmware upgrade status check...")
-        logging.debug(f"Scope: {self.scope_choice}, Site filter: {self.site_filter}")
+        logging.debug("Scope: %s, Site filter: %s", self.scope_choice, self.site_filter)
 
         if not self._resolve_site_filter():
             return
@@ -18883,13 +19044,13 @@ class FirmwareUpgradeStatusChecker:
                 print(" No site selected. Exiting.")
                 logging.warning("No site selected in specific site mode")
                 return False
-            logging.debug(f"Selected site filter: {self.site_filter}")
+            logging.debug("Selected site filter: %s", self.site_filter)
         return True
 
     def _fetch_device_stats(self) -> bool:
         """Fetch device statistics from API."""
         print("\n  Fetching device statistics...")
-        logging.debug(f"Scope: {self.scope_choice}, site_filter: {self.site_filter}")
+        logging.debug("Scope: %s, site_filter: %s", self.scope_choice, self.site_filter)
 
         try:
             if self.site_filter:
@@ -18898,7 +19059,7 @@ class FirmwareUpgradeStatusChecker:
                 return self._fetch_org_stats()
         except Exception as exception:
             print(f"! Failed to fetch device statistics: {exception}")
-            logging.error(f"Failed to fetch device statistics: {exception}")
+            logging.error("Failed to fetch device statistics: %s", exception)
             return False
 
     def _fetch_site_stats(self) -> bool:
@@ -18911,7 +19072,7 @@ class FirmwareUpgradeStatusChecker:
         self.all_device_stats.extend(site_stats)
 
         print(f"   Retrieved stats for {len(site_stats)} devices at selected site")
-        logging.info(f"Retrieved stats for {len(site_stats)} devices at site {self.site_filter}")
+        logging.info("Retrieved stats for %s devices at site %s", len(site_stats), self.site_filter)
         return len(self.all_device_stats) > 0 or self._handle_empty_stats()
 
     def _fetch_org_stats(self) -> bool:
@@ -18924,7 +19085,7 @@ class FirmwareUpgradeStatusChecker:
         self.all_device_stats.extend(org_stats)
 
         print(f"   Retrieved stats for {len(org_stats)} devices organization-wide")
-        logging.info(f"Retrieved stats for {len(org_stats)} devices organization-wide")
+        logging.info("Retrieved stats for %s devices organization-wide", len(org_stats))
         return len(self.all_device_stats) > 0 or self._handle_empty_stats()
 
     def _handle_empty_stats(self) -> bool:
@@ -18943,7 +19104,7 @@ class FirmwareUpgradeStatusChecker:
                 if site_id:
                     self.site_lookup[site_id] = site_name
         except Exception as exception:
-            logging.warning(f"Failed to fetch site information: {exception}")
+            logging.warning("Failed to fetch site information: %s", exception)
             self.site_lookup.clear()
 
     def _process_all_devices(self) -> None:
@@ -19287,7 +19448,7 @@ class FirmwareUpgradeStatusChecker:
 
         except Exception as exception:
             print(f"   -> Error checking SSR upgrade operations: {exception}")
-            logging.warning(f"Failed to check SSR upgrade operations: {exception}")
+            logging.warning("Failed to check SSR upgrade operations: %s", exception)
 
     def _process_ssr_upgrade(self, upgrade: dict[str, Any]) -> None:
         """Process a single SSR upgrade record."""
@@ -19364,7 +19525,7 @@ class FirmwareUpgradeStatusChecker:
 
         except Exception as exception:
             print(f"   -> Failed to read stored upgrade tracking data: {exception}")
-            logging.warning(f"Failed to read stored upgrade tracking: {exception}")
+            logging.warning("Failed to read stored upgrade tracking: %s", exception)
 
     def _check_stored_upgrade(self, record: dict[str, Any]) -> None:
         """Check status of a stored upgrade record."""
@@ -19427,7 +19588,7 @@ class FirmwareUpgradeStatusChecker:
 
         except Exception as exception:
             print(f"   -> Error checking audit logs: {exception}")
-            logging.warning(f"Failed to search org audit logs: {exception}")
+            logging.warning("Failed to search org audit logs: %s", exception)
 
     def _is_upgrade_event(self, log_entry: dict[str, Any]) -> bool:
         """Check if log entry is upgrade-related."""
@@ -19470,7 +19631,7 @@ class FirmwareUpgradeStatusChecker:
 
         except Exception as exception:
             print(f"   -> Error checking device events: {exception}")
-            logging.warning(f"Failed to search device upgrade events: {exception}")
+            logging.warning("Failed to search device upgrade events: %s", exception)
 
     def _display_device_events(self, events: list[dict[str, Any]]) -> None:
         """Display device events grouped by type."""
@@ -19520,7 +19681,7 @@ class FirmwareUpgradeStatusChecker:
 
         except Exception as exception:
             print(f"   Site '{site_name}': -> Error checking upgrades: {exception}")
-            logging.warning(f"Failed to check upgrades for site {site_id}: {exception}")
+            logging.warning("Failed to check upgrades for site %s: %s", site_id, exception)
             return False
 
     def _process_site_upgrade(self, upgrade: dict[str, Any], site_id: str, site_name: str) -> None:
@@ -19581,10 +19742,10 @@ class FirmwareUpgradeStatusChecker:
             DataExporter.save_data_to_output(self.upgrade_results, filename)  # type: ignore[no-untyped-call]
             print(f"\n[SUCCESS] Device firmware status exported to: data/{filename}")
             print(f"   [DATA] {len(self.upgrade_results)} device records exported")
-            logging.info(f"Exported {len(self.upgrade_results)} device status records")
+            logging.info("Exported %s device status records", len(self.upgrade_results))
         except Exception as exception:
             print(f"! Failed to export device status: {exception}")
-            logging.error(f"Failed to export device status: {exception}")
+            logging.error("Failed to export device status: %s", exception)
 
     def _export_active_operations(self, timestamp: str) -> None:
         """Export active upgrade operations to CSV."""
@@ -19621,10 +19782,10 @@ class FirmwareUpgradeStatusChecker:
 
             print(f"! Active upgrade operations exported to: {filename}")
             print(f"   {len(self.active_upgrades)} upgrade operations exported")
-            logging.info(f"Exported {len(self.active_upgrades)} active upgrade operations")
+            logging.info("Exported %s active upgrade operations", len(self.active_upgrades))
         except Exception as exception:
             print(f"! Failed to export upgrade operations: {exception}")
-            logging.error(f"Failed to export upgrade operations: {exception}")
+            logging.error("Failed to export upgrade operations: %s", exception)
 
     def _map_upgrade_for_export(self, upgrade: dict[str, Any]) -> dict[str, Any]:
         """Map upgrade record for CSV export."""
@@ -19765,7 +19926,10 @@ class MSPInventoryExporter:
         self._process_all_msps()  # type: ignore[no-untyped-call]
         self._finalize_export()  # type: ignore[no-untyped-call]
         logging.info(
-            f"Menu #144 complete: {self.device_count} devices exported from {self.org_count} orgs across {self.msp_count} MSPs"  # noqa: E501
+            "Menu #144 complete: %s devices exported from %s orgs across %s MSPs",
+            self.device_count,
+            self.org_count,
+            self.msp_count,
         )
 
     def _print_header(self):
@@ -19917,7 +20081,7 @@ class MSPInventoryExporter:
         except Exception as e:
             print(f"    X Error processing MSP {msp_name}: {e}")
             self.errors.append(f"MSP {msp_name}: {e}")
-            logging.error(f"MSP inventory export error for {msp_name}: {e}")
+            logging.error("MSP inventory export error for %s: %s", msp_name, e)
 
     def _fetch_org_inventory(self, org_id: str, org_name: str) -> list:  # type: ignore[type-arg]
         """Fetch all devices from org inventory. Returns empty list on failure."""
@@ -19993,7 +20157,7 @@ class MSPInventoryExporter:
         except Exception as e:
             print(f"      {org_name}: Error - {e}")
             self.errors.append(f"Org {org_name}: {e}")
-            logging.error(f"MSP inventory export error for org {org_name}: {e}")
+            logging.error("MSP inventory export error for org %s: %s", org_name, e)
 
     def _build_site_lookup(self, org_id: str) -> dict:  # type: ignore[type-arg]
         """Build a site_id -> site_name lookup for an org."""
@@ -20001,7 +20165,7 @@ class MSPInventoryExporter:
             sites = APICoreFetchUtils.all_sites_with_limit(org_id)
             return {s.get("id"): s.get("name", "Unknown") for s in sites}
         except Exception as e:
-            logging.debug(f"Failed to build site lookup for org {org_id}: {e}")
+            logging.debug("Failed to build site lookup for org %s: %s", org_id, e)
             return {}
 
     def _get_priority_fields(self) -> list:  # type: ignore[type-arg]
@@ -20269,7 +20433,7 @@ class AnomalyMetricsDiscovery:
             return cls._parse_metrics_csv(metrics_path)
 
         except Exception as exception:
-            logging.error(f"Error reading ConstInsightMetrics.csv: {str(exception)}")
+            logging.error("Error reading ConstInsightMetrics.csv: %s", str(exception))
             return cls.FALLBACK_METRICS.copy()
 
     @classmethod
@@ -20313,7 +20477,7 @@ class AnomalyMetricsDiscovery:
     def _sort_by_priority(cls, metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Sort metrics with priority items first, then alphabetically."""
         metrics.sort(key=lambda x: (not x.get("priority", False), x["metric_name"]))
-        logging.info(f"Found {len(metrics)} potential anomaly metrics from ConstInsightMetrics.csv")
+        logging.info("Found %s potential anomaly metrics from ConstInsightMetrics.csv", len(metrics))
         return metrics
 
 
@@ -20425,11 +20589,11 @@ class WLANRadiusTimerManager:
 
     def _fetch_site_info(self) -> bool:
         """Fetch site information from API."""
-        logging.info(f"Fetching site information for site ID: {self.site_id}")  # Log before the API call
+        logging.info("Fetching site information for site ID: %s", self.site_id)  # Log before the API call
         try:
             response = mistapi.api.v1.sites.sites.getSiteInfo(apisession, self.site_id)  # Request the site's details
             if response.status_code != 200:  # The API returned a non-success status
-                logging.error(f"Failed to fetch site info: HTTP {response.status_code}")  # Log the HTTP error
+                logging.error("Failed to fetch site info: HTTP %s", response.status_code)  # Log the HTTP error
                 print("\n[!] Failed to fetch site information. Exiting.")  # Inform the user
                 return False  # Abort -- we cannot proceed without site info
             self.site_info = response.data  # Cache the decoded site record
@@ -20438,15 +20602,15 @@ class WLANRadiusTimerManager:
             self._log_site_info()  # Log the resolved site details
             return True  # Site info loaded successfully
         except Exception as error:  # Network or parsing failure
-            logging.error(f"Error fetching site info: {error}")  # Log the exception detail
+            logging.error("Error fetching site info: %s", error)  # Log the exception detail
             print(f"\n[!] Error fetching site information: {error}")  # Inform the user
             return False  # Abort on error
 
     def _log_site_info(self) -> None:
         """Log site information details."""
-        logging.info(f"Site: {self.site_name}")  # Record the resolved site name
+        logging.info("Site: %s", self.site_name)  # Record the resolved site name
         if self.site_template_id:  # A site template is assigned
-            logging.info(f"Site Template ID: {self.site_template_id}")  # Log the template ID for traceability
+            logging.info("Site Template ID: %s", self.site_template_id)  # Log the template ID for traceability
         else:  # No template is assigned to this site
             logging.info("No site template assigned")  # Note the absence of a template
 
@@ -20463,11 +20627,11 @@ class WLANRadiusTimerManager:
             response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, self.site_id)  # Request site-level WLANs
             if response.status_code == 200:  # The request succeeded
                 self.site_wlans = response.data  # Cache the returned WLAN list
-                logging.info(f"Found {len(self.site_wlans)} site-level WLANs")  # Report how many were found
+                logging.info("Found %s site-level WLANs", len(self.site_wlans))  # Report how many were found
             else:  # Non-success status
-                logging.warning(f"Failed to fetch site WLANs: HTTP {response.status_code}")  # Warn but continue
+                logging.warning("Failed to fetch site WLANs: HTTP %s", response.status_code)  # Warn but continue
         except Exception as error:  # Network or parsing failure
-            logging.error(f"Error fetching site WLANs: {error}")  # Log the exception detail
+            logging.error("Error fetching site WLANs: %s", error)  # Log the exception detail
 
     def _fetch_site_template_wlans(self) -> None:
         """Fetch WLANs from site template if assigned."""
@@ -20483,11 +20647,13 @@ class WLANRadiusTimerManager:
                 self.template_name = template_data.get("name", "Unknown Template")  # Capture a display name
                 if "wlans" in template_data and template_data["wlans"]:  # The template embeds WLAN definitions
                     self.site_template_wlans = list(template_data["wlans"].values())  # Flatten the WLAN map to a list
-                    logging.info(f"Found {len(self.site_template_wlans)} site template-level WLANs")  # Report the count
+                    logging.info(
+                        "Found %s site template-level WLANs", len(self.site_template_wlans)
+                    )  # Report the count
             else:  # Non-success status
-                logging.warning(f"Failed to fetch site template: HTTP {response.status_code}")  # Warn but continue
+                logging.warning("Failed to fetch site template: HTTP %s", response.status_code)  # Warn but continue
         except Exception as error:  # Network or parsing failure
-            logging.error(f"Error fetching site template: {error}")  # Log the exception detail
+            logging.error("Error fetching site template: %s", error)  # Log the exception detail
 
     def _fetch_org_wlans(self) -> None:
         """Fetch org-level WLANs using templates assigned to this site."""
@@ -20497,7 +20663,7 @@ class WLANRadiusTimerManager:
             self._determine_assigned_templates()  # Work out which templates apply to this site
             self._fetch_and_filter_org_wlans()  # Pull org WLANs and keep only those on assigned templates
         except Exception as error:  # Any failure across the multi-step fetch
-            logging.error(f"Error fetching org WLANs or templates: {error}")  # Log the exception detail
+            logging.error("Error fetching org WLANs or templates: %s", error)  # Log the exception detail
 
     def _fetch_wlan_templates(self) -> None:
         """Fetch all WLAN templates from the organization."""
@@ -20505,9 +20671,9 @@ class WLANRadiusTimerManager:
         response = mistapi.api.v1.orgs.templates.listOrgTemplates(apisession, self.org_id)  # Request all org templates
         if response.status_code == 200:  # The request succeeded
             self.wlan_templates = response.data  # Cache the template list
-            logging.info(f"Found {len(self.wlan_templates)} org-level WLAN templates")  # Report the count
+            logging.info("Found %s org-level WLAN templates", len(self.wlan_templates))  # Report the count
         else:  # Non-success status
-            logging.warning(f"Failed to fetch WLAN templates: HTTP {response.status_code}")  # Warn but continue
+            logging.warning("Failed to fetch WLAN templates: HTTP %s", response.status_code)  # Warn but continue
 
     def _determine_assigned_templates(self) -> None:
         """Determine which templates are assigned to the selected site."""
@@ -20515,7 +20681,7 @@ class WLANRadiusTimerManager:
             if self._is_template_assigned_to_site(wlan_template):  # The template applies to this site
                 self.assigned_template_ids.add(wlan_template.get("id"))  # Remember its ID for WLAN filtering
         logging.info(
-            f"Found {len(self.assigned_template_ids)} WLAN templates assigned to this site"
+            "Found %s WLAN templates assigned to this site", len(self.assigned_template_ids)
         )  # Report the count
 
     def _is_template_assigned_to_site(self, wlan_template: dict[str, Any]) -> bool:
@@ -20539,10 +20705,10 @@ class WLANRadiusTimerManager:
         """Fetch org WLANs and filter to those using assigned templates."""
         response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)  # Request every WLAN in the org
         if response.status_code != 200:  # The request failed
-            logging.warning(f"Failed to fetch org WLANs: HTTP {response.status_code}")  # Warn but continue
+            logging.warning("Failed to fetch org WLANs: HTTP %s", response.status_code)  # Warn but continue
             return  # Nothing to filter without data
         all_org_wlans = response.data  # Decode the full org WLAN list
-        logging.info(f"Found {len(all_org_wlans)} total org WLANs")  # Report the total count
+        logging.info("Found %s total org WLANs", len(all_org_wlans))  # Report the total count
         for wlan in all_org_wlans:  # Examine each org WLAN
             wlan_template_id = wlan.get("template_id")  # The template this WLAN belongs to
             if (
@@ -20552,7 +20718,7 @@ class WLANRadiusTimerManager:
                 self.org_wlans.append(wlan)  # Keep it as a relevant org WLAN
         if self.org_wlans:  # At least one relevant org WLAN was kept
             logging.info(
-                f"Found {len(self.org_wlans)} org WLANs using templates assigned to this site"
+                "Found %s org WLANs using templates assigned to this site", len(self.org_wlans)
             )  # Report the count
 
     def _add_org_wlan_metadata(self, wlan: dict[str, Any], template_id: str) -> None:
@@ -20965,26 +21131,24 @@ class WLANRadiusTimerManager:
                 logging.error("Unknown inheritance level for WLAN")  # Log the error for diagnosis
         except Exception as error:  # Any API failure during the write
             print(f"\n[!] Error applying changes: {error}")  # Inform the user of the failure
-            logging.error(
-                f"Error applying WLAN authentication timer changes: {error}", exc_info=True
-            )  # Log with traceback
+            logging.exception("Error applying WLAN authentication timer changes: %s", error)  # Log with traceback
 
     def _update_site_wlan(self) -> None:
         """Update a site-level WLAN."""
         wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
         print("\n[*] Updating site-level WLAN...")  # Inform the user the write is starting
         payload = self._build_update_payload()  # Build the timer-only update body
-        logging.info(f"Updating site WLAN {wlan.get('id')} with payload: {payload}")  # Log before the API call
+        logging.info("Updating site WLAN %s with payload: %s", wlan.get("id"), payload)  # Log before the API call
         response = mistapi.api.v1.sites.wlans.updateSiteWlan(
             apisession, self.site_id, wlan.get("id"), payload
         )  # Push the update
         if response.status_code == 200:  # The update succeeded
             print(f"[+] Successfully updated WLAN: {wlan.get('ssid')}")  # Confirm success to the user
-            logging.info(f"Successfully updated site WLAN {wlan.get('id')}")  # Log the success
+            logging.info("Successfully updated site WLAN %s", wlan.get("id"))  # Log the success
         else:  # The update failed
             print(f"[!] Failed to update WLAN: HTTP {response.status_code}")  # Report the HTTP error
             logging.error(
-                f"Failed to update site WLAN: HTTP {response.status_code}, Response: {response.data}"
+                "Failed to update site WLAN: HTTP %s, Response: %s", response.status_code, response.data
             )  # Log the detail
 
     def _update_site_template_wlan(self) -> None:
@@ -20994,7 +21158,7 @@ class WLANRadiusTimerManager:
         template_id = wlan.get("_template_id")  # The template that owns this WLAN
         wlan_id = wlan.get("id")  # The WLAN's unique ID within the template
         logging.info(
-            f"Updating site template WLAN {wlan_id} in template {template_id}"
+            "Updating site template WLAN %s in template %s", wlan_id, template_id
         )  # Log before the read-modify-write
         template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
             apisession, self.org_id, template_id
@@ -21002,7 +21166,7 @@ class WLANRadiusTimerManager:
         if template_response.status_code != 200:  # Could not load the template to modify
             print(f"[!] Failed to fetch site template: HTTP {template_response.status_code}")  # Report the error
             logging.error(
-                f"Failed to fetch site template for update: HTTP {template_response.status_code}"
+                "Failed to fetch site template for update: HTTP %s", template_response.status_code
             )  # Log the failure
             return  # Abort -- cannot safely update without the current state
         template_data = template_response.data  # The full template document to mutate
@@ -21018,7 +21182,7 @@ class WLANRadiusTimerManager:
                 break  # Stop scanning once updated
         if not wlan_found:  # The WLAN was not present in the template
             print("[!] WLAN not found in site template")  # Report the miss
-            logging.error(f"WLAN {wlan_id} not found in site template {template_id}")  # Log the failure
+            logging.error("WLAN %s not found in site template %s", wlan_id, template_id)  # Log the failure
             return  # Abort -- nothing was changed
         update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(  # Write the modified template back
             apisession, self.org_id, template_id, template_data  # Send the full mutated document
@@ -21027,12 +21191,14 @@ class WLANRadiusTimerManager:
             print(f"[+] Successfully updated site template WLAN: {wlan.get('ssid')}")  # Confirm success
             print("[+] All sites using this template will inherit these changes")  # Remind the user of the blast radius
             logging.info(
-                f"Successfully updated site template WLAN {wlan_id} in template {template_id}"
+                "Successfully updated site template WLAN %s in template %s", wlan_id, template_id
             )  # Log the success
         else:  # The template write failed
             print(f"[!] Failed to update site template: HTTP {update_response.status_code}")  # Report the HTTP error
             logging.error(  # Log the failure detail
-                f"Failed to update site template: HTTP {update_response.status_code}, Response: {update_response.data}"
+                "Failed to update site template: HTTP %s, Response: %s",
+                update_response.status_code,
+                update_response.data,
             )
 
     def _update_org_wlan(self) -> None:
@@ -21045,7 +21211,7 @@ class WLANRadiusTimerManager:
             logging.error("Missing WLAN id for org WLAN update")  # Log the failure
             return  # Abort -- cannot target the update
         payload = self._build_update_payload()  # Build the timer-only update body
-        logging.info(f"Updating org WLAN {wlan_id} with payload: {payload}")  # Log before the API call
+        logging.info("Updating org WLAN %s with payload: %s", wlan_id, payload)  # Log before the API call
         response = mistapi.api.v1.orgs.wlans.updateOrgWlan(apisession, self.org_id, wlan_id, payload)  # Push the update
         if response.status_code == 200:  # The update succeeded
             print(f"[+] Successfully updated org WLAN: {wlan.get('ssid')}")  # Confirm success to the user
@@ -21053,11 +21219,11 @@ class WLANRadiusTimerManager:
             print(
                 f"[+] WLAN uses template '{template_name}' for its base configuration"
             )  # Clarify the template relationship
-            logging.info(f"Successfully updated org WLAN {wlan_id}")  # Log the success
+            logging.info("Successfully updated org WLAN %s", wlan_id)  # Log the success
         else:  # The update failed
             print(f"[!] Failed to update org WLAN: HTTP {response.status_code}")  # Report the HTTP error
             logging.error(
-                f"Failed to update org WLAN: HTTP {response.status_code}, Response: {response.data}"
+                "Failed to update org WLAN: HTTP %s, Response: %s", response.status_code, response.data
             )  # Log the detail
 
     def _print_completion_message(self) -> None:
@@ -21113,7 +21279,10 @@ class BulkRadiusWLANConfigManager:
         self.target_retries = int(os.getenv("RADIUS_AUTH_RETRIES", "2"))
         self.target_fast_dot1x = os.getenv("RADIUS_FAST_DOT1X", "true").lower() == "true"
         logging.debug(
-            f"Loaded RADIUS config: timeout={self.target_timeout}, retries={self.target_retries}, fast_dot1x={self.target_fast_dot1x}"  # noqa: E501
+            "Loaded RADIUS config: timeout=%s, retries=%s, fast_dot1x=%s",
+            self.target_timeout,
+            self.target_retries,
+            self.target_fast_dot1x,
         )
 
     def _display_config(self) -> None:
@@ -21147,21 +21316,21 @@ class BulkRadiusWLANConfigManager:
     def _scan_org_wlans(self) -> bool:
         """Fetch all WLANs in the organization using listOrgWlans API."""
         print("[*] Scanning organization for WLANs...")
-        logging.info(f"Fetching org WLANs for org_id: {self.org_id}")
+        logging.info("Fetching org WLANs for org_id: %s", self.org_id)
         try:
             response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)
             if response.status_code != 200:
-                logging.error(f"Failed to fetch org WLANs: HTTP {response.status_code}")
+                logging.error("Failed to fetch org WLANs: HTTP %s", response.status_code)
                 print(f"\n[!] Failed to fetch WLANs: HTTP {response.status_code}")
                 return False
             self.all_wlans = response.data
             if is_debug_mode():  # type: ignore[no-untyped-call]
-                logging.debug(f"API response data ({len(self.all_wlans)} WLANs): {self.all_wlans}")
-            logging.info(f"Found {len(self.all_wlans)} total WLANs in organization")
+                logging.debug("API response data (%s WLANs): %s", len(self.all_wlans), self.all_wlans)
+            logging.info("Found %s total WLANs in organization", len(self.all_wlans))
             print(f"[+] Found {len(self.all_wlans)} total WLANs in organization")
             return True
         except Exception as e:
-            logging.error(f"Exception fetching org WLANs: {e}")
+            logging.error("Exception fetching org WLANs: %s", e)
             print(f"\n[!] Error fetching WLANs: {e}")
             return False
 
@@ -21198,18 +21367,29 @@ class BulkRadiusWLANConfigManager:
                 self.compliant_wlans.append(wlan)
                 if is_debug_mode():  # type: ignore[no-untyped-call]
                     logging.debug(
-                        f"COMPLIANT: {wlan.get('ssid')} - timeout={wlan.get('auth_servers_timeout', 5)}, retries={wlan.get('auth_servers_retries', 2)}, fast={wlan.get('fast_dot1x_timers', False)}"  # noqa: E501
+                        "COMPLIANT: %s - timeout=%s, retries=%s, fast=%s",
+                        wlan.get("ssid"),
+                        wlan.get("auth_servers_timeout", 5),
+                        wlan.get("auth_servers_retries", 2),
+                        wlan.get("fast_dot1x_timers", False),
                     )
             else:
                 wlan["_compliance_status"] = "NEEDS_UPDATE"
                 self.radius_wlans.append(wlan)
                 if is_debug_mode():  # type: ignore[no-untyped-call]
                     logging.debug(
-                        f"NEEDS_UPDATE: {wlan.get('ssid')} - timeout={wlan.get('auth_servers_timeout', 5)}, retries={wlan.get('auth_servers_retries', 2)}, fast={wlan.get('fast_dot1x_timers', False)}"  # noqa: E501
+                        "NEEDS_UPDATE: %s - timeout=%s, retries=%s, fast=%s",
+                        wlan.get("ssid"),
+                        wlan.get("auth_servers_timeout", 5),
+                        wlan.get("auth_servers_retries", 2),
+                        wlan.get("fast_dot1x_timers", False),
                     )
         total_radius = len(self.radius_wlans) + len(self.compliant_wlans)
         logging.info(
-            f"Found {total_radius} RADIUS WLANs: {len(self.radius_wlans)} needing config, {len(self.compliant_wlans)} compliant"  # noqa: E501
+            "Found %s RADIUS WLANs: %s needing config, %s compliant",
+            total_radius,
+            len(self.radius_wlans),
+            len(self.compliant_wlans),
         )
         print(
             f"[+] Found {total_radius} RADIUS WLANs ({len(self.radius_wlans)} needing configuration, {len(self.compliant_wlans)} already compliant)"  # noqa: E501
@@ -21289,7 +21469,7 @@ class BulkRadiusWLANConfigManager:
                             elif idx >= max_count:  # Index beyond the list
                                 print(f"    [!] Index {idx + 1} out of range (max: {max_count})")  # Warn the user
                 except ValueError:  # A non-numeric range piece
-                    logging.warning(f"Invalid range format: {part}")  # Log and skip it
+                    logging.warning("Invalid range format: %s", part)  # Log and skip it
             else:  # This piece is a single index
                 try:
                     idx = int(part) - 1  # Convert to 0-based
@@ -21298,7 +21478,7 @@ class BulkRadiusWLANConfigManager:
                     elif idx >= max_count:  # Index beyond the list
                         print(f"    [!] Index {idx + 1} out of range (max: {max_count})")  # Warn the user
                 except ValueError:  # A non-numeric single piece
-                    logging.warning(f"Invalid index: {part}")  # Log and skip it
+                    logging.warning("Invalid index: %s", part)  # Log and skip it
 
         selected_indices.sort()  # Present the chosen indices in ascending order
         return selected_indices  # Hand the parsed indices back to the caller
@@ -21337,7 +21517,7 @@ class BulkRadiusWLANConfigManager:
             ssid = wlan.get("ssid", "Unknown")  # The WLAN's SSID for user-facing messages
 
             if not wlan_id:  # Defensive: the WLAN record lacks an ID
-                logging.error(f"Missing WLAN ID for {ssid}")  # Log the missing identifier
+                logging.error("Missing WLAN ID for %s", ssid)  # Log the missing identifier
                 self._record_change(wlan, "failed", "Missing WLAN ID")  # Record the failure in the audit trail
                 fail_count += 1  # Count this as a failure
                 continue  # Skip to the next WLAN
@@ -21350,7 +21530,11 @@ class BulkRadiusWLANConfigManager:
 
             print(f"  [{idx}/{len(self.selected_wlans)}] Updating {ssid}...", end=" ")  # Progress line (no newline yet)
             logging.info(  # Log before the update, noting dry-run vs real
-                f"{'DRY-RUN: Would update' if self.dry_run else 'Updating'} org WLAN {wlan_id} ({ssid}) with payload: {payload}"  # noqa: E501
+                "%s org WLAN %s (%s) with payload: %s",
+                "DRY-RUN: Would update" if self.dry_run else "Updating",
+                wlan_id,
+                ssid,
+                payload,
             )
 
             if self.dry_run:  # In dry-run mode we simulate instead of calling the API
@@ -21358,7 +21542,7 @@ class BulkRadiusWLANConfigManager:
                 self._record_change(wlan, "DRY-RUN", "")  # Record the simulated change
                 success_count += 1  # Count the simulation as a success
                 if is_debug_mode():  # type: ignore[no-untyped-call]  # Only dump payload when debugging
-                    logging.debug(f"DRY-RUN payload for {ssid}: {payload}")  # Log the would-be payload
+                    logging.debug("DRY-RUN payload for %s: %s", ssid, payload)  # Log the would-be payload
                 continue  # Skip the real API call
 
             try:
@@ -21370,23 +21554,23 @@ class BulkRadiusWLANConfigManager:
                     self._record_change(wlan, "success", "")  # Record the successful change
                     success_count += 1  # Count the success
                     if is_debug_mode():  # type: ignore[no-untyped-call]  # Only dump response when debugging
-                        logging.debug(f"API response for {ssid}: {response.data}")  # Log the API response body
+                        logging.debug("API response for %s: %s", ssid, response.data)  # Log the API response body
                 else:  # The API returned a non-success status
                     print(f"FAILED (HTTP {response.status_code})")  # Complete the progress line with failure
                     self._record_change(wlan, "failed", f"HTTP {response.status_code}")  # Record the failure
                     fail_count += 1  # Count the failure
-                    logging.error(f"Failed to update {ssid}: HTTP {response.status_code}")  # Log the HTTP error
+                    logging.error("Failed to update %s: HTTP %s", ssid, response.status_code)  # Log the HTTP error
             except Exception as e:  # The update call raised an exception
                 print(f"ERROR ({e})")  # Complete the progress line with the error
                 self._record_change(wlan, "failed", str(e))  # Record the exception in the audit trail
                 fail_count += 1  # Count the failure
-                logging.error(f"Exception updating {ssid}: {e}")  # Log the exception detail
+                logging.error("Exception updating %s: %s", ssid, e)  # Log the exception detail
 
             time.sleep(0.3)  # Brief pause between writes to respect API rate limits
 
         result_label = "DRY-RUN complete" if self.dry_run else "Update complete"  # Final summary verb
         print(f"\n[+] {result_label}: {success_count} successful, {fail_count} failed")  # Show the run totals
-        logging.info(f"{result_label}: {success_count} success, {fail_count} failed")  # Log the run totals
+        logging.info("%s: %s success, %s failed", result_label, success_count, fail_count)  # Log the run totals
 
     def _record_change(self, wlan: dict[str, Any], status: str, error_msg: str) -> None:
         """Record a change for the audit trail."""
@@ -21443,11 +21627,11 @@ class BulkRadiusWLANConfigManager:
                 writer.writerows(self.change_records)  # Write every recorded change
             print(f"\n[+] Audit trail exported to: {filepath}")  # Tell the user where the file landed
             logging.info(
-                f"Audit trail exported to {filepath} with {len(self.change_records)} records"
+                "Audit trail exported to %s with %s records", filepath, len(self.change_records)
             )  # Log the export
         except Exception as e:  # Writing the CSV failed (permissions, disk, etc.)
             print(f"\n[!] Failed to export audit trail: {e}")  # Inform the user of the failure
-            logging.error(f"Failed to export audit trail: {e}")  # Log the error detail
+            logging.error("Failed to export audit trail: %s", e)  # Log the error detail
 
     def manage(self, dry_run: bool = False) -> None:
         """Main entry point - orchestrates the bulk RADIUS WLAN configuration."""
@@ -21570,7 +21754,7 @@ class AuditAnalysisOps:
         try:
             time_range = parser.parse(time_input)  # Convert input to TimeRange object
         except ValueError as exc:
-            logging.error(f"Invalid time range: {exc}")  # Log parse failure
+            logging.error("Invalid time range: %s", exc)  # Log parse failure
             return
 
         print(f"\nFetching audit logs for: {time_range.description}")
@@ -21588,7 +21772,7 @@ class AuditAnalysisOps:
             entries = mistapi.get_all(response=response, mist_session=apisession) or []  # Paginate all results
             logging.debug("Retrieved %d raw audit log entries", len(entries))  # Log result count
         except Exception as exc:
-            logging.error(f"API call failed: {exc}")  # Log API failure with context
+            logging.error("API call failed: %s", exc)  # Log API failure with context
             return
 
         print(f"Retrieved {len(entries)} raw entries")
@@ -22214,7 +22398,7 @@ class MapsManagerLauncher:
 
     def _handle_import_error(self, error: ImportError) -> None:
         """Log and display import failure message."""
-        logging.error(f"Failed to import MapsManager from src/maps/maps_manager.py: {error}")
+        logging.error("Failed to import MapsManager from src/maps/maps_manager.py: %s", error)
         print("\nERROR: Could not load Maps Manager module.")
         print("Ensure src/maps/maps_manager.py exists")
 
@@ -22237,7 +22421,7 @@ class MapsManagerLauncher:
 
     def _handle_fatal_error(self, error: Exception) -> None:
         """Log and display fatal error message."""
-        logging.error(f"Error running Maps Manager: {error}", exc_info=True)
+        logging.error("Error running Maps Manager: %s", error, exc_info=True)
         print(f"\nERROR: {error}")
 
 
@@ -22339,7 +22523,7 @@ class TUILauncher:
 
     def _handle_fatal_error(self, error: Exception) -> None:
         """Handle fatal TUI errors."""
-        logging.error(f"TUI_MODE: Fatal error - {error}", exc_info=True)
+        logging.error("TUI_MODE: Fatal error - %s", error, exc_info=True)
         print(f"\n[ERROR] TUI mode crashed: {error}")
 
     def _restore_console_logging(self) -> None:
@@ -22355,7 +22539,7 @@ class TUILauncher:
 
         if self.debug_mode:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-            logging.debug(f"TUI_DEBUG: [{timestamp}] TUI_MODE function completed - returning to caller")
+            logging.debug("TUI_DEBUG: [%s] TUI_MODE function completed - returning to caller", timestamp)
 
         logging.info("TUI_MODE: TUI mode completed successfully")
         print("\n>> Returned from TUI mode to main menu")
@@ -22388,7 +22572,7 @@ class TelemetryEmitter:
                 os.makedirs(parent, exist_ok=True)
             self._handle = open(file_path, "a", encoding="utf-8")
         except OSError as exc:
-            logging.warning(f"TelemetryEmitter: cannot open {file_path}: {exc}")
+            logging.warning("TelemetryEmitter: cannot open %s: %s", file_path, exc)
 
     # -- core write ----------------------------------------------------------
 
@@ -22400,7 +22584,7 @@ class TelemetryEmitter:
             self._handle.write(json.dumps(event, default=str) + "\n")
             self._handle.flush()
         except OSError as exc:
-            logging.warning(f"TelemetryEmitter: write failed: {exc}")
+            logging.warning("TelemetryEmitter: write failed: %s", exc)
 
     def close(self) -> None:
         """Flush and close the underlying file handle."""
@@ -22573,9 +22757,9 @@ class TelemetryEmitter:
             while len(files) > limit:
                 oldest = files.pop(0)
                 os.remove(oldest)
-                logging.info(f"TelemetryEmitter: removed old file {oldest}")
+                logging.info("TelemetryEmitter: removed old file %s", oldest)
         except OSError as exc:
-            logging.warning(f"TelemetryEmitter: retention cleanup failed: {exc}")
+            logging.warning("TelemetryEmitter: retention cleanup failed: %s", exc)
 
     # -- timestamped filename helper -----------------------------------------
 
@@ -22993,7 +23177,7 @@ class OperationRegistry:
         entry = cls._REGISTRY.get(str(option))
         if entry is not None:
             return entry  # type: ignore[no-any-return]
-        logging.warning(f"OperationRegistry: option {option} not registered, defaulting to safe")
+        logging.warning("OperationRegistry: option %s not registered, defaulting to safe", option)
         return {"category": "safe"}
 
     @classmethod
@@ -23117,7 +23301,11 @@ def _systematic_test_run_option(
     if supports_fast and fast_enabled:  # Only pass fast=True when both the function and global mode agree.
         invoke_kwargs["fast"] = True  # Activate fast mode for this operation to reduce test time.
     logging.info(
-        f"SYSTEMATIC_TEST: INVOKE option={option} fast_supported={supports_fast} fast_enabled={fast_enabled} test_mode=True description='{description}'"  # noqa: E501
+        "SYSTEMATIC_TEST: INVOKE option=%s fast_supported=%s fast_enabled=%s test_mode=True description='%s'",
+        option,
+        supports_fast,
+        fast_enabled,
+        description,
     )  # Log invocation details before calling so post-mortem analysis can match events to options.
     try:  # Each option runs independently so one failure does not abort remaining tests.
         func(**invoke_kwargs)  # type: ignore[operator, no-untyped-call]  # Call menu action with resolved kwargs.
@@ -23125,7 +23313,7 @@ def _systematic_test_run_option(
         print(f"   [SUCCESS] Option {option} completed successfully")  # Confirm success immediately after call returns.
         emitter.emit_test_pass(option, description, duration, "systematic")  # Record pass event in telemetry.
         logging.info(
-            f"SYSTEMATIC_TEST: Successfully completed menu option {option}"
+            "SYSTEMATIC_TEST: Successfully completed menu option %s", option
         )  # Log success for log-correlation.
         return True, duration  # Signal success to the caller for count tracking.
     except Exception as exc:  # Catch all exceptions so the test harness can continue to the next option.
@@ -23137,7 +23325,7 @@ def _systematic_test_run_option(
             option, description, duration, exc, "systematic"
         )  # Record failure in telemetry for coverage reporting.
         logging.error(
-            f"SYSTEMATIC_TEST: Failed menu option {option}: {exc}"
+            "SYSTEMATIC_TEST: Failed menu option %s: %s", option, exc
         )  # Log full error for detailed investigation.
         return False, duration  # Signal failure to the caller for count tracking.
 
@@ -23268,13 +23456,13 @@ def run_systematic_test():  # noqa: C901, PLR0912, PLR0915
     if error_count == 0:  # All-pass outcome deserves an explicit success message.
         print("   All tested operations completed successfully!")  # Confirm all-green result to the operator.
         logging.info(
-            f"SYSTEMATIC_TEST: All {success_count} tested operations completed successfully in {total_time:.2f}s"
+            "SYSTEMATIC_TEST: All %s tested operations completed successfully in %.2fs", success_count, total_time
         )  # Record all-pass event for monitoring.
         return True  # Signal all-pass to callers (e.g., for exit-code logic).
     else:  # Some failures occurred; surface them without hiding the partial success.
         print(f"    {error_count} operations failed - check logs for details")  # Prompt operator to review logs.
         logging.warning(
-            f"SYSTEMATIC_TEST: {error_count} operations failed out of {len(safe_options)} tested"
+            "SYSTEMATIC_TEST: %s operations failed out of %s tested", error_count, len(safe_options)
         )  # Log failure count for alerting systems.
         return False  # Signal partial failure to callers.
 
@@ -23348,7 +23536,7 @@ def _launch_web_portal(args):
         print(">> For production, use: gunicorn wsgi:app")
         app.run(host=host, port=port, debug=False)
     else:
-        logging.info(f"WEB_PORTAL: Local mode - Flask dev server on {host}:{port}")
+        logging.info("WEB_PORTAL: Local mode - Flask dev server on %s:%s", host, port)
         print(f">> Web portal starting at http://127.0.0.1:{port}")
         app.run(host=host, port=port, debug=args.debug)
 
@@ -23635,7 +23823,7 @@ def _run_tui_mode(args: argparse.Namespace) -> None:
             logging.debug(
                 "TUI_DEBUG: [%s] Exception caught in TUI mode: %s: %s", timestamp, type(error).__name__, error
             )  # Log error  # noqa: E501
-        logging.error("TUI_MODE: Fatal error - %s", error, exc_info=True)  # Log full traceback to file
+        logging.exception("TUI_MODE: Fatal error - %s", error)  # Log full traceback to file
         print(f"\n[ERROR] TUI mode crashed: {error}")  # Inform user of crash
         sys.exit(1)  # Exit with error code after TUI crash
     if args.debug:
@@ -23908,21 +24096,21 @@ if __name__ == "__main__":
                 for line in formatted.rstrip().splitlines():
                     logging.error(line)
             except Exception as hook_err:
-                logging.error(f"Exception in global excepthook: {hook_err}")
+                logging.error("Exception in global excepthook: %s", hook_err)
 
         try:
             import sys as _sys_mod
 
             _sys_mod.excepthook = _global_excepthook
         except Exception as hook_setup_err:
-            logging.warning(f"Failed to install global excepthook: {hook_setup_err}")
+            logging.warning("Failed to install global excepthook: %s", hook_setup_err)
         main()  # type: ignore[no-untyped-call]
     except KeyboardInterrupt:
         logging.info("Application interrupted by user (Ctrl+C)")
         logging.debug("EXIT: __main__ - user interrupt")
         sys.exit(130)  # Standard exit code for SIGINT
     except Exception as e:
-        logging.error(f"Unhandled exception in main application: {e}")
+        logging.error("Unhandled exception in main application: %s", e)
         try:
             import traceback
 
@@ -23930,7 +24118,7 @@ if __name__ == "__main__":
             for line in traceback_details.rstrip().splitlines():
                 logging.error(line)
         except Exception as trace_err:
-            logging.error(f"Failed to log exception traceback: {trace_err}")
+            logging.error("Failed to log exception traceback: %s", trace_err)
         logging.debug("EXIT: __main__ - unhandled exception")
         sys.exit(1)
     finally:

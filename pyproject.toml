@@ -70,6 +70,7 @@ dev = [
     "pydocstyle[toml]>=6.3.0",
     "interrogate>=1.7.0",
     "hypothesis>=6.151.12",
+    "libcst>=1.5",              # AST-based codemod for #429 logging f-string sweep
     "playwright>=1.40.0",
     "pre-commit>=3.0.0",
 ]
@@ -99,11 +100,12 @@ target-version = "py313"
 extend-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "scripts", "specs", "src/maps"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B"]
-# Phase 1 ignores (2026-03-12) — tighten these incrementally:
-#   E402: module-import-not-at-top (33) — intentional: version check runs before imports
+select = ["E", "F", "W", "I", "UP", "B", "G"]
+# Phase 1 ignores (2026-03-12) -- tighten these incrementally:
+#   E402: module-import-not-at-top (33) -- intentional: version check runs before imports
 #   RESOLVED: F402, B007, PLR0913, E501, PLR0915/C901/PLR0912 (166 noqa annotations)
 # Phase 2 goal: re-enable T20 (print) after migrating prints to logging
+# Issue #429 (2026-06-23): enabled `G` rule family after sweeping all 695 G003/G004/G201 sites in MistHelper.py
 ignore = ["E402"]
 
 [tool.ruff.lint.isort]
@@ -111,6 +113,17 @@ known-first-party = ["src"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B011"]
+# Issue #429 swept G003/G004/G201 from MistHelper.py only; other files
+# retain eager logging formatting and will be addressed by follow-up issues.
+"src/**" = ["G"]
+"maps_manager.py" = ["G"]
+"wsgi.py" = ["G"]
+"starlink_dashboard.py" = ["G"]
+"web_portal/**" = ["G"]
+"tools/**" = ["G"]
+# Issue #429: synthetic input fixture for the codemod intentionally contains
+# G003/G004/G201 patterns so the codemod has something to rewrite during tests.
+"tests/fixtures/issue_429_codemod_synthetic_input.py" = ["G"]
 
 [tool.mypy]
 python_version = "3.13"

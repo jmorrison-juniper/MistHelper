@@ -61,6 +61,9 @@ Pygments>=2.20.0
 pytest
 hypothesis>=6.151.12
 
+# Codemod tooling for issue #429 logging f-string sweep (dev-only but listed for parity)
+libcst>=1.5
+
 # Note: The following are transitive dependencies installed automatically:
 # bcrypt, certifi, cffi, charset_normalizer, click, contourpy, cryptography,
 # cycler, decorator, deprecation, Flask, fonttools, future, geocoder, hvac,
