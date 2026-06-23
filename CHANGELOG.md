@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Lint / Compliance
+
+- **Issue #429 -- CONV-LOG-FSTRING sweep**: Converted all 695 eager-formatting
+  logging calls in `MistHelper.py` to lazy `%s`-style arguments
+  (681 G004 + 6 G003 + 8 G201 -> 0). Delivered in four ~170-site tranches with
+  a frozen parity-test baseline (`tests/fixtures/issue_429_log_baseline.json`)
+  and four new test modules (parity, hypothesis property, codemod idempotency,
+  lazy-sentinel) gating every tranche. Enabled the `G` ruff rule family in
+  `[tool.ruff.lint] select` and scoped it to `MistHelper.py` only via
+  `per-file-ignores`; `src/`, `tools/`, `web_portal/`, top-level helper
+  scripts, and the codemod synthetic-input fixture retain eager formatting
+  pending follow-up issues. Codemod (`tools/codemod_logging_lazy.py`) +
+  capture script (`tools/capture_log_baseline.py`) preserved for re-runs.
+
 ### Dependency Updates
 
 - Raised Mist API dependency floors to `mistapi>=0.63.1` in `requirements.txt`, `pyproject.toml`, and the runtime import manager so documented, packaged, and auto-install paths stay aligned.
