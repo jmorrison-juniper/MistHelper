@@ -7018,12 +7018,16 @@ class APIFetchUtils:
                     if attempt < max_retries:
                         delay = 0.5 * (1.5**attempt)  # Exponential backoff
                         logging.debug(
-                            f"Retrying device {failed_device_id} in {delay:.2f}s (attempt {attempt + 2}/{max_retries + 1})"  # noqa: E501
+                            "Retrying device %s in %.2fs (attempt %s/%s)",
+                            failed_device_id,
+                            delay,
+                            attempt + 2,
+                            max_retries + 1,
                         )
                         time.sleep(delay)
                 else:
                     logging.warning(
-                        f"! Failed to fetch config for device {failed_device_id} after {max_retries + 1} attempts"
+                        "! Failed to fetch config for device %s after %s attempts", failed_device_id, max_retries + 1
                     )
 
             return retry_results
@@ -7051,7 +7055,7 @@ class APIFetchUtils:
         # Filter out None results
         all_device_configs = [config for config in all_device_configs if config is not None]
 
-        logging.info(f"! Completed fetching {len(all_device_configs)} gateway device configs.")
+        logging.info("! Completed fetching %s gateway device configs.", len(all_device_configs))
         return all_device_configs
 
 
@@ -7119,7 +7123,7 @@ class DataProcessingUtils:
         flattened = []
         for entry in data:
             if not isinstance(entry, dict):
-                logging.debug(f"Skipping non-dictionary entry: {type(entry).__name__}")
+                logging.debug("Skipping non-dictionary entry: %s", type(entry).__name__)
                 continue
 
             new_entry = {}
@@ -7163,7 +7167,7 @@ class DataProcessingUtils:
         for entry in data:
             for key, value in entry.items():
                 if isinstance(value, (list, tuple, set)):
-                    logging.debug(f"Converting list/tuple/set at key '{key}' to string")
+                    logging.debug("Converting list/tuple/set at key '%s' to string", key)
                     entry[key] = ",".join(map(str, value))
         return data
 
@@ -7244,11 +7248,11 @@ class DatabaseSchemaUtils:
                     pattern in function_name
                     for pattern in ["getOrg", "listOrg", "searchOrg", "getSite", "listSite", "searchSite"]
                 ):
-                    logging.debug(f"Detected API function name from stack: {function_name}")
+                    logging.debug("Detected API function name from stack: %s", function_name)
                     return function_name
                 frame = frame.f_back
         except Exception as error:
-            logging.debug(f"Error determining API function name: {error}")
+            logging.debug("Error determining API function name: %s", error)
         finally:
             del frame
 
@@ -7269,7 +7273,7 @@ class DatabaseSchemaUtils:
         # First check if we have a specific strategy for this endpoint
         if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:
             strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()
-            logging.debug(f"Using configured strategy for {api_function_name}: {strategy['type']}")
+            logging.debug("Using configured strategy for %s: %s", api_function_name, strategy["type"])
             return strategy
 
         # If no specific strategy, use intelligent defaults based on data structure
@@ -7280,7 +7284,7 @@ class DatabaseSchemaUtils:
             # If data has an 'id' field, use it as unique constraint
             strategy["unique_constraints"] = ["id"]
             strategy["indexes"] = ["id"]
-            logging.debug(f"Enhanced default strategy for {api_function_name}: adding unique constraint on 'id'")
+            logging.debug("Enhanced default strategy for %s: adding unique constraint on 'id'", api_function_name)
 
         # Add common indexes for frequently queried fields
         common_index_fields = ["org_id", "site_id", "device_id", "timestamp", "mac", "serial"]
@@ -7288,7 +7292,7 @@ class DatabaseSchemaUtils:
             if field_name in data_fields and field_name not in strategy["indexes"]:
                 strategy["indexes"].append(field_name)  # type: ignore[attr-defined]
 
-        logging.debug(f"Using enhanced default strategy for {api_function_name}: {strategy}")
+        logging.debug("Using enhanced default strategy for %s: %s", api_function_name, strategy)
         return strategy
 
     @staticmethod
@@ -7397,7 +7401,7 @@ class DatabaseSchemaUtils:
             sql_parts.append(")")
             create_sql = "".join(sql_parts)
 
-        logging.debug(f"Generated CREATE TABLE SQL for {safe_table_name}: {create_sql[:100]}...")
+        logging.debug("Generated CREATE TABLE SQL for %s: %s...", safe_table_name, create_sql[:100])
         return create_sql
 
     @staticmethod
@@ -7473,7 +7477,11 @@ class SQLiteDatabaseWriter:
         """Log entry point with input parameters."""
         row_count = len(self.data) if self.data else 0
         logging.debug(
-            f"ENTRY: SQLiteDatabaseWriter.write(data_rows={row_count}, table_name={self.table_name}, api_function_name={self.api_function_name}) at {self.timestamp}"  # noqa: E501
+            "ENTRY: SQLiteDatabaseWriter.write(data_rows=%s, table_name=%s, api_function_name=%s) at %s",
+            row_count,
+            self.table_name,
+            self.api_function_name,
+            self.timestamp,
         )
 
     def _validate_inputs(self) -> bool:
@@ -7485,11 +7493,11 @@ class SQLiteDatabaseWriter:
     def _validate_data(self) -> bool:
         """Validate that data is a non-empty list."""
         if not self.data:
-            logging.warning(f"No data provided to write to table {self.table_name} at {self.timestamp}")
+            logging.warning("No data provided to write to table %s at %s", self.table_name, self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - no data to write")
             return False
         if not isinstance(self.data, list):
-            logging.error(f"Invalid data type: expected list, got {type(self.data)} at {self.timestamp}")
+            logging.error("Invalid data type: expected list, got %s at %s", type(self.data), self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid data type")
             return False
         return True
@@ -7497,7 +7505,7 @@ class SQLiteDatabaseWriter:
     def _validate_table_name(self) -> bool:
         """Validate that table name is a non-empty string."""
         if not self.table_name or not isinstance(self.table_name, str):
-            logging.error(f"Invalid table name: {self.table_name} at {self.timestamp}")
+            logging.error("Invalid table name: %s at %s", self.table_name, self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid table name")
             return False
         return True
@@ -7507,7 +7515,11 @@ class SQLiteDatabaseWriter:
         if not self.api_function_name:
             self.api_function_name = DatabaseSchemaUtils.determine_api_function_name_from_context()
         logging.debug(
-            f"Processing {len(self.data)} rows for table {self.table_name} using API function {self.api_function_name} at {self.timestamp}"  # noqa: E501
+            "Processing %s rows for table %s using API function %s at %s",
+            len(self.data),
+            self.table_name,
+            self.api_function_name,
+            self.timestamp,
         )
 
     def _ensure_database_directory(self) -> bool:
@@ -7517,10 +7529,10 @@ class SQLiteDatabaseWriter:
             return True
         try:
             os.makedirs(db_dir, exist_ok=True)
-            logging.info(f"Created database directory: {db_dir} at {self.timestamp}")
+            logging.info("Created database directory: %s at %s", db_dir, self.timestamp)
             return True
         except OSError as error:
-            logging.error(f"Failed to create database directory {db_dir}: {error} at {self.timestamp}")
+            logging.error("Failed to create database directory %s: %s at %s", db_dir, error, self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - directory creation failed")
             return False
 
@@ -7528,10 +7540,10 @@ class SQLiteDatabaseWriter:
         """Process data to handle formatting for database storage."""
         try:
             self.processed_data = DataProcessingUtils.escape_multiline(self.data)  # type: ignore[no-untyped-call]
-            logging.debug(f"Successfully processed data for SQLite compatibility at {self.timestamp}")
+            logging.debug("Successfully processed data for SQLite compatibility at %s", self.timestamp)
             return True
         except Exception as error:
-            logging.error(f"Failed to process data: {error} at {self.timestamp}")
+            logging.error("Failed to process data: %s at %s", error, self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - data processing failed")
             return False
 
@@ -7540,7 +7552,7 @@ class SQLiteDatabaseWriter:
         try:
             self.fields = DataProcessingUtils.get_unique_keys(self.processed_data)  # type: ignore[no-untyped-call]
             if not self.fields:
-                logging.error(f"No fields found in data for table {self.table_name} at {self.timestamp}")
+                logging.error("No fields found in data for table %s at %s", self.table_name, self.timestamp)
                 logging.debug("EXIT: SQLiteDatabaseWriter.write - no fields")
                 return False
             api_func_name = self.api_function_name if self.api_function_name else ""
@@ -7548,18 +7560,23 @@ class SQLiteDatabaseWriter:
             self._log_strategy_info()
             return True
         except Exception as error:
-            logging.error(f"Failed to determine fields and strategy: {error} at {self.timestamp}")
+            logging.error("Failed to determine fields and strategy: %s at %s", error, self.timestamp)
             logging.debug("EXIT: SQLiteDatabaseWriter.write - field determination failed")
             return False
 
     def _log_strategy_info(self) -> None:
         """Log strategy selection details."""
         logging.info(
-            f"Using hybrid SQLite strategy '{self.strategy['type']}' for table {self.table_name}: {self.strategy['description']}"  # noqa: E501
+            "Using hybrid SQLite strategy '%s' for table %s: %s",
+            self.strategy["type"],
+            self.table_name,
+            self.strategy["description"],
         )
-        logging.debug(f"Database fields determined: {self.fields} at {self.timestamp}")
+        logging.debug("Database fields determined: %s at %s", self.fields, self.timestamp)
         logging.debug(
-            f"Endpoint {self.api_function_name} mapped to {self.strategy['type']} strategy - eliminates need for artificial api_id fields"  # noqa: E501
+            "Endpoint %s mapped to %s strategy - eliminates need for artificial api_id fields",
+            self.api_function_name,
+            self.strategy["type"],
         )
 
     def _execute_database_operations(self) -> bool:
@@ -7584,10 +7601,10 @@ class SQLiteDatabaseWriter:
 
     def _connect_to_database(self) -> None:
         """Connect to SQLite database."""
-        logging.debug(f"Attempting to connect to database: {DATABASE_PATH} at {self.timestamp}")
+        logging.debug("Attempting to connect to database: %s at %s", DATABASE_PATH, self.timestamp)
         self.connection = sqlite3.connect(DATABASE_PATH)
         self.cursor = self.connection.cursor()
-        logging.info(f"Successfully connected to database: {DATABASE_PATH} at {self.timestamp}")
+        logging.info("Successfully connected to database: %s at %s", DATABASE_PATH, self.timestamp)
 
     def _create_table_and_indexes(self) -> None:
         """Create table with strategy-appropriate schema and indexes."""
@@ -7598,14 +7615,19 @@ class SQLiteDatabaseWriter:
         create_table_sql = DatabaseSchemaUtils.build_create_table_sql(self.table_name, self.fields, self.strategy)
         self.cursor.execute(create_table_sql)  # Execute DDL to create or verify the table structure
         logging.debug(
-            f"Table {self.table_name} created/verified with hybrid {self.strategy['type']} schema - using natural business keys from API"  # noqa: E501
+            "Table %s created/verified with hybrid %s schema - using natural business keys from API",
+            self.table_name,
+            self.strategy["type"],
         )
         index_sqls = DatabaseSchemaUtils.build_indexes_sql(self.table_name, self.fields, self.strategy)
         for index_sql in index_sqls:
             self.cursor.execute(index_sql)
         if index_sqls:
             logging.debug(
-                f"Created {len(index_sqls)} performance indexes for table {self.table_name} with {self.strategy['type']} strategy"  # noqa: E501
+                "Created %s performance indexes for table %s with %s strategy",
+                len(index_sqls),
+                self.table_name,
+                self.strategy["type"],
             )
 
     def _determine_insert_mode(self) -> str:
@@ -7613,7 +7635,8 @@ class SQLiteDatabaseWriter:
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
         if self.strategy["type"] in ["natural_pk", "composite_pk"]:
             logging.debug(
-                f"Using REPLACE mode for {self.strategy['type']} strategy - enables efficient upsert operations with natural keys"  # noqa: E501
+                "Using REPLACE mode for %s strategy - enables efficient upsert operations with natural keys",
+                self.strategy["type"],
             )
             return "INSERT OR REPLACE"
         safe_table = self._get_safe_table_name()
@@ -7653,10 +7676,12 @@ class SQLiteDatabaseWriter:
             insert_sql = self._build_insert_sql(insert_mode, safe_fields, len(values))
             self.cursor.execute(insert_sql, values)
             if idx < 3:
-                logging.debug(f"Row {idx} inserted into {self.table_name} using {insert_mode} at {self.timestamp}")
+                logging.debug(
+                    "Row %s inserted into %s using %s at %s", idx, self.table_name, insert_mode, self.timestamp
+                )
             return True
         except Exception as error:
-            logging.error(f"Failed to insert row {idx} into {self.table_name}: {error} at {self.timestamp}")
+            logging.error("Failed to insert row %s into %s: %s at %s", idx, self.table_name, error, self.timestamp)
             return False
 
     def _prepare_row_values(self, row: dict[str, Any], current_time: str) -> list[str]:
@@ -7680,24 +7705,30 @@ class SQLiteDatabaseWriter:
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
         self.connection.commit()
         logging.info(
-            f"Successfully wrote {successful_inserts}/{len(self.processed_data)} rows to table {self.table_name} in database {DATABASE_PATH} using {self.strategy['type']} strategy at {self.timestamp}"  # noqa: E501
+            "Successfully wrote %s/%s rows to table %s in database %s using %s strategy at %s",
+            successful_inserts,
+            len(self.processed_data),
+            self.table_name,
+            DATABASE_PATH,
+            self.strategy["type"],
+            self.timestamp,
         )
         safe_table_name = self._get_safe_table_name()
         self.cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")  # nosec B608
         row_count = self.cursor.fetchone()[0]
         logging.info(
-            f"Database verification: {row_count} rows confirmed in table {self.table_name} at {self.timestamp}"
+            "Database verification: %s rows confirmed in table %s at %s", row_count, self.table_name, self.timestamp
         )
 
     def _handle_sqlite_error(self, error: sqlite3.Error) -> None:
         """Handle SQLite-specific errors with rollback."""
-        logging.error(f"SQLite error when writing to {self.table_name}: {error} at {self.timestamp}")
+        logging.error("SQLite error when writing to %s: %s at %s", self.table_name, error, self.timestamp)
         self._rollback_transaction()
         logging.debug("EXIT: SQLiteDatabaseWriter.write - SQLite error")
 
     def _handle_unexpected_error(self, error: Exception) -> None:
         """Handle unexpected errors with rollback."""
-        logging.error(f"Unexpected error when writing to table {self.table_name}: {error} at {self.timestamp}")
+        logging.error("Unexpected error when writing to table %s: %s at %s", self.table_name, error, self.timestamp)
         self._rollback_transaction()
         logging.debug("EXIT: SQLiteDatabaseWriter.write - unexpected error")
 
@@ -7707,9 +7738,9 @@ class SQLiteDatabaseWriter:
             return
         try:
             self.connection.rollback()
-            logging.debug(f"Transaction rolled back for table {self.table_name} at {self.timestamp}")
+            logging.debug("Transaction rolled back for table %s at %s", self.table_name, self.timestamp)
         except Exception as rollback_error:
-            logging.error(f"Failed to rollback transaction: {rollback_error} at {self.timestamp}")
+            logging.error("Failed to rollback transaction: %s at %s", rollback_error, self.timestamp)
 
     def _close_connection(self) -> None:
         """Close database connection (safety-critical: resource cleanup)."""
@@ -7717,9 +7748,9 @@ class SQLiteDatabaseWriter:
             return
         try:
             self.connection.close()
-            logging.debug(f"Database connection closed for table {self.table_name} at {self.timestamp}")
+            logging.debug("Database connection closed for table %s at %s", self.table_name, self.timestamp)
         except Exception as error:
-            logging.error(f"Failed to close database connection: {error} at {self.timestamp}")
+            logging.error("Failed to close database connection: %s at %s", error, self.timestamp)
 
 
 class DataExporter:
@@ -7751,7 +7782,7 @@ class DataExporter:
             )
             logging.info("Polyglot DatabaseRouter initialized")
         except Exception as error:
-            logging.warning(f"DatabaseRouter init failed, CSV/SQLite only: {error}")
+            logging.warning("DatabaseRouter init failed, CSV/SQLite only: %s", error)
             cls._router = None
 
     @staticmethod
@@ -7780,7 +7811,11 @@ class DataExporter:
         """
         output_format = format_override if format_override else OUTPUT_FORMAT
         logging.debug(
-            f"DataExporter.write_with_format_selection: rows={len(data) if data else 0}, target={filename_or_table}, format={output_format}, api_func={api_function_name}"  # noqa: E501
+            "DataExporter.write_with_format_selection: rows=%s, target=%s, format=%s, api_func=%s",
+            len(data) if data else 0,
+            filename_or_table,
+            output_format,
+            api_function_name,
         )
 
         if not DataExporter._validate_write_inputs(data, filename_or_table, output_format):
@@ -7792,7 +7827,7 @@ class DataExporter:
             else:
                 csv_ok = DataExporter._write_sqlite_format(data, filename_or_table, api_function_name)
         except Exception as error:
-            logging.error(f"Failed to write data to {filename_or_table} in {output_format} format: {error}")
+            logging.error("Failed to write data to %s in %s format: %s", filename_or_table, output_format, error)
             return False
 
         DataExporter._route_to_polyglot(data, api_function_name, raw_data=raw_data)
@@ -7833,12 +7868,13 @@ class DataExporter:
             polyglot_data = raw_data or data
             result = DataExporter._router.write(polyglot_data, api_function_name)
             logging.info(
-                f"Polyglot write: backend={result.backend}, "
-                f"written={result.records_written}, "
-                f"failed={result.records_failed}"
+                "Polyglot write: backend=%s, written=%s, failed=%s",
+                result.backend,
+                result.records_written,
+                result.records_failed,
             )
         except Exception as error:
-            logging.warning(f"Polyglot write failed (CSV preserved): {error}")
+            logging.warning("Polyglot write failed (CSV preserved): %s", error)
 
     @classmethod
     def _check_periodic_snapshot(
@@ -7862,11 +7898,11 @@ class DataExporter:
     def _validate_write_inputs(data: list[dict[str, Any]], filename_or_table: str, output_format: str) -> bool:
         """Validate inputs for write operation. Returns True if valid."""
         if not data:
-            logging.warning(f"No data provided for output to {filename_or_table}")
+            logging.warning("No data provided for output to %s", filename_or_table)
             return False
 
         if output_format not in ["csv", "sqlite"]:
-            logging.error(f"Invalid output format: {output_format}. Must be 'csv' or 'sqlite'")
+            logging.error("Invalid output format: %s. Must be 'csv' or 'sqlite'", output_format)
             return False
 
         return True
@@ -7879,7 +7915,7 @@ class DataExporter:
     ) -> bool:
         """Write data to CSV format.  Pass fieldnames to preserve a specific column order."""
         csv_filename = filename_or_table if filename_or_table.endswith(".csv") else f"{filename_or_table}.csv"
-        logging.info(f"Writing {len(data)} rows to CSV file: {csv_filename}")
+        logging.info("Writing %s rows to CSV file: %s", len(data), csv_filename)
         DataExporter.write_to_csv(data, csv_filename, fieldnames=fieldnames)  # Thread explicit column order through
         return True
 
@@ -7887,8 +7923,10 @@ class DataExporter:
     def _write_sqlite_format(data: list[dict[str, Any]], filename_or_table: str, api_function_name: str | None) -> bool:
         """Write data to SQLite format. Returns True on success."""
         table_name = filename_or_table[:-4] if filename_or_table.endswith(".csv") else filename_or_table
-        logging.debug(f"SQLite write: table={table_name}, api_function={api_function_name}, strategy lookup initiated")
-        logging.info(f"Writing {len(data)} rows to SQLite table: {table_name}")
+        logging.debug(
+            "SQLite write: table=%s, api_function=%s, strategy lookup initiated", table_name, api_function_name
+        )
+        logging.info("Writing %s rows to SQLite table: %s", len(data), table_name)
         return SQLiteDatabaseWriter(data, table_name, api_function_name).write()
 
     @staticmethod
@@ -7910,10 +7948,10 @@ class DataExporter:
             fieldnames: Optional explicit column order.  When provided the columns are written
                 in exactly this order instead of being sorted alphabetically by get_unique_keys().
         """
-        logging.debug(f"ENTRY: DataExporter.write_to_csv(data_rows={len(data) if data else 0}, csv_file={csv_file})")
+        logging.debug("ENTRY: DataExporter.write_to_csv(data_rows=%s, csv_file=%s)", len(data) if data else 0, csv_file)
 
         if not data:
-            logging.warning(f"No data provided to write to {csv_file}")
+            logging.warning("No data provided to write to %s", csv_file)
             logging.debug("EXIT: DataExporter.write_to_csv - no data to write")
             return
 
@@ -7927,40 +7965,40 @@ class DataExporter:
         else:
             csv_file_path = csv_file
 
-        logging.debug(f"Preparing to write {len(data)} rows to {csv_file_path}...")
+        logging.debug("Preparing to write %s rows to %s...", len(data), csv_file_path)
         escaped_data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
         if fieldnames is not None:  # Caller supplied an explicit column order — use it as-is
             fields = fieldnames  # Preserve the requested column sequence without sorting
         else:
             fields = DataProcessingUtils.get_unique_keys(escaped_data)  # type: ignore[no-untyped-call]
-        logging.debug(f"CSV fields determined: {fields}")
+        logging.debug("CSV fields determined: %s", fields)
 
         try:
-            logging.debug(f"File I/O: Attempting to open {csv_file_path} for writing")
+            logging.debug("File I/O: Attempting to open %s for writing", csv_file_path)
             with open(csv_file_path, "w", newline="", encoding="utf-8") as file_handle:
                 writer = csv.DictWriter(file_handle, fieldnames=fields)
                 writer.writeheader()
-                logging.debug(f"File I/O: Successfully wrote CSV header to {csv_file_path}")
+                logging.debug("File I/O: Successfully wrote CSV header to %s", csv_file_path)
 
                 for idx, row in enumerate(escaped_data):
                     writer.writerow({field: row.get(field, "") for field in fields})
                     if idx < 3:  # Log the first few rows for debugging
-                        logging.debug(f"Row {idx} written: {row}")
+                        logging.debug("Row %s written: %s", idx, row)
 
-            logging.info(f"File I/O: Successfully wrote {len(escaped_data)} rows to {csv_file_path}")
+            logging.info("File I/O: Successfully wrote %s rows to %s", len(escaped_data), csv_file_path)
             logging.debug("EXIT: DataExporter.write_to_csv - success")
 
         except PermissionError as perm_error:
-            logging.error(f"File I/O: Permission denied when writing to {csv_file_path}: {perm_error}")
+            logging.error("File I/O: Permission denied when writing to %s: %s", csv_file_path, perm_error)
             print(f"! Cannot write to {csv_file_path}. Is it open in another program?")
             logging.debug("EXIT: DataExporter.write_to_csv - permission error")
             raise
         except OSError as os_error:
-            logging.error(f"File I/O: OS error when writing to {csv_file_path}: {os_error}")
+            logging.error("File I/O: OS error when writing to %s: %s", csv_file_path, os_error)
             logging.debug("EXIT: DataExporter.write_to_csv - OS error")
             raise
         except Exception as unexpected_error:
-            logging.error(f"File I/O: Unexpected error when writing to {csv_file}: {unexpected_error}")
+            logging.error("File I/O: Unexpected error when writing to %s: %s", csv_file, unexpected_error)
             logging.debug("EXIT: DataExporter.write_to_csv - unexpected error")
             raise
 
@@ -7996,7 +8034,7 @@ class DataExporter:
             int: Number of records processed
         """
         if not data:
-            logging.warning(f"No data to export for {filename}")
+            logging.warning("No data to export for %s", filename)
             return 0
 
         # Filter to dict entries only (defensive)
@@ -8005,7 +8043,7 @@ class DataExporter:
         # Sort if requested
         if sort_key:
             raw_data = sorted(raw_data, key=lambda x: x.get(sort_key, ""))
-            logging.debug(f"Data sorted by key: {sort_key}")
+            logging.debug("Data sorted by key: %s", sort_key)
 
         # Apply standard processing for CSV/SQLite (flatten + escape)
         processed_data = DataProcessingUtils.flatten_nested_fields(raw_data)
@@ -8020,10 +8058,10 @@ class DataExporter:
         )
 
         if success:
-            logging.info(f"Exported {len(processed_data)} records to {filename}")
+            logging.info("Exported %s records to %s", len(processed_data), filename)
             return len(processed_data)
         else:
-            logging.error(f"Failed to export data to {filename}")
+            logging.error("Failed to export data to %s", filename)
             return 0
 
 
@@ -8081,7 +8119,7 @@ class APIDataFetcher:
             self._fetch_api_data()
 
             if self.rawdata is None or len(self.rawdata) == 0:
-                logging.warning(f"! No data returned from API for {self.title}. Skipping.")
+                logging.warning("! No data returned from API for %s. Skipping.", self.title)
                 logging.debug("EXIT: APIDataFetcher.execute - no data")
                 return
 
@@ -8100,10 +8138,14 @@ class APIDataFetcher:
         """Log entry point with parameters."""
         api_name = self.api_call.__name__
         logging.debug(
-            f"ENTRY: APIDataFetcher(title={self.title}, api_call={api_name}, "
-            f"filename={self.filename}, sort_key={self.sort_key}, kwargs={self.kwargs})"
+            "ENTRY: APIDataFetcher(title=%s, api_call=%s, filename=%s, sort_key=%s, kwargs=%s)",
+            self.title,
+            api_name,
+            self.filename,
+            self.sort_key,
+            self.kwargs,
         )
-        logging.info(f"Starting data fetch: {self.title}")
+        logging.info("Starting data fetch: %s", self.title)
         print(self.title)
 
     # =========================================================================
@@ -8113,7 +8155,7 @@ class APIDataFetcher:
     def _fetch_api_data(self) -> None:
         """Make API call and retrieve paginated results with retry on timeout."""
         api_name = self.api_call.__name__
-        logging.debug(f"Making API call: {api_name} with kwargs: {self.kwargs}")
+        logging.debug("Making API call: %s with kwargs: %s", api_name, self.kwargs)
 
         response = self._call_api_with_retry(api_name)
         self._apply_rate_limiting()
@@ -8122,7 +8164,7 @@ class APIDataFetcher:
         try:
             self.rawdata = mistapi.get_all(response=response, mist_session=apisession)
             record_count = len(self.rawdata) if self.rawdata else 0
-            logging.debug(f"API call successful, retrieved {record_count} raw records")
+            logging.debug("API call successful, retrieved %s raw records", record_count)
         except KeyError as error:
             self._handle_key_error(response, error)
         except Exception as error:
@@ -8152,15 +8194,18 @@ class APIDataFetcher:
             if attempt < API_REQUEST_MAX_RETRIES:
                 delay = API_REQUEST_RETRY_DELAY * (2**attempt)
                 logging.warning(
-                    f"API call {api_name} failed (attempt {attempt + 1}/{API_REQUEST_MAX_RETRIES + 1}) "
-                    f"- retrying in {delay:.0f}s"
+                    "API call %s failed (attempt %s/%s) - retrying in %.0fs",
+                    api_name,
+                    attempt + 1,
+                    API_REQUEST_MAX_RETRIES + 1,
+                    delay,
                 )
                 print(
                     f"! API call timed out - retrying in {delay:.0f}s (attempt {attempt + 2}/{API_REQUEST_MAX_RETRIES + 1})"  # noqa: E501
                 )
                 time.sleep(delay)
 
-        logging.error(f"API call {api_name} failed after {API_REQUEST_MAX_RETRIES + 1} attempts")
+        logging.error("API call %s failed after %s attempts", api_name, API_REQUEST_MAX_RETRIES + 1)
         return last_response
 
     @staticmethod
@@ -8180,20 +8225,20 @@ class APIDataFetcher:
     def _apply_rate_limiting(self) -> None:
         """Apply rate limiting delay between API calls."""
         self.smoothed, delay = RateLimitingUtils.get_rate_limited_delay(self.smoothed, apisession, _api_usage_cache)  # type: ignore[no-untyped-call]
-        logging.debug(f"Applying rate limit delay: {delay:.2f}s")
+        logging.debug("Applying rate limit delay: %.2fs", delay)
         time.sleep(delay)
 
     def _log_response_structure(self, response: Any) -> None:
         """Log API response structure for debugging."""
-        logging.debug(f"API response type: {type(response)}")
+        logging.debug("API response type: %s", type(response))
         if not hasattr(response, "data"):
             return
 
-        logging.debug(f"Response.data type: {type(response.data)}")
+        logging.debug("Response.data type: %s", type(response.data))
         if isinstance(response.data, dict):
-            logging.debug(f"Response.data keys: {list(response.data.keys())}")
+            logging.debug("Response.data keys: %s", list(response.data.keys()))
         elif isinstance(response.data, list):
-            logging.debug(f"Response.data is list with {len(response.data)} items")
+            logging.debug("Response.data is list with %s items", len(response.data))
 
     # =========================================================================
     # ERROR HANDLING METHODS
@@ -8201,7 +8246,7 @@ class APIDataFetcher:
 
     def _handle_key_error(self, response: Any, error: KeyError) -> None:
         """Handle missing 'results' key or other structure issues."""
-        logging.error(f"API response structure error - missing key: {error}")
+        logging.error("API response structure error - missing key: %s", error)
         self._log_response_error_details(response)
 
         recovered_data = self._attempt_data_recovery(response)
@@ -8215,12 +8260,12 @@ class APIDataFetcher:
     def _log_response_error_details(self, response: Any) -> None:
         """Log detailed response information during error handling."""
         has_data = hasattr(response, "data")
-        logging.error(f"Response details: type={type(response)}, hasattr(data)={has_data}")
+        logging.error("Response details: type=%s, hasattr(data)=%s", type(response), has_data)
 
         if has_data:
-            logging.error(f"Response.data type={type(response.data)}")
+            logging.error("Response.data type=%s", type(response.data))
             if isinstance(response.data, dict):
-                logging.error(f"Available keys: {list(response.data.keys())}")
+                logging.error("Available keys: %s", list(response.data.keys()))
 
     def _attempt_data_recovery(self, response: Any) -> list[dict[str, Any]] | None:
         """Attempt to recover data from alternate response structures."""
@@ -8230,11 +8275,11 @@ class APIDataFetcher:
         if isinstance(response.data, dict):
             if "data" in response.data:
                 recovered = response.data.get("data", [])
-                logging.info(f"Recovered {len(recovered)} records from response.data['data']")
+                logging.info("Recovered %s records from response.data['data']", len(recovered))
                 return recovered  # type: ignore[no-any-return]
 
         if isinstance(response.data, list):
-            logging.info(f"Recovered {len(response.data)} records from response.data (list)")
+            logging.info("Recovered %s records from response.data (list)", len(response.data))
             return response.data
 
         return None
@@ -8244,18 +8289,18 @@ class APIDataFetcher:
         print(f"! API returned unexpected structure. Recovered {len(self.rawdata)} records.")
         api_name = self.api_call.__name__
         DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-        logging.info(f"Recovered data saved to {self.filename} ({len(self.rawdata)} rows)")
+        logging.info("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))
 
     def _handle_no_recovery(self) -> None:
         """Handle case where no data could be recovered."""
         print("! API response missing expected 'results' key. No data could be recovered.")
-        logging.error(f"Unable to recover any data from malformed response for {self.title}")
+        logging.error("Unable to recover any data from malformed response for %s", self.title)
         logging.debug("EXIT: APIDataFetcher - structure error, no recovery")
 
     def _handle_api_exception(self, error: Exception) -> None:
         """Handle exceptions during API data retrieval."""
-        logging.error(f"Exception occurred during API data retrieval: {error}")
-        logging.error(f"Exception type: {type(error).__name__}")
+        logging.error("Exception occurred during API data retrieval: %s", error)
+        logging.error("Exception type: %s", type(error).__name__)
         print(f"! Exception occurred during API call: {error}")
 
         if self._is_rate_limit_error(error):
@@ -8276,7 +8321,7 @@ class APIDataFetcher:
         if self.rawdata:
             api_name = self.api_call.__name__
             DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-            logging.info(f"Partial results saved to {self.filename} ({len(self.rawdata)} rows)")
+            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
             print(f"* Partial data saved: {len(self.rawdata)} records written to {self.filename}")
 
         logging.debug("EXIT: APIDataFetcher - rate limited")
@@ -8287,18 +8332,18 @@ class APIDataFetcher:
             try:
                 api_name = self.api_call.__name__
                 DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-                logging.info(f"Emergency save: {len(self.rawdata)} partial records saved before error exit")
+                logging.info("Emergency save: %s partial records saved before error exit", len(self.rawdata))
                 print(f"* Emergency save: {len(self.rawdata)} partial records written to {self.filename}")
             except Exception as save_error:
-                logging.error(f"Failed to save partial data during error handling: {save_error}")
+                logging.error("Failed to save partial data during error handling: %s", save_error)
 
         logging.debug("EXIT: APIDataFetcher - API error")
         raise error
 
     def _handle_outer_exception(self, error: Exception) -> None:
         """Handle exceptions at the top level."""
-        logging.error(f"! Error during data fetch for {self.title}: {error}")
-        logging.error(f"Exception type: {type(error).__name__}, Traceback info available in logs")
+        logging.error("! Error during data fetch for %s: %s", self.title, error)
+        logging.error("Exception type: %s, Traceback info available in logs", type(error).__name__)
 
         if self.rawdata:
             self._save_partial_data_on_error(error)
@@ -8312,14 +8357,14 @@ class APIDataFetcher:
         try:
             api_name = self.api_call.__name__
             DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-            logging.info(f"Partial results saved to {self.filename} ({len(self.rawdata)} rows)")
+            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
 
             print("\n!! PARTIAL DATA SAVED !!")
             print(f"   * Despite the error, {len(self.rawdata)} records were successfully saved to {self.filename}")
             print(f"   * Error: {str(error)}")
             print("   * You can retry the operation later to get remaining data")
         except Exception as save_error:
-            logging.error(f"Failed to save partial data in outer exception handler: {save_error}")
+            logging.error("Failed to save partial data in outer exception handler: %s", save_error)
             print(f"! Critical: Could not save partial data. Error: {save_error}")
 
     # =========================================================================
@@ -8328,7 +8373,7 @@ class APIDataFetcher:
 
     def _export_and_display_data(self) -> None:
         """Export data and display in table format."""
-        logging.info(f"Fetched {len(self.rawdata)} raw records from API.")
+        logging.info("Fetched %s raw records from API.", len(self.rawdata))
 
         api_name = self.api_call.__name__
         DataExporter.export_with_processing(  # type: ignore[no-untyped-call]
@@ -8342,10 +8387,10 @@ class APIDataFetcher:
         """Prepare and display data in PrettyTable format."""
         data = self._prepare_data_for_display()
         fields = DataProcessingUtils.get_unique_keys(data)  # type: ignore[no-untyped-call]
-        logging.debug(f"Unique fields for table: {fields}")
+        logging.debug("Unique fields for table: %s", fields)
 
         table = self._build_pretty_table(data, fields)
-        logging.debug("\n" + table.get_string())
+        logging.debug("\n%s", table.get_string())
 
     def _prepare_data_for_display(self) -> list[dict[str, Any]]:
         """Prepare raw data for table display."""
@@ -8378,7 +8423,7 @@ def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int,
         max_threads = FAST_MODE_MAX_CONCURRENT_CONNECTIONS  # Cap threads at configured connection pool capacity.
         threading_mode = "connection-aware"  # Label used in log output so operators can identify which strategy ran.
         logging.info(
-            f"! Connection-aware threading: Using {max_threads} threads (respects connection pool limit)"
+            "! Connection-aware threading: Using %s threads (respects connection pool limit)", max_threads
         )  # Confirm strategy selection and thread limit.
     else:  # CPU-aware mode maximizes parallelism up to available CPU cores.
         max_threads = (
@@ -8386,19 +8431,19 @@ def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int,
         )  # Use CPU count or configured fallback when cpu_count returns None.
         threading_mode = "CPU-aware"  # Label used in log output so operators can identify which strategy ran.
         logging.info(
-            f"! CPU-aware threading: Using {max_threads} threads (maximum CPU utilization)"
+            "! CPU-aware threading: Using %s threads (maximum CPU utilization)", max_threads
         )  # Confirm strategy selection and thread limit.
     connection_semaphore = threading.Semaphore(
         FAST_MODE_MAX_CONCURRENT_CONNECTIONS
     )  # Limit simultaneous API calls regardless of thread count.
     logging.info(
-        f"* Connection pool protection: Maximum {FAST_MODE_MAX_CONCURRENT_CONNECTIONS} concurrent API calls"
+        "* Connection pool protection: Maximum %s concurrent API calls", FAST_MODE_MAX_CONCURRENT_CONNECTIONS
     )  # Log semaphore bound for observability.
     batch_size = (
         max_threads * FAST_MODE_DEVICES_PER_THREAD
     )  # Scale batch size to thread count and items-per-thread setting.
     logging.info(
-        f"* Processing {len(work_items)} {batch_description} with connection pool management..."
+        "* Processing %s %s with connection pool management...", len(work_items), batch_description
     )  # Log total work-item count before batching begins.
     return (
         max_threads,
@@ -8422,7 +8467,12 @@ def _pool_process_batch_wait_loop(
     batch_failed: list[Any] = []  # Accumulate items whose futures raised or returned empty for this batch.
     first_result_logged = False  # Track whether the first-result debug log has fired to avoid repeated noise.
     logging.info(
-        f"! Processing batch {batch_number}/{total_batches} ({len(batch)} {batch_description}, ~{len(batch) / max_threads:.0f} per thread)"  # noqa: E501
+        "! Processing batch %s/%s (%s %s, ~%.0f per thread)",
+        batch_number,
+        total_batches,
+        len(batch),
+        batch_description,
+        len(batch) / max_threads,
     )  # Log batch progress before dispatching to the thread pool.
     with ThreadPoolExecutor(max_workers=max_threads) as executor:  # Bound thread count to the configured pool size.
         future_to_item = {
@@ -8445,14 +8495,14 @@ def _pool_process_batch_wait_loop(
                                 not first_result_logged
                             ):  # Log the first result's type once to help debug unexpected worker outputs.
                                 logging.debug(
-                                    f"! First future result type: {type(result)}"
+                                    "! First future result type: %s", type(result)
                                 )  # One-shot debug log to show actual result shape.
                                 first_result_logged = True  # Prevent repeated debug log on subsequent results.
                         else:  # Falsy result means the worker returned an empty list or None.
                             batch_failed.append(item)  # Track empty-result items for potential retry.
                     except Exception as exc:  # Worker threw an exception; log and track as failed.
                         logging.error(
-                            f"! Future exception for {batch_description.rstrip('s')} {item}: {exc}"
+                            "! Future exception for %s %s: %s", batch_description.rstrip("s"), item, exc
                         )  # Log exception with item context for targeted debugging.
                         batch_failed.append(item)  # Mark item as failed so retry logic can handle it.
                     finally:  # Advance progress bar regardless of success or failure.
@@ -8462,7 +8512,7 @@ def _pool_process_batch_wait_loop(
                             Exception
                         ) as upd_err:  # Progress bar update failure should not mask the real work result.
                             logging.error(
-                                f"! Progress bar update failed: {upd_err}"
+                                "! Progress bar update failed: %s", upd_err
                             )  # Log progress bar failure for environment-level debugging.
     return batch_successful, batch_failed  # Return batch-level results so caller can accumulate them.
 
@@ -8472,10 +8522,14 @@ def _pool_log_batch_exception(
 ) -> None:
     """Log a batch-level exception with full context then re-raise it."""
     logging.error(
-        f"! Batch-level exception in execute_with_connection_pool_management: {batch_exc}"
+        "! Batch-level exception in execute_with_connection_pool_management: %s", batch_exc
     )  # Surface root exception message for immediate diagnosis.
     logging.error(
-        f"! Batch context: batch_index={batch_index}, batch_size={batch_size}, max_threads={max_threads}, threading_mode={threading_mode}"  # noqa: E501
+        "! Batch context: batch_index=%s, batch_size=%s, max_threads=%s, threading_mode=%s",
+        batch_index,
+        batch_size,
+        max_threads,
+        threading_mode,
     )  # Log batch configuration context to support post-mortem analysis.
     try:  # Best-effort traceback capture preserves stack information in the log file.
         import traceback as _tb2  # Import locally to avoid affecting module-level namespace.
@@ -8489,7 +8543,7 @@ def _pool_log_batch_exception(
             logging.error(line)  # Emit one traceback line per log record.
     except Exception as trace_log_err:  # Traceback serialization failure should not suppress the re-raise.
         logging.error(
-            f"! Failed to log batch exception traceback: {trace_log_err}"
+            "! Failed to log batch exception traceback: %s", trace_log_err
         )  # Surface traceback logging failure as a secondary error.
     raise batch_exc  # Re-raise so outer handlers and the global excepthook can capture the original failure.
 
@@ -8518,7 +8572,7 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
         Tuple of (successful_results, failed_items)
     """
     if not work_items:  # Empty work list is a valid fast-exit condition.
-        logging.info(f"* No {batch_description} to process.")  # Tell caller why nothing ran.
+        logging.info("* No %s to process.", batch_description)  # Tell caller why nothing ran.
         return [], []  # Return empty results without configuring a thread pool.
 
     max_threads, connection_semaphore, batch_size, threading_mode = _pool_configure(
@@ -8560,7 +8614,7 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
         failed_items and retry_function
     ):  # Only invoke the retry path when failures exist and a retry function was provided.
         logging.info(
-            f"! Retrying {len(failed_items)} failed {batch_description}..."
+            "! Retrying %s failed %s...", len(failed_items), batch_description
         )  # Announce retry phase so operators can track it separately.
         retry_results, still_failed = retry_function(
             failed_items, connection_semaphore
@@ -8569,7 +8623,7 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
         failed_items = still_failed  # Replace failed list with items that still failed after retry.
 
     logging.info(
-        f"! Processed {len(successful_results)} {batch_description} successfully, {len(failed_items)} failed"
+        "! Processed %s %s successfully, %s failed", len(successful_results), batch_description, len(failed_items)
     )  # Log final success/failure tally for the whole pool run.
     return successful_results, failed_items  # Return both result lists so callers can report or act on failures.
 
@@ -8599,7 +8653,7 @@ class PromptClientUtils:
         Returns:
             str: The selected client MAC address (normalized) or None if no selection made
         """
-        logging.debug(f"Fetching connected clients for site: {site_id}")
+        logging.debug("Fetching connected clients for site: %s", site_id)
 
         try:
             # Fetch wireless clients using search endpoint (from clients module)
@@ -8632,11 +8686,14 @@ class PromptClientUtils:
 
             if not all_clients:
                 print("\n! No connected clients found at the selected site.")
-                logging.warning(f"No clients found for site_id: {site_id}")
+                logging.warning("No clients found for site_id: %s", site_id)
                 return None
 
             logging.info(
-                f"Found {len(all_clients)} connected clients at site ({len(wireless_clients or [])} wireless, {len(wired_clients or [])} wired)"  # noqa: E501
+                "Found %s connected clients at site (%s wireless, %s wired)",
+                len(all_clients),
+                len(wireless_clients or []),
+                len(wired_clients or []),
             )
 
             # Sort by hostname/username for easier selection
@@ -8675,12 +8732,12 @@ class PromptClientUtils:
             print("  - Enter 'c' to cancel")
 
             user_input = InputUtils.safe_input("\nEnter your choice: ", context="client_selection").strip()
-            logging.debug(f"User input for client selection: {user_input}")
+            logging.debug("User input for client selection: %s", user_input)
 
             # Check for manual entry
             if user_input.lower() == "m":
                 manual_mac = InputUtils.safe_input("Enter client MAC address: ", context="manual_mac")
-                logging.info(f"User chose manual MAC entry: {manual_mac}")
+                logging.info("User chose manual MAC entry: %s", manual_mac)
                 return manual_mac
 
             # Check for cancel
@@ -8699,21 +8756,25 @@ class PromptClientUtils:
                     conn_type = index_to_client[idx].get("connection_type", "Unknown")
                     print(f"\n! Selected: {client_hostname} ({conn_type}) - MAC: {client_mac}")
                     logging.info(
-                        f"User selected client by index: {idx} (hostname: {client_hostname}, mac: {client_mac}, type: {conn_type})"  # noqa: E501
+                        "User selected client by index: %s (hostname: %s, mac: %s, type: %s)",
+                        idx,
+                        client_hostname,
+                        client_mac,
+                        conn_type,
                     )
                     return client_mac  # type: ignore[no-any-return]
                 else:
                     print("\n! Invalid index")
-                    logging.error(f"Invalid client index: {idx}")
+                    logging.error("Invalid client index: %s", idx)
                     return None
             else:
                 print("\n! Please enter a valid index number, 'm' for manual, or 'c' to cancel")
-                logging.error(f"Invalid client selection input: {user_input}")
+                logging.error("Invalid client selection input: %s", user_input)
                 return None
 
         except Exception as error:
             print(f"\n! Error fetching clients: {error}")
-            logging.error(f"Exception in PromptClientUtils.select_client_mac: {error}", exc_info=True)
+            logging.exception("Exception in PromptClientUtils.select_client_mac: %s", error)
             return None
 
     @staticmethod
@@ -8749,7 +8810,7 @@ class PromptClientUtils:
             return PromptUtils._handle_client_selection(all_clients, sites_cache, site_id)
 
         except Exception as exception:
-            logging.error(f"Error during client selection: {exception}")
+            logging.error("Error during client selection: %s", exception)
             print(f"! Error searching for clients: {exception}")
             return None, None, None
 
@@ -8815,7 +8876,7 @@ class PromptUtils:
         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
         if not rawdata:
             print("No devices found for the selected site.")
-            logging.warning(f"No devices found for site_id: {site_id}")
+            logging.warning("No devices found for site_id: %s", site_id)
             return None
 
         # Filter devices locally based on requested device types
@@ -8830,7 +8891,7 @@ class PromptUtils:
 
             if not rawdata:
                 print(f"No devices of type '{device_type}' found at the selected site.")
-                logging.warning(f"No devices of type '{device_type}' found for site_id: {site_id}")
+                logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)
                 return None
 
         # Sort, flatten, and sanitize the inventory data for display and CSV export
@@ -8838,7 +8899,7 @@ class PromptUtils:
         inventory = DataProcessingUtils.flatten_nested_fields(inventory)
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
         DataExporter.save_data_to_output(inventory, csv_filename)  # type: ignore[no-untyped-call]
-        logging.info(f"Device inventory for site_id {site_id} written to {csv_filename}")
+        logging.info("Device inventory for site_id %s written to %s", site_id, csv_filename)
 
         # Prepare PrettyTable for user selection
         table = PrettyTable()
@@ -8861,7 +8922,7 @@ class PromptUtils:
             "Enter the index or name of the device to view device: ",
             context="device_inventory_selection",
         ).strip()
-        logging.debug(f"User input for device selection: {user_input}")
+        logging.debug("User input for device selection: %s", user_input)
 
         # Accept common dotted-index input (e.g., ".2") from interactive tests/operators.
         normalized_input = user_input[1:] if user_input.startswith(".") else user_input
@@ -8871,7 +8932,7 @@ class PromptUtils:
             idx = int(normalized_input)
             if idx in index_to_device:
                 device_id = index_to_device[idx].get("id")
-                logging.info(f"User selected device by index: {idx} (device_id: {device_id})")
+                logging.info("User selected device by index: %s (device_id: %s)", idx, device_id)
                 return device_id  # type: ignore[no-any-return]
             else:
                 logging.error(" Invalid index.")
@@ -8880,7 +8941,7 @@ class PromptUtils:
         # Try name selection
         if normalized_input in name_to_device:
             device_id = name_to_device[normalized_input].get("id")
-            logging.info(f"User selected device by name: {normalized_input} (device_id: {device_id})")
+            logging.info("User selected device by name: %s (device_id: %s)", normalized_input, device_id)
             return device_id  # type: ignore[no-any-return]
 
         logging.error(" Device not found by name or index.")
@@ -8916,7 +8977,7 @@ class PromptUtils:
             print(f"[{idx}] {row.get('name', 'Unnamed')}")
 
         user_input = InputUtils.safe_input("\nEnter site index or name: ", context="site_selection").strip()
-        logging.debug(f"User input for site selection: {user_input}")
+        logging.debug("User input for site selection: %s", user_input)
 
         global LAST_SELECTED_SITE_ID
 
@@ -8926,24 +8987,24 @@ class PromptUtils:
             if idx in index_to_site:
                 site_id = index_to_site[idx].get("id")
                 print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")
-                logging.info(f"User selected site by index: {idx} (site_id: {site_id})")
+                logging.info("User selected site by index: %s (site_id: %s)", idx, site_id)
                 LAST_SELECTED_SITE_ID = site_id
                 return site_id
             else:
                 print(" Invalid index.")
-                logging.warning(f"Invalid site index entered: {idx}")
+                logging.warning("Invalid site index entered: %s", idx)
                 return None
 
         # Try name selection
         if user_input in name_to_site:
             site_id = name_to_site[user_input].get("id")
             print(f"! Selected site: {user_input} (ID: {site_id})")
-            logging.info(f"User selected site by name: {user_input} (site_id: {site_id})")
+            logging.info("User selected site by name: %s (site_id: %s)", user_input, site_id)
             LAST_SELECTED_SITE_ID = site_id
             return site_id
 
         print(" Site not found by name or index.")
-        logging.warning(f"Site not found by name or index: {user_input}")
+        logging.warning("Site not found by name or index: %s", user_input)
         return None
 
     @staticmethod
@@ -8968,7 +9029,7 @@ class PromptUtils:
         logging.info("Prompting user to select a site from SiteList.csv...")
         site_id = PromptUtils.select_site_id_from_csv()
         if site_id:
-            logging.info(f"! Selected site ID: {site_id}")
+            logging.info("! Selected site ID: %s", site_id)
         else:
             logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
         return site_id
@@ -9050,10 +9111,10 @@ class PromptUtils:
             for client in clients:
                 client["client_type"] = "wireless"
                 client["source_site_id"] = site_id
-            logging.info(f"Found {len(clients)} wireless clients in site")
+            logging.info("Found %s wireless clients in site", len(clients))
             return clients
         except Exception as exception:
-            logging.warning(f"Could not fetch wireless clients for site: {exception}")
+            logging.warning("Could not fetch wireless clients for site: %s", exception)
             return []
 
     @staticmethod
@@ -9065,10 +9126,10 @@ class PromptUtils:
             for client in clients:
                 client["client_type"] = "wired"
                 client["source_site_id"] = site_id
-            logging.info(f"Found {len(clients)} wired clients in site")
+            logging.info("Found %s wired clients in site", len(clients))
             return clients
         except Exception as exception:
-            logging.warning(f"Could not fetch wired clients for site: {exception}")
+            logging.warning("Could not fetch wired clients for site: %s", exception)
             return []
 
     @staticmethod
@@ -9079,10 +9140,10 @@ class PromptUtils:
             clients = mistapi.get_all(response=response, mist_session=apisession) or []
             for client in clients:
                 client["client_type"] = "wireless"
-            logging.info(f"Found {len(clients)} wireless clients in organization")
+            logging.info("Found %s wireless clients in organization", len(clients))
             return clients
         except Exception as exception:
-            logging.warning(f"Could not fetch wireless clients for org: {exception}")
+            logging.warning("Could not fetch wireless clients for org: %s", exception)
             return []
 
     @staticmethod
@@ -9093,10 +9154,10 @@ class PromptUtils:
             clients = mistapi.get_all(response=response, mist_session=apisession) or []
             for client in clients:
                 client["client_type"] = "wired"
-            logging.info(f"Found {len(clients)} wired clients in organization")
+            logging.info("Found %s wired clients in organization", len(clients))
             return clients
         except Exception as exception:
-            logging.warning(f"Could not fetch wired clients for org: {exception}")
+            logging.warning("Could not fetch wired clients for org: %s", exception)
             return []
 
     @staticmethod
@@ -9106,10 +9167,10 @@ class PromptUtils:
             print(" Loading site information...")
             sites = APICoreFetchUtils.all_sites_with_limit(org_id)
             cache = {site["id"]: site["name"] for site in sites}
-            logging.info(f"Cached {len(cache)} sites for client display")
+            logging.info("Cached %s sites for client display", len(cache))
             return cache
         except Exception as exception:
-            logging.warning(f"Could not fetch sites for display: {exception}")
+            logging.warning("Could not fetch sites for display: %s", exception)
             return {}
 
     @staticmethod
@@ -9273,7 +9334,7 @@ class PromptUtils:
         if client_site_id and client_site_id in sites_cache:
             print(f"   Site: {sites_cache[client_site_id]}")
 
-        logging.info(f"User selected client: MAC={client_mac}, type={client_type}, site={client_site_id}")
+        logging.info("User selected client: MAC=%s, type=%s, site=%s", client_mac, client_type, client_site_id)
         return client_mac, client_type, client_site_id
 
 
@@ -9302,20 +9363,20 @@ class DeviceUtils:
         Returns:
             list: List of AP MAC addresses, or empty list if error/none found
         """
-        logging.debug(f"Fetching all AP MACs for site: {site_id}")
+        logging.debug("Fetching all AP MACs for site: %s", site_id)
 
         try:
             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
             if not rawdata:
-                logging.warning(f"No APs found for site_id: {site_id}")
+                logging.warning("No APs found for site_id: %s", site_id)
                 return []
 
             ap_macs = [ap.get("mac") for ap in rawdata if ap.get("mac")]
-            logging.info(f"Found {len(ap_macs)} AP MACs at site")
+            logging.info("Found %s AP MACs at site", len(ap_macs))
             return ap_macs
 
         except Exception as error:
-            logging.error(f"Exception in DeviceUtils.get_all_ap_macs_from_site: {error}", exc_info=True)
+            logging.exception("Exception in DeviceUtils.get_all_ap_macs_from_site: %s", error)
             return []
 
     @staticmethod
@@ -9383,14 +9444,14 @@ class DeviceUtils:
         serial = device.get("serial", "").strip()
         if serial:
             if warn_on_missing:
-                logging.warning(f"Device {serial} missing name field, using serial as identifier")
+                logging.warning("Device %s missing name field, using serial as identifier", serial)
             return serial  # type: ignore[no-any-return]
 
         # Fall back to device_id
         device_id = device.get("id", "").strip()
         if device_id:
             if warn_on_missing:
-                logging.warning(f"Device {device_id} missing name and serial, using device_id as identifier")
+                logging.warning("Device %s missing name and serial, using device_id as identifier", device_id)
             return device_id  # type: ignore[no-any-return]
 
         # Last resort
@@ -9878,7 +9939,7 @@ class OrgAlarmEventExporter:
             sort_key: Field to sort results by
             **api_kwargs: Additional arguments for the API call
         """
-        logging.info(f"Starting export of organization {data_type}...")
+        logging.info("Starting export of organization %s...", data_type)
         safe_data_type = data_type.replace(" ", "").replace("-", "").title()
         filename = f"Org{safe_data_type}.csv"
         APIDataFetcher(
@@ -9911,7 +9972,7 @@ class OrgAlarmEventExporter:
             logging.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
             logging.debug("EXIT: OrgAlarmEventExporter.alarms - success")
         except Exception as error:
-            logging.error(f"Failed to export open org alarms: {error}")
+            logging.error("Failed to export open org alarms: %s", error)
             logging.debug("EXIT: OrgAlarmEventExporter.alarms - error")
             raise
 
@@ -9952,11 +10013,13 @@ class OrgAlarmEventExporter:
         )
         rawdata = mistapi.get_all(response=response, mist_session=apisession)
         events = rawdata
-        logging.info(f"Fetched {len(events)} device events from the past {hours} hours (duration={duration_param}).")
+        logging.info(
+            "Fetched %s device events from the past %s hours (duration=%s).", len(events), hours, duration_param
+        )
         DataExporter.save_data_to_output(events, "OrgDeviceEvents.csv")  # type: ignore[no-untyped-call]
-        logging.info(f"Device events written to OrgDeviceEvents.csv ({len(events)} rows).")
+        logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))
         print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
-        logging.info(f"Menu #21: Device events export completed - {len(events)} events")
+        logging.info("Menu #21: Device events export completed - %s events", len(events))
         if events:
             logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
 
@@ -9985,12 +10048,12 @@ class OrgAlarmEventExporter:
                 token = fh.read().strip()  # Strip whitespace so malformed files don't produce bad tokens.
             if token:  # Non-empty token means there is a valid resume point.
                 logging.info(
-                    f"Resuming OrgDeviceEvents_52w from checkpoint token: {token}"
+                    "Resuming OrgDeviceEvents_52w from checkpoint token: %s", token
                 )  # Log resume event for traceability.
                 return token  # Return token so caller can pass it to the first API request.
         except Exception as exception:  # Checkpoint read failure should degrade gracefully to a fresh start.
             logging.warning(
-                f"Could not read checkpoint file {checkpoint_file}: {exception}"
+                "Could not read checkpoint file %s: %s", checkpoint_file, exception
             )  # Log why resume was skipped.
         return None  # Fall back to full export when checkpoint is unreadable.
 
@@ -10002,7 +10065,7 @@ class OrgAlarmEventExporter:
                 fh.write(str(token))  # Write token string so it can be read back on next run.
         except Exception as exception:  # Log failure without aborting the ongoing export stream.
             logging.warning(
-                f"Could not write checkpoint file {checkpoint_file}: {exception}"
+                "Could not write checkpoint file %s: %s", checkpoint_file, exception
             )  # Surface write failure for operator awareness.
 
     @staticmethod
@@ -10039,12 +10102,12 @@ class OrgAlarmEventExporter:
             except Exception as exception:  # Network errors and rate-limit responses are retryable.
                 last_exc = exception  # Remember last error for re-raise after exhaustion.
                 logging.warning(
-                    f"Attempt {attempt + 1}/{retries} to fetch device events page failed: {exception}"
+                    "Attempt %s/%s to fetch device events page failed: %s", attempt + 1, retries, exception
                 )  # Log attempt number and cause for monitoring.
                 if attempt < retries - 1:  # Don't sleep after the final attempt since we're about to give up.
                     sleep_time = backoff * (2**attempt)  # Exponential backoff reduces pressure on API during outages.
                     logging.debug(
-                        f"Waiting {sleep_time}s before retrying 52w page fetch"
+                        "Waiting %ss before retrying 52w page fetch", sleep_time
                     )  # Log backoff duration for performance debugging.
                     time.sleep(sleep_time)  # Pause before the next retry attempt.
         logging.error("Exceeded maximum retries fetching device events page")  # Record terminal retry failure.
@@ -10110,7 +10173,7 @@ class OrgAlarmEventExporter:
             except Exception as write_error:  # Re-raise immediately so callers can handle checkpoint cleanup.
                 mode = "append to" if append else "write initial"  # Log with operation context to aid debugging.
                 logging.error(
-                    f"Failed to {mode} OrgDeviceEvents_52w SQLite table {table_name}: {write_error}"
+                    "Failed to %s OrgDeviceEvents_52w SQLite table %s: %s", mode, table_name, write_error
                 )  # Log failure before re-raise.
                 raise  # Propagate so the outer export aborts and checkpoint state is preserved.
         else:  # CSV path writes using the stable header computed from preloaded pages.
@@ -10129,7 +10192,7 @@ class OrgAlarmEventExporter:
             except Exception as write_error:  # Re-raise immediately so callers can handle checkpoint cleanup.
                 mode = "append to" if append else "write initial"  # Log with operation context to aid debugging.
                 logging.error(
-                    f"Failed to {mode} OrgDeviceEvents_52w CSV file {csv_file}: {write_error}"
+                    "Failed to %s OrgDeviceEvents_52w CSV file %s: %s", mode, csv_file, write_error
                 )  # Log before re-raise.
                 raise  # Propagate so the outer export aborts and checkpoint state is preserved.
 
@@ -10177,7 +10240,7 @@ class OrgAlarmEventExporter:
 
         header_fields = DataProcessingUtils.get_unique_keys(buffered_rows)  # type: ignore[no-untyped-call]  # Derive stable column set from the preloaded sample.
         logging.info(
-            f"Using CSV header with {len(header_fields)} fields for OrgDeviceEvents_52w.csv"
+            "Using CSV header with %s fields for OrgDeviceEvents_52w.csv", len(header_fields)
         )  # Log header width for schema tracking.
         OrgAlarmEventExporter._52w_write_batch(
             buffered_rows, header_fields, csv_file, table_name, append=False
@@ -10214,10 +10277,10 @@ class OrgAlarmEventExporter:
         )  # Clean up checkpoint file after a successful full export.
         if OUTPUT_FORMAT == "sqlite":  # Log final destination path based on configured output format.
             logging.info(
-                f"All org device events (52w) exported to SQLite table {table_name} (DB: {DATABASE_PATH})"
+                "All org device events (52w) exported to SQLite table %s (DB: %s)", table_name, DATABASE_PATH
             )  # Confirm SQLite export completion.
         else:  # CSV format is the default; log its output path.
-            logging.info(f"All org device events (52w) exported to {csv_file}.")  # Confirm CSV export completion.
+            logging.info("All org device events (52w) exported to %s.", csv_file)  # Confirm CSV export completion.
 
 
 # ============================================================================
@@ -10251,7 +10314,7 @@ class OrgSiteExporter:
             limit=1000,
         ).execute()
         output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"
-        logging.info(f"Completed site list export and wrote results to {output_desc}.")
+        logging.info("Completed site list export and wrote results to %s.", output_desc)
         if emitter:
             emitter.emit_progress_complete("11", "sites", 1, 1, False, time.time() - op_start)
 
@@ -10263,7 +10326,7 @@ class OrgSiteExporter:
         """
         output_file = "SiteList_ListAPI.csv"
         if os.path.exists(output_file):
-            logging.info(f"! Using cached {output_file} (already exists)")
+            logging.info("! Using cached %s (already exists)", output_file)
             print(f"! Using cached {output_file} (already exists)")
             return
         logging.info("Fetching all sites using the 'list' sites API endpoint...")
