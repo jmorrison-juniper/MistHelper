@@ -6001,7 +6001,7 @@ class FilePathUtils:
     """
 
     @staticmethod
-    def get_csv_path(filename: str) -> str:
+    def get_csv_path(filename: str) -> str:  # Resolve a CSV name to a path under data/.
         """
         Helper function to ensure consistent CSV file paths in the data directory.
 
@@ -6012,20 +6012,20 @@ class FilePathUtils:
             str: Full path to the CSV file in the data directory
         """
         # Ensure data directory exists
-        data_dir = "data"
-        os.makedirs(data_dir, exist_ok=True)
+        data_dir = "data"  # All exports are confined to the data/ directory.
+        os.makedirs(data_dir, exist_ok=True)  # Create data/ on first use; no error if it exists.
 
         # If filename already includes a path, use it as-is
-        if os.path.dirname(filename):
-            return filename
+        if os.path.dirname(filename):  # Caller supplied an explicit directory.
+            return filename  # Respect caller-provided paths verbatim.
 
         # Otherwise, place it in the data directory
-        return os.path.join(data_dir, filename)
+        return os.path.join(data_dir, filename)  # Join bare names under data/ portably.
 
     @staticmethod
     def create_csv_template(
         filename: str, headers: list[str] | None = None, sample_data: list[list[str]] | None = None
-    ) -> str:
+    ) -> str:  # Create an empty CSV placeholder with optional headers.
         """
         Creates a basic CSV file placeholder in the correct location.
 
@@ -6037,70 +6037,70 @@ class FilePathUtils:
         Returns:
             str: Full path to the created file
         """
-        file_path = FilePathUtils.get_csv_path(filename)
+        file_path = FilePathUtils.get_csv_path(filename)  # Normalize the destination under data/.
 
         try:
             # Just create an empty file in the correct location
-            with open(file_path, "w", newline="", encoding="utf-8") as f:
-                if headers:
-                    writer = csv.writer(f)
-                    writer.writerow(headers)
+            with open(file_path, "w", newline="", encoding="utf-8") as f:  # Truncate/create the file.
+                if headers:  # Only write a header row when headers were provided.
+                    writer = csv.writer(f)  # Wrap the handle in a CSV writer.
+                    writer.writerow(headers)  # Emit the single header row.
                 # Don't write sample data - user will add their own content
 
-            logging.info("Created template file: %s", file_path)
-            return file_path
-        except Exception as error:
-            logging.error("Failed to create template file %s: %s", filename, error)
-            raise
+            logging.info("Created template file: %s", file_path)  # Record the created placeholder.
+            return file_path  # Hand the path back to the caller.
+        except Exception as error:  # Never leave a partial file without surfacing the cause.
+            logging.error("Failed to create template file %s: %s", filename, error)  # Log the failure cause.
+            raise  # Re-raise so callers can handle the failure.
 
 
 # ============================================================================
 # ENVIRONMENT UTILITIES CLASS
 # ============================================================================
-class EnvironmentUtils:
+class EnvironmentUtils:  # Centralized runtime/container environment detection.
     """
     Centralized environment detection utilities.
     Handles container detection, runtime environment identification, etc.
     """
 
     # Constants for container detection
-    TRUE_VALUES = {"1", "true", "yes", "on"}
-    OVERRIDE_ENV_VARS = ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER")
-    CONTAINER_ENV_VARS = (
+    TRUE_VALUES = {"1", "true", "yes", "on"}  # Strings treated as boolean-true in env vars.
+    OVERRIDE_ENV_VARS = ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER")  # Manual override switches.
+    CONTAINER_ENV_VARS = (  # Well-known vars set by container runtimes.
         "CONTAINER",
         "DOCKER_CONTAINER",
         "PODMAN_CONTAINER",
         "KUBERNETES_SERVICE_HOST",
         "CONTAINERD_NAMESPACE",
     )
-    CGROUP_INDICATORS = ("docker", "containerd", "podman", "lxc")
+    CGROUP_INDICATORS = ("docker", "containerd", "podman", "lxc")  # Substrings that mark a container cgroup.
 
     @staticmethod
-    def _check_override_env_vars() -> bool | None:
+    def _check_override_env_vars() -> bool | None:  # Honor an explicit operator override first.
         """Check for explicit container override environment variables."""
-        for explicit_var in EnvironmentUtils.OVERRIDE_ENV_VARS:
-            value = os.environ.get(explicit_var, "").strip().lower()
-            if value in EnvironmentUtils.TRUE_VALUES:
-                logging.debug("Container detection: override via %s=%s", explicit_var, value)
-                return True
-        return None
+        for explicit_var in EnvironmentUtils.OVERRIDE_ENV_VARS:  # Inspect each override switch.
+            value = os.environ.get(explicit_var, "").strip().lower()  # Normalize the configured value.
+            if value in EnvironmentUtils.TRUE_VALUES:  # Operator forced container mode on.
+                logging.debug("Container detection: override via %s=%s", explicit_var, value)  # Trace the override.
+                return True  # Short-circuit: treat as a container.
+        return None  # No override set; defer to other detectors.
 
     @staticmethod
-    def _check_dockerenv_file() -> bool:
+    def _check_dockerenv_file() -> bool:  # Detect Docker's /.dockerenv sentinel file.
         """Check for /.dockerenv sentinel file."""
-        if os.path.exists("/.dockerenv"):
-            logging.debug("Container detection: /.dockerenv present")
-            return True
-        return False
+        if os.path.exists("/.dockerenv"):  # Docker drops this file inside containers.
+            logging.debug("Container detection: /.dockerenv present")  # Trace the positive signal.
+            return True  # Sentinel present means containerized.
+        return False  # Absent sentinel is inconclusive here.
 
     @staticmethod
-    def _check_container_env_vars() -> bool:
+    def _check_container_env_vars() -> bool:  # Detect container runtimes via env vars.
         """Check for well-known container environment variables."""
-        for env_var in EnvironmentUtils.CONTAINER_ENV_VARS:
-            if os.environ.get(env_var):
-                logging.debug("Container detection: environment variable %s present", env_var)
-                return True
-        return False
+        for env_var in EnvironmentUtils.CONTAINER_ENV_VARS:  # Probe each known runtime variable.
+            if os.environ.get(env_var):  # Any non-empty value signals a container.
+                logging.debug("Container detection: environment variable %s present", env_var)  # Trace which one.
+                return True  # Treat as containerized.
+        return False  # None present; inconclusive here.
 
     @staticmethod
     def _check_cgroup_markers() -> bool:
@@ -6108,43 +6108,43 @@ class EnvironmentUtils:
         try:
             with open("/proc/1/cgroup", encoding="utf-8", errors="ignore") as cgroup_file:
                 cgroup_content = cgroup_file.read().lower()
-                for indicator in EnvironmentUtils.CGROUP_INDICATORS:
-                    if indicator in cgroup_content:
-                        logging.debug("Container detection: cgroup indicator '%s' found", indicator)
-                        return True
-        except (FileNotFoundError, PermissionError):
-            pass
-        return False
+                for indicator in EnvironmentUtils.CGROUP_INDICATORS:  # Scan cgroup text for each runtime marker.
+                    if indicator in cgroup_content:  # Marker substring present in cgroup.
+                        logging.debug("Container detection: cgroup indicator '%s' found", indicator)  # marker found.
+                        return True  # Containerized: a marker was found.
+        except (FileNotFoundError, PermissionError):  # No cgroup file or no access (host/non-Linux).
+            pass  # Treat missing cgroup as not-containerized.
+        return False  # No cgroup markers: not a container.
 
     @staticmethod
-    def _check_runtime_user() -> bool:
+    def _check_runtime_user() -> bool:  # Detect the container's dedicated service user.
         """Check if running as the 'misthelper' user."""
         try:
             import pwd  # Unix only
 
             current_user_name = pwd.getpwuid(os.getuid()).pw_name  # type: ignore[attr-defined]
-            if current_user_name == "misthelper":
-                logging.debug("Container detection: running as user 'misthelper'")
-                return True
+            if current_user_name == "misthelper":  # Image runs as the misthelper user.
+                logging.debug("Container detection: running as user 'misthelper'")  # Trace the user-based signal.
+                return True  # Running as misthelper means containerized.
         except Exception:  # nosec B110
-            pass
-        return False
+            pass  # Ignore lookup failures on host systems.
+        return False  # User signal absent: inconclusive.
 
     @staticmethod
-    def _check_app_path_with_sshd() -> bool:
+    def _check_app_path_with_sshd() -> bool:  # Detect the /app + sshd image layout.
         """Check for canonical container path /app with sshd presence."""
         try:
-            this_file_dir = os.path.abspath(os.path.dirname(__file__))
-            if this_file_dir.startswith("/app") and os.path.exists("/app/MistHelper.py"):
-                if os.path.exists("/usr/sbin/sshd"):
-                    logging.debug("Container detection: /app path with MistHelper.py and sshd present")
-                    return True
+            this_file_dir = os.path.abspath(os.path.dirname(__file__))  # Absolute directory of this module.
+            if this_file_dir.startswith("/app") and os.path.exists("/app/MistHelper.py"):  # In the image path.
+                if os.path.exists("/usr/sbin/sshd"):  # Image ships the SSH daemon.
+                    logging.debug("Container detection: /app path with MistHelper.py and sshd present")  # image signal.
+                    return True  # Layout matches the container image.
         except Exception:  # nosec B110
-            pass
-        return False
+            pass  # Ignore path-probing errors on host.
+        return False  # Layout not present: inconclusive.
 
     @staticmethod
-    def is_running_in_container() -> bool:
+    def is_running_in_container() -> bool:  # Public aggregate container check.
         """Determine if execution appears to be inside a container.
 
         Detection strategy is deliberately multi-factor and conservative. A positive
@@ -6163,12 +6163,12 @@ class EnvironmentUtils:
         """
         try:
             # Check override first (explicit operator control)
-            override_result = EnvironmentUtils._check_override_env_vars()
-            if override_result is not None:
-                return override_result
+            override_result = EnvironmentUtils._check_override_env_vars()  # Operator override wins first.
+            if override_result is not None:  # Override explicitly set the answer.
+                return override_result  # Honor the forced value.
 
             # Check standard indicators in order of reliability
-            checks = [
+            checks = [  # Ordered fallback detectors.
                 EnvironmentUtils._check_dockerenv_file,
                 EnvironmentUtils._check_container_env_vars,
                 EnvironmentUtils._check_cgroup_markers,
@@ -6176,18 +6176,18 @@ class EnvironmentUtils:
                 EnvironmentUtils._check_app_path_with_sshd,
             ]
 
-            for check in checks:
-                if check():
-                    return True
+            for check in checks:  # Run each detector in order.
+                if check():  # First positive detector wins.
+                    return True  # A detector confirmed container.
 
-        except Exception as container_detection_error:
-            logging.debug("Container detection failed with exception: %s", container_detection_error)
+        except Exception as container_detection_error:  # Never let detection crash startup.
+            logging.debug("Container detection failed with exception: %s", container_detection_error)  # log failure.
 
-        logging.debug("Container detection: no container indicators found - running in direct mode")
-        return False
+        logging.debug("Container detection: no container indicators found - running in direct mode")  # direct mode.
+        return False  # Default: not containerized.
 
     @staticmethod
-    def is_debug_mode() -> bool:
+    def is_debug_mode() -> bool:  # Report whether debug logging is on.
         """
         Check if debug mode is enabled via command line arguments.
         Delegates to module-level is_debug_mode() for consistency.
@@ -6201,14 +6201,14 @@ class EnvironmentUtils:
 # ============================================================================
 # VALIDATION UTILITIES CLASS
 # ============================================================================
-class ValidationUtils:
+class ValidationUtils:  # Input validators for API identifiers.
     """
     Centralized validation utilities for input validation and sanitization.
     All validation functions should be static methods in this class.
     """
 
     @staticmethod
-    def validate_site_id(site_id: str | None, function_name: str = "unknown") -> bool:
+    def validate_site_id(site_id: str | None, function_name: str = "unknown") -> bool:  # Guard site_id before API use.
         """
         Validates that site_id is not None or empty before making API calls.
 
@@ -6222,20 +6222,20 @@ class ValidationUtils:
         Raises:
             ValueError: If site_id is None or empty
         """
-        if site_id is None:
-            error_msg = f"! site_id is None in {function_name}. Cannot make API call."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
+        if site_id is None:  # Reject a missing site_id.
+            error_msg = f"! site_id is None in {function_name}. Cannot make API call."  # Build the failure message.
+            logging.error(error_msg)  # Log before raising.
+            raise ValueError(error_msg)  # Abort the call with context.
 
-        if isinstance(site_id, str) and site_id.strip() == "":
-            error_msg = f"! site_id is empty string in {function_name}. Cannot make API call."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
+        if isinstance(site_id, str) and site_id.strip() == "":  # Reject empty/whitespace site_id.
+            error_msg = f"! site_id is empty string in {function_name}. Cannot make API call."  # empty-string msg.
+            logging.error(error_msg)  # Log before raising.
+            raise ValueError(error_msg)  # Abort the call.
 
-        return True
+        return True  # site_id passed validation.
 
     @staticmethod
-    def validate_device_id(device_id: str | None, function_name: str = "unknown") -> bool:
+    def validate_device_id(device_id: str | None, function_name: str = "unknown") -> bool:  # Guard device_id.
         """
         Validates that device_id is not None or empty before making API calls.
 
@@ -6249,20 +6249,20 @@ class ValidationUtils:
         Raises:
             ValueError: If device_id is None or empty
         """
-        if device_id is None:
-            error_msg = f"! device_id is None in {function_name}. Cannot make API call."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
+        if device_id is None:  # Reject a missing device_id.
+            error_msg = f"! device_id is None in {function_name}. Cannot make API call."  # Build the failure message.
+            logging.error(error_msg)  # Log before raising.
+            raise ValueError(error_msg)  # Abort the call with context.
 
-        if isinstance(device_id, str) and device_id.strip() == "":
-            error_msg = f"! device_id is empty string in {function_name}. Cannot make API call."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
+        if isinstance(device_id, str) and device_id.strip() == "":  # Reject empty/whitespace device_id.
+            error_msg = f"! device_id is empty string in {function_name}. Cannot make API call."  # empty-string msg.
+            logging.error(error_msg)  # Log before raising.
+            raise ValueError(error_msg)  # Abort the call.
 
-        return True
+        return True  # device_id passed validation.
 
     @staticmethod
-    def validate_ping_target(target: str) -> bool:
+    def validate_ping_target(target: str) -> bool:  # Validate a ping destination string.
         """
         Validate ping target hostname or IP address.
 
@@ -6272,39 +6272,39 @@ class ValidationUtils:
         Returns:
             bool: True if valid target, False otherwise
         """
-        if not target or len(target.strip()) == 0:
-            return False
+        if not target or len(target.strip()) == 0:  # Reject empty targets.
+            return False  # Invalid: no target given.
 
-        target = target.strip()
+        target = target.strip()  # Normalize surrounding whitespace.
 
         # Check if it's a valid IP address
         try:
-            ipaddress.ip_address(target)
-            return True
-        except ValueError:
-            pass
+            ipaddress.ip_address(target)  # Parse as a literal IP.
+            return True  # Valid IP target.
+        except ValueError:  # Not an IP; try hostname.
+            pass  # Fall through to hostname check.
 
         # Check if it's a valid hostname
         # Basic hostname validation: alphanumeric, dots, hyphens
-        if re.match(r"^[a-zA-Z0-9.-]+$", target) and len(target) <= 253:
+        if re.match(r"^[a-zA-Z0-9.-]+$", target) and len(target) <= 253:  # Allow valid hostname charset/length.
             # Ensure it doesn't start or end with a dot or hyphen
-            if not target.startswith((".", "-")) and not target.endswith((".", "-")):
-                return True
+            if not target.startswith((".", "-")) and not target.endswith((".", "-")):  # Reject edge dot/dash.
+                return True  # Valid hostname target.
 
-        return False
+        return False  # Invalid ping target.
 
 
 # ============================================================================
 # CONFIGURATION UTILITIES CLASS
 # ============================================================================
-class ConfigUtils:
+class ConfigUtils:  # Org id and run-control helpers.
     """
     Centralized configuration utilities.
     Handles org_id retrieval, credentials, and configuration management.
     """
 
     @staticmethod
-    def get_cached_or_prompted_org_id() -> str:
+    def get_cached_or_prompted_org_id() -> str:  # Resolve org_id from cache/env/.env/prompt.
         """
         Get organization ID from various sources in order of preference:
         1. Global variable
@@ -6312,41 +6312,41 @@ class ConfigUtils:
         3. .env file
         4. Interactive prompt
         """
-        global org_id
+        global org_id  # Cache resolved id in the module global.
         # 1. Check global variable
-        if org_id:
-            logging.info("! Using org_id from global variable: %s", org_id)
+        if org_id:  # Reuse an already-resolved id.
+            logging.info("! Using org_id from global variable: %s", org_id)  # Trace the cached source.
             return org_id  # type: ignore[no-any-return]
         # 2. Check environment variable (set by dotenv or OS)
-        org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")
-        if org_id_env:
-            org_id = org_id_env
-            logging.info("! Loaded org_id from environment: %s", org_id)
-            return org_id
+        org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")  # Try environment variables next.
+        if org_id_env:  # Environment provided the id.
+            org_id = org_id_env  # Cache the env value.
+            logging.info("! Loaded org_id from environment: %s", org_id)  # Trace the env source.
+            return org_id  # Use the env id.
         # 3. Fallback: Try to load from .env manually (rarely needed)
         try:
-            with open(".env") as env_file:
-                for line in env_file:
-                    if line.strip().startswith("org_id="):
-                        org_id = line.strip().split("=", 1)[1].strip().strip('"')
-            if org_id:
-                logging.info("! Loaded org_id from .env: %s", org_id)
-                return org_id
-        except FileNotFoundError:
-            logging.warning("! .env file not found.")
+            with open(".env") as env_file:  # Fall back to the .env file.
+                for line in env_file:  # Scan each line for org_id.
+                    if line.strip().startswith("org_id="):  # Match the org_id assignment.
+                        org_id = line.strip().split("=", 1)[1].strip().strip('"')  # Extract and unquote the value.
+            if org_id:  # A value was parsed.
+                logging.info("! Loaded org_id from .env: %s", org_id)  # Trace the .env source.
+                return org_id  # Use the .env id.
+        except FileNotFoundError:  # No .env file present.
+            logging.warning("! .env file not found.")  # Warn that .env is missing.
         # 4. Prompt if still not set
-        logging.info("* No org_id found in .env or CLI. Prompting user...")
-        org_id_list = mistapi.cli.select_org(apisession)
-        if not org_id_list:
-            logging.error("Failed to retrieve org list. Check your API token and authentication.")
-            print("[ERROR] Unable to retrieve organizations. Your API token may be invalid or expired.")
-            print("[ERROR] Please update MIST_API_TOKEN in your .env file and try again.")
-            sys.exit(1)
-        org_id = org_id_list[0]
+        logging.info("* No org_id found in .env or CLI. Prompting user...")  # Prompt the user as last resort.
+        org_id_list = mistapi.cli.select_org(apisession)  # Interactive org selection.
+        if not org_id_list:  # Selection returned nothing.
+            logging.error("Failed to retrieve org list. Check your API token and authentication.")  # Log list failure.
+            print("[ERROR] Unable to retrieve organizations. Your API token may be invalid or expired.")  # Token hint.
+            print("[ERROR] Please update MIST_API_TOKEN in your .env file and try again.")  # Point to .env token.
+            sys.exit(1)  # Abort: no org to proceed with.
+        org_id = org_id_list[0]  # Use the first selected org.
         return org_id  # type: ignore[no-any-return]
 
     @staticmethod
-    def check_stop_signal() -> bool:
+    def check_stop_signal() -> bool:  # Check for the user stop sentinel.
         """Check for stop_loop.txt signal file and remove if found.
 
         Any long-running loop that iterates over sites or devices with API
@@ -6356,21 +6356,21 @@ class ConfigUtils:
         Returns:
             True if the stop signal was detected (caller should break).
         """
-        if os.path.exists("stop_loop.txt"):
+        if os.path.exists("stop_loop.txt"):  # Sentinel file requests a stop.
             try:
-                os.remove("stop_loop.txt")
-            except OSError:
-                pass
-            print(" Stop signal detected. Ending operation early.")
-            logging.info("Stop signal (stop_loop.txt) detected - operation stopped by user.")
-            return True
-        return False
+                os.remove("stop_loop.txt")  # Consume the sentinel once.
+            except OSError:  # Ignore removal races.
+                pass  # Best-effort cleanup only.
+            print(" Stop signal detected. Ending operation early.")  # Notify the user of early stop.
+            logging.info("Stop signal (stop_loop.txt) detected - operation stopped by user.")  # Log user stop.
+            return True  # Signal callers to stop.
+        return False  # No stop requested.
 
 
 # ============================================================================
 # API FETCH UTILITIES CLASS
 # ============================================================================
-class APICoreFetchUtils:
+class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
     """
     Core API Fetch Utilities
 
@@ -6419,7 +6419,7 @@ class APICoreFetchUtils:
 from src.api.tenant_fetch import APITenantFetchUtils  # Import the extracted instance class
 
 
-class APIFetchUtils:
+class APIFetchUtils:  # Higher-level org/site fetchers.
     """
     Centralized API fetch utilities.
     Groups all data fetching functions for better code organization.
@@ -6427,7 +6427,7 @@ class APIFetchUtils:
     """
 
     @staticmethod
-    def organization_services() -> list[dict[str, Any]]:
+    def organization_services() -> list[dict[str, Any]]:  # Fetch and flatten org services.
         """
         Fetch all services defined at the organization level using the Mist API.
 
@@ -6437,23 +6437,23 @@ class APIFetchUtils:
         SECURITY: Read-only operation fetching configuration data only.
         """
         try:
-            org_id = ConfigUtils.get_cached_or_prompted_org_id()
-            logging.info("Fetching organization services for org_id: %s", org_id)
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the target org.
+            logging.info("Fetching organization services for org_id: %s", org_id)  # Log before the API call.
 
             # Call the Mist API to get organization services
-            response = mistapi.api.v1.orgs.services.listOrgServices(apisession, org_id, limit=1000)
+            response = mistapi.api.v1.orgs.services.listOrgServices(apisession, org_id, limit=1000)  # List services.
 
-            if hasattr(response, "data") and response.data:
-                services_data = response.data
-                logging.info("Successfully retrieved %s organization services", len(services_data))
+            if hasattr(response, "data") and response.data:  # Only proceed with data.
+                services_data = response.data  # Unwrap the payload.
+                logging.info("Successfully retrieved %s organization services", len(services_data))  # Log the count.
 
                 # Extract service names and types for easier display
-                services_list = []
-                for service in services_data:
-                    if isinstance(service, dict):
-                        service_name = service.get("name", "unnamed")
-                        service_type = service.get("type", "custom")
-                        service_desc = service.get("description", "")
+                services_list = []  # Accumulate normalized rows.
+                for service in services_data:  # Walk each service.
+                    if isinstance(service, dict):  # Skip non-dict entries.
+                        service_name = service.get("name", "unnamed")  # Default missing names.
+                        service_type = service.get("type", "custom")  # Default missing type.
+                        service_desc = service.get("description", "")  # Default missing description.
                         services_list.append(
                             {
                                 "name": service_name,
@@ -6463,18 +6463,18 @@ class APIFetchUtils:
                             }
                         )
 
-                return services_list
+                return services_list  # Return normalized services.
 
             else:
-                logging.warning("No organization services found or response data is empty")
-                return []
+                logging.warning("No organization services found or response data is empty")  # Warn on empty response.
+                return []  # No services to return.
 
-        except Exception as error:
-            logging.error("Failed to fetch organization services: %s", error)
-            return []
+        except Exception as error:  # Never crash on API failure.
+            logging.error("Failed to fetch organization services: %s", error)  # Log the fetch failure.
+            return []  # Degrade to empty list.
 
     @staticmethod
-    def all_site_settings(apisession, org_id, limit=1000):
+    def all_site_settings(apisession, org_id, limit=1000):  # Fetch settings for every site.
         """
         Fetches configuration settings for all sites in the organization.
 
@@ -6486,29 +6486,29 @@ class APIFetchUtils:
         Returns:
             List of dictionaries, each containing the settings for a site.
         """
-        logging.info("Fetching all site settings...")
+        logging.info("Fetching all site settings...")  # Log before fetching sites.
 
         # Use mistapi.get_all to ensure pagination is handled for all sites
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites first.
 
-        all_configs = []
+        all_configs = []  # Collect per-site settings.
         for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]
-            if ConfigUtils.check_stop_signal():
-                break
-            site_id = site.get("id")
-            site_name = site.get("name", "Unnamed Site")
+            if ConfigUtils.check_stop_signal():  # Honor a user stop request.
+                break  # Stop iterating sites.
+            site_id = site.get("id")  # Target site id.
+            site_name = site.get("name", "Unnamed Site")  # Friendly site label.
             try:
                 # Fetch the site settings using the Mist API
-                config = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data
-                config["site_id"] = site_id
-                config["site_name"] = site_name
-                all_configs.append(config)
-                logging.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)
-            except Exception as error:
-                logging.warning("! Failed to fetch config for %s (ID: %s): %s", site_name, site_id, error)
+                config = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data  # Fetch site settings.
+                config["site_id"] = site_id  # Tag with site id.
+                config["site_name"] = site_name  # Tag with site name.
+                all_configs.append(config)  # Collect the setting.
+                logging.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)  # Log fetched config.
+            except Exception as error:  # Skip sites that fail.
+                logging.warning("! Failed to fetch config for %s (ID: %s): %s", site_name, site_id, error)  # log fail.
 
-        logging.info("Fetched settings for %s sites.", len(all_configs))
-        return all_configs
+        logging.info("Fetched settings for %s sites.", len(all_configs))  # Log total fetched.
+        return all_configs  # Return all site settings.
 
     @staticmethod
     def gateway_device_configs(apisession, org_id, fast=False, max_workers=None):  # noqa: C901, PLR0915
@@ -6525,116 +6525,116 @@ class APIFetchUtils:
         Returns:
             List of device configuration dictionaries.
         """
-        logging.info("Fetching org inventory to find gateway devices...")
+        logging.info("Fetching org inventory to find gateway devices...")  # Log before inventory fetch.
         try:
-            response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
-            inventory = mistapi.get_all(response=response, mist_session=apisession)
-        except Exception as error:
-            logging.error("! Failed to fetch org inventory: %s", error)
-            return []
+            response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)  # Fetch inventory.
+            inventory = mistapi.get_all(response=response, mist_session=apisession)  # Page through all devices.
+        except Exception as error:  # Inventory fetch failed.
+            logging.error("! Failed to fetch org inventory: %s", error)  # Log the failure.
+            return []  # Degrade to empty list.
 
-        logging.info("Found %s total devices in org inventory.", len(inventory))
+        logging.info("Found %s total devices in org inventory.", len(inventory))  # Log device count.
 
         # Load site names from SiteList.csv for enrichment
-        site_name_lookup = {}
+        site_name_lookup = {}  # Map site id to name.
         try:
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-            with open(site_list_path, encoding="utf-8") as file_handle:
-                reader = csv.DictReader(file_handle)
-                site_name_lookup = {row.get("id"): row.get("name", "Unnamed Site") for row in reader}
-        except Exception as error:
-            logging.warning("! Failed to load SiteList.csv for site names: %s", error)
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Locate the site list CSV.
+            with open(site_list_path, encoding="utf-8") as file_handle:  # Read site names from CSV.
+                reader = csv.DictReader(file_handle)  # Parse CSV rows.
+                site_name_lookup = {row.get("id"): row.get("name", "Unnamed Site") for row in reader}  # id->name map.
+        except Exception as error:  # CSV missing or unreadable.
+            logging.warning("! Failed to load SiteList.csv for site names: %s", error)  # Warn names may be unknown.
 
         # Filter for gateway devices and build work list
-        work_items = []
-        for device in inventory:
-            if device.get("type") == "gateway":
-                site_id = device.get("site_id")
-                device_id = device.get("id")
-                if site_id and device_id:
-                    site_name = site_name_lookup.get(site_id, "Unknown")
-                    work_items.append((site_id, device_id, site_name))
+        work_items = []  # Build gateway work list.
+        for device in inventory:  # Scan inventory devices.
+            if device.get("type") == "gateway":  # Only gateways need configs.
+                site_id = device.get("site_id")  # Owning site id.
+                device_id = device.get("id")  # Device id.
+                if site_id and device_id:  # Require both ids.
+                    site_name = site_name_lookup.get(site_id, "Unknown")  # Resolve site name.
+                    work_items.append((site_id, device_id, site_name))  # Queue the fetch.
 
-        logging.info("Prepared %s gateway device config API calls.", len(work_items))
+        logging.info("Prepared %s gateway device config API calls.", len(work_items))  # Log planned API calls.
 
-        def fetch_config(work_item, connection_semaphore):
+        def fetch_config(work_item, connection_semaphore):  # Fetch one device's config.
             """Fetch configuration for a single device with retry logic."""
-            work_site_id, work_device_id, work_site_name = work_item
+            work_site_id, work_device_id, work_site_name = work_item  # Unpack the work item.
 
             with connection_semaphore:  # Limit concurrent connections
                 try:
-                    logging.debug("Fetching config for %s (%s)", work_device_id, work_site_name)
-                    config_response = mistapi.api.v1.sites.devices.getSiteDevice(
+                    logging.debug("Fetching config for %s (%s)", work_device_id, work_site_name)  # Trace the fetch.
+                    config_response = mistapi.api.v1.sites.devices.getSiteDevice(  # Call the device API.
                         apisession, work_site_id, work_device_id
                     )
-                    config = getattr(config_response, "data", {})
-                    if config:
+                    config = getattr(config_response, "data", {})  # Unwrap data safely.
+                    if config:  # Only keep non-empty configs.
                         # Add site metadata for enrichment
-                        config["site_name"] = work_site_name
-                        config["site_id"] = work_site_id
-                        logging.debug("! Config fetched for %s", work_device_id)
-                        return config
+                        config["site_name"] = work_site_name  # Tag with site name.
+                        config["site_id"] = work_site_id  # Tag with site id.
+                        logging.debug("! Config fetched for %s", work_device_id)  # Trace success.
+                        return config  # Return the config.
                     else:
-                        logging.warning("! Empty config for device %s", work_device_id)
-                except Exception as inner_error:
-                    logging.error("! Failed to fetch config for device %s: %s", work_device_id, inner_error)
-                    return None
+                        logging.warning("! Empty config for device %s", work_device_id)  # Warn on empty config.
+                except Exception as inner_error:  # Isolate per-device failures.
+                    logging.error("! Failed to fetch config for device %s: %s", work_device_id, inner_error)  # log err.
+                    return None  # Mark this device failed.
 
-        def retry_fetch_config(failed_items, connection_semaphore):
+        def retry_fetch_config(failed_items, connection_semaphore):  # Retry failed device fetches.
             """Retry wrapper for device config fetching."""
-            max_retries = int(os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1"))
-            retry_results = []
+            max_retries = int(os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1"))  # Configurable retry count.
+            retry_results = []  # Collect retried configs.
 
-            for failed_work_item in failed_items:
-                failed_site_id, failed_device_id, failed_site_name = failed_work_item
+            for failed_work_item in failed_items:  # Walk failed items.
+                failed_site_id, failed_device_id, failed_site_name = failed_work_item  # Unpack the failed item.
 
-                for attempt in range(max_retries + 1):
+                for attempt in range(max_retries + 1):  # Bounded retry loop.
                     result = fetch_config(failed_work_item, connection_semaphore)  # type: ignore[no-untyped-call]
-                    if result is not None:
-                        retry_results.append(result)
-                        break
-                    if attempt < max_retries:
+                    if result is not None:  # Retry succeeded.
+                        retry_results.append(result)  # Keep the result.
+                        break  # Stop retrying this item.
+                    if attempt < max_retries:  # More attempts remain.
                         delay = 0.5 * (1.5**attempt)  # Exponential backoff
-                        logging.debug(
+                        logging.debug(  # Trace the retry/backoff.
                             "Retrying device %s in %.2fs (attempt %s/%s)",
                             failed_device_id,
                             delay,
                             attempt + 2,
                             max_retries + 1,
                         )
-                        time.sleep(delay)
+                        time.sleep(delay)  # Back off before retrying.
                 else:
-                    logging.warning(
+                    logging.warning(  # Warn after exhausting retries.
                         "! Failed to fetch config for device %s after %s attempts", failed_device_id, max_retries + 1
                     )
 
-            return retry_results
+            return retry_results  # Return retried configs.
 
         # Use connection pool management helper if fast mode is enabled
-        if fast:
-            successful_results, failed_items = execute_with_connection_pool_management(
+        if fast:  # Fast mode uses the pool.
+            successful_results, failed_items = execute_with_connection_pool_management(  # Pooled concurrent fetch.
                 work_items=work_items,
                 worker_function=fetch_config,
                 batch_description="gateway device configs",
                 retry_function=retry_fetch_config,
             )
-            all_device_configs = successful_results
+            all_device_configs = successful_results  # Start from successes.
         else:
             # Sequential processing for non-fast mode
-            all_device_configs = []
+            all_device_configs = []  # Sequential fallback path.
             # Create a dummy semaphore for sequential processing
-            dummy_semaphore = threading.Semaphore(1)
+            dummy_semaphore = threading.Semaphore(1)  # Serialize sequential fetches.
 
             for work_item in tqdm(work_items, desc="Fetching Configs", unit="device"):  # type: ignore[no-untyped-call]
                 result = fetch_config(work_item, dummy_semaphore)  # type: ignore[no-untyped-call]
-                if result is not None:
-                    all_device_configs.append(result)
+                if result is not None:  # Keep non-empty results.
+                    all_device_configs.append(result)  # Collect the config.
 
         # Filter out None results
-        all_device_configs = [config for config in all_device_configs if config is not None]
+        all_device_configs = [config for config in all_device_configs if config is not None]  # Drop any failures.
 
-        logging.info("! Completed fetching %s gateway device configs.", len(all_device_configs))
-        return all_device_configs
+        logging.info("! Completed fetching %s gateway device configs.", len(all_device_configs))  # Log completion.
+        return all_device_configs  # Return gateway configs.
 
 
 # ============================================================================
@@ -6642,7 +6642,7 @@ class APIFetchUtils:
 # ============================================================================
 
 
-class DataProcessingUtils:
+class DataProcessingUtils:  # JSON flattening/normalization.
     """
     Centralized data processing utilities.
     Groups all data transformation functions for better code organization.
@@ -6653,7 +6653,7 @@ class DataProcessingUtils:
     """
 
     @staticmethod
-    def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
+    def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:  # Flatten nested dict.
         """
         Recursively flattens a nested dictionary, joining keys with sep.
         Lists of dicts are flattened with indexed keys.
@@ -6668,15 +6668,15 @@ class DataProcessingUtils:
         Returns:
             dict: Flattened dictionary
         """
-        items: list[tuple[str, Any]] = []
-        for k, v in d.items():
-            k_str = str(k)
-            new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str
-            if isinstance(v, dict):
-                items.extend(DataProcessingUtils.flatten_dict(v, new_key, sep=sep).items())
-            elif isinstance(v, list):
-                if all(isinstance(i, dict) for i in v):
-                    for idx, item in enumerate(v):
+        items: list[tuple[str, Any]] = []  # Accumulate flattened pairs.
+        for k, v in d.items():  # Walk each key/value.
+            k_str = str(k)  # Stringify the key.
+            new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str  # Compose the dotted key.
+            if isinstance(v, dict):  # Recurse into nested dicts.
+                items.extend(DataProcessingUtils.flatten_dict(v, new_key, sep=sep).items())  # Merge nested results.
+            elif isinstance(v, list):  # Lists need index expansion.
+                if all(isinstance(i, dict) for i in v):  # List of dicts: index each.
+                    for idx, item in enumerate(v):  # Walk list items.
                         items.extend(DataProcessingUtils.flatten_dict(item, f"{new_key}{sep}{idx}", sep=sep).items())
                 else:
                     items.append((new_key, ",".join(map(str, v))))
@@ -7339,29 +7339,29 @@ class DataExporter:
     """
 
     _router: "DatabaseRouter | None" = None  # type: ignore[name-defined]
-    _router_initialized: bool = False
-    _last_snapshot_times: dict[str, float] = {}
+    _router_initialized: bool = False  # One-shot guard so the lazy router init runs exactly once per process.
+    _last_snapshot_times: dict[str, float] = {}  # Per-table last-snapshot epoch times used to throttle snapshots.
 
     @classmethod
     def _init_router(cls) -> None:
         """Initialize polyglot DatabaseRouter once (lazy, idempotent)."""
-        if cls._router_initialized:
-            return
-        cls._router_initialized = True
-        if not DB_LAYER_AVAILABLE:
-            logging.debug("Polyglot DB layer not installed - CSV/SQLite only")
-            return
-        try:
-            configure_db_logging()
-            config = DatabaseConfig.from_env()
-            cls._router = DatabaseRouter(
-                config,
-                strategies=ENDPOINT_PRIMARY_KEY_STRATEGIES,
+        if cls._router_initialized:  # Skip all work when a prior call already attempted initialization.
+            return  # Idempotent early-out keeps repeated export calls cheap.
+        cls._router_initialized = True  # Latch the guard before fallible work so a failure does not retry endlessly.
+        if not DB_LAYER_AVAILABLE:  # Optional polyglot dependency stack is not installed in this environment.
+            logging.debug("Polyglot DB layer not installed - CSV/SQLite only")  # Record the CSV/SQLite-only fallback.
+            return  # Nothing more to wire up without the polyglot DB layer present.
+        try:  # Router construction reads env and opens connections, so guard against any startup failure.
+            configure_db_logging()  # Route the DB layer's logger into MistHelper logging before first use.
+            config = DatabaseConfig.from_env()  # Build connection settings from .env so secrets stay out of code.
+            cls._router = DatabaseRouter(  # Cache the shared router on the class for every later export call.
+                config,  # Pass the env-derived connection/configuration object.
+                strategies=ENDPOINT_PRIMARY_KEY_STRATEGIES,  # Supply per-endpoint primary-key upsert strategies.
             )
-            logging.info("Polyglot DatabaseRouter initialized")
-        except Exception as error:
-            logging.warning("DatabaseRouter init failed, CSV/SQLite only: %s", error)
-            cls._router = None
+            logging.info("Polyglot DatabaseRouter initialized")  # Confirm the polyglot backend came up successfully.
+        except Exception as error:  # Never let optional-backend startup crash a core CSV/SQLite export.
+            logging.warning("DatabaseRouter init failed, CSV/SQLite only: %s", error)  # Surface the degraded mode.
+            cls._router = None  # Force the safe CSV/SQLite path when the router could not be constructed.
 
     @staticmethod
     def write_with_format_selection(
@@ -18438,80 +18438,80 @@ class FirmwareUpgradeStatusChecker:
             }
         )
 
-    def _should_include_device(self, fw_info: dict[str, Any]) -> bool:
+    def _should_include_device(self, fw_info: dict[str, Any]) -> bool:  # Scope filter for one device row.
         """Check if device matches scope filter."""
-        fw_status = fw_info["fw_status"]
-        fw_progress = fw_info["fw_progress"]
-        fw_timestamp = fw_info["fw_timestamp"]
+        fw_status = fw_info["fw_status"]  # Current firmware lifecycle status.
+        fw_progress = fw_info["fw_progress"]  # Percent-complete when upgrading.
+        fw_timestamp = fw_info["fw_timestamp"]  # Last status-change epoch for staleness.
 
         if self.scope_choice == "3":  # Active upgrades only
-            is_active = fw_status in ("inprogress", "upgrading", "downloading")
-            if is_active and self._is_stale_upgrade(fw_progress, fw_timestamp):
-                return False
-            return is_active
+            is_active = fw_status in ("inprogress", "upgrading", "downloading")  # Live transfer/apply states.
+            if is_active and self._is_stale_upgrade(fw_progress, fw_timestamp):  # Drop upgrades stuck too long.
+                return False  # Exclude stale rows from the active view.
+            return is_active  # Otherwise include only live upgrades.
         elif self.scope_choice == "4":  # Failed upgrades only
             return fw_status == "failed"  # type: ignore[no-any-return]
-        return True
+        return True  # Default scope keeps every device.
 
-    def _create_progress_display(self, fw_info: dict[str, Any]) -> str:
+    def _create_progress_display(self, fw_info: dict[str, Any]) -> str:  # Build the progress cell text.
         """Create visual progress display for CSV."""
-        fw_status = fw_info["fw_status"]
-        fw_progress = fw_info["fw_progress"]
-        fw_timestamp = fw_info["fw_timestamp"]
+        fw_status = fw_info["fw_status"]  # Status selects which glyph to render.
+        fw_progress = fw_info["fw_progress"]  # Percent used to size the bar.
+        fw_timestamp = fw_info["fw_timestamp"]  # Timestamp detects stale rows.
 
-        if fw_status in ("inprogress", "upgrading", "downloading"):
-            if self._is_stale_upgrade(fw_progress, fw_timestamp):
-                return "[===============] 100% (Complete - Stale)"
-            if fw_progress is not None:
-                return DisplayUtils.create_progress_bar(fw_progress, bar_length=15)
-        elif fw_status in ("upgraded", "success"):
-            return "[===============] 100% (Complete)"
-        elif fw_status == "failed":
-            return "[!!!!! FAILED !!!!!]"
-        return "N/A"
+        if fw_status in ("inprogress", "upgrading", "downloading"):  # Device reports active work.
+            if self._is_stale_upgrade(fw_progress, fw_timestamp):  # No movement past threshold = stuck.
+                return "[===============] 100% (Complete - Stale)"  # Full bar but flag staleness.
+            if fw_progress is not None:  # A real percent is available.
+                return DisplayUtils.create_progress_bar(fw_progress, bar_length=15)  # Proportional bar.
+        elif fw_status in ("upgraded", "success"):  # Upgrade finished cleanly.
+            return "[===============] 100% (Complete)"  # Full bar marks completion.
+        elif fw_status == "failed":  # Upgrade ended in failure.
+            return "[!!!!! FAILED !!!!!]"  # Loud marker for failures.
+        return "N/A"  # Idle/unknown devices have no progress.
 
-    def _display_summary(self) -> None:
+    def _display_summary(self) -> None:  # Print the aggregate firmware report.
         """Display firmware status summary."""
-        print("\n  Firmware Status Summary:")
-        print(f"   X  Total devices analyzed: {self.summary['total_devices']}")
-        print(f"   X  Devices with upgrade info: {self.summary['devices_with_fwupdate']}")
-        print(f"   X  Upgrades in progress: {self.summary['upgrade_in_progress']}")
+        print("\n  Firmware Status Summary:")  # Section header.
+        print(f"   X  Total devices analyzed: {self.summary['total_devices']}")  # Devices examined.
+        print(f"   X  Devices with upgrade info: {self.summary['devices_with_fwupdate']}")  # With fw data.
+        print(f"   X  Upgrades in progress: {self.summary['upgrade_in_progress']}")  # Running upgrades.
 
-        self._display_average_progress()
+        self._display_average_progress()  # Mean progress line when upgrades are active.
 
-        print(f"   X  Upgrades completed: {self.summary['upgrade_completed']}")
-        print(f"   X  Upgrades failed: {self.summary['upgrade_failed']}")
-        print(f"   X  Unknown status: {self.summary['upgrade_unknown']}")
+        print(f"   X  Upgrades completed: {self.summary['upgrade_completed']}")  # Completed tally.
+        print(f"   X  Upgrades failed: {self.summary['upgrade_failed']}")  # Failed tally.
+        print(f"   X  Unknown status: {self.summary['upgrade_unknown']}")  # Unreadable-status tally.
 
-        self._display_status_distribution()
-        self._display_type_distribution()
-        self._display_version_distribution()
-        self._display_model_distribution()
+        self._display_status_distribution()  # Counts by raw firmware status.
+        self._display_type_distribution()  # Counts by device type.
+        self._display_version_distribution()  # Counts by firmware version.
+        self._display_model_distribution()  # Counts by hardware model.
 
-    def _display_average_progress(self) -> None:
+    def _display_average_progress(self) -> None:  # Show mean percent of in-progress upgrades.
         """Display average progress for in-progress upgrades."""
-        if self.summary["progress_count"] > 0:
-            avg_progress = self.summary["progress_total"] / self.summary["progress_count"]
-            progress_bar = DisplayUtils.create_progress_bar(int(avg_progress))
-            print(f"   X  Average upgrade progress: {progress_bar}")
+        if self.summary["progress_count"] > 0:  # Only when some upgrade reported progress.
+            avg_progress = self.summary["progress_total"] / self.summary["progress_count"]  # Mean percent.
+            progress_bar = DisplayUtils.create_progress_bar(int(avg_progress))  # Render mean as a bar.
+            print(f"   X  Average upgrade progress: {progress_bar}")  # Emit the averaged line.
 
-    def _display_status_distribution(self) -> None:
+    def _display_status_distribution(self) -> None:  # List device counts per firmware status.
         """Display status distribution."""
-        if self.summary["devices_by_status"]:
-            print("\n  Status Distribution:")
-            for status, count in sorted(self.summary["devices_by_status"].items()):
-                print(f"   X  {status}: {count} devices")
+        if self.summary["devices_by_status"]:  # Skip when no status data collected.
+            print("\n  Status Distribution:")  # Sub-section header.
+            for status, count in sorted(self.summary["devices_by_status"].items()):  # Alphabetical order.
+                print(f"   X  {status}: {count} devices")  # One line per status bucket.
 
-    def _display_type_distribution(self) -> None:
+    def _display_type_distribution(self) -> None:  # List device counts per device type.
         """Display device type distribution."""
-        print("\n  Device Type Distribution:")
-        if self.summary["devices_by_type"]:
-            sorted_types = sorted(self.summary["devices_by_type"].items(), key=lambda x: x[1], reverse=True)
-            for device_type, count in sorted_types:
-                type_display = self.DEVICE_TYPE_NAMES.get(device_type, device_type.upper())
-                print(f"   X  {type_display}: {count} devices")
+        print("\n  Device Type Distribution:")  # Sub-section header always shown.
+        if self.summary["devices_by_type"]:  # Render buckets when type data exists.
+            sorted_types = sorted(self.summary["devices_by_type"].items(), key=lambda x: x[1], reverse=True)  # desc.
+            for device_type, count in sorted_types:  # Walk each type bucket.
+                type_display = self.DEVICE_TYPE_NAMES.get(device_type, device_type.upper())  # Friendly label.
+                print(f"   X  {type_display}: {count} devices")  # One line per device type.
         else:
-            print("   X  No device type information available")
+            print("   X  No device type information available")  # Message when no type data gathered.
 
     def _display_version_distribution(self) -> None:
         """Display version distribution."""
