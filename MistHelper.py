@@ -10398,7 +10398,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
             "country",
         ]
         for gateway in gateways:  # Iterate gateways for rows.
-            table.add_row(
+            table.add_row(  # Add gateway row to table.
                 [
                     gateway.get("name", ""),
                     gateway.get("mac", ""),
@@ -10412,10 +10412,10 @@ class OrgInventoryExporter:  # Org inventory exporters.
                     gateway.get("country", ""),
                 ]
             )
-        logging.debug("\n%s", table.get_string())
+        logging.debug("\n%s", table.get_string())  # Debug-log the table.
 
 
-class OrgDeviceStatsExporter:
+class OrgDeviceStatsExporter:  # Org device-stats exporters.
     """
     Organization Device Statistics Exporter
 
@@ -10424,7 +10424,7 @@ class OrgDeviceStatsExporter:
     """
 
     @staticmethod
-    def device_stats(fast: bool = False):
+    def device_stats(fast: bool = False):  # Export org device stats.
         """Export statistics for all devices in the organization to OrgDeviceStats.csv.
 
         Fast Mode Behavior:
@@ -10432,30 +10432,30 @@ class OrgDeviceStatsExporter:
             - Falls back to normal fetch otherwise.
         SECURITY: Read-only operation; safe to cache.
         """
-        output_file = "OrgDeviceStats.csv"
-        if fast and os.path.exists(output_file):
+        output_file = "OrgDeviceStats.csv"  # Define output filename.
+        if fast and os.path.exists(output_file):  # Branch: fast cache check.
             try:
-                mtime = os.path.getmtime(output_file)
-                age_minutes = (time.time() - mtime) / 60.0
-                if age_minutes < CSV_FRESHNESS_MINUTES:
-                    logging.info(
+                mtime = os.path.getmtime(output_file)  # Read file modified time.
+                age_minutes = (time.time() - mtime) / 60.0  # Compute file age in minutes.
+                if age_minutes < CSV_FRESHNESS_MINUTES:  # Branch: cache still fresh.
+                    logging.info(  # Log cache reuse.
                         " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
                         output_file,
                         age_minutes,
                         CSV_FRESHNESS_MINUTES,
                     )
                     print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
-                    return
-            except Exception as e:
-                logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)
-        logging.info("Starting export of organization device statistics...")
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("13", "device_stats", 1)
-        op_start = time.time()
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("org device statistics export", hours)
-        APIDataFetcher(
+                    return  # Skip re-fetch.
+            except Exception as e:  # Catch freshness-check error.
+                logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)  # Log freshness failure.
+        logging.info("Starting export of organization device statistics...")  # Log stats export start.
+        emitter = PROGRESS_EMITTER  # Capture progress emitter.
+        if emitter:  # Branch: emitter present.
+            emitter.emit_progress_start("13", "device_stats", 1)  # Emit progress start.
+        op_start = time.time()  # Record operation start time.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
+        TimeUtils.log_dynamic_lookback("org device statistics export", hours)  # Log chosen lookback window.
+        APIDataFetcher(  # Fetch and write device stats.
             title="Org Device Stats:",
             api_call=mistapi.api.v1.orgs.stats.listOrgDevicesStats,
             filename=output_file,
@@ -10464,11 +10464,11 @@ class OrgDeviceStatsExporter:
             duration=f"{hours}h",
             limit=1000,
         ).execute()
-        if emitter:
+        if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete("13", "device_stats", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def _port_stats_cache_hit(output_file: str, fast: bool) -> bool:
+    def _port_stats_cache_hit(output_file: str, fast: bool) -> bool:  # Check port-stats cache hit.
         """Return True when fast mode can safely reuse a fresh cached CSV."""
         if not fast or not os.path.exists(
             output_file
@@ -10497,7 +10497,7 @@ class OrgDeviceStatsExporter:
         return False  # Cache was missing, stale, or unreadable, so a fresh fetch is required.
 
     @staticmethod
-    def _load_port_stats_sites(org_id: str) -> list[tuple[str | None, str]]:
+    def _load_port_stats_sites(org_id: str) -> list[tuple[str | None, str]]:  # Load sites for port stats.
         """Load site identifiers and names for fast-mode per-site port stats collection."""
         try:  # Prefer cached site CSV because it avoids one extra API call in fast mode.
             CacheUtils.check_and_generate_csv(
@@ -10540,7 +10540,7 @@ class OrgDeviceStatsExporter:
         return sites  # Return normalized site tuples for the fast-mode worker pool.
 
     @staticmethod
-    def _fetch_site_port_stats(site_info, connection_semaphore):
+    def _fetch_site_port_stats(site_info, connection_semaphore):  # Fetch port stats for a site.
         """Fetch one site's switch/gateway port stats with bounded concurrency and retries."""
         site_id, site_name = site_info  # Unpack tuple so logging and API calls have stable local names.
         for attempt in range(
@@ -10596,7 +10596,7 @@ class OrgDeviceStatsExporter:
         return []  # Defensive fallback keeps return type stable even if retry loop exits unexpectedly.
 
     @staticmethod
-    def _retry_failed_site_port_stats(failed_sites, connection_semaphore):
+    def _retry_failed_site_port_stats(failed_sites, connection_semaphore):  # Retry failed site port stats.
         """Retry previously failed site fetches using a smaller worker pool."""
         retry_results = []  # Accumulate successful retry rows so they can merge with first-pass results.
         still_failed = []  # Track sites that remain failed after dedicated retry attempts.
@@ -10641,7 +10641,7 @@ class OrgDeviceStatsExporter:
         return retry_results, still_failed  # Return recovered rows and sites that remain unresolved.
 
     @staticmethod
-    def _flatten_site_port_results(successful_results):
+    def _flatten_site_port_results(successful_results):  # Flatten site port results.
         """Flatten pooled worker results into one list of port-stat rows."""
         all_port_stats = []  # Accumulate all site-level rows into one export list.
         for index, result_list in enumerate(
@@ -10659,7 +10659,7 @@ class OrgDeviceStatsExporter:
         return all_port_stats  # Return flattened org-wide port-stat list for sorting and export.
 
     @staticmethod
-    def _save_device_port_stats_output(all_port_stats, output_file: str) -> None:
+    def _save_device_port_stats_output(all_port_stats, output_file: str) -> None:  # Save device port stats output.
         """Sort, sanitize, and persist collected port-stat rows."""
         if not all_port_stats:  # Empty dataset should skip file creation and clearly tell the operator why.
             logging.warning(" No port statistics collected. CSV not created.")  # Log absence of exportable data.
@@ -10684,7 +10684,7 @@ class OrgDeviceStatsExporter:
         )  # Record successful export count in logs.
 
     @staticmethod
-    def _run_fast_device_port_stats(output_file: str) -> None:
+    def _run_fast_device_port_stats(output_file: str) -> None:  # Run fast device port stats.
         """Execute fast-mode site-parallel port stats collection and output."""
         logging.info(
             "* Fast mode: Parallelizing port stats retrieval across sites"
@@ -10788,7 +10788,7 @@ class OrgDeviceStatsExporter:
         ).execute()  # Execute org-level pagination and export through the shared fetcher.
 
     @staticmethod
-    def vpn_peer_stats(fast: bool = False):
+    def vpn_peer_stats(fast: bool = False):  # Export VPN peer stats.
         """Export VPN peer path statistics to OrgVPNPeerStats.csv.
 
         Fast Mode Behavior:
@@ -10796,8 +10796,8 @@ class OrgDeviceStatsExporter:
             - Normal fetch otherwise.
         SECURITY: Read-only; safe to cache.
         """
-        output_file = "OrgVPNPeerStats.csv"
-        if fast and os.path.exists(output_file):
+        output_file = "OrgVPNPeerStats.csv"  # Define output filename.
+        if fast and os.path.exists(output_file):  # Branch: fast cache check.
             try:
                 mtime = os.path.getmtime(output_file)
                 age_minutes = (time.time() - mtime) / 60.0
