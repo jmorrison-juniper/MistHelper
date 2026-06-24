@@ -13048,73 +13048,73 @@ class SiteConfigExporter:  # Site config exporters.
                 (site["name"] for site in sites if site["id"] == site_id),
                 site_id,
             )
-        except Exception as exception:
-            logging.error("Error getting site name for WLAN export: %s", exception)
-            site_name = site_id
+        except Exception as exception:  # Name lookup failed.
+            logging.error("Error getting site name for WLAN export: %s", exception)  # Log the error.
+            site_name = site_id  # Fall back to id.
 
-        filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"
+        filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"  # Build the CSV name.
 
         try:
             # Prefer derived WLANs so inherited/template WLANs are included.
-            derived_response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(
+            derived_response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(  # List derived WLANs.
                 apisession,
                 site_id,
                 resolve=True,
             )
-            rawdata = mistapi.get_all(response=derived_response, mist_session=apisession)
-        except Exception as exception:
-            logging.warning(
+            rawdata = mistapi.get_all(response=derived_response, mist_session=apisession)  # Page all rows.
+        except Exception as exception:  # Derived fetch failed.
+            logging.warning(  # Warn the fallback.
                 "Failed to fetch derived WLANs for site %s, falling back to site-local WLANs: %s", site_id, exception
             )
             local_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=1000)
-            rawdata = mistapi.get_all(response=local_response, mist_session=apisession)
+            rawdata = mistapi.get_all(response=local_response, mist_session=apisession)  # Page all rows.
 
-        if not rawdata:
-            logging.warning("No data provided for output to %s", filename)
+        if not rawdata:  # No rows.
+            logging.warning("No data provided for output to %s", filename)  # Warn none.
             DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
-            print(f"! 0 records exported to data\\{filename}")
-            return
+            print(f"! 0 records exported to data\\{filename}")  # Tell the user zero.
+            return  # Abort.
 
-        processed = DataProcessingUtils.flatten_nested_fields(rawdata)
+        processed = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-        processed = sorted(processed, key=lambda row: row.get("ssid", ""))
+        processed = sorted(processed, key=lambda row: row.get("ssid", ""))  # Sort by SSID.
         DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-        print(f"! {len(processed)} records exported to data\\{filename}")
+        print(f"! {len(processed)} records exported to data\\{filename}")  # Tell the user.
         logging.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
 
     @staticmethod
-    def maps():
+    def maps():  # Export site maps.
         """Export maps for a site to SiteMaps.csv."""
         SiteExportUtils._export_data(api_call=mistapi.api.v1.sites.maps.listSiteMaps, data_type="maps", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def zones():
+    def zones():  # Export site zones.
         """Export zones for a site to SiteZones.csv."""
         SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.sites.zones.listSiteZones, data_type="zones", sort_key="name"
         )
 
     @staticmethod
-    def settings():
+    def settings():  # Export all site settings.
         """Export configuration settings for all sites to AllSiteConfigs.csv."""
-        print("Site Configuration Settings:")
-        logging.info("Starting export of all site configuration settings...")
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug("Using org_id: %s for site settings export.", current_org_id)
+        print("Site Configuration Settings:")  # Header.
+        logging.info("Starting export of all site configuration settings...")  # Log start.
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        logging.debug("Using org_id: %s for site settings export.", current_org_id)  # Trace the org.
         data = APIFetchUtils.all_site_settings(apisession, current_org_id, limit=1000)  # type: ignore[no-untyped-call]
-        if data:
+        if data:  # Have data.
             logging.info("Fetched settings for %s sites. Flattening and sanitizing data...", len(data))
-            data = DataProcessingUtils.flatten_nested_fields(data)
+            data = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(data, "AllSiteConfigs.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")
-            logging.info(" Site configs saved to AllSiteConfigs.csv")
+            print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")  # Tell the user.
+            logging.info(" Site configs saved to AllSiteConfigs.csv")  # Log the save.
         else:
-            logging.warning(" No site configs found.")
-            print("! No site configurations found.")
+            logging.warning(" No site configs found.")  # Warn none found.
+            print("! No site configurations found.")  # Tell the user.
 
 
-class SiteAnomalyExporter:
+class SiteAnomalyExporter:  # Site anomaly exporters.
     """
     Site Anomaly and Event Exporter
 
@@ -13131,101 +13131,101 @@ class SiteAnomalyExporter:
         for all site-scoped metrics related to anomaly detection (capacity, coverage, roaming,
         client connectivity, AP availability, etc.).
         """
-        print("Export Site Anomaly Events:")
-        logging.info("Starting export of site anomaly events...")
+        print("Export Site Anomaly Events:")  # Header.
+        logging.info("Starting export of site anomaly events...")  # Log start.
 
         # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            print("! No site selected. Exiting.")
-            return
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            print("! No site selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
         # Get site name for filename
         try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception:
-            site_name = site_id
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)  # List the site.
+            sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        except Exception:  # Lookup failed.
+            site_name = site_id  # Fall back to id.
 
         # Clean site name for filename
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
-        filename = f"SiteAnomalyEvents_{sanitized_site_name}.csv"
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
+        filename = f"SiteAnomalyEvents_{sanitized_site_name}.csv"  # Build the CSV name.
 
         # Dynamically discover potential anomaly metrics from ConstInsightMetrics.csv
-        print("! Discovering potential anomaly metrics from Mist API definitions...")
-        potential_metrics = AnomalyMetricsDiscovery.discover()
+        print("! Discovering potential anomaly metrics from Mist API definitions...")  # Tell the user.
+        potential_metrics = AnomalyMetricsDiscovery.discover()  # Discover anomaly metrics.
 
         # Extract just the metric names for API calls
-        site_anomaly_metrics = [metric["metric_name"] for metric in potential_metrics]
+        site_anomaly_metrics = [metric["metric_name"] for metric in potential_metrics]  # Extract metric names.
 
         # Log discovered metrics
-        print(f"! Found {len(site_anomaly_metrics)} potential anomaly metrics:")
-        for metric_info in potential_metrics:
-            print(f"  - {metric_info['metric_name']}: {metric_info['description'][:60]}...")
+        print(f"! Found {len(site_anomaly_metrics)} potential anomaly metrics:")  # Tell the user.
+        for metric_info in potential_metrics:  # List each metric.
+            print(f"  - {metric_info['metric_name']}: {metric_info['description'][:60]}...")  # Print the metric.
 
-        if not site_anomaly_metrics:
+        if not site_anomaly_metrics:  # No metrics.
             print("! No potential anomaly metrics found. Please check ConstInsightMetrics.csv availability.")
-            return
+            return  # Abort.
 
-        all_anomaly_data = []
-        metrics_retrieved = 0
+        all_anomaly_data = []  # Accumulate anomaly rows.
+        metrics_retrieved = 0  # Success count.
 
-        print(f"! Retrieving {len(site_anomaly_metrics)} different site anomaly events...")
+        print(f"! Retrieving {len(site_anomaly_metrics)} different site anomaly events...")  # Tell the user.
 
         # Temporarily suppress mistapi error logging to keep console clean
         mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apiresponse"]
-        original_levels = {}
-        for logger_name in mistapi_loggers:
-            logger_instance = logging.getLogger(logger_name)
-            original_levels[logger_name] = logger_instance.level
+        original_levels = {}  # Save original levels.
+        for logger_name in mistapi_loggers:  # Quiet each logger.
+            logger_instance = logging.getLogger(logger_name)  # Get the logger.
+            original_levels[logger_name] = logger_instance.level  # Remember its level.
             logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
 
         try:
-            for metric in site_anomaly_metrics:
+            for metric in site_anomaly_metrics:  # Fetch each metric.
                 try:
                     # Call the site anomaly API endpoint
                     response = mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents(apisession, site_id, metric)
-                    anomaly_data = getattr(response, "data", response) or {}
+                    anomaly_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                    if anomaly_data:
+                    if anomaly_data:  # Have data.
                         # Add metric type identifier to each data point
-                        anomaly_data["metric_type"] = metric
-                        anomaly_data["site_id"] = site_id
-                        anomaly_data["site_name"] = site_name
-                        anomaly_data["data_type"] = "site_anomaly_events"
-                        all_anomaly_data.append(anomaly_data)
-                        metrics_retrieved += 1
-                        print(f"!? Retrieved {metric} anomaly events")
+                        anomaly_data["metric_type"] = metric  # Tag the metric.
+                        anomaly_data["site_id"] = site_id  # Tag the site.
+                        anomaly_data["site_name"] = site_name  # Tag the site name.
+                        anomaly_data["data_type"] = "site_anomaly_events"  # Tag the data type.
+                        all_anomaly_data.append(anomaly_data)  # Collect the row.
+                        metrics_retrieved += 1  # Count success.
+                        print(f"!? Retrieved {metric} anomaly events")  # Tell the user.
                         logging.debug("Successfully retrieved %s anomaly events for site %s", metric, site_id)
                     else:
-                        print(f"! No {metric} anomaly events available")
-                        logging.info("No %s anomaly events available for site %s", metric, site_id)
-                except Exception as metric_error:
-                    print(f"! Error retrieving {metric} anomaly events: {metric_error}")
+                        print(f"! No {metric} anomaly events available")  # Tell the user none.
+                        logging.info("No %s anomaly events available for site %s", metric, site_id)  # Log none.
+                except Exception as metric_error:  # Metric fetch failed.
+                    print(f"! Error retrieving {metric} anomaly events: {metric_error}")  # Tell the user.
                     logging.warning("Error retrieving %s anomaly events for site %s: %s", metric, site_id, metric_error)
 
             # Process and save all collected anomaly data
-            if all_anomaly_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_anomaly_data)
+            if all_anomaly_data:  # Have data.
+                processed = DataProcessingUtils.flatten_nested_fields(all_anomaly_data)  # Flatten nested fields.
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} site anomaly event types exported to {filename}")
-                logging.info(
+                print(f"! {metrics_retrieved} site anomaly event types exported to {filename}")  # Tell the user.
+                logging.info(  # Log the export.
                     "Exported %s site anomaly event types for %s to %s", metrics_retrieved, site_name, filename
                 )
             else:
-                print(f"! 0 anomaly events exported to {filename} (no data available)")
-                logging.warning("No anomaly events available for site %s", site_name)
+                print(f"! 0 anomaly events exported to {filename} (no data available)")  # Tell the user zero.
+                logging.warning("No anomaly events available for site %s", site_name)  # Warn none.
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
-        except Exception as exception:
-            print(f"! Error exporting site anomaly events: {exception}")
-            logging.error("Failed to export site anomaly events for %s: %s", site_name, exception)
+        except Exception as exception:  # Export failed.
+            print(f"! Error exporting site anomaly events: {exception}")  # Tell the user.
+            logging.error("Failed to export site anomaly events for %s: %s", site_name, exception)  # Log the error.
         finally:
             # Restore original logging levels
-            for logger_name, original_level in original_levels.items():
-                logging.getLogger(logger_name).setLevel(original_level)
+            for logger_name, original_level in original_levels.items():  # Restore logger levels.
+                logging.getLogger(logger_name).setLevel(original_level)  # Restore each level.
 
     @staticmethod
     def device_anomaly_events():  # noqa: C901, PLR0912, PLR0915
@@ -13234,104 +13234,104 @@ class SiteAnomalyExporter:
 
         Uses GET /api/v1/sites/:site_id/anomaly/:metric/device/:device_id endpoint to retrieve device anomaly events.
         """
-        print("Export Site Device Anomaly Events:")
-        logging.info("Starting export of site device anomaly events...")
+        print("Export Site Device Anomaly Events:")  # Header.
+        logging.info("Starting export of site device anomaly events...")  # Log start.
 
         # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            print("! No site selected. Exiting.")
-            return
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            print("! No site selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
         # Get site name for filename
         try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception:
-            site_name = site_id
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)  # List the site.
+            sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        except Exception:  # Lookup failed.
+            site_name = site_id  # Fall back to id.
 
         # Get device selection (issue #431: inlined PromptUtils.select_device).
-        device_selection = PromptUtils.select_device_id_from_inventory(site_id)
-        if not device_selection:
-            print("! No device selected. Exiting.")
-            return
+        device_selection = PromptUtils.select_device_id_from_inventory(site_id)  # Select a device.
+        if not device_selection:  # No device.
+            print("! No device selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
-        device_mac = device_selection[0]
-        device_name = device_selection[1]
+        device_mac = device_selection[0]  # Device MAC.
+        device_name = device_selection[1]  # Device name.
 
         # Clean names for filename
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
-        sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name)
-        filename = f"SiteDeviceAnomalyEvents_{sanitized_site_name}_{sanitized_device_name}.csv"
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
+        sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name)  # Sanitize the device name.
+        filename = f"SiteDeviceAnomalyEvents_{sanitized_site_name}_{sanitized_device_name}.csv"  # Build the CSV name.
 
         # Define device-specific anomaly metrics
-        device_anomaly_metrics = ["ap_availability", "throughput", "capacity"]
+        device_anomaly_metrics = ["ap_availability", "throughput", "capacity"]  # Device anomaly metrics.
 
-        all_device_anomaly_data = []
-        metrics_retrieved = 0
+        all_device_anomaly_data = []  # Accumulate anomaly rows.
+        metrics_retrieved = 0  # Success count.
 
         print(f"! Retrieving {len(device_anomaly_metrics)} different device anomaly events for {device_name}...")
 
         # Temporarily suppress mistapi error logging to keep console clean
         mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apiresponse"]
-        original_levels = {}
-        for logger_name in mistapi_loggers:
-            logger_instance = logging.getLogger(logger_name)
-            original_levels[logger_name] = logger_instance.level
+        original_levels = {}  # Save original levels.
+        for logger_name in mistapi_loggers:  # Quiet each logger.
+            logger_instance = logging.getLogger(logger_name)  # Get the logger.
+            original_levels[logger_name] = logger_instance.level  # Remember its level.
             logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
 
         try:
-            for metric in device_anomaly_metrics:
+            for metric in device_anomaly_metrics:  # Fetch each metric.
                 try:
                     # Call the site device anomaly API endpoint
-                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice(
+                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice(  # Get device anomalies.
                         apisession, site_id, metric, device_mac
                     )
-                    device_anomaly_data = getattr(response, "data", response) or {}
+                    device_anomaly_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                    if device_anomaly_data:
+                    if device_anomaly_data:  # Have data.
                         # Add metadata
-                        device_anomaly_data["metric_type"] = metric
-                        device_anomaly_data["site_id"] = site_id
-                        device_anomaly_data["site_name"] = site_name
-                        device_anomaly_data["device_mac"] = device_mac
-                        device_anomaly_data["device_name"] = device_name
-                        device_anomaly_data["data_type"] = "device_anomaly_events"
-                        all_device_anomaly_data.append(device_anomaly_data)
-                        metrics_retrieved += 1
-                        print(f"!? Retrieved {metric} device anomaly data")
+                        device_anomaly_data["metric_type"] = metric  # Tag the metric.
+                        device_anomaly_data["site_id"] = site_id  # Tag the site.
+                        device_anomaly_data["site_name"] = site_name  # Tag the site name.
+                        device_anomaly_data["device_mac"] = device_mac  # Tag the device MAC.
+                        device_anomaly_data["device_name"] = device_name  # Tag the device name.
+                        device_anomaly_data["data_type"] = "device_anomaly_events"  # Tag the data type.
+                        all_device_anomaly_data.append(device_anomaly_data)  # Collect the row.
+                        metrics_retrieved += 1  # Count success.
+                        print(f"!? Retrieved {metric} device anomaly data")  # Tell the user.
                         logging.debug("Successfully retrieved %s device anomaly data for %s", metric, device_mac)
                     else:
-                        print(f"! No {metric} device anomaly data available")
-                        logging.info("No %s device anomaly data available for %s", metric, device_mac)
-                except Exception as metric_error:
-                    print(f"! Error retrieving {metric} device anomaly data: {metric_error}")
-                    logging.warning(
+                        print(f"! No {metric} device anomaly data available")  # Tell the user none.
+                        logging.info("No %s device anomaly data available for %s", metric, device_mac)  # Log none.
+                except Exception as metric_error:  # Metric fetch failed.
+                    print(f"! Error retrieving {metric} device anomaly data: {metric_error}")  # Tell the user.
+                    logging.warning(  # Warn the failure.
                         "Error retrieving %s device anomaly data for %s: %s", metric, device_mac, metric_error
                     )
 
             # Process and save all collected device anomaly data
-            if all_device_anomaly_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_device_anomaly_data)
+            if all_device_anomaly_data:  # Have data.
+                processed = DataProcessingUtils.flatten_nested_fields(all_device_anomaly_data)  # Flatten nested fields.
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} device anomaly event types exported to {filename}")
-                logging.info(
+                print(f"! {metrics_retrieved} device anomaly event types exported to {filename}")  # Tell the user.
+                logging.info(  # Log the export.
                     "Exported %s device anomaly event types for %s to %s", metrics_retrieved, device_name, filename
                 )
             else:
-                print(f"! 0 device anomaly events exported to {filename} (no data available)")
-                logging.warning("No device anomaly events available for %s", device_name)
+                print(f"! 0 device anomaly events exported to {filename} (no data available)")  # Tell the user zero.
+                logging.warning("No device anomaly events available for %s", device_name)  # Warn none.
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
-        except Exception as exception:
-            print(f"! Error exporting device anomaly events: {exception}")
-            logging.error("Failed to export device anomaly events for %s: %s", device_name, exception)
+        except Exception as exception:  # Export failed.
+            print(f"! Error exporting device anomaly events: {exception}")  # Tell the user.
+            logging.error("Failed to export device anomaly events for %s: %s", device_name, exception)  # Log the error.
         finally:
             # Restore original logging levels
-            for logger_name, original_level in original_levels.items():
-                logging.getLogger(logger_name).setLevel(original_level)
+            for logger_name, original_level in original_levels.items():  # Restore logger levels.
+                logging.getLogger(logger_name).setLevel(original_level)  # Restore each level.
 
     @staticmethod
     def client_anomaly_events():  # noqa: C901, PLR0912, PLR0915
@@ -13341,49 +13341,49 @@ class SiteAnomalyExporter:
         Uses GET /api/v1/sites/:site_id/anomaly/:metric/client/:client_mac endpoint to retrieve client anomaly events
         including connection success rates, band-specific roaming performance, and throughput issues.
         """
-        print("Export Site Client Anomaly Events:")
-        logging.info("Starting export of site client anomaly events...")
+        print("Export Site Client Anomaly Events:")  # Header.
+        logging.info("Starting export of site client anomaly events...")  # Log start.
 
         # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            print("! No site selected. Exiting.")
-            return
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            print("! No site selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
         # Get site name for filename
         try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception:
-            site_name = site_id
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)  # List the site.
+            sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        except Exception:  # Lookup failed.
+            site_name = site_id  # Fall back to id.
 
         # Use the guided client selection function with the site_id
-        client_mac, client_type, selected_site_id = PromptClientUtils.select_client(site_id)
-        if not client_mac:
-            print("! No client selected. Exiting.")
-            return
+        client_mac, client_type, selected_site_id = PromptClientUtils.select_client(site_id)  # Select a client.
+        if not client_mac:  # No client.
+            print("! No client selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
         # Get hostname from the client MAC (we'll need to look it up)
-        client_hostname = "Unknown"
+        client_hostname = "Unknown"  # Default hostname.
         try:
             # Search for the client to get hostname
-            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(  # List client stats.
                 apisession, site_id, limit=100, duration="1d"
             )
-            clients = getattr(response, "data", response) or []
+            clients = getattr(response, "data", response) or []  # Unwrap data; default empty.
 
-            for client in clients:
-                if client.get("mac") == client_mac:
-                    client_hostname = client.get("hostname", client.get("name", "Unknown"))
-                    break
+            for client in clients:  # Find the client.
+                if client.get("mac") == client_mac:  # MAC matches.
+                    client_hostname = client.get("hostname", client.get("name", "Unknown"))  # Read the hostname.
+                    break  # Stop searching.
 
-        except Exception as exception:
-            logging.warning("Could not retrieve client hostname for %s: %s", client_mac, exception)
+        except Exception as exception:  # Lookup failed.
+            logging.warning("Could not retrieve client hostname for %s: %s", client_mac, exception)  # Warn the failure.
             client_hostname = client_mac  # Fallback to MAC address
 
         # Clean names for filename
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
         filename = f"SiteClientAnomalyEvents_{sanitized_site_name}_{client_mac.replace(':', '')}.csv"
 
         # Define client-specific anomaly metrics (verified working metrics)
@@ -13393,8 +13393,8 @@ class SiteAnomalyExporter:
             "throughput",  # Client throughput anomalies
         ]
 
-        all_client_anomaly_data = []
-        metrics_retrieved = 0
+        all_client_anomaly_data = []  # Accumulate anomaly rows.
+        metrics_retrieved = 0  # Success count.
 
         print(
             f"! Retrieving {len(client_anomaly_metrics)} different client anomaly events for {client_mac} ({client_hostname})..."  # noqa: E501
@@ -13402,66 +13402,66 @@ class SiteAnomalyExporter:
 
         # Temporarily suppress mistapi error logging to keep console clean
         mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apiresponse"]
-        original_levels = {}
-        for logger_name in mistapi_loggers:
-            logger_instance = logging.getLogger(logger_name)
-            original_levels[logger_name] = logger_instance.level
+        original_levels = {}  # Save original levels.
+        for logger_name in mistapi_loggers:  # Quiet each logger.
+            logger_instance = logging.getLogger(logger_name)  # Get the logger.
+            original_levels[logger_name] = logger_instance.level  # Remember its level.
             logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
 
         try:
-            for metric in client_anomaly_metrics:
+            for metric in client_anomaly_metrics:  # Fetch each metric.
                 try:
                     # Call the site client anomaly API endpoint
-                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(
+                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(  # Get client anomalies.
                         apisession, site_id, client_mac, metric
                     )
-                    client_anomaly_data = getattr(response, "data", response) or {}
+                    client_anomaly_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                    if client_anomaly_data:
+                    if client_anomaly_data:  # Have data.
                         # Add metadata
-                        client_anomaly_data["metric_type"] = metric
-                        client_anomaly_data["site_id"] = site_id
-                        client_anomaly_data["site_name"] = site_name
-                        client_anomaly_data["client_mac"] = client_mac
-                        client_anomaly_data["client_hostname"] = client_hostname
-                        client_anomaly_data["data_type"] = "client_anomaly_events"
-                        all_client_anomaly_data.append(client_anomaly_data)
-                        metrics_retrieved += 1
-                        print(f"!? Retrieved {metric} client anomaly data")
+                        client_anomaly_data["metric_type"] = metric  # Tag the metric.
+                        client_anomaly_data["site_id"] = site_id  # Tag the site.
+                        client_anomaly_data["site_name"] = site_name  # Tag the site name.
+                        client_anomaly_data["client_mac"] = client_mac  # Tag the client MAC.
+                        client_anomaly_data["client_hostname"] = client_hostname  # Tag the hostname.
+                        client_anomaly_data["data_type"] = "client_anomaly_events"  # Tag the data type.
+                        all_client_anomaly_data.append(client_anomaly_data)  # Collect the row.
+                        metrics_retrieved += 1  # Count success.
+                        print(f"!? Retrieved {metric} client anomaly data")  # Tell the user.
                         logging.debug("Successfully retrieved %s client anomaly data for %s", metric, client_mac)
                     else:
-                        print(f"! No {metric} client anomaly data available")
-                        logging.info("No %s client anomaly data available for %s", metric, client_mac)
-                except Exception as metric_error:
-                    print(f"! Error retrieving {metric} client anomaly data: {metric_error}")
-                    logging.warning(
+                        print(f"! No {metric} client anomaly data available")  # Tell the user none.
+                        logging.info("No %s client anomaly data available for %s", metric, client_mac)  # Log none.
+                except Exception as metric_error:  # Metric fetch failed.
+                    print(f"! Error retrieving {metric} client anomaly data: {metric_error}")  # Tell the user.
+                    logging.warning(  # Warn the failure.
                         "Error retrieving %s client anomaly data for %s: %s", metric, client_mac, metric_error
                     )
 
             # Process and save all collected client anomaly data
-            if all_client_anomaly_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_client_anomaly_data)
+            if all_client_anomaly_data:  # Have data.
+                processed = DataProcessingUtils.flatten_nested_fields(all_client_anomaly_data)  # Flatten nested fields.
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")
-                logging.info(
+                print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")  # Tell the user.
+                logging.info(  # Log the export.
                     "Exported %s client anomaly event types for %s to %s", metrics_retrieved, client_mac, filename
                 )
             else:
-                print(f"! 0 client anomaly events exported to {filename} (no data available)")
-                logging.warning("No client anomaly events available for %s", client_mac)
+                print(f"! 0 client anomaly events exported to {filename} (no data available)")  # Tell the user zero.
+                logging.warning("No client anomaly events available for %s", client_mac)  # Warn none.
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
-        except Exception as exception:
-            print(f"! Error exporting client anomaly events: {exception}")
-            logging.error("Failed to export client anomaly events for %s: %s", client_mac, exception)
+        except Exception as exception:  # Export failed.
+            print(f"! Error exporting client anomaly events: {exception}")  # Tell the user.
+            logging.error("Failed to export client anomaly events for %s: %s", client_mac, exception)  # Log the error.
         finally:
             # Restore original logging levels
-            for logger_name, original_level in original_levels.items():
-                logging.getLogger(logger_name).setLevel(original_level)
+            for logger_name, original_level in original_levels.items():  # Restore logger levels.
+                logging.getLogger(logger_name).setLevel(original_level)  # Restore each level.
 
 
-class SitesByAPModelExporter:
+class SitesByAPModelExporter:  # Sites-by-AP-model exporter.
     """
     Sites by AP Model Exporter.
 
@@ -13474,46 +13474,46 @@ class SitesByAPModelExporter:
     @staticmethod
     def _get_ap_models(org_id: str) -> tuple[list[dict], list[str]]:  # type: ignore[type-arg]
         """Return (ap_inventory, sorted_unique_models) for the organisation."""
-        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
-        aps = [d for d in inventory if d.get("type") == "ap"]
-        models = sorted({d.get("model", "") for d in aps if d.get("model")})
-        return aps, models
+        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch org inventory.
+        aps = [d for d in inventory if d.get("type") == "ap"]  # Keep only APs.
+        models = sorted({d.get("model", "") for d in aps if d.get("model")})  # Distinct sorted models.
+        return aps, models  # Return APs and models.
 
     @staticmethod
     def _prompt_model_selection(models: list[str], aps: list[dict]) -> str | None:  # type: ignore[type-arg]
         """Prompt user to select an AP model from the numbered list."""
-        print("\nAvailable AP models:")
-        for idx, model in enumerate(models, 1):
-            count = sum(1 for d in aps if d.get("model") == model)
-            print(f"  {idx:3d}. {model} ({count} APs)")
-        choice = InputUtils.safe_input(
+        print("\nAvailable AP models:")  # Header.
+        for idx, model in enumerate(models, 1):  # List each model.
+            count = sum(1 for d in aps if d.get("model") == model)  # Count APs per model.
+            print(f"  {idx:3d}. {model} ({count} APs)")  # Print the model.
+        choice = InputUtils.safe_input(  # Read the choice.
             "\nSelect model number (or Enter to cancel): ",
             context="ap_model_selection",
         )
-        if not choice.strip():
-            return None
+        if not choice.strip():  # Empty input.
+            return None  # No selection.
         try:
-            selected = int(choice.strip()) - 1
-            return models[selected] if 0 <= selected < len(models) else None
-        except (ValueError, IndexError):
-            print("! Invalid selection.")
-            return None
+            selected = int(choice.strip()) - 1  # Parse the index.
+            return models[selected] if 0 <= selected < len(models) else None  # Return the model or None.
+        except (ValueError, IndexError):  # Bad input.
+            print("! Invalid selection.")  # Tell the user.
+            return None  # No selection.
 
     @staticmethod
-    def _split_address(address: str) -> tuple[str, str, str, str, str]:
+    def _split_address(address: str) -> tuple[str, str, str, str, str]:  # Split an address string.
         """Split a full address string into street, city, state, zip, country."""
         try:
-            parts = address.split(", ")
-            street = parts[0]
-            city = parts[1]
-            state_zip = parts[2].split()
-            state = state_zip[0]
-            zip_code = state_zip[1]
-            country = parts[3]
-            return street, city, state, zip_code, country
-        except Exception as exception:
-            logging.debug("Failed to split address '%s': %s", address, exception)
-            return address, "", "", "", ""
+            parts = address.split(", ")  # Split on commas.
+            street = parts[0]  # Street part.
+            city = parts[1]  # City part.
+            state_zip = parts[2].split()  # State/zip part.
+            state = state_zip[0]  # State token.
+            zip_code = state_zip[1]  # Zip token.
+            country = parts[3]  # Country part.
+            return street, city, state, zip_code, country  # Return the parts.
+        except Exception as exception:  # Parse failed.
+            logging.debug("Failed to split address '%s': %s", address, exception)  # Trace the failure.
+            return address, "", "", "", ""  # Return address as street.
 
     @staticmethod
     def _build_export_rows(
@@ -13523,15 +13523,15 @@ class SitesByAPModelExporter:
     ) -> list[dict]:  # type: ignore[type-arg]
         """Group APs by site and build one CSV row per matching site."""
         grouped: dict[str, list[dict]] = {}  # type: ignore[type-arg]
-        for device in aps:
-            if device.get("model") == model and device.get("site_id"):
-                grouped.setdefault(device["site_id"], []).append(device)
-        rows = []
+        for device in aps:  # Walk APs.
+            if device.get("model") == model and device.get("site_id"):  # Match model with a site.
+                grouped.setdefault(device["site_id"], []).append(device)  # Group by site.
+        rows = []  # Accumulate rows.
         for site_id, devices in sorted(grouped.items(), key=lambda x: site_map.get(x[0], {}).get("name", "")):
-            site = site_map.get(site_id, {})
-            address = site.get("address", "")
+            site = site_map.get(site_id, {})  # Look up the site.
+            address = site.get("address", "")  # Read the address.
             street, city, state, zip_code, country = SitesByAPModelExporter._split_address(address)
-            rows.append(
+            rows.append(  # Append the row.
                 {
                     "site_id": site_id,
                     "site_name": site.get("name", ""),
@@ -13545,39 +13545,39 @@ class SitesByAPModelExporter:
                     "ap_macs": ", ".join(d.get("mac", "") for d in devices),
                 }
             )
-        return rows
+        return rows  # Return the rows.
 
     @staticmethod
-    def export_sites_by_ap_model() -> None:
+    def export_sites_by_ap_model() -> None:  # Export sites by AP model.
         """Export CSV of sites containing APs of a selected model with site address info."""
-        print("Export Sites by AP Model:")
-        logging.info("Starting export of sites by AP model...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        print("Export Sites by AP Model:")  # Header.
+        logging.info("Starting export of sites by AP model...")  # Log start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
 
-        print("! Fetching AP inventory from organization...")
-        aps, models = SitesByAPModelExporter._get_ap_models(org_id)
-        if not models:
-            print("! No APs found in organization inventory.")
-            return
+        print("! Fetching AP inventory from organization...")  # Tell the user.
+        aps, models = SitesByAPModelExporter._get_ap_models(org_id)  # Fetch APs and models.
+        if not models:  # No models.
+            print("! No APs found in organization inventory.")  # Tell the user.
+            return  # Abort.
 
-        model = SitesByAPModelExporter._prompt_model_selection(models, aps)
-        if not model:
-            return
+        model = SitesByAPModelExporter._prompt_model_selection(models, aps)  # Prompt a model.
+        if not model:  # No model.
+            return  # Abort.
 
-        print(f"! Fetching site details for sites with {model} APs...")
-        all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-        site_map = {site["id"]: site for site in all_sites if site.get("id")}
+        print(f"! Fetching site details for sites with {model} APs...")  # Tell the user.
+        all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites.
+        site_map = {site["id"]: site for site in all_sites if site.get("id")}  # Map site id to site.
 
-        rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)
-        if not rows:
-            print(f"! No sites found with {model} APs.")
-            return
+        rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)  # Build export rows.
+        if not rows:  # No rows.
+            print(f"! No sites found with {model} APs.")  # Tell the user.
+            return  # Abort.
 
-        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)
-        filename = f"SitesByAPModel_{safe_model}.csv"
+        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)  # Slugify the model.
+        filename = f"SitesByAPModel_{safe_model}.csv"  # Build the CSV name.
         DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")
-        print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")
-        logging.info("Exported %s sites with AP model %s", len(rows), model)
+        print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")  # Tell the user.
+        logging.info("Exported %s sites with AP model %s", len(rows), model)  # Log the export.
 
 
 # ============================================================================
@@ -13585,15 +13585,15 @@ class SitesByAPModelExporter:
 # ============================================================================
 
 
-class SiteExportUtils:
+class SiteExportUtils:  # Site export delegators.
     """Delegation wrapper for extracted site export implementation."""
 
     @staticmethod
-    def _configure_module():
+    def _configure_module():  # Configure the export module.
         """Configure extracted module dependencies and return module handle."""
         from src.export import site_export_utils as site_export_module  # noqa: PLC0415,I001
 
-        configure_site_export_utils_dependencies(
+        configure_site_export_utils_dependencies(  # Wire dependencies.
             apisession_dependency=apisession,
             prompt_utils=PromptUtils,
             config_utils=ConfigUtils,
@@ -13609,130 +13609,130 @@ class SiteExportUtils:
             tqdm_module=tqdm,
             mistapi_dependency=mistapi,
         )
-        return site_export_module
+        return site_export_module  # Return the module.
 
     @staticmethod
-    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):
+    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # Export a site endpoint.
         """Delegate generic site export flow to extracted module."""
-        module = SiteExportUtils._configure_module()
+        module = SiteExportUtils._configure_module()  # Configure the module.
         return module.SiteExportUtils._export_data(api_call, data_type, sort_key=sort_key, **api_kwargs)
 
     @staticmethod
-    def insight_metrics():
+    def insight_metrics():  # Export site insight metrics.
         """Menu #74 entry: configures deps then runs decomposed SiteMetricOperation."""
         SiteExportUtils._configure_module()  # Wire apisession / mistapi / DataExporter globals on the extracted module
         SiteMetricOperation.execute()  # Run the decomposed operation directly (no inheritance delegation)
 
     @staticmethod
-    def device_insights():
+    def device_insights():  # Export device insights.
         """Menu #76 entry: configures deps then runs decomposed DeviceMetricOperation."""
         SiteExportUtils._configure_module()  # Wire apisession / mistapi / DataExporter globals on the extracted module
         DeviceMetricOperation.execute()  # Run the decomposed operation directly (no inheritance delegation)
 
     @staticmethod
-    def insights():
+    def insights():  # Export site insights.
         """Menu #73 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.insights()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.insights()  # Delegate the export.
 
     @staticmethod
-    def _system_events():
+    def _system_events():  # Export system events.
         """Delegated site system events export."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils._system_events()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils._system_events()  # Delegate the export.
 
     @staticmethod
-    def _fast_roam_events():
+    def _fast_roam_events():  # Export fast-roam events.
         """Delegated site fast-roam events export."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils._fast_roam_events()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils._fast_roam_events()  # Delegate the export.
 
     @staticmethod
-    def ospf_stats():
+    def ospf_stats():  # Export OSPF stats.
         """Menu #70 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.ospf_stats()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.ospf_stats()  # Delegate the export.
 
     @staticmethod
-    def mxedge_upgrade_status():
+    def mxedge_upgrade_status():  # Export Mist Edge upgrades.
         """Menu #71 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.mxedge_upgrade_status()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.mxedge_upgrade_status()  # Delegate the export.
 
     @staticmethod
-    def auto_map_assignment_status():
+    def auto_map_assignment_status():  # Export auto-map status.
         """Menu #72 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.auto_map_assignment_status()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.auto_map_assignment_status()  # Delegate the export.
 
     @staticmethod
-    def site_stats() -> None:
+    def site_stats() -> None:  # Export site stats.
         """Menu #80 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.site_stats()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.site_stats()  # Delegate the export.
 
     @staticmethod
-    def gateway_metrics() -> None:
+    def gateway_metrics() -> None:  # Export gateway metrics.
         """Menu #81 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.gateway_metrics()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.gateway_metrics()  # Delegate the export.
 
     @staticmethod
-    def switches_metrics() -> None:
+    def switches_metrics() -> None:  # Export switch metrics.
         """Menu #82 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.switches_metrics()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.switches_metrics()  # Delegate the export.
 
     @staticmethod
-    def beacons_stats() -> None:
+    def beacons_stats() -> None:  # Export beacon stats.
         """Menu #83 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.beacons_stats()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.beacons_stats()  # Delegate the export.
 
     @staticmethod
-    def wxrules_usage() -> None:
+    def wxrules_usage() -> None:  # Export WxRules usage.
         """Menu #84 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.wxrules_usage()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.wxrules_usage()  # Delegate the export.
 
     @staticmethod
-    def assets_stats() -> None:
+    def assets_stats() -> None:  # Export asset stats.
         """Menu #85 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.assets_stats()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.assets_stats()  # Delegate the export.
 
     @staticmethod
-    def current_channel_planning() -> None:
+    def current_channel_planning() -> None:  # Export channel planning.
         """Menu #86 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.current_channel_planning()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.current_channel_planning()  # Delegate the export.
 
     @staticmethod
-    def zone_config_analysis() -> None:
+    def zone_config_analysis() -> None:  # Export zone analysis.
         """Menu #6 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.zone_config_analysis()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.zone_config_analysis()  # Delegate the export.
 
     @staticmethod
-    def _classify_device_platform(device_model: str) -> str:
+    def _classify_device_platform(device_model: str) -> str:  # Classify a device platform.
         """Delegate device platform classification helper."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils._classify_device_platform(device_model)
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils._classify_device_platform(device_model)  # Delegate the call.
 
     @staticmethod
-    def _metric_supported_on_platform(metric_name: str, device_platform: str) -> bool:
+    def _metric_supported_on_platform(metric_name: str, device_platform: str) -> bool:  # Check metric platform support.
         """Delegate metric/platform support check to the extracted SiteExportUtils impl."""
         module = SiteExportUtils._configure_module()  # resolve wired src module
         return module.SiteExportUtils._metric_compatible_with_platform(metric_name, device_platform)  # call src impl
 
     @staticmethod
-    def _normalize_device_mac_or_none(device_mac: str) -> str | None:
+    def _normalize_device_mac_or_none(device_mac: str) -> str | None:  # Normalize a device MAC.
         """Delegate device MAC normalization helper."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils._normalize_device_mac_or_none(device_mac)
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils._normalize_device_mac_or_none(device_mac)  # Delegate the call.
 
 
-class GatewayHaExporter:
+class GatewayHaExporter:  # Gateway HA exporter.
     """
     Exporter for HA (High-Availability) gateway cluster information.
 
@@ -13743,7 +13743,7 @@ class GatewayHaExporter:
     """
 
     # Field names preserved from the stats_gateway response that describe HA state
-    HA_STAT_FIELDS = [
+    HA_STAT_FIELDS = [  # HA stat columns.
         "mac",
         "name",
         "model",
