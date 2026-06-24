@@ -8020,7 +8020,7 @@ def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int,
     )  # Return all pool configuration values as a bundle.
 
 
-def _pool_process_batch_wait_loop(
+def _pool_process_batch_wait_loop(  # Submit one batch to a thread pool.
     batch: list[Any],
     batch_number: int,
     total_batches: int,
@@ -8094,7 +8094,7 @@ def _pool_process_batch_wait_loop(
     return batch_successful, batch_failed  # Return batch-level results so caller can accumulate them.
 
 
-def _pool_log_batch_exception(
+def _pool_log_batch_exception(  # Log a batch-level exception with context.
     batch_exc: Exception, batch_index: int, batch_size: int, max_threads: int, threading_mode: str
 ) -> None:
     """Log a batch-level exception with full context then re-raise it."""
@@ -8162,7 +8162,7 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
     ) // batch_size  # Pre-compute total batch count for progress labels.
     # Issue #431: bundle the 4 constant params into a frozen dataclass so
     # the inner loop signature stays within the 5-Item Rule's <=5 limit.
-    batch_config = BatchWorkerConfig(
+    batch_config = BatchWorkerConfig(  # Bundle constant worker params per 5-Item Rule.
         worker_function=worker_function,
         connection_semaphore=connection_semaphore,
         max_threads=max_threads,
@@ -8217,7 +8217,7 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
 # PromptNetworkDeviceUtils -- extracted to src/device/prompt_utils.py (issue #332)
 
 
-class PromptClientUtils:
+class PromptClientUtils:  # Client selection prompt helpers.
     """
     Client Selection Prompts
 
@@ -8236,12 +8236,12 @@ class PromptClientUtils:
         Returns:
             str: The selected client MAC address (normalized) or None if no selection made
         """
-        logging.debug("Fetching connected clients for site: %s", site_id)
+        logging.debug("Fetching connected clients for site: %s", site_id)  # Log before fetching clients.
 
         try:
             # Fetch wireless clients using search endpoint (from clients module)
             wireless_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)
-            wireless_clients = (
+            wireless_clients = (  # Normalize wireless results payload.
                 wireless_response.data.get("results", [])
                 if hasattr(wireless_response.data, "get")
                 else wireless_response.data
@@ -8249,30 +8249,30 @@ class PromptClientUtils:
 
             # Fetch wired clients using search endpoint (from separate wired_clients module)
             wired_response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id)
-            wired_clients = (
+            wired_clients = (  # Normalize wired results payload.
                 wired_response.data.get("results", []) if hasattr(wired_response.data, "get") else wired_response.data
             )
 
-            all_clients = []
+            all_clients = []  # Combined client list for selection.
 
             # Process wireless clients
-            if wireless_clients:
-                for client in wireless_clients:
-                    client["connection_type"] = "Wireless"
-                    all_clients.append(client)
+            if wireless_clients:  # Only tag wireless when present.
+                for client in wireless_clients:  # Tag each wireless client.
+                    client["connection_type"] = "Wireless"  # Mark connection type for display.
+                    all_clients.append(client)  # Add wireless client to combined list.
 
             # Process wired clients
-            if wired_clients:
-                for client in wired_clients:
-                    client["connection_type"] = "Wired"
-                    all_clients.append(client)
+            if wired_clients:  # Only tag wired when present.
+                for client in wired_clients:  # Tag each wired client.
+                    client["connection_type"] = "Wired"  # Mark connection type for display.
+                    all_clients.append(client)  # Add wired client to combined list.
 
-            if not all_clients:
-                print("\n! No connected clients found at the selected site.")
-                logging.warning("No clients found for site_id: %s", site_id)
-                return None
+            if not all_clients:  # No clients means nothing to select.
+                print("\n! No connected clients found at the selected site.")  # Tell operator no clients found.
+                logging.warning("No clients found for site_id: %s", site_id)  # Log the empty-site condition.
+                return None  # Abort selection with no result.
 
-            logging.info(
+            logging.info(  # Log client counts for visibility.
                 "Found %s connected clients at site (%s wireless, %s wired)",
                 len(all_clients),
                 len(wireless_clients or []),
@@ -8283,62 +8283,62 @@ class PromptClientUtils:
             all_clients = sorted(all_clients, key=lambda x: (x.get("hostname", ""), x.get("username", "")))
 
             # Prepare selection table
-            table = PrettyTable()
-            table.field_names = ["Index", "Hostname/User", "MAC", "IP", "Type", "SSID/VLAN"]
-            table.max_width["Hostname/User"] = 25
-            index_to_client = {}
+            table = PrettyTable()  # Build selection table.
+            table.field_names = ["Index", "Hostname/User", "MAC", "IP", "Type", "SSID/VLAN"]  # Define table columns.
+            table.max_width["Hostname/User"] = 25  # Cap hostname width for readability.
+            index_to_client = {}  # Map index back to client object.
 
-            for idx, client in enumerate(all_clients):
+            for idx, client in enumerate(all_clients):  # Enumerate clients for indexed rows.
                 hostname = client.get("hostname", client.get("username", "Unknown"))[:25]
-                mac = client.get("mac", "Unknown")
-                ip = client.get("ip", "Unknown")
-                conn_type = client.get("connection_type", "Unknown")
+                mac = client.get("mac", "Unknown")  # Default MAC when missing.
+                ip = client.get("ip", "Unknown")  # Default IP when missing.
+                conn_type = client.get("connection_type", "Unknown")  # Read connection type for branching.
 
                 # SSID for wireless, VLAN for wired
-                if conn_type == "Wireless":
-                    network = client.get("ssid", "N/A")
+                if conn_type == "Wireless":  # Wireless rows show SSID.
+                    network = client.get("ssid", "N/A")  # Use SSID as network label.
                 else:
-                    network = f"VLAN {client.get('vlan_id', 'N/A')}"
+                    network = f"VLAN {client.get('vlan_id', 'N/A')}"  # Wired rows show VLAN label.
 
-                table.add_row([idx, hostname, mac, ip, conn_type, network])
-                index_to_client[idx] = client
+                table.add_row([idx, hostname, mac, ip, conn_type, network])  # Add client row to the table.
+                index_to_client[idx] = client  # Map index to client for lookup.
 
-            print("\n" + "=" * 80)
-            print(" SELECT CONNECTED CLIENT")
-            print("=" * 80)
-            print(f"  Found {len(all_clients)} connected clients")
-            print("=" * 80)
-            print(table)
-            print("\nOptions:")
-            print("  - Enter index number to select a client")
-            print("  - Enter 'm' to manually type MAC address")
-            print("  - Enter 'c' to cancel")
+            print("\n" + "=" * 80)  # Print selection header rule.
+            print(" SELECT CONNECTED CLIENT")  # Print selection title.
+            print("=" * 80)  # Print closing header rule.
+            print(f"  Found {len(all_clients)} connected clients")  # Show count of connected clients.
+            print("=" * 80)  # Print separator rule.
+            print(table)  # Render the client table.
+            print("\nOptions:")  # Print options heading.
+            print("  - Enter index number to select a client")  # Explain index selection.
+            print("  - Enter 'm' to manually type MAC address")  # Explain manual MAC option.
+            print("  - Enter 'c' to cancel")  # Explain cancel option.
 
             user_input = InputUtils.safe_input("\nEnter your choice: ", context="client_selection").strip()
-            logging.debug("User input for client selection: %s", user_input)
+            logging.debug("User input for client selection: %s", user_input)  # Log raw selection input.
 
             # Check for manual entry
-            if user_input.lower() == "m":
+            if user_input.lower() == "m":  # Branch: manual MAC entry.
                 manual_mac = InputUtils.safe_input("Enter client MAC address: ", context="manual_mac")
-                logging.info("User chose manual MAC entry: %s", manual_mac)
-                return manual_mac
+                logging.info("User chose manual MAC entry: %s", manual_mac)  # Log manual MAC choice.
+                return manual_mac  # Return manually typed MAC.
 
             # Check for cancel
-            if user_input.lower() == "c":
-                logging.info("User cancelled client selection")
-                return None
+            if user_input.lower() == "c":  # Branch: cancel selection.
+                logging.info("User cancelled client selection")  # Log cancellation.
+                return None  # Abort with no selection.
 
             # Validate index selection
-            if user_input.isdigit():
-                idx = int(user_input)
-                if idx in index_to_client:
-                    client_mac = index_to_client[idx].get("mac")
-                    client_hostname = index_to_client[idx].get(
+            if user_input.isdigit():  # Branch: numeric index choice.
+                idx = int(user_input)  # Parse index to integer.
+                if idx in index_to_client:  # Validate index exists.
+                    client_mac = index_to_client[idx].get("mac")  # Read MAC of chosen client.
+                    client_hostname = index_to_client[idx].get(  # Read hostname of chosen client.
                         "hostname", index_to_client[idx].get("username", "Unknown")
                     )
                     conn_type = index_to_client[idx].get("connection_type", "Unknown")
                     print(f"\n! Selected: {client_hostname} ({conn_type}) - MAC: {client_mac}")
-                    logging.info(
+                    logging.info(  # Log the selected client.
                         "User selected client by index: %s (hostname: %s, mac: %s, type: %s)",
                         idx,
                         client_hostname,
@@ -8347,18 +8347,18 @@ class PromptClientUtils:
                     )
                     return client_mac  # type: ignore[no-any-return]
                 else:
-                    print("\n! Invalid index")
-                    logging.error("Invalid client index: %s", idx)
-                    return None
+                    print("\n! Invalid index")  # Out-of-range index path.
+                    logging.error("Invalid client index: %s", idx)  # Log invalid index.
+                    return None  # Abort on invalid index.
             else:
                 print("\n! Please enter a valid index number, 'm' for manual, or 'c' to cancel")
-                logging.error("Invalid client selection input: %s", user_input)
-                return None
+                logging.error("Invalid client selection input: %s", user_input)  # Log invalid selection input.
+                return None  # Abort on bad input.
 
-        except Exception as error:
-            print(f"\n! Error fetching clients: {error}")
+        except Exception as error:  # Catch client-fetch errors.
+            print(f"\n! Error fetching clients: {error}")  # Show fetch error to operator.
             logging.exception("Exception in PromptClientUtils.select_client_mac: %s", error)
-            return None
+            return None  # Abort on error.
 
     @staticmethod
     def select_client(site_id: str | None = None) -> tuple[str | None, str | None, str | None]:
@@ -8372,33 +8372,33 @@ class PromptClientUtils:
         Returns:
             tuple: (client_mac, client_type, site_id) or (None, None, None) if no selection
         """
-        print("\n  Client Selection")
-        print("=" * 30)
+        print("\n  Client Selection")  # Print selection heading.
+        print("=" * 30)  # Print separator rule.
 
         site_id = PromptUtils._determine_search_scope(site_id)  # type: ignore[assignment]
         if site_id is False:  # type: ignore[comparison-overlap]  # User explicitly cancelled
-            return None, None, None
+            return None, None, None  # Abort when no org resolved.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id from cache/prompt.
 
         try:
-            all_clients = PromptUtils._fetch_all_clients(org_id, site_id)
-            if not all_clients:
-                print(" No clients found.")
-                return None, None, None
+            all_clients = PromptUtils._fetch_all_clients(org_id, site_id)  # Fetch all clients for org/site.
+            if not all_clients:  # Handle empty client set.
+                print(" No clients found.")  # Tell operator none found.
+                return None, None, None  # Abort with empty result.
 
-            sites_cache = PromptUtils._load_sites_cache(org_id)
-            PromptUtils._display_client_table(all_clients, sites_cache)
+            sites_cache = PromptUtils._load_sites_cache(org_id)  # Load sites cache for names.
+            PromptUtils._display_client_table(all_clients, sites_cache)  # Display the client table.
 
             return PromptUtils._handle_client_selection(all_clients, sites_cache, site_id)
 
-        except Exception as exception:
-            logging.error("Error during client selection: %s", exception)
-            print(f"! Error searching for clients: {exception}")
-            return None, None, None
+        except Exception as exception:  # Catch selection errors.
+            logging.error("Error during client selection: %s", exception)  # Log selection error.
+            print(f"! Error searching for clients: {exception}")  # Show error to operator.
+            return None, None, None  # Abort on error.
 
     @staticmethod
-    def select_site_and_device_ids(site_id=None, device_id=None):
+    def select_site_and_device_ids(site_id=None, device_id=None):  # Prompt for site and device ids.
         """
         Returns site_id and device_id, either from arguments or via interactive prompts.
 
@@ -8409,26 +8409,26 @@ class PromptClientUtils:
         Returns:
             tuple: (site_id, device_id) or (None, None) if selection failed
         """
-        if not site_id:
-            site_id = PromptUtils.select_site_id_from_csv()
-            if not site_id:
-                print(" No site selected.")
-                return None, None
+        if not site_id:  # Resolve site when not supplied.
+            site_id = PromptUtils.select_site_id_from_csv()  # Prompt site from CSV.
+            if not site_id:  # Handle no-site selection.
+                print(" No site selected.")  # Tell operator none selected.
+                return None, None  # Abort with no ids.
 
-        if not device_id:
+        if not device_id:  # Resolve device when not supplied.
             device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="all")
-            if not device_id:
-                print(" No device selected.")
-                return None, None
+            if not device_id:  # Handle no-device selection.
+                print(" No device selected.")  # Tell operator none selected.
+                return None, None  # Abort with no ids.
 
-        return site_id, device_id
+        return site_id, device_id  # Return resolved id pair.
 
     # ========================================================================
     # CLIENT SELECTION METHODS
     # ========================================================================
 
 
-class PromptUtils:
+class PromptUtils:  # General prompt helpers.
     """
     Centralized prompt utilities for user input and selection operations.
     Groups all interactive selection functions (sites, devices, ports, clients).
@@ -8436,7 +8436,7 @@ class PromptUtils:
     """
 
     @staticmethod
-    def select_device_id_from_inventory(
+    def select_device_id_from_inventory(  # Prompt device id from inventory.
         site_id: str, device_type: str = "all", csv_filename: str = "SiteInventory.csv"
     ) -> str | None:
         """
@@ -8457,81 +8457,81 @@ class PromptUtils:
         # IMPORTANT: Always use type=all to get all device types (APs, switches, gateways)
         # The Mist API defaults to only APs unless explicitly specified
         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
-        if not rawdata:
-            print("No devices found for the selected site.")
-            logging.warning("No devices found for site_id: %s", site_id)
-            return None
+        if not rawdata:  # Handle empty inventory.
+            print("No devices found for the selected site.")  # Tell operator none found.
+            logging.warning("No devices found for site_id: %s", site_id)  # Log empty inventory.
+            return None  # Abort with no device.
 
         # Filter devices locally based on requested device types
-        if device_type != "all":
-            requested_types = [dtype.strip() for dtype in device_type.split(",")]
-            filtered_data = []
-            for device in rawdata:
-                device_device_type = device.get("type", "").lower()
-                if device_device_type in requested_types:
-                    filtered_data.append(device)
-            rawdata = filtered_data
+        if device_type != "all":  # Filter by type when requested.
+            requested_types = [dtype.strip() for dtype in device_type.split(",")]  # Split requested types list.
+            filtered_data = []  # Collect matching devices.
+            for device in rawdata:  # Scan each device.
+                device_device_type = device.get("type", "").lower()  # Read normalized device type.
+                if device_device_type in requested_types:  # Keep devices of requested type.
+                    filtered_data.append(device)  # Add matching device.
+            rawdata = filtered_data  # Replace data with filtered set.
 
-            if not rawdata:
-                print(f"No devices of type '{device_type}' found at the selected site.")
+            if not rawdata:  # Handle empty filtered set.
+                print(f"No devices of type '{device_type}' found at the selected site.")  # Tell operator none of type.
                 logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)
-                return None
+                return None  # Abort with no device.
 
         # Sort, flatten, and sanitize the inventory data for display and CSV export
-        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
-        inventory = DataProcessingUtils.flatten_nested_fields(inventory)
+        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))  # Sort inventory by model.
+        inventory = DataProcessingUtils.flatten_nested_fields(inventory)  # Flatten nested device fields.
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
         DataExporter.write_with_format_selection(inventory, csv_filename)  # type: ignore[no-untyped-call]
-        logging.info("Device inventory for site_id %s written to %s", site_id, csv_filename)
+        logging.info("Device inventory for site_id %s written to %s", site_id, csv_filename)  # Log CSV write location.
 
         # Prepare PrettyTable for user selection
-        table = PrettyTable()
-        table.field_names = ["Index", "name", "mac", "model", "serial"]
-        index_to_device = {}
-        name_to_device = {}
+        table = PrettyTable()  # Build device selection table.
+        table.field_names = ["Index", "name", "mac", "model", "serial"]  # Define table columns.
+        index_to_device = {}  # Map index to device.
+        name_to_device = {}  # Map name to device.
 
         # Populate the table and lookup dictionaries
-        for idx, item in enumerate(inventory):
-            table.add_row(
+        for idx, item in enumerate(inventory):  # Enumerate devices for rows.
+            table.add_row(  # Add device row to table.
                 [idx, item.get("name", ""), item.get("mac", ""), item.get("model", ""), item.get("serial", "")]
             )
-            index_to_device[idx] = item
-            name_to_device[item.get("name", "")] = item
+            index_to_device[idx] = item  # Map index to device object.
+            name_to_device[item.get("name", "")] = item  # Map name to device object.
 
-        print(table)
-        logging.info("Displayed device selection table to user.")
+        print(table)  # Render the device table.
+        logging.info("Displayed device selection table to user.")  # Log table display.
 
-        user_input = InputUtils.safe_input(
+        user_input = InputUtils.safe_input(  # Read operator device choice.
             "Enter the index or name of the device to view device: ",
             context="device_inventory_selection",
         ).strip()
-        logging.debug("User input for device selection: %s", user_input)
+        logging.debug("User input for device selection: %s", user_input)  # Log raw device input.
 
         # Accept common dotted-index input (e.g., ".2") from interactive tests/operators.
-        normalized_input = user_input[1:] if user_input.startswith(".") else user_input
+        normalized_input = user_input[1:] if user_input.startswith(".") else user_input  # Strip leading dot prefix.
 
         # Try index selection
-        if normalized_input.isdigit():
-            idx = int(normalized_input)
-            if idx in index_to_device:
-                device_id = index_to_device[idx].get("id")
+        if normalized_input.isdigit():  # Branch: numeric index choice.
+            idx = int(normalized_input)  # Parse index to integer.
+            if idx in index_to_device:  # Validate index exists.
+                device_id = index_to_device[idx].get("id")  # Read selected device id.
                 logging.info("User selected device by index: %s (device_id: %s)", idx, device_id)
                 return device_id  # type: ignore[no-any-return]
             else:
-                logging.error(" Invalid index.")
-                return None
+                logging.error(" Invalid index.")  # Log invalid index.
+                return None  # Abort on invalid index.
 
         # Try name selection
-        if normalized_input in name_to_device:
-            device_id = name_to_device[normalized_input].get("id")
+        if normalized_input in name_to_device:  # Branch: name match.
+            device_id = name_to_device[normalized_input].get("id")  # Read device id by name.
             logging.info("User selected device by name: %s (device_id: %s)", normalized_input, device_id)
             return device_id  # type: ignore[no-any-return]
 
-        logging.error(" Device not found by name or index.")
-        return None
+        logging.error(" Device not found by name or index.")  # Log not-found device.
+        return None  # Abort on not found.
 
     @staticmethod
-    def select_site_id_from_csv(csv_file: str = "SiteList.csv") -> str | None:
+    def select_site_id_from_csv(csv_file: str = "SiteList.csv") -> str | None:  # Prompt site id from CSV.
         """
         Prompts the user to select a site by index or name from SiteList.csv.
         Returns the corresponding site ID.
@@ -8543,55 +8543,55 @@ class PromptUtils:
             str: The selected site ID or None if no selection made
         """
         # Ensure the site list CSV is fresh or generate it if missing/stale
-        CacheUtils.check_and_generate_csv(csv_file, OrgSiteExporter.sites)
+        CacheUtils.check_and_generate_csv(csv_file, OrgSiteExporter.sites)  # Ensure site CSV exists.
 
         # Get the full path to the CSV file in the data directory
-        csv_file_path = FilePathUtils.get_csv_path(csv_file)
+        csv_file_path = FilePathUtils.get_csv_path(csv_file)  # Resolve CSV file path.
 
         # Load the site list from CSV
-        with open(csv_file_path, encoding="utf-8") as file:
-            reader = list(csv.DictReader(file))
-            index_to_site = {i: row for i, row in enumerate(reader)}
-            name_to_site = {row["name"]: row for row in reader if "name" in row}
+        with open(csv_file_path, encoding="utf-8") as file:  # Open the site CSV.
+            reader = list(csv.DictReader(file))  # Read all CSV rows.
+            index_to_site = {i: row for i, row in enumerate(reader)}  # Map index to site row.
+            name_to_site = {row["name"]: row for row in reader if "name" in row}  # Map name to site row.
 
         # Display available sites to the user
-        print("\nAvailable Sites:")
-        for idx, row in index_to_site.items():
-            print(f"[{idx}] {row.get('name', 'Unnamed')}")
+        print("\nAvailable Sites:")  # Print available sites heading.
+        for idx, row in index_to_site.items():  # Enumerate site rows.
+            print(f"[{idx}] {row.get('name', 'Unnamed')}")  # Print each site option.
 
         user_input = InputUtils.safe_input("\nEnter site index or name: ", context="site_selection").strip()
-        logging.debug("User input for site selection: %s", user_input)
+        logging.debug("User input for site selection: %s", user_input)  # Log raw site input.
 
-        global LAST_SELECTED_SITE_ID
+        global LAST_SELECTED_SITE_ID  # Track last selected site globally.
 
         # Try index selection
-        if user_input.isdigit():
-            idx = int(user_input)
-            if idx in index_to_site:
-                site_id = index_to_site[idx].get("id")
-                print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")
-                logging.info("User selected site by index: %s (site_id: %s)", idx, site_id)
-                LAST_SELECTED_SITE_ID = site_id
-                return site_id
+        if user_input.isdigit():  # Branch: numeric index choice.
+            idx = int(user_input)  # Parse index to integer.
+            if idx in index_to_site:  # Validate index exists.
+                site_id = index_to_site[idx].get("id")  # Read selected site id.
+                print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")  # Confirm site selection.
+                logging.info("User selected site by index: %s (site_id: %s)", idx, site_id)  # Log index selection.
+                LAST_SELECTED_SITE_ID = site_id  # Remember last selected site.
+                return site_id  # Return selected site id.
             else:
-                print(" Invalid index.")
-                logging.warning("Invalid site index entered: %s", idx)
-                return None
+                print(" Invalid index.")  # Reject out-of-range index.
+                logging.warning("Invalid site index entered: %s", idx)  # Log invalid index.
+                return None  # Abort on invalid index.
 
         # Try name selection
-        if user_input in name_to_site:
-            site_id = name_to_site[user_input].get("id")
-            print(f"! Selected site: {user_input} (ID: {site_id})")
-            logging.info("User selected site by name: %s (site_id: %s)", user_input, site_id)
-            LAST_SELECTED_SITE_ID = site_id
-            return site_id
+        if user_input in name_to_site:  # Branch: name match.
+            site_id = name_to_site[user_input].get("id")  # Read site id by name.
+            print(f"! Selected site: {user_input} (ID: {site_id})")  # Confirm site selection.
+            logging.info("User selected site by name: %s (site_id: %s)", user_input, site_id)  # Log name selection.
+            LAST_SELECTED_SITE_ID = site_id  # Remember last selected site.
+            return site_id  # Return selected site id.
 
-        print(" Site not found by name or index.")
-        logging.warning("Site not found by name or index: %s", user_input)
-        return None
+        print(" Site not found by name or index.")  # Report not-found site.
+        logging.warning("Site not found by name or index: %s", user_input)  # Log not-found site.
+        return None  # Abort on not found.
 
     @staticmethod
-    def select_site() -> str | None:
+    def select_site() -> str | None:  # Convenience site selector.
         """
         Prompts the user to select a site and returns the site_id.
         Uses the existing CSV-based site selection functionality.
@@ -8599,30 +8599,30 @@ class PromptUtils:
         Returns:
             str: The selected site ID or None if no selection made
         """
-        return PromptUtils.select_site_id_from_csv()
+        return PromptUtils.select_site_id_from_csv()  # Delegate to CSV selector.
 
     @staticmethod
-    def select_site_with_logging() -> str | None:
+    def select_site_with_logging() -> str | None:  # Site selector with logging.
         """
         Prompts the user to select a site from the CSV list and logs the selection.
 
         Returns:
             str: The selected site ID or None if no selection made
         """
-        logging.info("Prompting user to select a site from SiteList.csv...")
-        site_id = PromptUtils.select_site_id_from_csv()
-        if site_id:
-            logging.info("! Selected site ID: %s", site_id)
+        logging.info("Prompting user to select a site from SiteList.csv...")  # Log selection prompt start.
+        site_id = PromptUtils.select_site_id_from_csv()  # Prompt site from CSV.
+        if site_id:  # Handle successful selection.
+            logging.info("! Selected site ID: %s", site_id)  # Log selected site id.
         else:
             logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
-        return site_id
+        return site_id  # Return selected site id.
 
     # PromptUtils.select_device removed per issue #431 (ARCH-DELEGATE).
     # Callers now use PromptUtils.select_device_id_from_inventory(site_id, device_type)
     # directly -- it is the canonical implementation and accepts the same arguments.
 
     @staticmethod
-    def _determine_search_scope(site_id: str | None) -> str | None | Literal[False]:
+    def _determine_search_scope(site_id: str | None) -> str | None | Literal[False]:  # Determine client search scope.
         """
         Determines whether to search site-specific or org-wide.
 
@@ -8631,10 +8631,10 @@ class PromptUtils:
             None: for org-wide search
             False: if user cancelled selection
         """
-        if site_id:
-            return site_id
+        if site_id:  # Use provided site directly.
+            return site_id  # Return supplied site id.
 
-        scope_choice = (
+        scope_choice = (  # Prompt for scope choice.
             InputUtils.safe_input(
                 "Search scope - (s)ite-specific or (o)rganization-wide? [s/o]: ",
                 context="client_search_scope",
@@ -8642,12 +8642,12 @@ class PromptUtils:
             .strip()
             .lower()
         )
-        if scope_choice == "s":
-            selected_site = PromptUtils.select_site()
-            if not selected_site:
-                print(" No site selected.")
-                return False
-            return selected_site
+        if scope_choice == "s":  # Branch: single-site scope.
+            selected_site = PromptUtils.select_site()  # Prompt to pick a site.
+            if not selected_site:  # Handle no-site selection.
+                print(" No site selected.")  # Tell operator none selected.
+                return False  # Signal scope failure.
+            return selected_site  # Return chosen site scope.
 
         return None  # Org-wide search
 
@@ -8659,19 +8659,19 @@ class PromptUtils:
         Returns:
             List of client dictionaries with client_type added.
         """
-        all_clients = []
+        all_clients = []  # Combined client accumulator.
 
-        if site_id:
-            print("! Searching for clients in selected site...")
-            wireless = PromptUtils._fetch_site_wireless_clients(site_id)
-            wired = PromptUtils._fetch_site_wired_clients(site_id)
+        if site_id:  # Branch: site-scoped search.
+            print("! Searching for clients in selected site...")  # Inform operator of site search.
+            wireless = PromptUtils._fetch_site_wireless_clients(site_id)  # Fetch site wireless clients.
+            wired = PromptUtils._fetch_site_wired_clients(site_id)  # Fetch site wired clients.
         else:
-            print("! Searching for clients across organization...")
-            wireless = PromptUtils._fetch_org_wireless_clients(org_id)
-            wired = PromptUtils._fetch_org_wired_clients(org_id)
+            print("! Searching for clients across organization...")  # Inform operator of org search.
+            wireless = PromptUtils._fetch_org_wireless_clients(org_id)  # Fetch org wireless clients.
+            wired = PromptUtils._fetch_org_wired_clients(org_id)  # Fetch org wired clients.
 
-        all_clients.extend(wireless)
-        all_clients.extend(wired)
+        all_clients.extend(wireless)  # Add wireless clients to list.
+        all_clients.extend(wired)  # Add wired clients to list.
 
         return sorted(all_clients, key=lambda x: (x.get("hostname", ""), x.get("mac", "")))
 
@@ -8680,71 +8680,71 @@ class PromptUtils:
         """Fetches wireless clients for a specific site."""
         try:
             response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id, limit=1000)
-            clients = mistapi.get_all(response=response, mist_session=apisession) or []
-            for client in clients:
-                client["client_type"] = "wireless"
-                client["source_site_id"] = site_id
-            logging.info("Found %s wireless clients in site", len(clients))
-            return clients
-        except Exception as exception:
-            logging.warning("Could not fetch wireless clients for site: %s", exception)
-            return []
+            clients = mistapi.get_all(response=response, mist_session=apisession) or []  # Page through all results.
+            for client in clients:  # Tag each client.
+                client["client_type"] = "wireless"  # Mark as wireless type.
+                client["source_site_id"] = site_id  # Record source site id.
+            logging.info("Found %s wireless clients in site", len(clients))  # Log wireless client count.
+            return clients  # Return wireless clients.
+        except Exception as exception:  # Catch fetch errors.
+            logging.warning("Could not fetch wireless clients for site: %s", exception)  # Log fetch failure.
+            return []  # Return empty on error.
 
     @staticmethod
     def _fetch_site_wired_clients(site_id: str) -> list[dict]:  # type: ignore[type-arg]
         """Fetches wired clients for a specific site."""
         try:
             response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id, limit=1000)
-            clients = mistapi.get_all(response=response, mist_session=apisession) or []
-            for client in clients:
-                client["client_type"] = "wired"
-                client["source_site_id"] = site_id
-            logging.info("Found %s wired clients in site", len(clients))
-            return clients
-        except Exception as exception:
-            logging.warning("Could not fetch wired clients for site: %s", exception)
-            return []
+            clients = mistapi.get_all(response=response, mist_session=apisession) or []  # Page through all results.
+            for client in clients:  # Tag each client.
+                client["client_type"] = "wired"  # Mark as wired type.
+                client["source_site_id"] = site_id  # Record source site id.
+            logging.info("Found %s wired clients in site", len(clients))  # Log wired client count.
+            return clients  # Return wired clients.
+        except Exception as exception:  # Catch fetch errors.
+            logging.warning("Could not fetch wired clients for site: %s", exception)  # Log fetch failure.
+            return []  # Return empty on error.
 
     @staticmethod
     def _fetch_org_wireless_clients(org_id: str) -> list[dict]:  # type: ignore[type-arg]
         """Fetches wireless clients for the entire organization."""
         try:
             response = mistapi.api.v1.orgs.clients.searchOrgWirelessClients(apisession, org_id, limit=1000)
-            clients = mistapi.get_all(response=response, mist_session=apisession) or []
-            for client in clients:
-                client["client_type"] = "wireless"
-            logging.info("Found %s wireless clients in organization", len(clients))
-            return clients
-        except Exception as exception:
-            logging.warning("Could not fetch wireless clients for org: %s", exception)
-            return []
+            clients = mistapi.get_all(response=response, mist_session=apisession) or []  # Page through all results.
+            for client in clients:  # Tag each client.
+                client["client_type"] = "wireless"  # Mark as wireless type.
+            logging.info("Found %s wireless clients in organization", len(clients))  # Log wireless client count.
+            return clients  # Return wireless clients.
+        except Exception as exception:  # Catch fetch errors.
+            logging.warning("Could not fetch wireless clients for org: %s", exception)  # Log fetch failure.
+            return []  # Return empty on error.
 
     @staticmethod
     def _fetch_org_wired_clients(org_id: str) -> list[dict]:  # type: ignore[type-arg]
         """Fetches wired clients for the entire organization."""
         try:
             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(apisession, org_id, limit=1000)
-            clients = mistapi.get_all(response=response, mist_session=apisession) or []
-            for client in clients:
-                client["client_type"] = "wired"
-            logging.info("Found %s wired clients in organization", len(clients))
-            return clients
-        except Exception as exception:
-            logging.warning("Could not fetch wired clients for org: %s", exception)
-            return []
+            clients = mistapi.get_all(response=response, mist_session=apisession) or []  # Page through all results.
+            for client in clients:  # Tag each client.
+                client["client_type"] = "wired"  # Mark as wired type.
+            logging.info("Found %s wired clients in organization", len(clients))  # Log wired client count.
+            return clients  # Return wired clients.
+        except Exception as exception:  # Catch fetch errors.
+            logging.warning("Could not fetch wired clients for org: %s", exception)  # Log fetch failure.
+            return []  # Return empty on error.
 
     @staticmethod
-    def _load_sites_cache(org_id: str) -> dict[str, str]:
+    def _load_sites_cache(org_id: str) -> dict[str, str]:  # Load site id-to-name cache.
         """Loads site ID to name mapping for display purposes."""
         try:
-            print(" Loading site information...")
-            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-            cache = {site["id"]: site["name"] for site in sites}
-            logging.info("Cached %s sites for client display", len(cache))
-            return cache
-        except Exception as exception:
-            logging.warning("Could not fetch sites for display: %s", exception)
-            return {}
+            print(" Loading site information...")  # Inform operator of load.
+            sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all sites for org.
+            cache = {site["id"]: site["name"] for site in sites}  # Build id-to-name map.
+            logging.info("Cached %s sites for client display", len(cache))  # Log cached site count.
+            return cache  # Return the cache.
+        except Exception as exception:  # Catch fetch errors.
+            logging.warning("Could not fetch sites for display: %s", exception)  # Log fetch failure.
+            return {}  # Return empty cache on error.
 
     @staticmethod
     def _display_client_table(all_clients: list[dict], sites_cache: dict[str, str]) -> dict[int, dict]:  # type: ignore[type-arg]
@@ -8754,47 +8754,47 @@ class PromptUtils:
         Returns:
             Dictionary mapping index to client data.
         """
-        table = PrettyTable()
+        table = PrettyTable()  # Build client display table.
         table.field_names = ["#", "Hostname", "MAC Address", "Type", "IP Address", "SSID/VLAN", "Site", "Status"]
-        table.align["#"] = "r"
-        table.align["Hostname"] = "l"
-        table.align["MAC Address"] = "l"
-        table.align["Type"] = "c"
-        table.align["IP Address"] = "l"
-        table.align["SSID/VLAN"] = "l"
-        table.align["Site"] = "l"
-        table.align["Status"] = "c"
-        table.max_width["Hostname"] = 20
-        table.max_width["IP Address"] = 16
-        table.max_width["SSID/VLAN"] = 15
-        table.max_width["Site"] = 15
+        table.align["#"] = "r"  # Right-align index column.
+        table.align["Hostname"] = "l"  # Left-align hostname.
+        table.align["MAC Address"] = "l"  # Left-align MAC.
+        table.align["Type"] = "c"  # Center type column.
+        table.align["IP Address"] = "l"  # Left-align IP.
+        table.align["SSID/VLAN"] = "l"  # Left-align SSID/VLAN.
+        table.align["Site"] = "l"  # Left-align site.
+        table.align["Status"] = "c"  # Center status column.
+        table.max_width["Hostname"] = 20  # Cap hostname width.
+        table.max_width["IP Address"] = 16  # Cap IP width.
+        table.max_width["SSID/VLAN"] = 15  # Cap SSID/VLAN width.
+        table.max_width["Site"] = 15  # Cap site width.
 
-        for idx, client in enumerate(all_clients):
-            row = PromptUtils._format_client_row(idx, client, sites_cache)
-            table.add_row(row)
+        for idx, client in enumerate(all_clients):  # Enumerate clients for rows.
+            row = PromptUtils._format_client_row(idx, client, sites_cache)  # Format a client row.
+            table.add_row(row)  # Add row to table.
 
-        print(f"\n  Found {len(all_clients)} clients:")
-        print(table)
+        print(f"\n  Found {len(all_clients)} clients:")  # Show client count.
+        print(table)  # Render the table.
 
-        wireless_count = sum(1 for c in all_clients if c.get("client_type") == "wireless")
-        wired_count = sum(1 for c in all_clients if c.get("client_type") == "wired")
-        print(f"\n  Summary: {wireless_count} wireless, {wired_count} wired clients")
-        print("\n  [+] = Online  [~] = Recently seen  [-] = Offline")
-        print("---" * 20)
+        wireless_count = sum(1 for c in all_clients if c.get("client_type") == "wireless")  # Count wireless clients.
+        wired_count = sum(1 for c in all_clients if c.get("client_type") == "wired")  # Count wired clients.
+        print(f"\n  Summary: {wireless_count} wireless, {wired_count} wired clients")  # Print client summary.
+        print("\n  [+] = Online  [~] = Recently seen  [-] = Offline")  # Explain status legend.
+        print("---" * 20)  # Print separator rule.
 
         # Return mapping of index to client data
-        return {idx: client for idx, client in enumerate(all_clients)}
+        return {idx: client for idx, client in enumerate(all_clients)}  # Return index-to-client map.
 
     @staticmethod
     def _format_client_row(idx: int, client: dict, sites_cache: dict[str, str]) -> list:  # type: ignore[type-arg]
         """Formats a single client row for the selection table."""
-        site_name = PromptUtils._get_client_site_name(client, sites_cache)
-        status = PromptUtils._get_client_status(client)
+        site_name = PromptUtils._get_client_site_name(client, sites_cache)  # Resolve site name for row.
+        status = PromptUtils._get_client_status(client)  # Resolve status marker.
         hostname = PromptUtils._truncate_string(client.get("hostname", client.get("name", "Unknown")) or "Unknown", 20)
-        ip_address = PromptUtils._format_client_ip(client)
-        ssid_vlan = PromptUtils._format_client_ssid_vlan(client)
+        ip_address = PromptUtils._format_client_ip(client)  # Format client IP.
+        ssid_vlan = PromptUtils._format_client_ssid_vlan(client)  # Format SSID/VLAN field.
 
-        return [
+        return [  # Return formatted row cells.
             idx,
             hostname,
             client.get("mac", "Unknown"),
@@ -8808,51 +8808,51 @@ class PromptUtils:
     @staticmethod
     def _get_client_site_name(client: dict, sites_cache: dict[str, str]) -> str:  # type: ignore[type-arg]
         """Gets site name from cache or returns site ID."""
-        site_id = client.get("site_id", "")
-        if site_id in sites_cache:
-            return sites_cache[site_id]
-        return site_id if site_id else ""
+        site_id = client.get("site_id", "")  # Read client site id.
+        if site_id in sites_cache:  # Branch: site found in cache.
+            return sites_cache[site_id]  # Return cached site name.
+        return site_id if site_id else ""  # Fallback to raw site id.
 
     @staticmethod
     def _get_client_status(client: dict) -> str:  # type: ignore[type-arg]
         """Determines client connection status indicator."""
-        if client.get("connected", True):
-            status = "[+]"
+        if client.get("connected", True):  # Branch: client connected.
+            status = "[+]"  # Mark online status.
         else:
-            status = "[-]"
+            status = "[-]"  # Mark offline status.
 
-        if "last_seen" in client:
-            last_seen = client.get("last_seen", 0)
-            current_time = int(time.time())
+        if "last_seen" in client:  # Branch: last_seen present.
+            last_seen = client.get("last_seen", 0)  # Read last_seen timestamp.
+            current_time = int(time.time())  # Capture current time.
             if current_time - last_seen > 300:  # More than 5 minutes ago
-                status = "[~]"
+                status = "[~]"  # Mark recently-seen status.
 
-        return status
+        return status  # Return status marker.
 
     @staticmethod
     def _format_client_ip(client: dict) -> str:  # type: ignore[type-arg]
         """Formats client IP address, handling arrays."""
-        ip_address = client.get("ip", "")
-        if isinstance(ip_address, list):
-            return ip_address[0] if ip_address else "N/A"
-        return ip_address if ip_address and ip_address != "[]" else "N/A"
+        ip_address = client.get("ip", "")  # Read client IP field.
+        if isinstance(ip_address, list):  # Branch: IP is a list.
+            return ip_address[0] if ip_address else "N/A"  # Return first IP or N/A.
+        return ip_address if ip_address and ip_address != "[]" else "N/A"  # Return IP or N/A.
 
     @staticmethod
     def _format_client_ssid_vlan(client: dict) -> str:  # type: ignore[type-arg]
         """Formats client SSID/VLAN, handling arrays."""
-        ssid_vlan = client.get("ssid", client.get("vlan", ""))
-        if isinstance(ssid_vlan, list):
-            ssid_vlan = str(ssid_vlan[0]) if ssid_vlan else "N/A"
-        elif not ssid_vlan or ssid_vlan == "[]":
-            ssid_vlan = "N/A"
-        return PromptUtils._truncate_string(str(ssid_vlan), 15)
+        ssid_vlan = client.get("ssid", client.get("vlan", ""))  # Read SSID or VLAN field.
+        if isinstance(ssid_vlan, list):  # Branch: value is a list.
+            ssid_vlan = str(ssid_vlan[0]) if ssid_vlan else "N/A"  # Use first element or N/A.
+        elif not ssid_vlan or ssid_vlan == "[]":  # Branch: empty value.
+            ssid_vlan = "N/A"  # Default to N/A.
+        return PromptUtils._truncate_string(str(ssid_vlan), 15)  # Truncate for column width.
 
     @staticmethod
-    def _truncate_string(value: str, max_length: int) -> str:
+    def _truncate_string(value: str, max_length: int) -> str:  # Truncate helper.
         """Truncates string with ellipsis if too long."""
-        if len(value) > max_length:
-            return value[: max_length - 3] + "..."
-        return value
+        if len(value) > max_length:  # Branch: over max length.
+            return value[: max_length - 3] + "..."  # Truncate with ellipsis.
+        return value  # Return unchanged value.
 
     @staticmethod
     def _handle_client_selection(
@@ -8867,26 +8867,26 @@ class PromptUtils:
             tuple: (client_mac, client_type, site_id) or (None, None, None)
         """
         try:
-            max_index = len(all_clients) - 1
-            user_input = InputUtils.safe_input(
+            max_index = len(all_clients) - 1  # Compute max valid index.
+            user_input = InputUtils.safe_input(  # Read operator choice.
                 f"\n  Enter client index (0-{max_index}) or 'q' to quit: ",
                 context="client_selection_index",
             ).strip()
 
-            if user_input.lower() in ["q", "quit", "exit"]:
-                print(" Exiting client selection...")
-                return None, None, None
+            if user_input.lower() in ["q", "quit", "exit"]:  # Branch: quit commands.
+                print(" Exiting client selection...")  # Inform operator of exit.
+                return None, None, None  # Abort with no selection.
 
-            idx = int(user_input)
-            if 0 <= idx <= max_index:
+            idx = int(user_input)  # Parse index to integer.
+            if 0 <= idx <= max_index:  # Validate index range.
                 return PromptUtils._extract_selected_client(all_clients[idx], sites_cache, default_site_id)
             else:
                 print(f"! Invalid index. Please enter a number between 0 and {max_index}.")
-                return None, None, None
+                return None, None, None  # Abort on invalid index.
 
-        except ValueError:
-            print(" Please enter a valid number or 'q' to quit.")
-            return None, None, None
+        except ValueError:  # Catch non-numeric input.
+            print(" Please enter a valid number or 'q' to quit.")  # Prompt for valid input.
+            return None, None, None  # Abort on bad input.
 
     @staticmethod
     def _extract_selected_client(
@@ -8895,20 +8895,20 @@ class PromptUtils:
         default_site_id: str | None,
     ) -> tuple[str, str, str]:
         """Extracts and displays selected client information."""
-        client_mac = client.get("mac", "")
-        client_type = client.get("client_type", "unknown")
-        client_site_id = client.get("site_id", default_site_id) or ""
-        hostname = client.get("hostname", client.get("name", "Unknown"))
+        client_mac = client.get("mac", "")  # Read client MAC.
+        client_type = client.get("client_type", "unknown")  # Read client type.
+        client_site_id = client.get("site_id", default_site_id) or ""  # Resolve client site id.
+        hostname = client.get("hostname", client.get("name", "Unknown"))  # Read hostname/name.
 
-        print("\n Selected client:")
-        print(f"   Name: {hostname}")
-        print(f"   MAC: {client_mac}")
-        print(f"   Type: {client_type}")
-        if client_site_id and client_site_id in sites_cache:
-            print(f"   Site: {sites_cache[client_site_id]}")
+        print("\n Selected client:")  # Print selection heading.
+        print(f"   Name: {hostname}")  # Show client name.
+        print(f"   MAC: {client_mac}")  # Show client MAC.
+        print(f"   Type: {client_type}")  # Show client type.
+        if client_site_id and client_site_id in sites_cache:  # Branch: known site.
+            print(f"   Site: {sites_cache[client_site_id]}")  # Show resolved site name.
 
         logging.info("User selected client: MAC=%s, type=%s, site=%s", client_mac, client_type, client_site_id)
-        return client_mac, client_type, client_site_id
+        return client_mac, client_type, client_site_id  # Return client id triple.
 
 
 # NOTE: show_site_device_inventory() has been refactored into SiteDeviceExporter.device_inventory()
@@ -8919,14 +8919,14 @@ class PromptUtils:
 # ============================================================================
 
 
-class DeviceUtils:
+class DeviceUtils:  # Device helper utilities.
     """
     Centralized device-related utilities.
     Handles device lookups, port parsing, MAC address operations, etc.
     """
 
     @staticmethod
-    def get_all_ap_macs_from_site(site_id: str) -> list[str]:
+    def get_all_ap_macs_from_site(site_id: str) -> list[str]:  # Get all AP MACs for a site.
         """
         Fetch all AP MAC addresses from a site.
 
@@ -8936,24 +8936,24 @@ class DeviceUtils:
         Returns:
             list: List of AP MAC addresses, or empty list if error/none found
         """
-        logging.debug("Fetching all AP MACs for site: %s", site_id)
+        logging.debug("Fetching all AP MACs for site: %s", site_id)  # Log before AP fetch.
 
         try:
             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
-            if not rawdata:
-                logging.warning("No APs found for site_id: %s", site_id)
-                return []
+            if not rawdata:  # Handle empty AP set.
+                logging.warning("No APs found for site_id: %s", site_id)  # Log no APs found.
+                return []  # Return empty list.
 
-            ap_macs = [ap.get("mac") for ap in rawdata if ap.get("mac")]
-            logging.info("Found %s AP MACs at site", len(ap_macs))
-            return ap_macs
+            ap_macs = [ap.get("mac") for ap in rawdata if ap.get("mac")]  # Collect AP MAC addresses.
+            logging.info("Found %s AP MACs at site", len(ap_macs))  # Log AP MAC count.
+            return ap_macs  # Return AP MACs.
 
-        except Exception as error:
-            logging.exception("Exception in DeviceUtils.get_all_ap_macs_from_site: %s", error)
-            return []
+        except Exception as error:  # Catch fetch errors.
+            logging.exception("Exception in DeviceUtils.get_all_ap_macs_from_site: %s", error)  # Log the exception.
+            return []  # Return empty on error.
 
     @staticmethod
-    def expand_port_range_string(port_range_string: str) -> list[str]:
+    def expand_port_range_string(port_range_string: str) -> list[str]:  # Expand a port-range string.
         """
         Expands a port range string from device config into individual port names.
 
@@ -8969,32 +8969,32 @@ class DeviceUtils:
         Returns:
             list: List of individual port names
         """
-        expanded_ports = []
+        expanded_ports = []  # Accumulator for expanded ports.
 
         # Split by comma to handle multiple ranges
-        port_parts = [part.strip() for part in port_range_string.split(",")]
+        port_parts = [part.strip() for part in port_range_string.split(",")]  # Split on comma into parts.
 
-        for port_part in port_parts:
+        for port_part in port_parts:  # Process each part.
             # Check if this is a range (e.g., "ge-0/0/0-2")
-            if "-" in port_part:
+            if "-" in port_part:  # Branch: range expression.
                 # Try to match pattern like "ge-0/0/0-2"
-                match = re.match(r"^(.+/)(\d+)-(\d+)$", port_part)
-                if match:
+                match = re.match(r"^(.+/)(\d+)-(\d+)$", port_part)  # Match prefix and numeric range.
+                if match:  # Branch: valid range match.
                     prefix = match.group(1)  # e.g., "ge-0/0/"
                     start_num = int(match.group(2))  # e.g., 0
                     end_num = int(match.group(3))  # e.g., 2
 
                     # Expand the range
-                    for port_num in range(start_num, end_num + 1):
-                        expanded_ports.append(f"{prefix}{port_num}")
+                    for port_num in range(start_num, end_num + 1):  # Iterate the numeric range.
+                        expanded_ports.append(f"{prefix}{port_num}")  # Append each expanded port.
                 else:
                     # Couldn't parse as range, treat as single port
-                    expanded_ports.append(port_part)
+                    expanded_ports.append(port_part)  # Keep literal when unmatched.
             else:
                 # Single port name
-                expanded_ports.append(port_part)
+                expanded_ports.append(port_part)  # Keep single non-range port.
 
-        return expanded_ports
+        return expanded_ports  # Return expanded port list.
 
     @staticmethod
     def get_device_identifier(device: dict[str, Any], warn_on_missing: bool = False) -> str:
@@ -9009,34 +9009,34 @@ class DeviceUtils:
             str: Device identifier (name, serial, or device_id)
         """
         # Try name first
-        name = device.get("name", "").strip()
-        if name:
+        name = device.get("name", "").strip()  # Try name field first.
+        if name:  # Branch: name present.
             return name  # type: ignore[no-any-return]
 
         # Fall back to serial
-        serial = device.get("serial", "").strip()
-        if serial:
-            if warn_on_missing:
+        serial = device.get("serial", "").strip()  # Fall back to serial.
+        if serial:  # Branch: serial present.
+            if warn_on_missing:  # Branch: warn flag set.
                 logging.warning("Device %s missing name field, using serial as identifier", serial)
             return serial  # type: ignore[no-any-return]
 
         # Fall back to device_id
-        device_id = device.get("id", "").strip()
-        if device_id:
-            if warn_on_missing:
+        device_id = device.get("id", "").strip()  # Fall back to device id.
+        if device_id:  # Branch: id present.
+            if warn_on_missing:  # Branch: warn flag set.
                 logging.warning("Device %s missing name and serial, using device_id as identifier", device_id)
             return device_id  # type: ignore[no-any-return]
 
         # Last resort
-        if warn_on_missing:
-            logging.warning("Device found with no name, serial, or id - using 'UNKNOWN'")
-        return "UNKNOWN"
+        if warn_on_missing:  # Branch: warn flag set.
+            logging.warning("Device found with no name, serial, or id - using 'UNKNOWN'")  # Warn no identifier fields.
+        return "UNKNOWN"  # Last-resort placeholder id.
 
 
 # ============================================================================
 # ORGANIZATION TICKET MANAGER CLASS
 # ============================================================================
-class OrgTicketManager:
+class OrgTicketManager:  # Support ticket operations.
     """
     Full lifecycle management for Juniper Mist support tickets.
 
@@ -9052,7 +9052,7 @@ class OrgTicketManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def list_tickets() -> None:
+    def list_tickets() -> None:  # List org support tickets.
         """Menu 188: Export all organization support tickets to CSV/SQLite."""
         logging.info("Menu 188: Starting organization ticket list export")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.list_tickets()")  # Debug trace
@@ -9072,7 +9072,7 @@ class OrgTicketManager:
             raise  # Re-raise so caller sees the failure
 
     @staticmethod
-    def create_ticket() -> None:
+    def create_ticket() -> None:  # Create a support ticket.
         """Menu 189: Create a new support ticket in the organization."""
         logging.info("Menu 189: Starting support ticket creation")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.create_ticket()")  # Debug trace
@@ -9116,7 +9116,7 @@ class OrgTicketManager:
             raise  # Re-raise for upstream error handling
 
     @staticmethod
-    def add_comment() -> None:
+    def add_comment() -> None:  # Add a comment to a ticket.
         """Menu 190: Add a comment (with optional attachment) to an existing ticket."""
         logging.info("Menu 190: Starting add comment to ticket")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.add_comment()")  # Debug trace
@@ -9152,7 +9152,7 @@ class OrgTicketManager:
         )
 
     @staticmethod
-    def update_ticket() -> None:
+    def update_ticket() -> None:  # Update a support ticket.
         """Menu 191: Update fields on an existing support ticket."""
         logging.info("Menu 191: Starting ticket update")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.update_ticket()")  # Debug trace
@@ -9191,7 +9191,7 @@ class OrgTicketManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _prompt_subject() -> str:
+    def _prompt_subject() -> str:  # Prompt for ticket subject.
         """Prompt user for ticket subject line."""
         return InputUtils.safe_input(  # Use EOF-safe input wrapper
             "  Enter ticket subject: ",  # Prompt text for ticket title
@@ -9201,7 +9201,7 @@ class OrgTicketManager:
         )
 
     @staticmethod
-    def _prompt_ticket_type() -> str:
+    def _prompt_ticket_type() -> str:  # Prompt for ticket type.
         """Prompt user to select a ticket type from valid options."""
         print("\n  Ticket types:")  # Section header for type selection
         for index, ticket_type in enumerate(OrgTicketManager.TICKET_TYPES, 1):  # Number each type for selection
@@ -9221,7 +9221,7 @@ class OrgTicketManager:
         return OrgTicketManager.TICKET_TYPES[0]  # Default to 'question' for invalid input
 
     @staticmethod
-    def _prompt_ticket_id() -> str:
+    def _prompt_ticket_id() -> str:  # Prompt for ticket id.
         """Prompt user for ticket UUID."""
         return InputUtils.safe_input(  # Use EOF-safe input wrapper
             "  Enter ticket ID: ",  # Prompt text for ticket UUID
@@ -9231,7 +9231,7 @@ class OrgTicketManager:
         )
 
     @staticmethod
-    def _build_update_body() -> dict[str, str]:
+    def _build_update_body() -> dict[str, str]:  # Build ticket update body.
         """Collect fields to update from user prompts."""
         body: dict[str, str] = {}  # Accumulate changed fields in a dict
 
@@ -9290,7 +9290,7 @@ class OrgTicketManager:
             OrgTicketManager._submit_text_comment(org_id, ticket_id, comment_text)  # Submit text comment
 
     @staticmethod
-    def _submit_text_comment(org_id: str, ticket_id: str, comment_text: str) -> None:
+    def _submit_text_comment(org_id: str, ticket_id: str, comment_text: str) -> None:  # Submit a text-only comment.
         """Submit a text-only comment to a ticket."""
         logging.info("Adding text comment to ticket %s", ticket_id)  # Log before API call
         body = {"comment": comment_text}  # Build comment request body
@@ -9305,7 +9305,7 @@ class OrgTicketManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def view_ticket() -> None:
+    def view_ticket() -> None:  # View a single ticket.
         """Menu 192: View a single ticket with full comments and history."""
         logging.info("Menu 192: Starting ticket detail viewer")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.view_ticket()")  # Debug trace
@@ -9326,7 +9326,7 @@ class OrgTicketManager:
         logging.info("Menu 192: Ticket detail view complete for %s", ticket_id)  # Log success
 
     @staticmethod
-    def export_ticket_details() -> None:
+    def export_ticket_details() -> None:  # Export ticket details to file.
         """Menu 193: Export all tickets with full details and comments to CSV/SQLite."""
         logging.info("Menu 193: Starting full ticket detail export")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.export_ticket_details()")  # Debug trace
