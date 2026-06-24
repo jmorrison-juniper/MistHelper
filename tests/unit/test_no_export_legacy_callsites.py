@@ -5,14 +5,10 @@ from __future__ import annotations  # Keep annotation behavior consistent across
 from pathlib import Path  # Use pathlib for robust repository traversal in static scan.
 
 
-def test_no_internal_export_legacy_callsites() -> None:  # Keep canonical callsites in place.
+def test_no_internal_export_legacy_callsites() -> None:  # Ensure the retired name has zero callsites.
     repository_root = Path(__file__).resolve().parents[2]  # Resolve repo root.
     disallowed_token = "InsightMetricsUtils" + ".export_legacy("  # Build banned token without full literal.
-    allowed_existing_references = {
-        "MistHelper.py",
-        "src/export/site_insights/site_metric_operation.py",
-        "src/export/site_insights/device_metric_operation.py",
-    }  # Baseline paths with known debt until full migration.
+    allowed_existing_references: set[str] = set()  # Migration done: name retired, zero callsites allowed.
     violations: list[str] = []  # Collect hits for assertion output.
 
     for python_file in repository_root.rglob("*.py"):  # Scan all Python files.

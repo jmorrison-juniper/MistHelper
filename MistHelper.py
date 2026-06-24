@@ -9611,250 +9611,6 @@ class OrgAlarmEventExporter:
         )
         exporter.export()
 
-    @staticmethod
-    def _52w_load_checkpoint(checkpoint_file: str) -> str | None:
-        """Read search_after token from checkpoint file to resume a previous export."""
-        if not os.path.exists(checkpoint_file):  # No file means export hasn't run yet or completed cleanly.
-            return None  # Fresh start, no token to resume from.
-        try:  # File read can fail due to permissions or corruption; fall back to fresh export.
-            with open(checkpoint_file, encoding="utf-8") as fh:
-                token = fh.read().strip()  # Strip whitespace so malformed files don't produce bad tokens.
-            if token:  # Non-empty token means there is a valid resume point.
-                logging.info(
-                    "Resuming OrgDeviceEvents_52w from checkpoint token: %s", token
-                )  # Log resume event for traceability.
-                return token  # Return token so caller can pass it to the first API request.
-        except Exception as exception:  # Checkpoint read failure should degrade gracefully to a fresh start.
-            logging.warning(
-                "Could not read checkpoint file %s: %s", checkpoint_file, exception
-            )  # Log why resume was skipped.
-        return None  # Fall back to full export when checkpoint is unreadable.
-
-    @staticmethod
-    def _52w_save_checkpoint(checkpoint_file: str, token: str) -> None:
-        """Persist current search_after token so export can resume after interruption."""
-        try:  # Checkpoint write failure is non-fatal but reduces resumability.
-            with open(checkpoint_file, "w", encoding="utf-8") as fh:
-                fh.write(str(token))  # Write token string so it can be read back on next run.
-        except Exception as exception:  # Log failure without aborting the ongoing export stream.
-            logging.warning(
-                "Could not write checkpoint file %s: %s", checkpoint_file, exception
-            )  # Surface write failure for operator awareness.
-
-    @staticmethod
-    def _52w_remove_checkpoint(checkpoint_file: str) -> None:
-        """Remove checkpoint file after a successful complete export."""
-        try:  # Cleanup is best-effort and should not raise even when the file is missing.
-            if os.path.exists(checkpoint_file):  # Avoid FileNotFoundError on double-cleanup.
-                os.remove(checkpoint_file)  # Delete checkpoint so next run starts fresh.
-        except Exception:  # Failure to delete is safe to swallow since the export already completed.
-            logging.debug("Could not remove checkpoint file after completion")  # Log silently; not an operator concern.
-
-    @staticmethod
-    def _52w_fetch_page(org_id: str, limit: int, duration: str, token: str | None) -> object:
-        """Fetch one page of device events from the Mist API using optional search_after token."""
-        if token:  # Passing search_after continues pagination from the saved cursor position.
-            return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-                apisession, org_id, device_type="all", limit=limit, duration=duration, search_after=token
-            )  # Resume from token for mid-export continuation.
-        return mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-            apisession, org_id, device_type="all", limit=limit, duration=duration
-        )  # Initial fetch with no cursor returns events from the start of the 52-week window.
-
-    @staticmethod
-    def _52w_fetch_page_with_retries(
-        org_id: str, limit: int, duration: str, token: str | None, retries: int = 3, backoff: float = 1.0
-    ) -> object:
-        """Fetch one device-events page with exponential-backoff retries for transient failures."""
-        last_exc: Exception | None = None  # Track last exception so callers get a meaningful error on exhaustion.
-        for attempt in range(retries):  # Retry up to the configured limit before giving up.
-            try:  # Wrap each attempt so a transient API error can be retried rather than aborting.
-                return OrgAlarmEventExporter._52w_fetch_page(
-                    org_id, limit, duration, token
-                )  # Delegate to atomic fetch method.
-            except Exception as exception:  # Network errors and rate-limit responses are retryable.
-                last_exc = exception  # Remember last error for re-raise after exhaustion.
-                logging.warning(
-                    "Attempt %s/%s to fetch device events page failed: %s", attempt + 1, retries, exception
-                )  # Log attempt number and cause for monitoring.
-                if attempt < retries - 1:  # Don't sleep after the final attempt since we're about to give up.
-                    sleep_time = backoff * (2**attempt)  # Exponential backoff reduces pressure on API during outages.
-                    logging.debug(
-                        "Waiting %ss before retrying 52w page fetch", sleep_time
-                    )  # Log backoff duration for performance debugging.
-                    time.sleep(sleep_time)  # Pause before the next retry attempt.
-        logging.error("Exceeded maximum retries fetching device events page")  # Record terminal retry failure.
-        if last_exc is not None:  # Re-raise the real exception so callers can propagate it correctly.
-            raise last_exc
-        raise RuntimeError(
-            "All retries failed with no exception captured"
-        )  # Defensive fallback for unexpected exhaustion.
-
-    @staticmethod
-    def _52w_parse_page_data(response: object) -> tuple[list, str | None]:
-        """Extract results list and next search_after token from a raw API page response."""
-        page_data = getattr(response, "data", None)  # SDK wraps response body in .data attribute.
-        if not page_data:  # Missing data means end of stream or API error.
-            return [], None  # Caller should stop pagination when both are empty.
-        if isinstance(page_data, dict):  # Most Mist API pages return a dict with results and pagination metadata.
-            results = page_data.get("results", []) or page_data.get(
-                "data", []
-            )  # Handle both 'results' and 'data' key conventions.
-            next_token = page_data.get("search_after") or page_data.get(
-                "next"
-            )  # Support both pagination token key names.
-        else:  # Some SDK wrappers return the list directly without a wrapping dict.
-            results = page_data if isinstance(page_data, list) else []  # Normalize unexpected shapes to empty list.
-            next_token = None  # Flat list response means no cursor was returned.
-        return results, next_token  # Return row data and continuation token for the caller.
-
-    @staticmethod
-    def _52w_preload_pages(
-        org_id: str, search_after: str | None, limit: int, duration: str, preload_count: int
-    ) -> tuple[list[dict[str, Any]], str | None]:
-        """Fetch and flatten the first N pages to build a stable CSV header before streaming."""
-        buffered_rows: list[dict[str, Any]] = []  # Accumulate flattened rows from preload pages for header derivation.
-        next_token = search_after  # Start from checkpoint position so preload respects resume state.
-        for _ in range(preload_count):  # Collect up to preload_count pages before switching to streaming mode.
-            response = OrgAlarmEventExporter._52w_fetch_page(
-                org_id, limit, duration, next_token
-            )  # Fetch next page using current cursor.
-            results, next_token = OrgAlarmEventExporter._52w_parse_page_data(
-                response
-            )  # Extract row list and next cursor.
-            if not results:  # Empty results means end of data; stop preloading.
-                break  # Exit early to avoid spurious empty pages in the buffered set.
-            processed = DataProcessingUtils.flatten_nested_fields(
-                results
-            )  # Normalize nested API fields for CSV compatibility.
-            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # Escape embedded newlines so CSV rows stay single-line.
-            buffered_rows.extend(processed)  # Merge this page's flattened rows into the preload buffer.
-            if not next_token:  # No next token means data is fully exhausted during preload.
-                break  # Stop preloading since there is nothing more to stream.
-        return buffered_rows, next_token  # Return all preloaded rows plus the cursor for the stream phase.
-
-    @staticmethod
-    def _52w_write_batch(
-        rows: list[dict[str, Any]], header_fields: list[str], csv_file: str, table_name: str, append: bool
-    ) -> None:
-        """Write or append a batch of device-event rows to CSV or SQLite based on global output format."""
-        if OUTPUT_FORMAT == "sqlite":  # SQLite path uses the shared DataExporter multi-backend writer.
-            try:  # SQLite write failure is fatal because data loss cannot be recovered without checkpoint replay.
-                DataExporter.write_with_format_selection(
-                    rows, table_name, format_override="sqlite", api_function_name="searchOrgDeviceEvents"
-                )  # Persist rows to the configured SQLite database using the endpoint name for PK strategy lookup.
-            except Exception as write_error:  # Re-raise immediately so callers can handle checkpoint cleanup.
-                mode = "append to" if append else "write initial"  # Log with operation context to aid debugging.
-                logging.error(
-                    "Failed to %s OrgDeviceEvents_52w SQLite table %s: %s", mode, table_name, write_error
-                )  # Log failure before re-raise.
-                raise  # Propagate so the outer export aborts and checkpoint state is preserved.
-        else:  # CSV path writes using the stable header computed from preloaded pages.
-            file_mode = "a" if append else "w"  # Append for streaming pages; overwrite for the initial batch.
-            try:  # CSV write failure is fatal because a truncated file cannot be completed without full re-export.
-                with open(csv_file, file_mode, newline="", encoding="utf-8") as fh:
-                    writer = csv.DictWriter(
-                        fh, fieldnames=header_fields
-                    )  # Use precomputed stable header for all pages.
-                    if not append:  # Only write the header row for the initial batch.
-                        writer.writeheader()  # Emit column names once so every append page uses the same order.
-                    for row in rows:  # Write each row using get-with-default so missing fields produce empty cells.
-                        writer.writerow(
-                            {k: row.get(k, "") for k in header_fields}
-                        )  # Map every header field to a value or empty string.
-            except Exception as write_error:  # Re-raise immediately so callers can handle checkpoint cleanup.
-                mode = "append to" if append else "write initial"  # Log with operation context to aid debugging.
-                logging.error(
-                    "Failed to %s OrgDeviceEvents_52w CSV file %s: %s", mode, csv_file, write_error
-                )  # Log before re-raise.
-                raise  # Propagate so the outer export aborts and checkpoint state is preserved.
-
-    @staticmethod
-    def device_events_52w_legacy() -> None:
-        """
-        Export all org device events from the last 52 weeks to OrgDeviceEvents_52w.csv.
-
-        Streams results using search_after pagination with checkpoint resumability and
-        memory-efficient per-page writes to CSV or SQLite.
-        """
-        logging.info(
-            "Exporting all org device events from the last 52 weeks..."
-        )  # Log entry point for operational traceability.
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org context before any API or file operations.
-        if not org_id:  # Missing org ID blocks all API calls so abort early with a clear error.
-            logging.error("No org_id available. Exiting.")  # Surface missing org context as an error for operators.
-            return  # Cannot proceed without a valid org identifier.
-
-        data_dir = "data"  # All output files live under the standard data directory.
-        os.makedirs(data_dir, exist_ok=True)  # Ensure data directory exists before writing any files.
-        checkpoint_file = os.path.join(
-            data_dir, f"OrgDeviceEvents_52w.{org_id}.checkpoint"
-        )  # Per-org checkpoint path so parallel runs don't collide.
-        csv_file = os.path.join(
-            data_dir, "OrgDeviceEvents_52w.csv"
-        )  # Stable output CSV path expected by downstream consumers.
-        table_name = "OrgDeviceEvents_52w"  # SQLite table name used by the DataExporter backend.
-        limit = 1000  # Page size balances memory usage against API round-trip count.
-        duration = "52w"  # 52-week lookback spans a full year of device event history.
-
-        search_after = OrgAlarmEventExporter._52w_load_checkpoint(
-            checkpoint_file
-        )  # Load prior position to resume interrupted exports.
-        buffered_rows, next_token = OrgAlarmEventExporter._52w_preload_pages(
-            org_id, search_after, limit, duration, 3
-        )  # Preload first 3 pages to derive a stable CSV header before streaming.
-
-        if not buffered_rows:  # No rows means the org has no device events in the 52-week window.
-            logging.info(
-                "No device events found for the 52-week period."
-            )  # Record empty result explicitly for monitoring.
-            DataExporter.write_with_format_selection([], "OrgDeviceEvents_52w.csv")  # type: ignore[no-untyped-call]  # Write empty output so downstream expects a file.
-            return  # Nothing to stream; exit cleanly.
-
-        header_fields = DataProcessingUtils.get_unique_keys(buffered_rows)  # type: ignore[no-untyped-call]  # Derive stable column set from the preloaded sample.
-        logging.info(
-            "Using CSV header with %s fields for OrgDeviceEvents_52w.csv", len(header_fields)
-        )  # Log header width for schema tracking.
-        OrgAlarmEventExporter._52w_write_batch(
-            buffered_rows, header_fields, csv_file, table_name, append=False
-        )  # Write preloaded pages as the initial output batch.
-
-        if next_token:  # Only save checkpoint when more pages remain after the preload phase.
-            OrgAlarmEventExporter._52w_save_checkpoint(
-                checkpoint_file, next_token
-            )  # Persist cursor so a crash here can be resumed.
-
-        while next_token:  # Stream all remaining pages until the API returns no continuation cursor.
-            response = OrgAlarmEventExporter._52w_fetch_page_with_retries(
-                org_id, limit, duration, next_token
-            )  # Fetch next page with exponential-backoff retry protection.
-            results, next_token = OrgAlarmEventExporter._52w_parse_page_data(
-                response
-            )  # Extract row data and updated cursor from response.
-            if not results:  # Empty results signals the end of the event stream.
-                break  # Exit streaming loop; all available events have been written.
-            processed = DataProcessingUtils.flatten_nested_fields(
-                results
-            )  # Flatten nested API fields for flat-file compatibility.
-            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # Escape newlines so CSV rows remain single-line.
-            OrgAlarmEventExporter._52w_write_batch(
-                processed, header_fields, csv_file, table_name, append=True
-            )  # Append this page's rows to the output file or SQLite table.
-            if next_token:  # Update checkpoint after each successful page write for fine-grained resume.
-                OrgAlarmEventExporter._52w_save_checkpoint(
-                    checkpoint_file, next_token
-                )  # Advance checkpoint so a crash loses at most one page.
-
-        OrgAlarmEventExporter._52w_remove_checkpoint(
-            checkpoint_file
-        )  # Clean up checkpoint file after a successful full export.
-        if OUTPUT_FORMAT == "sqlite":  # Log final destination path based on configured output format.
-            logging.info(
-                "All org device events (52w) exported to SQLite table %s (DB: %s)", table_name, DATABASE_PATH
-            )  # Confirm SQLite export completion.
-        else:  # CSV format is the default; log its output path.
-            logging.info("All org device events (52w) exported to %s.", csv_file)  # Confirm CSV export completion.
-
 
 # ============================================================================
 # ORGANIZATION DATA EXPORT UTILITIES CLASS
@@ -11361,56 +11117,6 @@ class OrgDeviceInventorySummary:
         return OrgDeviceInventoryMSPOrchestrator
 
     @staticmethod
-    def _fetch_switch_physical_inventory(current_org_id: str) -> list[dict]:
-        """Delegate switch physical inventory fetch to extracted summary core."""
-        return OrgDeviceInventorySummary._get_summary_impl()._fetch_switch_physical_inventory(current_org_id)
-
-    @staticmethod
-    def _aggregate_switch_counts(switch_records: list[dict], distinct: str) -> list[dict]:
-        """Delegate switch aggregation to extracted summary core."""
-        return OrgDeviceInventorySummary._get_summary_impl()._aggregate_switch_counts(switch_records, distinct)
-
-    @staticmethod
-    def _fetch_gateway_physical_inventory(current_org_id: str) -> list[dict]:
-        """Delegate gateway physical inventory fetch to extracted summary core."""
-        return OrgDeviceInventorySummary._get_summary_impl()._fetch_gateway_physical_inventory(current_org_id)
-
-    @staticmethod
-    def _aggregate_gateway_counts(gateway_records: list[dict], distinct: str) -> list[dict]:
-        """Delegate gateway aggregation to extracted summary core."""
-        return OrgDeviceInventorySummary._get_summary_impl()._aggregate_gateway_counts(gateway_records, distinct)
-
-    @staticmethod
-    def _fetch_all_counts(current_org_id: str, distinct: str) -> list[dict]:
-        """Delegate grouped count fetch to extracted summary core."""
-        return OrgDeviceInventorySummary._get_summary_impl()._fetch_all_counts(current_org_id, distinct)
-
-    @staticmethod
-    def _fetch_versions_per_model(current_org_id: str, model_rows: list[dict]) -> list[dict]:
-        """Delegate version-per-model fetch to extracted summary core."""
-        return OrgDeviceInventorySummary._get_summary_impl()._fetch_versions_per_model(current_org_id, model_rows)
-
-    @staticmethod
-    def _display_pivot_and_export(rows: list[dict], filename: str) -> None:
-        """Delegate pivot display/export to extracted summary core."""
-        OrgDeviceInventorySummary._get_summary_impl()._display_pivot_and_export(rows, filename)
-
-    @staticmethod
-    def _display_and_export(rows: list[dict], distinct: str, filename: str, api_func: str) -> None:
-        """Delegate tabular summary display/export to extracted summary core."""
-        OrgDeviceInventorySummary._get_summary_impl()._display_and_export(rows, distinct, filename, api_func)
-
-    @staticmethod
-    def _resolve_safe_org_name(current_org_id: str) -> str:
-        """Delegate safe org name resolution to extracted summary core."""
-        return OrgDeviceInventorySummary._get_summary_impl()._resolve_safe_org_name(current_org_id)
-
-    @staticmethod
-    def _run_for_org(target_org_id: str) -> "tuple[list[dict], list[dict], list[dict], str]":
-        """Delegate full single-org summary execution to extracted summary core."""
-        return OrgDeviceInventorySummary._get_summary_impl().run_for_org(target_org_id)
-
-    @staticmethod
     def execute() -> None:
         """Single-org entry point for menu operation 13."""
         OrgDeviceInventorySummary._get_summary_impl().execute()
@@ -11421,35 +11127,18 @@ class OrgDeviceInventorySummary:
         return OrgDeviceInventorySummary._get_msp_impl()._resolve_active_msp()
 
     @staticmethod
-    def _fetch_org_list(active_msp: "dict[str, Any]") -> "list[dict[str, Any]]":
-        """Delegate MSP org list retrieval to extracted MSP orchestrator."""
-        return OrgDeviceInventorySummary._get_msp_impl()._fetch_org_list(active_msp)
-
-    @staticmethod
     def _run_single_msp_org() -> None:
         """Delegate single-org MSP flow to extracted MSP orchestrator."""
-        OrgDeviceInventorySummary._get_msp_impl().run_single_msp_org(OrgDeviceInventorySummary._run_for_org)
-
-    @staticmethod
-    def _display_combined_pivot_and_export(
-        all_ver_data: "list[tuple[str, list[dict]]]",
-        filename: str,
-    ) -> None:
-        """Delegate combined MSP pivot export to extracted MSP orchestrator."""
-        OrgDeviceInventorySummary._get_msp_impl()._display_combined_pivot_and_export(all_ver_data, filename)
-
-    @staticmethod
-    def _build_combined_reports(
-        msp_safe_name: str,
-        collected: "list[dict[str, Any]]",
-    ) -> None:
-        """Delegate combined MSP report generation to extracted MSP orchestrator."""
-        OrgDeviceInventorySummary._get_msp_impl()._build_combined_reports(msp_safe_name, collected)
+        OrgDeviceInventorySummary._get_msp_impl().run_single_msp_org(
+            OrgDeviceInventorySummary._get_summary_impl().run_for_org  # Bind extracted core run_for_org as callback.
+        )
 
     @staticmethod
     def execute_msp() -> None:
         """Delegate batch MSP execution to extracted MSP orchestrator."""
-        OrgDeviceInventorySummary._get_msp_impl().execute_msp(OrgDeviceInventorySummary._run_for_org)
+        OrgDeviceInventorySummary._get_msp_impl().execute_msp(
+            OrgDeviceInventorySummary._get_summary_impl().run_for_org  # Bind extracted core run_for_org as callback.
+        )
 
     @staticmethod
     def dispatch() -> None:
@@ -12651,7 +12340,7 @@ class OrgExportUtils:
 
         # First, refresh the available metrics from the API
         print("! Refreshing available insight metrics from Mist API...")
-        InsightMetricsUtils.export_legacy()
+        InsightMetricsUtils.export_const_insight_metrics()  # Refresh ConstInsightMetrics.csv before scope filtering
 
         # Get all metrics that support "org" scope
         org_metrics = InsightMetricsUtils.get_by_scope("org")
@@ -14031,10 +13720,10 @@ class SiteExportUtils:
         return module.SiteExportUtils._classify_device_platform(device_model)
 
     @staticmethod
-    def _metric_compatible_with_platform(metric_name: str, device_platform: str) -> bool:
-        """Delegate metric compatibility helper."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils._metric_compatible_with_platform(metric_name, device_platform)
+    def _metric_supported_on_platform(metric_name: str, device_platform: str) -> bool:
+        """Delegate metric/platform support check to the extracted SiteExportUtils impl."""
+        module = SiteExportUtils._configure_module()  # resolve wired src module
+        return module.SiteExportUtils._metric_compatible_with_platform(metric_name, device_platform)  # call src impl
 
     @staticmethod
     def _normalize_device_mac_or_none(device_mac: str) -> str | None:
@@ -15196,13 +14885,13 @@ class InsightMetricsUtils:
     """
 
     @staticmethod
-    def export_legacy() -> None:
+    def export_const_insight_metrics() -> None:
         """
-        Legacy function maintained for backward compatibility.
+        Export available const insight metrics via the ConstDefinitionsExporter.
 
-        Uses the ConstDefinitionsExporter class for comprehensive const export.
+        Refreshes data/ConstInsightMetrics.csv so scope-filtering helpers can read it.
         """
-        print("Export Available Insight Metrics (Legacy Mode):")
+        print("Export Available Insight Metrics:")  # User-facing banner for the const insight metrics export
         print("! Note: This function now uses the dynamic comprehensive const export system")
         print("! For best results, consider using Menu 82: Export All Const Definitions")
         logging.info("Legacy const insight metrics export called - using ConstDefinitionsExporter class")
@@ -16174,33 +15863,9 @@ class TroubleshootUtils:
         ExtractedMarvisTroubleshootUtils.view_insights(TroubleshootUtils._build_deps())
 
     @staticmethod
-    def _fetch_org_insights(org_id: str) -> None:
-        """Delegated helper for organization-level insights retrieval."""
-        ExtractedMarvisTroubleshootUtils._fetch_org_insights(org_id, TroubleshootUtils._build_deps())
-
-    @staticmethod
-    def _process_insight_response(endpoint_name: str, data: Any) -> bool:
-        """Delegated helper for insight response processing."""
-        return ExtractedMarvisTroubleshootUtils._process_insight_response(
-            endpoint_name,
-            data,
-            TroubleshootUtils._build_deps(),
-        )
-
-    @staticmethod
-    def _log_endpoint_error(endpoint_name: str, exception: Exception) -> None:
-        """Delegated helper for endpoint error logging."""
-        ExtractedMarvisTroubleshootUtils._log_endpoint_error(endpoint_name, exception)
-
-    @staticmethod
     def _display_usage_guide() -> None:
         """Delegated helper for usage guide display."""
         ExtractedMarvisTroubleshootUtils._display_usage_guide()
-
-    @staticmethod
-    def _handle_insights_error(exception: Exception) -> None:
-        """Delegated helper for Marvis insights error handling."""
-        ExtractedMarvisTroubleshootUtils._handle_insights_error(exception)
 
 
 # ============================================================================
@@ -16314,61 +15979,9 @@ class SSHRunnerManager:
         return ExtractedSSHRunnerManager.interactive(SSHRunnerManager._build_deps())
 
     @staticmethod
-    def by_gateway_template(fast=False):
-        """Delegated SSH runner by gateway template entrypoint."""
-        ExtractedSSHRunnerManager.by_gateway_template(SSHRunnerManager._build_deps(), fast=fast)
-
-    @staticmethod
-    def _collect_missing_data(hosts, username, password, commands):
-        """Delegated helper to collect missing SSH configuration data."""
-        return ExtractedSSHRunnerManager._collect_missing_data(
-            SSHRunnerManager._build_deps(),
-            hosts,
-            username,
-            password,
-            commands,
-        )
-
-    @staticmethod
-    def _execute_ssh(hosts, username, password, commands):
-        """Delegated helper to execute SSH commands."""
-        return ExtractedSSHRunnerManager._execute_ssh(
-            SSHRunnerManager._build_deps(),
-            hosts,
-            username,
-            password,
-            commands,
-        )
-
-    @staticmethod
     def _load_gateway_data():
         """Delegated helper to load gateway management data."""
         return ExtractedSSHRunnerManager._load_gateway_data(SSHRunnerManager._build_deps())
-
-    @staticmethod
-    def _select_gateway_template(gateways):
-        """Delegated helper to choose gateway template."""
-        return ExtractedSSHRunnerManager._select_gateway_template(SSHRunnerManager._build_deps(), gateways)
-
-    @staticmethod
-    def _filter_gateways(gateways, template_name):
-        """Delegated helper to filter gateways by template and status."""
-        return ExtractedSSHRunnerManager._filter_gateways(gateways, template_name)
-
-    @staticmethod
-    def _display_filtered_gateways(gateways):
-        """Delegated helper to display filtered gateways."""
-        ExtractedSSHRunnerManager._display_filtered_gateways(gateways)
-
-    @staticmethod
-    def _confirm_execution(count):
-        """Delegated helper to confirm SSH execution."""
-        return ExtractedSSHRunnerManager._confirm_execution(SSHRunnerManager._build_deps(), count)
-
-    @staticmethod
-    def _execute_by_template(management_ips, template_name):
-        """Delegated helper to execute SSH by selected template."""
-        ExtractedSSHRunnerManager._execute_by_template(SSHRunnerManager._build_deps(), management_ips, template_name)
 
 
 # ============================================================================
@@ -16786,15 +16399,6 @@ class AddressComparisonCounters:
     def get_duration(self):
         """Get the elapsed time in seconds between start and end timing."""
         return self._impl.get_duration()
-
-    def increment_parse_failure(self, reason):
-        """
-        Increment parse failure counter and track the specific reason.
-
-        Args:
-            reason (str): The specific reason for the parse failure
-        """
-        self._impl.increment_parse_failure(reason)
 
     def log_summary(self):
         """Log a comprehensive summary of all counter metrics."""
@@ -18481,46 +18085,28 @@ class DeviceRebootManager:
 
 
 class FirmwareManager:
-    """Thin wrapper that delegates to src.firmware.firmware_manager."""
+    """Factory for the extracted firmware manager (src.firmware.firmware_manager)."""
 
-    def __init__(self, apisession: Any, org_id: str) -> None:
-        """Initialize with session and org ID."""
-        self._apisession = apisession
-        self._org_id = org_id
+    @staticmethod
+    def create(apisession: Any, org_id: str) -> Any:
+        """Build the DI-wired firmware-manager impl so menu callbacks invoke it directly."""
+        # Local import keeps firmware deps off the hot startup path
+        from src.firmware.firmware_manager import FirmwareManager as _Impl  # noqa: PLC0415
 
-    def _create_impl(self) -> Any:
-        """Create the extracted FirmwareManager implementation."""
-        from src.firmware.firmware_manager import FirmwareManager as _Impl
-
-        return _Impl(
-            apisession=self._apisession,
-            org_id=self._org_id,
-            safe_input_fn=InputUtils.safe_input,
-            select_site_fn=PromptUtils.select_site,
-            check_cache_fn=CacheUtils.check_and_generate_csv,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            gateway_templates_fn=GatewayExportUtils.templates,
-            sites_fn=OrgSiteExporter.sites,
+        logging.debug("Building firmware manager impl for org %s", org_id)  # Trace factory build
+        return _Impl(  # Inject MistHelper collaborators into the extracted impl
+            apisession=apisession,  # Live Mist API session passed through
+            org_id=org_id,  # Target organization identifier
+            safe_input_fn=InputUtils.safe_input,  # EOF-safe prompt helper
+            select_site_fn=PromptUtils.select_site,  # Interactive site picker
+            check_cache_fn=CacheUtils.check_and_generate_csv,  # Validate/refresh cached CSV
+            get_csv_path_fn=FilePathUtils.get_csv_path,  # Resolve data/ output paths
+            gateway_templates_fn=GatewayExportUtils.templates,  # Fetch gateway templates
+            sites_fn=OrgSiteExporter.sites,  # Fetch org site list
         )
 
-    def check_firmware_upgrade_status(self, scope_choice: str | None = None, site_filter: str | None = None) -> None:
-        """Check firmware upgrade status across org sites."""
-        self._create_impl().check_firmware_upgrade_status(scope_choice=scope_choice, site_filter=site_filter)
 
-    def execute_firmware_upgrade_with_mode_selection(self) -> None:
-        """Execute AP firmware upgrade with mode selection."""
-        self._create_impl().execute_firmware_upgrade_with_mode_selection()
-
-    def execute_switch_firmware_upgrade_with_mode_selection(self) -> None:
-        """Execute switch firmware upgrade with mode selection."""
-        self._create_impl().execute_switch_firmware_upgrade_with_mode_selection()
-
-    def execute_ssr_firmware_upgrade_with_mode_selection(self) -> None:
-        """Execute SSR firmware upgrade with mode selection."""
-        self._create_impl().execute_ssr_firmware_upgrade_with_mode_selection()
-
-
-# NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager(apisession, org_id).check_firmware_upgrade_status() directly  # noqa: E501
+# NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager.create(apisession, org_id).check_firmware_upgrade_status()  # noqa: E501
 
 
 class FirmwareUpgradeStatusChecker:
@@ -19447,7 +19033,7 @@ class BulkAPFirmwareUpgrader:
             check_stop_fn=ConfigUtils.check_stop_signal,
             fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
             get_csv_path_fn=FilePathUtils.get_csv_path,
-            check_firmware_status_fn=lambda: FirmwareManager(
+            check_firmware_status_fn=lambda: FirmwareManager.create(
                 apisession, ConfigUtils.get_cached_or_prompted_org_id()
             ).check_firmware_upgrade_status(),
             get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
@@ -21537,7 +21123,7 @@ menu_actions = {
     "50": (OrgConfigExporter.mx_edges, "Export MX Edge information for the organization"),
     # Status & Monitoring
     "137": (
-        lambda: FirmwareManager(  # type: ignore[no-untyped-call]
+        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).check_firmware_upgrade_status(),
         "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV",
@@ -21594,7 +21180,7 @@ menu_actions = {
     "121": (ARPCommandManager.execute, "Run ARP command on an AP and receive output via WebSocket"),
     # ! DESTRUCTIVE OPERATIONS - USE WITH EXTREME CAUTION
     "154": (
-        lambda: FirmwareManager(  # type: ignore[no-untyped-call]
+        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_firmware_upgrade_with_mode_selection(),
         " DESTRUCTIVE: Advanced AP firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment",  # noqa: E501
@@ -21628,7 +21214,8 @@ menu_actions = {
         "Enhanced SSH Command Runner - Execute commands on remote network devices via SSH",
     ),
     "176": (
-        SSHRunnerManager.by_gateway_template,
+        # Wire menu directly to extracted SSH runner impl (facade wrapper removed).
+        lambda: ExtractedSSHRunnerManager.by_gateway_template(SSHRunnerManager._build_deps()),
         "SSH Runner - Target gateways by template name (online gateways with management IPs only)",
     ),
     # ==============================
@@ -21676,7 +21263,7 @@ menu_actions = {
     # SWITCH FIRMWARE OPERATIONS
     # ==============================
     "155": (
-        lambda: FirmwareManager(  # type: ignore[no-untyped-call]
+        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_switch_firmware_upgrade_with_mode_selection(),
         " DESTRUCTIVE: Advanced Switch firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment",  # noqa: E501
@@ -21685,7 +21272,7 @@ menu_actions = {
     # SSR FIRMWARE OPERATIONS
     # ==============================
     "156": (
-        lambda: FirmwareManager(  # type: ignore[no-untyped-call]
+        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_ssr_firmware_upgrade_with_mode_selection(),
         " DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment",  # noqa: E501

@@ -130,15 +130,15 @@ Local workaround (corrupted venv -- dash plugin autoload only): run affected tes
 
 ## Acceptance Criteria *(mandatory)*
 
-- [ ] `check_compliance.py MistHelper.py` -> `ARCH-DELEGATE` = 0, `ARCH-NAMING` = 0.
-- [ ] No new wrappers/aliases/`# noqa`/suppressions introduced.
-- [ ] All 6 exemptions are detector fixes (dunder/closure), each covered by a regression test; a real delegator remains flagged.
-- [ ] FirmwareManager is a `create()` factory; 5 call sites repointed; behavior preserved.
-- [ ] `export_legacy` renamed across all 8 touch points; guardrail allowlist empty and passing.
-- [ ] Dead `device_events_52w_legacy` + `_52w_*` cluster + its test removed; live `device_events_52w` path unaffected.
-- [ ] Every touched line carries an inline *why* comment; action logging added; ASCII-only.
-- [ ] `py_compile`, `ruff`, `black` all green on `MistHelper.py` and `analyzers.py`.
-- [ ] Affected unit + guardrail tests pass via the local workaround.
+- [x] `check_compliance.py MistHelper.py` -> `ARCH-DELEGATE` = 0, `ARCH-NAMING` = 0. (score 30.0 -> 54.0; Architecture un-pinned)
+- [x] No new wrappers/aliases/`# noqa`/suppressions introduced.
+- [x] All 6 exemptions are detector fixes (dunder/closure), each covered by a regression test; a real delegator remains flagged.
+- [x] FirmwareManager is a `create()` factory; 5 call sites repointed; behavior preserved.
+- [x] `export_legacy` renamed across all 8 touch points; guardrail allowlist empty and passing.
+- [x] Dead `device_events_52w_legacy` + `_52w_*` cluster + its test removed; live `device_events_52w` path unaffected.
+- [x] Every touched line carries an inline *why* comment; action logging added; ASCII-only.
+- [x] `py_compile`, `ruff`, `black` all green on `MistHelper.py` and `analyzers.py`.
+- [x] Affected unit + guardrail tests pass via the local workaround. (20 passed; 1 pre-existing wcwidth venv failure unrelated to this change)
 - [ ] PR links this spec and Issue #440 ("Part of #431"); CodeQL + all gates green before `auto-merge`.
 
 ## Risks & Mitigations

@@ -106,9 +106,9 @@ def test_classify_device_platform_by_model_prefix():
 
 
 def test_metric_compatibility_filters_switch_metrics_for_ap():
-    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "ap") is False
-    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "switch") is True
-    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "unknown") is True
+    assert MistHelper.SiteExportUtils._metric_supported_on_platform("switch-metrics", "ap") is False
+    assert MistHelper.SiteExportUtils._metric_supported_on_platform("switch-metrics", "switch") is True
+    assert MistHelper.SiteExportUtils._metric_supported_on_platform("switch-metrics", "unknown") is True
 
 
 def test_normalize_device_mac_or_none_accepts_and_normalizes():
@@ -162,7 +162,7 @@ def test_select_device_id_from_csv_accepts_dotted_index(monkeypatch):
 def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(MistHelper.PromptUtils, "select_site", lambda: "site-1")
-    monkeypatch.setattr(MistHelper.InsightMetricsUtils, "export_legacy", lambda: None)
+    monkeypatch.setattr(MistHelper.InsightMetricsUtils, "export_const_insight_metrics", lambda: None)
     monkeypatch.setattr(MistHelper.InsightMetricsUtils, "get_by_scope", lambda scope: ["metric-one"])
     monkeypatch.setattr(MistHelper.EnhancedSSHRunner, "sanitize_filename", lambda value: value.replace(" ", "_"))
 

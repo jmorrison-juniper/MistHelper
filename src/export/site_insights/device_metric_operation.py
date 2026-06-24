@@ -17,7 +17,7 @@ class DeviceMetricOperation:
         logging.info("Starting export of site device insights...")  # Trace operation start for ops visibility
 
         print("! Refreshing available insight metrics from Mist API...")  # User-facing progress preserved verbatim
-        _parent.InsightMetricsUtils.export_legacy()  # Refresh ConstInsightMetrics.csv cache before reading from it
+        _parent.InsightMetricsUtils.export_const_insight_metrics()  # Refresh ConstInsightMetrics.csv before reading it
 
         prompts = DeviceMetricOperation._prompt_site_and_device()  # Run both selection prompts up front
         if prompts is None:
