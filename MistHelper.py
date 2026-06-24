@@ -6679,10 +6679,10 @@ class DataProcessingUtils:  # JSON flattening/normalization.
                     for idx, item in enumerate(v):  # Walk list items.
                         items.extend(DataProcessingUtils.flatten_dict(item, f"{new_key}{sep}{idx}", sep=sep).items())
                 else:
-                    items.append((new_key, ",".join(map(str, v))))
+                    items.append((new_key, ",".join(map(str, v))))  # Join scalar list as CSV.
             else:
-                items.append((new_key, v))
-        return dict(items)
+                items.append((new_key, v))  # Keep scalar value as-is.
+        return dict(items)  # Return the flat dict.
 
     @staticmethod
     def flatten_nested_fields(data: list[dict[str, Any]]) -> list[dict[str, Any]]:  # noqa: C901
@@ -6698,41 +6698,41 @@ class DataProcessingUtils:  # JSON flattening/normalization.
         Returns:
             list: List of dictionaries with flattened nested fields
         """
-        flattened = []
-        for entry in data:
-            if not isinstance(entry, dict):
-                logging.debug("Skipping non-dictionary entry: %s", type(entry).__name__)
-                continue
+        flattened = []  # Collect flattened rows.
+        for entry in data:  # Process each record.
+            if not isinstance(entry, dict):  # Skip non-dict records.
+                logging.debug("Skipping non-dictionary entry: %s", type(entry).__name__)  # Trace skipped entry.
+                continue  # Move to next record.
 
-            new_entry = {}
-            for key, value in entry.items():
+            new_entry = {}  # Build the flattened row.
+            for key, value in entry.items():  # Walk each field.
                 # Try to parse stringified dicts/lists
-                if isinstance(value, str) and (value.startswith("{") or value.startswith("[")):
+                if isinstance(value, str) and (value.startswith("{") or value.startswith("[")):  # Maybe embedded JSON.
                     try:
-                        value = ast.literal_eval(value)
-                    except Exception:
+                        value = ast.literal_eval(value)  # Parse Python-literal JSON.
+                    except Exception:  # Literal parse failed.
                         try:
-                            value = json.loads(value)
+                            value = json.loads(value)  # Fall back to JSON parse.
                         except Exception:  # nosec B110
                             pass  # Leave as string if parsing fails
 
-                if isinstance(value, dict):
-                    flat = DataProcessingUtils.flatten_dict(value, parent_key=key)
-                    new_entry.update(flat)
-                elif isinstance(value, list):
-                    if all(isinstance(i, dict) for i in value):
-                        for idx, item in enumerate(value):
-                            flat = DataProcessingUtils.flatten_dict(item, parent_key=f"{key}_{idx}")
-                            new_entry.update(flat)
+                if isinstance(value, dict):  # Nested dict needs flattening.
+                    flat = DataProcessingUtils.flatten_dict(value, parent_key=key)  # Flatten the nested dict.
+                    new_entry.update(flat)  # Merge flattened keys.
+                elif isinstance(value, list):  # Lists need expansion.
+                    if all(isinstance(i, dict) for i in value):  # List of dicts: index each.
+                        for idx, item in enumerate(value):  # Walk list items.
+                            flat = DataProcessingUtils.flatten_dict(item, parent_key=f"{key}_{idx}")  # Flatten item.
+                            new_entry.update(flat)  # Merge item keys.
                     else:
-                        new_entry[key] = ",".join(map(str, value))
+                        new_entry[key] = ",".join(map(str, value))  # Join scalar list as CSV.
                 else:
-                    new_entry[key] = value
-            flattened.append(new_entry)
-        return flattened
+                    new_entry[key] = value  # Keep scalar value.
+            flattened.append(new_entry)  # Add the flattened row.
+        return flattened  # Return all flattened rows.
 
     @staticmethod
-    def convert_list_values_to_strings(data):
+    def convert_list_values_to_strings(data):  # Stringify list-valued fields.
         """
         Convert list, tuple, or set values to CSV-compatible comma-separated strings.
 
@@ -6742,15 +6742,15 @@ class DataProcessingUtils:  # JSON flattening/normalization.
         Returns:
             Data with list values converted to strings
         """
-        for entry in data:
-            for key, value in entry.items():
-                if isinstance(value, (list, tuple, set)):
-                    logging.debug("Converting list/tuple/set at key '%s' to string", key)
-                    entry[key] = ",".join(map(str, value))
-        return data
+        for entry in data:  # Process each record.
+            for key, value in entry.items():  # Walk each field.
+                if isinstance(value, (list, tuple, set)):  # Only convert collections.
+                    logging.debug("Converting list/tuple/set at key '%s' to string", key)  # Trace the conversion.
+                    entry[key] = ",".join(map(str, value))  # Join as CSV string.
+        return data  # Return converted records.
 
     @staticmethod
-    def get_unique_keys(data):
+    def get_unique_keys(data):  # Collect the union of all keys.
         """
         Get all unique dictionary keys from a list of dictionaries.
         Returns a sorted list of string keys.
@@ -6761,13 +6761,13 @@ class DataProcessingUtils:  # JSON flattening/normalization.
         Returns:
             list: Sorted list of unique keys as strings
         """
-        fields = set()
-        for entry in data:
-            fields.update(entry.keys())
-        return sorted(str(f) for f in fields)
+        fields = set()  # Accumulate distinct keys.
+        for entry in data:  # Scan each record.
+            fields.update(entry.keys())  # Add this record's keys.
+        return sorted(str(f) for f in fields)  # Return sorted field names.
 
     @staticmethod
-    def escape_multiline(data):
+    def escape_multiline(data):  # Escape newlines for CSV safety.
         """
         Escape multiline strings for CSV compatibility.
         Joins list values as comma-separated strings.
@@ -6779,13 +6779,13 @@ class DataProcessingUtils:  # JSON flattening/normalization.
         Returns:
             Data with escaped multiline strings
         """
-        for entry in data:
-            for key, value in entry.items():
-                if isinstance(value, list):
-                    entry[key] = ",".join(map(str, value))
-                elif isinstance(value, str):
-                    entry[key] = value.replace("\n", "\\n").replace("\r", "")
-        return data
+        for entry in data:  # Process each record.
+            for key, value in entry.items():  # Walk each field.
+                if isinstance(value, list):  # Join lists to a string.
+                    entry[key] = ",".join(map(str, value))  # CSV-join the list.
+                elif isinstance(value, str):  # Escape string newlines.
+                    entry[key] = value.replace("\n", "\\n").replace("\r", "")  # Escape CR/LF for CSV.
+        return data  # Return escaped records.
 
 
 # MarvisDataUtils extracted to src/marvis/marvis_utils.py (issue #330).
@@ -6800,7 +6800,7 @@ marvis_data_utils = MarvisDataUtils(  # Instantiate with the two required data-p
 )
 
 
-class DatabaseSchemaUtils:
+class DatabaseSchemaUtils:  # Build SQLite DDL from data.
     """
     Centralized database schema utilities for SQLite operations.
     Groups all schema-related functions per the 5-Item Rule class organization.
@@ -6808,7 +6808,7 @@ class DatabaseSchemaUtils:
     """
 
     @staticmethod
-    def determine_api_function_name_from_context() -> str:
+    def determine_api_function_name_from_context() -> str:  # Infer API name from the call stack.
         """
         Attempts to determine the API function name from the current call stack.
         This helps identify which endpoint strategy to use for table schema.
@@ -6817,27 +6817,27 @@ class DatabaseSchemaUtils:
             str: The API function name if found, else 'unknown'
         """
         # Look through the call stack for known API function patterns
-        frame = inspect.currentframe()
+        frame = inspect.currentframe()  # Start at the current frame.
         try:
-            while frame:
-                function_name = frame.f_code.co_name
+            while frame:  # Walk up the stack.
+                function_name = frame.f_code.co_name  # Name of this frame's function.
                 # Check if this looks like an API function name
-                if any(
+                if any(  # Match known API call patterns.
                     pattern in function_name
                     for pattern in ["getOrg", "listOrg", "searchOrg", "getSite", "listSite", "searchSite"]
                 ):
-                    logging.debug("Detected API function name from stack: %s", function_name)
-                    return function_name
-                frame = frame.f_back
-        except Exception as error:
-            logging.debug("Error determining API function name: %s", error)
+                    logging.debug("Detected API function name from stack: %s", function_name)  # Trace detected name.
+                    return function_name  # Use the detected API name.
+                frame = frame.f_back  # Step to the caller frame.
+        except Exception as error:  # Stack inspection failed.
+            logging.debug("Error determining API function name: %s", error)  # Trace the inspection error.
         finally:
-            del frame
+            del frame  # Break the reference cycle.
 
-        return "unknown"
+        return "unknown"  # Fallback when undetected.
 
     @staticmethod
-    def get_endpoint_strategy(api_function_name: str, data_fields: list[str]) -> dict[str, Any]:
+    def get_endpoint_strategy(api_function_name: str, data_fields: list[str]) -> dict[str, Any]:  # Pick PK strategy.
         """
         Determines the appropriate database schema strategy for an API endpoint.
 
@@ -6849,29 +6849,29 @@ class DatabaseSchemaUtils:
             dict: Strategy configuration including primary key, indexes, etc.
         """
         # First check if we have a specific strategy for this endpoint
-        if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:
-            strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()
-            logging.debug("Using configured strategy for %s: %s", api_function_name, strategy["type"])
-            return strategy
+        if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:  # Use a configured strategy.
+            strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()  # Copy to avoid mutation.
+            logging.debug("Using configured strategy for %s: %s", api_function_name, strategy["type"])  # Trace pick.
+            return strategy  # Return configured strategy.
 
         # If no specific strategy, use intelligent defaults based on data structure
         strategy: dict[str, Any] = ENDPOINT_PRIMARY_KEY_STRATEGIES["default"].copy()  # type: ignore[no-redef]
 
         # Enhance default strategy based on available fields
-        if "id" in data_fields:
+        if "id" in data_fields:  # Default: key on id.
             # If data has an 'id' field, use it as unique constraint
-            strategy["unique_constraints"] = ["id"]
-            strategy["indexes"] = ["id"]
+            strategy["unique_constraints"] = ["id"]  # Enforce unique id.
+            strategy["indexes"] = ["id"]  # Index id for lookups.
             logging.debug("Enhanced default strategy for %s: adding unique constraint on 'id'", api_function_name)
 
         # Add common indexes for frequently queried fields
-        common_index_fields = ["org_id", "site_id", "device_id", "timestamp", "mac", "serial"]
-        for field_name in common_index_fields:
-            if field_name in data_fields and field_name not in strategy["indexes"]:
+        common_index_fields = ["org_id", "site_id", "device_id", "timestamp", "mac", "serial"]  # Common index columns.
+        for field_name in common_index_fields:  # Add indexes when present.
+            if field_name in data_fields and field_name not in strategy["indexes"]:  # Avoid duplicate indexes.
                 strategy["indexes"].append(field_name)  # type: ignore[attr-defined]
 
-        logging.debug("Using enhanced default strategy for %s: %s", api_function_name, strategy)
-        return strategy
+        logging.debug("Using enhanced default strategy for %s: %s", api_function_name, strategy)  # Trace strategy.
+        return strategy  # Return enhanced strategy.
 
     @staticmethod
     def build_create_table_sql(
@@ -6890,100 +6890,100 @@ class DatabaseSchemaUtils:
         Returns:
             str: Complete CREATE TABLE SQL statement
         """
-        datetime.now(UTC).isoformat()
+        datetime.now(UTC).isoformat()  # Timestamp the schema build.
 
         # Sanitize table name
-        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", table_name)
-        if not safe_table_name or safe_table_name[0].isdigit():
-            safe_table_name = f"table_{safe_table_name}"
+        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", table_name)  # Sanitize the table name.
+        if not safe_table_name or safe_table_name[0].isdigit():  # Names cannot start with a digit.
+            safe_table_name = f"table_{safe_table_name}"  # Prefix to make it valid.
 
         # Start building SQL
-        if strategy["type"] == "natural_pk":
+        if strategy["type"] == "natural_pk":  # Stable-UUID table path.
             # Use API id field(s) as primary key
-            pk_fields = strategy["primary_key"]
-            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+            pk_fields = strategy["primary_key"]  # Natural primary key columns.
+            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]  # Begin the CREATE TABLE.
 
             # Add all fields, with primary key fields getting special treatment
-            field_definitions = []
-            for field in fields:
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))
-                if field in pk_fields:
-                    field_definitions.append(f"{safe_field} TEXT NOT NULL")
+            field_definitions = []  # Column definitions.
+            for field in fields:  # Define each column.
+                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
+                if field in pk_fields:  # PK columns are NOT NULL.
+                    field_definitions.append(f"{safe_field} TEXT NOT NULL")  # Required PK column.
                 else:
-                    field_definitions.append(f"{safe_field} TEXT")
+                    field_definitions.append(f"{safe_field} TEXT")  # Optional column.
 
             # Add metadata fields
-            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
-            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: created time.
+            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: updated time.
 
-            sql_parts.append(", ".join(field_definitions))
+            sql_parts.append(", ".join(field_definitions))  # Join column defs.
 
             # Add primary key constraint
-            pk_constraint = f"PRIMARY KEY ({', '.join(pk_fields)})"
-            sql_parts.append(f", {pk_constraint}")
+            pk_constraint = f"PRIMARY KEY ({', '.join(pk_fields)})"  # Compose the PK clause.
+            sql_parts.append(f", {pk_constraint}")  # Append the PK clause.
 
-            sql_parts.append(")")
-            create_sql = "".join(sql_parts)
+            sql_parts.append(")")  # Close the column list.
+            create_sql = "".join(sql_parts)  # Assemble the DDL.
 
-        elif strategy["type"] == "composite_pk":
+        elif strategy["type"] == "composite_pk":  # Time-series table path.
             # Use composite primary key
-            pk_fields = strategy["primary_key"]
-            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+            pk_fields = strategy["primary_key"]  # Composite key columns.
+            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]  # Begin the CREATE TABLE.
 
-            field_definitions = []
-            for field in fields:
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))
-                if field in pk_fields:
-                    field_definitions.append(f"{safe_field} TEXT NOT NULL")
+            field_definitions = []  # Column definitions.
+            for field in fields:  # Define each column.
+                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
+                if field in pk_fields:  # PK columns are NOT NULL.
+                    field_definitions.append(f"{safe_field} TEXT NOT NULL")  # Required PK column.
                 else:
-                    field_definitions.append(f"{safe_field} TEXT")
+                    field_definitions.append(f"{safe_field} TEXT")  # Optional column.
 
             # Add metadata fields
-            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
-            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: created time.
+            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: updated time.
 
-            sql_parts.append(", ".join(field_definitions))
+            sql_parts.append(", ".join(field_definitions))  # Join column defs.
 
             # Add composite primary key constraint
-            available_pk_fields = [f for f in pk_fields if f in fields]
-            if available_pk_fields:
-                pk_constraint = f"PRIMARY KEY ({', '.join(available_pk_fields)})"
-                sql_parts.append(f", {pk_constraint}")
+            available_pk_fields = [f for f in pk_fields if f in fields]  # Only key on present columns.
+            if available_pk_fields:  # At least one PK column exists.
+                pk_constraint = f"PRIMARY KEY ({', '.join(available_pk_fields)})"  # Compose the PK clause.
+                sql_parts.append(f", {pk_constraint}")  # Append the PK clause.
 
-            sql_parts.append(")")
-            create_sql = "".join(sql_parts)
+            sql_parts.append(")")  # Close the column list.
+            create_sql = "".join(sql_parts)  # Assemble the DDL.
 
         else:  # auto_increment_with_unique
             # Use auto-increment primary key with unique constraints
-            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]  # Begin the CREATE TABLE.
 
-            field_definitions = ["misthelper_internal_id INTEGER PRIMARY KEY AUTOINCREMENT"]
+            field_definitions = ["misthelper_internal_id INTEGER PRIMARY KEY AUTOINCREMENT"]  # Surrogate key column.
 
-            for field in fields:
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))
-                field_definitions.append(f"{safe_field} TEXT")
+            for field in fields:  # Define each column.
+                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
+                field_definitions.append(f"{safe_field} TEXT")  # Optional column.
 
             # Add metadata fields
-            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
-            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: created time.
+            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: updated time.
 
-            sql_parts.append(", ".join(field_definitions))
+            sql_parts.append(", ".join(field_definitions))  # Join column defs.
 
             # Add unique constraints if specified
-            unique_fields = [f for f in strategy["unique_constraints"] if f in fields]
-            if unique_fields:
-                for field in unique_fields:
-                    safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))
-                    sql_parts.append(f", UNIQUE({safe_field})")
+            unique_fields = [f for f in strategy["unique_constraints"] if f in fields]  # Unique cols present in data.
+            if unique_fields:  # Add unique constraints.
+                for field in unique_fields:  # Each unique column.
+                    safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
+                    sql_parts.append(f", UNIQUE({safe_field})")  # Append unique constraint.
 
-            sql_parts.append(")")
-            create_sql = "".join(sql_parts)
+            sql_parts.append(")")  # Close the column list.
+            create_sql = "".join(sql_parts)  # Assemble the DDL.
 
-        logging.debug("Generated CREATE TABLE SQL for %s: %s...", safe_table_name, create_sql[:100])
-        return create_sql
+        logging.debug("Generated CREATE TABLE SQL for %s: %s...", safe_table_name, create_sql[:100])  # Trace DDL.
+        return create_sql  # Return the CREATE TABLE.
 
     @staticmethod
-    def build_indexes_sql(table_name: str, fields: list[str], strategy: dict[str, Any]) -> list[str]:
+    def build_indexes_sql(table_name: str, fields: list[str], strategy: dict[str, Any]) -> list[str]:  # Build indexes.
         """
         Builds CREATE INDEX SQL statements for the specified strategy.
 
@@ -6995,24 +6995,24 @@ class DatabaseSchemaUtils:
         Returns:
             list: List of CREATE INDEX SQL statements
         """
-        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", table_name)
-        if not safe_table_name or safe_table_name[0].isdigit():
-            safe_table_name = f"table_{safe_table_name}"
+        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", table_name)  # Sanitize the table name.
+        if not safe_table_name or safe_table_name[0].isdigit():  # Names cannot start with a digit.
+            safe_table_name = f"table_{safe_table_name}"  # Prefix to make it valid.
 
-        index_sqls = []
+        index_sqls = []  # Collect index statements.
 
         # Create indexes for fields specified in strategy
-        for field_name in strategy.get("indexes", []):
-            if field_name in fields:
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field_name))
-                index_name = f"idx_{safe_table_name}_{safe_field}"
-                index_sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {safe_table_name} ({safe_field})"
-                index_sqls.append(index_sql)
+        for field_name in strategy.get("indexes", []):  # One index per configured field.
+            if field_name in fields:  # Only index present columns.
+                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field_name))  # Sanitize the column name.
+                index_name = f"idx_{safe_table_name}_{safe_field}"  # Deterministic index name.
+                index_sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {safe_table_name} ({safe_field})"  # index DDL.
+                index_sqls.append(index_sql)  # Collect the statement.
 
-        return index_sqls
+        return index_sqls  # Return all index DDL.
 
 
-class SQLiteDatabaseWriter:
+class SQLiteDatabaseWriter:  # Upsert records into SQLite.
     """
     Write list of dictionaries to SQLite database using hybrid primary key strategies.
 
@@ -7025,36 +7025,36 @@ class SQLiteDatabaseWriter:
         SQLiteDatabaseWriter(data, table_name, api_function_name).write()
     """
 
-    def __init__(self, data: list[dict[str, Any]], table_name: str, api_function_name: str | None = None):
+    def __init__(self, data: list[dict[str, Any]], table_name: str, api_function_name: str | None = None):  # capture.
         """Initialize writer with data, table name, and optional API function name."""
-        self.data = data
-        self.table_name = table_name
-        self.api_function_name = api_function_name
-        self.timestamp = datetime.now(UTC).isoformat()
-        self.processed_data: list[dict[str, Any]] = []
-        self.fields: list[str] = []
-        self.strategy: dict[str, Any] = {}
-        self.connection: sqlite3.Connection | None = None
-        self.cursor: sqlite3.Cursor | None = None
+        self.data = data  # Rows to persist.
+        self.table_name = table_name  # Destination table.
+        self.api_function_name = api_function_name  # Source API for strategy.
+        self.timestamp = datetime.now(UTC).isoformat()  # Write timestamp.
+        self.processed_data: list[dict[str, Any]] = []  # Normalized rows.
+        self.fields: list[str] = []  # Resolved column list.
+        self.strategy: dict[str, Any] = {}  # Chosen PK/index strategy.
+        self.connection: sqlite3.Connection | None = None  # Lazy DB connection.
+        self.cursor: sqlite3.Cursor | None = None  # Lazy DB cursor.
 
-    def write(self) -> bool:
+    def write(self) -> bool:  # Run the full upsert pipeline.
         """Main entry point - orchestrates the database write operation."""
-        self._log_entry()
-        if not self._validate_inputs():
-            return False
-        self._resolve_api_function_name()
-        if not self._ensure_database_directory():
-            return False
-        if not self._process_data():
-            return False
-        if not self._determine_fields_and_strategy():
-            return False
-        return self._execute_database_operations()
+        self._log_entry()  # Log the write start.
+        if not self._validate_inputs():  # Abort on invalid input.
+            return False  # Nothing written.
+        self._resolve_api_function_name()  # Infer API name if missing.
+        if not self._ensure_database_directory():  # Abort if dir not writable.
+            return False  # Nothing written.
+        if not self._process_data():  # Abort on processing failure.
+            return False  # Nothing written.
+        if not self._determine_fields_and_strategy():  # Abort if schema undetermined.
+            return False  # Abort: schema undetermined.
+        return self._execute_database_operations()  # Run the DB writes.
 
-    def _log_entry(self) -> None:
+    def _log_entry(self) -> None:  # Log write parameters.
         """Log entry point with input parameters."""
-        row_count = len(self.data) if self.data else 0
-        logging.debug(
+        row_count = len(self.data) if self.data else 0  # Count rows for the log.
+        logging.debug(  # Trace the write entry.
             "ENTRY: SQLiteDatabaseWriter.write(data_rows=%s, table_name=%s, api_function_name=%s) at %s",
             row_count,
             self.table_name,
@@ -7062,37 +7062,37 @@ class SQLiteDatabaseWriter:
             self.timestamp,
         )
 
-    def _validate_inputs(self) -> bool:
+    def _validate_inputs(self) -> bool:  # Validate data and table name.
         """Validate data and table name inputs."""
-        if not self._validate_data():
-            return False
-        return self._validate_table_name()
+        if not self._validate_data():  # Data must be valid.
+            return False  # Reject bad data.
+        return self._validate_table_name()  # Then validate table name.
 
-    def _validate_data(self) -> bool:
+    def _validate_data(self) -> bool:  # Ensure data is a non-empty list.
         """Validate that data is a non-empty list."""
-        if not self.data:
-            logging.warning("No data provided to write to table %s at %s", self.table_name, self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - no data to write")
-            return False
-        if not isinstance(self.data, list):
-            logging.error("Invalid data type: expected list, got %s at %s", type(self.data), self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid data type")
-            return False
-        return True
+        if not self.data:  # No rows to write.
+            logging.warning("No data provided to write to table %s at %s", self.table_name, self.timestamp)  # no data.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - no data to write")  # Trace early exit.
+            return False  # Reject empty data.
+        if not isinstance(self.data, list):  # Data must be a list.
+            logging.error("Invalid data type: expected list, got %s at %s", type(self.data), self.timestamp)  # type err
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid data type")  # Trace early exit.
+            return False  # Reject wrong type.
+        return True  # Data is valid.
 
-    def _validate_table_name(self) -> bool:
+    def _validate_table_name(self) -> bool:  # Ensure a usable table name.
         """Validate that table name is a non-empty string."""
-        if not self.table_name or not isinstance(self.table_name, str):
-            logging.error("Invalid table name: %s at %s", self.table_name, self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid table name")
-            return False
-        return True
+        if not self.table_name or not isinstance(self.table_name, str):  # Name must be a non-empty str.
+            logging.error("Invalid table name: %s at %s", self.table_name, self.timestamp)  # Log the bad name.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid table name")  # Trace early exit.
+            return False  # Reject bad name.
+        return True  # Name is valid.
 
-    def _resolve_api_function_name(self) -> None:
+    def _resolve_api_function_name(self) -> None:  # Backfill API name if missing.
         """Determine API function name from context if not provided."""
-        if not self.api_function_name:
-            self.api_function_name = DatabaseSchemaUtils.determine_api_function_name_from_context()
-        logging.debug(
+        if not self.api_function_name:  # Only when unset.
+            self.api_function_name = DatabaseSchemaUtils.determine_api_function_name_from_context()  # Infer from stack.
+        logging.debug(  # Trace the resolved name.
             "Processing %s rows for table %s using API function %s at %s",
             len(self.data),
             self.table_name,
@@ -7100,91 +7100,91 @@ class SQLiteDatabaseWriter:
             self.timestamp,
         )
 
-    def _ensure_database_directory(self) -> bool:
+    def _ensure_database_directory(self) -> bool:  # Create the DB directory.
         """Create database directory if it does not exist."""
-        db_dir = os.path.dirname(DATABASE_PATH)
-        if not db_dir or os.path.exists(db_dir):
-            return True
+        db_dir = os.path.dirname(DATABASE_PATH)  # Directory holding the DB.
+        if not db_dir or os.path.exists(db_dir):  # Already present or cwd.
+            return True  # Directory ready.
         try:
-            os.makedirs(db_dir, exist_ok=True)
-            logging.info("Created database directory: %s at %s", db_dir, self.timestamp)
-            return True
-        except OSError as error:
-            logging.error("Failed to create database directory %s: %s at %s", db_dir, error, self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - directory creation failed")
-            return False
+            os.makedirs(db_dir, exist_ok=True)  # Create the directory.
+            logging.info("Created database directory: %s at %s", db_dir, self.timestamp)  # Log the creation.
+            return True  # Directory ready.
+        except OSError as error:  # Creation failed.
+            logging.error("Failed to create database directory %s: %s at %s", db_dir, error, self.timestamp)  # dir err.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - directory creation failed")  # Trace early exit.
+            return False  # Cannot proceed without dir.
 
-    def _process_data(self) -> bool:
+    def _process_data(self) -> bool:  # Normalize data for SQLite.
         """Process data to handle formatting for database storage."""
         try:
             self.processed_data = DataProcessingUtils.escape_multiline(self.data)  # type: ignore[no-untyped-call]
-            logging.debug("Successfully processed data for SQLite compatibility at %s", self.timestamp)
-            return True
-        except Exception as error:
-            logging.error("Failed to process data: %s at %s", error, self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - data processing failed")
-            return False
+            logging.debug("Successfully processed data for SQLite compatibility at %s", self.timestamp)  # Trace ok.
+            return True  # Processing succeeded.
+        except Exception as error:  # Processing failed.
+            logging.error("Failed to process data: %s at %s", error, self.timestamp)  # Log the failure.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - data processing failed")  # Trace early exit.
+            return False  # Abort on failure.
 
-    def _determine_fields_and_strategy(self) -> bool:
+    def _determine_fields_and_strategy(self) -> bool:  # Resolve columns and strategy.
         """Get all unique fields and determine primary key strategy."""
         try:
             self.fields = DataProcessingUtils.get_unique_keys(self.processed_data)  # type: ignore[no-untyped-call]
-            if not self.fields:
-                logging.error("No fields found in data for table %s at %s", self.table_name, self.timestamp)
-                logging.debug("EXIT: SQLiteDatabaseWriter.write - no fields")
-                return False
-            api_func_name = self.api_function_name if self.api_function_name else ""
-            self.strategy = DatabaseSchemaUtils.get_endpoint_strategy(api_func_name, self.fields)
-            self._log_strategy_info()
-            return True
-        except Exception as error:
-            logging.error("Failed to determine fields and strategy: %s at %s", error, self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - field determination failed")
-            return False
+            if not self.fields:  # Need at least one field.
+                logging.error("No fields found in data for table %s at %s", self.table_name, self.timestamp)  # no flds
+                logging.debug("EXIT: SQLiteDatabaseWriter.write - no fields")  # Trace early exit.
+                return False  # Abort: no fields.
+            api_func_name = self.api_function_name if self.api_function_name else ""  # Default empty name.
+            self.strategy = DatabaseSchemaUtils.get_endpoint_strategy(api_func_name, self.fields)  # Pick the strategy.
+            self._log_strategy_info()  # Log the chosen strategy.
+            return True  # Fields and strategy ready.
+        except Exception as error:  # Determination failed.
+            logging.error("Failed to determine fields and strategy: %s at %s", error, self.timestamp)  # Log failure.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - field determination failed")  # Trace early exit.
+            return False  # Abort on failure.
 
-    def _log_strategy_info(self) -> None:
+    def _log_strategy_info(self) -> None:  # Log strategy and fields.
         """Log strategy selection details."""
-        logging.info(
+        logging.info(  # Log the strategy summary.
             "Using hybrid SQLite strategy '%s' for table %s: %s",
             self.strategy["type"],
             self.table_name,
             self.strategy["description"],
         )
-        logging.debug("Database fields determined: %s at %s", self.fields, self.timestamp)
-        logging.debug(
+        logging.debug("Database fields determined: %s at %s", self.fields, self.timestamp)  # Trace the field list.
+        logging.debug(  # Trace strategy details.
             "Endpoint %s mapped to %s strategy - eliminates need for artificial api_id fields",
             self.api_function_name,
             self.strategy["type"],
         )
 
-    def _execute_database_operations(self) -> bool:
+    def _execute_database_operations(self) -> bool:  # Connect, create, insert, commit.
         """Execute database operations with comprehensive error handling."""
         try:
-            self._connect_to_database()
-            self._create_table_and_indexes()
-            insert_mode = self._determine_insert_mode()
-            safe_fields = self._prepare_safe_fields()
-            successful_inserts = self._insert_all_rows(insert_mode, safe_fields)
-            self._commit_and_verify(successful_inserts)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - success")
-            return True
-        except sqlite3.Error as error:
-            self._handle_sqlite_error(error)
-            return False
-        except Exception as error:
-            self._handle_unexpected_error(error)
-            return False
+            self._connect_to_database()  # Open the DB connection.
+            self._create_table_and_indexes()  # Ensure schema exists.
+            insert_mode = self._determine_insert_mode()  # Pick insert/upsert mode.
+            safe_fields = self._prepare_safe_fields()  # Sanitize column names.
+            successful_inserts = self._insert_all_rows(insert_mode, safe_fields)  # Insert all rows.
+            self._commit_and_verify(successful_inserts)  # Commit and verify counts.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - success")  # Trace success.
+            return True  # Write succeeded.
+        except sqlite3.Error as error:  # Handle SQLite errors.
+            self._handle_sqlite_error(error)  # Log and rollback.
+            return False  # Write failed.
+        except Exception as error:  # Handle unexpected errors.
+            self._handle_unexpected_error(error)  # Log and rollback.
+            return False  # Write failed.
         finally:
-            self._close_connection()
+            self._close_connection()  # Always close the connection.
 
-    def _connect_to_database(self) -> None:
+    def _connect_to_database(self) -> None:  # Open a SQLite connection.
         """Connect to SQLite database."""
-        logging.debug("Attempting to connect to database: %s at %s", DATABASE_PATH, self.timestamp)
-        self.connection = sqlite3.connect(DATABASE_PATH)
-        self.cursor = self.connection.cursor()
-        logging.info("Successfully connected to database: %s at %s", DATABASE_PATH, self.timestamp)
+        logging.debug("Attempting to connect to database: %s at %s", DATABASE_PATH, self.timestamp)  # Trace connect.
+        self.connection = sqlite3.connect(DATABASE_PATH)  # Open the database file.
+        self.cursor = self.connection.cursor()  # Create a cursor.
+        logging.info("Successfully connected to database: %s at %s", DATABASE_PATH, self.timestamp)  # Log connection.
 
-    def _create_table_and_indexes(self) -> None:
+    def _create_table_and_indexes(self) -> None:  # Create table then indexes.
         """Create table with strategy-appropriate schema and indexes."""
         assert (
             self.cursor is not None
@@ -7192,97 +7192,97 @@ class SQLiteDatabaseWriter:
         # Build the CREATE TABLE SQL using the strategy (natural/composite/auto-increment)
         create_table_sql = DatabaseSchemaUtils.build_create_table_sql(self.table_name, self.fields, self.strategy)
         self.cursor.execute(create_table_sql)  # Execute DDL to create or verify the table structure
-        logging.debug(
+        logging.debug(  # Trace the DDL.
             "Table %s created/verified with hybrid %s schema - using natural business keys from API",
             self.table_name,
             self.strategy["type"],
         )
-        index_sqls = DatabaseSchemaUtils.build_indexes_sql(self.table_name, self.fields, self.strategy)
-        for index_sql in index_sqls:
-            self.cursor.execute(index_sql)
-        if index_sqls:
-            logging.debug(
+        index_sqls = DatabaseSchemaUtils.build_indexes_sql(self.table_name, self.fields, self.strategy)  # Index DDL.
+        for index_sql in index_sqls:  # Create each index.
+            self.cursor.execute(index_sql)  # Execute the index DDL.
+        if index_sqls:  # Only log when indexes exist.
+            logging.debug(  # Trace index creation.
                 "Created %s performance indexes for table %s with %s strategy",
                 len(index_sqls),
                 self.table_name,
                 self.strategy["type"],
             )
 
-    def _determine_insert_mode(self) -> str:
+    def _determine_insert_mode(self) -> str:  # Choose upsert vs insert.
         """Determine insert strategy based on schema type."""
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
-        if self.strategy["type"] in ["natural_pk", "composite_pk"]:
-            logging.debug(
+        if self.strategy["type"] in ["natural_pk", "composite_pk"]:  # Keyed tables upsert.
+            logging.debug(  # Trace upsert mode.
                 "Using REPLACE mode for %s strategy - enables efficient upsert operations with natural keys",
                 self.strategy["type"],
             )
-            return "INSERT OR REPLACE"
-        safe_table = self._get_safe_table_name()
+            return "INSERT OR REPLACE"  # Upsert on conflict.
+        safe_table = self._get_safe_table_name()  # Sanitize for the clear.
         self.cursor.execute(f"DELETE FROM {safe_table}")  # nosec B608
-        logging.debug("Cleared existing data and using INSERT mode for auto-increment fallback strategy")
-        return "INSERT"
+        logging.debug("Cleared existing data and using INSERT mode for auto-increment fallback strategy")  # fallback.
+        return "INSERT"  # Plain insert (cleared table).
 
-    def _get_safe_table_name(self) -> str:
+    def _get_safe_table_name(self) -> str:  # Sanitize the table name.
         """Get sanitized table name safe for SQL."""
-        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", self.table_name)
-        if not safe_table_name or safe_table_name[0].isdigit():
-            safe_table_name = f"table_{safe_table_name}"
-        return safe_table_name
+        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", self.table_name)  # Strip unsafe chars.
+        if not safe_table_name or safe_table_name[0].isdigit():  # Cannot start with a digit.
+            safe_table_name = f"table_{safe_table_name}"  # Prefix to make valid.
+        return safe_table_name  # Return the safe name.
 
-    def _prepare_safe_fields(self) -> list[str]:
+    def _prepare_safe_fields(self) -> list[str]:  # Sanitize and add audit cols.
         """Prepare sanitized field names with metadata columns."""
-        safe_fields = [re.sub(r"[^a-zA-Z0-9_]", "_", str(field)) for field in self.fields]
-        safe_fields.extend(["misthelper_created_time", "misthelper_updated_time"])
-        return safe_fields
+        safe_fields = [re.sub(r"[^a-zA-Z0-9_]", "_", str(field)) for field in self.fields]  # Sanitize field names.
+        safe_fields.extend(["misthelper_created_time", "misthelper_updated_time"])  # Append audit timestamp cols.
+        return safe_fields  # Return the column list.
 
-    def _insert_all_rows(self, insert_mode: str, safe_fields: list[str]) -> int:
+    def _insert_all_rows(self, insert_mode: str, safe_fields: list[str]) -> int:  # Insert every processed row.
         """Insert all data rows and return count of successful inserts."""
-        current_time = datetime.now(UTC).isoformat()
-        successful_inserts = 0
-        for idx, row in enumerate(self.processed_data):
-            if self._insert_single_row(idx, row, insert_mode, safe_fields, current_time):
-                successful_inserts += 1
-        return successful_inserts
+        current_time = datetime.now(UTC).isoformat()  # One timestamp per batch.
+        successful_inserts = 0  # Count successes.
+        for idx, row in enumerate(self.processed_data):  # Insert each row.
+            if self._insert_single_row(idx, row, insert_mode, safe_fields, current_time):  # Count successful inserts.
+                successful_inserts += 1  # Tally the success.
+        return successful_inserts  # Return the success count.
 
-    def _insert_single_row(
+    def _insert_single_row(  # Insert one row safely.
         self, idx: int, row: dict[str, Any], insert_mode: str, safe_fields: list[str], current_time: str
     ) -> bool:
         """Insert a single row into the database."""
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
         try:
-            values = self._prepare_row_values(row, current_time)
-            insert_sql = self._build_insert_sql(insert_mode, safe_fields, len(values))
-            self.cursor.execute(insert_sql, values)
-            if idx < 3:
-                logging.debug(
+            values = self._prepare_row_values(row, current_time)  # Build the value tuple.
+            insert_sql = self._build_insert_sql(insert_mode, safe_fields, len(values))  # Build the INSERT SQL.
+            self.cursor.execute(insert_sql, values)  # Execute the insert.
+            if idx < 3:  # Sample-log the first rows.
+                logging.debug(  # Trace a sample insert.
                     "Row %s inserted into %s using %s at %s", idx, self.table_name, insert_mode, self.timestamp
                 )
-            return True
-        except Exception as error:
+            return True  # Row inserted.
+        except Exception as error:  # Per-row failure.
             logging.error("Failed to insert row %s into %s: %s at %s", idx, self.table_name, error, self.timestamp)
-            return False
+            return False  # Row failed.
 
-    def _prepare_row_values(self, row: dict[str, Any], current_time: str) -> list[str]:
+    def _prepare_row_values(self, row: dict[str, Any], current_time: str) -> list[str]:  # Stringify row values.
         """Prepare values for a single row including metadata."""
-        values = []
-        for field_name in self.fields:
-            value = row.get(field_name, "")
-            values.append("" if value is None else str(value))
-        values.extend([current_time, current_time])
-        return values
+        values = []  # Collect string values.
+        for field_name in self.fields:  # In field order.
+            value = row.get(field_name, "")  # Default missing fields.
+            values.append("" if value is None else str(value))  # Stringify; None -> empty.
+        values.extend([current_time, current_time])  # Append audit timestamps.
+        return values  # Return the value list.
 
-    def _build_insert_sql(self, insert_mode: str, safe_fields: list[str], value_count: int) -> str:
+    def _build_insert_sql(self, insert_mode: str, safe_fields: list[str], value_count: int) -> str:  # Compose INSERT.
         """Build parameterized INSERT SQL statement."""
-        placeholders = ", ".join(["?"] * value_count)
-        safe_table_name = self._get_safe_table_name()
-        return f"{insert_mode} INTO {safe_table_name} ({', '.join(safe_fields)}) VALUES ({placeholders})"
+        placeholders = ", ".join(["?"] * value_count)  # Bind placeholders.
+        safe_table_name = self._get_safe_table_name()  # Sanitize the table name.
+        return f"{insert_mode} INTO {safe_table_name} ({', '.join(safe_fields)}) VALUES ({placeholders})"  # Return SQL.
 
-    def _commit_and_verify(self, successful_inserts: int) -> None:
+    def _commit_and_verify(self, successful_inserts: int) -> None:  # Commit then verify row count.
         """Commit transaction and verify row count."""
         assert self.connection is not None, "Database connection not initialized"  # nosec B101
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
-        self.connection.commit()
-        logging.info(
+        self.connection.commit()  # Persist the transaction.
+        logging.info(  # Log inserts committed.
             "Successfully wrote %s/%s rows to table %s in database %s using %s strategy at %s",
             successful_inserts,
             len(self.processed_data),
@@ -7291,47 +7291,47 @@ class SQLiteDatabaseWriter:
             self.strategy["type"],
             self.timestamp,
         )
-        safe_table_name = self._get_safe_table_name()
+        safe_table_name = self._get_safe_table_name()  # Sanitize for the count query.
         self.cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")  # nosec B608
-        row_count = self.cursor.fetchone()[0]
-        logging.info(
+        row_count = self.cursor.fetchone()[0]  # Read the verified count.
+        logging.info(  # Log the verified count.
             "Database verification: %s rows confirmed in table %s at %s", row_count, self.table_name, self.timestamp
         )
 
-    def _handle_sqlite_error(self, error: sqlite3.Error) -> None:
+    def _handle_sqlite_error(self, error: sqlite3.Error) -> None:  # Log and roll back SQLite errors.
         """Handle SQLite-specific errors with rollback."""
-        logging.error("SQLite error when writing to %s: %s at %s", self.table_name, error, self.timestamp)
-        self._rollback_transaction()
-        logging.debug("EXIT: SQLiteDatabaseWriter.write - SQLite error")
+        logging.error("SQLite error when writing to %s: %s at %s", self.table_name, error, self.timestamp)  # sqlite err
+        self._rollback_transaction()  # Undo partial writes.
+        logging.debug("EXIT: SQLiteDatabaseWriter.write - SQLite error")  # Trace early exit.
 
-    def _handle_unexpected_error(self, error: Exception) -> None:
+    def _handle_unexpected_error(self, error: Exception) -> None:  # Log and roll back other errors.
         """Handle unexpected errors with rollback."""
         logging.error("Unexpected error when writing to table %s: %s at %s", self.table_name, error, self.timestamp)
-        self._rollback_transaction()
-        logging.debug("EXIT: SQLiteDatabaseWriter.write - unexpected error")
+        self._rollback_transaction()  # Undo partial writes.
+        logging.debug("EXIT: SQLiteDatabaseWriter.write - unexpected error")  # Trace early exit.
 
-    def _rollback_transaction(self) -> None:
+    def _rollback_transaction(self) -> None:  # Roll back the transaction.
         """Rollback transaction if connection exists."""
-        if not self.connection:
-            return
+        if not self.connection:  # Nothing to roll back.
+            return  # No connection open.
         try:
-            self.connection.rollback()
-            logging.debug("Transaction rolled back for table %s at %s", self.table_name, self.timestamp)
-        except Exception as rollback_error:
-            logging.error("Failed to rollback transaction: %s at %s", rollback_error, self.timestamp)
+            self.connection.rollback()  # Undo uncommitted writes.
+            logging.debug("Transaction rolled back for table %s at %s", self.table_name, self.timestamp)  # Trace undo.
+        except Exception as rollback_error:  # Rollback itself failed.
+            logging.error("Failed to rollback transaction: %s at %s", rollback_error, self.timestamp)  # rollback fail.
 
-    def _close_connection(self) -> None:
+    def _close_connection(self) -> None:  # Close the DB connection.
         """Close database connection (safety-critical: resource cleanup)."""
-        if not self.connection:
-            return
+        if not self.connection:  # Nothing to close.
+            return  # No connection open.
         try:
-            self.connection.close()
-            logging.debug("Database connection closed for table %s at %s", self.table_name, self.timestamp)
-        except Exception as error:
-            logging.error("Failed to close database connection: %s at %s", error, self.timestamp)
+            self.connection.close()  # Release the connection.
+            logging.debug("Database connection closed for table %s at %s", self.table_name, self.timestamp)  # closed.
+        except Exception as error:  # Close failed.
+            logging.error("Failed to close database connection: %s at %s", error, self.timestamp)  # log close error.
 
 
-class DataExporter:
+class DataExporter:  # Multi-backend export facade.
     """
     Handles data export operations for CSV and Redis/SQLite output formats.
     Centralizes all data saving logic that was previously scattered across functions.
@@ -7343,7 +7343,7 @@ class DataExporter:
     _last_snapshot_times: dict[str, float] = {}  # Per-table last-snapshot epoch times used to throttle snapshots.
 
     @classmethod
-    def _init_router(cls) -> None:
+    def _init_router(cls) -> None:  # Lazy polyglot router init.
         """Initialize polyglot DatabaseRouter once (lazy, idempotent)."""
         if cls._router_initialized:  # Skip all work when a prior call already attempted initialization.
             return  # Idempotent early-out keeps repeated export calls cheap.
@@ -7364,7 +7364,7 @@ class DataExporter:
             cls._router = None  # Force the safe CSV/SQLite path when the router could not be constructed.
 
     @staticmethod
-    def write_with_format_selection(
+    def write_with_format_selection(  # Public export entry point.
         data: list[dict[str, Any]],
         filename_or_table: str,
         format_override: str | None = None,
@@ -7387,8 +7387,8 @@ class DataExporter:
         Returns:
             bool: True if successful, False otherwise
         """
-        output_format = format_override if format_override else OUTPUT_FORMAT
-        logging.debug(
+        output_format = format_override if format_override else OUTPUT_FORMAT  # Override or global format.
+        logging.debug(  # Trace the write request.
             "DataExporter.write_with_format_selection: rows=%s, target=%s, format=%s, api_func=%s",
             len(data) if data else 0,
             filename_or_table,
@@ -7396,28 +7396,28 @@ class DataExporter:
             api_function_name,
         )
 
-        if not DataExporter._validate_write_inputs(data, filename_or_table, output_format):
-            return False
+        if not DataExporter._validate_write_inputs(data, filename_or_table, output_format):  # Validate before writing.
+            return False  # Reject invalid input.
 
         try:
-            if output_format == "csv":
-                csv_ok = DataExporter._write_csv_format(data, filename_or_table, fieldnames=fieldnames)
+            if output_format == "csv":  # CSV branch.
+                csv_ok = DataExporter._write_csv_format(data, filename_or_table, fieldnames=fieldnames)  # Write CSV.
             else:
-                csv_ok = DataExporter._write_sqlite_format(data, filename_or_table, api_function_name)
-        except Exception as error:
+                csv_ok = DataExporter._write_sqlite_format(data, filename_or_table, api_function_name)  # Write SQLite.
+        except Exception as error:  # Never crash on write.
             logging.error("Failed to write data to %s in %s format: %s", filename_or_table, output_format, error)
-            return False
+            return False  # Write failed.
 
-        DataExporter._route_to_polyglot(data, api_function_name, raw_data=raw_data)
-        return csv_ok
+        DataExporter._route_to_polyglot(data, api_function_name, raw_data=raw_data)  # Mirror to polyglot DB.
+        return csv_ok  # Return the primary result.
 
-    _standalone_logged = False
+    _standalone_logged = False  # One-shot standalone log guard.
 
     @staticmethod
-    def _is_standalone_mode() -> bool:
+    def _is_standalone_mode() -> bool:  # Detect non-container standalone.
         """Auto-detect standalone mode: skip polyglot when not in a container."""
-        standalone_env = os.getenv("MISTHELPER_STANDALONE", "").lower()
-        if standalone_env == "true":
+        standalone_env = os.getenv("MISTHELPER_STANDALONE", "").lower()  # Read the override env.
+        if standalone_env == "true":  # Explicit standalone request.
             return True
         if standalone_env == "false":
             return False
