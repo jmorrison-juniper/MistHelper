@@ -47,7 +47,7 @@ class DeviceMetricOperation:
                 "! No metrics found for device scope. Check ConstInsightMetrics.csv file."
             )  # User-facing error preserved
             logging.error("No device-scope metrics found in const insight metrics")  # Persist failure cause in the log
-            _parent.DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]  # Emit empty file for consistency
+            _parent.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Emit empty file for consistency
             return
 
         all_data, metrics_retrieved = DeviceMetricOperation._collect_metrics(  # Run the per-metric API loop
@@ -240,7 +240,7 @@ class DeviceMetricOperation:
                     all_device_data
                 )  # Flatten nested API objects
                 processed = _parent.DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe text
-                _parent.DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]  # Write to disk / DB
+                _parent.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Write to disk / DB
                 print(
                     f"! {metrics_retrieved} device insight metrics exported to {filename}"
                 )  # User-facing summary preserved
@@ -260,7 +260,7 @@ class DeviceMetricOperation:
                 device_name,
                 site_name,
             )
-            _parent.DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]  # Always emit a file
+            _parent.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Always emit a file
         except Exception as exception:
             print(f"! Error exporting device insights: {exception}")  # User-facing error preserved verbatim
             logging.error(  # Persist failure cause with both site and device context for triage
@@ -269,4 +269,4 @@ class DeviceMetricOperation:
                 site_name,
                 exception,
             )
-            _parent.DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]  # Always emit a file
+            _parent.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Always emit a file

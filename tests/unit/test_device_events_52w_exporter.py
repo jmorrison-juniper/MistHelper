@@ -26,4 +26,4 @@ def test_device_events_exporter_handles_empty_results(tmp_path, monkeypatch) -> 
         logger=MagicMock(),
     )
     exporter.export()
-    data_exporter.save_data_to_output.assert_called_once()
+    data_exporter.write_with_format_selection.assert_called_once()

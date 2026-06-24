@@ -91,7 +91,7 @@ class TestDevice52wLegacyOrchestration:
     """Verify orchestrator calls helpers in the correct order."""
 
     def test_empty_preload_exits_without_writing_real_file(self, monkeypatch):
-        """No rows → save_data_to_output called with empty list."""
+        """No rows -> write_with_format_selection called with empty list (issue #431)."""
         monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-1")
         monkeypatch.setattr(MistHelper.OrgAlarmEventExporter, "_52w_load_checkpoint", lambda cp: None)
         monkeypatch.setattr(
@@ -101,7 +101,9 @@ class TestDevice52wLegacyOrchestration:
         )
         saved = {"rows": None}
         monkeypatch.setattr(
-            MistHelper.DataExporter, "save_data_to_output", lambda rows, fname: saved.__setitem__("rows", rows)
+            MistHelper.DataExporter,
+            "write_with_format_selection",
+            lambda rows, fname, **_kw: saved.__setitem__("rows", rows),
         )
 
         MistHelper.OrgAlarmEventExporter.device_events_52w_legacy()

@@ -246,7 +246,7 @@ class WifiClientsExporter:
         logging.debug("Multiline escaping completed for %d rows", len(sanitized))  # Result size.
 
         logging.info("Writing SiteWiFiClients.CSV to configured output backend")  # Log before final write action.
-        self.data_exporter.save_data_to_output(
+        self.data_exporter.write_with_format_selection(
             sanitized, "SiteWiFiClients.CSV"
         )  # Persist final processed records via existing data exporter.
         logging.debug("SiteWiFiClients.CSV write completed successfully")  # After-action confirmation.

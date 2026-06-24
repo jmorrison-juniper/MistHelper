@@ -228,7 +228,7 @@ class SLEMetricsService:
         if all_sle_data:  # Data was collected from at least one source
             processed = deps.DataProcessingUtils.flatten_nested_fields(all_sle_data)  # Flatten nested SLE structures
             processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV
-            deps.DataExporter.save_data_to_output(processed, "OrgSLEMetrics.csv")  # Write the export file
+            deps.DataExporter.write_with_format_selection(processed, "OrgSLEMetrics.csv")  # Write the export file
             print(f"! {metrics_retrieved} organization SLE data sources exported to OrgSLEMetrics.csv")  # User summary
             logging.info(
                 f"Exported {len(processed)} org SLE data points from {metrics_retrieved} sources to OrgSLEMetrics.csv"  # noqa: E501
@@ -236,7 +236,9 @@ class SLEMetricsService:
         else:  # No data collected from any source
             print("! 0 organization SLE metrics exported to OrgSLEMetrics.csv (no data available)")  # User summary
             logging.warning("No org SLE data available - all sources failed or returned empty")  # Warn on empty run
-            deps.DataExporter.save_data_to_output([], "OrgSLEMetrics.csv")  # Write an empty export for consistency
+            deps.DataExporter.write_with_format_selection(
+                [], "OrgSLEMetrics.csv"
+            )  # Write an empty export for consistency
 
     @classmethod
     def execute(cls, fast: bool = False) -> None:
@@ -275,5 +277,5 @@ class SLEMetricsService:
         except Exception as exception:  # Any unexpected top-level failure still writes an empty export
             print(f"! Error exporting organization SLE metrics: {exception}")  # User-facing error
             logging.error(f"Failed to export org SLE metrics: {exception}")  # Trace the failure
-            deps.DataExporter.save_data_to_output([], "OrgSLEMetrics.csv")  # Write empty export on failure
+            deps.DataExporter.write_with_format_selection([], "OrgSLEMetrics.csv")  # Write empty export on failure
         progress.complete()  # Always emit the progress-complete event

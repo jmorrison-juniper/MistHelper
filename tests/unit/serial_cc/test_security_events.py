@@ -67,7 +67,7 @@ def test_security_events_exports_security_policies(mock_resolve_runtime_dependen
     ):
         SecurityEventsService.execute(fast=False)
 
-    assert deps.DataExporter.save_data_to_output.call_count >= 2
+    assert deps.DataExporter.write_with_format_selection.call_count >= 2
 
 
 @patch("src.refactors.serial_cc.security_events._resolve_runtime_dependencies")
@@ -94,4 +94,4 @@ def test_security_events_exports_rogue_data(mock_resolve_runtime_dependencies):
     ):
         SecurityEventsService.execute(fast=False)
 
-    assert deps.DataExporter.save_data_to_output.call_count >= 3
+    assert deps.DataExporter.write_with_format_selection.call_count >= 3

@@ -49,7 +49,7 @@ def test_switch_vc_stats_returns_when_no_switches(mock_resolve_runtime_dependenc
     ):
         SwitchVcStatsService.execute()  # Execute service
 
-    deps.DataExporter.save_data_to_output.assert_not_called()  # No output should be written on empty inventory
+    deps.DataExporter.write_with_format_selection.assert_not_called()  # No output should be written on empty inventory
 
 
 @patch("src.refactors.serial_cc.switch_vc_stats._resolve_runtime_dependencies")
@@ -80,8 +80,8 @@ def test_switch_vc_stats_sequential_exports_records(mock_resolve_runtime_depende
     ):
         SwitchVcStatsService.execute()  # Execute service
 
-    deps.DataExporter.save_data_to_output.assert_called_once()  # Export should be written exactly once
-    args = deps.DataExporter.save_data_to_output.call_args.args  # Extract positional call args for validation
+    deps.DataExporter.write_with_format_selection.assert_called_once()  # Export should be written exactly once
+    args = deps.DataExporter.write_with_format_selection.call_args.args  # Extract positional call args for validation
     assert args[1] == "OrgSwitchVCStats.csv"  # Destination filename must match legacy contract
     assert args[0][0]["status"] == "up"  # VC API field should be present in merged export row
 
@@ -130,4 +130,4 @@ def test_switch_vc_stats_fast_mode_uses_parallel_collection(mock_resolve_runtime
     ):
         SwitchVcStatsService.execute()  # Execute service
 
-    deps.DataExporter.save_data_to_output.assert_called_once()  # Export should still be produced
+    deps.DataExporter.write_with_format_selection.assert_called_once()  # Export should still be produced

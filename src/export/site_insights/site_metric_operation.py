@@ -38,7 +38,7 @@ class SiteMetricOperation:
                 "! No metrics found for site scope. Check ConstInsightMetrics.csv file."
             )  # User-facing error preserved verbatim
             logging.error("No site-scope metrics found in const insight metrics")  # Persist failure cause in the log
-            _parent.DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]  # Emit empty file for downstream consistency
+            _parent.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Emit empty file for downstream consistency
             return
 
         all_data, metrics_retrieved = SiteMetricOperation._collect_metrics(  # Run the per-metric API loop
@@ -142,7 +142,7 @@ class SiteMetricOperation:
                     all_insight_data
                 )  # Flatten nested API objects
                 processed = _parent.DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe text
-                _parent.DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]  # Write to disk / DB
+                _parent.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Write to disk / DB
                 print(
                     f"! {metrics_retrieved} site insight metrics exported to {filename}"
                 )  # User-facing summary preserved
@@ -155,10 +155,10 @@ class SiteMetricOperation:
                 return
             print(f"! 0 insight metrics exported to {filename} (no data available)")  # User-facing summary preserved
             logging.warning("No insight data available for site %s", site_name)  # Distinguish empty result from error
-            _parent.DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]  # Emit empty file for consistency
+            _parent.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Emit empty file for consistency
         except Exception as exception:
             print(f"! Error exporting site insight metrics: {exception}")  # User-facing error preserved verbatim
             logging.error(
                 "Failed to export site insight metrics for %s: %s", site_name, exception
             )  # Persist failure cause
-            _parent.DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]  # Always emit a file for consistency
+            _parent.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Always emit a file for consistency

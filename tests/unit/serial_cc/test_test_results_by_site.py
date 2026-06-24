@@ -37,7 +37,7 @@ def test_execute_exits_early_when_no_gateway_sites(mock_resolve):
 
     GatewayTestResultsService.execute(fast=False)  # Execute service in standard mode
 
-    deps.DataExporter.save_data_to_output.assert_not_called()  # No output written on empty site list
+    deps.DataExporter.write_with_format_selection.assert_not_called()  # No output written on empty site list
 
 
 @patch("src.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
@@ -57,8 +57,8 @@ def test_execute_sequential_exports_records(mock_resolve):
 
     GatewayTestResultsService.execute(fast=False)  # Execute service in standard mode
 
-    deps.DataExporter.save_data_to_output.assert_called_once()  # CSV must be written exactly once
-    call_args = deps.DataExporter.save_data_to_output.call_args.args  # Inspect positional args
+    deps.DataExporter.write_with_format_selection.assert_called_once()  # CSV must be written exactly once
+    call_args = deps.DataExporter.write_with_format_selection.call_args.args  # Inspect positional args
     assert call_args[1] == "AllGatewayTestResults.csv"  # Filename contract must be preserved
     assert call_args[0][0]["status"] == "passed"  # Result rows must flow through to the writer
 
@@ -77,7 +77,7 @@ def test_execute_sequential_no_export_when_empty_results(mock_resolve):
 
     GatewayTestResultsService.execute(fast=False)  # Execute service in standard mode
 
-    deps.DataExporter.save_data_to_output.assert_not_called()  # No CSV on empty results
+    deps.DataExporter.write_with_format_selection.assert_not_called()  # No CSV on empty results
 
 
 @patch("src.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
@@ -105,8 +105,8 @@ def test_execute_fast_uses_pool_management(mock_resolve):
         GatewayTestResultsService.execute(fast=True)  # Execute service in fast mode
 
     deps.execute_with_connection_pool_management.assert_called_once()  # Pool must be used in fast mode
-    deps.DataExporter.save_data_to_output.assert_called_once()  # CSV must be written
-    call_args = deps.DataExporter.save_data_to_output.call_args.args  # Inspect positional args
+    deps.DataExporter.write_with_format_selection.assert_called_once()  # CSV must be written
+    call_args = deps.DataExporter.write_with_format_selection.call_args.args  # Inspect positional args
     assert call_args[1] == "AllGatewayTestResults.csv"  # Filename contract preserved in fast mode
 
 

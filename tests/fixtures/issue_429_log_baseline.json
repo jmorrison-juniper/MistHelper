@@ -24,11 +24,6 @@
     "pattern": "format_spec_2f_with_arithmetic",
     "rendered": "Retrying device dev-abc in 2.50s (attempt 2/4)"
   },
-  "L801": {
-    "line": 801,
-    "pattern": "already_lazy_negative_control",
-    "rendered": "UV package manager not found in PATH or Python environment"
-  },
   "L8151": {
     "line": 8151,
     "pattern": "format_spec_2f",

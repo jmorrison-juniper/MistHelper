@@ -164,7 +164,7 @@ class SiteExportUtils(SiteInsightsExporter):
             data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested JSON.
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
             logging.info("Saving exported site data to %s", filename)  # Log before save.
-            DataExporter.save_data_to_output(data, filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(data, filename)  # type: ignore[no-untyped-call]
             full_file_path = (
                 filename if os.path.dirname(filename) else os.path.join("data", filename)
             )  # Compose absolute-style display path preserved.
@@ -221,17 +221,17 @@ class SiteExportUtils(SiteInsightsExporter):
                 )
 
             if rows:
-                DataExporter.save_data_to_output(rows, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(rows, filename)  # type: ignore[no-untyped-call]
                 print(f"! {len(rows)} records exported to data\\{filename}")
                 logging.info(f"Exported {len(rows)} site SLE metric insight records to {filename}")
             else:
                 print(f"! 0 records exported to data\\{filename} (no metrics available)")
                 logging.warning(f"No site SLE metric insight data available for site {site_name}")
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
         except Exception as exception:
             print(f"! Error exporting site SLE metric insights: {exception}")
             logging.error(f"Failed to export site SLE metric insights for site {site_name}: {exception}")
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
     @staticmethod
     def _system_events():  # type: ignore[no-untyped-def]
@@ -298,7 +298,7 @@ class SiteExportUtils(SiteInsightsExporter):
             rows = [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
             rows = DataProcessingUtils.flatten_nested_fields(rows)
             filename = "SiteSiteStats.csv"
-            DataExporter.save_data_to_output(rows, filename, api_function_name="getSiteStats")
+            DataExporter.write_with_format_selection(rows, filename, api_function_name="getSiteStats")
             logging.info("Exported %d site stats records to %s", len(rows), filename)
         except Exception as exception:
             logging.error("Failed to export site stats: %s", exception, exc_info=True)
@@ -317,7 +317,7 @@ class SiteExportUtils(SiteInsightsExporter):
             rows = [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
             rows = DataProcessingUtils.flatten_nested_fields(rows)
             filename = "SiteGatewayMetrics.csv"
-            DataExporter.save_data_to_output(rows, filename, api_function_name="getSiteGatewayMetrics")
+            DataExporter.write_with_format_selection(rows, filename, api_function_name="getSiteGatewayMetrics")
             logging.info("Exported %d gateway metric records to %s", len(rows), filename)
         except Exception as exception:
             logging.error("Failed to export gateway metrics: %s", exception, exc_info=True)
@@ -336,7 +336,7 @@ class SiteExportUtils(SiteInsightsExporter):
             rows = [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
             rows = DataProcessingUtils.flatten_nested_fields(rows)
             filename = "SiteSwitchesMetrics.csv"
-            DataExporter.save_data_to_output(rows, filename, api_function_name="getSiteSwitchesMetrics")
+            DataExporter.write_with_format_selection(rows, filename, api_function_name="getSiteSwitchesMetrics")
             logging.info("Exported %d switches metric records to %s", len(rows), filename)
         except Exception as exception:
             logging.error("Failed to export switches metrics: %s", exception, exc_info=True)
@@ -365,7 +365,7 @@ class SiteExportUtils(SiteInsightsExporter):
             rows = [raw] if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
             rows = DataProcessingUtils.flatten_nested_fields(rows)
             filename = "SiteWxrulesUsage.csv"
-            DataExporter.save_data_to_output(rows, filename, api_function_name="getSiteWxRulesUsage")
+            DataExporter.write_with_format_selection(rows, filename, api_function_name="getSiteWxRulesUsage")
             logging.info("Exported %d WxRules usage records to %s", len(rows), filename)
         except Exception as exception:
             logging.error("Failed to export WxRules usage: %s", exception, exc_info=True)
@@ -405,7 +405,7 @@ class SiteExportUtils(SiteInsightsExporter):
                 rows = raw if isinstance(raw, list) else [raw]
             rows = DataProcessingUtils.flatten_nested_fields(rows)
             filename = "SiteCurrentChannelPlanning.csv"
-            DataExporter.save_data_to_output(rows, filename, api_function_name="getSiteCurrentChannelPlanning")
+            DataExporter.write_with_format_selection(rows, filename, api_function_name="getSiteCurrentChannelPlanning")
             logging.info("Exported %d channel planning records to %s", len(rows), filename)
         except Exception as exception:
             logging.error("Failed to export channel planning: %s", exception, exc_info=True)
@@ -420,5 +420,5 @@ class SiteExportUtils(SiteInsightsExporter):
             get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
             check_stop_fn=ConfigUtils.check_stop_signal,
             all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-            save_data_fn=DataExporter.save_data_to_output,
+            save_data_fn=DataExporter.write_with_format_selection,
         )

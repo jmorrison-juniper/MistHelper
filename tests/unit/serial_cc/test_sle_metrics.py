@@ -38,7 +38,7 @@ def test_sle_metrics_normal_mode_fetches_all_categories(mock_resolve_runtime_dep
 
     SLEMetricsService.execute(fast=False)
 
-    assert deps.DataExporter.save_data_to_output.called
+    assert deps.DataExporter.write_with_format_selection.called
 
 
 @patch("src.refactors.serial_cc.sle_metrics._resolve_runtime_dependencies")
@@ -75,5 +75,5 @@ def test_sle_metrics_handles_empty_results(mock_resolve_runtime_dependencies):
 
     SLEMetricsService.execute(fast=False)
 
-    save_calls = deps.DataExporter.save_data_to_output.call_args_list
+    save_calls = deps.DataExporter.write_with_format_selection.call_args_list
     assert any(call[0][0] == [] for call in save_calls)

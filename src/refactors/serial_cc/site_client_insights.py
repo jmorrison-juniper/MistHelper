@@ -121,13 +121,13 @@ class SiteClientInsightsService:
         if all_client_data:  # Data was collected for at least one metric
             processed = deps.DataProcessingUtils.flatten_nested_fields(all_client_data)  # Flatten nested structures
             processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV
-            deps.DataExporter.save_data_to_output(processed, filename)  # Write the export file
+            deps.DataExporter.write_with_format_selection(processed, filename)  # Write the export file
             print(f"! {metrics_retrieved} client insight metrics exported to {filename}")  # User summary
             logging.info(f"Exported {metrics_retrieved} client insight metrics at {site_name} to {filename}")  # Trace
         else:  # No data collected for any metric
             print(f"! 0 client insights exported to {filename} (no data available)")  # User summary
             logging.warning(f"No client insight data available at {site_name}")  # Warn on empty run
-            deps.DataExporter.save_data_to_output([], filename)  # Write an empty export for consistency
+            deps.DataExporter.write_with_format_selection([], filename)  # Write an empty export for consistency
 
     @classmethod
     def execute(cls) -> None:
@@ -180,7 +180,7 @@ class SiteClientInsightsService:
         if not client_metrics:  # No client-scope metrics configured
             print("! No metrics found for client scope. Check ConstInsightMetrics.csv file.")  # Inform the user
             logging.error("No client-scope metrics found in const insight metrics")  # Trace the misconfiguration
-            deps.DataExporter.save_data_to_output([], filename)  # Write an empty export for consistency
+            deps.DataExporter.write_with_format_selection([], filename)  # Write an empty export for consistency
             return  # Abort the workflow
 
         print(f"! Retrieving {len(client_metrics)} different client insight metrics for selected client...")  # Info
@@ -193,4 +193,4 @@ class SiteClientInsightsService:
         except Exception as exception:  # Unexpected top-level failure
             print(f"! Error exporting client insights: {exception}")  # User-facing error
             logging.error(f"Failed to export client insights at {site_name}: {exception}")  # Trace the failure
-            deps.DataExporter.save_data_to_output([], filename)  # Write empty export on failure
+            deps.DataExporter.write_with_format_selection([], filename)  # Write empty export on failure

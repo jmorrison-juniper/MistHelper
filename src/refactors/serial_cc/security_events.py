@@ -121,13 +121,13 @@ class SecurityEventsService:
         if dataset:
             processed = deps.DataProcessingUtils.flatten_nested_fields(dataset)
             processed = deps.DataProcessingUtils.escape_multiline(processed)
-            deps.DataExporter.save_data_to_output(processed, output_file)
+            deps.DataExporter.write_with_format_selection(processed, output_file)
             print(f"! {len(processed)} {data_label} exported to {output_file}")
             logging.info("Exported %d %s to %s", len(processed), data_label, output_file)
         else:
             print(f"! 0 {data_label} exported to {output_file} {empty_suffix}")
             logging.warning(empty_message)
-            deps.DataExporter.save_data_to_output([], output_file)
+            deps.DataExporter.write_with_format_selection([], output_file)
 
     @staticmethod
     def _fetch_site_rogue(
@@ -171,13 +171,15 @@ class SecurityEventsService:
         if all_rogue_data:  # At least one rogue device found
             processed = deps.DataProcessingUtils.flatten_nested_fields(all_rogue_data)  # Flatten nested structures
             processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV
-            deps.DataExporter.save_data_to_output(processed, "OrgRogueData.csv")  # Write the export file
+            deps.DataExporter.write_with_format_selection(processed, "OrgRogueData.csv")  # Write the export file
             print(f"! {len(processed)} rogue devices exported to OrgRogueData.csv")  # User summary
             logging.info("Exported %d rogue devices to OrgRogueData.csv", len(processed))  # Trace export volume
         else:  # No rogue devices across any site
             print("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")  # User summary
             logging.info("No rogue devices found across all sites (OrgRogueData.csv written empty).")  # Trace empty
-            deps.DataExporter.save_data_to_output([], "OrgRogueData.csv")  # Write an empty export for consistency
+            deps.DataExporter.write_with_format_selection(
+                [], "OrgRogueData.csv"
+            )  # Write an empty export for consistency
 
     @staticmethod
     def _export_rogue_data(deps: SimpleNamespace) -> None:

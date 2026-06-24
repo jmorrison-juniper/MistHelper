@@ -107,8 +107,11 @@ from src.bootstrap.package_installer import (
     PackageInstaller,
 )  # Duplicate import; harmless re-import of package installer
 from src.capture.packet_capture import (
-    PacketCaptureManager as ExtractedPacketCaptureManager,
-)  # Import packet capture manager (renamed to avoid conflicts)
+    PacketCaptureManager,
+)  # Import packet capture manager directly under its canonical name (issue #431: alias removed)
+from src.dataclasses.batch_worker import (
+    BatchWorkerConfig,
+)  # Issue #431: groups thread-pool batch config to keep _pool_process_batch_wait_loop within the 5-Item Rule.
 from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # Import 52-week device events export handler
 from src.export.site_export_utils import (
     configure_site_export_utils_dependencies,
@@ -625,437 +628,11 @@ def _parse_requirements_file(filepath="requirements.txt"):  # Read dependency sp
         return []  # Fail safe with an empty list rather than crashing startup
 
 
-def _early_dependency_check_legacy_impl():  # noqa: C901, PLR0912, PLR0915
-    """
-    Check and auto-install critical dependencies before they're imported.
-
-    WORKFLOW:
-    1. Check for missing dependencies
-    2. Check if UV is installed
-    3. If UV missing -> install UV with pip
-    4. Verify UV is now available
-    5. Use UV to install/update packages (with per-package pip fallback)
-
-    SECURITY: Only installs from requirements.txt - no arbitrary package execution.
-    This runs before main import logic to enable direct script execution.
-    """
-    # Check if auto-install is disabled
-    if os.getenv("DISABLE_AUTO_INSTALL", "false").lower() == "true":  # Operators can opt out of auto-install via .env
-        logging.debug(
-            "Early dependency auto-install disabled via DISABLE_AUTO_INSTALL"
-        )  # Record that we're skipping the check
-        return  # Respect the opt-out and do nothing further
-
-    # Parse requirements.txt for all dependencies
-    all_packages = _parse_requirements_file()  # type: ignore[no-untyped-call]  # Load the list of (name, spec) dependency tuples
-    if not all_packages:  # No requirements parsed (file missing or empty)
-        logging.warning(
-            "No packages found in requirements.txt - skipping dependency check"
-        )  # Warn and skip rather than guess
-        return  # Nothing to verify or install
-
-    # Check if we should upgrade to latest versions (not just meet minimum requirements)
-    # Accepts both AUTO_UPGRADE_TO_LATEST and AUTO_UPGRADE_DEPENDENCIES for compatibility
-    auto_upgrade_to_latest = (  # Decide whether to chase newest PyPI versions vs only satisfy minimums
-        os.getenv("AUTO_UPGRADE_TO_LATEST", os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true")).lower()
-        == "true"  # Honor either env var name; default on
-    )
-    if auto_upgrade_to_latest:  # Upgrade-to-latest mode is enabled
-        logging.debug(
-            "AUTO_UPGRADE_TO_LATEST enabled - will check PyPI for newer versions"
-        )  # Note the extra PyPI lookups that follow
-
-    # Quick check: try importing each package and check versions
-    missing_packages = []  # Packages that fail to import (not installed)
-    outdated_packages = []  # Packages installed but below required/latest version
-    for package_name, package_spec in all_packages:  # Evaluate every dependency from requirements.txt
-        # Handle package name vs import name differences
-        # Normalize to lowercase for lookup since pip package names are case-insensitive
-        # but PACKAGE_IMPORT_MAP uses lowercase keys (e.g., 'pyyaml' not 'PyYAML')
-        import_name = PACKAGE_IMPORT_MAP.get(
-            package_name.lower(), package_name
-        )  # Translate pip name to import name when they differ
-        if not import_name:  # Defensive: skip if mapping yielded an empty name
-            continue  # Skip if no valid import name
-
-        try:  # Probe whether the module can be imported
-            __import__(import_name)  # Attempt the import; raises ImportError if missing
-            # Package exists - check if version satisfies requirement
-            installed_version = _get_installed_version(package_name)  # Read the currently installed version string
-            if installed_version and not _version_satisfies(
-                installed_version, package_spec
-            ):  # Installed but too old for the spec
-                outdated_packages.append((package_name, package_spec, installed_version))  # Queue it for upgrade
-                logging.info(
-                    "Outdated dependency: %s %s (requires %s)", package_name, installed_version, package_spec
-                )  # Log the version gap
-            elif auto_upgrade_to_latest and installed_version:  # Meets the spec, but we may still chase a newer release
-                # Check PyPI for newer version (best-effort, skip on any error)
-                try:  # PyPI lookup is best-effort; never let it break startup
-                    latest_version = _get_latest_pypi_version(
-                        package_name
-                    )  # Query PyPI for the newest published version
-                except Exception:  # Network/proxy failure
-                    latest_version = ""  # Treat as 'unknown' so we don't force an upgrade
-                if latest_version and _parse_version(latest_version) > _parse_version(
-                    installed_version
-                ):  # A strictly newer version exists
-                    outdated_packages.append((package_name, package_spec, installed_version))  # Queue it for upgrade
-                    logging.info(
-                        "Newer version available: %s %s -> %s", package_name, installed_version, latest_version
-                    )  # Log the available upgrade
-        except ImportError:  # The module could not be imported at all
-            missing_packages.append((package_name, package_spec))  # Queue it for installation
-            logging.info("Missing dependency detected: %s", package_name)  # Log the missing package
-
-    if not missing_packages and not outdated_packages:  # Everything is present and current
-        logging.debug(
-            "All %s dependencies from requirements.txt present and up-to-date", len(all_packages)
-        )  # Nothing to do
-        return  # Early exit; no install work needed
-
-    if missing_packages:  # There are packages to install
-        logging.info(
-            "Attempting to auto-install %s missing dependencies...", len(missing_packages)
-        )  # Announce the install plan
-    if outdated_packages:  # There are packages to upgrade
-        logging.info(
-            "Attempting to upgrade %s outdated dependencies...", len(outdated_packages)
-        )  # Announce the upgrade plan
-
-    # Helper function to find UV executable in various locations
-    def find_uv_executable():  # noqa: C901, PLR0912  # Locate the 'uv' binary across common install locations
-        """Find UV executable, checking PATH and Python environment bin directories."""
-        import sysconfig  # Provides platform-specific path layout (scripts dir, user base)
-
-        # List of possible UV command variations to try
-        uv_commands = []  # Ordered list of candidate commands to probe for a working 'uv'
-
-        # 1. Check if 'uv' is in PATH
-        uv_commands.append(["uv"])  # Simplest case: 'uv' resolvable via PATH
-
-        # 2. Check Python's Scripts/bin directory (where pip installs executables)
-        scripts_dir = sysconfig.get_path("scripts")  # Directory where pip drops console scripts
-        if scripts_dir:  # Only add if the path is known
-            uv_in_scripts = os.path.join(scripts_dir, "uv")  # Build the candidate path to uv in that dir
-            if os.name == "nt":  # Windows  # Windows executables need the .exe suffix
-                uv_in_scripts += ".exe"  # Append .exe so the path resolves on Windows
-            uv_commands.append([uv_in_scripts])  # Add the scripts-dir candidate
-
-        # 3. Check relative to sys.executable (for venv scenarios)
-        python_bin_dir = os.path.dirname(sys.executable)  # Directory containing the running Python interpreter
-        uv_beside_python = os.path.join(python_bin_dir, "uv")  # uv often sits next to python in a venv
-        if os.name == "nt":  # Add .exe on Windows
-            uv_beside_python += ".exe"  # Windows executable suffix
-        uv_commands.append([uv_beside_python])  # Add the beside-python candidate
-
-        # 4. Try python -m uv as fallback
-        uv_commands.append([sys.executable, "-m", "uv"])  # Run uv as a module if the binary isn't found
-
-        # 5. macOS user base bin directory (common for system Python installs)
-        if sys.platform == "darwin":  # macOS-specific user install locations
-            user_base = sysconfig.get_config_var("userbase")  # Base dir for per-user installs on macOS
-            if user_base:  # Only if the user base is known
-                user_bin_uv = os.path.join(user_base, "bin", "uv")  # Candidate uv under the user base bin
-                uv_commands.append([user_bin_uv])  # Add the user-base candidate
-            # Also try common macOS user Python locations
-            import site  # Provides the user site-packages path
-
-            user_site = site.getusersitepackages()  # Per-user site-packages directory
-            if user_site:  # Only proceed if a user site path exists
-                # Convert site-packages path to bin path
-                # e.g., ~/Library/Python/3.9/lib/python/site-packages -> ~/Library/Python/3.9/bin
-                parts = user_site.split(os.sep)  # Split the path into components to find the Python version segment
-                for i, part in enumerate(parts):  # Scan components for the 'Python' marker
-                    if part.startswith("Python") and i + 1 < len(parts):  # Found the Python version directory
-                        user_bin = os.path.join(
-                            os.sep.join(parts[: i + 2]), "bin", "uv"
-                        )  # Rebuild path up to version dir + bin/uv
-                        uv_commands.append([user_bin])  # Add the derived macOS candidate
-                        break  # Stop after the first match
-
-        # Try each command
-        for cmd in uv_commands:  # Probe candidates in priority order
-            try:  # Each probe may fail; keep trying the rest
-                # For file paths, check existence first
-                if len(cmd) == 1 and os.path.sep in cmd[0]:  # Candidate is an explicit file path (not a bare 'uv')
-                    if not os.path.isfile(cmd[0]):  # Skip if the file doesn't actually exist
-                        continue  # Try the next candidate
-
-                result = subprocess.run(
-                    cmd + ["--version"], capture_output=True, text=True, timeout=5
-                )  # nosec B603  # Run 'uv --version' to confirm it works
-                if result.returncode == 0:  # Exit code 0 means uv ran successfully
-                    logging.debug("Found UV at: %s", cmd)  # Record which candidate worked
-                    return cmd, result.stdout.strip()  # Return the working command and its version string
-            except (FileNotFoundError, subprocess.SubprocessError, OSError):  # Candidate missing or failed to execute
-                continue  # Move on to the next candidate
-
-        return None, None  # No working uv found in any location
-
-    # Step 1: Check if UV is installed
-    use_uv = False  # Tracks whether we'll use UV (fast) or fall back to pip
-    uv_cmd = None  # Will hold the working uv command list once found
-    uv_cmd, uv_version = find_uv_executable()  # type: ignore[no-untyped-call]  # Probe for an existing uv install
-    if uv_cmd:  # A working uv was found
-        use_uv = True  # Prefer UV for installs (much faster than pip)
-        logging.info(
-            "UV package manager detected: %s (cmd: %s)", uv_version, " ".join(uv_cmd)
-        )  # Log which uv we'll use
-    else:  # No uv present yet
-        logging.info("UV package manager not found in PATH or Python environment")  # Note that we'll try to install it
-
-    # Step 2: If UV not installed, try to install it with pip
-    if not use_uv:  # Only attempt bootstrap if uv wasn't found
-        logging.info("Attempting to install UV package manager with pip...")  # Announce the bootstrap install
-        try:  # The pip install may fail (no network, restricted env)
-            install_result = subprocess.run(  # nosec B603  # Bootstrap uv via pip
-                [sys.executable, "-m", "pip", "install", "uv"],
-                capture_output=True,
-                text=True,
-                timeout=30,  # 30s cap so startup can't hang
-            )
-            if install_result.returncode == 0:  # pip reported success
-                logging.info("UV package manager installed successfully")  # Confirm the install
-                # Step 3: Re-check for UV in all locations
-                uv_cmd, uv_version = find_uv_executable()  # type: ignore[no-untyped-call]  # Re-probe now that uv should exist
-                if uv_cmd:  # uv is now usable
-                    use_uv = True  # Switch to the faster UV path
-                    logging.info(
-                        "UV verified after install: %s (cmd: %s)", uv_version, " ".join(uv_cmd)
-                    )  # Log the verified uv
-                else:  # Install claimed success but binary not found
-                    logging.warning(
-                        "UV installation succeeded but uv command not found in any expected location"
-                    )  # Surface the oddity
-                    use_uv = False  # Fall back to pip to be safe
-            else:  # pip returned a non-zero exit code
-                logging.warning(
-                    "Failed to install UV with pip: %s", install_result.stderr.strip()
-                )  # Log the pip error output
-        except Exception as install_error:  # Subprocess raised (timeout, OS error, etc.)
-            logging.warning("Could not install UV: %s", install_error)  # Log why the bootstrap failed
-
-    # Log installation strategy
-    if use_uv:  # We have a working uv
-        logging.info(
-            "Using UV for package installations (pip fallback per package if needed)"
-        )  # State the chosen strategy
-    else:  # No uv available
-        logging.info("Using pip for package installations (UV unavailable)")  # Fall back to pip for all installs
-
-    # Step 4: Install/update missing packages
-    success_count = 0  # Count of packages successfully installed
-    failure_count = 0  # Count of packages that failed to install
-
-    for (
-        _package_name,
-        package_spec,
-    ) in missing_packages:  # Install each missing dependency (name unused; spec drives install)
-        installed = False  # Track whether this package got installed by any method
-
-        # Try UV first if available
-        if use_uv and uv_cmd:  # Prefer UV when we have a working uv command
-            try:  # UV invocation may fail; pip fallback handles that below
-                # Build UV command - if using 'python -m uv', structure differs
-                if uv_cmd[0] == sys.executable:  # uv is invoked as 'python -m uv'
-                    cmd = uv_cmd + [
-                        "pip",
-                        "install",
-                        "--python",
-                        sys.executable,
-                        package_spec,
-                    ]  # Target the current interpreter
-                else:  # uv is a standalone binary
-                    cmd = uv_cmd + [
-                        "pip",
-                        "install",
-                        "--python",
-                        sys.executable,
-                        package_spec,
-                    ]  # Still target the current interpreter
-                logging.info("Installing %s with UV...", package_spec)  # Announce the UV install attempt
-                result = subprocess.run(
-                    cmd, capture_output=True, text=True, timeout=60
-                )  # nosec B603  # 60s cap prevents hangs
-
-                if result.returncode == 0:  # UV reported success
-                    logging.info("Successfully installed %s with UV", package_spec)  # Confirm the install
-                    success_count += 1  # Tally a successful install
-                    installed = True  # Mark done so we skip the pip fallback
-                else:  # UV failed for this package
-                    # UV failed - log and try pip fallback
-                    logging.warning(
-                        "UV installation failed for %s: %s", package_spec, result.stderr.strip()
-                    )  # Log UV's error
-                    logging.info("Retrying %s with pip fallback...", package_spec)  # Announce the pip retry
-            except Exception as uv_error:  # UV process raised (timeout, OS error)
-                logging.warning("UV installation error for %s: %s", package_spec, uv_error)  # Log the exception
-                logging.info("Retrying %s with pip fallback...", package_spec)  # Fall through to pip
-
-        # Try pip if UV not available or UV failed
-        if not installed:  # Only use pip if UV didn't already install it
-            try:  # pip may also fail; record the failure if so
-                cmd = [
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    package_spec,
-                ]  # Standard pip install for the current interpreter
-                logging.info("Installing %s with pip...", package_spec)  # Announce the pip install
-                result = subprocess.run(
-                    cmd, capture_output=True, text=True, timeout=60
-                )  # nosec B603  # 60s cap prevents hangs
-
-                if result.returncode == 0:  # pip reported success
-                    logging.info("Successfully installed %s with pip", package_spec)  # Confirm the install
-                    success_count += 1  # Tally a successful install
-                    installed = True  # Mark this package done
-                else:  # pip failed
-                    logging.error(
-                        "Pip installation failed for %s: %s", package_spec, result.stderr.strip()
-                    )  # Log pip's error output
-                    failure_count += 1  # Tally a failed install
-            except Exception as pip_error:  # pip process raised (timeout, OS error)
-                logging.error("Could not install %s with pip: %s", package_spec, pip_error)  # Log the exception
-                failure_count += 1  # Tally a failed install
-
-    # Step 5: Upgrade outdated packages
-    upgrade_count = 0  # Count of packages successfully upgraded
-    upgrade_failure_count = 0  # Count of packages that failed to upgrade
-
-    for package_name, package_spec, installed_version in outdated_packages:  # Upgrade each package flagged as outdated
-        upgraded = False  # Track whether this package got upgraded by any method
-
-        # Try UV first if available
-        if use_uv and uv_cmd:  # Prefer UV when available (faster than pip)
-            try:  # UV upgrade may fail; pip fallback handles that below
-                if uv_cmd[0] == sys.executable:  # uv invoked as 'python -m uv'
-                    cmd = uv_cmd + [
-                        "pip",
-                        "install",
-                        "--upgrade",
-                        "--python",
-                        sys.executable,
-                        package_spec,
-                    ]  # Upgrade for current interpreter
-                else:  # uv is a standalone binary
-                    cmd = uv_cmd + [
-                        "pip",
-                        "install",
-                        "--upgrade",
-                        "--python",
-                        sys.executable,
-                        package_spec,
-                    ]  # Upgrade for current interpreter
-                logging.info(
-                    "Upgrading %s from %s with UV...", package_name, installed_version
-                )  # Announce the UV upgrade
-                result = subprocess.run(
-                    cmd, capture_output=True, text=True, timeout=60
-                )  # nosec B603  # 60s cap prevents hangs
-
-                if result.returncode == 0:  # UV upgrade succeeded
-                    new_version = _get_installed_version(package_name)  # Read the version after upgrade for logging
-                    logging.info(
-                        "Successfully upgraded %s: %s -> %s", package_name, installed_version, new_version
-                    )  # Log the version change
-                    upgrade_count += 1  # Tally a successful upgrade
-                    upgraded = True  # Mark done so we skip the pip fallback
-                else:  # UV upgrade failed
-                    logging.warning(
-                        "UV upgrade failed for %s: %s", package_name, result.stderr.strip()
-                    )  # Log UV's error
-                    logging.info("Retrying %s upgrade with pip fallback...", package_name)  # Announce the pip retry
-            except Exception as uv_error:  # UV process raised
-                logging.warning("UV upgrade error for %s: %s", package_name, uv_error)  # Log the exception
-                logging.info("Retrying %s upgrade with pip fallback...", package_name)  # Fall through to pip
-
-        # Try pip if UV not available or UV failed
-        if not upgraded:  # Only use pip if UV didn't already upgrade it
-            try:  # pip upgrade may fail; handle corrupted-state and generic errors
-                cmd = [
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "--upgrade",
-                    package_spec,
-                ]  # Standard pip upgrade for the current interpreter
-                logging.info(
-                    "Upgrading %s from %s with pip...", package_name, installed_version
-                )  # Announce the pip upgrade
-                result = subprocess.run(
-                    cmd, capture_output=True, text=True, timeout=60
-                )  # nosec B603  # 60s cap prevents hangs
-
-                if result.returncode == 0:  # pip upgrade succeeded
-                    new_version = _get_installed_version(package_name)  # Read the post-upgrade version for logging
-                    logging.info(
-                        "Successfully upgraded %s: %s -> %s", package_name, installed_version, new_version
-                    )  # Log the version change
-                    upgrade_count += 1  # Tally a successful upgrade
-                    upgraded = True  # Mark this package done
-                else:  # pip upgrade failed; inspect why
-                    # Check if failure is due to corrupted package state (no RECORD file)
-                    if (
-                        "no-record-file" in result.stderr or "RECORD" in result.stderr
-                    ):  # Broken install metadata (missing RECORD)
-                        logging.warning(
-                            "Package %s has corrupted state - attempting force reinstall...", package_name
-                        )  # Explain the recovery attempt
-                        force_cmd = [  # Build a force-reinstall command to repair the broken package
-                            sys.executable,  # Use the current interpreter
-                            "-m",  # Run pip as a module
-                            "pip",  # The pip tool
-                            "install",  # Install action
-                            "--force-reinstall",  # Overwrite the corrupted install
-                            "--no-deps",  # Don't touch dependencies (only repair this package)
-                            package_spec,  # The package to repair
-                        ]
-                        force_result = subprocess.run(  # nosec B603  # Execute the repair install
-                            force_cmd,  # The force-reinstall command built above
-                            capture_output=True,  # Capture output for logging
-                            text=True,  # Decode output as text
-                            timeout=60,  # 60s cap prevents hangs
-                        )
-                        if force_result.returncode == 0:  # Repair succeeded
-                            new_version = _get_installed_version(package_name)  # Read the repaired version for logging
-                            logging.info(  # Log the successful repair and version change
-                                "Successfully force-reinstalled %s: %s -> %s",
-                                package_name,
-                                installed_version,
-                                new_version,
-                            )
-                            upgrade_count += 1  # Tally the repair as a successful upgrade
-                            upgraded = True  # Mark this package done
-                        else:  # Repair also failed
-                            logging.error(
-                                "Force reinstall failed for %s: %s", package_name, force_result.stderr.strip()
-                            )  # Log the repair error
-                            upgrade_failure_count += 1  # Tally a failed upgrade
-                    else:  # Failure was not a corrupted-state issue
-                        logging.error(
-                            "Pip upgrade failed for %s: %s", package_name, result.stderr.strip()
-                        )  # Log the generic pip error
-                        upgrade_failure_count += 1  # Tally a failed upgrade
-            except Exception as pip_error:  # pip process raised (timeout, OS error)
-                logging.error("Could not upgrade %s with pip: %s", package_name, pip_error)  # Log the exception
-                upgrade_failure_count += 1  # Tally a failed upgrade
-
-    # Summary
-    summary_parts = []  # Build a human-readable summary of install/upgrade outcomes
-    if missing_packages:  # Only report installs if any were attempted
-        summary_parts.append(f"{success_count} installed")  # Add the installed count
-    if outdated_packages:  # Only report upgrades if any were attempted
-        summary_parts.append(f"{upgrade_count} upgraded")  # Add the upgraded count
-    if failure_count + upgrade_failure_count > 0:  # Only report failures if any occurred
-        summary_parts.append(f"{failure_count + upgrade_failure_count} failed")  # Add the combined failure count
-
-    logging.info(
-        "Early dependency check completed: %s", ", ".join(summary_parts) if summary_parts else "all up-to-date"
-    )  # Final one-line summary
+# _early_dependency_check_legacy_impl removed per issue #431 (ARCH-NAMING +
+# dead-code). The function (~430 lines, cyclomatic 64) was a leftover legacy
+# implementation never called from anywhere -- production startup uses the
+# canonical _early_dependency_check() defined below which delegates to the
+# extracted src/bootstrap/* orchestrator.
 
 
 # Simplified facade delegating dependency bootstrap logic to extracted src/bootstrap modules.
@@ -1194,9 +771,10 @@ def listen_keyboard(*args, **kwargs):  # Removed feature; harmless stub kept for
     return None  # No listener object to return
 
 
-def stop_listening():  # Removed feature; harmless stub kept for old call sites
-    """No-op fallback for removed keyboard listener functionality."""
-    pass  # Nothing to stop; intentionally a no-op
+# stop_listening() removed per issue #431: it was a `pass` no-op stub for a
+# legacy keyboard listener that has no real implementation. The single call
+# site inside `send_keyboard_input` (interactive SSR/SRX websocket shell) is
+# also removed below since stopping a never-started listener is a no-op.
 
 
 # ============================================================================
@@ -1918,11 +1496,8 @@ class GlobalImportManager:
             logging.debug("Error checking/upgrading %s: %s", module_name, e)  # Log for diagnostics
             return True  # Non-critical failure -- never block startup on upgrade issues
 
-    def _get_actual_import_name(self, module_name: str) -> str:
-        """Get the actual import name for a given module name, handling mappings."""
-        return self.import_name_mappings.get(
-            module_name, module_name
-        )  # Map package name to import name, defaulting to itself
+    # _get_actual_import_name removed per issue #431 (ARCH-DELEGATE) -- callers
+    # now do `self.import_name_mappings.get(name, name)` inline.
 
     def import_module_safely(  # noqa: C901, PLR0912, PLR0915
         self,
@@ -1950,8 +1525,8 @@ class GlobalImportManager:
             if module_name in self.special_import_handlers:  # Some modules need custom construction logic
                 module = self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]  # Invoke the special handler
             else:  # Ordinary module -- import it directly
-                # Use mapping to get actual import name
-                actual_import_name = self._get_actual_import_name(module_name)  # Resolve package name to import name
+                # Issue #431 inlined _get_actual_import_name; resolve package -> import name.
+                actual_import_name = self.import_name_mappings.get(module_name, module_name)
                 module = __import__(actual_import_name)  # Import the module by its real import name
 
             self.imports[module_name] = module  # Cache the imported module for later global assignment
@@ -1997,8 +1572,8 @@ class GlobalImportManager:
 
                     importlib.invalidate_caches()  # Force Python to notice the newly installed files
 
-                    # Remove any cached failed imports
-                    actual_import_name = self._get_actual_import_name(module_name)  # Resolve the real import name again
+                    # Remove any cached failed imports (issue #431 inlined _get_actual_import_name).
+                    actual_import_name = self.import_name_mappings.get(module_name, module_name)
                     modules_to_clear = [actual_import_name, module_name]  # Both names may be cached as failed
                     for mod_name in modules_to_clear:  # Purge each possibly-cached name
                         if mod_name in sys.modules:  # A stale/failed entry exists in the module cache
@@ -2012,8 +1587,8 @@ class GlobalImportManager:
                     try:
                         if module_name in self.special_import_handlers:  # Use the special handler again if present
                             module = self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]  # Re-run the handler
-                        else:  # Ordinary module retry
-                            actual_import_name = self._get_actual_import_name(module_name)  # Resolve import name
+                        else:  # Ordinary module retry (issue #431 inlined _get_actual_import_name).
+                            actual_import_name = self.import_name_mappings.get(module_name, module_name)
                             module = __import__(actual_import_name)  # Re-import now that the package is installed
 
                         self.imports[module_name] = module  # Cache the now-successful import
@@ -2336,9 +1911,9 @@ class GlobalImportManager:
                 "websocket-client not available - WebSocket operations will be disabled"
             )  # WebSocket features disabled
 
-    def get_import(self, module_name: str) -> Any | None:
-        """Get an imported module by name."""
-        return self.imports.get(module_name)  # Return the cached module object, or None if it never imported
+    # get_import removed per issue #431 (ARCH-DELEGATE) -- callers access
+    # `self.imports.get(name)` directly. `self.imports` is the public
+    # dict already mutated elsewhere in this class.
 
     def is_available(self, module_name: str) -> bool:
         """Check if a module is available."""
@@ -2541,7 +2116,7 @@ class InputUtils:
             return True  # Progress bars are functional
 
         # Try to get tqdm from the import manager
-        tqdm_from_manager = import_manager.get_import("tqdm")  # Ask the manager for a cached real tqdm
+        tqdm_from_manager = import_manager.imports.get("tqdm")  # Issue #431: inlined get_import.
         if tqdm_from_manager:  # The manager has a usable tqdm
             tqdm = tqdm_from_manager  # Replace the fallback with the real implementation
             logging.info("Retrieved tqdm from import manager")  # Record the recovery
@@ -3350,14 +2925,14 @@ def _ensure_mist_get_method(session: Any) -> bool:
     """
     if hasattr(session, "mist_get"):  # Preferred method already present -- nothing to do
         return True  # Session is compatible as-is
-    if hasattr(session, "get") and callable(session.get):  # Alternate method found -- wrap it
+    if hasattr(session, "get") and callable(session.get):  # Alternate method found -- bind a compat callable
 
-        def _mist_get_wrapper(*args, **kwargs):  # pragma: no cover (simple adapter)
-            return session.get(*args, **kwargs)  # Delegate to get() with all args forwarded
+        def _mist_get_impl(*args, **kwargs):  # Closure binds `session` and implements mist_get on top of get().
+            return session.get(*args, **kwargs)  # Forward to the session's native get() with identical signature.
 
-        session.mist_get = _mist_get_wrapper  # Attach wrapper so callers using mist_get work transparently
-        logging.info("Added mist_get wrapper around underlying get() method for compatibility")
-        return True  # Session is now compatible via wrapper
+        session.mist_get = _mist_get_impl  # Attach the closure so callers can use mist_get uniformly.
+        logging.info("Added mist_get implementation around underlying get() method for compatibility")
+        return True  # Session is now exposes mist_get via the bound closure
     logging.error("Initialized session lacks 'mist_get' or 'get' methods required for API calls")
     return False  # Session is unusable -- hard failure
 
@@ -3474,9 +3049,12 @@ def _configure_session_timeout(session_obj: Any) -> None:
                 self.default_timeout = default_timeout
                 super().__init__(**kwargs)
 
-            def send(self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None):  # noqa: PLR0913
+            def send(  # noqa: PLR0913, STRUCT-PARAMS  # external contract: requests.HTTPAdapter.send signature
+                self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None
+            ):
                 if timeout is None:
                     timeout = self.default_timeout
+                # Issue #431: forward args verbatim; signature must match parent for adapter contract.
                 return super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
 
         adapter = TimeoutAdapter(default_timeout=API_REQUEST_TIMEOUT)
@@ -6269,12 +5847,12 @@ class DeviceDataFetcher:
         """Process fetched data and output to CSV and table."""
         processed = DataProcessingUtils.flatten_nested_fields(data)
         processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(processed, self.filename)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(processed, self.filename)  # type: ignore[no-untyped-call]
         DisplayUtils.dict_list_as_pretty_table(processed)
 
 
-# Canonical ownership: runtime PacketCaptureManager resolves to the extracted src.capture.packet_capture implementation.
-PacketCaptureManager = ExtractedPacketCaptureManager
+# Issue #431: module-level alias `PacketCaptureManager = ExtractedPacketCaptureManager`
+# was removed. The canonical name is now imported directly at module top.
 
 
 class SFPTransceiverDataProcessor:
@@ -6387,7 +5965,7 @@ class SFPTransceiverDataProcessor:
                     len(unique_devices_with_transceivers),
                 )
 
-            DataExporter.save_data_to_output(merged_data, SFPTransceiverDataProcessor.OUTPUT_FILENAME)  # type: ignore[no-untyped-call]  # Write the merged rows to the output backend
+            DataExporter.write_with_format_selection(merged_data, SFPTransceiverDataProcessor.OUTPUT_FILENAME)  # type: ignore[no-untyped-call]  # Write the merged rows to the output backend
             logging.info(
                 "Wrote %s rows to %s", len(merged_data), SFPTransceiverDataProcessor.OUTPUT_FILENAME
             )  # Log the row count written
@@ -8002,21 +7580,10 @@ class DataExporter:
             logging.debug("EXIT: DataExporter.write_to_csv - unexpected error")
             raise
 
-    @staticmethod
-    def save_data_to_output(data, filename, api_function_name=None):
-        """
-        Save data to the specified format (CSV or SQLite).
-        Convenience method with identical signature for backward compatibility.
-
-        Args:
-            data: List of dictionaries containing the data to write
-            filename: CSV filename or database table name
-            api_function_name: Name of the API function for SQLite strategy selection
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        return DataExporter.write_with_format_selection(data, filename, api_function_name=api_function_name)
+    # save_data_to_output removed per issue #431 (ARCH-DELEGATE). All call
+    # sites now invoke DataExporter.write_with_format_selection(data, filename,
+    # api_function_name=...) directly -- it is the canonical implementation
+    # and accepts the identical (data, filename, api_function_name=) form.
 
     @staticmethod
     def export_with_processing(data, filename, sort_key=None, api_function_name=None):
@@ -8288,7 +7855,7 @@ class APIDataFetcher:
         """Save recovered data and notify user."""
         print(f"! API returned unexpected structure. Recovered {len(self.rawdata)} records.")
         api_name = self.api_call.__name__
-        DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
         logging.info("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))
 
     def _handle_no_recovery(self) -> None:
@@ -8320,7 +7887,7 @@ class APIDataFetcher:
 
         if self.rawdata:
             api_name = self.api_call.__name__
-            DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
             logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
             print(f"* Partial data saved: {len(self.rawdata)} records written to {self.filename}")
 
@@ -8331,7 +7898,7 @@ class APIDataFetcher:
         if self.rawdata:
             try:
                 api_name = self.api_call.__name__
-                DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
                 logging.info("Emergency save: %s partial records saved before error exit", len(self.rawdata))
                 print(f"* Emergency save: {len(self.rawdata)} partial records written to {self.filename}")
             except Exception as save_error:
@@ -8356,7 +7923,7 @@ class APIDataFetcher:
         """Save partial data when outer exception occurs."""
         try:
             api_name = self.api_call.__name__
-            DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
             logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
 
             print("\n!! PARTIAL DATA SAVED !!")
@@ -8455,14 +8022,17 @@ def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int,
 
 def _pool_process_batch_wait_loop(
     batch: list[Any],
-    worker_function: Any,
-    connection_semaphore: threading.Semaphore,
-    max_threads: int,
-    batch_description: str,
     batch_number: int,
     total_batches: int,
+    config: "BatchWorkerConfig",
 ) -> tuple[list[Any], list[Any]]:
-    """Submit one batch to a thread pool and collect results via a wait loop."""
+    """Submit one batch to a thread pool and collect results via a wait loop.
+
+    Issue #431: the per-batch values (batch, batch_number, total_batches) stay as
+    direct parameters because they change every iteration; the constant worker
+    configuration (worker_function, semaphore, thread count, description) moves
+    into ``config`` so the public signature stays at 4 parameters (the 5-Item Rule).
+    """
     batch_successful: list[Any] = []  # Accumulate successful worker results for this batch.
     batch_failed: list[Any] = []  # Accumulate items whose futures raised or returned empty for this batch.
     first_result_logged = False  # Track whether the first-result debug log has fired to avoid repeated noise.
@@ -8471,18 +8041,25 @@ def _pool_process_batch_wait_loop(
         batch_number,
         total_batches,
         len(batch),
-        batch_description,
-        len(batch) / max_threads,
+        config.batch_description,  # Issue #431: pulled from the config dataclass; was a positional param.
+        len(batch) / config.max_threads,  # Issue #431: pulled from the config dataclass; was a positional param.
     )  # Log batch progress before dispatching to the thread pool.
-    with ThreadPoolExecutor(max_workers=max_threads) as executor:  # Bound thread count to the configured pool size.
+    with ThreadPoolExecutor(
+        max_workers=config.max_threads
+    ) as executor:  # Bound thread count to configured pool size (issue #431: was max_threads positional).
         future_to_item = {
-            executor.submit(worker_function, item, connection_semaphore): item for item in batch
+            executor.submit(  # Issue #431: worker_function / semaphore now sourced from config dataclass.
+                config.worker_function, item, config.connection_semaphore
+            ): item
+            for item in batch
         }  # Map each future back to its source item for error reporting.
         batch_desc = (
             f"Batch {batch_number}/{total_batches}"  # Build tqdm description once so progress bar label is consistent.
         )
         pending = set(future_to_item.keys())  # Track in-flight futures so the wait loop can detect completion.
-        with tqdm(total=len(pending), desc=batch_desc, unit=batch_description.rstrip("s")) as pbar:  # type: ignore[call-arg, no-untyped-call]  # Show per-batch progress to the operator.
+        with tqdm(  # Show per-batch progress to the operator (issue #431: batch_description from config).
+            total=len(pending), desc=batch_desc, unit=config.batch_description.rstrip("s")
+        ) as pbar:  # type: ignore[call-arg, no-untyped-call]
             while pending:  # Keep collecting futures until all have resolved.
                 done, pending = wait(pending, return_when=FIRST_COMPLETED)  # Wake up as soon as any future finishes.
                 for future in done:  # Inspect each completed future before moving on.
@@ -8501,8 +8078,8 @@ def _pool_process_batch_wait_loop(
                         else:  # Falsy result means the worker returned an empty list or None.
                             batch_failed.append(item)  # Track empty-result items for potential retry.
                     except Exception as exc:  # Worker threw an exception; log and track as failed.
-                        logging.error(
-                            "! Future exception for %s %s: %s", batch_description.rstrip("s"), item, exc
+                        logging.error(  # Issue #431: batch_description sourced from config.
+                            "! Future exception for %s %s: %s", config.batch_description.rstrip("s"), item, exc
                         )  # Log exception with item context for targeted debugging.
                         batch_failed.append(item)  # Mark item as failed so retry logic can handle it.
                     finally:  # Advance progress bar regardless of success or failure.
@@ -8583,6 +8160,14 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
     total_batches = (
         len(work_items) + batch_size - 1
     ) // batch_size  # Pre-compute total batch count for progress labels.
+    # Issue #431: bundle the 4 constant params into a frozen dataclass so
+    # the inner loop signature stays within the 5-Item Rule's <=5 limit.
+    batch_config = BatchWorkerConfig(
+        worker_function=worker_function,
+        connection_semaphore=connection_semaphore,
+        max_threads=max_threads,
+        batch_description=batch_description,
+    )
 
     for batch_index in range(
         0, len(work_items), batch_size
@@ -8594,14 +8179,12 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
             batch_number = (
                 batch_index // batch_size
             ) + 1  # Compute 1-based batch number for human-readable progress logs.
+            # Issue #431: per-batch values stay positional; constant config travels through dataclass.
             batch_successful, batch_failed = _pool_process_batch_wait_loop(
                 batch,
-                worker_function,
-                connection_semaphore,
-                max_threads,
-                batch_description,
                 batch_number,
                 total_batches,
+                batch_config,
             )  # Execute this batch through the bounded thread pool and collect per-future results.
             successful_results.extend(batch_successful)  # Merge batch successes into the overall result list.
             failed_items.extend(batch_failed)  # Merge batch failures into the overall failed list for retry handling.
@@ -8898,7 +8481,7 @@ class PromptUtils:
         inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
         inventory = DataProcessingUtils.flatten_nested_fields(inventory)
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(inventory, csv_filename)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(inventory, csv_filename)  # type: ignore[no-untyped-call]
         logging.info("Device inventory for site_id %s written to %s", site_id, csv_filename)
 
         # Prepare PrettyTable for user selection
@@ -9034,19 +8617,9 @@ class PromptUtils:
             logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
         return site_id
 
-    @staticmethod
-    def select_device(site_id: str, device_type: str = "all") -> str | None:
-        """
-        Prompts the user to select a device from the specified site and returns the device_id.
-
-        Args:
-            site_id (str): The site ID to filter devices by
-            device_type (str): Filter by device type ("all", "switch", "gateway", "ap")
-
-        Returns:
-            str: The selected device ID or None if no selection made
-        """
-        return PromptUtils.select_device_id_from_inventory(site_id, device_type)
+    # PromptUtils.select_device removed per issue #431 (ARCH-DELEGATE).
+    # Callers now use PromptUtils.select_device_id_from_inventory(site_id, device_type)
+    # directly -- it is the canonical implementation and accepts the same arguments.
 
     @staticmethod
     def _determine_search_scope(site_id: str | None) -> str | None | Literal[False]:
@@ -10016,7 +9589,7 @@ class OrgAlarmEventExporter:
         logging.info(
             "Fetched %s device events from the past %s hours (duration=%s).", len(events), hours, duration_param
         )
-        DataExporter.save_data_to_output(events, "OrgDeviceEvents.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(events, "OrgDeviceEvents.csv")  # type: ignore[no-untyped-call]
         logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))
         print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
         logging.info("Menu #21: Device events export completed - %s events", len(events))
@@ -10235,7 +9808,7 @@ class OrgAlarmEventExporter:
             logging.info(
                 "No device events found for the 52-week period."
             )  # Record empty result explicitly for monitoring.
-            DataExporter.save_data_to_output([], "OrgDeviceEvents_52w.csv")  # type: ignore[no-untyped-call]  # Write empty output so downstream expects a file.
+            DataExporter.write_with_format_selection([], "OrgDeviceEvents_52w.csv")  # type: ignore[no-untyped-call]  # Write empty output so downstream expects a file.
             return  # Nothing to stream; exit cleanly.
 
         header_fields = DataProcessingUtils.get_unique_keys(buffered_rows)  # type: ignore[no-untyped-call]  # Derive stable column set from the preloaded sample.
@@ -10342,7 +9915,7 @@ class OrgSiteExporter:
         sites = DataProcessingUtils.flatten_nested_fields(sites)
         sites = DataProcessingUtils.escape_multiline(sites)  # type: ignore[no-untyped-call]
         # Write to the configured output backend (CSV or SQLite) via the DataExporter abstraction
-        DataExporter.save_data_to_output(sites, output_file)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(sites, output_file)  # type: ignore[no-untyped-call]
         logging.info("! Sites exported to %s", output_file)  # Log the successful export
         print(f"! Sites exported to {output_file}")  # Inform the user on stdout
 
@@ -10359,7 +9932,7 @@ class OrgSiteExporter:
         logging.info("Fetched %s sites from the organization.", len(sites))
         flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)
         sanitized_sites = DataProcessingUtils.escape_multiline(flattened_sites)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(sanitized_sites, "SitesWithLocations.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(sanitized_sites, "SitesWithLocations.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(sanitized_sites)} sites exported to SitesWithLocations.csv")
         logging.info(" Full site data written to SitesWithLocations.csv")
 
@@ -10377,7 +9950,7 @@ class OrgSiteExporter:
         logging.info("Fetched %s current guest users from API.", len(guests))
         guests = DataProcessingUtils.flatten_nested_fields(guests)
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(guests, "OrgCurrentGuests.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(guests, "OrgCurrentGuests.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(guests)} current guest users exported to OrgCurrentGuests.csv")
         logging.info(" Current guests exported to OrgCurrentGuests.csv")
 
@@ -10398,7 +9971,7 @@ class OrgSiteExporter:
         logging.info("Fetched %s historical guest users from API.", len(guests))
         guests = DataProcessingUtils.flatten_nested_fields(guests)
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(guests, "OrgHistoricalGuests.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(guests, "OrgHistoricalGuests.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(guests)} historical guest users exported to OrgHistoricalGuests.csv")
         logging.info(" Historical guests exported to OrgHistoricalGuests.csv")
 
@@ -10955,7 +10528,7 @@ class OrgInventoryExporter:
         enriched_devices = DataProcessingUtils.flatten_nested_fields(enriched_devices)
         enriched_devices = DataProcessingUtils.escape_multiline(enriched_devices)  # type: ignore[no-untyped-call]
         enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))
-        DataExporter.save_data_to_output(enriched_devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(enriched_devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(enriched_devices)} devices exported to AllDevicesWithSiteInfo.csv")
         logging.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(enriched_devices))
 
@@ -11050,7 +10623,7 @@ class OrgInventoryExporter:
         gateways = DataProcessingUtils.flatten_nested_fields(gateways)
         gateways = DataProcessingUtils.escape_multiline(gateways)  # type: ignore[no-untyped-call]
         gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))
-        DataExporter.save_data_to_output(gateways, "GatewaysWithSiteInfo.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(gateways, "GatewaysWithSiteInfo.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(gateways)} gateways exported to GatewaysWithSiteInfo.csv")
         logging.info("Gateway data written to GatewaysWithSiteInfo.csv")
 
@@ -11346,7 +10919,7 @@ class OrgDeviceStatsExporter:
             all_port_stats
         )  # Normalize nested API payloads into flat CSV-friendly records.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape embedded newlines so CSV stays row-stable.
-        DataExporter.save_data_to_output(sanitized, output_file, api_function_name="searchSiteSwOrGwPorts")  # type: ignore[no-untyped-call]  # Persist to configured backend with endpoint metadata.
+        DataExporter.write_with_format_selection(sanitized, output_file, api_function_name="searchSiteSwOrGwPorts")  # type: ignore[no-untyped-call]  # Persist to configured backend with endpoint metadata.
         print(
             f"! {len(all_port_stats)} port stat records exported to {output_file}"
         )  # Confirm output row count to the operator.
@@ -11994,17 +11567,17 @@ class OrgTemplateExporter:
                 logging.info(
                     "No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv"
                 )  # Log the empty result
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]  # Write an empty file for consistency
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Write an empty file for consistency
                 return  # Nothing more to do
             processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON into flat CSV rows
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(processed)} AP templates exported to {filename}")
             logging.info("Exported %s AP templates to %s.", len(processed), filename)
         except Exception as e:
             logging.error("Failed to export AP templates: %s", e)
             try:
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
                 pass
             raise
@@ -12024,17 +11597,17 @@ class OrgTemplateExporter:
                 logging.info(
                     "No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv"
                 )
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
                 return
             processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(processed)} switch templates exported to {filename}")
             logging.info("Exported %s switch templates to %s.", len(processed), filename)
         except Exception as e:
             logging.error("Failed to export switch templates: %s", e)
             try:
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
                 pass
             raise
@@ -12143,7 +11716,7 @@ class OrgClientSecurityExporter:
         if all_rogue_clients:  # At least one rogue client was found
             flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_clients)  # Flatten nested JSON to CSV rows
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
-            DataExporter.save_data_to_output(sanitized, "OrgRogueClients")  # type: ignore[no-untyped-call]  # Write to the output backend
+            DataExporter.write_with_format_selection(sanitized, "OrgRogueClients")  # type: ignore[no-untyped-call]  # Write to the output backend
             logging.info("! %s rogue clients exported to OrgRogueClients", len(all_rogue_clients))  # Log the export
             print(
                 f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients"
@@ -12215,7 +11788,7 @@ class OrgClientSecurityExporter:
         if all_rogue_aps:  # At least one rogue AP was found
             flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_aps)  # Flatten nested JSON to CSV rows
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
-            DataExporter.save_data_to_output(sanitized, "OrgRogueAPs")  # type: ignore[no-untyped-call]  # Write to the output backend
+            DataExporter.write_with_format_selection(sanitized, "OrgRogueAPs")  # type: ignore[no-untyped-call]  # Write to the output backend
             logging.info("! %s rogue APs exported to OrgRogueAPs", len(all_rogue_aps))  # Log the export
             print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")  # Report the count to the user
         else:  # No rogue APs found anywhere
@@ -12747,16 +12320,16 @@ class OrgAdminExporter:
                 raw_items = [raw_items]
             if not raw_items:
                 logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
-                DataExporter.save_data_to_output([], filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
                 return
             processed = DataProcessingUtils.flatten_nested_fields(raw_items)
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed, filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
             logging.info("Exported %s license records to %s.", len(processed), filename)
         except Exception as e:
             logging.error("Failed to export licenses: %s", e)
             try:
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
                 pass
             raise
@@ -12805,10 +12378,10 @@ class SelfExportUtils:
                 logging.warning(
                     "No self audit log records returned for the last %d hours", hours
                 )  # Warn on empty result
-                DataExporter.save_data_to_output([], filename)  # Write empty file to signal successful run
+                DataExporter.write_with_format_selection([], filename)  # Write empty file to signal successful run
                 return
             rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested change-detail dicts for CSV
-            DataExporter.save_data_to_output(
+            DataExporter.write_with_format_selection(
                 rows, filename, api_function_name="listSelfAuditLogs"
             )  # Write to configured backend
             logging.info("Exported %d self audit log records to %s", len(rows), filename)  # Log success
@@ -12944,7 +12517,7 @@ class OrgConfigExporter:
             if not orgs_data:
                 print("  No organizations found under this MSP")
                 logging.info("MSP has no organizations")
-                DataExporter.save_data_to_output([], "MspOrganizations.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "MspOrganizations.csv")  # type: ignore[no-untyped-call]
                 return
 
             # Process and export
@@ -12956,7 +12529,7 @@ class OrgConfigExporter:
                 record["msp_id"] = msp_id
                 record["msp_name"] = msp_name
 
-            DataExporter.save_data_to_output(processed, "MspOrganizations.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, "MspOrganizations.csv")  # type: ignore[no-untyped-call]
             print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")
             logging.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))
 
@@ -13058,13 +12631,13 @@ class OrgExportUtils:
         if all_sites_sle_data:
             processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
             print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")
             logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))
         else:
             print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")
             logging.warning("No sites SLE data available for organization")
-            DataExporter.save_data_to_output([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
         if emitter:
             emitter.emit_progress_complete(
                 "67", "sites_sle_summary", len(sle_types), items_done, False, time.time() - op_start
@@ -13087,10 +12660,10 @@ class OrgExportUtils:
             print("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")
             logging.error("No org-scope metrics found in const insight metrics")
             # Create empty normalized files
-            DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
             return
 
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -13218,22 +12791,22 @@ class OrgExportUtils:
 
                 # Summary data
                 processed_summary = DataProcessingUtils.escape_multiline(all_summary_data)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed_summary, "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed_summary, "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
                 print(f"  !? {len(processed_summary)} summary records -> OrgMetricsSummary.csv")
 
                 # Time series data
                 processed_time_series = DataProcessingUtils.escape_multiline(all_time_series_data)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed_time_series, "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed_time_series, "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
                 print(f"  !? {len(processed_time_series)} time series records -> OrgMetricsTimeSeries.csv")
 
                 # Results data
                 processed_results = DataProcessingUtils.escape_multiline(all_results_data)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed_results, "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed_results, "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
                 print(f"  !? {len(processed_results)} results records -> OrgMetricsResults.csv")
 
                 # Sites data
                 processed_sites = DataProcessingUtils.escape_multiline(all_sites_data)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed_sites, "OrgSitesData.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed_sites, "OrgSitesData.csv")  # type: ignore[no-untyped-call]
                 print(f"  !? {len(processed_sites)} sites records -> OrgSitesData.csv")
 
                 print(
@@ -13248,28 +12821,28 @@ class OrgExportUtils:
                 # Also save a legacy combined file for compatibility
                 processed_legacy = DataProcessingUtils.flatten_nested_fields(all_insight_data)
                 processed_legacy = DataProcessingUtils.escape_multiline(processed_legacy)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed_legacy, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed_legacy, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
                 print("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")
 
             else:
                 print("! 0 organization insight metrics exported (no data available)")
                 logging.warning("No org insight data available - all metrics failed or returned empty")
                 # Create empty normalized files
-                DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
 
         except Exception as exception:
             print(f"! Error exporting organization insight metrics: {exception}")
             logging.error("Failed to export org insight metrics: %s", exception)
             # Create empty normalized files in case of error
-            DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
 
     @staticmethod
     def _nac_clients():
@@ -13433,7 +13006,7 @@ class OrgExportUtils:
                 return
             data = DataProcessingUtils.flatten_nested_fields(rawdata)
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
             print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")
             logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")
             logging.info("Menu #22: Audit logs export completed - %s records", len(data))
@@ -13532,7 +13105,7 @@ class SiteDeviceExporter:
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
         fields = DataProcessingUtils.get_unique_keys(inventory)  # type: ignore[no-untyped-call]
 
-        DataExporter.save_data_to_output(inventory, csv_filename)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(inventory, csv_filename)  # type: ignore[no-untyped-call]
         logging.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))
 
         # Prepare PrettyTable for display
@@ -13574,7 +13147,7 @@ class SiteDeviceExporter:
                 flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
                 filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"
-                DataExporter.save_data_to_output(sanitized_data, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
                 print(f"! {len(rawdata)} device stats exported to {filename}")
             else:
                 print("! No device statistics found for this site")
@@ -13604,7 +13177,8 @@ class SiteDeviceExporter:
         if not site_id:
             logging.error("No site selected. Exiting.")
             return
-        device_id = PromptUtils.select_device(site_id, device_type="switch")
+        # Issue #431: inlined PromptUtils.select_device -> canonical select_device_id_from_inventory.
+        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="switch")
         if not device_id:
             logging.error("No switch device selected. Exiting.")
             return
@@ -13619,7 +13193,7 @@ class SiteDeviceExporter:
                 flattened = DataProcessingUtils.flatten_nested_fields(vc_data)
                 sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
                 filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"
-                DataExporter.save_data_to_output(sanitized, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
                 logging.info("! Virtual chassis information exported to %s", filename)
                 if sanitized:
                     print(f"\n!! Virtual Chassis Summary for {device_name}:")
@@ -13660,7 +13234,7 @@ class SiteDeviceExporter:
                 flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
                 filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"
-                DataExporter.save_data_to_output(sanitized_data, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
                 print(f"! {len(rawdata)} devices exported to {filename}")
             else:
                 print("! No devices found for this site")
@@ -13700,7 +13274,7 @@ class SiteClientExporter:
                 flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
                 filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"
-                DataExporter.save_data_to_output(sanitized_data, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
                 print(f"! {len(rawdata)} client records exported to {filename}")
             else:
                 print("! No client data found for this site")
@@ -13808,14 +13382,14 @@ class SiteConfigExporter:
 
         if not rawdata:
             logging.warning("No data provided for output to %s", filename)
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             print(f"! 0 records exported to data\\{filename}")
             return
 
         processed = DataProcessingUtils.flatten_nested_fields(rawdata)
         processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
         processed = sorted(processed, key=lambda row: row.get("ssid", ""))
-        DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
         print(f"! {len(processed)} records exported to data\\{filename}")
         logging.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
 
@@ -13843,7 +13417,7 @@ class SiteConfigExporter:
             logging.info("Fetched settings for %s sites. Flattening and sanitizing data...", len(data))
             data = DataProcessingUtils.flatten_nested_fields(data)
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(data, "AllSiteConfigs.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(data, "AllSiteConfigs.csv")  # type: ignore[no-untyped-call]
             print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")
             logging.info(" Site configs saved to AllSiteConfigs.csv")
         else:
@@ -13946,7 +13520,7 @@ class SiteAnomalyExporter:
             if all_anomaly_data:
                 processed = DataProcessingUtils.flatten_nested_fields(all_anomaly_data)
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} site anomaly event types exported to {filename}")
                 logging.info(
                     "Exported %s site anomaly event types for %s to %s", metrics_retrieved, site_name, filename
@@ -13954,7 +13528,7 @@ class SiteAnomalyExporter:
             else:
                 print(f"! 0 anomaly events exported to {filename} (no data available)")
                 logging.warning("No anomaly events available for site %s", site_name)
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
         except Exception as exception:
             print(f"! Error exporting site anomaly events: {exception}")
@@ -13988,8 +13562,8 @@ class SiteAnomalyExporter:
         except Exception:
             site_name = site_id
 
-        # Get device selection
-        device_selection = PromptUtils.select_device(site_id)
+        # Get device selection (issue #431: inlined PromptUtils.select_device).
+        device_selection = PromptUtils.select_device_id_from_inventory(site_id)
         if not device_selection:
             print("! No device selected. Exiting.")
             return
@@ -14052,7 +13626,7 @@ class SiteAnomalyExporter:
             if all_device_anomaly_data:
                 processed = DataProcessingUtils.flatten_nested_fields(all_device_anomaly_data)
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} device anomaly event types exported to {filename}")
                 logging.info(
                     "Exported %s device anomaly event types for %s to %s", metrics_retrieved, device_name, filename
@@ -14060,7 +13634,7 @@ class SiteAnomalyExporter:
             else:
                 print(f"! 0 device anomaly events exported to {filename} (no data available)")
                 logging.warning("No device anomaly events available for %s", device_name)
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
         except Exception as exception:
             print(f"! Error exporting device anomaly events: {exception}")
@@ -14179,7 +13753,7 @@ class SiteAnomalyExporter:
             if all_client_anomaly_data:
                 processed = DataProcessingUtils.flatten_nested_fields(all_client_anomaly_data)
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")
                 logging.info(
                     "Exported %s client anomaly event types for %s to %s", metrics_retrieved, client_mac, filename
@@ -14187,7 +13761,7 @@ class SiteAnomalyExporter:
             else:
                 print(f"! 0 client anomaly events exported to {filename} (no data available)")
                 logging.warning("No client anomaly events available for %s", client_mac)
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
         except Exception as exception:
             print(f"! Error exporting client anomaly events: {exception}")
@@ -14532,7 +14106,7 @@ class GatewayHaExporter:
             GatewayHaExporter._print_ha_summary(rows)  # Print tabular summary to the terminal
             flat_rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV/DB
             filename = "GatewayHaClusterInfo.csv"  # Output filename for the export
-            DataExporter.save_data_to_output(
+            DataExporter.write_with_format_selection(
                 flat_rows, filename, api_function_name="listSiteGatewayHaStats"
             )  # Write to configured backend (CSV, SQLite, ArangoDB, etc.)
             logging.info("Exported %d HA gateway records to %s", len(flat_rows), filename)  # Log export success
@@ -15225,7 +14799,7 @@ class ConstDefinitionsExporter:
         except Exception as error:
             print(f"  ! Error exporting {config.description.lower()}: {error}")
             logging.error("Failed to export %s from %s: %s", config.description.lower(), config.endpoint_name, error)
-            DataExporter.save_data_to_output([], config.filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], config.filename)  # type: ignore[no-untyped-call]
             self.endpoints_failed += 1
 
     def _fetch_endpoint_data(self, config: EndpointConfig):
@@ -15509,13 +15083,13 @@ class ConstDefinitionsExporter:
         if not const_data:
             print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
             logging.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)
-            DataExporter.save_data_to_output([], config.filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], config.filename)  # type: ignore[no-untyped-call]
             self.endpoints_updated += 1
             return
 
         data_list = self._convert_to_list(config.endpoint_name, const_data)
         processed = DataProcessingUtils.escape_multiline(data_list)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(processed, config.filename)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(processed, config.filename)  # type: ignore[no-untyped-call]
 
         print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")
         logging.info("Exported %s fresh %s to %s", len(processed), config.description.lower(), config.filename)
@@ -16348,7 +15922,7 @@ class GatewayTestExporter:
             filename = "AllGatewaySyntheticTests.csv"
             flattened = DataProcessingUtils.flatten_nested_fields(all_stats)
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(sanitized, filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")
             logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
             logging.info(
@@ -16648,7 +16222,7 @@ class GatewayTemplateConfigManager:
             apisession=apisession,
             input_fn=InputUtils.safe_input,
             get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.save_data_to_output,
+            save_data_fn=DataExporter.write_with_format_selection,
             check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
             generate_sites_fn=OrgSiteExporter.sites,
             sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
@@ -16666,7 +16240,7 @@ class GatewayTemplateConfigManager:
             apisession=apisession,
             input_fn=InputUtils.safe_input,
             get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.save_data_to_output,
+            save_data_fn=DataExporter.write_with_format_selection,
             check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
             generate_sites_fn=OrgSiteExporter.sites,
             sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
@@ -16684,7 +16258,7 @@ class GatewayTemplateConfigManager:
             apisession=apisession,
             input_fn=InputUtils.safe_input,
             get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.save_data_to_output,
+            save_data_fn=DataExporter.write_with_format_selection,
             check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
             generate_sites_fn=OrgSiteExporter.sites,
             sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
@@ -16709,7 +16283,7 @@ class DeviceConfigTemplateClonerManager:
             apisession=apisession,  # Pass authenticated global API session
             input_fn=InputUtils.safe_input,  # Pass EOF-safe input wrapper for SSH/container contexts
             get_csv_path_fn=FilePathUtils.get_csv_path,  # Pass path builder for OS-safe output paths
-            save_data_fn=DataExporter.save_data_to_output,  # Pass CSV writer for output persistence
+            save_data_fn=DataExporter.write_with_format_selection,  # Pass CSV writer for output persistence
             write_csv_fn=DataExporter.write_with_format_selection,  # Pass PK-aware format-selecting writer
         ).clone()  # Delegate all business logic to extracted implementation
 
@@ -16915,8 +16489,7 @@ class CLIShellManager:
                     if ws.sock is not None:
                         ws.sock.shutdown(2)
                         ws.sock.close()
-                    stop_listening()  # type: ignore[no-untyped-call]
-                    return
+                    return  # Issue #431: removed obsolete stop_listening() call (was a no-op stub)
                 mapped_key = keymap.get(key, key)
                 data = f"\00{mapped_key}"
                 data_byte = bytearray(map(ord, data))
@@ -18330,7 +17903,7 @@ class WANProbeConfigManager:
             )
 
         output_file = "GatewayTemplate_WAN_Probe_Config_Audit.csv"
-        DataExporter.save_data_to_output(report_data, output_file)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(report_data, output_file)  # type: ignore[no-untyped-call]
 
         # Calculate summary
         total_interfaces = sum(len(r["interfaces_updated"]) for r in results)
@@ -18459,7 +18032,7 @@ class VirtualChassisManager:
             sites_generator=OrgSiteExporter.sites,
             flatten_fields_fn=DataProcessingUtils.flatten_nested_fields,
             escape_multiline_fn=DataProcessingUtils.escape_multiline,
-            save_data_fn=DataExporter.save_data_to_output,
+            save_data_fn=DataExporter.write_with_format_selection,
         )
 
 
@@ -19739,7 +19312,7 @@ class FirmwareUpgradeStatusChecker:
 
         filename = f"FirmwareUpgradeStatus_{timestamp}.csv"
         try:
-            DataExporter.save_data_to_output(self.upgrade_results, filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(self.upgrade_results, filename)  # type: ignore[no-untyped-call]
             print(f"\n[SUCCESS] Device firmware status exported to: data/{filename}")
             print(f"   [DATA] {len(self.upgrade_results)} device records exported")
             logging.info("Exported %s device status records", len(self.upgrade_results))
@@ -21300,9 +20873,8 @@ class BulkRadiusWLANConfigManager:
         print(f"    - fast_dot1x_timers:    {self.target_fast_dot1x}")
         print("")
 
-    def _safe_input(self, prompt: str, context: str = "bulk_radius_config") -> str:
-        """Universal input wrapper with EOF handling."""
-        return InputUtils.safe_input(prompt, context=context)
+    # _safe_input removed per issue #431 (ARCH-DELEGATE). Callers now use
+    # InputUtils.safe_input(prompt, context="bulk_radius_config") directly.
 
     def _get_org_id(self) -> bool:
         """Get organization ID from cache or prompt."""
@@ -21663,7 +21235,8 @@ class BulkRadiusWLANConfigManager:
         self._display_wlans()  # Show the selectable WLAN table
 
         print("  Enter selection (e.g., 'all', '1', '1,3,5', '1-5') or 'q' to cancel:")  # Explain the selection syntax
-        selection = self._safe_input("  > ", "wlan_selection")  # Read the user's WLAN selection
+        # Issue #431: inlined self._safe_input -> canonical InputUtils.safe_input.
+        selection = InputUtils.safe_input("  > ", context="wlan_selection")
 
         if not selection.strip():  # The user entered nothing
             print("\n[*] No selection made. Exiting.")  # Inform the user and exit
@@ -21688,7 +21261,8 @@ class BulkRadiusWLANConfigManager:
             "\n  WARNING: This will modify WLAN authentication settings."
         )  # Warn the user before the destructive step
         print("  Type 'APPLY' to proceed, or anything else to cancel.")  # Explain the required confirmation
-        confirm = self._safe_input("  > ", "apply_confirm")  # Read the confirmation keyword
+        # Issue #431: inlined self._safe_input -> canonical InputUtils.safe_input.
+        confirm = InputUtils.safe_input("  > ", context="apply_confirm")
 
         if confirm.strip() != "APPLY":  # The user did not type the exact confirmation word
             print("\n[*] Operation cancelled by user.")  # Acknowledge the cancellation
@@ -22194,7 +21768,7 @@ menu_actions = {
                 check_stop_fn=ConfigUtils.check_stop_signal,
                 safe_input_fn=InputUtils.safe_input,
                 all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-                save_data_fn=DataExporter.save_data_to_output,
+                save_data_fn=DataExporter.write_with_format_selection,
                 tqdm_fn=tqdm,
             )
         ),
@@ -22210,7 +21784,7 @@ menu_actions = {
                 mistapi=mistapi,
                 get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
                 all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-                save_data_fn=DataExporter.save_data_to_output,
+                save_data_fn=DataExporter.write_with_format_selection,
             )
         ),
         "Site Inventory Health Analysis - Find sites with APs missing switches/gateways, or with offline infrastructure",  # noqa: E501

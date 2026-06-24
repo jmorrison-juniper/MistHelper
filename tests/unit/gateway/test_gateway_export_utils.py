@@ -16,7 +16,7 @@ def _configure_dependencies() -> None:
         config_utils=SimpleNamespace(get_cached_or_prompted_org_id=MagicMock(return_value="org-1")),
         cache_utils=SimpleNamespace(check_and_generate_csv=MagicMock()),
         file_path_utils=SimpleNamespace(get_csv_path=MagicMock(return_value="test.csv")),
-        data_exporter=SimpleNamespace(save_data_to_output=MagicMock()),
+        data_exporter=SimpleNamespace(write_with_format_selection=MagicMock()),
         data_processing_utils=SimpleNamespace(
             flatten_nested_fields=MagicMock(side_effect=lambda rows: rows),
             escape_multiline=MagicMock(side_effect=lambda rows: rows),
