@@ -15956,14 +15956,14 @@ class DeviceConfigTemplateClonerManager:  # Device config template cloner.
 # ============================================================================
 # SSH RUNNER MANAGER CLASS
 # ============================================================================
-class SSHRunnerManager:
+class SSHRunnerManager:  # SSH runner delegators.
     """Delegation wrapper for extracted SSH runner manager implementation."""
 
     @staticmethod
-    def _build_deps() -> SSHRunnerManagerDeps:
+    def _build_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle.
         """Build dependency container for extracted SSH runner logic."""
-        cli_args = globals().get("args") if "args" in globals() else None
-        return SSHRunnerManagerDeps(
+        cli_args = globals().get("args") if "args" in globals() else None  # Read parsed CLI args.
+        return SSHRunnerManagerDeps(  # Assemble the deps.
             args=cli_args,
             progress_emitter=PROGRESS_EMITTER,
             enhanced_ssh_runner=EnhancedSSHRunner,
@@ -15974,20 +15974,20 @@ class SSHRunnerManager:
         )
 
     @staticmethod
-    def interactive():
+    def interactive():  # Run interactive SSH.
         """Delegated interactive SSH runner entrypoint."""
-        return ExtractedSSHRunnerManager.interactive(SSHRunnerManager._build_deps())
+        return ExtractedSSHRunnerManager.interactive(SSHRunnerManager._build_deps())  # Delegate to the impl.
 
     @staticmethod
-    def _load_gateway_data():
+    def _load_gateway_data():  # Load gateway data.
         """Delegated helper to load gateway management data."""
-        return ExtractedSSHRunnerManager._load_gateway_data(SSHRunnerManager._build_deps())
+        return ExtractedSSHRunnerManager._load_gateway_data(SSHRunnerManager._build_deps())  # Delegate to the impl.
 
 
 # ============================================================================
 # CLI SHELL MANAGER CLASS
 # ============================================================================
-class CLIShellManager:
+class CLIShellManager:  # CLI shell over WebSocket.
     """
     Manages interactive CLI shell sessions for network devices.
 
@@ -16007,15 +16007,15 @@ class CLIShellManager:
             debug: Enable debug mode for WebSocket tracing
         """
         site_id, device_id = PromptClientUtils.select_site_and_device_ids(site_id, device_id)  # type: ignore[no-untyped-call]
-        if not site_id or not device_id:
-            return
+        if not site_id or not device_id:  # Need both ids.
+            return  # Abort.
 
-        shell_url = CLIShellManager._create_session(site_id, device_id)
-        if shell_url:
-            CLIShellManager._run_interactive(shell_url, debug=debug)
+        shell_url = CLIShellManager._create_session(site_id, device_id)  # Create the session.
+        if shell_url:  # Have a URL.
+            CLIShellManager._run_interactive(shell_url, debug=debug)  # Run the shell.
 
     @staticmethod
-    def _create_session(site_id: str, device_id: str) -> str | None:
+    def _create_session(site_id: str, device_id: str) -> str | None:  # Create a shell session.
         """
         Creates a shell session and returns the WebSocket URL.
 
@@ -16028,11 +16028,11 @@ class CLIShellManager:
         """
         try:
             response = mistapi.api.v1.sites.devices.createSiteDeviceShellSession(apisession, site_id, device_id)
-            shell_data = response.data
+            shell_data = response.data  # Read the URL data.
             return shell_data.get("url")  # type: ignore[no-any-return]
-        except Exception as exception:
-            print(f"! Failed to create shell session: {exception}")
-            return None
+        except Exception as exception:  # Creation failed.
+            print(f"! Failed to create shell session: {exception}")  # Tell the user.
+            return None  # Return None.
 
     @staticmethod
     def _run_interactive(shell_url: str, debug: bool = False) -> None:  # noqa: C901, PLR0915
@@ -16043,28 +16043,28 @@ class CLIShellManager:
             shell_url: The WebSocket URL for the shell session
             debug: Enable debug mode for WebSocket tracing
         """
-        if not _has_pyte or pyte is None:
-            print("! Terminal emulation requires pyte. Install: pip install pyte")
-            return
+        if not _has_pyte or pyte is None:  # pyte missing.
+            print("! Terminal emulation requires pyte. Install: pip install pyte")  # Tell the user to install.
+            return  # Abort.
 
-        if debug:
-            websocket.enableTrace(True)
+        if debug:  # Debug mode.
+            websocket.enableTrace(True)  # Trace the WebSocket.
 
-        print(" Connecting to WebSocket shell...")
-        ws = websocket.create_connection(shell_url)
-        print(" Connected.")
+        print(" Connecting to WebSocket shell...")  # Tell the user.
+        ws = websocket.create_connection(shell_url)  # Open the WebSocket.
+        print(" Connected.")  # Tell the user.
 
-        screen = pyte.Screen(80, 40)
-        stream = pyte.Stream(screen)
+        screen = pyte.Screen(80, 40)  # Virtual screen.
+        stream = pyte.Stream(screen)  # Terminal stream.
 
-        def resize_terminal():
-            cols, rows = shutil.get_terminal_size()
-            resize_msg = json.dumps({"resize": {"width": cols, "height": rows}})
+        def resize_terminal():  # Resize the terminal.
+            cols, rows = shutil.get_terminal_size()  # Read terminal size.
+            resize_msg = json.dumps({"resize": {"width": cols, "height": rows}})  # Build the resize msg.
             if debug:  # Verbose troubleshooting output is enabled
                 print(f"[DEBUG] Sending resize: {resize_msg}")  # Show the terminal-resize control message being sent
             ws.send(resize_msg)  # Tell the remote PTY about the new terminal dimensions
 
-        def receive_websocket_data():
+        def receive_websocket_data():  # Receive WebSocket data.
             while ws.connected:  # Keep reading while the WebSocket stays open
                 try:
                     data = ws.recv()  # Block for the next chunk of terminal output
@@ -16085,9 +16085,9 @@ class CLIShellManager:
                     print(f"\n## Connection lost: {exception} ##")  # Notify the user the session dropped
                     return  # Exit the receive loop
 
-        def send_keyboard_input(key):
-            if ws.connected:
-                keymap = {
+        def send_keyboard_input(key):  # Send keyboard input.
+            if ws.connected:  # Socket connected.
+                keymap = {  # Key remap table.
                     "enter": "\n",
                     "space": " ",
                     "tab": "\t",
@@ -16097,31 +16097,31 @@ class CLIShellManager:
                     "right": "\x00\x1b[C",
                     "backspace": "\x08",
                 }
-                if key == "~":
-                    print("\n## Exit from shell ##")
-                    if ws.sock is not None:
-                        ws.sock.shutdown(2)
-                        ws.sock.close()
+                if key == "~":  # Exit key.
+                    print("\n## Exit from shell ##")  # Tell the user.
+                    if ws.sock is not None:  # Socket present.
+                        ws.sock.shutdown(2)  # Shut down the socket.
+                        ws.sock.close()  # Close the socket.
                     return  # Issue #431: removed obsolete stop_listening() call (was a no-op stub)
-                mapped_key = keymap.get(key, key)
-                data = f"\00{mapped_key}"
-                data_byte = bytearray(map(ord, data))
-                if debug:
-                    print(f"[DEBUG] Sending: {repr(data)}")
+                mapped_key = keymap.get(key, key)  # Map the key.
+                data = f"\00{mapped_key}"  # Frame the data.
+                data_byte = bytearray(map(ord, data))  # Encode to bytes.
+                if debug:  # Debug mode.
+                    print(f"[DEBUG] Sending: {repr(data)}")  # Trace the send.
                 try:
-                    ws.send_binary(data_byte)
-                except Exception as exception:
-                    print(f"\n## Send failed: {exception} ##")
-                    return
+                    ws.send_binary(data_byte)  # Send the bytes.
+                except Exception as exception:  # Send failed.
+                    print(f"\n## Send failed: {exception} ##")  # Tell the user.
+                    return  # Return.
 
         resize_terminal()  # type: ignore[no-untyped-call]
-        threading.Thread(target=receive_websocket_data).start()
+        threading.Thread(target=receive_websocket_data).start()  # Start the receiver thread.
 
         # Wake up Juniper SSR prompt
-        time.sleep(1)
-        ws.send_binary(bytearray(map(ord, "\00\n\n")))
-        if debug:
-            print("[DEBUG] Sent wakeup sequence to Juniper SSRs")
+        time.sleep(1)  # Wait for connect.
+        ws.send_binary(bytearray(map(ord, "\00\n\n")))  # Send a wakeup.
+        if debug:  # Debug mode.
+            print("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # Trace the wakeup.
 
         listen_keyboard(on_release=send_keyboard_input, delay_second_char=0, delay_other_chars=0, lower=False)  # type: ignore[no-untyped-call]
 
@@ -16129,7 +16129,7 @@ class CLIShellManager:
 # ============================================================================
 # ARP COMMAND MANAGER CLASS
 # ============================================================================
-class ARPCommandManager:
+class ARPCommandManager:  # ARP WebSocket command manager.
     """
     Manages ARP command execution via WebSocket for network devices.
 
@@ -16138,7 +16138,7 @@ class ARPCommandManager:
     """
 
     @staticmethod
-    def execute(site_id=None, device_id=None):
+    def execute(site_id=None, device_id=None):  # Run the ARP command.
         """
         Execute ARP command on a device and receive output via WebSocket.
 
@@ -16146,208 +16146,208 @@ class ARPCommandManager:
             site_id: Optional site ID (prompts if not provided)
             device_id: Optional device ID (prompts if not provided)
         """
-        if not site_id or not device_id:
+        if not site_id or not device_id:  # Prompt for ids.
             site_id, device_id = PromptClientUtils.select_site_and_device_ids(site_id, device_id)  # type: ignore[no-untyped-call]
-        if not site_id or not device_id:
-            return
+        if not site_id or not device_id:  # Need both ids.
+            return  # Abort.
 
-        mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")
-        mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
+        mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")  # Resolve the host.
+        mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")  # Resolve the token.
 
-        if not mist_host or not mist_apitoken:
-            print(" Mist host or API token not found in session or environment.")
-            return
+        if not mist_host or not mist_apitoken:  # Missing credentials.
+            print(" Mist host or API token not found in session or environment.")  # Tell the user.
+            return  # Abort.
 
-        print(" Subscribing to WebSocket stream...")
+        print(" Subscribing to WebSocket stream...")  # Tell the user.
         session_id = ARPCommandManager._trigger_command(mist_host, mist_apitoken, site_id, device_id)  # type: ignore[no-untyped-call]
-        if session_id:
+        if session_id:  # Have a session.
             ARPCommandManager._listen_for_output(  # type: ignore[no-untyped-call]
                 mist_host.replace("api.", "api-ws."), mist_apitoken, site_id, device_id, session_id
             )
 
     @staticmethod
-    def _trigger_command(mist_host, mist_apitoken, site_id, device_id):
+    def _trigger_command(mist_host, mist_apitoken, site_id, device_id):  # Trigger the ARP command.
         """Trigger ARP command on device via REST API."""
-        url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/arp"
-        headers = {"Authorization": f"Token {mist_apitoken}"}
-        response = requests.post(url, headers=headers, json={}, timeout=30)
+        url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/arp"  # Build the URL.
+        headers = {"Authorization": f"Token {mist_apitoken}"}  # Auth header.
+        response = requests.post(url, headers=headers, json={}, timeout=30)  # POST the command.
 
-        if response.status_code == 200:
-            session_id = response.json().get("session")
-            print(f"! ARP command triggered. Session ID: {session_id}")
-            return session_id
+        if response.status_code == 200:  # Success.
+            session_id = response.json().get("session")  # Read the session id.
+            print(f"! ARP command triggered. Session ID: {session_id}")  # Tell the user.
+            return session_id  # Return the session.
         else:
-            print(f"! Failed to trigger ARP command: {response.status_code}")
-            print(response.text)
-            return None
+            print(f"! Failed to trigger ARP command: {response.status_code}")  # Tell the user fail.
+            print(response.text)  # Show the body.
+            return None  # Return None.
 
     @staticmethod
     def _listen_for_output(  # noqa: PLR0913
         mist_host, mist_apitoken, site_id, device_id, session_id, timeout=30, idle_timeout=3, debug=False
     ):
         """Listen for WebSocket command output from a device."""
-        if debug:
-            websocket.enableTrace(True)
+        if debug:  # Debug mode.
+            websocket.enableTrace(True)  # Trace the WebSocket.
 
-        ws_url = f"wss://{mist_host}/api-ws/v1/stream"
-        headers = [f"Authorization: Token {mist_apitoken}"]
-        subscribe_msg = {"subscribe": f"/sites/{site_id}/devices/{device_id}/cmd"}
+        ws_url = f"wss://{mist_host}/api-ws/v1/stream"  # Stream URL.
+        headers = [f"Authorization: Token {mist_apitoken}"]  # Auth header.
+        subscribe_msg = {"subscribe": f"/sites/{site_id}/devices/{device_id}/cmd"}  # Subscribe message.
 
-        output_lines: list[str] = []
-        buffer = ""
-        last_message_time = time.time()
+        output_lines: list[str] = []  # Collect output lines.
+        buffer = ""  # Reassembly buffer.
+        last_message_time = time.time()  # Last-message time.
 
-        def on_message(ws, message):
-            nonlocal last_message_time, buffer, output_lines
+        def on_message(ws, message):  # Handle a message.
+            nonlocal last_message_time, buffer, output_lines  # Share outer state.
             last_message_time, buffer = ARPCommandManager._handle_message(  # type: ignore[no-untyped-call]
                 message, session_id, buffer, output_lines, debug
             )
 
-        def on_close(ws, *args):
+        def on_close(ws, *args):  # Handle close.
             ARPCommandManager._handle_close(output_lines, debug)  # type: ignore[no-untyped-call]
 
-        def on_error(ws, error):
-            logging.error("! WebSocket error: %s", error)
+        def on_error(ws, error):  # Handle error.
+            logging.error("! WebSocket error: %s", error)  # Log the error.
 
-        def on_open(ws):
-            logging.info(" WebSocket opened. Subscribing...")
-            ws.send(json.dumps(subscribe_msg))
+        def on_open(ws):  # Handle open.
+            logging.info(" WebSocket opened. Subscribing...")  # Log the open.
+            ws.send(json.dumps(subscribe_msg))  # Send the subscribe.
 
-        ws = websocket.WebSocketApp(
+        ws = websocket.WebSocketApp(  # Build the WebSocket app.
             ws_url, header=headers, on_message=on_message, on_error=on_error, on_close=on_close, on_open=on_open
         )
 
-        def run_ws():
-            ws.run_forever()
+        def run_ws():  # Run the WebSocket.
+            ws.run_forever()  # Block on the socket.
 
-        ws_thread = threading.Thread(target=run_ws)
-        ws_thread.start()
+        ws_thread = threading.Thread(target=run_ws)  # Run it in a thread.
+        ws_thread.start()  # Start the thread.
 
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            time.sleep(1)
-            if time.time() - last_message_time > idle_timeout and output_lines:
-                logging.info(" Idle timeout reached. Closing WebSocket.")
-                ws.close()
-                break
+        start_time = time.time()  # Start the timer.
+        while time.time() - start_time < timeout:  # Poll until timeout.
+            time.sleep(1)  # Pace the poll.
+            if time.time() - last_message_time > idle_timeout and output_lines:  # Idle with output.
+                logging.info(" Idle timeout reached. Closing WebSocket.")  # Log the idle close.
+                ws.close()  # Close the socket.
+                break  # Stop polling.
 
-        if ws.keep_running:
-            logging.warning(" Timeout waiting for ARP output.")
-            ws.close()
+        if ws.keep_running:  # Still running.
+            logging.warning(" Timeout waiting for ARP output.")  # Warn the timeout.
+            ws.close()  # Close the socket.
 
     @staticmethod
-    def _handle_message(message, session_id, buffer, output_lines, debug=False):
+    def _handle_message(message, session_id, buffer, output_lines, debug=False):  # Parse one ARP message.
         """Handle incoming WebSocket message."""
-        last_message_time = time.time()
+        last_message_time = time.time()  # Record the time.
         try:
-            if debug:
-                logging.debug("WebSocket raw message received: %s", message)
+            if debug:  # Debug mode.
+                logging.debug("WebSocket raw message received: %s", message)  # Trace the raw message.
 
-            msg = json.loads(message)
-            data_str = msg.get("data", "{}")
-            data_obj = json.loads(data_str) if isinstance(data_str, str) else data_str
-            inner_data = data_obj.get("data", {})
-            if isinstance(inner_data, str):
-                inner_data = json.loads(inner_data)
+            msg = json.loads(message)  # Parse the JSON.
+            data_str = msg.get("data", "{}")  # Read the data string.
+            data_obj = json.loads(data_str) if isinstance(data_str, str) else data_str  # Parse nested JSON.
+            inner_data = data_obj.get("data", {})  # Read the inner data.
+            if isinstance(inner_data, str):  # String payload.
+                inner_data = json.loads(inner_data)  # Parse it.
 
-            if inner_data.get("session") == session_id:
-                raw_output = inner_data.get("raw", "")
-                buffer += raw_output
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    output_lines.append(line)
-                if debug:
-                    logging.debug("Processed WebSocket data: %s chars", len(raw_output))
+            if inner_data.get("session") == session_id:  # Session matches.
+                raw_output = inner_data.get("raw", "")  # Read the raw output.
+                buffer += raw_output  # Append to buffer.
+                while "\n" in buffer:  # Split on newlines.
+                    line, buffer = buffer.split("\n", 1)  # Pop one line.
+                    output_lines.append(line)  # Collect it.
+                if debug:  # Debug mode.
+                    logging.debug("Processed WebSocket data: %s chars", len(raw_output))  # Trace the size.
 
-        except json.JSONDecodeError as e:
-            logging.error("WebSocket message JSON decode error: %s", e)
-        except KeyError as e:
-            logging.warning("WebSocket message missing expected key: %s", e)
-        except Exception as e:
-            logging.error("Unexpected error parsing WebSocket message: %s", e)
+        except json.JSONDecodeError as e:  # JSON decode failed.
+            logging.error("WebSocket message JSON decode error: %s", e)  # Log the error.
+        except KeyError as e:  # Missing key.
+            logging.warning("WebSocket message missing expected key: %s", e)  # Warn the gap.
+        except Exception as e:  # Unexpected failure.
+            logging.error("Unexpected error parsing WebSocket message: %s", e)  # Log the error.
 
-        return last_message_time, buffer
+        return last_message_time, buffer  # Return time and buffer.
 
     @staticmethod
-    def _handle_close(output_lines, debug=False):
+    def _handle_close(output_lines, debug=False):  # Handle the close.
         """Handle WebSocket close and process output."""
-        logging.info(" WebSocket closed.")
-        if output_lines:
-            compiled_output = "\n".join(output_lines)
+        logging.info(" WebSocket closed.")  # Log the close.
+        if output_lines:  # Have output.
+            compiled_output = "\n".join(output_lines)  # Join the lines.
             ARPCommandManager._save_output(compiled_output)  # type: ignore[no-untyped-call]
             ARPCommandManager._export_to_csv("arp_output_raw.txt")  # type: ignore[no-untyped-call]
 
-            print("\n  ARP Output Received:\n")
-            rows = compiled_output.split("\n")
-            parsed_rows = [row.split("\t") for row in rows if row.strip()]
-            max_cols = max(len(row) for row in parsed_rows) if parsed_rows else 0
-            for row in parsed_rows:
-                while len(row) < max_cols:
-                    row.append("")
+            print("\n  ARP Output Received:\n")  # Tell the user.
+            rows = compiled_output.split("\n")  # Split into rows.
+            parsed_rows = [row.split("\t") for row in rows if row.strip()]  # Split each row.
+            max_cols = max(len(row) for row in parsed_rows) if parsed_rows else 0  # Max column count.
+            for row in parsed_rows:  # Pad each row.
+                while len(row) < max_cols:  # Pad short rows.
+                    row.append("")  # Append a cell.
 
-            if parsed_rows:
-                table = PrettyTable()
-                table.field_names = [f"Col {col_num + 1}" for col_num in range(max_cols)]
-                for row in parsed_rows:
-                    table.add_row(row)
+            if parsed_rows:  # Have rows.
+                table = PrettyTable()  # Build the table.
+                table.field_names = [f"Col {col_num + 1}" for col_num in range(max_cols)]  # Number the columns.
+                for row in parsed_rows:  # Add each row.
+                    table.add_row(row)  # Add the row.
 
-                if debug:
-                    print(table)
-                    logging.debug("\n%s", table.get_string())
+                if debug:  # Debug mode.
+                    print(table)  # Print the table.
+                    logging.debug("\n%s", table.get_string())  # Log the table.
                 else:
-                    print(f"! ARP output received with {len(parsed_rows)} rows.")
+                    print(f"! ARP output received with {len(parsed_rows)} rows.")  # Tell the user.
         else:
-            print(" No ARP output received for this session.")
-            logging.warning(" No ARP output received for this session.")
+            print(" No ARP output received for this session.")  # Tell the user none.
+            logging.warning(" No ARP output received for this session.")  # Warn none.
 
     @staticmethod
-    def _save_output(compiled_output, filename="arp_output_raw.txt"):
+    def _save_output(compiled_output, filename="arp_output_raw.txt"):  # Save raw output.
         """Save compiled output to file."""
         try:
-            file_path = FilePathUtils.get_csv_path(filename)
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(compiled_output)
-            logging.info("! ARP output saved to %s", file_path)
-        except Exception as e:
-            logging.error("! Failed to save ARP output to file: %s", e)
+            file_path = FilePathUtils.get_csv_path(filename)  # Build the path.
+            with open(file_path, "w", encoding="utf-8") as f:  # Open the file.
+                f.write(compiled_output)  # Write the output.
+            logging.info("! ARP output saved to %s", file_path)  # Log the save.
+        except Exception as e:  # Save failed.
+            logging.error("! Failed to save ARP output to file: %s", e)  # Log the error.
 
     @staticmethod
     def _export_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
         """Export ARP output to CSV files."""
         try:
-            txt_file_path = FilePathUtils.get_csv_path(txt_filename)
-            csv1_path = FilePathUtils.get_csv_path(csv1)
-            csv2_path = FilePathUtils.get_csv_path(csv2)
+            txt_file_path = FilePathUtils.get_csv_path(txt_filename)  # Source path.
+            csv1_path = FilePathUtils.get_csv_path(csv1)  # First CSV path.
+            csv2_path = FilePathUtils.get_csv_path(csv2)  # Second CSV path.
 
-            with open(txt_file_path, encoding="utf-8") as f:
-                raw_text = f.read()
+            with open(txt_file_path, encoding="utf-8") as f:  # Open the source.
+                raw_text = f.read()  # Read the text.
 
-            lines = raw_text.splitlines()
-            dataset1: list[list[str]] = []
-            dataset2: list[list[str]] = []
-            current_dataset = dataset1
+            lines = raw_text.splitlines()  # Split into lines.
+            dataset1: list[list[str]] = []  # First dataset.
+            dataset2: list[list[str]] = []  # Second dataset.
+            current_dataset = dataset1  # Start with the first.
 
-            for line in lines:
-                if "Total" in line:
-                    current_dataset = dataset2
+            for line in lines:  # Walk lines.
+                if "Total" in line:  # Total marker.
+                    current_dataset = dataset2  # Switch datasets.
                 else:
-                    columns = [col.strip() for col in line.split("\t") if col.strip()]
-                    if columns:
-                        current_dataset.append(columns)
+                    columns = [col.strip() for col in line.split("\t") if col.strip()]  # Split the columns.
+                    if columns:  # Have columns.
+                        current_dataset.append(columns)  # Collect the row.
 
-            with open(csv1_path, "w", newline="", encoding="utf-8") as f1:
-                writer = csv.writer(f1)
-                writer.writerows(dataset1)
+            with open(csv1_path, "w", newline="", encoding="utf-8") as f1:  # Open the first CSV.
+                writer = csv.writer(f1)  # CSV writer.
+                writer.writerows(dataset1)  # Write the rows.
 
-            with open(csv2_path, "w", newline="", encoding="utf-8") as f2:
-                writer = csv.writer(f2)
-                writer.writerows(dataset2)
+            with open(csv2_path, "w", newline="", encoding="utf-8") as f2:  # Open the second CSV.
+                writer = csv.writer(f2)  # CSV writer.
+                writer.writerows(dataset2)  # Write the rows.
 
-            print(f"! Saved {len(dataset1)} rows to {csv1_path}")
-            print(f"! Saved {len(dataset2)} rows to {csv2_path}")
+            print(f"! Saved {len(dataset1)} rows to {csv1_path}")  # Tell the user.
+            print(f"! Saved {len(dataset2)} rows to {csv2_path}")  # Tell the user.
 
-        except Exception as e:
-            print(f"! Failed to export ARP output to CSV: {e}")
+        except Exception as e:  # Export failed.
+            print(f"! Failed to export ARP output to CSV: {e}")  # Tell the user.
 
 
 # NOTE: listen_for_command_output removed - use ARPCommandManager._listen_for_output directly
@@ -16365,38 +16365,38 @@ from src.utils.address_utils import (
 from src.utils.rate_limiting import RateLimitingUtils  # noqa: E402
 
 
-class AddressComparisonCounters:
+class AddressComparisonCounters:  # Address comparison counters.
     """Track metrics for address comparison. Delegated to src.inventory.csv_comparator."""
 
-    def __init__(self):
+    def __init__(self):  # Build the counters.
         """Initialize all counter attributes and timing."""
         from src.inventory.csv_comparator import (
             AddressComparisonCounters as _Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        self._impl = _Impl()
+        self._impl = _Impl()  # Create the impl.
         # Expose attrs for direct access compatibility
-        self.total_devices = self._impl.total_devices
-        self.devices_enriched = self._impl.devices_enriched
-        self.devices_skipped = self._impl.devices_skipped
-        self.perfect_matches = self._impl.perfect_matches
-        self.mismatches_found = self._impl.mismatches_found
-        self.auto_corrections = self._impl.auto_corrections
-        self.comparison_failures = self._impl.comparison_failures
-        self.parse_failures = self._impl.parse_failures
-        self.parse_failure_reasons = self._impl.parse_failure_reasons
-        self.start_time = self._impl.start_time
-        self.end_time = self._impl.end_time
+        self.total_devices = self._impl.total_devices  # Mirror total devices.
+        self.devices_enriched = self._impl.devices_enriched  # Mirror enriched.
+        self.devices_skipped = self._impl.devices_skipped  # Mirror skipped.
+        self.perfect_matches = self._impl.perfect_matches  # Mirror perfect matches.
+        self.mismatches_found = self._impl.mismatches_found  # Mirror mismatches.
+        self.auto_corrections = self._impl.auto_corrections  # Mirror auto-corrections.
+        self.comparison_failures = self._impl.comparison_failures  # Mirror comparison failures.
+        self.parse_failures = self._impl.parse_failures  # Mirror parse failures.
+        self.parse_failure_reasons = self._impl.parse_failure_reasons  # Mirror failure reasons.
+        self.start_time = self._impl.start_time  # Mirror start time.
+        self.end_time = self._impl.end_time  # Mirror end time.
 
-    def start_timing(self):
+    def start_timing(self):  # Start timing.
         """Start the timing counter for performance tracking."""
-        self._impl.start_timing()
+        self._impl.start_timing()  # Delegate to the impl.
 
-    def end_timing(self):
+    def end_timing(self):  # End timing.
         """End the timing counter for performance tracking."""
-        self._impl.end_timing()
+        self._impl.end_timing()  # Delegate to the impl.
 
-    def get_duration(self):
+    def get_duration(self):  # Get the duration.
         """Get the elapsed time in seconds between start and end timing."""
         return self._impl.get_duration()
 
