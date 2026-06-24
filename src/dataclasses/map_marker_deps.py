@@ -9,6 +9,7 @@ Splitting the marker call signature into position + style keeps the
 from __future__ import annotations  # PEP 604 unions on Python 3.10+ codebases.
 
 from dataclasses import dataclass  # Standard library dataclass factory.
+from typing import Any  # Wildcard inner type for the loosely-typed type_cfg payload.
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,4 +26,4 @@ class DeviceMarkerStyle:
 
     angle: float  # Device orientation in Mist degrees (0 = up, clockwise positive).
     device_color: str  # Status-driven color used for the crosshair arms.
-    type_cfg: dict  # Per-type config (legend name, default size, etc).
+    type_cfg: dict[str, Any]  # Per-type config (legend name, default size, etc).

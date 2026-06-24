@@ -9,16 +9,17 @@ agents.md 5-parameter-per-function limit.
 from __future__ import annotations  # PEP 604 unions on Python 3.10+ codebases.
 
 from dataclasses import dataclass  # Standard library dataclass factory.
+from typing import Any  # Wildcard inner type for the loosely-typed Mist API payloads.
 
 
 @dataclass(frozen=True, slots=True)
 class MapCloneSummary:
     """Identity + payload of a freshly cloned map for summary printing."""
 
-    source_map: dict  # The original map dict as returned by the Mist API.
+    source_map: dict[str, Any]  # The original map dict as returned by the Mist API.
     new_name: str  # The name the user chose for the clone.
     cloned_map_id: str  # The UUID Mist assigned to the newly created clone.
-    clone_payload: dict  # The body that was actually POSTed (walls, ppm, etc).
+    clone_payload: dict[str, Any]  # The body that was actually POSTed (walls, ppm, etc).
     had_image: bool  # True when an image file was uploaded as part of the clone.
 
 

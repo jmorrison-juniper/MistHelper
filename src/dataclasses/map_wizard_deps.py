@@ -9,15 +9,16 @@ backup_file into purpose-specific dataclasses.
 from __future__ import annotations  # PEP 604 unions on Python 3.10+ codebases.
 
 from dataclasses import dataclass  # Standard library dataclass factory.
+from typing import Any  # Wildcard inner type for the loosely-typed Mist asset dicts.
 
 
 @dataclass(frozen=True, slots=True)
 class MapWizardPreviewContext:
     """Inputs the preview step needs to render the upcoming changes."""
 
-    current_map: dict  # Existing map record so original PPM/dimensions show in the preview.
+    current_map: dict[str, Any]  # Existing map record so original PPM/dimensions show in the preview.
     map_name: str  # Human-readable map name printed at the top of the preview.
-    assets: dict  # Asset bundle (devices, zones, beacons) used to show a coord-translation sample.
+    assets: dict[str, Any]  # Asset bundle (devices, zones, beacons) used to show a coord-translation sample.
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,9 +34,9 @@ class MapWizardApplyTarget:
 class MapWizardApplyContext:
     """Mutable state the apply step uses to scale assets and record failures."""
 
-    current_map: dict  # Pre-replacement record (drives wall/wayfinding path scaling).
-    assets: dict  # Asset bundle, scaled in-place when in "proportional" mode.
-    errors: list  # Out-parameter list the helper appends failure descriptions to.
+    current_map: dict[str, Any]  # Pre-replacement record (drives wall/wayfinding path scaling).
+    assets: dict[str, Any]  # Asset bundle, scaled in-place when in "proportional" mode.
+    errors: list[str]  # Out-parameter list the helper appends failure descriptions to.
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,4 +45,4 @@ class MapWizardSummaryContext:
 
     map_name: str  # Human-readable map name printed in the summary header.
     backup_file: str  # Path to the JSON backup written before any changes were applied.
-    errors: list  # Accumulated apply-step failures; empty means a clean run.
+    errors: list[str]  # Accumulated apply-step failures; empty means a clean run.
