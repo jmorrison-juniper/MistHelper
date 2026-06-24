@@ -17651,7 +17651,7 @@ class SiteConfigManager:  # Site config manager.
         """Configure extracted module dependencies and return the module handle."""
         from src.site import site_config_manager as site_config_module  # noqa: PLC0415,I001
 
-        site_config_module.configure_site_config_manager_dependencies(
+        site_config_module.configure_site_config_manager_dependencies(  # Wire dependencies.
             apisession_dependency=apisession,
             config_utils=ConfigUtils,
             file_path_utils=FilePathUtils,
@@ -17660,37 +17660,37 @@ class SiteConfigManager:  # Site config manager.
             mistapi_dependency=mistapi,
             default_api_page_limit=DEFAULT_API_PAGE_LIMIT,
         )
-        return site_config_module
+        return site_config_module  # Return the module.
 
     @staticmethod
-    def create_test_sites_from_csv():
+    def create_test_sites_from_csv():  # Create test sites from CSV.
         """Menu #171 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()
-        return module.SiteConfigManager.create_test_sites_from_csv()
+        module = SiteConfigManager._configure_module()  # Configure the module.
+        return module.SiteConfigManager.create_test_sites_from_csv()  # Delegate the call.
 
     @staticmethod
-    def create_country_rf_templates_and_assign():
+    def create_country_rf_templates_and_assign():  # Create country RF templates.
         """Menu #172 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()
-        return module.SiteConfigManager.create_country_rf_templates_and_assign()
+        module = SiteConfigManager._configure_module()  # Configure the module.
+        return module.SiteConfigManager.create_country_rf_templates_and_assign()  # Delegate the call.
 
     @staticmethod
-    def create_ap_model_device_profiles():
+    def create_ap_model_device_profiles():  # Create AP device profiles.
         """Menu #173 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()
-        return module.SiteConfigManager.create_ap_model_device_profiles()
+        module = SiteConfigManager._configure_module()  # Configure the module.
+        return module.SiteConfigManager.create_ap_model_device_profiles()  # Delegate the call.
 
     @staticmethod
-    def assign_aps_to_matching_device_profiles():
+    def assign_aps_to_matching_device_profiles():  # Assign APs to profiles.
         """Menu #174 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()
-        return module.SiteConfigManager.assign_aps_to_matching_device_profiles()
+        module = SiteConfigManager._configure_module()  # Configure the module.
+        return module.SiteConfigManager.assign_aps_to_matching_device_profiles()  # Delegate the call.
 
 
 # ============================================================================
 # DEVICE REBOOT MANAGER CLASS
 # ============================================================================
-class DeviceRebootManager:
+class DeviceRebootManager:  # Device reboot manager.
     """
     Manages device reboot operations with comprehensive safety checks and audit logging.
 
@@ -17703,67 +17703,67 @@ class DeviceRebootManager:
     """
 
     @staticmethod
-    def by_gateway_template_list():
+    def by_gateway_template_list():  # Reboot by template list.
         """
         Reboots all devices associated with gateway templates in GatewayTemplateRebootList.CSV.
         Logs results to GatewayTemplateRebootResults.CSV.
         """
-        logging.info("[Menu 91] Starting DeviceRebootManager.by_gateway_template_list")
+        logging.info("[Menu 91] Starting DeviceRebootManager.by_gateway_template_list")  # Log start.
 
         # Step 1: Validate reboot list file exists
-        reboot_targets = DeviceRebootManager._load_and_validate_reboot_targets()
-        if not reboot_targets:
-            return
+        reboot_targets = DeviceRebootManager._load_and_validate_reboot_targets()  # Load reboot targets.
+        if not reboot_targets:  # No targets.
+            return  # Abort.
 
         # Step 2: Display confirmation and get user consent
-        if not DeviceRebootManager._confirm_reboot_operation(reboot_targets):
-            return
+        if not DeviceRebootManager._confirm_reboot_operation(reboot_targets):  # Confirm the reboot.
+            return  # Abort.
 
         # Step 3: Execute reboots and collect results
-        results = DeviceRebootManager._execute_reboots(reboot_targets)
+        results = DeviceRebootManager._execute_reboots(reboot_targets)  # Execute the reboots.
 
         # Step 4: Export results to CSV
-        DeviceRebootManager._export_reboot_results(results)
+        DeviceRebootManager._export_reboot_results(results)  # Export the results.
 
     @staticmethod
     def _load_and_validate_reboot_targets() -> list[dict] | None:  # type: ignore[type-arg]
         """Load reboot list and return validated device targets."""
         # Check for reboot list file
-        reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")
-        if not os.path.exists(reboot_list_path):
-            DeviceRebootManager._handle_missing_reboot_file(reboot_list_path)
-            return None
+        reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")  # Reboot list path.
+        if not os.path.exists(reboot_list_path):  # File missing.
+            DeviceRebootManager._handle_missing_reboot_file(reboot_list_path)  # Handle the missing file.
+            return None  # Abort.
 
         # Ensure required CSVs are fresh
-        DeviceRebootManager._ensure_fresh_csv_cache()
+        DeviceRebootManager._ensure_fresh_csv_cache()  # Refresh the CSV cache.
 
         # Load template mappings
-        template_name_to_id = DeviceRebootManager._load_template_mappings()
-        if not template_name_to_id:
-            return None
+        template_name_to_id = DeviceRebootManager._load_template_mappings()  # Load template mappings.
+        if not template_name_to_id:  # No mappings.
+            return None  # Abort.
 
         # Load reboot template names
-        reboot_template_names = DeviceRebootManager._load_reboot_template_names()
-        if not reboot_template_names:
-            return None
+        reboot_template_names = DeviceRebootManager._load_reboot_template_names()  # Load reboot template names.
+        if not reboot_template_names:  # No names.
+            return None  # Abort.
 
         # Map names to IDs
         reboot_template_ids = DeviceRebootManager._map_template_names_to_ids(reboot_template_names, template_name_to_id)
-        if not reboot_template_ids:
-            return None
+        if not reboot_template_ids:  # No ids.
+            return None  # Abort.
 
         # Find target devices
         return DeviceRebootManager._find_reboot_target_devices(reboot_template_ids, template_name_to_id)
 
     @staticmethod
-    def _handle_missing_reboot_file(reboot_list_path: str) -> None:
+    def _handle_missing_reboot_file(reboot_list_path: str) -> None:  # Handle the missing file.
         """Handle missing reboot list file - offer to create template."""
-        logging.error(" GatewayTemplateRebootList.CSV not found.")
-        print(" GatewayTemplateRebootList.CSV not found.")
-        print(f"   Please create this file at: {reboot_list_path}")
-        print("   This file should contain template names to reboot, one per line.")
+        logging.error(" GatewayTemplateRebootList.CSV not found.")  # Log the missing file.
+        print(" GatewayTemplateRebootList.CSV not found.")  # Tell the user.
+        print(f"   Please create this file at: {reboot_list_path}")  # Show the path.
+        print("   This file should contain template names to reboot, one per line.")  # Explain the format.
 
-        user_input = (
+        user_input = (  # Prompt to create it.
             InputUtils.safe_input(
                 "   Would you like to create an empty file? (y/n): ",
                 context="gateway_reboot_create_template_file",
@@ -17771,118 +17771,118 @@ class DeviceRebootManager:
             .strip()
             .lower()
         )
-        if user_input in ["y", "yes"]:
+        if user_input in ["y", "yes"]:  # User said yes.
             try:
                 template_path = FilePathUtils.create_csv_template("GatewayTemplateRebootList.CSV")
-                print(f"! Empty file created at: {template_path}")
-                print("   Edit the file to add template names and run again.")
-            except Exception as error:
-                print(f"! Failed to create file: {error}")
+                print(f"! Empty file created at: {template_path}")  # Tell the user.
+                print("   Edit the file to add template names and run again.")  # Tell the user.
+            except Exception as error:  # Creation failed.
+                print(f"! Failed to create file: {error}")  # Tell the user.
 
     @staticmethod
-    def _ensure_fresh_csv_cache() -> None:
+    def _ensure_fresh_csv_cache() -> None:  # Refresh the CSV cache.
         """Ensure required CSV files are fresh."""
-        CacheUtils.check_and_generate_csv("OrgDevices.csv", OrgInventoryExporter.devices)
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
+        CacheUtils.check_and_generate_csv("OrgDevices.csv", OrgInventoryExporter.devices)  # Refresh devices CSV.
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Refresh sites CSV.
         CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-        CacheUtils.check_and_generate_csv(
+        CacheUtils.check_and_generate_csv(  # Refresh gateway configs CSV.
             "AllSiteGatewayConfigs.csv",
             lambda: GatewayExportUtils.device_configs(fast=True),
         )
 
     @staticmethod
-    def _load_template_mappings() -> dict[str, str] | None:
+    def _load_template_mappings() -> dict[str, str] | None:  # Load template name->id.
         """Load template name to ID mapping from OrgGatewayTemplates.csv."""
-        template_name_to_id = {}
+        template_name_to_id = {}  # Name-to-id map.
         try:
-            gateway_templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
-            with open(gateway_templates_path, encoding="utf-8") as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    name = row.get("name", "").strip()
-                    tid = row.get("id", "").strip()
-                    if name and tid:
-                        template_name_to_id[name] = tid
-            logging.info("Loaded %s gateway templates", len(template_name_to_id))
-        except Exception as error:
-            logging.error("! Failed to load gateway templates: %s", error)
-            print(f"! Failed to load gateway templates: {error}")
-            return None
+            gateway_templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")  # Templates path.
+            with open(gateway_templates_path, encoding="utf-8") as file:  # Open the CSV.
+                reader = csv.DictReader(file)  # Parse rows.
+                for row in reader:  # Walk rows.
+                    name = row.get("name", "").strip()  # Read the name.
+                    tid = row.get("id", "").strip()  # Read the id.
+                    if name and tid:  # Have both.
+                        template_name_to_id[name] = tid  # Map name to id.
+            logging.info("Loaded %s gateway templates", len(template_name_to_id))  # Log the count.
+        except Exception as error:  # Load failed.
+            logging.error("! Failed to load gateway templates: %s", error)  # Log the error.
+            print(f"! Failed to load gateway templates: {error}")  # Tell the user.
+            return None  # Abort.
 
-        if not template_name_to_id:
-            logging.warning(" No gateway templates found in OrgGatewayTemplates.csv")
-            print(" No gateway templates found in OrgGatewayTemplates.csv")
-            return None
+        if not template_name_to_id:  # No templates.
+            logging.warning(" No gateway templates found in OrgGatewayTemplates.csv")  # Warn none.
+            print(" No gateway templates found in OrgGatewayTemplates.csv")  # Tell the user.
+            return None  # Abort.
 
-        return template_name_to_id
+        return template_name_to_id  # Return the map.
 
     @staticmethod
-    def _load_reboot_template_names() -> set[str] | None:
+    def _load_reboot_template_names() -> set[str] | None:  # Load reboot template names.
         """Load template names from reboot list file."""
-        reboot_template_names = set()
+        reboot_template_names = set()  # Name set.
         try:
-            reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")
-            with open(reboot_list_path, encoding="utf-8") as file:
-                reader = csv.reader(file)
-                for row in reader:
-                    if row and row[0].strip():
-                        reboot_template_names.add(row[0].strip())
-            logging.info("Loaded %s template names from reboot list", len(reboot_template_names))
-        except Exception as error:
-            logging.error("! Failed to load reboot template list: %s", error)
-            print(f"! Failed to load reboot template list: {error}")
-            return None
-        return reboot_template_names if reboot_template_names else None
+            reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")  # Reboot list path.
+            with open(reboot_list_path, encoding="utf-8") as file:  # Open the CSV.
+                reader = csv.reader(file)  # Parse rows.
+                for row in reader:  # Walk rows.
+                    if row and row[0].strip():  # Non-empty name.
+                        reboot_template_names.add(row[0].strip())  # Collect it.
+            logging.info("Loaded %s template names from reboot list", len(reboot_template_names))  # Log the count.
+        except Exception as error:  # Load failed.
+            logging.error("! Failed to load reboot template list: %s", error)  # Log the error.
+            print(f"! Failed to load reboot template list: {error}")  # Tell the user.
+            return None  # Abort.
+        return reboot_template_names if reboot_template_names else None  # Return names or None.
 
     @staticmethod
-    def _map_template_names_to_ids(names: set[str], mapping: dict[str, str]) -> set[str] | None:
+    def _map_template_names_to_ids(names: set[str], mapping: dict[str, str]) -> set[str] | None:  # Map names to ids.
         """Map template names to IDs, logging matches and mismatches."""
-        reboot_template_ids = set()
-        for name in names:
-            if name in mapping:
-                reboot_template_ids.add(mapping[name])
-                logging.info("! Found template '%s' with ID '%s'", name, mapping[name])
+        reboot_template_ids = set()  # Id set.
+        for name in names:  # Walk names.
+            if name in mapping:  # Name found.
+                reboot_template_ids.add(mapping[name])  # Collect the id.
+                logging.info("! Found template '%s' with ID '%s'", name, mapping[name])  # Log the match.
             else:
-                logging.warning("! Template '%s' not found in OrgGatewayTemplates.csv", name)
-                print(f"! Template '{name}' not found in available templates")
+                logging.warning("! Template '%s' not found in OrgGatewayTemplates.csv", name)  # Warn not found.
+                print(f"! Template '{name}' not found in available templates")  # Tell the user.
 
-        if not reboot_template_ids:
-            logging.error(" No matching template IDs found for reboot")
-            print(" No matching template IDs found for reboot")
-            print("Available templates:")
-            for name, tid in mapping.items():
-                print(f"  - {name} ({tid})")
-            return None
+        if not reboot_template_ids:  # No matches.
+            logging.error(" No matching template IDs found for reboot")  # Log none.
+            print(" No matching template IDs found for reboot")  # Tell the user.
+            print("Available templates:")  # List available.
+            for name, tid in mapping.items():  # Walk templates.
+                print(f"  - {name} ({tid})")  # Print each.
+            return None  # Abort.
 
-        return reboot_template_ids
+        return reboot_template_ids  # Return the ids.
 
     @staticmethod
     def _find_reboot_target_devices(template_ids: set[str], mapping: dict[str, str]) -> list[dict] | None:  # type: ignore[type-arg]
         """Find gateway devices in sites using the target templates."""
-        template_id_to_name = {tid: name for name, tid in mapping.items()}
+        template_id_to_name = {tid: name for name, tid in mapping.items()}  # Invert the map.
 
         # Find sites using target templates
         site_to_template = DeviceRebootManager._find_sites_using_templates(template_ids, template_id_to_name)
-        if not site_to_template:
-            logging.warning(" No sites found using the specified gateway templates")
-            print(" No sites found using the specified gateway templates")
-            return None
+        if not site_to_template:  # No sites.
+            logging.warning(" No sites found using the specified gateway templates")  # Warn none.
+            print(" No sites found using the specified gateway templates")  # Tell the user.
+            return None  # Abort.
 
         # Find gateway devices in those sites
-        reboot_targets = []
+        reboot_targets = []  # Collect reboot targets.
         try:
-            gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")
-            with open(gateway_configs_path, encoding="utf-8") as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    device_site_id = row.get("site_id", "").strip()
-                    device_type = row.get("type", "").strip()
-                    device_id = row.get("id", "").strip()
-                    device_name = row.get("name", "").strip()
+            gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")  # Gateway configs path.
+            with open(gateway_configs_path, encoding="utf-8") as file:  # Open the CSV.
+                reader = csv.DictReader(file)  # Parse rows.
+                for row in reader:  # Walk rows.
+                    device_site_id = row.get("site_id", "").strip()  # Read the site id.
+                    device_type = row.get("type", "").strip()  # Read the type.
+                    device_id = row.get("id", "").strip()  # Read the device id.
+                    device_name = row.get("name", "").strip()  # Read the device name.
 
-                    if device_site_id in site_to_template and device_type == "gateway":
+                    if device_site_id in site_to_template and device_type == "gateway":  # Matching gateway.
                         template_id, template_name, site_name = site_to_template[device_site_id]
-                        reboot_targets.append(
+                        reboot_targets.append(  # Collect the target.
                             {
                                 "device_id": device_id,
                                 "device_name": device_name,
@@ -17892,11 +17892,11 @@ class DeviceRebootManager:
                                 "template_name": template_name,
                             }
                         )
-                        logging.info("Found gateway '%s' at site '%s'", device_name, site_name)
-        except Exception as error:
-            logging.error("! Failed to load gateway configs: %s", error)
-            print(f"! Failed to load gateway configs: {error}")
-            return None
+                        logging.info("Found gateway '%s' at site '%s'", device_name, site_name)  # Log the find.
+        except Exception as error:  # Load failed.
+            logging.error("! Failed to load gateway configs: %s", error)  # Log the error.
+            print(f"! Failed to load gateway configs: {error}")  # Tell the user.
+            return None  # Abort.
 
         if not reboot_targets:
             logging.warning(" No gateway devices found in sites using the specified templates")
