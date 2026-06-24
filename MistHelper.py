@@ -11998,46 +11998,46 @@ class OrgAdminExporter:  # Org admin/token exporters.
                 logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
                 raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Build the raw URL.
                 if apisession is None:  # No session.
-                    raise ValueError("API session not initialized")
-                response = apisession.mist_get(raw_url)
-                raw_items = getattr(response, "data", response) or []
+                    raise ValueError("API session not initialized")  # No session: fail loudly.
+                response = apisession.mist_get(raw_url)  # Direct GET fallback.
+                raw_items = getattr(response, "data", response) or []  # Unwrap data; default empty.
             else:
-                response = list_func(apisession, current_org_id, limit=1000)
+                response = list_func(apisession, current_org_id, limit=1000)  # Call the wrapper.
                 raw_items = mistapi.get_all(response=response, mist_session=apisession) or []
-            if not isinstance(raw_items, list):
-                logging.debug("License endpoint returned non-list payload; normalizing to list")
-                raw_items = [raw_items]
-            if not raw_items:
+            if not isinstance(raw_items, list):  # Normalize to a list.
+                logging.debug("License endpoint returned non-list payload; normalizing to list")  # Trace normalization.
+                raw_items = [raw_items]  # Wrap single item.
+            if not raw_items:  # No records.
                 logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
                 DataExporter.write_with_format_selection([], filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
-                return
-            processed = DataProcessingUtils.flatten_nested_fields(raw_items)
+                return  # Abort.
+            processed = DataProcessingUtils.flatten_nested_fields(raw_items)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(processed, filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
-            logging.info("Exported %s license records to %s.", len(processed), filename)
-        except Exception as e:
-            logging.error("Failed to export licenses: %s", e)
+            logging.info("Exported %s license records to %s.", len(processed), filename)  # Log export count.
+        except Exception as e:  # Export failed.
+            logging.error("Failed to export licenses: %s", e)  # Log the error.
             try:
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
-                pass
-            raise
+                pass  # Best-effort cleanup.
+            raise  # Re-raise to caller.
 
     @staticmethod
-    def usage():
+    def usage():  # Export license usage.
         """Export organization usage data to OrgUsage.csv."""
-        logging.info("Starting export of organization license usage...")
-        APIDataFetcher(
+        logging.info("Starting export of organization license usage...")  # Log start.
+        APIDataFetcher(  # Fetch and write usage.
             title="Organization License Usage:",
             api_call=mistapi.api.v1.orgs.licenses.getOrgLicensesBySite,
             filename="OrgUsage",
             sort_key="site_id",
         ).execute()
-        logging.info(" License usage data exported to OrgUsage")
-        print(" License usage data exported to OrgUsage")
+        logging.info(" License usage data exported to OrgUsage")  # Log completion.
+        print(" License usage data exported to OrgUsage")  # Tell the user.
 
 
-class SelfExportUtils:
+class SelfExportUtils:  # Self/account exporters.
     """
     Authenticated Self / Account Export Utilities
 
@@ -12047,7 +12047,7 @@ class SelfExportUtils:
     """
 
     @staticmethod
-    def audit_logs() -> None:
+    def audit_logs() -> None:  # Export audit logs.
         """Export audit log of changes made by the authenticated admin account to SelfAuditLogs.csv."""
         logging.info("Starting export of self (admin account) audit logs...")  # Log before operation
         filename = "SelfAuditLogs.csv"  # Output filename for self audit log entries
@@ -12068,7 +12068,7 @@ class SelfExportUtils:
                     "No self audit log records returned for the last %d hours", hours
                 )  # Warn on empty result
                 DataExporter.write_with_format_selection([], filename)  # Write empty file to signal successful run
-                return
+                return  # Abort.
             rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested change-detail dicts for CSV
             DataExporter.write_with_format_selection(
                 rows, filename, api_function_name="listSelfAuditLogs"
@@ -12078,7 +12078,7 @@ class SelfExportUtils:
             logging.exception("Failed to export self audit logs: %s", exception)  # Log full traceback
 
 
-class OrgConfigExporter:
+class OrgConfigExporter:  # Org config exporters.
     """
     Organization Configuration Exporter
 
@@ -12087,24 +12087,24 @@ class OrgConfigExporter:
     """
 
     @staticmethod
-    def psks():
+    def psks():  # Export PSKs.
         """Export organization PSKs to OrgPsks.csv."""
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.psks.listOrgPsks, data_type="psks", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def webhooks():
+    def webhooks():  # Export webhooks.
         """Export organization webhooks to OrgWebhooks.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.webhooks.listOrgWebhooks, data_type="webhooks", sort_key="name"
         )
 
     @staticmethod
-    def wlans():
+    def wlans():  # Export WLANs.
         """Export organization WLANs to OrgWlans.csv."""
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.wlans.listOrgWlans, data_type="wlans", sort_key="ssid")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def mx_edges():
+    def mx_edges():  # Export Mist Edges (MSP flow).
         """Export MX Edge data to OrgMxEdges.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.mxedges.listOrgMxEdges, data_type="mx edges", sort_key="name"
@@ -12151,94 +12151,94 @@ class OrgConfigExporter:
             return  # Abort the export -- no MSP access to query
 
         # MSP privileges available - let user select which MSP to query
-        print("")
-        print("=" * 60)
-        print("  MSP ORGANIZATION EXPORT")
-        print("=" * 60)
-        print("")
+        print("")  # Spacer.
+        print("=" * 60)  # Divider.
+        print("  MSP ORGANIZATION EXPORT")  # Section title.
+        print("=" * 60)  # Divider.
+        print("")  # Spacer.
 
-        selected_msp = None
-        if len(msp_privileges) == 1:
-            selected_msp = msp_privileges[0]
-            print(f"  Using MSP: {selected_msp['msp_name']}")
+        selected_msp = None  # No MSP selected yet.
+        if len(msp_privileges) == 1:  # Exactly one MSP.
+            selected_msp = msp_privileges[0]  # Auto-select it.
+            print(f"  Using MSP: {selected_msp['msp_name']}")  # Tell the user.
         else:
-            print("  Available MSPs:")
-            for idx, msp in enumerate(msp_privileges, start=1):
-                print(f"    {idx}. {msp['msp_name']} (role: {msp['role']})")
-            print("")
+            print("  Available MSPs:")  # List MSPs.
+            for idx, msp in enumerate(msp_privileges, start=1):  # Enumerate MSPs.
+                print(f"    {idx}. {msp['msp_name']} (role: {msp['role']})")  # Print each option.
+            print("")  # Spacer.
             try:
                 choice = InputUtils.safe_input("  Select MSP (number): ", context="msp_export").strip()
-                choice_idx = int(choice) - 1
-                if 0 <= choice_idx < len(msp_privileges):
-                    selected_msp = msp_privileges[choice_idx]
+                choice_idx = int(choice) - 1  # Parse the index.
+                if 0 <= choice_idx < len(msp_privileges):  # In range?
+                    selected_msp = msp_privileges[choice_idx]  # Pick the MSP.
                 else:
-                    print("X Invalid selection")
-                    return
-            except (ValueError, SystemExit):
-                print("X Invalid input")
-                return
+                    print("X Invalid selection")  # Tell the user invalid.
+                    return  # Abort.
+            except (ValueError, SystemExit):  # Bad input.
+                print("X Invalid input")  # Tell the user.
+                return  # Abort.
 
-        msp_id = selected_msp["msp_id"]
-        msp_name = selected_msp["msp_name"]
-        print(f"  Fetching organizations for MSP: {msp_name}...")
-        logging.info("Fetching MSP organizations for %s (ID: %s)", msp_name, msp_id)
+        msp_id = selected_msp["msp_id"]  # MSP id.
+        msp_name = selected_msp["msp_name"]  # MSP name.
+        print(f"  Fetching organizations for MSP: {msp_name}...")  # Tell the user.
+        logging.info("Fetching MSP organizations for %s (ID: %s)", msp_name, msp_id)  # Log the fetch.
 
         # Verify session is valid before API call
-        if apisession is None:
-            print("X No active API session")
-            logging.error("Cannot fetch MSP orgs - apisession is None")
-            return
+        if apisession is None:  # No session.
+            print("X No active API session")  # Tell the user.
+            logging.error("Cannot fetch MSP orgs - apisession is None")  # Log the error.
+            return  # Abort.
 
         try:
-            import mistapi.api.v1.msps.orgs as msp_orgs_api
+            import mistapi.api.v1.msps.orgs as msp_orgs_api  # Import MSP orgs API.
 
-            response = msp_orgs_api.listMspOrgs(apisession, msp_id)
+            response = msp_orgs_api.listMspOrgs(apisession, msp_id)  # List MSP orgs.
 
-            if not response or not hasattr(response, "data"):
-                print("X Failed to retrieve MSP organizations")
-                logging.error("listMspOrgs returned no data")
-                return
+            if not response or not hasattr(response, "data"):  # No data.
+                print("X Failed to retrieve MSP organizations")  # Tell the user.
+                logging.error("listMspOrgs returned no data")  # Log the error.
+                return  # Abort.
 
-            orgs_data = response.data
-            if not isinstance(orgs_data, list):
-                orgs_data = [orgs_data] if orgs_data else []
+            orgs_data = response.data  # Read the payload.
+            if not isinstance(orgs_data, list):  # Normalize to a list.
+                orgs_data = [orgs_data] if orgs_data else []  # Wrap single item.
 
-            if not orgs_data:
-                print("  No organizations found under this MSP")
-                logging.info("MSP has no organizations")
+            if not orgs_data:  # No orgs.
+                print("  No organizations found under this MSP")  # Tell the user.
+                logging.info("MSP has no organizations")  # Log it.
                 DataExporter.write_with_format_selection([], "MspOrganizations.csv")  # type: ignore[no-untyped-call]
-                return
+                return  # Abort.
 
             # Process and export
-            processed = DataProcessingUtils.flatten_nested_fields(orgs_data)
+            processed = DataProcessingUtils.flatten_nested_fields(orgs_data)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
 
             # Add MSP context to each record
-            for record in processed:
-                record["msp_id"] = msp_id
-                record["msp_name"] = msp_name
+            for record in processed:  # Tag each org.
+                record["msp_id"] = msp_id  # Add MSP id.
+                record["msp_name"] = msp_name  # Add MSP name.
 
             DataExporter.write_with_format_selection(processed, "MspOrganizations.csv")  # type: ignore[no-untyped-call]
-            print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")
-            logging.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))
+            print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")  # Tell the user.
+            logging.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))  # Log export count.
 
             # Show summary
-            print("")
-            print(f"  Organizations under {msp_name}:")
+            print("")  # Spacer.
+            print(f"  Organizations under {msp_name}:")  # Header.
             for org in orgs_data[:10]:  # Show first 10
-                org_name = org.get("name", "Unknown")
-                org_id = org.get("id", "N/A")
-                print(f"    - {org_name} ({org_id[:8]}...)")
-            if len(orgs_data) > 10:
-                print(f"    ... and {len(orgs_data) - 10} more")
-            print("")
+                org_name = org.get("name", "Unknown")  # Org name.
+                org_id = org.get("id", "N/A")  # Org id.
+                print(f"    - {org_name} ({org_id[:8]}...)")  # Print the org.
+            if len(orgs_data) > 10:  # More than shown.
+                print(f"    ... and {len(orgs_data) - 10} more")  # Note the remainder.
+            print("")  # Spacer.
 
-        except Exception as e:
-            print(f"X Error fetching MSP organizations: {e}")
-            logging.error("Failed to fetch MSP organizations: %s", e)
+        except Exception as e:  # Fetch failed.
+            print(f"X Error fetching MSP organizations: {e}")  # Tell the user.
+            logging.error("Failed to fetch MSP organizations: %s", e)  # Log the error.
 
 
-class OrgExportUtils:
+class OrgExportUtils:  # Generic org export helpers.
     """
     Centralized organization-level data export utilities.
     Groups all export_org_* functions for better code organization.
@@ -12246,7 +12246,7 @@ class OrgExportUtils:
     """
 
     @staticmethod
-    def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):
+    def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):  # Export an org endpoint.
         """
         Generic function to export organization-specific data to CSV.
 
@@ -12260,17 +12260,17 @@ class OrgExportUtils:
         Returns:
             None
         """
-        logging.info("Starting export of organization %s...", data_type)
+        logging.info("Starting export of organization %s...", data_type)  # Log start.
 
         # Create filename from data_type
-        safe_data_type = data_type.replace(" ", "").replace("-", "").title()
-        filename = f"Org{safe_data_type}.csv"
+        safe_data_type = data_type.replace(" ", "").replace("-", "").title()  # Sanitize for filename.
+        filename = f"Org{safe_data_type}.csv"  # Build the CSV name.
 
-        fetcher_kwargs = dict(api_kwargs)
-        if limit is not None:
-            fetcher_kwargs["limit"] = limit
+        fetcher_kwargs = dict(api_kwargs)  # Copy extra kwargs.
+        if limit is not None:  # Limit provided.
+            fetcher_kwargs["limit"] = limit  # Set the page limit.
 
-        APIDataFetcher(
+        APIDataFetcher(  # Fetch and write.
             title=f"Organization {data_type.title()}:",
             api_call=api_call,
             filename=filename,
@@ -12279,118 +12279,118 @@ class OrgExportUtils:
         ).execute()
 
     @staticmethod
-    def sites_sle_summary():
+    def sites_sle_summary():  # Export sites SLE summary.
         """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
-        print("Export Organization Sites SLE Summary:")
-        logging.info("Starting export of sites SLE summary...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        print("Export Organization Sites SLE Summary:")  # Header.
+        logging.info("Starting export of sites SLE summary...")  # Log start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
 
         # SLE types to export
-        sle_types = ["wifi", "wired", "wan"]
-        all_sites_sle_data = []
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("67", "sites_sle_summary", len(sle_types))
-        op_start = time.time()
-        items_done = 0
+        sle_types = ["wifi", "wired", "wan"]  # SLE types to fetch.
+        all_sites_sle_data = []  # Accumulate SLE rows.
+        emitter = PROGRESS_EMITTER  # Progress emitter.
+        if emitter:  # Emitter present.
+            emitter.emit_progress_start("67", "sites_sle_summary", len(sle_types))  # Signal progress start.
+        op_start = time.time()  # Start the timer.
+        items_done = 0  # Items processed.
 
-        for sle_type in sle_types:
+        for sle_type in sle_types:  # Fetch each SLE type.
             try:
-                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
+                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the SLE API.
                     apisession, org_id, sle=sle_type, duration="7d", limit=1000
                 )
                 sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
-                for site_data in sites_sle_data:
+                for site_data in sites_sle_data:  # Tag each row.
                     # Add SLE type identifier to the data
-                    site_data["sle_type"] = sle_type
-                    all_sites_sle_data.append(site_data)
+                    site_data["sle_type"] = sle_type  # Record the SLE type.
+                    all_sites_sle_data.append(site_data)  # Collect the row.
 
                 logging.debug("Retrieved SLE data for %s sites with SLE type: %s", len(sites_sle_data), sle_type)
-            except Exception as exception:
-                logging.warning("Failed to get sites SLE data for type %s: %s", sle_type, exception)
-                continue
+            except Exception as exception:  # Fetch failed.
+                logging.warning("Failed to get sites SLE data for type %s: %s", sle_type, exception)  # Warn and skip.
+                continue  # Next SLE type.
             finally:
-                items_done += 1
-                if emitter:
-                    emitter.emit_progress_tick(
+                items_done += 1  # Count this item.
+                if emitter:  # Emitter present.
+                    emitter.emit_progress_tick(  # Tick progress.
                         "67", "sites_sle_summary", len(sle_types), sle_type, items_done, len(sle_types) - items_done
                     )
 
-        if all_sites_sle_data:
-            processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)
+        if all_sites_sle_data:  # Have data.
+            processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")
-            logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))
+            print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")  # Tell the user.
+            logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))  # Log export count.
         else:
-            print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")
-            logging.warning("No sites SLE data available for organization")
+            print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")  # Tell the user zero.
+            logging.warning("No sites SLE data available for organization")  # Warn no data.
             DataExporter.write_with_format_selection([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
-        if emitter:
-            emitter.emit_progress_complete(
+        if emitter:  # Emitter present.
+            emitter.emit_progress_complete(  # Signal progress complete.
                 "67", "sites_sle_summary", len(sle_types), items_done, False, time.time() - op_start
             )
 
     @staticmethod
     def insight_metrics():  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide insight metrics to normalized CSV files."""
-        print("Export Organization Insight Metrics (Normalized):")
-        logging.info("Starting export of organization insight metrics with normalized structure...")
+        print("Export Organization Insight Metrics (Normalized):")  # Header.
+        logging.info("Starting export of organization insight metrics with normalized structure...")  # Log start.
 
         # First, refresh the available metrics from the API
-        print("! Refreshing available insight metrics from Mist API...")
+        print("! Refreshing available insight metrics from Mist API...")  # Tell the user.
         InsightMetricsUtils.export_const_insight_metrics()  # Refresh ConstInsightMetrics.csv before scope filtering
 
         # Get all metrics that support "org" scope
-        org_metrics = InsightMetricsUtils.get_by_scope("org")
+        org_metrics = InsightMetricsUtils.get_by_scope("org")  # Load org-scope metrics.
 
-        if not org_metrics:
-            print("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")
-            logging.error("No org-scope metrics found in const insight metrics")
+        if not org_metrics:  # No metrics.
+            print("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")  # Tell the user.
+            logging.error("No org-scope metrics found in const insight metrics")  # Log the error.
             # Create empty normalized files
             DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-            return
+            return  # Abort.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
 
         # Initialize normalized data collections
-        all_summary_data = []
-        all_time_series_data = []
-        all_results_data = []
-        all_sites_data = []
+        all_summary_data = []  # Summary rows.
+        all_time_series_data = []  # Time-series rows.
+        all_results_data = []  # Results rows.
+        all_sites_data = []  # Sites rows.
 
-        all_insight_data = []
-        metrics_retrieved = 0
-        metrics_failed = 0
+        all_insight_data = []  # Raw insight rows.
+        metrics_retrieved = 0  # Success count.
+        metrics_failed = 0  # Failure count.
 
-        print(f"! Retrieving {len(org_metrics)} different organization insight metrics...")
-        print("! Processing each metric individually with proper error handling...")
+        print(f"! Retrieving {len(org_metrics)} different organization insight metrics...")  # Tell the user.
+        print("! Processing each metric individually with proper error handling...")  # Tell the user.
 
         try:
             # Iterate through each org-scoped metric and retrieve it individually
-            for metric in org_metrics:
+            for metric in org_metrics:  # Fetch each metric.
                 try:
-                    logging.debug("Attempting to retrieve org insight metric: %s", metric)
+                    logging.debug("Attempting to retrieve org insight metric: %s", metric)  # Trace the attempt.
 
                     # For metrics that analyze sites, use getOrgSitesSle instead of getOrgSle
                     if "worst-sites" in metric or metric in ["sites-sle", "sites-sle-filtered"]:
                         # These metrics require site-level SLE data analysis
-                        sle_categories = ["wifi", "wan", "wired"]
+                        sle_categories = ["wifi", "wan", "wired"]  # SLE categories.
 
-                        for sle_category in sle_categories:
+                        for sle_category in sle_categories:  # Fetch each category.
                             try:
-                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
+                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the SLE API.
                                     apisession, org_id, sle=sle_category, duration="7d", limit=1000
                                 )
                                 sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
-                                if sites_data:
+                                if sites_data:  # Have data.
                                     # Create an aggregated insight result from sites data
-                                    insight_result = {
+                                    insight_result = {  # Build the result.
                                         "metric_type": f"{metric}_{sle_category}",
                                         "org_id": org_id,
                                         "sle_category": sle_category,
@@ -12400,8 +12400,8 @@ class OrgExportUtils:
                                         "original_metric": metric,
                                     }
 
-                                    all_insight_data.append(insight_result)
-                                    metrics_retrieved += 1
+                                    all_insight_data.append(insight_result)  # Collect the result.
+                                    metrics_retrieved += 1  # Count success.
                                     logging.debug(
                                         "Successfully retrieved sites data for insight metric: %s with SLE: %s (%s sites)",  # noqa: E501
                                         metric,
@@ -12409,79 +12409,79 @@ class OrgExportUtils:
                                         len(sites_data),
                                     )
                                 else:
-                                    logging.debug(
+                                    logging.debug(  # Trace empty.
                                         "No sites data available for insight metric: %s with SLE: %s",
                                         metric,
                                         sle_category,
                                     )
-                            except Exception as sites_error:
-                                logging.debug(
+                            except Exception as sites_error:  # Category fetch failed.
+                                logging.debug(  # Trace the failure.
                                     "Failed to get sites data for insight metric '%s' with SLE '%s': %s",
                                     metric,
                                     sle_category,
                                     sites_error,
                                 )
-                                continue
+                                continue  # Next category.
                     else:
                         # For other metrics, use getOrgSle directly
                         response = mistapi.api.v1.orgs.insights.getOrgSle(apisession, org_id, metric, duration="7d")
-                        insight_data = getattr(response, "data", response) or {}
+                        insight_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                        if insight_data:
+                        if insight_data:  # Have data.
                             # Add metric type identifier to each data point
-                            insight_data["metric_type"] = metric
-                            insight_data["org_id"] = org_id
-                            all_insight_data.append(insight_data)
-                            metrics_retrieved += 1
+                            insight_data["metric_type"] = metric  # Tag the metric.
+                            insight_data["org_id"] = org_id  # Tag the org.
+                            all_insight_data.append(insight_data)  # Collect the row.
+                            metrics_retrieved += 1  # Count success.
                             logging.debug("Successfully retrieved org insight data for metric: %s", metric)
                         else:
-                            logging.debug("No data available for org metric: %s", metric)
-                            metrics_failed += 1
+                            logging.debug("No data available for org metric: %s", metric)  # Trace empty.
+                            metrics_failed += 1  # Count failure.
 
-                except Exception as metric_error:
-                    metrics_failed += 1
+                except Exception as metric_error:  # Metric fetch failed.
+                    metrics_failed += 1  # Count failure.
                     logging.debug("Failed to get org insight data for metric '%s': %s", metric, metric_error)
                     # Continue with next metric instead of failing entirely
-                    continue
+                    continue  # Next metric.
 
             # Also try getOrgSitesSle for sites summary data
             try:
-                logging.debug("Attempting to retrieve org sites SLE summary")
+                logging.debug("Attempting to retrieve org sites SLE summary")  # Trace the attempt.
                 response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, duration="7d", limit=100)
                 sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
-                if sites_data:
-                    for item in sites_data:
-                        item["metric_type"] = "org_sites_sle_summary"
-                        item["org_id"] = org_id
-                        all_insight_data.append(item)
-                    metrics_retrieved += 1
+                if sites_data:  # Have data.
+                    for item in sites_data:  # Tag each row.
+                        item["metric_type"] = "org_sites_sle_summary"  # Tag the metric.
+                        item["org_id"] = org_id  # Tag the org.
+                        all_insight_data.append(item)  # Collect the row.
+                    metrics_retrieved += 1  # Count success.
                     logging.debug("Successfully retrieved org sites SLE data for %s sites", len(sites_data))
-            except Exception as sites_error:
-                metrics_failed += 1
-                logging.debug("Failed to get org sites SLE summary: %s", sites_error)
+            except Exception as sites_error:  # Summary fetch failed.
+                metrics_failed += 1  # Count failure.
+                logging.debug("Failed to get org sites SLE summary: %s", sites_error)  # Trace the failure.
 
             # Report results
             print(f"! Metric retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")
             logging.info("Org insight metrics: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed)
 
-            if all_insight_data:
-                print("! Parsing metrics into normalized data structures...")
+            if all_insight_data:  # Have data.
+                print("! Parsing metrics into normalized data structures...")  # Tell the user.
 
                 # Parse each metric into normalized structures
-                for metric_data in all_insight_data:
+                for metric_data in all_insight_data:  # Normalize each metric.
                     normalized = InsightMetricsUtils.parse_to_normalized_data(metric_data, org_id)
-                    all_summary_data.extend(normalized["summary"])
-                    all_time_series_data.extend(normalized["time_series"])
-                    all_results_data.extend(normalized["results"])
-                    all_sites_data.extend(normalized["sites_data"])
+                    all_summary_data.extend(normalized["summary"])  # Collect summary.
+                    all_time_series_data.extend(normalized["time_series"])  # Collect time-series.
+                    all_results_data.extend(normalized["results"])  # Collect results.
+                    all_sites_data.extend(normalized["sites_data"])  # Collect sites.
 
                 # Export to separate CSV files
-                print("! Exporting to normalized CSV files...")
+                print("! Exporting to normalized CSV files...")  # Tell the user.
 
                 # Summary data
                 processed_summary = DataProcessingUtils.escape_multiline(all_summary_data)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed_summary, "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-                print(f"  !? {len(processed_summary)} summary records -> OrgMetricsSummary.csv")
+                print(f"  !? {len(processed_summary)} summary records -> OrgMetricsSummary.csv")  # Tell the user.
 
                 # Time series data
                 processed_time_series = DataProcessingUtils.escape_multiline(all_time_series_data)  # type: ignore[no-untyped-call]
@@ -12491,31 +12491,31 @@ class OrgExportUtils:
                 # Results data
                 processed_results = DataProcessingUtils.escape_multiline(all_results_data)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed_results, "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-                print(f"  !? {len(processed_results)} results records -> OrgMetricsResults.csv")
+                print(f"  !? {len(processed_results)} results records -> OrgMetricsResults.csv")  # Tell the user.
 
                 # Sites data
                 processed_sites = DataProcessingUtils.escape_multiline(all_sites_data)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed_sites, "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-                print(f"  !? {len(processed_sites)} sites records -> OrgSitesData.csv")
+                print(f"  !? {len(processed_sites)} sites records -> OrgSitesData.csv")  # Tell the user.
 
                 print(
                     f"\n! Successfully exported {metrics_retrieved} organization insight metrics to 4 normalized CSV files"  # noqa: E501
                 )
-                logging.info(
+                logging.info(  # Log the export.
                     "Exported %s org insight data points from %s metrics to normalized CSV files",
                     len(all_insight_data),
                     metrics_retrieved,
                 )
 
                 # Also save a legacy combined file for compatibility
-                processed_legacy = DataProcessingUtils.flatten_nested_fields(all_insight_data)
+                processed_legacy = DataProcessingUtils.flatten_nested_fields(all_insight_data)  # Flatten nested fields.
                 processed_legacy = DataProcessingUtils.escape_multiline(processed_legacy)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed_legacy, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
-                print("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")
+                print("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")  # Tell the user.
 
             else:
-                print("! 0 organization insight metrics exported (no data available)")
-                logging.warning("No org insight data available - all metrics failed or returned empty")
+                print("! 0 organization insight metrics exported (no data available)")  # Tell the user zero.
+                logging.warning("No org insight data available - all metrics failed or returned empty")  # Warn no data.
                 # Create empty normalized files
                 DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
@@ -12523,9 +12523,9 @@ class OrgExportUtils:
                 DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
 
-        except Exception as exception:
-            print(f"! Error exporting organization insight metrics: {exception}")
-            logging.error("Failed to export org insight metrics: %s", exception)
+        except Exception as exception:  # Export failed.
+            print(f"! Error exporting organization insight metrics: {exception}")  # Tell the user.
+            logging.error("Failed to export org insight metrics: %s", exception)  # Log the error.
             # Create empty normalized files in case of error
             DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
@@ -12534,38 +12534,38 @@ class OrgExportUtils:
             DataExporter.write_with_format_selection([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def _nac_clients():
+    def _nac_clients():  # Export NAC clients.
         """Export NAC clients to OrgNacClients.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClients, data_type="nac clients", sort_key="mac"
         )
 
     @staticmethod
-    def _nac_tags():
+    def _nac_tags():  # Export NAC tags.
         """Export NAC tags to OrgNacTags.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nactags.listOrgNacTags, data_type="nac tags", sort_key="name"
         )
 
     @staticmethod
-    def _nac_portals():
+    def _nac_portals():  # Export NAC portals.
         """Export NAC portals to OrgNacPortals.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nacportals.listOrgNacPortals, data_type="nac portals", sort_key="name"
         )
 
     @staticmethod
-    def _nac_rules():
+    def _nac_rules():  # Export NAC rules.
         """Export NAC rules to OrgNacRules.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nacrules.listOrgNacRules, data_type="nac rules", sort_key="name"
         )
 
     @staticmethod
-    def _nac_events():
+    def _nac_events():  # Export NAC events.
         """Export NAC events to OrgNacEvents.csv."""
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("org NAC events export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve lookback hours.
+        TimeUtils.log_dynamic_lookback("org NAC events export", hours)  # Log the window.
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClientEvents,
             data_type="nac events",
@@ -12574,42 +12574,42 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def _assets():
+    def _assets():  # Export assets.
         """Export organization assets to OrgAssets.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgAssets, data_type="assets", sort_key="name"
         )
 
     @staticmethod
-    def _bgp_peers():
+    def _bgp_peers():  # Export BGP peers.
         """Export BGP peer data to OrgBgpPeers.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgBgpStats, data_type="bgp peers", sort_key="peer_ip"
         )
 
     @staticmethod
-    def _tunnel_stats():
+    def _tunnel_stats():  # Export tunnel stats.
         """Export tunnel statistics to OrgTunnelStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgTunnelsStats, data_type="tunnel stats", sort_key="name"
         )
 
     @staticmethod
-    def _site_stats():
+    def _site_stats():  # Export site stats.
         """Export site statistics to OrgSiteStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.listOrgSiteStats, data_type="site stats", sort_key="name"
         )
 
     @staticmethod
-    def _mxedge_stats():
+    def _mxedge_stats():  # Export Mist Edge stats.
         """Export MX Edge statistics to OrgMxedgeStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.listOrgMxEdgesStats, data_type="mx edge stats", sort_key="name"
         )
 
     @staticmethod
-    def e911_report():
+    def e911_report():  # Export E911 report.
         """Export E911 report for the organization to OrgE911Report.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.exports.getOrgE911Report,
@@ -12619,7 +12619,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def jsi_pbn():
+    def jsi_pbn():  # Export JSI PBN.
         """Export JSI PBN (Product Bulletin Notifications) data to OrgJsiPbn.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiPbn,
@@ -12628,7 +12628,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def jsi_sirt():
+    def jsi_sirt():  # Export JSI SIRT.
         """Export JSI SIRT (Security Incident Response Team) advisories to OrgJsiSirt.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiSirt,
@@ -12637,7 +12637,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def ospf_stats():
+    def ospf_stats():  # Export OSPF stats.
         """Export OSPF adjacency statistics for the organization to OrgOspfStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgOspfStats,
@@ -12646,7 +12646,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def _security_intel_profiles():
+    def _security_intel_profiles():  # Export security intel profiles.
         """Export security intelligence profiles to OrgSecurityIntelProfiles.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles,
@@ -12655,14 +12655,14 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def _invites():
+    def _invites():  # Export invites.
         """Export organization invites to OrgInvites.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.invites.listOrgInvites, data_type="invites", sort_key="email"
         )
 
     @staticmethod
-    def audit_logs(full_history: bool = False, duration: str | None = None) -> None:
+    def audit_logs(full_history: bool = False, duration: str | None = None) -> None:  # Export audit logs.
         """
         Export organization audit logs to OrgAuditLogs.csv.
         Fetches all pages using mistapi.get_all.
@@ -12670,56 +12670,56 @@ class OrgExportUtils:
         If False, pulls only the last 24 hours.
         If duration is provided, uses it as the duration parameter.
         """
-        logging.info("Menu #22: Starting audit logs export")
+        logging.info("Menu #22: Starting audit logs export")  # Log start.
         logging.debug("ENTRY: OrgExportUtils.audit_logs(full_history=%s, duration=%s)", full_history, duration)
         try:
-            org_id = ConfigUtils.get_cached_or_prompted_org_id()
-            kwargs: dict[str, Any] = {"limit": 1000}
-            if duration:
-                kwargs["duration"] = duration
-                logging.info("Exporting audit logs for duration: %s", duration)
-            elif not full_history:
-                hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-                TimeUtils.log_dynamic_lookback("audit logs export", hours)
-                kwargs["duration"] = f"{hours}h"
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+            kwargs: dict[str, Any] = {"limit": 1000}  # Base API params.
+            if duration:  # Duration provided.
+                kwargs["duration"] = duration  # Set the duration.
+                logging.info("Exporting audit logs for duration: %s", duration)  # Log the window.
+            elif not full_history:  # No duration, recent only.
+                hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve lookback hours.
+                TimeUtils.log_dynamic_lookback("audit logs export", hours)  # Log the window.
+                kwargs["duration"] = f"{hours}h"  # Set the duration.
                 logging.info("Exporting only last %s hours of audit logs (duration=%sh).", hours, hours)
             else:
-                kwargs["start"] = 0
-                logging.info("Exporting full audit log history (start=0).")
-            logging.debug("Making API call with parameters: %s", kwargs)
-            response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)
-            if not rawdata:
-                logging.warning(" No audit logs returned from API.")
-                logging.debug("EXIT: OrgExportUtils.audit_logs - no data")
-                return
-            data = DataProcessingUtils.flatten_nested_fields(rawdata)
+                kwargs["start"] = 0  # Full history from start.
+                logging.info("Exporting full audit log history (start=0).")  # Log full history.
+            logging.debug("Making API call with parameters: %s", kwargs)  # Trace the params.
+            response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)  # List audit logs.
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            if not rawdata:  # No rows.
+                logging.warning(" No audit logs returned from API.")  # Warn none returned.
+                logging.debug("EXIT: OrgExportUtils.audit_logs - no data")  # Trace exit.
+                return  # Abort.
+            data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")
-            logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")
-            logging.info("Menu #22: Audit logs export completed - %s records", len(data))
-            logging.debug("EXIT: OrgExportUtils.audit_logs - success")
-        except Exception as e:
-            logging.error("Failed to export audit logs: %s", e)
-            logging.debug("EXIT: OrgExportUtils.audit_logs - error")
-            raise
+            print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")  # Tell the user.
+            logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")  # Log completion.
+            logging.info("Menu #22: Audit logs export completed - %s records", len(data))  # Log the count.
+            logging.debug("EXIT: OrgExportUtils.audit_logs - success")  # Trace success.
+        except Exception as e:  # Export failed.
+            logging.error("Failed to export audit logs: %s", e)  # Log the error.
+            logging.debug("EXIT: OrgExportUtils.audit_logs - error")  # Trace exit.
+            raise  # Re-raise to caller.
 
     @staticmethod
     def sle_metrics(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
-        from src.refactors.serial_cc.sle_metrics import SLEMetricsService
+        from src.refactors.serial_cc.sle_metrics import SLEMetricsService  # Import the SLE service.
 
-        SLEMetricsService.execute(fast)
+        SLEMetricsService.execute(fast)  # Run the SLE export.
 
     @staticmethod
-    def ssid_template_consolidation() -> None:
+    def ssid_template_consolidation() -> None:  # Consolidate SSID templates.
         """SSID template consolidation workflow (Menu #145). Delegates to src.ssid_consolidation."""
         from src.ssid_consolidation.ssid_template_consolidation import (  # noqa: PLC0415
             SSIDTemplateConsolidationManager as _Impl,
         )
 
-        _Impl.execute(
+        _Impl.execute(  # Delegate to the impl.
             apisession=apisession,
             page_limit=DEFAULT_API_PAGE_LIMIT,
             safe_input_fn=InputUtils.safe_input,
@@ -12728,13 +12728,13 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def e911_bssid_compliance_report() -> None:
+    def e911_bssid_compliance_report() -> None:  # E911 BSSID compliance report.
         """E911 BSSID compliance report (Menu #89). Delegates to src.reports.e911_bssid."""
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            print("! No organization selected. Exiting.")
-            return
-        E911BSSIDReportGenerator.execute(
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not current_org_id:  # No org.
+            print("! No organization selected. Exiting.")  # Tell the user.
+            return  # Abort.
+        E911BSSIDReportGenerator.execute(  # Run the report.
             apisession=apisession,
             page_limit=DEFAULT_API_PAGE_LIMIT,
             org_id=current_org_id,
@@ -12748,7 +12748,7 @@ class OrgExportUtils:
 # ============================================================================
 
 
-class SiteDeviceExporter:
+class SiteDeviceExporter:  # Site device exporters.
     """
     Site Device Data Exporter
 
@@ -12757,7 +12757,7 @@ class SiteDeviceExporter:
     """
 
     @staticmethod
-    def device_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):
+    def device_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):  # Export site device inventory.
         """
         Fetches and displays the device inventory for a given site.
 
@@ -12769,170 +12769,170 @@ class SiteDeviceExporter:
         SECURITY: Always fetch all device types from API first (type=all), then filter locally
         to avoid Mist API's default behavior of only returning APs.
         """
-        logging.info("Fetching device inventory for site_id=%s, device_type=%s", site_id, device_type)
+        logging.info("Fetching device inventory for site_id=%s, device_type=%s", site_id, device_type)  # Log the fetch.
 
         # IMPORTANT: Always use type=all to get all device types (APs, switches, gateways)
         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
-        if not rawdata:
-            print("No devices found for the selected site.")
-            logging.warning("No devices found for site_id=%s", site_id)
-            return
+        if not rawdata:  # No devices.
+            print("No devices found for the selected site.")  # Tell the user.
+            logging.warning("No devices found for site_id=%s", site_id)  # Warn none found.
+            return  # Abort.
 
         # Filter devices locally based on requested device types
-        if device_type != "all":
-            requested_types = [dtype.strip() for dtype in device_type.split(",")]
-            rawdata = [d for d in rawdata if d.get("type", "").lower() in requested_types]
+        if device_type != "all":  # Type filter requested.
+            requested_types = [dtype.strip() for dtype in device_type.split(",")]  # Parse requested types.
+            rawdata = [d for d in rawdata if d.get("type", "").lower() in requested_types]  # Keep matching devices.
 
-            if not rawdata:
-                print(f"No devices of type '{device_type}' found at the selected site.")
+            if not rawdata:  # None after filter.
+                print(f"No devices of type '{device_type}' found at the selected site.")  # Tell the user.
                 logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)
-                return
+                return  # Abort.
 
         # Sort inventory by model for easier viewing
-        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
-        inventory = DataProcessingUtils.flatten_nested_fields(inventory)
+        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))  # Sort by model.
+        inventory = DataProcessingUtils.flatten_nested_fields(inventory)  # Flatten nested fields.
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
         fields = DataProcessingUtils.get_unique_keys(inventory)  # type: ignore[no-untyped-call]
 
         DataExporter.write_with_format_selection(inventory, csv_filename)  # type: ignore[no-untyped-call]
-        logging.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))
+        logging.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))  # Log the write.
 
         # Prepare PrettyTable for display
-        table = PrettyTable()
-        table.field_names = fields
+        table = PrettyTable()  # Build the table.
+        table.field_names = fields  # Set columns.
 
-        if "model" in fields:
+        if "model" in fields:  # Model column present.
             try:
-                table.sortby = "model"
-            except Exception as error:
-                logging.warning("! Could not sort table by 'model': %s", error)
+                table.sortby = "model"  # Sort by model.
+            except Exception as error:  # Sort failed.
+                logging.warning("! Could not sort table by 'model': %s", error)  # Warn sort failure.
 
-        for item in inventory:
-            row = [item.get(field, "") for field in fields]
-            table.add_row(row)
+        for item in inventory:  # Add each row.
+            row = [item.get(field, "") for field in fields]  # Build the row.
+            table.add_row(row)  # Add the row.
 
-        logging.debug("\n%s", table.get_string())
+        logging.debug("\n%s", table.get_string())  # Log the table.
 
     @staticmethod
-    def device_stats():
+    def device_stats():  # Export site device stats.
         """Export device statistics for a site to SiteDeviceStats.csv."""
-        print("Site Device Statistics:")
-        logging.info("Starting export of site device statistics...")
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            logging.error("No org_id available. Exiting.")
-            return
-        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        logging.info("Exporting device statistics for site: %s", site_name)
+        print("Site Device Statistics:")  # Header.
+        logging.info("Starting export of site device statistics...")  # Log start.
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            logging.error("No site selected. Exiting.")  # Log the error.
+            return  # Abort.
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not current_org_id:  # No org.
+            logging.error("No org_id available. Exiting.")  # Log the error.
+            return  # Abort.
+        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)  # List all sites.
+        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        logging.info("Exporting device statistics for site: %s", site_name)  # Log the export.
         try:
             response = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="all", limit=1000)
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)
-            if rawdata:
-                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            if rawdata:  # Have data.
+                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
-                filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"
+                filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"  # Build the CSV name.
                 DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
-                print(f"! {len(rawdata)} device stats exported to {filename}")
+                print(f"! {len(rawdata)} device stats exported to {filename}")  # Tell the user.
             else:
-                print("! No device statistics found for this site")
-        except Exception as e:
-            logging.error("Error fetching device stats for site %s: %s", site_name, e)
-            print(f"! Error fetching device statistics: {e}")
+                print("! No device statistics found for this site")  # Tell the user none.
+        except Exception as e:  # Fetch failed.
+            logging.error("Error fetching device stats for site %s: %s", site_name, e)  # Log the error.
+            print(f"! Error fetching device statistics: {e}")  # Tell the user.
 
     @staticmethod
-    def port_stats():
+    def port_stats():  # Export site port stats.
         """Export port statistics for a site to SitePortStats.csv."""
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("29", "port_stats", 1)
-        op_start = time.time()
+        emitter = PROGRESS_EMITTER  # Progress emitter.
+        if emitter:  # Emitter present.
+            emitter.emit_progress_start("29", "port_stats", 1)  # Signal progress start.
+        op_start = time.time()  # Start the timer.
         SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts, data_type="port stats", sort_key="mac"
         )
-        if emitter:
+        if emitter:  # Emitter present.
             emitter.emit_progress_complete("29", "port_stats", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def device_virtual_chassis():
+    def device_virtual_chassis():  # Export device virtual chassis.
         """Export virtual chassis data for a site to SiteDeviceVirtualChassis.csv."""
-        print("Export Virtual Chassis Information:")
-        logging.info("Starting export of site device virtual chassis information...")
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
+        print("Export Virtual Chassis Information:")  # Header.
+        logging.info("Starting export of site device virtual chassis information...")  # Log start.
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            logging.error("No site selected. Exiting.")  # Log the error.
+            return  # Abort.
         # Issue #431: inlined PromptUtils.select_device -> canonical select_device_id_from_inventory.
-        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="switch")
-        if not device_id:
-            logging.error("No switch device selected. Exiting.")
-            return
-        response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
-        devices = mistapi.get_all(response=response, mist_session=apisession)
+        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="switch")  # Select a switch.
+        if not device_id:  # No switch.
+            logging.error("No switch device selected. Exiting.")  # Log the error.
+            return  # Abort.
+        response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")  # List site devices.
+        devices = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
         device_name = next((dev["name"] for dev in devices if dev["id"] == device_id), device_id)
-        logging.info("Exporting virtual chassis information for device: %s", device_name)
+        logging.info("Exporting virtual chassis information for device: %s", device_name)  # Log the export.
         try:
             response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)
-            if response.data:
-                vc_data = [response.data] if isinstance(response.data, dict) else response.data
-                flattened = DataProcessingUtils.flatten_nested_fields(vc_data)
+            if response.data:  # Have data.
+                vc_data = [response.data] if isinstance(response.data, dict) else response.data  # Normalize to a list.
+                flattened = DataProcessingUtils.flatten_nested_fields(vc_data)  # Flatten nested fields.
                 sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-                filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"
+                filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"  # Build the CSV name.
                 DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
-                logging.info("! Virtual chassis information exported to %s", filename)
-                if sanitized:
-                    print(f"\n!! Virtual Chassis Summary for {device_name}:")
-                    print(f"   * Records exported: {len(sanitized)}")
+                logging.info("! Virtual chassis information exported to %s", filename)  # Log the export.
+                if sanitized:  # Have records.
+                    print(f"\n!! Virtual Chassis Summary for {device_name}:")  # Header.
+                    print(f"   * Records exported: {len(sanitized)}")  # Show the count.
                     # If the flattened output includes a 'members' field, show a short summary
-                    if "members" in sanitized[0]:
-                        print(f"   * VC members: {sanitized[0].get('members', 'N/A')}")
-                    if "preprovisioned" in sanitized[0]:
+                    if "members" in sanitized[0]:  # Members present.
+                        print(f"   * VC members: {sanitized[0].get('members', 'N/A')}")  # Show members.
+                    if "preprovisioned" in sanitized[0]:  # Preprovisioned present.
                         print(f"   * Preprovisioned: {sanitized[0].get('preprovisioned', 'N/A')}")
-                    print(f"   * Data saved to: {filename}")
+                    print(f"   * Data saved to: {filename}")  # Show the path.
             else:
-                logging.warning("! No virtual chassis data returned for device %s", device_name)
-                print(f"! No virtual chassis data found for device {device_name}")
-        except Exception as e:
-            logging.error("! Failed to export virtual chassis information: %s", e)
-            print(f"! Failed to export virtual chassis information: {e}")
+                logging.warning("! No virtual chassis data returned for device %s", device_name)  # Warn no VC data.
+                print(f"! No virtual chassis data found for device {device_name}")  # Tell the user.
+        except Exception as e:  # Export failed.
+            logging.error("! Failed to export virtual chassis information: %s", e)  # Log the error.
+            print(f"! Failed to export virtual chassis information: {e}")  # Tell the user.
 
     @staticmethod
-    def devices():
+    def devices():  # Export site device list.
         """Export device data for a site to SiteDevices.csv."""
-        print("Site Device List:")
-        logging.info("Starting export of site device list...")
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            logging.error("No org_id available. Exiting.")
-            return
-        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        logging.info("Exporting device list for site: %s", site_name)
+        print("Site Device List:")  # Header.
+        logging.info("Starting export of site device list...")  # Log start.
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            logging.error("No site selected. Exiting.")  # Log the error.
+            return  # Abort.
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not current_org_id:  # No org.
+            logging.error("No org_id available. Exiting.")  # Log the error.
+            return  # Abort.
+        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)  # List all sites.
+        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        logging.info("Exporting device list for site: %s", site_name)  # Log the export.
         try:
             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
-            rawdata = getattr(response, "data", [])
-            if rawdata:
-                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+            rawdata = getattr(response, "data", [])  # Unwrap data; default empty.
+            if rawdata:  # Have data.
+                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
-                filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"
+                filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"  # Build the CSV name.
                 DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
-                print(f"! {len(rawdata)} devices exported to {filename}")
+                print(f"! {len(rawdata)} devices exported to {filename}")  # Tell the user.
             else:
-                print("! No devices found for this site")
-        except Exception as e:
-            logging.error("Error fetching devices for site %s: %s", site_name, e)
-            print(f"! Error fetching device data: {e}")
+                print("! No devices found for this site")  # Tell the user none.
+        except Exception as e:  # Fetch failed.
+            logging.error("Error fetching devices for site %s: %s", site_name, e)  # Log the error.
+            print(f"! Error fetching device data: {e}")  # Tell the user.
 
 
-class SiteClientExporter:
+class SiteClientExporter:  # Site client exporters.
     """
     Site Client Data Exporter
 
@@ -12941,54 +12941,54 @@ class SiteClientExporter:
     """
 
     @staticmethod
-    def clients():
+    def clients():  # Export site client stats.
         """Export client data for a site to SiteClients.csv."""
-        print("Site Client Statistics:")
-        logging.info("Starting export of site client statistics...")
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            logging.error("No org_id available. Exiting.")
-            return
-        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        logging.info("Exporting client statistics for site: %s", site_name)
+        print("Site Client Statistics:")  # Header.
+        logging.info("Starting export of site client statistics...")  # Log start.
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            logging.error("No site selected. Exiting.")  # Log the error.
+            return  # Abort.
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not current_org_id:  # No org.
+            logging.error("No org_id available. Exiting.")  # Log the error.
+            return  # Abort.
+        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)  # List all sites.
+        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        logging.info("Exporting client statistics for site: %s", site_name)  # Log the export.
         try:
             response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=1000)
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)
-            if rawdata:
-                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            if rawdata:  # Have data.
+                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
-                filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"
+                filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"  # Build the CSV name.
                 DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
-                print(f"! {len(rawdata)} client records exported to {filename}")
+                print(f"! {len(rawdata)} client records exported to {filename}")  # Tell the user.
             else:
-                print("! No client data found for this site")
-        except Exception as e:
-            logging.error("Error fetching client stats for site %s: %s", site_name, e)
-            print(f"! Error fetching client data: {e}")
+                print("! No client data found for this site")  # Tell the user none.
+        except Exception as e:  # Fetch failed.
+            logging.error("Error fetching client stats for site %s: %s", site_name, e)  # Log the error.
+            print(f"! Error fetching client data: {e}")  # Tell the user.
 
     @staticmethod
     def client_insights():  # noqa: C901, PLR0912, PLR0915
         """Delegated site client insights entrypoint preserved for compatibility."""
         from src.refactors.serial_cc.site_client_insights import SiteClientInsightsService
 
-        SiteClientInsightsService.execute()
+        SiteClientInsightsService.execute()  # Run the insights export.
 
     @staticmethod
-    def _normalize_client_mac_or_none(client_mac: str) -> str | None:
+    def _normalize_client_mac_or_none(client_mac: str) -> str | None:  # Normalize a client MAC.
         """Validate and normalize client MAC for site insights endpoints."""
-        if not client_mac:
-            return None
-        if not PacketCaptureManager.validate_mac_address(client_mac):
-            return None
-        return PacketCaptureManager.normalize_mac_address(client_mac)
+        if not client_mac:  # Empty input.
+            return None  # Return None.
+        if not PacketCaptureManager.validate_mac_address(client_mac):  # Invalid MAC.
+            return None  # Return None.
+        return PacketCaptureManager.normalize_mac_address(client_mac)  # Return normalized MAC.
 
     @staticmethod
-    def wifi_clients(site_id=None):
+    def wifi_clients(site_id=None):  # Export WiFi clients.
         """Compatibility facade that delegates WiFi client export to extracted exporter."""
         logging.info(
             "Delegating wifi_clients to WifiClientsExporter"
@@ -13012,14 +13012,14 @@ class SiteClientExporter:
         logging.debug("Completed delegated wifi_clients export workflow")  # Log delegated exporter completion.
 
     @staticmethod
-    def beacons():
+    def beacons():  # Export beacons.
         """Export beacons for a site to SiteBeacons.csv."""
         SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.sites.beacons.listSiteBeacons, data_type="beacons", sort_key="name"
         )
 
 
-class SiteConfigExporter:
+class SiteConfigExporter:  # Site config exporters.
     """
     Site Configuration Exporter
 
@@ -13028,23 +13028,23 @@ class SiteConfigExporter:
     """
 
     @staticmethod
-    def wlans(site_id=None):
+    def wlans(site_id=None):  # Export site WLANs.
         """Export effective WLANs for a site to SiteWlans.csv."""
-        logging.info("Starting export of site WLANs...")
+        logging.info("Starting export of site WLANs...")  # Log start.
 
-        if not site_id:
-            site_id = PromptUtils.select_site()
-            if not site_id:
-                logging.error("No site selected. Exiting.")
-                return
+        if not site_id:  # No site given.
+            site_id = PromptUtils.select_site()  # Select a site.
+            if not site_id:  # No site.
+                logging.error("No site selected. Exiting.")  # Log the error.
+                return  # Abort.
 
         try:
-            response = mistapi.api.v1.orgs.sites.listOrgSites(
+            response = mistapi.api.v1.orgs.sites.listOrgSites(  # List org sites.
                 apisession,
                 ConfigUtils.get_cached_or_prompted_org_id(),
             )
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next(
+            sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            site_name = next(  # Resolve site name.
                 (site["name"] for site in sites if site["id"] == site_id),
                 site_id,
             )
