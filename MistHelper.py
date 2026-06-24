@@ -16398,17 +16398,17 @@ class AddressComparisonCounters:  # Address comparison counters.
 
     def get_duration(self):  # Get the duration.
         """Get the elapsed time in seconds between start and end timing."""
-        return self._impl.get_duration()
+        return self._impl.get_duration()  # Delegate to the impl.
 
-    def log_summary(self):
+    def log_summary(self):  # Log the summary.
         """Log a comprehensive summary of all counter metrics."""
-        self._impl.log_summary()
+        self._impl.log_summary()  # Delegate to the impl.
 
 
-class InventoryCSVComparator:
+class InventoryCSVComparator:  # Inventory CSV comparator.
     """Compare Mist inventory with CSV. Delegated to src.inventory.csv_comparator."""
 
-    def __init__(
+    def __init__(  # Capture comparison inputs.
         self, fast: bool = False, address_check: bool = False, debug: bool = False, skip_ssl_verify: bool = True
     ):
         """
@@ -16424,7 +16424,7 @@ class InventoryCSVComparator:
             InventoryCSVComparator as _Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        self._impl = _Impl(
+        self._impl = _Impl(  # Build the impl.
             fast=fast,
             address_check=address_check,
             debug=debug,
@@ -16441,22 +16441,22 @@ class InventoryCSVComparator:
             address_validation_config_cls=AddressValidationConfig,
         )
 
-    def execute(self) -> None:
+    def execute(self) -> None:  # Run the comparison.
         """Execute the complete inventory comparison workflow."""
-        self._impl.execute()
+        self._impl.execute()  # Delegate to the impl.
 
 
 # ============================================================================
 # WAN2 MIGRATION MANAGER CLASS (delegated)
 # ============================================================================
-class WAN2MigrationManager:
+class WAN2MigrationManager:  # WAN2 migration manager.
     """Delegation wrapper for extracted WAN2 migration manager implementation."""
 
-    def __init__(self):
+    def __init__(self):  # Wire and build the impl.
         """Initialize delegated WAN2 manager with runtime dependencies."""
         from src.gateway import wan2_migration_manager as wan2_module  # noqa: PLC0415,I001
 
-        wan2_module.configure_wan2_migration_dependencies(
+        wan2_module.configure_wan2_migration_dependencies(  # Wire dependencies.
             apisession_dependency=apisession,
             config_utils=ConfigUtils,
             cache_utils=CacheUtils,
@@ -16468,13 +16468,13 @@ class WAN2MigrationManager:
             mistapi_dependency=mistapi,
             site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
         )
-        self._impl = wan2_module.WAN2MigrationManager()
+        self._impl = wan2_module.WAN2MigrationManager()  # Create the impl.
 
-    def set_site_variable(self):
+    def set_site_variable(self):  # Set a site variable.
         """Menu #149 delegated entrypoint."""
-        return self._impl.set_site_variable()
+        return self._impl.set_site_variable()  # Delegate to the impl.
 
-    def __getattr__(self, name):
+    def __getattr__(self, name):  # Forward unknown attributes.
         """Proxy attribute access to the extracted implementation."""
         return getattr(self._impl, name)  # Delegate to real impl for test compat
 
@@ -16482,7 +16482,7 @@ class WAN2MigrationManager:
 # ============================================================================
 # ORG CONFIG MIGRATION MANAGER CLASS
 # ============================================================================
-class OrgConfigMigrationManager:
+class OrgConfigMigrationManager:  # Org config migration manager.
     """
     Export and import org-level WAN/gateway configuration for cross-org migration.
 
@@ -16542,7 +16542,7 @@ class OrgConfigMigrationManager:
         },
     ]
 
-    def __init__(self, session, org_id_fn, safe_input_fn):
+    def __init__(self, session, org_id_fn, safe_input_fn):  # Capture session and helpers.
         """Initialize with API session, org_id resolver, and safe_input function."""
         self.session = session  # Authenticated mistapi session for API calls
         self.org_id_fn = org_id_fn  # Callable that returns current org_id (may prompt user)
@@ -16555,7 +16555,7 @@ class OrgConfigMigrationManager:
     # Public entry points
     # ------------------------------------------------------------------
 
-    def export_config(self) -> None:
+    def export_config(self) -> None:  # Export the org config.
         """Menu 176: Export org WAN/gateway config to a JSON bundle."""
         logging.info("Menu 176: Starting org config export")  # Log operation start for traceability
         self.org_id = self.org_id_fn()  # Resolve current org ID from cache or user prompt
@@ -16576,22 +16576,22 @@ class OrgConfigMigrationManager:
             results[config_type["key"]] = items  # Store under the type's key name
         return results  # Return complete results dict
 
-    def import_config(self) -> None:
+    def import_config(self) -> None:  # Import the org config.
         """Menu 177: Import a JSON bundle into the current org."""
         logging.info("Menu 177: Starting org config import")  # Log operation start for traceability
         self.org_id = self.org_id_fn()  # Resolve destination org ID from cache or user prompt
         filepath = self._select_import_file()  # Let user pick from available export bundles
         if not filepath:  # User cancelled or no files found
-            return
+            return  # Abort.
 
         bundle = self._load_and_validate_bundle(filepath)  # Parse JSON and validate structure
         if not bundle:  # Invalid or unreadable bundle
-            return
+            return  # Abort.
 
         self._display_bundle_preview(bundle)  # Show what the bundle contains before proceeding
         dry_run = self._prompt_dry_run()  # Ask if user wants preview-only mode
         if not dry_run and not self._confirm_import():  # Require typed IMPORT for real operations
-            return
+            return  # Abort.
 
         self._fetch_existing_objects()  # Cache destination org objects for conflict detection
         results = self._execute_import(bundle, dry_run)  # Run the dependency-ordered import
@@ -16602,7 +16602,7 @@ class OrgConfigMigrationManager:
     # Export helpers
     # ------------------------------------------------------------------
 
-    def _get_org_name(self) -> str:
+    def _get_org_name(self) -> str:  # Resolve the org name.
         """Fetch organization name from the API."""
         logging.info("Fetching org name for org %s", self.org_id)  # Log before API call
         try:
@@ -16615,7 +16615,7 @@ class OrgConfigMigrationManager:
             logging.warning("Could not fetch org name: %s", error)  # Log warning with error details
         return "Unknown"  # Fallback when API call fails
 
-    def _resolve_api_fn(self, dotted_path: str):
+    def _resolve_api_fn(self, dotted_path: str):  # Resolve an API function.
         """Resolve a dotted string like 'mistapi.api.v1.orgs.networks.listOrgNetworks' to a callable."""
         parts = dotted_path.split(".")  # Split dotted path into module segments
         current = mistapi  # Start from the top-level mistapi module
@@ -16691,7 +16691,7 @@ class OrgConfigMigrationManager:
     # Import helpers
     # ------------------------------------------------------------------
 
-    def _select_import_file(self) -> str:
+    def _select_import_file(self) -> str:  # Select an import file.
         """List available export bundles and let the user pick one."""
         import glob  # Local import -- only needed for this method
 
@@ -16724,7 +16724,7 @@ class OrgConfigMigrationManager:
             if 0 <= selected < len(files):  # Validate index is within range
                 return files[selected]  # Return the selected file path
         except (ValueError, IndexError):  # Handle non-numeric or out-of-range input
-            pass
+            pass  # Ignore and continue.
         print("  Invalid selection.")  # User feedback for bad input
         return ""  # Signal no valid selection
 
@@ -16773,7 +16773,7 @@ class OrgConfigMigrationManager:
         total = sum(counts.values())  # Total across all types
         print(f"  Total objects: {total}")  # Grand total for user awareness
 
-    def _prompt_dry_run(self) -> bool:
+    def _prompt_dry_run(self) -> bool:  # Prompt for dry-run.
         """Ask if the user wants a dry-run (preview only)."""
         choice = self.safe_input_fn(  # EOF-safe input for SSH/container contexts
             "\n  Run as dry-run (preview only)? [Y/n]: ",
@@ -16782,7 +16782,7 @@ class OrgConfigMigrationManager:
         )
         return choice.upper() != "N"  # Anything except explicit 'N' means dry-run
 
-    def _confirm_import(self) -> bool:
+    def _confirm_import(self) -> bool:  # Confirm the import.
         """Require typed 'IMPORT' confirmation for actual import."""
         print("\n  WARNING: This will create configuration objects in the destination org.")  # Safety warning
         print("  This operation cannot be automatically undone.")  # Emphasize irreversibility
@@ -16799,7 +16799,7 @@ class OrgConfigMigrationManager:
     # Conflict detection
     # ------------------------------------------------------------------
 
-    def _fetch_existing_objects(self) -> None:
+    def _fetch_existing_objects(self) -> None:  # Fetch existing objects.
         """Fetch current objects from destination org for conflict detection."""
         print("\n  Fetching existing config from destination org...")  # User feedback
         logging.info("Fetching existing objects from destination org for conflict detection")  # Log operation
@@ -16813,7 +16813,7 @@ class OrgConfigMigrationManager:
         existing_list = self._existing.get(type_key, [])  # Get cached objects for this type
         conflict = self._check_name_conflict(new_obj, existing_list)  # Check name collision first
         if conflict:  # Name match found -- return immediately
-            return conflict
+            return conflict  # Return the conflict.
 
         config_entry = next((ct for ct in self.CONFIG_TYPES if ct["key"] == type_key), None)  # Find config metadata
         if config_entry and config_entry.get("conflict_check"):  # Only check subnets for types that need it
@@ -16824,7 +16824,7 @@ class OrgConfigMigrationManager:
         """Check if an object with the same name already exists (case-insensitive)."""
         new_name = (new_obj.get("name") or "").lower()  # Normalize to lowercase for comparison
         if not new_name:  # Skip unnamed objects (shouldn't happen but be defensive)
-            return None
+            return None  # No conflict.
         for existing in existing_list:  # Check every existing object in destination
             existing_name = (existing.get("name") or "").lower()  # Normalize existing name
             if new_name == existing_name:  # Case-insensitive match found
@@ -16838,24 +16838,24 @@ class OrgConfigMigrationManager:
     def _check_subnet_overlap(self, new_obj: dict, existing_list: list, type_key: str) -> dict | None:  # type: ignore[type-arg]
         """Check for IP/subnet overlaps between new and existing objects."""
         if type_key == "networks":  # Networks use subnet field for CIDR
-            return self._check_network_subnet_overlap(new_obj, existing_list)
+            return self._check_network_subnet_overlap(new_obj, existing_list)  # Check subnet overlap.
         if type_key == "services":  # Services use addresses[] array
-            return self._check_service_address_overlap(new_obj, existing_list)
+            return self._check_service_address_overlap(new_obj, existing_list)  # Check address overlap.
         return None  # Other types don't have IP fields
 
     def _check_network_subnet_overlap(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
         """Check network subnet overlap using ipaddress module."""
         new_subnet = new_obj.get("subnet")  # Get the CIDR subnet string
         if not new_subnet:  # No subnet defined -- skip overlap check
-            return None
+            return None  # No conflict.
         try:
             new_net = ipaddress.ip_network(new_subnet, strict=False)  # Parse CIDR, allow host bits
         except ValueError:  # Invalid CIDR format -- skip gracefully
-            return None
+            return None  # No conflict.
         for existing in existing_list:  # Compare against each existing network
             existing_subnet = existing.get("subnet")  # Get existing network's CIDR
             if not existing_subnet:  # Skip existing networks without subnets
-                continue
+                continue  # Skip it.
             try:
                 existing_net = ipaddress.ip_network(existing_subnet, strict=False)  # Parse for comparison
                 if new_net.overlaps(existing_net):  # Check if any IP addresses are shared
@@ -16864,18 +16864,18 @@ class OrgConfigMigrationManager:
                         "detail": f"{new_subnet} overlaps with '{existing.get('name')}' ({existing_subnet})",
                     }
             except ValueError:  # Invalid existing CIDR -- skip and continue
-                continue
+                continue  # Skip it.
         return None  # No subnet overlaps found
 
     def _check_service_address_overlap(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
         """Check service address overlap for objects with addresses[] field."""
         new_addrs = new_obj.get("addresses", [])  # Get list of IP/CIDR addresses
         if not new_addrs:  # No addresses to check -- skip
-            return None
+            return None  # No conflict.
         for addr in new_addrs:  # Check each address in the new service
             overlap = self._check_single_address(addr, existing_list)  # Compare against all existing
             if overlap:  # First overlap found -- return immediately
-                return overlap
+                return overlap  # Return the overlap.
         return None  # No address overlaps found
 
     def _check_single_address(self, addr: str, existing_list: list) -> dict | None:  # type: ignore[type-arg]
@@ -16883,7 +16883,7 @@ class OrgConfigMigrationManager:
         try:
             new_net = ipaddress.ip_network(addr, strict=False)  # Parse address as network for overlap check
         except ValueError:  # Invalid address format -- skip
-            return None
+            return None  # No conflict.
         for existing in existing_list:  # Compare against each existing service
             for ex_addr in existing.get("addresses", []):  # Check each address in existing service
                 try:
@@ -16894,14 +16894,14 @@ class OrgConfigMigrationManager:
                             "detail": f"{addr} overlaps with '{existing.get('name')}' ({ex_addr})",
                         }
                 except ValueError:  # Invalid existing address -- skip and continue
-                    continue
+                    continue  # Skip it.
         return None  # No address overlap found
 
     # ------------------------------------------------------------------
     # ID remapping
     # ------------------------------------------------------------------
 
-    def _build_remap_entry(self, source_id: str, dest_id: str) -> None:
+    def _build_remap_entry(self, source_id: str, dest_id: str) -> None:  # Record an id remap.
         """Record a source-to-destination ID mapping."""
         self._remap_table[source_id] = dest_id  # Store mapping for cross-reference remapping
         logging.debug("ID remap: %s -> %s", source_id[:8], dest_id[:8])  # Log truncated IDs for tracing
@@ -16909,20 +16909,20 @@ class OrgConfigMigrationManager:
     def _remap_object_references(self, obj: dict, type_key: str) -> dict:  # type: ignore[type-arg]
         """Remap foreign ID references in an object using the remap table."""
         if type_key == "vpns":  # VPNs reference network IDs
-            self._remap_vpn_networks(obj)
+            self._remap_vpn_networks(obj)  # Remap VPN networks.
         elif type_key == "gateway_templates":  # Gateway templates reference network/VPN IDs
-            self._remap_gateway_template_refs(obj)
+            self._remap_gateway_template_refs(obj)  # Remap gateway refs.
         elif type_key == "device_profiles":  # Device profiles reference gateway template IDs
-            self._remap_device_profile_refs(obj)
+            self._remap_device_profile_refs(obj)  # Remap profile refs.
         elif type_key == "service_policies":  # Service policies reference service IDs
-            self._remap_service_policy_refs(obj)
+            self._remap_service_policy_refs(obj)  # Remap policy refs.
         return obj  # Return object with remapped references
 
     def _remap_vpn_networks(self, obj: dict) -> None:  # type: ignore[type-arg]
         """Remap network IDs inside VPN network entries."""
         networks = obj.get("networks", {})  # VPN networks is a dict of name->config
         if not isinstance(networks, dict):  # Guard against unexpected data shapes
-            return
+            return  # Abort.
         remapped: dict[str, dict] = {}  # type: ignore[type-arg] # Build new dict with remapped IDs
         for net_name, net_config in networks.items():  # Iterate each network entry
             if isinstance(net_config, dict) and "id" in net_config:  # Check if entry has an ID to remap
@@ -16950,7 +16950,7 @@ class OrgConfigMigrationManager:
         """Remap service IDs in service policy rules."""
         services = obj.get("services", [])  # Service policies contain a list of service refs
         if not isinstance(services, list):  # Guard against unexpected data shapes
-            return
+            return  # Abort.
         for service_entry in services:  # Iterate each service reference in the policy
             if isinstance(service_entry, dict) and "id" in service_entry:  # Has remappable ID
                 old_id = service_entry["id"]  # Capture source org's service ID
@@ -16974,7 +16974,7 @@ class OrgConfigMigrationManager:
         for config_type in sorted_types:  # Process each type in dependency order
             objects = bundle.get(config_type["key"], [])  # Get objects of this type from bundle
             if not objects:  # Skip empty types
-                continue
+                continue  # Skip it.
             self._import_type_batch(config_type, objects, dry_run, results)  # Import the batch
         return results  # Return all results for report
 
@@ -17009,8 +17009,8 @@ class OrgConfigMigrationManager:
 
         conflict = self._detect_conflicts(obj, type_key)  # Check for name/subnet conflicts
         if conflict:  # Conflict found -- skip and record
-            self._record_conflict(type_key, obj_name, source_id, conflict, results)
-            return
+            self._record_conflict(type_key, obj_name, source_id, conflict, results)  # Record the conflict.
+            return  # Skip it.
 
         cleaned = self._strip_source_fields(obj)  # Remove source-org-specific fields
         cleaned = self._remap_object_references(cleaned, type_key)  # Remap cross-references to dest IDs
@@ -17018,7 +17018,7 @@ class OrgConfigMigrationManager:
         if dry_run:  # Preview mode -- don't make API calls
             print(f"      {label}Would import: {obj_name}")  # Show what would happen
             results.append({"type": type_key, "name": obj_name, "status": "would_import"})  # Record for report
-            return
+            return  # Abort.
 
         self._create_and_record(config_type, cleaned, obj_name, source_id, results)  # Create via API
 
@@ -17035,7 +17035,7 @@ class OrgConfigMigrationManager:
         results.append({"type": type_key, "name": name, "status": "skipped", "reason": conflict["detail"]})  # Record
         existing_id = conflict.get("existing_id")  # Get destination org's matching object ID
         if existing_id and source_id:  # Both IDs available -- record mapping for cross-references
-            self._build_remap_entry(source_id, existing_id)
+            self._build_remap_entry(source_id, existing_id)  # Remap to existing id.
 
     def _create_and_record(  # type: ignore[type-arg]
         self,
@@ -17053,7 +17053,7 @@ class OrgConfigMigrationManager:
             response = create_fn(self.session, self.org_id, body=cleaned)  # Call Mist API to create
             new_id = self._extract_created_id(response)  # Extract new object ID from response
             if source_id and new_id:  # Record mapping for downstream cross-references
-                self._build_remap_entry(source_id, new_id)
+                self._build_remap_entry(source_id, new_id)  # Remap to new id.
             print(f"      OK: {name}")  # User feedback showing success
             logging.debug("Created %s '%s' with ID %s", type_key, name, new_id[:8] if new_id else "n/a")  # Log result
             results.append({"type": type_key, "name": name, "status": "imported"})  # Record success
@@ -17062,7 +17062,7 @@ class OrgConfigMigrationManager:
             logging.error("Failed to create %s '%s': %s", type_key, name, error)  # Log error with context
             results.append({"type": type_key, "name": name, "status": "failed", "reason": str(error)})  # Record failure
 
-    def _extract_created_id(self, response) -> str:
+    def _extract_created_id(self, response) -> str:  # Extract the created id.
         """Extract the new object ID from a create API response."""
         if hasattr(response, "data") and isinstance(response.data, dict):  # Check response has data dict
             return response.data.get("id", "")  # type: ignore[no-any-return] # Return the new ID
@@ -17084,13 +17084,13 @@ class OrgConfigMigrationManager:
         print("  " + "=" * 55)  # Report header separator
 
         if would_import:  # Show dry-run preview section if applicable
-            self._print_report_section("WOULD IMPORT (dry-run)", would_import)
+            self._print_report_section("WOULD IMPORT (dry-run)", would_import)  # Report would-import.
         if imported:  # Show successfully imported section
-            self._print_report_section("IMPORTED", imported)
+            self._print_report_section("IMPORTED", imported)  # Report imported.
         if skipped:  # Show skipped-due-to-conflicts section
-            self._print_report_section("SKIPPED (conflicts)", skipped)
+            self._print_report_section("SKIPPED (conflicts)", skipped)  # Report skipped.
         if failed:  # Show failed-to-import section
-            self._print_report_section("FAILED", failed)
+            self._print_report_section("FAILED", failed)  # Report failed.
 
         self._print_report_totals(imported, skipped, failed, would_import)  # Show grand totals
 
@@ -17108,19 +17108,19 @@ class OrgConfigMigrationManager:
         total = len(imported) + len(skipped) + len(failed) + len(would_import)  # Grand total
         print(f"  Total: {total} objects processed")  # Total line
         if would_import:  # Show dry-run count
-            print(f"    Would import: {len(would_import)}")
+            print(f"    Would import: {len(would_import)}")  # Show would-import count.
         if imported:  # Show imported count
-            print(f"    Imported:     {len(imported)}")
+            print(f"    Imported:     {len(imported)}")  # Show imported count.
         if skipped:  # Show skipped count
-            print(f"    Skipped:      {len(skipped)}")
+            print(f"    Skipped:      {len(skipped)}")  # Show skipped count.
         if failed:  # Show failed count
-            print(f"    Failed:       {len(failed)}")
+            print(f"    Failed:       {len(failed)}")  # Show failed count.
 
 
 # ============================================================================
 # WAN PROBE CONFIGURATION MANAGER CLASS
 # ============================================================================
-class WANProbeConfigManager:
+class WANProbeConfigManager:  # WAN probe config manager.
     """
     Manages WAN interface ICMP probe configuration for gateway templates.
 
@@ -17138,22 +17138,22 @@ class WANProbeConfigManager:
     # Default probe configuration - loaded from environment variables
     # MIST_WAN_PROBE_IPS: Comma-separated list of probe IPs (e.g., "192.151.29.254,18.154.184.32")
     # MIST_WAN_PROBE_PROFILE: Probe profile name (e.g., "lte")
-    DEFAULT_PROBE_IPS = [
+    DEFAULT_PROBE_IPS = [  # Default probe IPs.
         ip.strip() for ip in os.getenv("MIST_WAN_PROBE_IPS", "192.151.29.254,18.154.184.32").split(",") if ip.strip()
     ]
-    DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")
+    DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")  # Default probe profile.
 
-    def __init__(self):
+    def __init__(self):  # Init the manager state.
         """Initialize the WAN Probe Configuration Manager."""
-        self.org_id = None
-        self.templates = []
-        self.sites = []
-        self.template_site_counts: dict[str, int] = {}
-        self.probe_ips = self.DEFAULT_PROBE_IPS.copy()
-        self.probe_profile = self.DEFAULT_PROBE_PROFILE
+        self.org_id = None  # Resolved org id.
+        self.templates = []  # Loaded templates.
+        self.sites = []  # Loaded sites.
+        self.template_site_counts: dict[str, int] = {}  # Sites per template.
+        self.probe_ips = self.DEFAULT_PROBE_IPS.copy()  # Working probe IPs.
+        self.probe_profile = self.DEFAULT_PROBE_PROFILE  # Working probe profile.
 
     @classmethod
-    def configure(cls, dry_run: bool = False) -> None:
+    def configure(cls, dry_run: bool = False) -> None:  # Configure entry point.
         """
         Menu #166: Configure WAN Probe Override on Gateway Templates (DESTRUCTIVE)
 
@@ -17163,114 +17163,114 @@ class WANProbeConfigManager:
         Args:
             dry_run: If True, show what would change without making modifications
         """
-        manager = cls()
-        manager._execute(dry_run)
+        manager = cls()  # Build the manager.
+        manager._execute(dry_run)  # Run the flow.
 
-    def _execute(self, dry_run: bool) -> None:
+    def _execute(self, dry_run: bool) -> None:  # Run the probe config flow.
         """Main execution flow for WAN probe configuration."""
-        self._display_header(dry_run)
+        self._display_header(dry_run)  # Show the header.
 
-        if not self._initialize():
-            return
+        if not self._initialize():  # Initialize state.
+            return  # Abort.
 
-        if not self._load_data():
-            return
+        if not self._load_data():  # Load the data.
+            return  # Abort.
 
-        templates_to_modify = self._select_templates()
-        if not templates_to_modify:
-            return
+        templates_to_modify = self._select_templates()  # Select templates.
+        if not templates_to_modify:  # None selected.
+            return  # Abort.
 
-        templates_with_changes = self._analyze_templates(templates_to_modify)
-        if not templates_with_changes:
-            print("\n  No WAN interfaces found in selected templates.")
-            print("  No changes needed.")
-            logging.info("Menu #166: No WAN interfaces found in selected templates")
-            return
+        templates_with_changes = self._analyze_templates(templates_to_modify)  # Analyze templates.
+        if not templates_with_changes:  # No changes.
+            print("\n  No WAN interfaces found in selected templates.")  # Tell the user.
+            print("  No changes needed.")  # Tell the user.
+            logging.info("Menu #166: No WAN interfaces found in selected templates")  # Log it.
+            return  # Abort.
 
-        self._show_preview(templates_with_changes, dry_run)
+        self._show_preview(templates_with_changes, dry_run)  # Show the preview.
 
-        if not dry_run:
-            if not self._confirm_operation(len(templates_with_changes)):
-                return
+        if not dry_run:  # Real run.
+            if not self._confirm_operation(len(templates_with_changes)):  # Need confirmation.
+                return  # Abort.
 
-        results = self._apply_changes(templates_with_changes, dry_run)
-        self._generate_report(results, dry_run)
+        results = self._apply_changes(templates_with_changes, dry_run)  # Apply the changes.
+        self._generate_report(results, dry_run)  # Generate the report.
 
-    def _display_header(self, dry_run: bool) -> None:
+    def _display_header(self, dry_run: bool) -> None:  # Show the header.
         """Display operation header with configuration details."""
-        print("\n  DESTRUCTIVE: Configure WAN Interface ICMP Probe Settings")
-        print("=" * 70)
-        if dry_run:
-            print("  >> DRY-RUN MODE: No changes will be made to templates")
-            print("  >> This will show what WOULD be changed without modifying anything")
+        print("\n  DESTRUCTIVE: Configure WAN Interface ICMP Probe Settings")  # Header.
+        print("=" * 70)  # Divider.
+        if dry_run:  # Dry-run.
+            print("  >> DRY-RUN MODE: No changes will be made to templates")  # Tell the user.
+            print("  >> This will show what WOULD be changed without modifying anything")  # Tell the user.
         else:
-            print("  !? WARNING: This operation modifies gateway templates")
-            print("  !? All sites using affected templates will inherit the change")
-        print("=" * 70)
-        print("\n  Probe Configuration:")
-        print(f"    Probe IPs: {self.probe_ips}")
-        print(f"    Probe Profile: {self.probe_profile}")
-        print("=" * 70)
-        logging.warning("Menu #166 DESTRUCTIVE: Configure WAN Probe Override operation started")
+            print("  !? WARNING: This operation modifies gateway templates")  # Warn destructive.
+            print("  !? All sites using affected templates will inherit the change")  # Warn inheritance.
+        print("=" * 70)  # Divider.
+        print("\n  Probe Configuration:")  # Probe config header.
+        print(f"    Probe IPs: {self.probe_ips}")  # Show probe IPs.
+        print(f"    Probe Profile: {self.probe_profile}")  # Show probe profile.
+        print("=" * 70)  # Divider.
+        logging.warning("Menu #166 DESTRUCTIVE: Configure WAN Probe Override operation started")  # Log the start.
 
-    def _initialize(self) -> bool:
+    def _initialize(self) -> bool:  # Initialize state.
         """Initialize org_id. Returns True on success."""
-        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not self.org_id:
-            print(" Failed to get organization ID.")
-            logging.error("Menu #166: Could not obtain org_id")
-            return False
-        return True
+        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not self.org_id:  # No org.
+            print(" Failed to get organization ID.")  # Tell the user.
+            logging.error("Menu #166: Could not obtain org_id")  # Log the error.
+            return False  # Abort.
+        return True  # Initialized.
 
-    def _load_data(self) -> bool:
+    def _load_data(self) -> bool:  # Load the data.
         """Load gateway templates and site data. Returns True on success."""
-        print("\n  Loading gateway template data...")
+        print("\n  Loading gateway template data...")  # Tell the user.
         CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Refresh sites CSV.
 
-        templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
-        with open(templates_path, encoding="utf-8") as file_handle:
-            self.templates = list(csv.DictReader(file_handle))
+        templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")  # Templates path.
+        with open(templates_path, encoding="utf-8") as file_handle:  # Open the CSV.
+            self.templates = list(csv.DictReader(file_handle))  # Read the templates.
 
-        if not self.templates:
-            print(" No gateway templates found.")
-            logging.warning("Menu #166: No gateway templates available")
-            return False
+        if not self.templates:  # No templates.
+            print(" No gateway templates found.")  # Tell the user.
+            logging.warning("Menu #166: No gateway templates available")  # Warn none.
+            return False  # Abort.
 
-        sites_path = FilePathUtils.get_csv_path("SiteList.csv")
-        with open(sites_path, encoding="utf-8") as file_handle:
-            self.sites = list(csv.DictReader(file_handle))
+        sites_path = FilePathUtils.get_csv_path("SiteList.csv")  # Sites path.
+        with open(sites_path, encoding="utf-8") as file_handle:  # Open the CSV.
+            self.sites = list(csv.DictReader(file_handle))  # Read the sites.
 
         # Build template site counts (excluding sites matching MIST_SITE_EXCLUDE_PREFIX)
-        for site in self.sites:
+        for site in self.sites:  # Walk sites.
             if MIST_SITE_EXCLUDE_PREFIX and site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX):
-                continue
-            template_id = site.get("gatewaytemplate_id", "").strip()
-            if template_id:
+                continue  # Skip it.
+            template_id = site.get("gatewaytemplate_id", "").strip()  # Read template id.
+            if template_id:  # Have a template.
                 self.template_site_counts[template_id] = self.template_site_counts.get(template_id, 0) + 1
 
         logging.info("Loaded %s gateway templates and %s sites", len(self.templates), len(self.sites))
-        return True
+        return True  # Loaded.
 
-    def _select_templates(self) -> list[dict[str, Any]]:
+    def _select_templates(self) -> list[dict[str, Any]]:  # Select templates.
         """Display templates and get user selection. Returns selected templates."""
-        templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())
+        templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())  # Sort by name.
 
-        print(f"\n  Available Gateway Templates ({len(templates_sorted)}):")
-        template_list = []
-        for idx, template in enumerate(templates_sorted, start=1):
-            template_id = template.get("id", "")
-            template_name = template.get("name", "Unnamed Template")
-            site_count = self.template_site_counts.get(template_id, 0)
+        print(f"\n  Available Gateway Templates ({len(templates_sorted)}):")  # Tell the user.
+        template_list = []  # Display rows.
+        for idx, template in enumerate(templates_sorted, start=1):  # Enumerate templates.
+            template_id = template.get("id", "")  # Template id.
+            template_name = template.get("name", "Unnamed Template")  # Template name.
+            site_count = self.template_site_counts.get(template_id, 0)  # Site count.
             template_list.append({"id": template_id, "name": template_name, "site_count": site_count})
-            print(f"   [{idx}] {template_name} ({site_count} sites)")
+            print(f"   [{idx}] {template_name} ({site_count} sites)")  # Print the option.
 
-        print("\n  Template Selection:")
-        print("   Enter template numbers (comma-separated, e.g., 1,3,5)")
-        print("   Or 'all' to modify all templates")
-        print("   Or 'cancel' to abort")
+        print("\n  Template Selection:")  # Selection header.
+        print("   Enter template numbers (comma-separated, e.g., 1,3,5)")  # Tell the user.
+        print("   Or 'all' to modify all templates")  # Tell the user.
+        print("   Or 'cancel' to abort")  # Tell the user.
 
-        selection = (
+        selection = (  # Read the selection.
             InputUtils.safe_input(
                 "\n  Selection: ",
                 context="wan_probe_template_selection",
