@@ -13761,7 +13761,7 @@ class GatewayHaExporter:  # Gateway HA exporter.
     ]
 
     @staticmethod
-    def ha_cluster_info() -> None:
+    def ha_cluster_info() -> None:  # Export HA cluster info.
         """Export HA gateway cluster info for a selected site (Menu #87).
 
         Flow:
@@ -13803,7 +13803,7 @@ class GatewayHaExporter:  # Gateway HA exporter.
             logging.exception("Failed to export HA gateway cluster info: %s", exception)  # Log full traceback
 
     @staticmethod
-    def _build_ha_rows(ha_gateways: list, site_id: str) -> list:
+    def _build_ha_rows(ha_gateways: list, site_id: str) -> list:  # Build HA summary rows.
         """Build merged rows combining gateway stats with cluster node pair membership.
 
         For each HA gateway, fetches the /ha endpoint to get the peer node MAC addresses,
@@ -13851,7 +13851,7 @@ class GatewayHaExporter:  # Gateway HA exporter.
         return rows  # Return the complete merged dataset
 
     @staticmethod
-    def _print_ha_summary(rows: list) -> None:
+    def _print_ha_summary(rows: list) -> None:  # Print the HA summary.
         """Print a formatted summary of HA gateway cluster pairs to the terminal.
 
         Args:
@@ -13876,12 +13876,12 @@ class GatewayHaExporter:  # Gateway HA exporter.
         print()  # Blank line after table for readability
 
 
-def _get_service_ping_manager_instance():
+def _get_service_ping_manager_instance():  # Build a ServicePingManager.
     """Create extracted ServicePingManager instance with MistHelper runtime dependencies."""
-    from src.websocket.service_ping_manager import ServicePingManager as _SPM
+    from src.websocket.service_ping_manager import ServicePingManager as _SPM  # Import the extracted class.
     from src.websocket.service_ping_manager import configure_service_ping_manager_dependencies as _configure_spm
 
-    _configure_spm(
+    _configure_spm(  # Wire dependencies.
         apisession_dependency=apisession,
         mistapi_dependency=mistapi,
         prompt_utils=PromptUtils,
@@ -13893,10 +13893,10 @@ def _get_service_ping_manager_instance():
         api_fetch_utils=APIFetchUtils,
     )
 
-    return _SPM()
+    return _SPM()  # Return the instance.
 
 
-class ServicePingManager:
+class ServicePingManager:  # Service ping facade.
     """Service ping manager (Menu 120).
 
     Implementation extracted to `src/websocket/service_ping_manager.py` and
@@ -13904,29 +13904,29 @@ class ServicePingManager:
     MistHelper menu orchestration and delegation only.
     """
 
-    from src.websocket.service_ping_manager import ServicePingManager as _Extracted
+    from src.websocket.service_ping_manager import ServicePingManager as _Extracted  # Import the extracted class.
 
-    DEFAULT_HOST = _Extracted.DEFAULT_HOST
-    DEFAULT_COUNT = _Extracted.DEFAULT_COUNT
-    DEFAULT_SIZE = _Extracted.DEFAULT_SIZE
-    MIN_SIZE = _Extracted.MIN_SIZE
-    MAX_SIZE = _Extracted.MAX_SIZE
-    DEFAULT_TENANT = _Extracted.DEFAULT_TENANT
-    DEFAULT_SERVICE = _Extracted.DEFAULT_SERVICE
+    DEFAULT_HOST = _Extracted.DEFAULT_HOST  # Re-export default host.
+    DEFAULT_COUNT = _Extracted.DEFAULT_COUNT  # Re-export default count.
+    DEFAULT_SIZE = _Extracted.DEFAULT_SIZE  # Re-export default size.
+    MIN_SIZE = _Extracted.MIN_SIZE  # Re-export min size.
+    MAX_SIZE = _Extracted.MAX_SIZE  # Re-export max size.
+    DEFAULT_TENANT = _Extracted.DEFAULT_TENANT  # Re-export default tenant.
+    DEFAULT_SERVICE = _Extracted.DEFAULT_SERVICE  # Re-export default service.
 
-    def __init__(self):
+    def __init__(self):  # Build the delegate.
         """Initialize wrapper by mirroring extracted manager state for test compatibility."""
-        extracted = _get_service_ping_manager_instance()
-        self.__dict__.update(extracted.__dict__)
-        self._delegate = extracted
+        extracted = _get_service_ping_manager_instance()  # Create the extracted instance.
+        self.__dict__.update(extracted.__dict__)  # Copy its state.
+        self._delegate = extracted  # Keep the delegate.
 
-    def __getattr__(self, name):
+    def __getattr__(self, name):  # Forward unknown attributes.
         """Delegate unknown attributes and methods to extracted implementation."""
-        return getattr(self._delegate, name)
+        return getattr(self._delegate, name)  # Delegate the attribute.
 
-    def execute(self) -> None:
+    def execute(self) -> None:  # Run the ping flow.
         """Execute menu 120 via the extracted service ping manager."""
-        self._delegate.execute()
+        self._delegate.execute()  # Delegate to the impl.
 
 
 # ============================================================================
@@ -13934,11 +13934,11 @@ class ServicePingManager:
 # ============================================================================
 
 
-def _get_routing_utils_instance():
+def _get_routing_utils_instance():  # Build a RoutingUtils.
     """Create RoutingUtils instance with MistHelper globals."""
-    from src.network.routing_utils import RoutingUtils as _RU
+    from src.network.routing_utils import RoutingUtils as _RU  # Import the extracted class.
 
-    return _RU(
+    return _RU(  # Wire dependencies.
         apisession=apisession,
         select_site_fn=PromptUtils.select_site_id_from_csv,
         select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(site_id, device_type=dtype),
@@ -13948,7 +13948,7 @@ def _get_routing_utils_instance():
     )
 
 
-class RoutingUtils:
+class RoutingUtils:  # Routing utils facade.
     """Routing utilities (Menus 6-8).
 
     Implementation extracted to src/network/routing_utils.py.
@@ -13957,19 +13957,19 @@ class RoutingUtils:
     """
 
     @staticmethod
-    def execute_show_forwarding_table():
+    def execute_show_forwarding_table():  # Show the forwarding table.
         """Execute show forwarding table on a gateway/SSR device via WebSocket."""
-        _get_routing_utils_instance().execute_show_forwarding_table()
+        _get_routing_utils_instance().execute_show_forwarding_table()  # Delegate to the impl.
 
     @staticmethod
-    def execute_show_routing_table():
+    def execute_show_routing_table():  # Show the routing table.
         """Execute show route command on switches via WebSocket."""
-        _get_routing_utils_instance().execute_show_routing_table()
+        _get_routing_utils_instance().execute_show_routing_table()  # Delegate to the impl.
 
     @staticmethod
-    def execute_show_ssr_routes():
+    def execute_show_ssr_routes():  # Show SSR routes.
         """Execute SSR/SRX routing table via dedicated API."""
-        _get_routing_utils_instance().execute_show_ssr_routes()
+        _get_routing_utils_instance().execute_show_ssr_routes()  # Delegate to the impl.
 
 
 # ============================================================================
@@ -13978,13 +13978,13 @@ class RoutingUtils:
 # ============================================================================
 
 
-def _get_duc_instance():
+def _get_duc_instance():  # Build DeviceUtilityCommands.
     """Create DeviceUtilityCommands instance with MistHelper globals."""
-    from src.device.utility_commands import (
+    from src.device.utility_commands import (  # Import the extracted class.
         DeviceUtilityCommands as _DUC,
     )
 
-    return _DUC(
+    return _DUC(  # Wire dependencies.
         apisession=apisession,
         select_site_fn=PromptUtils.select_site_id_from_csv,
         select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(site_id, device_type=dtype),
@@ -13994,7 +13994,7 @@ def _get_duc_instance():
     )
 
 
-class DeviceUtilityCommands:
+class DeviceUtilityCommands:  # Device utility command facade.
     """Device utility commands (Menus 123-157).
 
     Implementation extracted to src/device/utility_commands.py.
@@ -14002,186 +14002,186 @@ class DeviceUtilityCommands:
     access to MistHelper globals (apisession, utility classes).
     """
 
-    from src.device.utility_commands import (
+    from src.device.utility_commands import (  # Import the extracted class.
         DeviceUtilityCommands as _Extracted,
     )
 
-    DEVICE_TYPE_COMPATIBILITY_MAP = _Extracted.DEVICE_TYPE_COMPATIBILITY_MAP
+    DEVICE_TYPE_COMPATIBILITY_MAP = _Extracted.DEVICE_TYPE_COMPATIBILITY_MAP  # Re-export compatibility map.
 
     @staticmethod
-    def traceroute() -> None:
+    def traceroute() -> None:  # Run traceroute.
         """Menu 123: Traceroute from device to destination host."""
-        _get_duc_instance().traceroute()
+        _get_duc_instance().traceroute()  # Delegate to the impl.
 
     @staticmethod
-    def show_ospf_neighbors() -> None:
+    def show_ospf_neighbors() -> None:  # Show OSPF neighbors.
         """Menu 124: Show OSPF neighbors on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_neighbors()
+        _get_duc_instance().show_ospf_neighbors()  # Delegate to the impl.
 
     @staticmethod
-    def show_ospf_interfaces() -> None:
+    def show_ospf_interfaces() -> None:  # Show OSPF interfaces.
         """Menu 125: Show OSPF interfaces on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_interfaces()
+        _get_duc_instance().show_ospf_interfaces()  # Delegate to the impl.
 
     @staticmethod
-    def show_ospf_database() -> None:
+    def show_ospf_database() -> None:  # Show OSPF database.
         """Menu 126: Show OSPF database on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_database()
+        _get_duc_instance().show_ospf_database()  # Delegate to the impl.
 
     @staticmethod
-    def show_ospf_summary() -> None:
+    def show_ospf_summary() -> None:  # Show OSPF summary.
         """Menu 127: Show OSPF summary on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_summary()
+        _get_duc_instance().show_ospf_summary()  # Delegate to the impl.
 
     @staticmethod
-    def resolve_dns() -> None:
+    def resolve_dns() -> None:  # Resolve DNS.
         """Menu 135: Test DNS resolution on SSR gateway."""
-        _get_duc_instance().resolve_dns()
+        _get_duc_instance().resolve_dns()  # Delegate to the impl.
 
     @staticmethod
-    def monitor_traffic() -> None:
+    def monitor_traffic() -> None:  # Monitor traffic.
         """Menu 136: Monitor traffic on switch/SRX port."""
-        _get_duc_instance().monitor_traffic()
+        _get_duc_instance().monitor_traffic()  # Delegate to the impl.
 
     @staticmethod
-    def run_top() -> None:
+    def run_top() -> None:  # Run top.
         """Menu 137: Run top command on switch/SRX."""
-        _get_duc_instance().run_top()
+        _get_duc_instance().run_top()  # Delegate to the impl.
 
     @staticmethod
-    def show_session() -> None:
+    def show_session() -> None:  # Show sessions.
         """Menu 128: Show sessions on SSR/SRX gateway."""
-        _get_duc_instance().show_session()
+        _get_duc_instance().show_session()  # Delegate to the impl.
 
     @staticmethod
-    def show_service_path() -> None:
+    def show_service_path() -> None:  # Show the service path.
         """Menu 129: Show service path on SSR gateway."""
-        _get_duc_instance().show_service_path()
+        _get_duc_instance().show_service_path()  # Delegate to the impl.
 
     @staticmethod
-    def show_bgp_summary() -> None:
+    def show_bgp_summary() -> None:  # Show BGP summary.
         """Menu 130: Show BGP summary on switch or gateway."""
-        _get_duc_instance().show_bgp_summary()
+        _get_duc_instance().show_bgp_summary()  # Delegate to the impl.
 
     @staticmethod
-    def show_arp_table() -> None:
+    def show_arp_table() -> None:  # Show the ARP table.
         """Menu 131: Show ARP table on switch or gateway."""
-        _get_duc_instance().show_arp_table()
+        _get_duc_instance().show_arp_table()  # Delegate to the impl.
 
     @staticmethod
-    def show_dhcp_leases() -> None:
+    def show_dhcp_leases() -> None:  # Show DHCP leases.
         """Menu 132: Show DHCP leases on switch or gateway."""
-        _get_duc_instance().show_dhcp_leases()
+        _get_duc_instance().show_dhcp_leases()  # Delegate to the impl.
 
     @staticmethod
-    def show_dot1x() -> None:
+    def show_dot1x() -> None:  # Show 802.1X state.
         """Menu 133: Show 802.1X table on switch."""
-        _get_duc_instance().show_dot1x()
+        _get_duc_instance().show_dot1x()  # Delegate to the impl.
 
     @staticmethod
-    def show_evpn_database() -> None:
+    def show_evpn_database() -> None:  # Show EVPN database.
         """Menu 134: Show EVPN database on switch or gateway."""
-        _get_duc_instance().show_evpn_database()
+        _get_duc_instance().show_evpn_database()  # Delegate to the impl.
 
     @staticmethod
-    def locate_device() -> None:
+    def locate_device() -> None:  # Locate the device.
         """Menu 138: Locate device by blinking LED."""
-        _get_duc_instance().locate_device()
+        _get_duc_instance().locate_device()  # Delegate to the impl.
 
     @staticmethod
-    def unlocate_device() -> None:
+    def unlocate_device() -> None:  # Unlocate the device.
         """Menu 139: Stop device LED blinking."""
-        _get_duc_instance().unlocate_device()
+        _get_duc_instance().unlocate_device()  # Delegate to the impl.
 
     @staticmethod
-    def bounce_port() -> None:
+    def bounce_port() -> None:  # Bounce a port.
         """Menu 140: Bounce switch/gateway port."""
-        _get_duc_instance().bounce_port()
+        _get_duc_instance().bounce_port()  # Delegate to the impl.
 
     @staticmethod
-    def cable_test() -> None:
+    def cable_test() -> None:  # Run a cable test.
         """Menu 141: Run cable test on switch port."""
-        _get_duc_instance().cable_test()
+        _get_duc_instance().cable_test()  # Delegate to the impl.
 
     @staticmethod
-    def reprovision_device() -> None:
+    def reprovision_device() -> None:  # Reprovision the device.
         """Menu 142: Reprovision switch/gateway."""
-        _get_duc_instance().reprovision_device()
+        _get_duc_instance().reprovision_device()  # Delegate to the impl.
 
     @staticmethod
-    def readopt_device() -> None:
+    def readopt_device() -> None:  # Re-adopt the device.
         """Menu 143: Re-adopt switch device."""
-        _get_duc_instance().readopt_device()
+        _get_duc_instance().readopt_device()  # Delegate to the impl.
 
     @staticmethod
-    def get_ztp_password() -> None:
+    def get_ztp_password() -> None:  # Get the ZTP password.
         """Menu 144: Get ZTP password for switch/gateway."""
-        _get_duc_instance().get_ztp_password()
+        _get_duc_instance().get_ztp_password()  # Delegate to the impl.
 
     @staticmethod
-    def get_config_commands() -> None:
+    def get_config_commands() -> None:  # Get config commands.
         """Menu 145: Get configuration CLI commands for switch."""
-        _get_duc_instance().get_config_commands()
+        _get_duc_instance().get_config_commands()  # Delegate to the impl.
 
     @staticmethod
-    def upload_support_file() -> None:
+    def upload_support_file() -> None:  # Upload a support file.
         """Menu 146: Upload support file from switch/gateway."""
-        _get_duc_instance().upload_support_file()
+        _get_duc_instance().upload_support_file()  # Delegate to the impl.
 
     @staticmethod
-    def clear_arp_cache() -> None:
+    def clear_arp_cache() -> None:  # Clear the ARP cache.
         """Menu 147: Clear ARP cache."""
-        _get_duc_instance().clear_arp_cache()
+        _get_duc_instance().clear_arp_cache()  # Delegate to the impl.
 
     @staticmethod
-    def clear_bgp_routes() -> None:
+    def clear_bgp_routes() -> None:  # Clear BGP routes.
         """Menu 148: Clear BGP routes."""
-        _get_duc_instance().clear_bgp_routes()
+        _get_duc_instance().clear_bgp_routes()  # Delegate to the impl.
 
     @staticmethod
-    def clear_session() -> None:
+    def clear_session() -> None:  # Clear a session.
         """Menu 149: Clear session on SSR/SRX gateway."""
-        _get_duc_instance().clear_session()
+        _get_duc_instance().clear_session()  # Delegate to the impl.
 
     @staticmethod
-    def clear_mac_table() -> None:
+    def clear_mac_table() -> None:  # Clear the MAC table.
         """Menu 150: Clear MAC table."""
-        _get_duc_instance().clear_mac_table()
+        _get_duc_instance().clear_mac_table()  # Delegate to the impl.
 
     @staticmethod
-    def clear_bpdu_error() -> None:
+    def clear_bpdu_error() -> None:  # Clear a BPDU error.
         """Menu 151: Clear BPDU errors on switch."""
-        _get_duc_instance().clear_bpdu_error()
+        _get_duc_instance().clear_bpdu_error()  # Delegate to the impl.
 
     @staticmethod
-    def clear_learned_macs() -> None:
+    def clear_learned_macs() -> None:  # Clear learned MACs.
         """Menu 152: Clear learned MACs from switch port."""
-        _get_duc_instance().clear_learned_macs()
+        _get_duc_instance().clear_learned_macs()  # Delegate to the impl.
 
     @staticmethod
-    def clear_policy_hit_count() -> None:
+    def clear_policy_hit_count() -> None:  # Clear policy hit counts.
         """Menu 153: Clear policy hit count on SSR."""
-        _get_duc_instance().clear_policy_hit_count()
+        _get_duc_instance().clear_policy_hit_count()  # Delegate to the impl.
 
     @staticmethod
-    def release_dhcp_lease() -> None:
+    def release_dhcp_lease() -> None:  # Release a DHCP lease.
         """Menu 154: Release DHCP lease on switch/gateway."""
-        _get_duc_instance().release_dhcp_lease()
+        _get_duc_instance().release_dhcp_lease()  # Delegate to the impl.
 
     @staticmethod
-    def release_dhcp_ssr() -> None:
+    def release_dhcp_ssr() -> None:  # Release a DHCP lease (SSR).
         """Menu 155: Release DHCP lease on SSR/SRX."""
-        _get_duc_instance().release_dhcp_ssr()
+        _get_duc_instance().release_dhcp_ssr()  # Delegate to the impl.
 
     @staticmethod
-    def poll_switch_stats() -> None:
+    def poll_switch_stats() -> None:  # Poll switch stats.
         """Menu 156: Poll fresh statistics from switch."""
-        _get_duc_instance().poll_switch_stats()
+        _get_duc_instance().poll_switch_stats()  # Delegate to the impl.
 
     @staticmethod
-    def create_device_snapshot() -> None:
+    def create_device_snapshot() -> None:  # Create a device snapshot.
         """Menu 157: Create device snapshot on switch."""
-        _get_duc_instance().create_device_snapshot()
+        _get_duc_instance().create_device_snapshot()  # Delegate to the impl.
 
 
 # ==============================
@@ -14190,19 +14190,19 @@ class DeviceUtilityCommands:
 
 
 @dataclass
-class EndpointConfig:
+class EndpointConfig:  # Const endpoint descriptor.
     """Configuration for a discovered const endpoint."""
 
-    endpoint_name: str
-    module: object
-    function_name: str
-    filename: str
-    description: str
-    modname: str
+    endpoint_name: str  # Endpoint name.
+    module: object  # Source module.
+    function_name: str  # API function name.
+    filename: str  # Output filename.
+    description: str  # Human description.
+    modname: str  # Module path.
     special_handling: str | None = None  # 'all_models', 'all_countries', 'all_countries_channels', or None
 
 
-class ConstDefinitionsExporter:
+class ConstDefinitionsExporter:  # Const definitions exporter.
     """
     Exports all available const definitions from the Mist API to individual CSV files.
 
@@ -14218,137 +14218,137 @@ class ConstDefinitionsExporter:
         exporter.export_all()
     """
 
-    CACHE_MAX_AGE_HOURS = 24
+    CACHE_MAX_AGE_HOURS = 24  # Cache freshness window.
     FALLBACK_GATEWAY_MODELS = ["SRX300", "SRX320", "SRX320-POE", "SRX340", "SRX345", "SRX380"]
-    FALLBACK_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP", "CN", "IN", "BR"]
-    FALLBACK_CHANNEL_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP"]
+    FALLBACK_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP", "CN", "IN", "BR"]  # Fallback country list.
+    FALLBACK_CHANNEL_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP"]  # Fallback channel countries.
 
-    def __init__(self, api_session):
+    def __init__(self, api_session):  # Capture the session.
         """Initialize exporter with API session and counters."""
-        self.api_session = api_session
-        self.discovered_endpoints: dict[str, EndpointConfig] = {}
-        self.endpoints_processed = 0
-        self.endpoints_skipped_fresh = 0
-        self.endpoints_updated = 0
-        self.endpoints_failed = 0
+        self.api_session = api_session  # Store the session.
+        self.discovered_endpoints: dict[str, EndpointConfig] = {}  # Discovered endpoints.
+        self.endpoints_processed = 0  # Processed count.
+        self.endpoints_skipped_fresh = 0  # Skipped-fresh count.
+        self.endpoints_updated = 0  # Updated count.
+        self.endpoints_failed = 0  # Failed count.
 
-    def export_all(self) -> None:
+    def export_all(self) -> None:  # Export every const endpoint.
         """Main entry point: discover and export all const definitions."""
-        print("Export All Available Const Definitions (Dynamic Discovery):")
-        logging.info("Starting comprehensive dynamic export of all const definitions...")
+        print("Export All Available Const Definitions (Dynamic Discovery):")  # Header.
+        logging.info("Starting comprehensive dynamic export of all const definitions...")  # Log start.
 
         try:
-            self._discover_endpoints()
-            if not self.discovered_endpoints:
-                print("! No const endpoints discovered from mistapi library")
-                logging.error("Dynamic discovery found no const endpoints")
-                return
+            self._discover_endpoints()  # Discover endpoints.
+            if not self.discovered_endpoints:  # None found.
+                print("! No const endpoints discovered from mistapi library")  # Tell the user.
+                logging.error("Dynamic discovery found no const endpoints")  # Log the error.
+                return  # Abort.
 
-            self._process_all_endpoints()
-            self._print_summary()
+            self._process_all_endpoints()  # Process all endpoints.
+            self._print_summary()  # Print the summary.
 
-        except Exception as error:
-            print(f"! Critical error during dynamic const discovery: {error}")
-            logging.error("Critical error during dynamic const discovery: %s", error)
+        except Exception as error:  # Discovery failed.
+            print(f"! Critical error during dynamic const discovery: {error}")  # Tell the user.
+            logging.error("Critical error during dynamic const discovery: %s", error)  # Log the error.
 
-    def _discover_endpoints(self) -> None:
+    def _discover_endpoints(self) -> None:  # Discover const endpoints.
         """Discover all const modules in mistapi.api.v1.const package."""
-        import pkgutil
+        import pkgutil  # Import pkgutil.
 
-        import mistapi.api.v1.const as const_package
+        import mistapi.api.v1.const as const_package  # Import the const package.
 
-        print("! Dynamically discovering const endpoints from mistapi library...")
-        logging.info("Starting dynamic discovery of const endpoints")
+        print("! Dynamically discovering const endpoints from mistapi library...")  # Tell the user.
+        logging.info("Starting dynamic discovery of const endpoints")  # Log start.
 
         for _importer, modname, ispkg in pkgutil.iter_modules(const_package.__path__, const_package.__name__ + "."):
-            if ispkg:
-                continue
-            self._inspect_module(modname)
+            if ispkg:  # Skip subpackages.
+                continue  # Next module.
+            self._inspect_module(modname)  # Inspect the module.
 
         print(f"! Successfully discovered {len(self.discovered_endpoints)} const endpoints dynamically")
         logging.info("Dynamic discovery completed: %s endpoints found", len(self.discovered_endpoints))
 
-    def _inspect_module(self, modname: str) -> None:
+    def _inspect_module(self, modname: str) -> None:  # Inspect one const module.
         """Inspect a single const module for API functions."""
-        import importlib
+        import importlib  # Import importlib.
 
-        endpoint_name = modname.split(".")[-1]
-        if endpoint_name.startswith("_"):
-            return
+        endpoint_name = modname.split(".")[-1]  # Endpoint name from path.
+        if endpoint_name.startswith("_"):  # Skip private modules.
+            return  # Skip it.
 
-        print(f"  ! Inspecting const module: {endpoint_name}")
+        print(f"  ! Inspecting const module: {endpoint_name}")  # Tell the user.
 
         try:
-            module = importlib.import_module(modname)
-            functions = self._find_api_functions(module, endpoint_name)
+            module = importlib.import_module(modname)  # Import the module.
+            functions = self._find_api_functions(module, endpoint_name)  # Find API functions.
 
-            if not functions:
-                print(f"    ! No API functions found in {endpoint_name}")
-                logging.warning("No functions found in %s", endpoint_name)
-                return
+            if not functions:  # None found.
+                print(f"    ! No API functions found in {endpoint_name}")  # Tell the user.
+                logging.warning("No functions found in %s", endpoint_name)  # Warn none found.
+                return  # Skip it.
 
-            api_function = self._select_best_function(functions)
-            if api_function:
-                self._register_endpoint(endpoint_name, module, api_function, modname)
+            api_function = self._select_best_function(functions)  # Pick the best function.
+            if api_function:  # Function found.
+                self._register_endpoint(endpoint_name, module, api_function, modname)  # Register the endpoint.
             else:
-                print(f"    ! No suitable API functions found in {endpoint_name}")
+                print(f"    ! No suitable API functions found in {endpoint_name}")  # Tell the user none.
                 logging.warning("No API functions with mist_session parameter found in %s", endpoint_name)
 
-        except Exception as error:
-            module_display_name = modname.split(".")[-1] if modname else "unknown"
-            print(f"    ! Error inspecting {module_display_name}: {error}")
-            logging.error("Error inspecting const module %s: %s", module_display_name, error)
+        except Exception as error:  # Inspection failed.
+            module_display_name = modname.split(".")[-1] if modname else "unknown"  # Module display name.
+            print(f"    ! Error inspecting {module_display_name}: {error}")  # Tell the user.
+            logging.error("Error inspecting const module %s: %s", module_display_name, error)  # Log the error.
 
-    def _find_api_functions(self, module, endpoint_name: str) -> list[str]:
+    def _find_api_functions(self, module, endpoint_name: str) -> list[str]:  # Find candidate API functions.
         """Find all callable API functions in a module."""
-        import inspect
+        import inspect  # Import inspect.
 
-        functions = []
-        for name, obj in inspect.getmembers(module):
-            if not inspect.isfunction(obj) or name.startswith("_"):
+        functions = []  # Collect function names.
+        for name, obj in inspect.getmembers(module):  # Walk module members.
+            if not inspect.isfunction(obj) or name.startswith("_"):  # Skip non-functions/private.
                 continue
 
-            sig = inspect.signature(obj)
-            param_names = list(sig.parameters.keys())
-            has_session_param = "mist_session" in param_names or "apisession" in param_names
+            sig = inspect.signature(obj)  # Read the signature.
+            param_names = list(sig.parameters.keys())  # List parameter names.
+            has_session_param = "mist_session" in param_names or "apisession" in param_names  # Detect a session param.
 
-            if has_session_param and len(param_names) >= 1:
-                functions.append(name)
-                logging.debug("Found potential API function in %s: %s%s", endpoint_name, name, sig)
+            if has_session_param and len(param_names) >= 1:  # Looks like an API call.
+                functions.append(name)  # Keep the function.
+                logging.debug("Found potential API function in %s: %s%s", endpoint_name, name, sig)  # Trace the find.
 
-        return functions
+        return functions  # Return the functions.
 
-    def _select_best_function(self, functions: list[str]) -> str | None:
+    def _select_best_function(self, functions: list[str]) -> str | None:  # Pick the best function.
         """Select the best API function from a list (prefer list*, then get*)."""
-        for func_name in functions:
-            if func_name.lower().startswith("list"):
-                return func_name
+        for func_name in functions:  # Prefer list*.
+            if func_name.lower().startswith("list"):  # Name starts with list.
+                return func_name  # Use it.
 
-        for func_name in functions:
-            if func_name.lower().startswith("get"):
-                return func_name
+        for func_name in functions:  # Then prefer get*.
+            if func_name.lower().startswith("get"):  # Name starts with get.
+                return func_name  # Use it.
 
-        return functions[0] if functions else None
+        return functions[0] if functions else None  # Fall back to the first.
 
     def _register_endpoint(self, endpoint_name: str, module, api_function: str, modname: str) -> None:
         """Register an endpoint after analyzing its parameters."""
-        import inspect
+        import inspect  # Import inspect.
 
-        filename = self._build_filename(endpoint_name)
-        description = f"{endpoint_name.replace('_', ' ').title()} Definitions"
+        filename = self._build_filename(endpoint_name)  # Build the filename.
+        description = f"{endpoint_name.replace('_', ' ').title()} Definitions"  # Build the description.
 
-        sig = inspect.signature(getattr(module, api_function))
-        required_params = self._get_required_params(sig)
-        optional_params = self._get_optional_params(sig)
+        sig = inspect.signature(getattr(module, api_function))  # Read the signature.
+        required_params = self._get_required_params(sig)  # Required params.
+        optional_params = self._get_optional_params(sig)  # Optional params.
 
-        special_handling = self._determine_special_handling(
+        special_handling = self._determine_special_handling(  # Decide special handling.
             endpoint_name, api_function, required_params, optional_params, filename
         )
 
-        if special_handling == "skip":
-            return
+        if special_handling == "skip":  # Endpoint to skip.
+            return  # Skip it.
 
-        config = EndpointConfig(
+        config = EndpointConfig(  # Build the config.
             endpoint_name=endpoint_name,
             module=module,
             function_name=api_function,
@@ -14357,32 +14357,32 @@ class ConstDefinitionsExporter:
             modname=modname,
             special_handling=special_handling,
         )
-        self.discovered_endpoints[endpoint_name] = config
+        self.discovered_endpoints[endpoint_name] = config  # Register the endpoint.
 
-        print(f"    ! Found API function: {api_function}() -> {filename}")
-        logging.debug("Discovered %s: %s() -> %s", endpoint_name, api_function, filename)
+        print(f"    ! Found API function: {api_function}() -> {filename}")  # Tell the user.
+        logging.debug("Discovered %s: %s() -> %s", endpoint_name, api_function, filename)  # Trace the find.
 
-    def _build_filename(self, endpoint_name: str) -> str:
+    def _build_filename(self, endpoint_name: str) -> str:  # Build the const filename.
         """Convert endpoint_name to ConstTitleCase.csv filename."""
-        parts = endpoint_name.split("_")
-        title_name = "".join(word.capitalize() for word in parts)
-        return f"Const{title_name}.csv"
+        parts = endpoint_name.split("_")  # Split on underscores.
+        title_name = "".join(word.capitalize() for word in parts)  # Title-case the name.
+        return f"Const{title_name}.csv"  # Return the filename.
 
     def _get_required_params(self, sig) -> list:  # type: ignore[no-untyped-def, type-arg]
         """Extract required parameters from function signature."""
-        import inspect
+        import inspect  # Import inspect.
 
-        return [
+        return [  # List required params.
             p
             for p in sig.parameters.values()
             if p.default == inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]
         ]
 
-    def _get_optional_params(self, sig) -> list[str]:
+    def _get_optional_params(self, sig) -> list[str]:  # List optional params.
         """Extract optional parameter names from function signature."""
-        import inspect
+        import inspect  # Import inspect.
 
-        return [
+        return [  # List optional params.
             p.name
             for p in sig.parameters.values()
             if p.default != inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]
@@ -14397,126 +14397,126 @@ class ConstDefinitionsExporter:
         filename: str,
     ) -> str | None:
         """Determine special handling type for endpoint."""
-        if endpoint_name == "ap_channels" and "country_code" in optional_params:
+        if endpoint_name == "ap_channels" and "country_code" in optional_params:  # AP channels special case.
             print(f"    ! Found special endpoint {api_function}() with optional 'country_code' parameter")
-            print(f"    ! Will call for all available countries -> {filename}")
-            return "all_countries_channels"
+            print(f"    ! Will call for all available countries -> {filename}")  # Tell the user.
+            return "all_countries_channels"  # All-countries channels.
 
-        if not required_params:
-            return None
+        if not required_params:  # No required params.
+            return None  # Standard handling.
 
-        param_names = [p.name for p in required_params]
+        param_names = [p.name for p in required_params]  # Required param names.
 
-        if endpoint_name == "default_gateway_config" and "model" in param_names:
-            print(f"    ! Found special endpoint {api_function}() requiring 'model' parameter")
-            print(f"    ! Will call for all available gateway models -> {filename}")
-            return "all_models"
+        if endpoint_name == "default_gateway_config" and "model" in param_names:  # Gateway config special case.
+            print(f"    ! Found special endpoint {api_function}() requiring 'model' parameter")  # Tell the user.
+            print(f"    ! Will call for all available gateway models -> {filename}")  # Tell the user.
+            return "all_models"  # All-models handling.
 
-        if endpoint_name == "states" and "country_code" in param_names:
-            print(f"    ! Found special endpoint {api_function}() requiring 'country_code' parameter")
-            print(f"    ! Will call for all available countries -> {filename}")
-            return "all_countries"
+        if endpoint_name == "states" and "country_code" in param_names:  # States special case.
+            print(f"    ! Found special endpoint {api_function}() requiring 'country_code' parameter")  # Tell the user.
+            print(f"    ! Will call for all available countries -> {filename}")  # Tell the user.
+            return "all_countries"  # All-countries handling.
 
-        print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")
+        print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")  # Tell the user skip.
         logging.info("Skipping %s.%s() - requires parameters: %s", endpoint_name, api_function, param_names)
-        return "skip"
+        return "skip"  # Skip it.
 
-    def _process_all_endpoints(self) -> None:
+    def _process_all_endpoints(self) -> None:  # Process all endpoints.
         """Process each discovered endpoint."""
-        for _endpoint_name, config in self.discovered_endpoints.items():
-            self._process_single_endpoint(config)
+        for _endpoint_name, config in self.discovered_endpoints.items():  # Walk endpoints.
+            self._process_single_endpoint(config)  # Process each.
 
-    def _process_single_endpoint(self, config: EndpointConfig) -> None:
+    def _process_single_endpoint(self, config: EndpointConfig) -> None:  # Process one endpoint.
         """Process a single endpoint with cache checking and data export."""
-        print(f"\n! Processing {config.description} ({config.endpoint_name})...")
+        print(f"\n! Processing {config.description} ({config.endpoint_name})...")  # Tell the user.
 
         try:
-            if self._is_file_fresh(config):
-                self.endpoints_skipped_fresh += 1
-                self.endpoints_processed += 1
-                return
+            if self._is_file_fresh(config):  # File is fresh.
+                self.endpoints_skipped_fresh += 1  # Count skipped-fresh.
+                self.endpoints_processed += 1  # Count processed.
+                return  # Skip it.
 
-            self._fetch_and_export_endpoint(config)
-            self.endpoints_processed += 1
+            self._fetch_and_export_endpoint(config)  # Fetch and export.
+            self.endpoints_processed += 1  # Count processed.
 
-        except Exception as error:
-            print(f"! Critical error processing {config.endpoint_name}: {error}")
-            logging.error("Critical error processing %s: %s", config.endpoint_name, error)
-            self.endpoints_failed += 1
-            self.endpoints_processed += 1
+        except Exception as error:  # Processing failed.
+            print(f"! Critical error processing {config.endpoint_name}: {error}")  # Tell the user.
+            logging.error("Critical error processing %s: %s", config.endpoint_name, error)  # Log the error.
+            self.endpoints_failed += 1  # Count failed.
+            self.endpoints_processed += 1  # Count processed.
 
-    def _is_file_fresh(self, config: EndpointConfig) -> bool:
+    def _is_file_fresh(self, config: EndpointConfig) -> bool:  # Check cache freshness.
         """Check if cached file exists and is fresh enough to use."""
-        import os
-        import time
-        from datetime import datetime
+        import os  # Import os.
+        import time  # Import time.
+        from datetime import datetime  # Import datetime.
 
-        file_path = os.path.join("data", config.filename)
-        if not os.path.exists(file_path):
-            print(f"  ! {config.filename} not found - fetching fresh data from API...")
-            logging.info("%s not found, fetching from API", config.filename)
-            return False
+        file_path = os.path.join("data", config.filename)  # Build the file path.
+        if not os.path.exists(file_path):  # File missing.
+            print(f"  ! {config.filename} not found - fetching fresh data from API...")  # Tell the user.
+            logging.info("%s not found, fetching from API", config.filename)  # Log the fetch.
+            return False  # Not fresh.
 
         try:
-            file_mtime = os.path.getmtime(file_path)
-            file_age_hours = (time.time() - file_mtime) / 3600
-            file_timestamp = datetime.fromtimestamp(file_mtime).strftime("%Y-%m-%d %H:%M:%S")
+            file_mtime = os.path.getmtime(file_path)  # Read the mtime.
+            file_age_hours = (time.time() - file_mtime) / 3600  # Compute age in hours.
+            file_timestamp = datetime.fromtimestamp(file_mtime).strftime("%Y-%m-%d %H:%M:%S")  # Format the timestamp.
 
-            if file_age_hours < self.CACHE_MAX_AGE_HOURS:
+            if file_age_hours < self.CACHE_MAX_AGE_HOURS:  # Within the window.
                 print(f"  ! Found fresh {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
                 print(f"  ! Skipping API call - using cached data (cache valid for {self.CACHE_MAX_AGE_HOURS}h)")
                 logging.info("Using cached %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
-                return True
+                return True  # Fresh.
             else:
                 print(f"  ! Found stale {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
                 print(f"  ! File is older than {self.CACHE_MAX_AGE_HOURS}h threshold - fetching fresh data from API...")
                 logging.info("Refreshing stale %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
-                return False
+                return False  # Stale.
 
-        except Exception as error:
-            print(f"  ! Error checking file timestamp: {error}")
+        except Exception as error:  # Timestamp check failed.
+            print(f"  ! Error checking file timestamp: {error}")  # Tell the user.
             logging.warning("Could not check %s file timestamp, will fetch fresh data: %s", config.endpoint_name, error)
-            return False
+            return False  # Not fresh.
 
-    def _fetch_and_export_endpoint(self, config: EndpointConfig) -> None:
+    def _fetch_and_export_endpoint(self, config: EndpointConfig) -> None:  # Fetch and export an endpoint.
         """Fetch data from API and export to file."""
         print(f"  ! Requesting fresh {config.description.lower()} from Mist API using {config.function_name}()...")
 
         try:
-            const_data = self._fetch_endpoint_data(config)
-            self._export_data(config, const_data)
-        except Exception as error:
-            print(f"  ! Error exporting {config.description.lower()}: {error}")
+            const_data = self._fetch_endpoint_data(config)  # Fetch the data.
+            self._export_data(config, const_data)  # Export the data.
+        except Exception as error:  # Export failed.
+            print(f"  ! Error exporting {config.description.lower()}: {error}")  # Tell the user.
             logging.error("Failed to export %s from %s: %s", config.description.lower(), config.endpoint_name, error)
             DataExporter.write_with_format_selection([], config.filename)  # type: ignore[no-untyped-call]
-            self.endpoints_failed += 1
+            self.endpoints_failed += 1  # Count failed.
 
-    def _fetch_endpoint_data(self, config: EndpointConfig):
+    def _fetch_endpoint_data(self, config: EndpointConfig):  # Dispatch the fetch type.
         """Fetch data based on special handling type."""
-        if config.special_handling == "all_models":
-            return self._fetch_all_gateway_models(config)
-        elif config.special_handling == "all_countries":
-            return self._fetch_all_country_states(config)
-        elif config.special_handling == "all_countries_channels":
-            return self._fetch_all_country_channels(config)
+        if config.special_handling == "all_models":  # All-models case.
+            return self._fetch_all_gateway_models(config)  # Fetch per model.
+        elif config.special_handling == "all_countries":  # All-countries case.
+            return self._fetch_all_country_states(config)  # Fetch per country.
+        elif config.special_handling == "all_countries_channels":  # All-channels case.
+            return self._fetch_all_country_channels(config)  # Fetch per country.
         else:
-            return self._fetch_standard_endpoint(config)
+            return self._fetch_standard_endpoint(config)  # Standard fetch.
 
-    def _fetch_standard_endpoint(self, config: EndpointConfig):
+    def _fetch_standard_endpoint(self, config: EndpointConfig):  # Fetch a standard endpoint.
         """Fetch data from a standard endpoint with no special parameters."""
-        api_function = getattr(config.module, config.function_name)
-        response = api_function(self.api_session)
-        return getattr(response, "data", response) or {}
+        api_function = getattr(config.module, config.function_name)  # Resolve the function.
+        response = api_function(self.api_session)  # Call the API.
+        return getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
     def _fetch_all_gateway_models(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
         """Fetch gateway configs for all available models."""
 
         print(f"  ! Special handling: Calling {config.function_name}() for all available gateway models...")
 
-        gateway_models = self._get_gateway_models_list()
-        all_configs = []
-        successful = 0
-        failed = 0
+        gateway_models = self._get_gateway_models_list()  # List gateway models.
+        all_configs = []  # Accumulate configs.
+        successful = 0  # Success count.
+        failed = 0  # Failure count.
 
         for model in gateway_models:
             try:
