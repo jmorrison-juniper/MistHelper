@@ -7418,44 +7418,44 @@ class DataExporter:  # Multi-backend export facade.
         """Auto-detect standalone mode: skip polyglot when not in a container."""
         standalone_env = os.getenv("MISTHELPER_STANDALONE", "").lower()  # Read the override env.
         if standalone_env == "true":  # Explicit standalone request.
-            return True
-        if standalone_env == "false":
-            return False
-        if not EnvironmentUtils.is_running_in_container():
-            if not DataExporter._standalone_logged:
+            return True  # Forced standalone.
+        if standalone_env == "false":  # Forced non-standalone.
+            return False  # Not standalone.
+        if not EnvironmentUtils.is_running_in_container():  # Auto-detect when not in container.
+            if not DataExporter._standalone_logged:  # Log once.
                 logging.info("Standalone mode auto-detected (not in container), skipping polyglot database")
-                DataExporter._standalone_logged = True
-            return True
-        return False
+                DataExporter._standalone_logged = True  # Latch the one-shot log.
+            return True  # Standalone outside a container.
+        return False  # Containerized: not standalone.
 
     @staticmethod
-    def _route_to_polyglot(
+    def _route_to_polyglot(  # Mirror writes to polyglot DB.
         data: list[dict[str, Any]],
         api_function_name: str | None,
         raw_data: list[dict[str, Any]] | None = None,
     ) -> None:
         """Send data to polyglot backends (ArangoDB/Redis) if available."""
-        if not api_function_name or not DB_LAYER_AVAILABLE:
-            return
-        if DataExporter._is_standalone_mode():
-            return
-        DataExporter._init_router()
-        if DataExporter._router is None:
-            return
+        if not api_function_name or not DB_LAYER_AVAILABLE:  # Need API name and DB layer.
+            return  # Skip polyglot mirror.
+        if DataExporter._is_standalone_mode():  # Standalone skips polyglot.
+            return  # Skip polyglot mirror.
+        DataExporter._init_router()  # Ensure the router exists.
+        if DataExporter._router is None:  # Router unavailable.
+            return  # Skip polyglot mirror.
         try:
-            polyglot_data = raw_data or data
-            result = DataExporter._router.write(polyglot_data, api_function_name)
-            logging.info(
+            polyglot_data = raw_data or data  # Prefer raw payload.
+            result = DataExporter._router.write(polyglot_data, api_function_name)  # Write to polyglot DB.
+            logging.info(  # Log the polyglot result.
                 "Polyglot write: backend=%s, written=%s, failed=%s",
                 result.backend,
                 result.records_written,
                 result.records_failed,
             )
-        except Exception as error:
-            logging.warning("Polyglot write failed (CSV preserved): %s", error)
+        except Exception as error:  # Never let polyglot break CSV.
+            logging.warning("Polyglot write failed (CSV preserved): %s", error)  # polyglot warn.
 
     @classmethod
-    def _check_periodic_snapshot(
+    def _check_periodic_snapshot(  # Throttle periodic snapshots.
         cls,
         api_function_name: str,
         threshold_seconds: float = 3600.0,
@@ -7465,50 +7465,50 @@ class DataExporter:  # Multi-backend export facade.
         Returns True if a snapshot should be taken (threshold exceeded).
         Updates the timestamp when returning True.
         """
-        now = time.time()
-        last_time = cls._last_snapshot_times.get(api_function_name, 0.0)
-        if (now - last_time) < threshold_seconds:
-            return False
-        cls._last_snapshot_times[api_function_name] = now
-        return True
+        now = time.time()  # Current time.
+        last_time = cls._last_snapshot_times.get(api_function_name, 0.0)  # Last snapshot time.
+        if (now - last_time) < threshold_seconds:  # Too soon for another.
+            return False  # Skip this snapshot.
+        cls._last_snapshot_times[api_function_name] = now  # Record snapshot time.
+        return True  # Allow the snapshot.
 
     @staticmethod
     def _validate_write_inputs(data: list[dict[str, Any]], filename_or_table: str, output_format: str) -> bool:
         """Validate inputs for write operation. Returns True if valid."""
-        if not data:
-            logging.warning("No data provided for output to %s", filename_or_table)
-            return False
+        if not data:  # No rows to write.
+            logging.warning("No data provided for output to %s", filename_or_table)  # warn no data.
+            return False  # Reject empty data.
 
-        if output_format not in ["csv", "sqlite"]:
-            logging.error("Invalid output format: %s. Must be 'csv' or 'sqlite'", output_format)
-            return False
+        if output_format not in ["csv", "sqlite"]:  # Only csv/sqlite allowed.
+            logging.error("Invalid output format: %s. Must be 'csv' or 'sqlite'", output_format)  # bad format.
+            return False  # Reject bad format.
 
-        return True
+        return True  # Inputs valid.
 
     @staticmethod
-    def _write_csv_format(
+    def _write_csv_format(  # Write rows to a CSV file.
         data: list[dict[str, Any]],
         filename_or_table: str,
         fieldnames: list[str] | None = None,
     ) -> bool:
         """Write data to CSV format.  Pass fieldnames to preserve a specific column order."""
         csv_filename = filename_or_table if filename_or_table.endswith(".csv") else f"{filename_or_table}.csv"
-        logging.info("Writing %s rows to CSV file: %s", len(data), csv_filename)
+        logging.info("Writing %s rows to CSV file: %s", len(data), csv_filename)  # Log CSV write.
         DataExporter.write_to_csv(data, csv_filename, fieldnames=fieldnames)  # Thread explicit column order through
-        return True
+        return True  # CSV written.
 
     @staticmethod
     def _write_sqlite_format(data: list[dict[str, Any]], filename_or_table: str, api_function_name: str | None) -> bool:
         """Write data to SQLite format. Returns True on success."""
         table_name = filename_or_table[:-4] if filename_or_table.endswith(".csv") else filename_or_table
-        logging.debug(
+        logging.debug(  # Trace SQLite write.
             "SQLite write: table=%s, api_function=%s, strategy lookup initiated", table_name, api_function_name
         )
-        logging.info("Writing %s rows to SQLite table: %s", len(data), table_name)
-        return SQLiteDatabaseWriter(data, table_name, api_function_name).write()
+        logging.info("Writing %s rows to SQLite table: %s", len(data), table_name)  # Log SQLite write.
+        return SQLiteDatabaseWriter(data, table_name, api_function_name).write()  # Run the writer.
 
     @staticmethod
-    def write_to_csv(
+    def write_to_csv(  # Low-level CSV writer.
         data: list[dict[str, Any]],
         csv_file: str,
         fieldnames: list[str] | None = None,
@@ -7528,57 +7528,57 @@ class DataExporter:  # Multi-backend export facade.
         """
         logging.debug("ENTRY: DataExporter.write_to_csv(data_rows=%s, csv_file=%s)", len(data) if data else 0, csv_file)
 
-        if not data:
-            logging.warning("No data provided to write to %s", csv_file)
-            logging.debug("EXIT: DataExporter.write_to_csv - no data to write")
-            return
+        if not data:  # No rows to write.
+            logging.warning("No data provided to write to %s", csv_file)  # warn no data.
+            logging.debug("EXIT: DataExporter.write_to_csv - no data to write")  # Trace early exit.
+            return  # Nothing to write.
 
         # Ensure data directory exists and construct proper file path
-        data_dir = "data"
-        os.makedirs(data_dir, exist_ok=True)
+        data_dir = "data"  # Confine to data/.
+        os.makedirs(data_dir, exist_ok=True)  # Ensure data/ exists.
 
         # If csv_file doesn't already include a path, place it in the data directory
-        if not os.path.dirname(csv_file):
-            csv_file_path = os.path.join(data_dir, csv_file)
+        if not os.path.dirname(csv_file):  # Bare filename.
+            csv_file_path = os.path.join(data_dir, csv_file)  # Place under data/.
         else:
-            csv_file_path = csv_file
+            csv_file_path = csv_file  # Use given path.
 
-        logging.debug("Preparing to write %s rows to %s...", len(data), csv_file_path)
+        logging.debug("Preparing to write %s rows to %s...", len(data), csv_file_path)  # Trace write prep.
         escaped_data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
         if fieldnames is not None:  # Caller supplied an explicit column order — use it as-is
             fields = fieldnames  # Preserve the requested column sequence without sorting
         else:
             fields = DataProcessingUtils.get_unique_keys(escaped_data)  # type: ignore[no-untyped-call]
-        logging.debug("CSV fields determined: %s", fields)
+        logging.debug("CSV fields determined: %s", fields)  # Trace fields.
 
         try:
-            logging.debug("File I/O: Attempting to open %s for writing", csv_file_path)
-            with open(csv_file_path, "w", newline="", encoding="utf-8") as file_handle:
-                writer = csv.DictWriter(file_handle, fieldnames=fields)
-                writer.writeheader()
-                logging.debug("File I/O: Successfully wrote CSV header to %s", csv_file_path)
+            logging.debug("File I/O: Attempting to open %s for writing", csv_file_path)  # Trace open.
+            with open(csv_file_path, "w", newline="", encoding="utf-8") as file_handle:  # Open CSV for writing.
+                writer = csv.DictWriter(file_handle, fieldnames=fields)  # Dict-based CSV writer.
+                writer.writeheader()  # Write the header row.
+                logging.debug("File I/O: Successfully wrote CSV header to %s", csv_file_path)  # Trace header.
 
-                for idx, row in enumerate(escaped_data):
-                    writer.writerow({field: row.get(field, "") for field in fields})
+                for idx, row in enumerate(escaped_data):  # Write each row.
+                    writer.writerow({field: row.get(field, "") for field in fields})  # Write row by field order.
                     if idx < 3:  # Log the first few rows for debugging
-                        logging.debug("Row %s written: %s", idx, row)
+                        logging.debug("Row %s written: %s", idx, row)  # Trace a row.
 
             logging.info("File I/O: Successfully wrote %s rows to %s", len(escaped_data), csv_file_path)
-            logging.debug("EXIT: DataExporter.write_to_csv - success")
+            logging.debug("EXIT: DataExporter.write_to_csv - success")  # Trace success.
 
-        except PermissionError as perm_error:
+        except PermissionError as perm_error:  # File locked/denied.
             logging.error("File I/O: Permission denied when writing to %s: %s", csv_file_path, perm_error)
-            print(f"! Cannot write to {csv_file_path}. Is it open in another program?")
-            logging.debug("EXIT: DataExporter.write_to_csv - permission error")
-            raise
-        except OSError as os_error:
-            logging.error("File I/O: OS error when writing to %s: %s", csv_file_path, os_error)
-            logging.debug("EXIT: DataExporter.write_to_csv - OS error")
-            raise
-        except Exception as unexpected_error:
+            print(f"! Cannot write to {csv_file_path}. Is it open in another program?")  # user hint.
+            logging.debug("EXIT: DataExporter.write_to_csv - permission error")  # Trace exit.
+            raise  # Propagate the error.
+        except OSError as os_error:  # OS-level write error.
+            logging.error("File I/O: OS error when writing to %s: %s", csv_file_path, os_error)  # os error.
+            logging.debug("EXIT: DataExporter.write_to_csv - OS error")  # Trace exit.
+            raise  # Propagate the error.
+        except Exception as unexpected_error:  # Unexpected write error.
             logging.error("File I/O: Unexpected error when writing to %s: %s", csv_file, unexpected_error)
-            logging.debug("EXIT: DataExporter.write_to_csv - unexpected error")
-            raise
+            logging.debug("EXIT: DataExporter.write_to_csv - unexpected error")  # Trace exit.
+            raise  # Propagate the error.
 
     # save_data_to_output removed per issue #431 (ARCH-DELEGATE). All call
     # sites now invoke DataExporter.write_with_format_selection(data, filename,
@@ -7586,7 +7586,7 @@ class DataExporter:  # Multi-backend export facade.
     # and accepts the identical (data, filename, api_function_name=) form.
 
     @staticmethod
-    def export_with_processing(data, filename, sort_key=None, api_function_name=None):
+    def export_with_processing(data, filename, sort_key=None, api_function_name=None):  # Process then export records.
         """
         Export data with standard processing (flatten, escape, sort).
         Common pattern used throughout the codebase.
@@ -7600,39 +7600,39 @@ class DataExporter:  # Multi-backend export facade.
         Returns:
             int: Number of records processed
         """
-        if not data:
-            logging.warning("No data to export for %s", filename)
-            return 0
+        if not data:  # Nothing to export.
+            logging.warning("No data to export for %s", filename)  # warn no data.
+            return 0  # Zero exported.
 
         # Filter to dict entries only (defensive)
-        raw_data = [entry for entry in data if isinstance(entry, dict)]
+        raw_data = [entry for entry in data if isinstance(entry, dict)]  # Keep dict rows only.
 
         # Sort if requested
-        if sort_key:
-            raw_data = sorted(raw_data, key=lambda x: x.get(sort_key, ""))
-            logging.debug("Data sorted by key: %s", sort_key)
+        if sort_key:  # Optional sort.
+            raw_data = sorted(raw_data, key=lambda x: x.get(sort_key, ""))  # Sort by key.
+            logging.debug("Data sorted by key: %s", sort_key)  # Trace the sort.
 
         # Apply standard processing for CSV/SQLite (flatten + escape)
-        processed_data = DataProcessingUtils.flatten_nested_fields(raw_data)
+        processed_data = DataProcessingUtils.flatten_nested_fields(raw_data)  # Flatten nested fields.
         processed_data = DataProcessingUtils.escape_multiline(processed_data)  # type: ignore[no-untyped-call]
 
         # Save flattened data to CSV/SQLite, pass raw to polyglot
-        success = DataExporter.write_with_format_selection(
+        success = DataExporter.write_with_format_selection(  # Write via selected backend.
             processed_data,
             filename,
             api_function_name=api_function_name,
             raw_data=raw_data,
         )
 
-        if success:
-            logging.info("Exported %s records to %s", len(processed_data), filename)
-            return len(processed_data)
+        if success:  # Export succeeded.
+            logging.info("Exported %s records to %s", len(processed_data), filename)  # Log export count.
+            return len(processed_data)  # Return rows exported.
         else:
-            logging.error("Failed to export data to %s", filename)
-            return 0
+            logging.error("Failed to export data to %s", filename)  # log export failure.
+            return 0  # Zero exported.
 
 
-class APIDataFetcher:
+class APIDataFetcher:  # Fetch, export, display a result.
     """
     Fetches data from Mist API, processes it, and exports to CSV/SQLite.
 
@@ -7646,7 +7646,7 @@ class APIDataFetcher:
         - Detailed logging for troubleshooting
     """
 
-    def __init__(
+    def __init__(  # Capture the fetch parameters.
         self,
         title: str,
         api_call: Any,
@@ -7666,45 +7666,45 @@ class APIDataFetcher:
             display_fields: Optional list of fields for table display
             **kwargs: Additional arguments passed to the API call
         """
-        self.title = title
-        self.api_call = api_call
-        self.filename = filename
-        self.sort_key = sort_key
-        self.display_fields = display_fields
-        self.kwargs = kwargs
+        self.title = title  # Human-readable title.
+        self.api_call = api_call  # Callable that fetches data.
+        self.filename = filename  # Output filename.
+        self.sort_key = sort_key  # Optional sort key.
+        self.display_fields = display_fields  # Columns to display.
+        self.kwargs = kwargs  # Extra API arguments.
 
-        self.org_id = ""
-        self.rawdata: list[dict[str, Any]] = []
-        self.smoothed: float | None = None
+        self.org_id = ""  # Resolved org id.
+        self.rawdata: list[dict[str, Any]] = []  # Raw API rows.
+        self.smoothed: float | None = None  # Smoothed delay metric.
 
-    def execute(self) -> None:
+    def execute(self) -> None:  # Run fetch/export/display.
         """Execute the complete API fetch workflow."""
-        self._log_entry()
-        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        self._log_entry()  # Log the run start.
+        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
 
         try:
-            self._fetch_api_data()
+            self._fetch_api_data()  # Fetch from the API.
 
-            if self.rawdata is None or len(self.rawdata) == 0:
-                logging.warning("! No data returned from API for %s. Skipping.", self.title)
-                logging.debug("EXIT: APIDataFetcher.execute - no data")
-                return
+            if self.rawdata is None or len(self.rawdata) == 0:  # No data returned.
+                logging.warning("! No data returned from API for %s. Skipping.", self.title)  # warn no data.
+                logging.debug("EXIT: APIDataFetcher.execute - no data")  # Trace early exit.
+                return  # Skip export.
 
-            self._export_and_display_data()
-            logging.debug("EXIT: APIDataFetcher.execute - success")
+            self._export_and_display_data()  # Export and display.
+            logging.debug("EXIT: APIDataFetcher.execute - success")  # Trace success.
 
-        except Exception as error:
-            self._handle_outer_exception(error)
-            raise
+        except Exception as error:  # Handle run failure.
+            self._handle_outer_exception(error)  # Log/report the failure.
+            raise  # Propagate the error.
 
     # =========================================================================
     # INITIALIZATION AND LOGGING METHODS
     # =========================================================================
 
-    def _log_entry(self) -> None:
+    def _log_entry(self) -> None:  # Log fetch parameters.
         """Log entry point with parameters."""
-        api_name = self.api_call.__name__
-        logging.debug(
+        api_name = self.api_call.__name__  # API callable name.
+        logging.debug(  # Trace the entry.
             "ENTRY: APIDataFetcher(title=%s, api_call=%s, filename=%s, sort_key=%s, kwargs=%s)",
             self.title,
             api_name,
@@ -7712,32 +7712,32 @@ class APIDataFetcher:
             self.sort_key,
             self.kwargs,
         )
-        logging.info("Starting data fetch: %s", self.title)
-        print(self.title)
+        logging.info("Starting data fetch: %s", self.title)  # Log fetch start.
+        print(self.title)  # Show the title.
 
     # =========================================================================
     # API CALL METHODS
     # =========================================================================
 
-    def _fetch_api_data(self) -> None:
+    def _fetch_api_data(self) -> None:  # Call the API and store rows.
         """Make API call and retrieve paginated results with retry on timeout."""
-        api_name = self.api_call.__name__
-        logging.debug("Making API call: %s with kwargs: %s", api_name, self.kwargs)
+        api_name = self.api_call.__name__  # API callable name.
+        logging.debug("Making API call: %s with kwargs: %s", api_name, self.kwargs)  # Trace the call.
 
-        response = self._call_api_with_retry(api_name)
-        self._apply_rate_limiting()
-        self._log_response_structure(response)
+        response = self._call_api_with_retry(api_name)  # Call with retry.
+        self._apply_rate_limiting()  # Throttle after the call.
+        self._log_response_structure(response)  # Trace response shape.
 
         try:
-            self.rawdata = mistapi.get_all(response=response, mist_session=apisession)
-            record_count = len(self.rawdata) if self.rawdata else 0
-            logging.debug("API call successful, retrieved %s raw records", record_count)
-        except KeyError as error:
-            self._handle_key_error(response, error)
-        except Exception as error:
-            self._handle_api_exception(error)
+            self.rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page through all rows.
+            record_count = len(self.rawdata) if self.rawdata else 0  # Count retrieved rows.
+            logging.debug("API call successful, retrieved %s raw records", record_count)  # Trace the count.
+        except KeyError as error:  # Malformed response key.
+            self._handle_key_error(response, error)  # Try to recover data.
+        except Exception as error:  # Other API failure.
+            self._handle_api_exception(error)  # Handle/raise the failure.
 
-    def _call_api_with_retry(self, api_name: str) -> Any:
+    def _call_api_with_retry(self, api_name: str) -> Any:  # Retry the API call.
         """Call API with retry logic for timeout and connection errors.
 
         Detects failures by checking response.status_code (None when mistapi
@@ -7750,17 +7750,17 @@ class APIDataFetcher:
         Returns:
             The API response object.
         """
-        last_response = None
-        for attempt in range(API_REQUEST_MAX_RETRIES + 1):
-            response = self.api_call(apisession, self.org_id, **self.kwargs)
-            last_response = response
+        last_response = None  # Track the last response.
+        for attempt in range(API_REQUEST_MAX_RETRIES + 1):  # Bounded retry loop.
+            response = self.api_call(apisession, self.org_id, **self.kwargs)  # Invoke the API.
+            last_response = response  # Remember it.
 
-            if self._is_response_valid(response):
-                return response
+            if self._is_response_valid(response):  # Good response?
+                return response  # Return on success.
 
-            if attempt < API_REQUEST_MAX_RETRIES:
-                delay = API_REQUEST_RETRY_DELAY * (2**attempt)
-                logging.warning(
+            if attempt < API_REQUEST_MAX_RETRIES:  # More attempts left.
+                delay = API_REQUEST_RETRY_DELAY * (2**attempt)  # Exponential backoff.
+                logging.warning(  # Warn and back off.
                     "API call %s failed (attempt %s/%s) - retrying in %.0fs",
                     api_name,
                     attempt + 1,
@@ -7770,218 +7770,218 @@ class APIDataFetcher:
                 print(
                     f"! API call timed out - retrying in {delay:.0f}s (attempt {attempt + 2}/{API_REQUEST_MAX_RETRIES + 1})"  # noqa: E501
                 )
-                time.sleep(delay)
+                time.sleep(delay)  # Wait before retry.
 
         logging.error("API call %s failed after %s attempts", api_name, API_REQUEST_MAX_RETRIES + 1)
-        return last_response
+        return last_response  # Return last response.
 
     @staticmethod
-    def _is_response_valid(response: Any) -> bool:
+    def _is_response_valid(response: Any) -> bool:  # Validate an API response.
         """Check if an API response indicates a successful call.
 
         Returns False when status_code is None (timeout/connection error
         swallowed by mistapi) or when it indicates a server error.
         """
-        status = getattr(response, "status_code", None)
-        if status is None:
-            return False
-        if status >= 500:
-            return False
-        return True
+        status = getattr(response, "status_code", None)  # Read status code.
+        if status is None:  # No status present.
+            return False  # Treat as invalid.
+        if status >= 500:  # Server error.
+            return False  # Retry on 5xx.
+        return True  # Response is usable.
 
-    def _apply_rate_limiting(self) -> None:
+    def _apply_rate_limiting(self) -> None:  # Sleep to respect rate limits.
         """Apply rate limiting delay between API calls."""
         self.smoothed, delay = RateLimitingUtils.get_rate_limited_delay(self.smoothed, apisession, _api_usage_cache)  # type: ignore[no-untyped-call]
-        logging.debug("Applying rate limit delay: %.2fs", delay)
-        time.sleep(delay)
+        logging.debug("Applying rate limit delay: %.2fs", delay)  # Trace the delay.
+        time.sleep(delay)  # Apply the delay.
 
-    def _log_response_structure(self, response: Any) -> None:
+    def _log_response_structure(self, response: Any) -> None:  # Trace the response shape.
         """Log API response structure for debugging."""
-        logging.debug("API response type: %s", type(response))
-        if not hasattr(response, "data"):
-            return
+        logging.debug("API response type: %s", type(response))  # Trace response type.
+        if not hasattr(response, "data"):  # No data attribute.
+            return  # Nothing to inspect.
 
-        logging.debug("Response.data type: %s", type(response.data))
-        if isinstance(response.data, dict):
-            logging.debug("Response.data keys: %s", list(response.data.keys()))
-        elif isinstance(response.data, list):
-            logging.debug("Response.data is list with %s items", len(response.data))
+        logging.debug("Response.data type: %s", type(response.data))  # Trace data type.
+        if isinstance(response.data, dict):  # Dict payload.
+            logging.debug("Response.data keys: %s", list(response.data.keys()))  # Trace dict keys.
+        elif isinstance(response.data, list):  # List payload.
+            logging.debug("Response.data is list with %s items", len(response.data))  # Trace list size.
 
     # =========================================================================
     # ERROR HANDLING METHODS
     # =========================================================================
 
-    def _handle_key_error(self, response: Any, error: KeyError) -> None:
+    def _handle_key_error(self, response: Any, error: KeyError) -> None:  # Recover from missing keys.
         """Handle missing 'results' key or other structure issues."""
-        logging.error("API response structure error - missing key: %s", error)
-        self._log_response_error_details(response)
+        logging.error("API response structure error - missing key: %s", error)  # log key error.
+        self._log_response_error_details(response)  # Log response details.
 
-        recovered_data = self._attempt_data_recovery(response)
+        recovered_data = self._attempt_data_recovery(response)  # Try to salvage rows.
 
-        if recovered_data:
-            self.rawdata = recovered_data
-            self._save_recovered_data()
+        if recovered_data:  # Recovery succeeded.
+            self.rawdata = recovered_data  # Use the recovered rows.
+            self._save_recovered_data()  # Persist them.
         else:
-            self._handle_no_recovery()
+            self._handle_no_recovery()  # Give up cleanly.
 
-    def _log_response_error_details(self, response: Any) -> None:
+    def _log_response_error_details(self, response: Any) -> None:  # Log response diagnostics.
         """Log detailed response information during error handling."""
-        has_data = hasattr(response, "data")
-        logging.error("Response details: type=%s, hasattr(data)=%s", type(response), has_data)
+        has_data = hasattr(response, "data")  # Has a data attribute?
+        logging.error("Response details: type=%s, hasattr(data)=%s", type(response), has_data)  # log details.
 
-        if has_data:
-            logging.error("Response.data type=%s", type(response.data))
-            if isinstance(response.data, dict):
-                logging.error("Available keys: %s", list(response.data.keys()))
+        if has_data:  # Inspect the data.
+            logging.error("Response.data type=%s", type(response.data))  # log data type.
+            if isinstance(response.data, dict):  # Dict payload.
+                logging.error("Available keys: %s", list(response.data.keys()))  # log keys.
 
-    def _attempt_data_recovery(self, response: Any) -> list[dict[str, Any]] | None:
+    def _attempt_data_recovery(self, response: Any) -> list[dict[str, Any]] | None:  # Salvage rows from odd shapes.
         """Attempt to recover data from alternate response structures."""
-        if not hasattr(response, "data"):
-            return None
+        if not hasattr(response, "data"):  # No data to recover.
+            return None  # Nothing to recover.
 
-        if isinstance(response.data, dict):
-            if "data" in response.data:
-                recovered = response.data.get("data", [])
-                logging.info("Recovered %s records from response.data['data']", len(recovered))
+        if isinstance(response.data, dict):  # Dict payload.
+            if "data" in response.data:  # Nested data key.
+                recovered = response.data.get("data", [])  # Pull nested rows.
+                logging.info("Recovered %s records from response.data['data']", len(recovered))  # log recovered.
                 return recovered  # type: ignore[no-any-return]
 
-        if isinstance(response.data, list):
-            logging.info("Recovered %s records from response.data (list)", len(response.data))
-            return response.data
+        if isinstance(response.data, list):  # List payload.
+            logging.info("Recovered %s records from response.data (list)", len(response.data))  # log recovered list.
+            return response.data  # Use the list directly.
 
-        return None
+        return None  # Nothing to recover.
 
-    def _save_recovered_data(self) -> None:
+    def _save_recovered_data(self) -> None:  # Persist recovered rows.
         """Save recovered data and notify user."""
-        print(f"! API returned unexpected structure. Recovered {len(self.rawdata)} records.")
-        api_name = self.api_call.__name__
+        print(f"! API returned unexpected structure. Recovered {len(self.rawdata)} records.")  # Tell the user.
+        api_name = self.api_call.__name__  # API callable name.
         DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-        logging.info("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))
+        logging.info("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))  # log saved.
 
-    def _handle_no_recovery(self) -> None:
+    def _handle_no_recovery(self) -> None:  # Report unrecoverable response.
         """Handle case where no data could be recovered."""
-        print("! API response missing expected 'results' key. No data could be recovered.")
-        logging.error("Unable to recover any data from malformed response for %s", self.title)
-        logging.debug("EXIT: APIDataFetcher - structure error, no recovery")
+        print("! API response missing expected 'results' key. No data could be recovered.")  # Tell the user.
+        logging.error("Unable to recover any data from malformed response for %s", self.title)  # log no recovery.
+        logging.debug("EXIT: APIDataFetcher - structure error, no recovery")  # Trace exit.
 
-    def _handle_api_exception(self, error: Exception) -> None:
+    def _handle_api_exception(self, error: Exception) -> None:  # Handle a fetch exception.
         """Handle exceptions during API data retrieval."""
-        logging.error("Exception occurred during API data retrieval: %s", error)
-        logging.error("Exception type: %s", type(error).__name__)
-        print(f"! Exception occurred during API call: {error}")
+        logging.error("Exception occurred during API data retrieval: %s", error)  # log exception.
+        logging.error("Exception type: %s", type(error).__name__)  # log type.
+        print(f"! Exception occurred during API call: {error}")  # Tell the user.
 
-        if self._is_rate_limit_error(error):
-            self._handle_rate_limit()
-            return
+        if self._is_rate_limit_error(error):  # Rate limited?
+            self._handle_rate_limit()  # Save partial and stop.
+            return  # Done.
 
-        self._emergency_save_and_raise(error)
+        self._emergency_save_and_raise(error)  # Save then raise.
 
-    def _is_rate_limit_error(self, error: Exception) -> bool:
+    def _is_rate_limit_error(self, error: Exception) -> bool:  # Detect HTTP 429.
         """Check if exception is HTTP 429 rate limit error."""
-        status_code = getattr(getattr(error, "response", None), "status_code", None)
-        return status_code == 429
+        status_code = getattr(getattr(error, "response", None), "status_code", None)  # Read the status code.
+        return status_code == 429  # True only on 429.
 
-    def _handle_rate_limit(self) -> None:
+    def _handle_rate_limit(self) -> None:  # Save partial on rate limit.
         """Handle HTTP 429 rate limit error."""
-        logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")
+        logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")  # warn rate limit.
 
-        if self.rawdata:
-            api_name = self.api_call.__name__
+        if self.rawdata:  # Have partial data?
+            api_name = self.api_call.__name__  # API callable name.
             DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
-            print(f"* Partial data saved: {len(self.rawdata)} records written to {self.filename}")
+            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))  # log partial.
+            print(f"* Partial data saved: {len(self.rawdata)} records written to {self.filename}")  # Tell the user.
 
-        logging.debug("EXIT: APIDataFetcher - rate limited")
+        logging.debug("EXIT: APIDataFetcher - rate limited")  # Trace exit.
 
-    def _emergency_save_and_raise(self, error: Exception) -> None:
+    def _emergency_save_and_raise(self, error: Exception) -> None:  # Save partial then re-raise.
         """Save partial data before re-raising exception."""
-        if self.rawdata:
+        if self.rawdata:  # Have partial data?
             try:
-                api_name = self.api_call.__name__
+                api_name = self.api_call.__name__  # API callable name.
                 DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
                 logging.info("Emergency save: %s partial records saved before error exit", len(self.rawdata))
                 print(f"* Emergency save: {len(self.rawdata)} partial records written to {self.filename}")
-            except Exception as save_error:
-                logging.error("Failed to save partial data during error handling: %s", save_error)
+            except Exception as save_error:  # Save failed.
+                logging.error("Failed to save partial data during error handling: %s", save_error)  # log save fail.
 
-        logging.debug("EXIT: APIDataFetcher - API error")
-        raise error
+        logging.debug("EXIT: APIDataFetcher - API error")  # Trace exit.
+        raise error  # Re-raise the original.
 
-    def _handle_outer_exception(self, error: Exception) -> None:
+    def _handle_outer_exception(self, error: Exception) -> None:  # Handle a top-level error.
         """Handle exceptions at the top level."""
-        logging.error("! Error during data fetch for %s: %s", self.title, error)
-        logging.error("Exception type: %s, Traceback info available in logs", type(error).__name__)
+        logging.error("! Error during data fetch for %s: %s", self.title, error)  # log error.
+        logging.error("Exception type: %s, Traceback info available in logs", type(error).__name__)  # log type.
 
-        if self.rawdata:
-            self._save_partial_data_on_error(error)
+        if self.rawdata:  # Have partial data?
+            self._save_partial_data_on_error(error)  # Save what we have.
         else:
-            print("! No data was collected before the error occurred")
+            print("! No data was collected before the error occurred")  # Tell the user none saved.
 
-        logging.debug("EXIT: APIDataFetcher - error")
+        logging.debug("EXIT: APIDataFetcher - error")  # Trace exit.
 
-    def _save_partial_data_on_error(self, error: Exception) -> None:
+    def _save_partial_data_on_error(self, error: Exception) -> None:  # Persist partial rows on error.
         """Save partial data when outer exception occurs."""
         try:
-            api_name = self.api_call.__name__
+            api_name = self.api_call.__name__  # API callable name.
             DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
+            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))  # log partial.
 
-            print("\n!! PARTIAL DATA SAVED !!")
+            print("\n!! PARTIAL DATA SAVED !!")  # Notify the user.
             print(f"   * Despite the error, {len(self.rawdata)} records were successfully saved to {self.filename}")
-            print(f"   * Error: {str(error)}")
-            print("   * You can retry the operation later to get remaining data")
-        except Exception as save_error:
-            logging.error("Failed to save partial data in outer exception handler: %s", save_error)
-            print(f"! Critical: Could not save partial data. Error: {save_error}")
+            print(f"   * Error: {str(error)}")  # Show the error.
+            print("   * You can retry the operation later to get remaining data")  # Suggest a retry.
+        except Exception as save_error:  # Save failed.
+            logging.error("Failed to save partial data in outer exception handler: %s", save_error)  # log save fail.
+            print(f"! Critical: Could not save partial data. Error: {save_error}")  # Tell the user.
 
     # =========================================================================
     # DATA PROCESSING AND DISPLAY METHODS
     # =========================================================================
 
-    def _export_and_display_data(self) -> None:
+    def _export_and_display_data(self) -> None:  # Export then show a table.
         """Export data and display in table format."""
-        logging.info("Fetched %s raw records from API.", len(self.rawdata))
+        logging.info("Fetched %s raw records from API.", len(self.rawdata))  # log raw count.
 
-        api_name = self.api_call.__name__
+        api_name = self.api_call.__name__  # API callable name.
         DataExporter.export_with_processing(  # type: ignore[no-untyped-call]
             self.rawdata, self.filename, sort_key=self.sort_key, api_function_name=api_name
         )
-        print(f"! {len(self.rawdata)} records exported to {self.filename}")
+        print(f"! {len(self.rawdata)} records exported to {self.filename}")  # Tell the user.
 
-        self._display_table()
+        self._display_table()  # Render the table.
 
-    def _display_table(self) -> None:
+    def _display_table(self) -> None:  # Build and log a table.
         """Prepare and display data in PrettyTable format."""
-        data = self._prepare_data_for_display()
+        data = self._prepare_data_for_display()  # Normalize rows.
         fields = DataProcessingUtils.get_unique_keys(data)  # type: ignore[no-untyped-call]
-        logging.debug("Unique fields for table: %s", fields)
+        logging.debug("Unique fields for table: %s", fields)  # Trace fields.
 
-        table = self._build_pretty_table(data, fields)
-        logging.debug("\n%s", table.get_string())
+        table = self._build_pretty_table(data, fields)  # Build the table.
+        logging.debug("\n%s", table.get_string())  # Log the table.
 
-    def _prepare_data_for_display(self) -> list[dict[str, Any]]:
+    def _prepare_data_for_display(self) -> list[dict[str, Any]]:  # Filter, sort, flatten rows.
         """Prepare raw data for table display."""
-        data = [entry for entry in self.rawdata if isinstance(entry, dict)]
+        data = [entry for entry in self.rawdata if isinstance(entry, dict)]  # Dict rows only.
 
-        if self.sort_key:
+        if self.sort_key:  # Optional sort.
             sort_key_str: str = self.sort_key  # Type narrowing
-            data = sorted(data, key=lambda x: x.get(sort_key_str, ""))
+            data = sorted(data, key=lambda x: x.get(sort_key_str, ""))  # Sort by key.
 
-        data = DataProcessingUtils.flatten_nested_fields(data)
+        data = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
         data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
         return data  # type: ignore[no-any-return]
 
-    def _build_pretty_table(self, data: list[dict[str, Any]], fields: list[str]) -> Any:
+    def _build_pretty_table(self, data: list[dict[str, Any]], fields: list[str]) -> Any:  # Build a PrettyTable.
         """Build PrettyTable from processed data."""
-        table = PrettyTable()
-        table.field_names = self.display_fields if self.display_fields else fields
-        table.valign = "t"
+        table = PrettyTable()  # New table.
+        table.field_names = self.display_fields if self.display_fields else fields  # Choose columns.
+        table.valign = "t"  # Top-align cells.
 
         for item in tqdm(data, desc="Processing", unit="record"):  # type: ignore[no-untyped-call]
-            row = [item.get(field, "") for field in table.field_names]
-            table.add_row(row)
+            row = [item.get(field, "") for field in table.field_names]  # Build a row.
+            table.add_row(row)  # Add the row.
 
-        return table
+        return table  # Return the table.
 
 
 def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int, threading.Semaphore, int, str]:
