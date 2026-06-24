@@ -17279,88 +17279,88 @@ class WANProbeConfigManager:  # WAN probe config manager.
             .lower()
         )
 
-        if selection == "cancel":
-            print(" Operation cancelled.")
-            logging.info("Menu #166 cancelled by user at template selection")
-            return []
+        if selection == "cancel":  # User cancelled.
+            print(" Operation cancelled.")  # Tell the user.
+            logging.info("Menu #166 cancelled by user at template selection")  # Log the cancel.
+            return []  # Return empty.
 
-        if selection == "all":
-            return template_list
+        if selection == "all":  # Select all.
+            return template_list  # Return all templates.
 
         try:
-            indices = [int(idx.strip()) - 1 for idx in selection.split(",")]
-            selected = [template_list[idx] for idx in indices if 0 <= idx < len(template_list)]
-            if not selected:
-                print(" No valid templates selected.")
-                return []
-            return selected
-        except (ValueError, IndexError) as error:
-            print(f" Invalid selection: {error}")
-            logging.error("Menu #166: Invalid template selection: %s", error)
-            return []
+            indices = [int(idx.strip()) - 1 for idx in selection.split(",")]  # Parse the indices.
+            selected = [template_list[idx] for idx in indices if 0 <= idx < len(template_list)]  # Resolve to templates.
+            if not selected:  # None valid.
+                print(" No valid templates selected.")  # Tell the user.
+                return []  # Return empty.
+            return selected  # Return the selection.
+        except (ValueError, IndexError) as error:  # Bad input.
+            print(f" Invalid selection: {error}")  # Tell the user.
+            logging.error("Menu #166: Invalid template selection: %s", error)  # Log the error.
+            return []  # Return empty.
 
     def _analyze_templates(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Fetch and analyze templates for WAN interfaces. Returns templates with changes."""
-        print(f"\n  Analyzing {len(templates_to_modify)} templates for WAN interfaces...")
-        templates_with_changes = []
+        print(f"\n  Analyzing {len(templates_to_modify)} templates for WAN interfaces...")  # Tell the user.
+        templates_with_changes = []  # Collect changed templates.
 
-        def fetch_and_analyze(template_info: dict[str, Any]) -> dict[str, Any] | None:
+        def fetch_and_analyze(template_info: dict[str, Any]) -> dict[str, Any] | None:  # Analyze one template.
             """Worker function to fetch and analyze a single template."""
-            template_id = template_info["id"]
-            template_name = template_info["name"]
+            template_id = template_info["id"]  # Template id.
+            template_name = template_info["name"]  # Template name.
 
             try:
-                logging.debug("Fetching template configuration for %s", template_name)
-                response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(
+                logging.debug("Fetching template configuration for %s", template_name)  # Trace the fetch.
+                response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(  # Fetch the template.
                     apisession, self.org_id, template_id
                 )
-                config = response.data if hasattr(response, "data") else {}
+                config = response.data if hasattr(response, "data") else {}  # Unwrap the config.
 
-                if not isinstance(config, dict):
-                    logging.warning("Template %s returned invalid structure", template_name)
-                    return None
+                if not isinstance(config, dict):  # Invalid structure.
+                    logging.warning("Template %s returned invalid structure", template_name)  # Warn it.
+                    return None  # Skip it.
 
-                port_config = config.get("port_config", {})
-                if not isinstance(port_config, dict):
-                    logging.debug("Template %s has no port_config", template_name)
-                    return None
+                port_config = config.get("port_config", {})  # Read port config.
+                if not isinstance(port_config, dict):  # Invalid port config.
+                    logging.debug("Template %s has no port_config", template_name)  # Trace none.
+                    return None  # Skip it.
 
                 # Find all WAN interfaces
-                wan_interfaces = []
-                for port_name, port_settings in port_config.items():
-                    if isinstance(port_settings, dict) and port_settings.get("usage") == "wan":
-                        current_probe = port_settings.get("wan_probe_override", {})
+                wan_interfaces = []  # Collect WAN ports.
+                for port_name, port_settings in port_config.items():  # Walk ports.
+                    if isinstance(port_settings, dict) and port_settings.get("usage") == "wan":  # WAN-usage port.
+                        current_probe = port_settings.get("wan_probe_override", {})  # Read probe override.
                         current_ips = current_probe.get("ips", []) if isinstance(current_probe, dict) else []
-                        current_profile = (
+                        current_profile = (  # Read current profile.
                             current_probe.get("probe_profile", "") if isinstance(current_probe, dict) else ""
                         )
 
-                        wan_interfaces.append(
+                        wan_interfaces.append(  # Collect the interface.
                             {"port_name": port_name, "current_ips": current_ips, "current_profile": current_profile}
                         )
 
-                if wan_interfaces:
-                    return {
+                if wan_interfaces:  # Have WAN ports.
+                    return {  # Return the changes.
                         "id": template_id,
                         "name": template_name,
                         "site_count": template_info["site_count"],
                         "config": config,
                         "wan_interfaces": wan_interfaces,
                     }
-                return None
+                return None  # No WAN ports.
 
-            except Exception as error:
-                logging.error("Error analyzing template %s: %s", template_name, error)
-                logging.error(traceback.format_exc())
-                print(f"\n  !? Error analyzing template '{template_name}': {error}")
-                return None
+            except Exception as error:  # Analysis failed.
+                logging.error("Error analyzing template %s: %s", template_name, error)  # Log the error.
+                logging.error(traceback.format_exc())  # Log the traceback.
+                print(f"\n  !? Error analyzing template '{template_name}': {error}")  # Tell the user.
+                return None  # Skip it.
 
         # Parallel fetch with ThreadPoolExecutor
-        max_workers = min(10, len(templates_to_modify))
+        max_workers = min(10, len(templates_to_modify))  # Size the worker pool.
         logging.info("Fetching %s templates in parallel (max %s workers)", len(templates_to_modify), max_workers)
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            import concurrent.futures
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:  # Run the pool.
+            import concurrent.futures  # Import futures.
 
             future_map = {executor.submit(fetch_and_analyze, t): t for t in templates_to_modify}
 
@@ -17370,66 +17370,66 @@ class WANProbeConfigManager:  # WAN probe config manager.
                 desc="Analyzing templates",
                 unit="template",
             ):
-                result = future.result()
-                if result:
-                    templates_with_changes.append(result)
+                result = future.result()  # Read the result.
+                if result:  # Have a result.
+                    templates_with_changes.append(result)  # Collect it.
 
-        return templates_with_changes
+        return templates_with_changes  # Return changed templates.
 
     def _show_preview(self, templates_with_changes: list[dict[str, Any]], dry_run: bool) -> None:
         """Display preview of changes to be made."""
-        total_interfaces = sum(len(t["wan_interfaces"]) for t in templates_with_changes)
-        total_sites = sum(t["site_count"] for t in templates_with_changes)
+        total_interfaces = sum(len(t["wan_interfaces"]) for t in templates_with_changes)  # Total interfaces.
+        total_sites = sum(t["site_count"] for t in templates_with_changes)  # Total sites.
 
-        print("\n  Preview of Changes:")
-        print(f"  {len(templates_with_changes)} templates with {total_interfaces} WAN interfaces")
-        print(f"  Affecting {total_sites} sites")
+        print("\n  Preview of Changes:")  # Header.
+        print(f"  {len(templates_with_changes)} templates with {total_interfaces} WAN interfaces")  # Show the counts.
+        print(f"  Affecting {total_sites} sites")  # Show affected sites.
 
-        for template in templates_with_changes:
-            print(f"\n   Template: {template['name']} ({template['site_count']} sites)")
-            for wan_if in template["wan_interfaces"]:
-                port = wan_if["port_name"]
-                current_ips = wan_if["current_ips"] or ["(none)"]
-                current_profile = wan_if["current_profile"] or "(none)"
-                print(f"     {port}:")
-                print(f"       Current: ips={current_ips}, profile={current_profile}")
-                print(f"       New:     ips={self.probe_ips}, profile={self.probe_profile}")
+        for template in templates_with_changes:  # Walk templates.
+            print(f"\n   Template: {template['name']} ({template['site_count']} sites)")  # Print the template.
+            for wan_if in template["wan_interfaces"]:  # Walk WAN ports.
+                port = wan_if["port_name"]  # Port name.
+                current_ips = wan_if["current_ips"] or ["(none)"]  # Current IPs.
+                current_profile = wan_if["current_profile"] or "(none)"  # Current profile.
+                print(f"     {port}:")  # Print the port.
+                print(f"       Current: ips={current_ips}, profile={current_profile}")  # Show current.
+                print(f"       New:     ips={self.probe_ips}, profile={self.probe_profile}")  # Show new.
 
-    def _confirm_operation(self, template_count: int) -> bool:
+    def _confirm_operation(self, template_count: int) -> bool:  # Confirm the operation.
         """Prompt for confirmation. Returns True if confirmed."""
-        print(f"\n  {'=' * 70}")
-        print(f"  !? CRITICAL: This will modify {template_count} gateway templates")
-        print("  !? Type 'APPLY' (all caps) to proceed or anything else to cancel")
-        print(f"  {'=' * 70}")
+        print(f"\n  {'=' * 70}")  # Divider.
+        print(f"  !? CRITICAL: This will modify {template_count} gateway templates")  # Warn destructive.
+        print("  !? Type 'APPLY' (all caps) to proceed or anything else to cancel")  # Ask to type APPLY.
+        print(f"  {'=' * 70}")  # Divider.
 
-        confirmation = InputUtils.safe_input(
+        confirmation = InputUtils.safe_input(  # Read the confirmation.
             "\n  Confirmation: ",
             context="wan_probe_apply_confirmation",
         ).strip()
-        if confirmation != "APPLY":
-            print(" Operation cancelled.")
-            logging.info("Menu #166 cancelled by user at final confirmation")
-            return False
-        return True
+        if confirmation != "APPLY":  # Not confirmed.
+            print(" Operation cancelled.")  # Tell the user.
+            logging.info("Menu #166 cancelled by user at final confirmation")  # Log the cancel.
+            return False  # Abort.
+        return True  # Confirmed.
 
     def _apply_changes(self, templates_with_changes: list[dict[str, Any]], dry_run: bool) -> list[dict[str, Any]]:
         """Apply probe configuration changes to templates. Returns results."""
-        print("\n  Applying WAN probe configuration...")
-        results = []
+        print("\n  Applying WAN probe configuration...")  # Tell the user.
+        results = []  # Collect results.
 
         for template in tqdm(templates_with_changes, desc="Updating templates", unit="template"):  # type: ignore[no-untyped-call]
-            result = self._update_single_template(template, dry_run)
-            results.append(result)
+            result = self._update_single_template(template, dry_run)  # Update one template.
+            results.append(result)  # Collect the result.
 
-        return results
+        return results  # Return all results.
 
     def _update_single_template(self, template: dict[str, Any], dry_run: bool) -> dict[str, Any]:
         """Update a single template's WAN probe configuration."""
-        template_id = template["id"]
-        template_name = template["name"]
-        config = template["config"]
+        template_id = template["id"]  # Template id.
+        template_name = template["name"]  # Template name.
+        config = template["config"]  # Template config.
 
-        result = {
+        result = {  # Build the result.
             "template_name": template_name,
             "template_id": template_id,
             "site_count": template["site_count"],
@@ -17439,58 +17439,58 @@ class WANProbeConfigManager:  # WAN probe config manager.
         }
 
         try:
-            port_config = config.get("port_config", {})
-            interfaces_modified = []
+            port_config = config.get("port_config", {})  # Read port config.
+            interfaces_modified = []  # Track modified ports.
 
-            for wan_if in template["wan_interfaces"]:
-                port_name = wan_if["port_name"]
-                if port_name in port_config:
+            for wan_if in template["wan_interfaces"]:  # Walk WAN ports.
+                port_name = wan_if["port_name"]  # Port name.
+                if port_name in port_config:  # Port present.
                     # Set wan_probe_override
-                    port_config[port_name]["wan_probe_override"] = {
+                    port_config[port_name]["wan_probe_override"] = {  # Set the probe override.
                         "ips": self.probe_ips.copy(),
                         "probe_profile": self.probe_profile,
                     }
-                    interfaces_modified.append(port_name)
-                    logging.debug("Template %s: Updated %s probe config", template_name, port_name)
+                    interfaces_modified.append(port_name)  # Mark it modified.
+                    logging.debug("Template %s: Updated %s probe config", template_name, port_name)  # Trace the update.
 
-            if interfaces_modified:
-                config["port_config"] = port_config
-                result["interfaces_updated"] = interfaces_modified
+            if interfaces_modified:  # Any modifications.
+                config["port_config"] = port_config  # Store port config.
+                result["interfaces_updated"] = interfaces_modified  # Record updates.
 
-                if dry_run:
-                    result["status"] = "DRY-RUN"
+                if dry_run:  # Dry-run.
+                    result["status"] = "DRY-RUN"  # Mark dry-run.
                     logging.info("DRY-RUN: Would update template %s interfaces: %s", template_name, interfaces_modified)
                 else:
-                    logging.debug("Updating template %s via API", template_name)
-                    update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
+                    logging.debug("Updating template %s via API", template_name)  # Trace the update.
+                    update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(  # Update the template.
                         apisession, self.org_id, template_id, body=config
                     )
 
-                    if update_resp.status_code == 200:
-                        result["status"] = "SUCCESS"
-                        logging.info("Successfully updated template %s", template_name)
+                    if update_resp.status_code == 200:  # Success.
+                        result["status"] = "SUCCESS"  # Mark success.
+                        logging.info("Successfully updated template %s", template_name)  # Log success.
                     else:
-                        result["status"] = "FAILED"
-                        result["error"] = f"API returned status {update_resp.status_code}"
+                        result["status"] = "FAILED"  # Failed.
+                        result["error"] = f"API returned status {update_resp.status_code}"  # Record the error.
                         logging.error("Failed to update template %s: status %s", template_name, update_resp.status_code)
             else:
-                result["status"] = "SKIPPED"
-                result["error"] = "No WAN interfaces found in port_config"
+                result["status"] = "SKIPPED"  # Mark skipped.
+                result["error"] = "No WAN interfaces found in port_config"  # Record the reason.
 
-        except Exception as error:
-            result["status"] = "ERROR"
-            result["error"] = str(error)
-            logging.error("Error updating template %s: %s", template_name, error)
-            logging.error(traceback.format_exc())
+        except Exception as error:  # Update failed.
+            result["status"] = "ERROR"  # Mark error.
+            result["error"] = str(error)  # Record the error.
+            logging.error("Error updating template %s: %s", template_name, error)  # Log the error.
+            logging.error(traceback.format_exc())  # Log the traceback.
 
-        return result
+        return result  # Return the result.
 
-    def _generate_report(self, results: list[dict[str, Any]], dry_run: bool) -> None:
+    def _generate_report(self, results: list[dict[str, Any]], dry_run: bool) -> None:  # Generate the audit report.
         """Generate and display final report."""
         # Prepare report data
-        report_data = []
-        for result in results:
-            report_data.append(
+        report_data = []  # Collect report rows.
+        for result in results:  # Walk results.
+            report_data.append(  # Build a report row.
                 {
                     "template_name": result["template_name"],
                     "template_id": result["template_id"],
@@ -17506,46 +17506,46 @@ class WANProbeConfigManager:  # WAN probe config manager.
                 }
             )
 
-        output_file = "GatewayTemplate_WAN_Probe_Config_Audit.csv"
+        output_file = "GatewayTemplate_WAN_Probe_Config_Audit.csv"  # Output filename.
         DataExporter.write_with_format_selection(report_data, output_file)  # type: ignore[no-untyped-call]
 
         # Calculate summary
-        total_interfaces = sum(len(r["interfaces_updated"]) for r in results)
+        total_interfaces = sum(len(r["interfaces_updated"]) for r in results)  # Total interfaces.
         total_sites = sum(r["site_count"] for r in results if r["status"] in ["SUCCESS", "DRY-RUN"])
 
-        if dry_run:
-            dry_run_count = sum(1 for r in results if r["status"] == "DRY-RUN")
-            print("\n  WAN Probe Configuration DRY-RUN Complete!")
-            print("=" * 70)
-            print("  >> DRY-RUN MODE: No actual changes were made")
-            print(f"  Templates Analyzed: {len(results)}")
-            print(f"  Would Update: {dry_run_count} templates")
-            print(f"  WAN Interfaces: {total_interfaces}")
-            print(f"  Sites Affected: {total_sites}")
-            print("\n  >> To apply changes, run without --dry-run flag")
+        if dry_run:  # Dry-run.
+            dry_run_count = sum(1 for r in results if r["status"] == "DRY-RUN")  # Count dry-runs.
+            print("\n  WAN Probe Configuration DRY-RUN Complete!")  # Tell the user.
+            print("=" * 70)  # Divider.
+            print("  >> DRY-RUN MODE: No actual changes were made")  # Tell the user.
+            print(f"  Templates Analyzed: {len(results)}")  # Show analyzed count.
+            print(f"  Would Update: {dry_run_count} templates")  # Show would-update.
+            print(f"  WAN Interfaces: {total_interfaces}")  # Show interfaces.
+            print(f"  Sites Affected: {total_sites}")  # Show sites.
+            print("\n  >> To apply changes, run without --dry-run flag")  # Tell the user.
         else:
-            success_count = sum(1 for r in results if r["status"] == "SUCCESS")
-            failure_count = len(results) - success_count
+            success_count = sum(1 for r in results if r["status"] == "SUCCESS")  # Count successes.
+            failure_count = len(results) - success_count  # Count failures.
 
-            print("\n  WAN Probe Configuration Complete!")
-            print("=" * 70)
-            print(f"  Templates Updated: {success_count}")
-            print(f"  Templates Failed: {failure_count}")
-            print(f"  WAN Interfaces Configured: {total_interfaces}")
-            print(f"  Sites Affected: {total_sites}")
+            print("\n  WAN Probe Configuration Complete!")  # Tell the user.
+            print("=" * 70)  # Divider.
+            print(f"  Templates Updated: {success_count}")  # Show updated count.
+            print(f"  Templates Failed: {failure_count}")  # Show failed count.
+            print(f"  WAN Interfaces Configured: {total_interfaces}")  # Show interfaces.
+            print(f"  Sites Affected: {total_sites}")  # Show sites.
 
-            if success_count > 0:
-                print("\n  Configuration Applied:")
-                print(f"    Probe IPs: {self.probe_ips}")
-                print(f"    Probe Profile: {self.probe_profile}")
+            if success_count > 0:  # Any success.
+                print("\n  Configuration Applied:")  # Tell the user.
+                print(f"    Probe IPs: {self.probe_ips}")  # Show probe IPs.
+                print(f"    Probe Profile: {self.probe_profile}")  # Show probe profile.
 
-            if failure_count > 0:
-                print(f"\n  !? {failure_count} templates failed - check audit report")
+            if failure_count > 0:  # Any failure.
+                print(f"\n  !? {failure_count} templates failed - check audit report")  # Warn the failures.
 
-        print(f"\n  Report saved to: {output_file}")
-        print("=" * 70)
+        print(f"\n  Report saved to: {output_file}")  # Tell the user.
+        print("=" * 70)  # Divider.
 
-        logging.warning(
+        logging.warning(  # Log the summary.
             "Menu #166 DESTRUCTIVE operation complete: %s templates updated",
             sum(1 for r in results if r["status"] == "SUCCESS"),
         )
@@ -17554,15 +17554,15 @@ class WANProbeConfigManager:  # WAN probe config manager.
 # ============================================================================
 # WAN PROBE DEVICE OVERRIDE MANAGER CLASS (delegated)
 # ============================================================================
-class WANProbeDeviceOverrideManager:
+class WANProbeDeviceOverrideManager:  # WAN probe device override.
     """Delegation wrapper for extracted WAN probe device override manager implementation."""
 
     @classmethod
-    def configure(cls, dry_run: bool = False) -> None:
+    def configure(cls, dry_run: bool = False) -> None:  # Configure entry point.
         """Menu #167 delegated entrypoint."""
         from src.gateway import wan_probe_device_override_manager as wan_probe_module  # noqa: PLC0415,I001
 
-        wan_probe_module.configure_wan_probe_device_override_dependencies(
+        wan_probe_module.configure_wan_probe_device_override_dependencies(  # Wire dependencies.
             apisession_dependency=apisession,
             config_utils=ConfigUtils,
             cache_utils=CacheUtils,
@@ -17574,13 +17574,13 @@ class WANProbeDeviceOverrideManager:
             mistapi_dependency=mistapi,
             site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
         )
-        return wan_probe_module.WANProbeDeviceOverrideManager.configure(dry_run=dry_run)
+        return wan_probe_module.WANProbeDeviceOverrideManager.configure(dry_run=dry_run)  # Delegate the config.
 
 
 # ============================================================================
 # VIRTUAL CHASSIS MANAGER CLASS
 # ============================================================================
-class VirtualChassisManager:
+class VirtualChassisManager:  # Virtual chassis manager.
     """Virtual chassis to virtual MAC conversion operations (Menus 92-94).
 
     Implementation extracted to src/device/virtual_chassis.py.
@@ -17589,13 +17589,13 @@ class VirtualChassisManager:
     """
 
     @staticmethod
-    def convert_single(dry_run: bool = False) -> None:
+    def convert_single(dry_run: bool = False) -> None:  # Convert a single VC.
         """Convert a single VC switch to virtual MAC (Menu 92)."""
-        from src.device.virtual_chassis import (
+        from src.device.virtual_chassis import (  # Import the impl.
             VirtualChassisManager as _VC,
         )
 
-        _VC.convert_single(
+        _VC.convert_single(  # Delegate the conversion.
             apisession=apisession,
             select_site_fn=PromptUtils.select_site,
             safe_input_fn=InputUtils.safe_input,
@@ -17606,13 +17606,13 @@ class VirtualChassisManager:
         )
 
     @staticmethod
-    def convert_by_site_list() -> None:
+    def convert_by_site_list() -> None:  # Convert by site list.
         """Bulk convert VC switches from site list CSV (Menu 93)."""
-        from src.device.virtual_chassis import (
+        from src.device.virtual_chassis import (  # Import the impl.
             VirtualChassisManager as _VC,
         )
 
-        _VC.convert_by_site_list(
+        _VC.convert_by_site_list(  # Delegate the conversion.
             apisession=apisession,
             safe_input_fn=InputUtils.safe_input,
             get_csv_path_fn=FilePathUtils.get_csv_path,
@@ -17623,13 +17623,13 @@ class VirtualChassisManager:
         )
 
     @staticmethod
-    def check_status() -> None:
+    def check_status() -> None:  # Check VC status.
         """Check conversion status of all VC switches (Menu 94)."""
-        from src.device.virtual_chassis import (
+        from src.device.virtual_chassis import (  # Import the impl.
             VirtualChassisManager as _VC,
         )
 
-        _VC.check_status(
+        _VC.check_status(  # Delegate the check.
             get_csv_path_fn=FilePathUtils.get_csv_path,
             check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
             inventory_generator=OrgInventoryExporter.inventory,
@@ -17643,11 +17643,11 @@ class VirtualChassisManager:
 # ============================================================================
 # SITE CONFIGURATION MANAGER CLASS
 # ============================================================================
-class SiteConfigManager:
+class SiteConfigManager:  # Site config manager.
     """Delegation wrapper for extracted site configuration implementation."""
 
     @staticmethod
-    def _configure_module():
+    def _configure_module():  # Configure the module.
         """Configure extracted module dependencies and return the module handle."""
         from src.site import site_config_manager as site_config_module  # noqa: PLC0415,I001
 
