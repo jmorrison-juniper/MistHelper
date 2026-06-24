@@ -66,6 +66,7 @@ with patch.dict(
 # two helpers below so the existing per-kwarg test style stays readable.
 from dataclasses import replace
 
+from src.dataclasses.family_selection_context import FamilySelectionContext  # Phase B refactor.
 from src.dataclasses.site_auto_upgrade_deps import SiteAutoUpgradeCoreDeps, SiteAutoUpgradeMspDeps
 
 
@@ -672,38 +673,44 @@ class TestApplyFamilySelection:
         version_map = {"AP41": [{"version": "2.0"}, {"version": "1.0"}]}
         custom: dict[str, str] = {}
         _apply_family_selection(
-            "1",
-            "AP41",
-            ["AP41"],
-            ["2.0", "1.0"],
-            None,
-            version_map,
-            custom,
+            "1",  # Operator's choice -> picks index 1 in the sorted_versions list.
+            custom,  # Mutable out dict the function writes the chosen version into.
+            FamilySelectionContext(  # Issue #433 Phase B: 5 fields bundled into one ctx param.
+                family="AP41",
+                models=["AP41"],
+                sorted_versions=["2.0", "1.0"],
+                current_version=None,
+                model_version_map=version_map,
+            ),
         )
         assert custom["AP41"] == "2.0"
 
     def test_empty_keeps_current(self, capsys):
         _apply_family_selection(
-            "",
-            "AP41",
-            ["AP41"],
-            ["2.0"],
-            "1.0",
-            {},
-            {},
+            "",  # Empty choice falls through to the "keep current" path.
+            {},  # No mutation expected when current version is preserved.
+            FamilySelectionContext(  # Issue #433 Phase B: 5 fields bundled into one ctx param.
+                family="AP41",
+                models=["AP41"],
+                sorted_versions=["2.0"],
+                current_version="1.0",  # Current version exists -> "Keeping" message printed.
+                model_version_map={},
+            ),
         )
         captured = capsys.readouterr()
         assert "Keeping" in captured.out
 
     def test_empty_no_current_skips(self, capsys):
         _apply_family_selection(
-            "",
-            "AP41",
-            ["AP41"],
-            ["2.0"],
-            None,
-            {},
-            {},
+            "",  # Empty choice + no current version triggers the "Skipped" path.
+            {},  # No mutation expected on the skip path.
+            FamilySelectionContext(  # Issue #433 Phase B: 5 fields bundled into one ctx param.
+                family="AP41",
+                models=["AP41"],
+                sorted_versions=["2.0"],
+                current_version=None,  # No current version -> "Skipped" message printed.
+                model_version_map={},
+            ),
         )
         captured = capsys.readouterr()
         assert "Skipped" in captured.out
