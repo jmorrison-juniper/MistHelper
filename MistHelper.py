@@ -9375,7 +9375,7 @@ class OrgTicketManager:  # Support ticket operations.
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _select_ticket(org_id: str) -> str:
+    def _select_ticket(org_id: str) -> str:  # Prompt to select a ticket.
         """List tickets and let user pick by index, or enter ID manually."""
         logging.info("Fetching ticket list for selection (org %s)", org_id)  # Log before API call
         try:
@@ -9432,7 +9432,7 @@ class OrgTicketManager:  # Support ticket operations.
             return ""  # Return empty to signal cancellation
 
     @staticmethod
-    def _fetch_ticket_detail(org_id: str, ticket_id: str) -> dict:
+    def _fetch_ticket_detail(org_id: str, ticket_id: str) -> dict:  # Fetch one ticket detail.
         """Fetch full ticket data including comments via getOrgTicket."""
         logging.info("Fetching detail for ticket %s", ticket_id)  # Log before API call
         try:
@@ -9448,7 +9448,7 @@ class OrgTicketManager:  # Support ticket operations.
             return {}  # Return empty dict to signal failure
 
     @staticmethod
-    def _display_ticket_detail(ticket_data: dict) -> None:
+    def _display_ticket_detail(ticket_data: dict) -> None:  # Display ticket detail.
         """Format and display a ticket with its full comment history."""
         print("\n  " + "=" * 60)  # Top separator bar
         print(f"  Ticket: {ticket_data.get('subject', '(no subject)')}")  # Display subject
@@ -9481,7 +9481,7 @@ class OrgTicketManager:  # Support ticket operations.
 # ============================================================================
 # ORGANIZATION ALARM & EVENT EXPORTER CLASS
 # ============================================================================
-class OrgAlarmEventExporter:
+class OrgAlarmEventExporter:  # Org alarm/event exporters.
     """
     Focused exporter for alarm and event time-series data from the Mist API.
 
@@ -9502,7 +9502,7 @@ class OrgAlarmEventExporter:
     """
 
     @staticmethod
-    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):
+    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # Generic org export helper.
         """
         Generic helper to export organization data via APIDataFetcher.
 
@@ -9512,10 +9512,10 @@ class OrgAlarmEventExporter:
             sort_key: Field to sort results by
             **api_kwargs: Additional arguments for the API call
         """
-        logging.info("Starting export of organization %s...", data_type)
-        safe_data_type = data_type.replace(" ", "").replace("-", "").title()
-        filename = f"Org{safe_data_type}.csv"
-        APIDataFetcher(
+        logging.info("Starting export of organization %s...", data_type)  # Log export start.
+        safe_data_type = data_type.replace(" ", "").replace("-", "").title()  # Sanitize data type for filename.
+        filename = f"Org{safe_data_type}.csv"  # Build output CSV name.
+        APIDataFetcher(  # Fetch and write the data.
             title=f"Organization {data_type.title()}:",
             api_call=api_call,
             filename=filename,
@@ -9525,16 +9525,16 @@ class OrgAlarmEventExporter:
         ).execute()
 
     @staticmethod
-    def alarms():
+    def alarms():  # Export open org alarms.
         """
         Export open organization alarms from the past 24 hours to OrgAlarms.csv.
         """
-        logging.info("Menu #20: Starting organization alarms export")
-        logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("open org alarms export", hours)
+        logging.info("Menu #20: Starting organization alarms export")  # Log alarms menu start.
+        logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")  # Trace entry for debugging.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
+        TimeUtils.log_dynamic_lookback("open org alarms export", hours)  # Log chosen lookback window.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch and write alarms.
                 title="Search all Org Alarms:",
                 api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
                 filename="OrgAlarms.csv",
@@ -9543,14 +9543,14 @@ class OrgAlarmEventExporter:
                 acked=False,
             ).execute()
             logging.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
-            logging.debug("EXIT: OrgAlarmEventExporter.alarms - success")
-        except Exception as error:
-            logging.error("Failed to export open org alarms: %s", error)
-            logging.debug("EXIT: OrgAlarmEventExporter.alarms - error")
-            raise
+            logging.debug("EXIT: OrgAlarmEventExporter.alarms - success")  # Trace successful exit.
+        except Exception as error:  # Catch export errors.
+            logging.error("Failed to export open org alarms: %s", error)  # Log export failure.
+            logging.debug("EXIT: OrgAlarmEventExporter.alarms - error")  # Trace error exit.
+            raise  # Re-raise to caller.
 
     @staticmethod
-    def alarm_templates():
+    def alarm_templates():  # Export org alarm templates.
         """Export alarm templates to OrgAlarmTemplates.csv."""
         OrgAlarmEventExporter._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates,
@@ -9559,10 +9559,10 @@ class OrgAlarmEventExporter:
         )
 
     @staticmethod
-    def events():
+    def events():  # Export org events.
         """Export organization events to OrgEvents.csv."""
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("org events export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
+        TimeUtils.log_dynamic_lookback("org events export", hours)  # Log chosen lookback window.
         OrgAlarmEventExporter._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
             data_type="events",
@@ -9571,35 +9571,35 @@ class OrgAlarmEventExporter:
         )
 
     @staticmethod
-    def device_events():
+    def device_events():  # Export org device events.
         """
         Export all device events from the past 24 hours to OrgDeviceEvents.csv.
         """
-        logging.info("Menu #21: Starting device events export")
-        logging.info("Search Org Device Events:")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("recent device events export", hours)
-        duration_param = f"{hours}h"
-        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+        logging.info("Menu #21: Starting device events export")  # Log device events menu start.
+        logging.info("Search Org Device Events:")  # Log search start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
+        TimeUtils.log_dynamic_lookback("recent device events export", hours)  # Log chosen lookback window.
+        duration_param = f"{hours}h"  # Format duration param.
+        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(  # Search org device events.
             apisession, org_id, device_type="all", limit=1000, duration=duration_param
         )
-        rawdata = mistapi.get_all(response=response, mist_session=apisession)
-        events = rawdata
-        logging.info(
+        rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page through all events.
+        events = rawdata  # Alias rawdata as events.
+        logging.info(  # Log fetched event count.
             "Fetched %s device events from the past %s hours (duration=%s).", len(events), hours, duration_param
         )
         DataExporter.write_with_format_selection(events, "OrgDeviceEvents.csv")  # type: ignore[no-untyped-call]
-        logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))
-        print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
+        logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))  # Log written event count.
+        print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")  # Confirm export to operator.
         logging.info("Menu #21: Device events export completed - %s events", len(events))
-        if events:
-            logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
+        if events:  # Branch: events present.
+            logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))  # Debug-dump sample events.
 
     @staticmethod
-    def device_events_52w() -> None:
+    def device_events_52w() -> None:  # Export 52-week device events.
         """Delegated 52-week device event export entrypoint."""
-        exporter = DeviceEvents52wExporter(
+        exporter = DeviceEvents52wExporter(  # Build the 52w exporter.
             apisession=apisession,
             mistapi=mistapi,
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
@@ -9609,13 +9609,13 @@ class OrgAlarmEventExporter:
             database_path=DATABASE_PATH,
             logger=logging,
         )
-        exporter.export()
+        exporter.export()  # Run the export.
 
 
 # ============================================================================
 # ORGANIZATION DATA EXPORT UTILITIES CLASS
 # ============================================================================
-class OrgSiteExporter:
+class OrgSiteExporter:  # Org site exporters.
     """
     Organization Site Data Exporter
 
@@ -9624,51 +9624,51 @@ class OrgSiteExporter:
     """
 
     @staticmethod
-    def sites():
+    def sites():  # Export the org site list.
         """
         Fetches and exports the list of all sites in the organization.
         Output format determined by global OUTPUT_FORMAT setting.
         Uses APIDataFetcher to handle API call and output writing.
         """
-        logging.info("Starting export of organization site list...")
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("11", "sites", 1)
-        op_start = time.time()
-        APIDataFetcher(
+        logging.info("Starting export of organization site list...")  # Log site export start.
+        emitter = PROGRESS_EMITTER  # Capture progress emitter.
+        if emitter:  # Branch: emitter present.
+            emitter.emit_progress_start("11", "sites", 1)  # Emit progress start.
+        op_start = time.time()  # Record operation start time.
+        APIDataFetcher(  # Fetch and write sites.
             title="Site List:",
             api_call=mistapi.api.v1.orgs.sites.listOrgSites,
             filename="SiteList",
             sort_key="name",
             limit=1000,
         ).execute()
-        output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"
-        logging.info("Completed site list export and wrote results to %s.", output_desc)
-        if emitter:
+        output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"  # Describe output backend.
+        logging.info("Completed site list export and wrote results to %s.", output_desc)  # Log site export success.
+        if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete("11", "sites", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def sites_list_api():
+    def sites_list_api():  # Export sites via list API.
         """
         Uses the 'list' sites API endpoint (not 'search') to export all sites to SiteList_ListAPI.csv,
         but only if the file does not already exist.
         """
-        output_file = "SiteList_ListAPI.csv"
-        if os.path.exists(output_file):
-            logging.info("! Using cached %s (already exists)", output_file)
-            print(f"! Using cached {output_file} (already exists)")
-            return
-        logging.info("Fetching all sites using the 'list' sites API endpoint...")
-        print("Fetching all sites using the 'list' sites API endpoint...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-        if not sites:
-            logging.warning(" No sites returned from API.")
-            print(" No sites returned from API.")
-            return
-        sites = DataProcessingUtils.flatten_nested_fields(sites)
+        output_file = "SiteList_ListAPI.csv"  # Define output filename.
+        if os.path.exists(output_file):  # Branch: cached file exists.
+            logging.info("! Using cached %s (already exists)", output_file)  # Log cache reuse.
+            print(f"! Using cached {output_file} (already exists)")  # Inform operator of cache.
+            return  # Skip re-fetch.
+        logging.info("Fetching all sites using the 'list' sites API endpoint...")  # Log fetch start.
+        print("Fetching all sites using the 'list' sites API endpoint...")  # Inform operator of fetch.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all sites.
+        if not sites:  # Branch: no sites returned.
+            logging.warning(" No sites returned from API.")  # Log empty result.
+            print(" No sites returned from API.")  # Inform operator none returned.
+            return  # Skip write.
+        sites = DataProcessingUtils.flatten_nested_fields(sites)  # Flatten nested site fields.
         # Normalize nested JSON structures into a flat row-per-record format for CSV/DB output
-        sites = DataProcessingUtils.flatten_nested_fields(sites)
+        sites = DataProcessingUtils.flatten_nested_fields(sites)  # Flatten again post-merge.
         sites = DataProcessingUtils.escape_multiline(sites)  # type: ignore[no-untyped-call]
         # Write to the configured output backend (CSV or SQLite) via the DataExporter abstraction
         DataExporter.write_with_format_selection(sites, output_file)  # type: ignore[no-untyped-call]
@@ -9676,63 +9676,63 @@ class OrgSiteExporter:
         print(f"! Sites exported to {output_file}")  # Inform the user on stdout
 
     @staticmethod
-    def sites_with_location():
+    def sites_with_location():  # Export sites with location.
         """
         Export a list of sites with all available fields to SitesWithLocations.csv.
         """
-        print("Sites with Location and Timezone Info:")
-        logging.info("Listing Sites with Full Info:")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug("Using org_id: %s for site location export.", org_id)
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-        logging.info("Fetched %s sites from the organization.", len(sites))
-        flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)
+        print("Sites with Location and Timezone Info:")  # Inform operator of export.
+        logging.info("Listing Sites with Full Info:")  # Log listing start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
+        logging.debug("Using org_id: %s for site location export.", org_id)  # Log org id used.
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all sites.
+        logging.info("Fetched %s sites from the organization.", len(sites))  # Log fetched site count.
+        flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)  # Flatten nested site fields.
         sanitized_sites = DataProcessingUtils.escape_multiline(flattened_sites)  # type: ignore[no-untyped-call]
         DataExporter.write_with_format_selection(sanitized_sites, "SitesWithLocations.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(sanitized_sites)} sites exported to SitesWithLocations.csv")
-        logging.info(" Full site data written to SitesWithLocations.csv")
+        print(f"! {len(sanitized_sites)} sites exported to SitesWithLocations.csv")  # Confirm export to operator.
+        logging.info(" Full site data written to SitesWithLocations.csv")  # Log write success.
 
     @staticmethod
-    def current_guests():
+    def current_guests():  # Export current guest users.
         """
         Export all current guest users in the org to OrgCurrentGuests.csv
         """
-        print("Current and Historical Guest Users:")
-        logging.info("Exporting all current guest users in the org...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug("Using org_id: %s for current guest export.", org_id)
+        print("Current and Historical Guest Users:")  # Inform operator of export.
+        logging.info("Exporting all current guest users in the org...")  # Log guest export start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
+        logging.debug("Using org_id: %s for current guest export.", org_id)  # Log org id used.
         response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(apisession, org_id, limit=1000)
-        guests = mistapi.get_all(response=response, mist_session=apisession)
-        logging.info("Fetched %s current guest users from API.", len(guests))
-        guests = DataProcessingUtils.flatten_nested_fields(guests)
+        guests = mistapi.get_all(response=response, mist_session=apisession)  # Page through all guests.
+        logging.info("Fetched %s current guest users from API.", len(guests))  # Log fetched guest count.
+        guests = DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
         DataExporter.write_with_format_selection(guests, "OrgCurrentGuests.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(guests)} current guest users exported to OrgCurrentGuests.csv")
-        logging.info(" Current guests exported to OrgCurrentGuests.csv")
+        print(f"! {len(guests)} current guest users exported to OrgCurrentGuests.csv")  # Confirm export to operator.
+        logging.info(" Current guests exported to OrgCurrentGuests.csv")  # Log write success.
 
     @staticmethod
-    def historical_guests():
+    def historical_guests():  # Export 7-day guest history.
         """
         Export all guest users from the last 7 days to OrgHistoricalGuests.csv
         """
-        logging.info("Exporting all guest users from the last 7 days...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        end_time = int(time.time())
-        start_time = end_time - 7 * 24 * 3600
+        logging.info("Exporting all guest users from the last 7 days...")  # Log historical export start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
+        end_time = int(time.time())  # Capture end time as now.
+        start_time = end_time - 7 * 24 * 3600  # Compute 7-day start time.
         logging.debug("Fetching guest authorizations from %s to %s (epoch seconds).", start_time, end_time)
-        response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(
+        response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(  # Search guests in window.
             apisession, org_id, limit=1000, start=start_time, end=end_time
         )
-        guests = mistapi.get_all(response=response, mist_session=apisession)
-        logging.info("Fetched %s historical guest users from API.", len(guests))
-        guests = DataProcessingUtils.flatten_nested_fields(guests)
+        guests = mistapi.get_all(response=response, mist_session=apisession)  # Page through all guests.
+        logging.info("Fetched %s historical guest users from API.", len(guests))  # Log fetched guest count.
+        guests = DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
         DataExporter.write_with_format_selection(guests, "OrgHistoricalGuests.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(guests)} historical guest users exported to OrgHistoricalGuests.csv")
-        logging.info(" Historical guests exported to OrgHistoricalGuests.csv")
+        logging.info(" Historical guests exported to OrgHistoricalGuests.csv")  # Log write success.
 
 
-class OrgInventoryExporter:
+class OrgInventoryExporter:  # Org inventory exporters.
     """
     Organization Inventory and Device Exporter
 
@@ -9741,16 +9741,16 @@ class OrgInventoryExporter:
     """
 
     @staticmethod
-    def inventory():
+    def inventory():  # Export org device inventory.
         """
         Fetches and exports the full inventory of devices in the organization to OrgInventory.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
-        logging.info("Starting export of organization device inventory...")
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("12", "inventory", 1)
-        op_start = time.time()
+        logging.info("Starting export of organization device inventory...")  # Log inventory export start.
+        emitter = PROGRESS_EMITTER  # Capture progress emitter.
+        if emitter:  # Branch: emitter present.
+            emitter.emit_progress_start("12", "inventory", 1)  # Emit progress start.
+        op_start = time.time()  # Record operation start time.
         APIDataFetcher(
             title="Org Inventory:",
             api_call=mistapi.api.v1.orgs.inventory.getOrgInventory,
@@ -9760,28 +9760,28 @@ class OrgInventoryExporter:
             limit=1000,
         ).execute()
         logging.info("Completed organization inventory export and wrote results to OrgInventory.csv.")
-        if emitter:
+        if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete("12", "inventory", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def devices():
+    def devices():  # Export all org devices.
         """
         Fetches and exports a list of all devices in the organization to OrgDevices.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
-        logging.info("Starting export of all organization devices...")
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("17", "devices", 1)
-        op_start = time.time()
-        APIDataFetcher(
+        logging.info("Starting export of all organization devices...")  # Log devices export start.
+        emitter = PROGRESS_EMITTER  # Capture progress emitter.
+        if emitter:  # Branch: emitter present.
+            emitter.emit_progress_start("17", "devices", 1)  # Emit progress start.
+        op_start = time.time()  # Record operation start time.
+        APIDataFetcher(  # Fetch and write devices.
             title="Org Devices:",
             api_call=mistapi.api.v1.orgs.devices.listOrgDevices,
             filename="OrgDevices.csv",
             sort_key="type",
         ).execute()
         logging.info("Completed organization devices export and wrote results to OrgDevices.csv.")
-        if emitter:
+        if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete("17", "devices", 1, 1, False, time.time() - op_start)
 
     @staticmethod
@@ -9806,7 +9806,7 @@ class OrgInventoryExporter:
         return org_name_for_filename  # Return resolved display name for downstream filename sanitization.
 
     @staticmethod
-    def _build_safe_org_name(org_name_for_filename: str) -> str:
+    def _build_safe_org_name(org_name_for_filename: str) -> str:  # Build filesystem-safe org name.
         """Sanitize organization name so generated filenames stay filesystem-safe."""
         return "".join(  # Build safe filename character-by-character to preserve readable names.
             character if character.isalnum() or character in "-_" else "_" for character in org_name_for_filename
@@ -9862,7 +9862,7 @@ class OrgInventoryExporter:
             )  # Preserve root-cause detail without aborting menu 25.
 
     @staticmethod
-    def _load_combined_inventory_rows() -> list[dict[str, str]]:
+    def _load_combined_inventory_rows() -> list[dict[str, str]]:  # Load combined inventory rows.
         """Load enriched device rows from AllDevicesWithSiteInfo.csv."""
         devices_with_site_info_path = FilePathUtils.get_csv_path(
             "AllDevicesWithSiteInfo.csv"
@@ -9873,7 +9873,7 @@ class OrgInventoryExporter:
             return list(csv.DictReader(file))  # Materialize all rows so weekly grouping can iterate more than once.
 
     @staticmethod
-    def _partition_combined_inventory_rows(
+    def _partition_combined_inventory_rows(  # Partition combined inventory rows.
         all_devices: list[dict[str, str]],
     ) -> tuple[list[dict[str, str]], list[dict[str, str]], int]:
         """Separate physical inventory rows from virtual VC placeholders and count duplicates."""
@@ -9899,7 +9899,7 @@ class OrgInventoryExporter:
         )  # Return physical rows plus shell diagnostics for logging.
 
     @staticmethod
-    def _log_combined_inventory_vc_summary(
+    def _log_combined_inventory_vc_summary(  # Log virtual-chassis summary.
         all_devices: list[dict[str, str]],
         site_configs: list[dict[str, str]],
         empty_vc_shells: list[dict[str, str]],
@@ -9930,7 +9930,7 @@ class OrgInventoryExporter:
             )  # Confirm report logic remains intentional.
 
     @staticmethod
-    def _build_combined_inventory_weekly_row(
+    def _build_combined_inventory_weekly_row(  # Build one weekly inventory row.
         device: dict[str, str],
         end_customer_name: str | None,
         end_customer_account_id: str | None,
@@ -9952,7 +9952,7 @@ class OrgInventoryExporter:
         }
 
     @staticmethod
-    def _build_combined_inventory_weekly_data(
+    def _build_combined_inventory_weekly_data(  # Build weekly inventory dataset.
         site_configs: list[dict[str, str]],
         end_customer_name: str | None,
         end_customer_account_id: str | None,
@@ -9989,7 +9989,7 @@ class OrgInventoryExporter:
         return weekly_data, summary_data  # Return both detailed buckets and summary counts for file writers.
 
     @staticmethod
-    def _write_combined_inventory_weekly_csvs(
+    def _write_combined_inventory_weekly_csvs(  # Write weekly inventory CSVs.
         output_folder: str,
         fieldnames: list[str],
         weekly_data: defaultdict[str, list[dict[str, str | None]]],
@@ -10012,7 +10012,7 @@ class OrgInventoryExporter:
                 writer.writerows(rows)  # Write all device rows for this ISO week.
 
     @staticmethod
-    def _write_combined_inventory_summary(
+    def _write_combined_inventory_summary(  # Write combined inventory summary.
         output_folder: str,
         summary_data: defaultdict[tuple[int, int], int],
     ) -> None:
@@ -10029,7 +10029,7 @@ class OrgInventoryExporter:
                 summary_writer.writerow([year, week, count])  # Persist per-week device totals.
 
     @staticmethod
-    def _write_combined_inventory_master_csv(
+    def _write_combined_inventory_master_csv(  # Write combined inventory master CSV.
         output_folder: str,
         safe_org_name: str,
         site_configs: list[dict[str, str]],
@@ -10071,7 +10071,7 @@ class OrgInventoryExporter:
         return master_csv_filename, len(master_csv_data)  # Return metadata for final user-facing summary message.
 
     @staticmethod
-    def combined_inventory_with_site_info():
+    def combined_inventory_with_site_info():  # Export devices with site info.
         """
         Combines fresh AllDevicesWithSiteInfo data into multiple CSV files
         grouped by calendar week based on 'created_time' field.
@@ -10160,81 +10160,81 @@ class OrgInventoryExporter:
             fast (bool): If True, enables optimized processing mode with enhanced caching
                         and concurrent site lookups where applicable.
         """
-        print("All Devices with Site and Address Info:")
-        logging.info("Fetching All Devices with Site Info...")
-        if fast:
-            logging.info(" Fast mode enabled for devices with site info export")
+        print("All Devices with Site and Address Info:")  # Inform operator of export.
+        logging.info("Fetching All Devices with Site Info...")  # Log fetch start.
+        if fast:  # Branch: fast mode.
+            logging.info(" Fast mode enabled for devices with site info export")  # Log fast mode enabled.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
 
         # Ensure required CSV files are available, using caching where possible
-        if fast:
+        if fast:  # Branch: fast mode path.
             # Use cached data when fast mode is enabled
-            CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
+            CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure site CSV cached.
             CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgInventoryExporter.inventory)
 
             # Load from cached CSV files instead of making API calls
-            site_lookup = {}
+            site_lookup = {}  # Init site lookup map.
             try:
-                site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-                with open(site_list_path, encoding="utf-8") as file:
-                    reader = csv.DictReader(file)
-                    site_lookup = {
+                site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve site CSV path.
+                with open(site_list_path, encoding="utf-8") as file:  # Open cached site CSV.
+                    reader = csv.DictReader(file)  # Read site CSV rows.
+                    site_lookup = {  # Build site lookup from CSV.
                         row["id"]: {"name": row.get("name", ""), "address": row.get("address", "")} for row in reader
                     }
-                logging.debug("Loaded %s sites from cached SiteList.csv", len(site_lookup))
-            except Exception as exception:
+                logging.debug("Loaded %s sites from cached SiteList.csv", len(site_lookup))  # Log loaded site count.
+            except Exception as exception:  # Catch CSV load error.
                 logging.warning("Failed to load from cached SiteList.csv, falling back to API: %s", exception)
                 # Fallback to API if cached data fails
-                sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-                site_lookup = {
+                sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch sites from API.
+                site_lookup = {  # Build site lookup from API.
                     site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
                 }
-                logging.debug("Loaded %s sites from API fallback", len(site_lookup))
+                logging.debug("Loaded %s sites from API fallback", len(site_lookup))  # Log API fallback count.
 
             # Load inventory from cached CSV
-            inventory = []
+            inventory = []  # Init inventory list.
             try:
-                inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
-                with open(inventory_path, encoding="utf-8") as file:
-                    reader = csv.DictReader(file)
-                    inventory = list(reader)
+                inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")  # Resolve inventory CSV path.
+                with open(inventory_path, encoding="utf-8") as file:  # Open cached inventory CSV.
+                    reader = csv.DictReader(file)  # Read inventory CSV rows.
+                    inventory = list(reader)  # Materialize inventory rows.
                 logging.debug("Loaded %s devices from cached OrgInventory.csv", len(inventory))
-            except Exception as exception:
+            except Exception as exception:  # Catch CSV load error.
                 logging.warning("Failed to load from cached OrgInventory.csv, falling back to API: %s", exception)
                 # Fallback to API if cached data fails
-                inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
-                logging.debug("Loaded %s devices from API fallback", len(inventory))
+                inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch inventory from API.
+                logging.debug("Loaded %s devices from API fallback", len(inventory))  # Log API fallback count.
         else:
             # Original behavior: fetch directly from API
             # Fetch all sites and build a lookup dictionary for site info
-            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-            site_lookup = {
+            sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch sites from API.
+            site_lookup = {  # Build site lookup from API.
                 site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
             }
-            logging.debug("Loaded %s sites for lookup.", len(site_lookup))
+            logging.debug("Loaded %s sites for lookup.", len(site_lookup))  # Log loaded site count.
 
             # Fetch org inventory (all devices)
-            inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
-            logging.debug("Loaded %s devices from org inventory.", len(inventory))
+            inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch inventory from API.
+            logging.debug("Loaded %s devices from org inventory.", len(inventory))  # Log loaded device count.
 
-        def split_address(address):
+        def split_address(address):  # Parse address into parts.
             """
             Splits a full address string into street, city, state, zip, and country.
             Returns empty strings if parsing fails.
             """
             try:
-                parts = address.split(", ")
-                street = parts[0]
-                city = parts[1]
-                state_zip = parts[2].split()
-                state = state_zip[0]
-                zip_code = state_zip[1]
-                country = parts[3]
-                return street, city, state, zip_code, country
-            except Exception as exception:
-                logging.debug("Failed to split address '%s': %s", address, exception)
-                return address, "", "", "", ""
+                parts = address.split(", ")  # Split on comma separators.
+                street = parts[0]  # Extract street.
+                city = parts[1]  # Extract city.
+                state_zip = parts[2].split()  # Split state and zip.
+                state = state_zip[0]  # Extract state.
+                zip_code = state_zip[1]  # Extract zip code.
+                country = parts[3]  # Extract country.
+                return street, city, state, zip_code, country  # Return parsed address parts.
+            except Exception as exception:  # Catch parse errors.
+                logging.debug("Failed to split address '%s': %s", address, exception)  # Log parse failure.
+                return address, "", "", "", ""  # Return raw address fallback.
 
         # Build mac -> site_id lookup for VC member site inheritance.
         # Physical VC members have vc_mac but no site_id in the API response.
@@ -10247,12 +10247,12 @@ class OrgInventoryExporter:
             mac = device.get("mac", "")  # Get device MAC address
             if mac and device.get("site_id"):  # Any device with a site assignment
                 mac_to_site_id[mac] = device["site_id"]  # Index for vc_mac lookups
-        logging.info(
+        logging.info(  # Log enrichment start.
             "Built mac->site_id lookup with %d entries for VC member site inheritance",
             len(mac_to_site_id),
         )
 
-        enriched_devices = []
+        enriched_devices = []  # Init enriched device list.
         vc_inherited_count = 0  # Track how many physical members inherited site info from their VC
         for device in tqdm(inventory, desc="Processing Devices", unit="device"):  # type: ignore[no-untyped-call]
             site_id = device.get("site_id")  # Check if device has its own site_id
@@ -10275,22 +10275,22 @@ class OrgInventoryExporter:
             enriched_devices.append(device)  # Add enriched device to output list
             logging.debug("Enriched device %s (%s) with site info.", device.get("name", ""), device.get("mac", ""))
         if vc_inherited_count:  # Log inheritance summary if any members were fixed
-            logging.info(
+            logging.info(  # Log enrichment progress.
                 "%d physical VC members inherited site info from their VC parent",
                 vc_inherited_count,
             )
 
         # Flatten nested fields and escape multiline strings for CSV compatibility
-        enriched_devices = DataProcessingUtils.flatten_nested_fields(enriched_devices)
+        enriched_devices = DataProcessingUtils.flatten_nested_fields(enriched_devices)  # Flatten enriched fields.
         enriched_devices = DataProcessingUtils.escape_multiline(enriched_devices)  # type: ignore[no-untyped-call]
-        enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))
+        enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))  # Sort by site name.
         DataExporter.write_with_format_selection(enriched_devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(enriched_devices)} devices exported to AllDevicesWithSiteInfo.csv")
         logging.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(enriched_devices))
 
         # Display a summary table in logs
-        table = PrettyTable()
-        table.field_names = [
+        table = PrettyTable()  # Build display table.
+        table.field_names = [  # Define table columns.
             "name",
             "mac",
             "model",
@@ -10303,8 +10303,8 @@ class OrgInventoryExporter:
             "zip_code",
             "country",
         ]
-        for dev in enriched_devices:
-            table.add_row(
+        for dev in enriched_devices:  # Iterate enriched devices.
+            table.add_row(  # Add device row to table.
                 [
                     dev.get("name", ""),
                     dev.get("mac", ""),
@@ -10319,73 +10319,73 @@ class OrgInventoryExporter:
                     dev.get("country", ""),
                 ]
             )
-        logging.debug("\n%s", table.get_string())
+        logging.debug("\n%s", table.get_string())  # Debug-log the table.
 
     @staticmethod
-    def gateways_with_site_info():
+    def gateways_with_site_info():  # Export gateways with site info.
         """
         Fetches all gateway devices in the organization, enriches them with site and address info,
         and exports the result to GatewaysWithSiteInfo.csv. Also logs and displays a summary table.
         """
-        print("Gateways with Site and Address Info:")
-        logging.info("Fetching Gateways with Site Info...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        print("Gateways with Site and Address Info:")  # Inform operator of export.
+        logging.info("Fetching Gateways with Site Info...")  # Log fetch start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
 
         # Fetch site list and build a lookup dictionary for site info
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch sites from API.
         site_lookup = {site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites}
-        logging.debug("Loaded %s sites for lookup.", len(site_lookup))
+        logging.debug("Loaded %s sites for lookup.", len(site_lookup))  # Log loaded site count.
 
         # Fetch org inventory (all devices)
-        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
-        logging.debug("Loaded %s devices from org inventory.", len(inventory))
+        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch inventory from API.
+        logging.debug("Loaded %s devices from org inventory.", len(inventory))  # Log loaded device count.
 
-        def split_address(address):
+        def split_address(address):  # Parse address into parts.
             """
             Splits a full address string into street, city, state, zip, and country.
             Returns empty strings if parsing fails.
             """
             try:
-                parts = address.split(", ")
-                street = parts[0]
-                city = parts[1]
-                state_zip = parts[2].split()
-                state = state_zip[0]
-                zip_code = state_zip[1]
-                country = parts[3]
-                return street, city, state, zip_code, country
-            except Exception as exception:
-                logging.debug("Failed to split address '%s': %s", address, exception)
-                return address, "", "", "", ""
+                parts = address.split(", ")  # Split on comma separators.
+                street = parts[0]  # Extract street.
+                city = parts[1]  # Extract city.
+                state_zip = parts[2].split()  # Split state and zip.
+                state = state_zip[0]  # Extract state.
+                zip_code = state_zip[1]  # Extract zip code.
+                country = parts[3]  # Extract country.
+                return street, city, state, zip_code, country  # Return parsed address parts.
+            except Exception as exception:  # Catch parse errors.
+                logging.debug("Failed to split address '%s': %s", address, exception)  # Log parse failure.
+                return address, "", "", "", ""  # Return raw address fallback.
 
         # Filter for gateways and enrich with site info
-        gateways = []
+        gateways = []  # Init gateway list.
         for device in tqdm(inventory, desc="Processing Gateways", unit="device"):  # type: ignore[no-untyped-call]
-            if device.get("type") == "gateway":
-                site_id = device.get("site_id")
-                site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})
-                device["site_name"] = site_info["name"]
-                device["site_address"] = site_info["address"]
+            if device.get("type") == "gateway":  # Branch: device is gateway.
+                site_id = device.get("site_id")  # Read device site id.
+                site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})  # Look up site info.
+                device["site_name"] = site_info["name"]  # Attach site name.
+                device["site_address"] = site_info["address"]  # Attach site address.
                 street, city, state, zip_code, country = split_address(site_info["address"])  # type: ignore[no-untyped-call]
-                device["street"] = street
-                device["city"] = city
-                device["state"] = state
-                device["zip_code"] = zip_code
-                device["country"] = country
-                gateways.append(device)
-        logging.info("Enriched %s gateway devices with site info.", len(gateways))
+                device["street"] = street  # Attach street.
+                device["city"] = city  # Attach city.
+                device["state"] = state  # Attach state.
+                device["zip_code"] = zip_code  # Attach zip code.
+                device["country"] = country  # Attach country.
+                gateways.append(device)  # Add gateway to list.
+        logging.info("Enriched %s gateway devices with site info.", len(gateways))  # Log enriched gateway count.
 
         # Flatten nested fields and escape multiline strings for CSV compatibility
-        gateways = DataProcessingUtils.flatten_nested_fields(gateways)
+        gateways = DataProcessingUtils.flatten_nested_fields(gateways)  # Flatten gateway fields.
         gateways = DataProcessingUtils.escape_multiline(gateways)  # type: ignore[no-untyped-call]
-        gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))
+        gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))  # Sort by site name.
         DataExporter.write_with_format_selection(gateways, "GatewaysWithSiteInfo.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(gateways)} gateways exported to GatewaysWithSiteInfo.csv")
-        logging.info("Gateway data written to GatewaysWithSiteInfo.csv")
+        print(f"! {len(gateways)} gateways exported to GatewaysWithSiteInfo.csv")  # Confirm export to operator.
+        logging.info("Gateway data written to GatewaysWithSiteInfo.csv")  # Log write success.
 
         # Display a summary table in logs
-        table = PrettyTable()
-        table.field_names = [
+        table = PrettyTable()  # Build display table.
+        table.field_names = [  # Define table columns.
             "name",
             "mac",
             "model",
@@ -10397,7 +10397,7 @@ class OrgInventoryExporter:
             "zip_code",
             "country",
         ]
-        for gateway in gateways:
+        for gateway in gateways:  # Iterate gateways for rows.
             table.add_row(
                 [
                     gateway.get("name", ""),
