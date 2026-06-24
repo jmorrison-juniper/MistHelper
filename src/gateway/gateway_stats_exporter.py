@@ -196,7 +196,7 @@ class GatewayStatsExporter:
             sanitized.append(flat_record)  # Append flattened record.
         filename = "AllGatewayDeviceStats.csv"  # Output filename preserved verbatim.
         logging.info("Saving sanitized gateway stats to %s", filename)  # Log before save action.
-        DataExporter.save_data_to_output(sanitized, filename)  # Persist data to output backend.
+        DataExporter.write_with_format_selection(sanitized, filename)  # Persist data to output backend.
         logging.info(f"! Gateway device statistics saved to {filename} ({len(all_stats)} records).")
         logging.info(f"! API Optimization: Collected detailed stats for {len(gateway_devices)} gateways")
         successful_requests = len([stats for stats in all_stats if stats.get("status") != "failed"])
@@ -327,7 +327,7 @@ class GatewayStatsExporter:
 
         output_file = "GatewayWANPortConflicts.csv"
         conflicts_found.sort(key=lambda x: (x.get("device_name", ""), x.get("port_name", "")))
-        DataExporter.save_data_to_output(conflicts_found, output_file)
+        DataExporter.write_with_format_selection(conflicts_found, output_file)
 
         unique_gateways = {r.get("device_name", "Unknown") for r in conflicts_found}
         logging.info(f"! Exported {len(conflicts_found)} conflicts from {len(unique_gateways)} gateways")

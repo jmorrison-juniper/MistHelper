@@ -94,7 +94,7 @@ class DeviceConfigTemplateClonerManager:
         apisession: object,  # Authenticated mistapi session object
         input_fn: Callable,  # safe_input wrapper for all user prompts
         get_csv_path_fn: Callable,  # FilePathUtils.get_csv_path for output paths
-        save_data_fn: Callable,  # DataExporter.save_data_to_output for CSV write
+        save_data_fn: Callable,  # DataExporter.write_with_format_selection (was save_data_to_output, issue #431)
         write_csv_fn: Callable,  # DataExporter.write_with_format_selection — PK-aware writer
     ) -> None:
         """Store injected dependencies as instance attributes."""

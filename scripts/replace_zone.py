@@ -28,7 +28,7 @@ class ZoneConfigurationAnalyzer:
             get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
             check_stop_fn=ConfigUtils.check_stop_signal,
             all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-            save_data_fn=DataExporter.save_data_to_output,
+            save_data_fn=DataExporter.write_with_format_selection,
         )
 
 

@@ -280,7 +280,7 @@ class GatewayExportUtils:
             for row in results
         ]
 
-        DataExporter.save_data_to_output(final_results, "GatewayManagementIPs.csv")
+        DataExporter.write_with_format_selection(final_results, "GatewayManagementIPs.csv")
 
         print("! Gateway management IP export completed:")
         print(f"  - Total gateways processed: {gateways_processed}")
@@ -324,7 +324,9 @@ class GatewayExportUtils:
         if debug:
             logging.debug(f"Sample filtered row: {filtered_rows[0]}")
         logging.info("Saving filtered gateway port configs to FilteredGatewayPortConfigs.csv")  # Log before save.
-        DataExporter.save_data_to_output(filtered_rows, "FilteredGatewayPortConfigs.csv")  # Persist filtered set.
+        DataExporter.write_with_format_selection(
+            filtered_rows, "FilteredGatewayPortConfigs.csv"
+        )  # Persist filtered set.
         logging.info(" Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")
 
     @staticmethod
@@ -339,7 +341,7 @@ class GatewayExportUtils:
         flattened = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested JSON.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # Escape multiline cells for CSV.
         logging.info("Saving sanitized gateway configs to AllSiteGatewayConfigs.csv")  # Log before save.
-        DataExporter.save_data_to_output(sanitized, "AllSiteGatewayConfigs.csv")  # Persist full configs.
+        DataExporter.write_with_format_selection(sanitized, "AllSiteGatewayConfigs.csv")  # Persist full configs.
         logging.info(" Device configs saved to AllSiteGatewayConfigs.csv")
         filtered_rows = GatewayExportUtils._build_filtered_port_rows(sanitized)  # Build port-config subset.
         GatewayExportUtils._save_filtered_port_configs(filtered_rows, debug)  # Persist filtered subset.
@@ -358,7 +360,7 @@ class GatewayExportUtils:
             return
         templates = DataProcessingUtils.flatten_nested_fields(templates)
         templates = DataProcessingUtils.escape_multiline(templates)
-        DataExporter.save_data_to_output(templates, "OrgGatewayTemplates.csv")
+        DataExporter.write_with_format_selection(templates, "OrgGatewayTemplates.csv")
         print(f"! {len(templates)} gateway templates exported to OrgGatewayTemplates.csv")
         logging.info(" Gateway templates exported to OrgGatewayTemplates.csv")
 
@@ -462,7 +464,7 @@ class GatewayExportUtils:
             generate_templates_fn=GatewayExportUtils.templates,
             generate_sites_fn=OrgSiteExporter.sites,
             get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.save_data_to_output,
+            save_data_fn=DataExporter.write_with_format_selection,
             input_fn=InputUtils.safe_input,
             connection_pool_fn=execute_with_connection_pool_management,
         )

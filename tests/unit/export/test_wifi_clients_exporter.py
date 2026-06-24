@@ -38,7 +38,7 @@ def test_execute_aborts_when_no_site_selected() -> None:
 
     exporter.execute(site_id=None)
 
-    data_exporter.save_data_to_output.assert_not_called()
+    data_exporter.write_with_format_selection.assert_not_called()
 
 
 def test_execute_exports_merged_records() -> None:
@@ -63,4 +63,4 @@ def test_execute_exports_merged_records() -> None:
 
     exporter.execute(site_id="site-1")
 
-    data_exporter.save_data_to_output.assert_called_once()
+    data_exporter.write_with_format_selection.assert_called_once()

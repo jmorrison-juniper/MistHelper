@@ -167,7 +167,7 @@ class MarvisTroubleshootUtils:
         data = deps.marvis_data_utils.format_for_csv(response.data, "client")  # Flatten for CSV export
         filename = f"MarvisInsights_Client_{client_mac.replace(':', '')}_{client_type}.csv"  # Stable per-client name
         logging.info("Saving Marvis client CSV to %s", filename)  # Pre-write log
-        deps.data_exporter.save_data_to_output(data, filename)  # Persist results
+        deps.data_exporter.write_with_format_selection(data, filename)  # Persist results
         logging.debug("Marvis client CSV saved (rows=%s)", len(data) if data else 0)  # Post-write log
         print(f"! Results saved to {filename}")
 
@@ -191,7 +191,7 @@ class MarvisTroubleshootUtils:
         safe_name = device_name.replace(" ", "_")  # Sanitise device name for filesystem
         filename = f"MarvisInsights_Device_{device_mac.replace(':', '')}_{safe_name}.csv"  # Deterministic filename
         logging.info("Saving Marvis device CSV to %s", filename)
-        deps.data_exporter.save_data_to_output(data, filename)
+        deps.data_exporter.write_with_format_selection(data, filename)
         logging.debug("Marvis device CSV saved (rows=%s)", len(data) if data else 0)
         print(f"! Results saved to {filename}")
 
@@ -211,7 +211,7 @@ class MarvisTroubleshootUtils:
         data = deps.marvis_data_utils.format_for_csv(response.data, "network")  # Flatten for CSV
         filename = f"MarvisInsights_Network_{site_id}.csv"  # Per-site filename
         logging.info("Saving Marvis network CSV to %s", filename)
-        deps.data_exporter.save_data_to_output(data, filename)
+        deps.data_exporter.write_with_format_selection(data, filename)
         logging.debug("Marvis network CSV saved (rows=%s)", len(data) if data else 0)
         print(f"! Results saved to {filename}")
 
@@ -462,7 +462,7 @@ class MarvisTroubleshootUtils:
 
         filename = f"MarvisInsights_{endpoint_name.replace(' ', '_')}.csv"  # Stable per-endpoint filename
         logging.info("Saving insights CSV: %s", filename)
-        deps.data_exporter.save_data_to_output(formatted_insights, filename)
+        deps.data_exporter.write_with_format_selection(formatted_insights, filename)
         logging.debug("Insights CSV saved (rows=%s)", len(formatted_insights) if formatted_insights else 0)
         print(f"  Full insights saved to {filename}")
         return True

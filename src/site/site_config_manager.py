@@ -199,10 +199,10 @@ class SiteConfigManager:
         print("========================================\n")
 
         if created:
-            DataExporter.save_data_to_output(created, "CreatedTestSites.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(created, "CreatedTestSites.csv")  # type: ignore[no-untyped-call]
             print(" Created sites exported to CreatedTestSites.csv")
         if failed:
-            DataExporter.save_data_to_output(failed, "FailedTestSites.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(failed, "FailedTestSites.csv")  # type: ignore[no-untyped-call]
             print(" Failed sites exported to FailedTestSites.csv")
 
     # -------------------------------------------------------------------------
@@ -524,9 +524,9 @@ class SiteConfigManager:
         print(f"  Sites Skipped (no country): {len(skipped)}")
 
         if success:
-            DataExporter.save_data_to_output(success, "SuccessfulRFTemplateAssignments.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(success, "SuccessfulRFTemplateAssignments.csv")  # type: ignore[no-untyped-call]
         if failed:
-            DataExporter.save_data_to_output(failed, "FailedRFTemplateAssignments.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(failed, "FailedRFTemplateAssignments.csv")  # type: ignore[no-untyped-call]
 
     # -------------------------------------------------------------------------
     # Device Profile Creation (Menu 173)
@@ -694,9 +694,9 @@ class SiteConfigManager:
         print(f"  Device Profiles Skipped: {len(skipped)}")
 
         if created:
-            DataExporter.save_data_to_output(created, "CreatedAPModelDeviceProfiles.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(created, "CreatedAPModelDeviceProfiles.csv")  # type: ignore[no-untyped-call]
         if failed:
-            DataExporter.save_data_to_output(failed, "FailedAPModelDeviceProfiles.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(failed, "FailedAPModelDeviceProfiles.csv")  # type: ignore[no-untyped-call]
 
     # -------------------------------------------------------------------------
     # Device Profile Assignment (Menu 174)
@@ -893,8 +893,8 @@ class SiteConfigManager:
         print(f"  APs Skipped (no model info): {len(without_model)}")
 
         if success:
-            DataExporter.save_data_to_output(success, "SuccessfulAPProfileAssignments.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(success, "SuccessfulAPProfileAssignments.csv")  # type: ignore[no-untyped-call]
         if failed:
-            DataExporter.save_data_to_output(failed, "FailedAPProfileAssignments.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(failed, "FailedAPProfileAssignments.csv")  # type: ignore[no-untyped-call]
         if without_profile:
-            DataExporter.save_data_to_output(without_profile, "SkippedAPsNoMatchingProfile.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(without_profile, "SkippedAPsNoMatchingProfile.csv")  # type: ignore[no-untyped-call]

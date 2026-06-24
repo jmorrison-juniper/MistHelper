@@ -6267,7 +6267,7 @@ class DeviceDataFetcher:
         """Process fetched data and output to CSV and table."""
         processed = DataProcessingUtils.flatten_nested_fields(data)
         processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(processed, self.filename)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(processed, self.filename)  # type: ignore[no-untyped-call]
         DisplayUtils.dict_list_as_pretty_table(processed)
 
 
@@ -6385,7 +6385,7 @@ class SFPTransceiverDataProcessor:
                     len(unique_devices_with_transceivers),
                 )
 
-            DataExporter.save_data_to_output(merged_data, SFPTransceiverDataProcessor.OUTPUT_FILENAME)  # type: ignore[no-untyped-call]  # Write the merged rows to the output backend
+            DataExporter.write_with_format_selection(merged_data, SFPTransceiverDataProcessor.OUTPUT_FILENAME)  # type: ignore[no-untyped-call]  # Write the merged rows to the output backend
             logging.info(
                 "Wrote %s rows to %s", len(merged_data), SFPTransceiverDataProcessor.OUTPUT_FILENAME
             )  # Log the row count written
@@ -8000,21 +8000,10 @@ class DataExporter:
             logging.debug("EXIT: DataExporter.write_to_csv - unexpected error")
             raise
 
-    @staticmethod
-    def save_data_to_output(data, filename, api_function_name=None):
-        """
-        Save data to the specified format (CSV or SQLite).
-        Convenience method with identical signature for backward compatibility.
-
-        Args:
-            data: List of dictionaries containing the data to write
-            filename: CSV filename or database table name
-            api_function_name: Name of the API function for SQLite strategy selection
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        return DataExporter.write_with_format_selection(data, filename, api_function_name=api_function_name)
+    # save_data_to_output removed per issue #431 (ARCH-DELEGATE). All call
+    # sites now invoke DataExporter.write_with_format_selection(data, filename,
+    # api_function_name=...) directly -- it is the canonical implementation
+    # and accepts the identical (data, filename, api_function_name=) form.
 
     @staticmethod
     def export_with_processing(data, filename, sort_key=None, api_function_name=None):
@@ -8286,7 +8275,7 @@ class APIDataFetcher:
         """Save recovered data and notify user."""
         print(f"! API returned unexpected structure. Recovered {len(self.rawdata)} records.")
         api_name = self.api_call.__name__
-        DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
         logging.info("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))
 
     def _handle_no_recovery(self) -> None:
@@ -8318,7 +8307,7 @@ class APIDataFetcher:
 
         if self.rawdata:
             api_name = self.api_call.__name__
-            DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
             logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
             print(f"* Partial data saved: {len(self.rawdata)} records written to {self.filename}")
 
@@ -8329,7 +8318,7 @@ class APIDataFetcher:
         if self.rawdata:
             try:
                 api_name = self.api_call.__name__
-                DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
                 logging.info("Emergency save: %s partial records saved before error exit", len(self.rawdata))
                 print(f"* Emergency save: {len(self.rawdata)} partial records written to {self.filename}")
             except Exception as save_error:
@@ -8354,7 +8343,7 @@ class APIDataFetcher:
         """Save partial data when outer exception occurs."""
         try:
             api_name = self.api_call.__name__
-            DataExporter.save_data_to_output(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
             logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
 
             print("\n!! PARTIAL DATA SAVED !!")
@@ -8896,7 +8885,7 @@ class PromptUtils:
         inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
         inventory = DataProcessingUtils.flatten_nested_fields(inventory)
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(inventory, csv_filename)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(inventory, csv_filename)  # type: ignore[no-untyped-call]
         logging.info("Device inventory for site_id %s written to %s", site_id, csv_filename)
 
         # Prepare PrettyTable for user selection
@@ -10004,7 +9993,7 @@ class OrgAlarmEventExporter:
         logging.info(
             "Fetched %s device events from the past %s hours (duration=%s).", len(events), hours, duration_param
         )
-        DataExporter.save_data_to_output(events, "OrgDeviceEvents.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(events, "OrgDeviceEvents.csv")  # type: ignore[no-untyped-call]
         logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))
         print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
         logging.info("Menu #21: Device events export completed - %s events", len(events))
@@ -10223,7 +10212,7 @@ class OrgAlarmEventExporter:
             logging.info(
                 "No device events found for the 52-week period."
             )  # Record empty result explicitly for monitoring.
-            DataExporter.save_data_to_output([], "OrgDeviceEvents_52w.csv")  # type: ignore[no-untyped-call]  # Write empty output so downstream expects a file.
+            DataExporter.write_with_format_selection([], "OrgDeviceEvents_52w.csv")  # type: ignore[no-untyped-call]  # Write empty output so downstream expects a file.
             return  # Nothing to stream; exit cleanly.
 
         header_fields = DataProcessingUtils.get_unique_keys(buffered_rows)  # type: ignore[no-untyped-call]  # Derive stable column set from the preloaded sample.
@@ -10330,7 +10319,7 @@ class OrgSiteExporter:
         sites = DataProcessingUtils.flatten_nested_fields(sites)
         sites = DataProcessingUtils.escape_multiline(sites)  # type: ignore[no-untyped-call]
         # Write to the configured output backend (CSV or SQLite) via the DataExporter abstraction
-        DataExporter.save_data_to_output(sites, output_file)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(sites, output_file)  # type: ignore[no-untyped-call]
         logging.info("! Sites exported to %s", output_file)  # Log the successful export
         print(f"! Sites exported to {output_file}")  # Inform the user on stdout
 
@@ -10347,7 +10336,7 @@ class OrgSiteExporter:
         logging.info("Fetched %s sites from the organization.", len(sites))
         flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)
         sanitized_sites = DataProcessingUtils.escape_multiline(flattened_sites)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(sanitized_sites, "SitesWithLocations.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(sanitized_sites, "SitesWithLocations.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(sanitized_sites)} sites exported to SitesWithLocations.csv")
         logging.info(" Full site data written to SitesWithLocations.csv")
 
@@ -10365,7 +10354,7 @@ class OrgSiteExporter:
         logging.info("Fetched %s current guest users from API.", len(guests))
         guests = DataProcessingUtils.flatten_nested_fields(guests)
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(guests, "OrgCurrentGuests.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(guests, "OrgCurrentGuests.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(guests)} current guest users exported to OrgCurrentGuests.csv")
         logging.info(" Current guests exported to OrgCurrentGuests.csv")
 
@@ -10386,7 +10375,7 @@ class OrgSiteExporter:
         logging.info("Fetched %s historical guest users from API.", len(guests))
         guests = DataProcessingUtils.flatten_nested_fields(guests)
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(guests, "OrgHistoricalGuests.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(guests, "OrgHistoricalGuests.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(guests)} historical guest users exported to OrgHistoricalGuests.csv")
         logging.info(" Historical guests exported to OrgHistoricalGuests.csv")
 
@@ -10943,7 +10932,7 @@ class OrgInventoryExporter:
         enriched_devices = DataProcessingUtils.flatten_nested_fields(enriched_devices)
         enriched_devices = DataProcessingUtils.escape_multiline(enriched_devices)  # type: ignore[no-untyped-call]
         enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))
-        DataExporter.save_data_to_output(enriched_devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(enriched_devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(enriched_devices)} devices exported to AllDevicesWithSiteInfo.csv")
         logging.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(enriched_devices))
 
@@ -11038,7 +11027,7 @@ class OrgInventoryExporter:
         gateways = DataProcessingUtils.flatten_nested_fields(gateways)
         gateways = DataProcessingUtils.escape_multiline(gateways)  # type: ignore[no-untyped-call]
         gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))
-        DataExporter.save_data_to_output(gateways, "GatewaysWithSiteInfo.csv")  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(gateways, "GatewaysWithSiteInfo.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(gateways)} gateways exported to GatewaysWithSiteInfo.csv")
         logging.info("Gateway data written to GatewaysWithSiteInfo.csv")
 
@@ -11334,7 +11323,7 @@ class OrgDeviceStatsExporter:
             all_port_stats
         )  # Normalize nested API payloads into flat CSV-friendly records.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape embedded newlines so CSV stays row-stable.
-        DataExporter.save_data_to_output(sanitized, output_file, api_function_name="searchSiteSwOrGwPorts")  # type: ignore[no-untyped-call]  # Persist to configured backend with endpoint metadata.
+        DataExporter.write_with_format_selection(sanitized, output_file, api_function_name="searchSiteSwOrGwPorts")  # type: ignore[no-untyped-call]  # Persist to configured backend with endpoint metadata.
         print(
             f"! {len(all_port_stats)} port stat records exported to {output_file}"
         )  # Confirm output row count to the operator.
@@ -11982,17 +11971,17 @@ class OrgTemplateExporter:
                 logging.info(
                     "No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv"
                 )  # Log the empty result
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]  # Write an empty file for consistency
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Write an empty file for consistency
                 return  # Nothing more to do
             processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON into flat CSV rows
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(processed)} AP templates exported to {filename}")
             logging.info("Exported %s AP templates to %s.", len(processed), filename)
         except Exception as e:
             logging.error("Failed to export AP templates: %s", e)
             try:
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
                 pass
             raise
@@ -12012,17 +12001,17 @@ class OrgTemplateExporter:
                 logging.info(
                     "No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv"
                 )
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
                 return
             processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(processed)} switch templates exported to {filename}")
             logging.info("Exported %s switch templates to %s.", len(processed), filename)
         except Exception as e:
             logging.error("Failed to export switch templates: %s", e)
             try:
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
                 pass
             raise
@@ -12131,7 +12120,7 @@ class OrgClientSecurityExporter:
         if all_rogue_clients:  # At least one rogue client was found
             flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_clients)  # Flatten nested JSON to CSV rows
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
-            DataExporter.save_data_to_output(sanitized, "OrgRogueClients")  # type: ignore[no-untyped-call]  # Write to the output backend
+            DataExporter.write_with_format_selection(sanitized, "OrgRogueClients")  # type: ignore[no-untyped-call]  # Write to the output backend
             logging.info("! %s rogue clients exported to OrgRogueClients", len(all_rogue_clients))  # Log the export
             print(
                 f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients"
@@ -12203,7 +12192,7 @@ class OrgClientSecurityExporter:
         if all_rogue_aps:  # At least one rogue AP was found
             flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_aps)  # Flatten nested JSON to CSV rows
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
-            DataExporter.save_data_to_output(sanitized, "OrgRogueAPs")  # type: ignore[no-untyped-call]  # Write to the output backend
+            DataExporter.write_with_format_selection(sanitized, "OrgRogueAPs")  # type: ignore[no-untyped-call]  # Write to the output backend
             logging.info("! %s rogue APs exported to OrgRogueAPs", len(all_rogue_aps))  # Log the export
             print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")  # Report the count to the user
         else:  # No rogue APs found anywhere
@@ -12735,16 +12724,16 @@ class OrgAdminExporter:
                 raw_items = [raw_items]
             if not raw_items:
                 logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
-                DataExporter.save_data_to_output([], filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
                 return
             processed = DataProcessingUtils.flatten_nested_fields(raw_items)
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed, filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
             logging.info("Exported %s license records to %s.", len(processed), filename)
         except Exception as e:
             logging.error("Failed to export licenses: %s", e)
             try:
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
                 pass
             raise
@@ -12793,10 +12782,10 @@ class SelfExportUtils:
                 logging.warning(
                     "No self audit log records returned for the last %d hours", hours
                 )  # Warn on empty result
-                DataExporter.save_data_to_output([], filename)  # Write empty file to signal successful run
+                DataExporter.write_with_format_selection([], filename)  # Write empty file to signal successful run
                 return
             rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested change-detail dicts for CSV
-            DataExporter.save_data_to_output(
+            DataExporter.write_with_format_selection(
                 rows, filename, api_function_name="listSelfAuditLogs"
             )  # Write to configured backend
             logging.info("Exported %d self audit log records to %s", len(rows), filename)  # Log success
@@ -12932,7 +12921,7 @@ class OrgConfigExporter:
             if not orgs_data:
                 print("  No organizations found under this MSP")
                 logging.info("MSP has no organizations")
-                DataExporter.save_data_to_output([], "MspOrganizations.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "MspOrganizations.csv")  # type: ignore[no-untyped-call]
                 return
 
             # Process and export
@@ -12944,7 +12933,7 @@ class OrgConfigExporter:
                 record["msp_id"] = msp_id
                 record["msp_name"] = msp_name
 
-            DataExporter.save_data_to_output(processed, "MspOrganizations.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, "MspOrganizations.csv")  # type: ignore[no-untyped-call]
             print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")
             logging.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))
 
@@ -13046,13 +13035,13 @@ class OrgExportUtils:
         if all_sites_sle_data:
             processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
             print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")
             logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))
         else:
             print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")
             logging.warning("No sites SLE data available for organization")
-            DataExporter.save_data_to_output([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
         if emitter:
             emitter.emit_progress_complete(
                 "67", "sites_sle_summary", len(sle_types), items_done, False, time.time() - op_start
@@ -13075,10 +13064,10 @@ class OrgExportUtils:
             print("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")
             logging.error("No org-scope metrics found in const insight metrics")
             # Create empty normalized files
-            DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
             return
 
         org_id = ConfigUtils.get_cached_or_prompted_org_id()
@@ -13206,22 +13195,22 @@ class OrgExportUtils:
 
                 # Summary data
                 processed_summary = DataProcessingUtils.escape_multiline(all_summary_data)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed_summary, "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed_summary, "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
                 print(f"  !? {len(processed_summary)} summary records -> OrgMetricsSummary.csv")
 
                 # Time series data
                 processed_time_series = DataProcessingUtils.escape_multiline(all_time_series_data)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed_time_series, "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed_time_series, "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
                 print(f"  !? {len(processed_time_series)} time series records -> OrgMetricsTimeSeries.csv")
 
                 # Results data
                 processed_results = DataProcessingUtils.escape_multiline(all_results_data)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed_results, "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed_results, "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
                 print(f"  !? {len(processed_results)} results records -> OrgMetricsResults.csv")
 
                 # Sites data
                 processed_sites = DataProcessingUtils.escape_multiline(all_sites_data)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed_sites, "OrgSitesData.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed_sites, "OrgSitesData.csv")  # type: ignore[no-untyped-call]
                 print(f"  !? {len(processed_sites)} sites records -> OrgSitesData.csv")
 
                 print(
@@ -13236,28 +13225,28 @@ class OrgExportUtils:
                 # Also save a legacy combined file for compatibility
                 processed_legacy = DataProcessingUtils.flatten_nested_fields(all_insight_data)
                 processed_legacy = DataProcessingUtils.escape_multiline(processed_legacy)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed_legacy, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed_legacy, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
                 print("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")
 
             else:
                 print("! 0 organization insight metrics exported (no data available)")
                 logging.warning("No org insight data available - all metrics failed or returned empty")
                 # Create empty normalized files
-                DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
 
         except Exception as exception:
             print(f"! Error exporting organization insight metrics: {exception}")
             logging.error("Failed to export org insight metrics: %s", exception)
             # Create empty normalized files in case of error
-            DataExporter.save_data_to_output([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
 
     @staticmethod
     def _nac_clients():
@@ -13421,7 +13410,7 @@ class OrgExportUtils:
                 return
             data = DataProcessingUtils.flatten_nested_fields(rawdata)
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
             print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")
             logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")
             logging.info("Menu #22: Audit logs export completed - %s records", len(data))
@@ -13520,7 +13509,7 @@ class SiteDeviceExporter:
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
         fields = DataProcessingUtils.get_unique_keys(inventory)  # type: ignore[no-untyped-call]
 
-        DataExporter.save_data_to_output(inventory, csv_filename)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(inventory, csv_filename)  # type: ignore[no-untyped-call]
         logging.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))
 
         # Prepare PrettyTable for display
@@ -13562,7 +13551,7 @@ class SiteDeviceExporter:
                 flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
                 filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"
-                DataExporter.save_data_to_output(sanitized_data, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
                 print(f"! {len(rawdata)} device stats exported to {filename}")
             else:
                 print("! No device statistics found for this site")
@@ -13608,7 +13597,7 @@ class SiteDeviceExporter:
                 flattened = DataProcessingUtils.flatten_nested_fields(vc_data)
                 sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
                 filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"
-                DataExporter.save_data_to_output(sanitized, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
                 logging.info("! Virtual chassis information exported to %s", filename)
                 if sanitized:
                     print(f"\n!! Virtual Chassis Summary for {device_name}:")
@@ -13649,7 +13638,7 @@ class SiteDeviceExporter:
                 flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
                 filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"
-                DataExporter.save_data_to_output(sanitized_data, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
                 print(f"! {len(rawdata)} devices exported to {filename}")
             else:
                 print("! No devices found for this site")
@@ -13689,7 +13678,7 @@ class SiteClientExporter:
                 flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
                 filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"
-                DataExporter.save_data_to_output(sanitized_data, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
                 print(f"! {len(rawdata)} client records exported to {filename}")
             else:
                 print("! No client data found for this site")
@@ -13797,14 +13786,14 @@ class SiteConfigExporter:
 
         if not rawdata:
             logging.warning("No data provided for output to %s", filename)
-            DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             print(f"! 0 records exported to data\\{filename}")
             return
 
         processed = DataProcessingUtils.flatten_nested_fields(rawdata)
         processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
         processed = sorted(processed, key=lambda row: row.get("ssid", ""))
-        DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
         print(f"! {len(processed)} records exported to data\\{filename}")
         logging.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
 
@@ -13832,7 +13821,7 @@ class SiteConfigExporter:
             logging.info("Fetched settings for %s sites. Flattening and sanitizing data...", len(data))
             data = DataProcessingUtils.flatten_nested_fields(data)
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(data, "AllSiteConfigs.csv")  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(data, "AllSiteConfigs.csv")  # type: ignore[no-untyped-call]
             print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")
             logging.info(" Site configs saved to AllSiteConfigs.csv")
         else:
@@ -13935,7 +13924,7 @@ class SiteAnomalyExporter:
             if all_anomaly_data:
                 processed = DataProcessingUtils.flatten_nested_fields(all_anomaly_data)
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} site anomaly event types exported to {filename}")
                 logging.info(
                     "Exported %s site anomaly event types for %s to %s", metrics_retrieved, site_name, filename
@@ -13943,7 +13932,7 @@ class SiteAnomalyExporter:
             else:
                 print(f"! 0 anomaly events exported to {filename} (no data available)")
                 logging.warning("No anomaly events available for site %s", site_name)
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
         except Exception as exception:
             print(f"! Error exporting site anomaly events: {exception}")
@@ -14041,7 +14030,7 @@ class SiteAnomalyExporter:
             if all_device_anomaly_data:
                 processed = DataProcessingUtils.flatten_nested_fields(all_device_anomaly_data)
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} device anomaly event types exported to {filename}")
                 logging.info(
                     "Exported %s device anomaly event types for %s to %s", metrics_retrieved, device_name, filename
@@ -14049,7 +14038,7 @@ class SiteAnomalyExporter:
             else:
                 print(f"! 0 device anomaly events exported to {filename} (no data available)")
                 logging.warning("No device anomaly events available for %s", device_name)
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
         except Exception as exception:
             print(f"! Error exporting device anomaly events: {exception}")
@@ -14168,7 +14157,7 @@ class SiteAnomalyExporter:
             if all_client_anomaly_data:
                 processed = DataProcessingUtils.flatten_nested_fields(all_client_anomaly_data)
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.save_data_to_output(processed, filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
                 print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")
                 logging.info(
                     "Exported %s client anomaly event types for %s to %s", metrics_retrieved, client_mac, filename
@@ -14176,7 +14165,7 @@ class SiteAnomalyExporter:
             else:
                 print(f"! 0 client anomaly events exported to {filename} (no data available)")
                 logging.warning("No client anomaly events available for %s", client_mac)
-                DataExporter.save_data_to_output([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
         except Exception as exception:
             print(f"! Error exporting client anomaly events: {exception}")
@@ -14521,7 +14510,7 @@ class GatewayHaExporter:
             GatewayHaExporter._print_ha_summary(rows)  # Print tabular summary to the terminal
             flat_rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV/DB
             filename = "GatewayHaClusterInfo.csv"  # Output filename for the export
-            DataExporter.save_data_to_output(
+            DataExporter.write_with_format_selection(
                 flat_rows, filename, api_function_name="listSiteGatewayHaStats"
             )  # Write to configured backend (CSV, SQLite, ArangoDB, etc.)
             logging.info("Exported %d HA gateway records to %s", len(flat_rows), filename)  # Log export success
@@ -15214,7 +15203,7 @@ class ConstDefinitionsExporter:
         except Exception as error:
             print(f"  ! Error exporting {config.description.lower()}: {error}")
             logging.error("Failed to export %s from %s: %s", config.description.lower(), config.endpoint_name, error)
-            DataExporter.save_data_to_output([], config.filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], config.filename)  # type: ignore[no-untyped-call]
             self.endpoints_failed += 1
 
     def _fetch_endpoint_data(self, config: EndpointConfig):
@@ -15498,13 +15487,13 @@ class ConstDefinitionsExporter:
         if not const_data:
             print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
             logging.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)
-            DataExporter.save_data_to_output([], config.filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], config.filename)  # type: ignore[no-untyped-call]
             self.endpoints_updated += 1
             return
 
         data_list = self._convert_to_list(config.endpoint_name, const_data)
         processed = DataProcessingUtils.escape_multiline(data_list)  # type: ignore[no-untyped-call]
-        DataExporter.save_data_to_output(processed, config.filename)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(processed, config.filename)  # type: ignore[no-untyped-call]
 
         print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")
         logging.info("Exported %s fresh %s to %s", len(processed), config.description.lower(), config.filename)
@@ -16337,7 +16326,7 @@ class GatewayTestExporter:
             filename = "AllGatewaySyntheticTests.csv"
             flattened = DataProcessingUtils.flatten_nested_fields(all_stats)
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-            DataExporter.save_data_to_output(sanitized, filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
             print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")
             logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
             logging.info(
@@ -16637,7 +16626,7 @@ class GatewayTemplateConfigManager:
             apisession=apisession,
             input_fn=InputUtils.safe_input,
             get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.save_data_to_output,
+            save_data_fn=DataExporter.write_with_format_selection,
             check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
             generate_sites_fn=OrgSiteExporter.sites,
             sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
@@ -16655,7 +16644,7 @@ class GatewayTemplateConfigManager:
             apisession=apisession,
             input_fn=InputUtils.safe_input,
             get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.save_data_to_output,
+            save_data_fn=DataExporter.write_with_format_selection,
             check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
             generate_sites_fn=OrgSiteExporter.sites,
             sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
@@ -16673,7 +16662,7 @@ class GatewayTemplateConfigManager:
             apisession=apisession,
             input_fn=InputUtils.safe_input,
             get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.save_data_to_output,
+            save_data_fn=DataExporter.write_with_format_selection,
             check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
             generate_sites_fn=OrgSiteExporter.sites,
             sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
@@ -16698,7 +16687,7 @@ class DeviceConfigTemplateClonerManager:
             apisession=apisession,  # Pass authenticated global API session
             input_fn=InputUtils.safe_input,  # Pass EOF-safe input wrapper for SSH/container contexts
             get_csv_path_fn=FilePathUtils.get_csv_path,  # Pass path builder for OS-safe output paths
-            save_data_fn=DataExporter.save_data_to_output,  # Pass CSV writer for output persistence
+            save_data_fn=DataExporter.write_with_format_selection,  # Pass CSV writer for output persistence
             write_csv_fn=DataExporter.write_with_format_selection,  # Pass PK-aware format-selecting writer
         ).clone()  # Delegate all business logic to extracted implementation
 
@@ -18318,7 +18307,7 @@ class WANProbeConfigManager:
             )
 
         output_file = "GatewayTemplate_WAN_Probe_Config_Audit.csv"
-        DataExporter.save_data_to_output(report_data, output_file)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(report_data, output_file)  # type: ignore[no-untyped-call]
 
         # Calculate summary
         total_interfaces = sum(len(r["interfaces_updated"]) for r in results)
@@ -18447,7 +18436,7 @@ class VirtualChassisManager:
             sites_generator=OrgSiteExporter.sites,
             flatten_fields_fn=DataProcessingUtils.flatten_nested_fields,
             escape_multiline_fn=DataProcessingUtils.escape_multiline,
-            save_data_fn=DataExporter.save_data_to_output,
+            save_data_fn=DataExporter.write_with_format_selection,
         )
 
 
@@ -19727,7 +19716,7 @@ class FirmwareUpgradeStatusChecker:
 
         filename = f"FirmwareUpgradeStatus_{timestamp}.csv"
         try:
-            DataExporter.save_data_to_output(self.upgrade_results, filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(self.upgrade_results, filename)  # type: ignore[no-untyped-call]
             print(f"\n[SUCCESS] Device firmware status exported to: data/{filename}")
             print(f"   [DATA] {len(self.upgrade_results)} device records exported")
             logging.info("Exported %s device status records", len(self.upgrade_results))
@@ -22183,7 +22172,7 @@ menu_actions = {
                 check_stop_fn=ConfigUtils.check_stop_signal,
                 safe_input_fn=InputUtils.safe_input,
                 all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-                save_data_fn=DataExporter.save_data_to_output,
+                save_data_fn=DataExporter.write_with_format_selection,
                 tqdm_fn=tqdm,
             )
         ),
@@ -22199,7 +22188,7 @@ menu_actions = {
                 mistapi=mistapi,
                 get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
                 all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-                save_data_fn=DataExporter.save_data_to_output,
+                save_data_fn=DataExporter.write_with_format_selection,
             )
         ),
         "Site Inventory Health Analysis - Find sites with APs missing switches/gateways, or with offline infrastructure",  # noqa: E501

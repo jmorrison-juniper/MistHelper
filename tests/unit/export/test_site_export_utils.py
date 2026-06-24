@@ -52,7 +52,7 @@ def _configure_dependencies(select_site_return: str | None = "site-1") -> tuple[
             escape_multiline=MagicMock(side_effect=lambda rows: rows),
             get_unique_keys=MagicMock(return_value=["name"]),
         ),
-        data_exporter=SimpleNamespace(save_data_to_output=exporter_mock),
+        data_exporter=SimpleNamespace(write_with_format_selection=exporter_mock),
         time_utils=SimpleNamespace(
             get_dynamic_lookback_hours=MagicMock(return_value=24), log_dynamic_lookback=MagicMock()
         ),

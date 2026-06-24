@@ -24,7 +24,7 @@ def _configure_dependencies(*, site_exclude_prefix: str = "") -> None:
         gateway_export_utils=SimpleNamespace(templates=MagicMock()),
         file_path_utils=SimpleNamespace(get_csv_path=MagicMock(return_value="test.csv")),
         input_utils=SimpleNamespace(safe_input=MagicMock(return_value="1")),
-        data_exporter=SimpleNamespace(save_data_to_output=MagicMock()),
+        data_exporter=SimpleNamespace(write_with_format_selection=MagicMock()),
         mistapi_dependency=SimpleNamespace(),
         site_exclude_prefix=site_exclude_prefix,
     )
@@ -83,7 +83,7 @@ def test_generate_report_calls_exporter_with_expected_output_filename() -> None:
     from src.gateway import wan_probe_device_override_manager as module
 
     exporter = MagicMock()
-    module.DataExporter.save_data_to_output = exporter
+    module.DataExporter.write_with_format_selection = exporter
 
     manager._generate_report(
         [

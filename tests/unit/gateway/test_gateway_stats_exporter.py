@@ -16,7 +16,7 @@ def _configure_dependencies() -> None:
         config_utils=SimpleNamespace(get_cached_or_prompted_org_id=MagicMock(return_value="org-1")),
         validation_utils=SimpleNamespace(validate_site_id=MagicMock(), validate_device_id=MagicMock()),
         data_processing_utils=SimpleNamespace(flatten_dict=MagicMock(side_effect=lambda row: row)),
-        data_exporter=SimpleNamespace(save_data_to_output=MagicMock()),
+        data_exporter=SimpleNamespace(write_with_format_selection=MagicMock()),
         rate_limiting_utils=SimpleNamespace(get_rate_limited_delay=MagicMock(return_value=(None, 0))),
         cache_utils=SimpleNamespace(check_and_generate_csv=MagicMock(return_value=True)),
         file_path_utils=SimpleNamespace(get_csv_path=MagicMock(return_value="test.csv")),

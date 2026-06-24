@@ -152,7 +152,7 @@ def test_select_device_id_from_csv_accepts_dotted_index(monkeypatch):
         "listSiteDevices",
         lambda *_args, **_kwargs: _Resp(),
     )
-    monkeypatch.setattr(MistHelper.DataExporter, "save_data_to_output", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(MistHelper.DataExporter, "write_with_format_selection", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: ".2")
 
     selected = MistHelper.PromptUtils.select_device_id_from_inventory("site-1", "all", "DeviceInventory.csv")
@@ -200,7 +200,7 @@ def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
         "getSiteInsightMetricsForClient",
         get_client_insight_stub,
     )
-    monkeypatch.setattr(MistHelper.DataExporter, "save_data_to_output", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(MistHelper.DataExporter, "write_with_format_selection", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: "0")
 
     MistHelper.SiteClientExporter.client_insights()

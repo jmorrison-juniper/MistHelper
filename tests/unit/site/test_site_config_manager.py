@@ -19,7 +19,7 @@ def _configure_dependencies() -> None:
         ),
         file_path_utils=SimpleNamespace(get_csv_path=MagicMock(return_value="test.csv")),
         input_utils=SimpleNamespace(safe_input=MagicMock(return_value="CREATE")),
-        data_exporter=SimpleNamespace(save_data_to_output=MagicMock()),
+        data_exporter=SimpleNamespace(write_with_format_selection=MagicMock()),
         mistapi_dependency=SimpleNamespace(),
         default_api_page_limit=1000,
     )

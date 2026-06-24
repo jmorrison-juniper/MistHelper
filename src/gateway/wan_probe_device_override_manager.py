@@ -526,7 +526,7 @@ class WANProbeDeviceOverrideManager:
         report_data = self._build_report_rows(results)  # CSV-shaped rows per device
         output_file = "GatewayDevice_WAN_Probe_Override_Audit.csv"  # Stable audit filename
         logging.info("Saving WAN probe override audit CSV: %s", output_file)  # Pre-write log
-        DataExporter.save_data_to_output(report_data, output_file)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(report_data, output_file)  # type: ignore[no-untyped-call]
         logging.debug("Audit CSV saved (rows=%s)", len(report_data))  # Post-write log
 
         total_ports = sum(len(r["ports_updated"]) for r in results)  # Aggregate ports modified

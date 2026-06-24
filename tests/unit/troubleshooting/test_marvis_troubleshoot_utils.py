@@ -15,7 +15,7 @@ def _make_deps() -> MarvisTroubleshootDeps:
         select_site=MagicMock(return_value=None), select_device=MagicMock(return_value=None)
     )
     mock_config_utils = SimpleNamespace(get_cached_or_prompted_org_id=MagicMock(return_value="org-1"))
-    mock_data_exporter = SimpleNamespace(save_data_to_output=MagicMock())
+    mock_data_exporter = SimpleNamespace(write_with_format_selection=MagicMock())
     mock_marvis_data_utils = SimpleNamespace(format_for_csv=MagicMock(return_value=[{"site_id": "site-1"}]))
     mock_data_processing_utils = SimpleNamespace(
         flatten_nested_fields=MagicMock(return_value=[{"flattened": True}]),
@@ -63,7 +63,7 @@ def test_process_insight_response_sites_uses_marvis_formatter() -> None:
 
     assert result is True
     deps.marvis_data_utils.format_for_csv.assert_called_once_with(payload, "sites")
-    deps.data_exporter.save_data_to_output.assert_called_once()
+    deps.data_exporter.write_with_format_selection.assert_called_once()
 
 
 def test_view_insights_fetches_org_and_attempts_insights() -> None:

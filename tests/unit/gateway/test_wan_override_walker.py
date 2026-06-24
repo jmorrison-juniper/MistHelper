@@ -56,7 +56,7 @@ def test_walk_writes_empty_header_when_no_overrides(tmp_path: Path) -> None:
         mistapi_dependency=SimpleNamespace(),
         cache_utils=SimpleNamespace(check_and_generate_csv=MagicMock()),
         file_path_utils=SimpleNamespace(get_csv_path=resolver.get_csv_path),
-        data_exporter=SimpleNamespace(save_data_to_output=MagicMock()),
+        data_exporter=SimpleNamespace(write_with_format_selection=MagicMock()),
         org_site_exporter=SimpleNamespace(sites_list_api=MagicMock()),
         mist_wan_target_ports=["ge-0/0/1"],
         connection_pool_fn=MagicMock(return_value=([], [])),

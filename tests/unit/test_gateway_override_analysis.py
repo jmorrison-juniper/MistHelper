@@ -27,4 +27,4 @@ def test_wan_override_walker_returns_when_ports_not_configured(tmp_path) -> None
         gateway_export_utils_ref=gateway_ref,
     )
     WanOverrideWalker.walk(fast=False)  # Empty target ports should trigger early return
-    assert not data_exporter.save_data_to_output.called  # No writes when ports unconfigured
+    assert not data_exporter.write_with_format_selection.called  # No writes when ports unconfigured

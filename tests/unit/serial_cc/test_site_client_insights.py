@@ -32,7 +32,7 @@ def test_no_site_selected_returns_early(mock_resolve_runtime_dependencies):
 
     SiteClientInsightsService.execute()
 
-    deps.DataExporter.save_data_to_output.assert_not_called()
+    deps.DataExporter.write_with_format_selection.assert_not_called()
 
 
 @patch("src.refactors.serial_cc.site_client_insights._resolve_runtime_dependencies")
@@ -50,7 +50,7 @@ def test_invalid_client_mac_returns_early(mock_resolve_runtime_dependencies):
 
     SiteClientInsightsService.execute()
 
-    deps.DataExporter.save_data_to_output.assert_not_called()
+    deps.DataExporter.write_with_format_selection.assert_not_called()
 
 
 @patch("src.refactors.serial_cc.site_client_insights._resolve_runtime_dependencies")
@@ -71,4 +71,4 @@ def test_happy_path_exports_rows(mock_resolve_runtime_dependencies):
 
     SiteClientInsightsService.execute()
 
-    deps.DataExporter.save_data_to_output.assert_called_once()
+    deps.DataExporter.write_with_format_selection.assert_called_once()
