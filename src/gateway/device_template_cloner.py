@@ -432,8 +432,8 @@ class DeviceConfigTemplateClonerManager:
             return True  # Signal successful completion to caller
 
         except Exception as exc:  # Catch all unexpected errors for safe logging
-            logging.error(  # Log full error context for NOC engineer troubleshooting
-                "DeviceConfigTemplateClonerManager.clone() failed: %s", exc, exc_info=True
+            logging.exception(  # Log full error context for NOC engineer troubleshooting
+                "DeviceConfigTemplateClonerManager.clone() failed: %s", exc
             )
             print(f"Error: {exc}")  # Print brief error message for interactive feedback
             return False  # Signal failure to caller

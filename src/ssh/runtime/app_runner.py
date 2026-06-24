@@ -71,7 +71,7 @@ class AppRunner:
                 if event == "line":  # Only log "line" events
                     try:  # Defensive: never let tracer crash the run
                         if frame.f_code.co_filename == runner_file and class_start <= frame.f_lineno <= class_end:
-                            logger.debug(f"[LINE] {frame.f_code.co_name}:{frame.f_lineno}")
+                            logger.debug("[LINE] %s:%s", frame.f_code.co_name, frame.f_lineno)
                     except Exception:  # nosec B110 - tracer must never break user flow
                         pass
                 return _ssh_line_tracer
@@ -81,7 +81,7 @@ class AppRunner:
             logger.debug("[TRACE] Line-level tracer installed for EnhancedSSHRunner region")
             return True, previous_tracer
         except Exception as trace_err:  # Best-effort: log and continue without tracer
-            logger.debug(f"[TRACE] Failed to install line tracer: {trace_err}")
+            logger.debug("[TRACE] Failed to install line tracer: %s", trace_err)
             return False, None
 
     @staticmethod
@@ -95,7 +95,7 @@ class AppRunner:
             sys.settrace(previous_tracer)  # Restore prior tracer (often None)
             logger.debug("[TRACE] Line-level tracer removed")
         except Exception as cleanup_err:  # Defensive: never raise from cleanup
-            logger.debug(f"[TRACE] Failed to remove line tracer: {cleanup_err}")
+            logger.debug("[TRACE] Failed to remove line tracer: %s", cleanup_err)
 
     @staticmethod
     def _load_env_config(use_env: bool, logger: logging.Logger) -> dict[str, Any]:
@@ -109,8 +109,10 @@ class AppRunner:
             hosts = env_config.get("hosts", [])  # Local alias for f-string readability
             hosts_str = ", ".join(hosts) if len(hosts) <= 3 else f"{len(hosts)} hosts"  # Compact preview
             logger.info(
-                f"Found .env credentials - Hosts: {hosts_str}, "  # noqa: E501 - long log line preserved
-                f"User: {env_config.get('username')}, Commands: {len(env_config.get('commands', []))}"
+                "Found .env credentials - Hosts: %s, User: %s, Commands: %s",
+                hosts_str,
+                env_config.get("username"),
+                len(env_config.get("commands", [])),
             )
         return env_config
 
@@ -176,15 +178,15 @@ class AppRunner:
     def _resolve_commands(args: Any, env_config: dict[str, Any], use_env: bool, logger: logging.Logger) -> list[str]:
         """Resolve the command list via the documented 4-tier priority chain."""
         if args.command:  # Priority 1: CLI-supplied single command
-            logger.info(f"Using command from command line: {args.command}")
+            logger.info("Using command from command line: %s", args.command)
             return [args.command]
         env_cmds = env_config.get("commands", []) if use_env else []  # Priority 2: .env commands
         if env_cmds:
-            logger.info(f"Using {len(env_cmds)} commands from .env file: {env_cmds}")
+            logger.info("Using %s commands from .env file: %s", len(env_cmds), env_cmds)
             return env_cmds
         csv_cmds = CommandCsvLoader().load()  # Priority 3: SSH_COMMANDS.CSV
         if csv_cmds:
-            logger.info(f"Using {len(csv_cmds)} commands from data/SSH_COMMANDS.CSV: {csv_cmds}")
+            logger.info("Using %s commands from data/SSH_COMMANDS.CSV: %s", len(csv_cmds), csv_cmds)
             print(f"!? Loaded {len(csv_cmds)} commands from data/SSH_COMMANDS.CSV")
             return csv_cmds
         return AppRunner._prompt_for_commands(env_cmds, csv_cmds)  # Priority 4: interactive
@@ -291,8 +293,8 @@ class AppRunner:
             print("\n[INTERRUPT] Operation cancelled by user")
             return False
         except Exception as exec_err:  # Preserve legacy fatal-error diagnostics
-            logger.error("Fatal error during SSH runner execution", exc_info=True)
-            logger.debug(f"[DIAG] Type of exception object: {type(exec_err)}")
+            logger.exception("Fatal error during SSH runner execution")
+            logger.debug("[DIAG] Type of exception object: %s", type(exec_err))
             print(f"X  Fatal error: {exec_err}")
             return False
         finally:  # Always clean up the tracer to avoid leaking it into the caller

@@ -1125,7 +1125,7 @@ class OrgDataCollector:
         """
         org_id = get_org_id_fn()
         total = len(ALL_OPERATIONS)
-        logging.info(f"Org Data Collector: starting {total} operations for org {org_id}")
+        logging.info("Org Data Collector: starting %s operations for org %s", total, org_id)
 
         confirmation = safe_input_fn(
             f"\nThis will run {total} org-level API calls to populate databases.\n" "Continue? (y/N): ",
@@ -1200,7 +1200,7 @@ def _run_single(
     except Exception as error:
         error_name = type(error).__name__
         print(f"FAILED ({error_name})")
-        logging.error(f"Org Data Collector: {api_name} failed: {error_name}: {error}")
+        logging.error("Org Data Collector: %s failed: %s: %s", api_name, error_name, error)
         return "failed"
 
 
@@ -1224,7 +1224,10 @@ def _print_summary(
     print(f"  Duration:  {minutes}m {seconds}s")
     print(f"{'=' * 60}")
     logging.info(
-        f"Org Data Collector: complete -- "
-        f"{succeeded}/{total} succeeded, {failed} failed, "
-        f"{minutes}m {seconds}s elapsed"
+        "Org Data Collector: complete -- %s/%s succeeded, %s failed, %sm %ss elapsed",
+        succeeded,
+        total,
+        failed,
+        minutes,
+        seconds,
     )

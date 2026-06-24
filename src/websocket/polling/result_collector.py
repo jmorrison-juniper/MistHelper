@@ -159,16 +159,18 @@ class ResultCollector:
         if time.time() - ctx.last_activity <= ctx.activity_timeout:
             return None
         if self._debug:
-            self._logger.debug(f"Activity timeout reached ({ctx.activity_timeout}s), completing with {count} messages")
+            self._logger.debug(
+                "Activity timeout reached (%ss), completing with %s messages", ctx.activity_timeout, count
+            )
             print(f"[DEBUG] Activity timeout reached ({ctx.activity_timeout}s), completing with {count} messages")
-        self._logger.info(f"No new data for {ctx.activity_timeout}s, assuming command complete")
+        self._logger.info("No new data for %ss, assuming command complete", ctx.activity_timeout)
         with self._lock:  # Pop under lock
             return self._results.pop(ctx.session_id, [])
 
     def _emergency_drain(self, ctx: _CollectorContext) -> list[dict[str, Any]]:
         """Trip the secondary circuit breaker and return whatever segments we have."""
         if self._debug:
-            self._logger.error(f"Circuit breaker triggered at {ctx.check_count} checks!")
+            self._logger.error("Circuit breaker triggered at %s checks!", ctx.check_count)
             self._logger.error("This indicates a possible infinite loop or system hang")
             print(f"[EMERGENCY] Circuit breaker triggered at {ctx.check_count} checks!")
             print("[EMERGENCY] This indicates a possible infinite loop or system hang")
@@ -181,7 +183,7 @@ class ResultCollector:
     def _drain_on_timeout(self, ctx: _CollectorContext) -> list[dict[str, Any]]:
         """Pop residual segments after the absolute timeout elapsed."""
         if self._debug:
-            self._logger.debug(f"Timeout occurred after polling ended, {ctx.check_count} checks")
+            self._logger.debug("Timeout occurred after polling ended, %s checks", ctx.check_count)
             print(f"[DEBUG] Timeout occurred after polling ended, {ctx.check_count} checks")
         with self._lock:
             return self._results.pop(ctx.session_id, [])
@@ -190,9 +192,9 @@ class ResultCollector:
         """Verbatim startup debug trace preserved from the original implementation."""
         if not self._debug:
             return
-        self._logger.debug(f"Waiting for session {ctx.session_id} (timeout: {timeout_seconds}s)")
-        self._logger.debug(f"Current time: {time.time()}")
-        self._logger.debug(f"Activity timeout: {ctx.activity_timeout}s)")
+        self._logger.debug("Waiting for session %s (timeout: %ss)", ctx.session_id, timeout_seconds)
+        self._logger.debug("Current time: %s", time.time())
+        self._logger.debug("Activity timeout: %ss)", ctx.activity_timeout)
         print(f"[DEBUG] Waiting for session {ctx.session_id} (timeout: {timeout_seconds}s)")
         print(f"[DEBUG] Current time: {time.time()}")
         print(f"[DEBUG] Activity timeout: {ctx.activity_timeout}s)")
@@ -203,18 +205,20 @@ class ResultCollector:
         if not self._debug or (current_time - ctx.last_debug_time) < _PERF_LOG_INTERVAL:
             return
         elapsed = current_time - ctx.start_time
-        self._logger.debug(f"Check #{ctx.check_count} at {elapsed:.1f}s - Still waiting for session {ctx.session_id}")
-        self._logger.debug(f"Last activity: {current_time - ctx.last_activity:.1f}s ago")
+        self._logger.debug(
+            "Check #%s at %.1fs - Still waiting for session %s", ctx.check_count, elapsed, ctx.session_id
+        )
+        self._logger.debug("Last activity: %.1fs ago", current_time - ctx.last_activity)
         print(f"[PERF] Check #{ctx.check_count} at {elapsed:.1f}s - Still waiting for session {ctx.session_id}")
         print(f"[PERF] Last activity: {current_time - ctx.last_activity:.1f}s ago")
         with self._lock:  # Quick stats snapshot under lock
             available = list(self._results.keys())
             if ctx.session_id in self._results:
                 msg_count = len(self._results[ctx.session_id])
-                self._logger.debug(f"Found {msg_count} messages for our session")
+                self._logger.debug("Found %s messages for our session", msg_count)
                 print(f"[PERF] Found {msg_count} messages for our session")
             else:
-                self._logger.debug(f"Our session not in results yet. Available: {available}")
+                self._logger.debug("Our session not in results yet. Available: %s", available)
                 print(f"[PERF] Our session not in results yet. Available: {available}")
         ctx.last_debug_time = current_time
 
@@ -222,8 +226,8 @@ class ResultCollector:
         """Periodic trace when the session has not produced any messages yet."""
         if not self._debug or ctx.check_count % 50 != 1:
             return
-        self._logger.debug(f"Check #{ctx.check_count}, no results yet for session {ctx.session_id}")
-        self._logger.debug(f"Available sessions: {list(self._results.keys())}")
+        self._logger.debug("Check #%s, no results yet for session %s", ctx.check_count, ctx.session_id)
+        self._logger.debug("Available sessions: %s", list(self._results.keys()))
         print(f"[DEBUG] Check #{ctx.check_count}, no results yet for session {ctx.session_id}")
         print(f"[DEBUG] Available sessions: {list(self._results.keys())}")
 
@@ -231,7 +235,7 @@ class ResultCollector:
         """Trace when a new message arrives for the session."""
         if not self._debug:
             return
-        self._logger.debug(f"New activity detected: {count} messages (+{count - ctx.last_message_count}) ")
+        self._logger.debug("New activity detected: %s messages (+%s) ", count, count - ctx.last_message_count)
 
     def _maybe_emit_combined_trace(
         self,
@@ -243,20 +247,20 @@ class ResultCollector:
         if not self._debug or ctx.check_count % 50 != 1:
             return
         latest_raw = collected[-1].get("raw", "") if collected else ""
-        self._logger.debug(f"Check #{ctx.check_count}, found {len(collected)} messages")
-        self._logger.debug(f"Latest raw (first 100 chars): {repr(latest_raw[:100])}")
-        self._logger.debug(f"Total content length: {len(all_raw)} chars")
+        self._logger.debug("Check #%s, found %s messages", ctx.check_count, len(collected))
+        self._logger.debug("Latest raw (first 100 chars): %s", repr(latest_raw[:100]))
+        self._logger.debug("Total content length: %s chars", len(all_raw))
         print(f"[DEBUG] Check #{ctx.check_count}, found {len(collected)} messages")
         print(f"[DEBUG] Latest raw (first 100 chars): {repr(latest_raw[:100])}")
         print(f"[DEBUG] Total content length: {len(all_raw)} chars")
         if not all_raw:
             return
-        self._logger.debug(f"Service ping content sample: {repr(all_raw[:300])}")
+        self._logger.debug("Service ping content sample: %s", repr(all_raw[:300]))
         print(f"[DEBUG] Service ping content sample: {repr(all_raw[:300])}")
         lowered = all_raw.lower()
         for pattern in ("bytes from", "seq=", "time="):  # Diagnostic markers preserved
             if pattern in lowered:
-                self._logger.debug(f"Service ping: Found '{pattern}' pattern")
+                self._logger.debug("Service ping: Found '%s' pattern", pattern)
                 print(f"[DEBUG] Service ping: Found '{pattern}' pattern")
 
     def _emit_completion_debug(
@@ -269,12 +273,12 @@ class ResultCollector:
         """Verbatim trace block emitted whenever an indicator fires."""
         if not self._debug:
             return
-        self._logger.debug(f"Found completion indicator '{indicator}' in combined content")
-        self._logger.debug(f"Completing after {ctx.check_count} checks")
-        self._logger.debug(f"Total collected messages: {len(collected)}")
-        self._logger.debug(f"Total content length: {len(all_raw)} characters")
-        self._logger.debug(f"Raw content sample (first 200 chars): {repr(all_raw[:200])}")
-        self._logger.debug(f"Raw content sample (last 200 chars): {repr(all_raw[-200:])}")
+        self._logger.debug("Found completion indicator '%s' in combined content", indicator)
+        self._logger.debug("Completing after %s checks", ctx.check_count)
+        self._logger.debug("Total collected messages: %s", len(collected))
+        self._logger.debug("Total content length: %s characters", len(all_raw))
+        self._logger.debug("Raw content sample (first 200 chars): %s", repr(all_raw[:200]))
+        self._logger.debug("Raw content sample (last 200 chars): %s", repr(all_raw[-200:]))
         print(f"[DEBUG] Found completion indicator '{indicator}' in combined content")
         print(f"[DEBUG] Completing after {ctx.check_count} checks")
         print(f"[DEBUG] Total collected messages: {len(collected)}")

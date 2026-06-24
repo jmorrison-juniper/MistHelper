@@ -113,16 +113,10 @@ known-first-party = ["src"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["B011"]
-# Issue #429 swept G003/G004/G201 from MistHelper.py only; other files
-# retain eager logging formatting and will be addressed by follow-up issues.
-"src/**" = ["G"]
-"maps_manager.py" = ["G"]
-"wsgi.py" = ["G"]
-"starlink_dashboard.py" = ["G"]
-"web_portal/**" = ["G"]
-"tools/**" = ["G"]
-# Issue #429: synthetic input fixture for the codemod intentionally contains
-# G003/G004/G201 patterns so the codemod has something to rewrite during tests.
+# Issue #433 Phase A swept G003/G004/G201 from src/, tools/, web_portal/,
+# starlink_dashboard.py, wsgi.py, and maps_manager.py (#429 had previously
+# cleaned up MistHelper.py). Only the codemod synthetic input fixture
+# retains G violations on purpose -- they are the test material.
 "tests/fixtures/issue_429_codemod_synthetic_input.py" = ["G"]
 
 [tool.mypy]

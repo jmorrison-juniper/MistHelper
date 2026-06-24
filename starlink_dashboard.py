@@ -601,7 +601,7 @@ class StarlinkDashboard(QMainWindow):
     def change_theme(self, theme_name: str):
         """Handle theme change from dropdown."""
         self.apply_theme(theme_name)
-        logger.info(f"Theme changed to: {theme_name}")
+        logger.info("Theme changed to: %s", theme_name)
 
     def close_application(self):
         """Close the application gracefully."""
@@ -1073,7 +1073,7 @@ class StarlinkDashboard(QMainWindow):
                 return
 
             self.starlink_ip = ip_address
-            logger.info(f"Attempting to connect to Starlink at {self.starlink_ip}")
+            logger.info("Attempting to connect to Starlink at %s", self.starlink_ip)
 
             # Actual gRPC connection
             if self.connect_to_starlink():
@@ -1123,7 +1123,7 @@ class StarlinkDashboard(QMainWindow):
         try:
             import grpc
 
-            logger.info(f"Connecting to Starlink gRPC service at {self.starlink_ip}:9200")
+            logger.info("Connecting to Starlink gRPC service at %s:9200", self.starlink_ip)
 
             # Establish gRPC connection to Starlink dish
             # The Starlink dish runs a gRPC service on port 9200
@@ -1142,10 +1142,10 @@ class StarlinkDashboard(QMainWindow):
             return True
 
         except grpc.FutureTimeoutError:
-            logger.error(f"Connection timeout: Could not reach Starlink at {self.starlink_ip}:9200")
+            logger.error("Connection timeout: Could not reach Starlink at %s:9200", self.starlink_ip)
             return False
         except Exception as error:
-            logger.error(f"Connection failed: {error}")
+            logger.error("Connection failed: %s", error)
             return False
 
     def get_starlink_stats(self) -> dict:
@@ -1189,7 +1189,7 @@ class StarlinkDashboard(QMainWindow):
                 import device_pb2  # type: ignore[import]
                 import device_pb2_grpc  # type: ignore[import]
             except ImportError as import_error:
-                logger.error(f"Starlink protobuf modules not found: {import_error}")
+                logger.error("Starlink protobuf modules not found: %s", import_error)
                 QMessageBox.critical(
                     self,
                     "Proto Files Missing",
@@ -1221,9 +1221,10 @@ class StarlinkDashboard(QMainWindow):
                 diag = response.dish_get_diagnostics
 
                 logger.info(
-                    f"Got diagnostics - ID: {diag.id if hasattr(diag, 'id') else 'N/A'}, "
-                    f"Software: {diag.software_version if hasattr(diag, 'software_version') else 'N/A'}, "
-                    f"Hardware: {diag.hardware_version if hasattr(diag, 'hardware_version') else 'N/A'}"
+                    "Got diagnostics - ID: %s, Software: %s, Hardware: %s",
+                    diag.id if hasattr(diag, "id") else "N/A",
+                    diag.software_version if hasattr(diag, "software_version") else "N/A",
+                    diag.hardware_version if hasattr(diag, "hardware_version") else "N/A",
                 )
 
                 # DEBUG: Print full diagnostics object structure
@@ -1282,9 +1283,10 @@ class StarlinkDashboard(QMainWindow):
                 if hasattr(diag, "alerts"):
                     is_operational = not (diag.alerts.dish_thermal_shutdown or diag.alerts.motors_stuck)
                     logger.debug(
-                        f"Alert status: obstructed={diag.alerts.obstructed}, "
-                        f"thermal_shutdown={diag.alerts.dish_thermal_shutdown}, "
-                        f"motors_stuck={diag.alerts.motors_stuck}"
+                        "Alert status: obstructed=%s, thermal_shutdown=%s, motors_stuck=%s",
+                        diag.alerts.obstructed,
+                        diag.alerts.dish_thermal_shutdown,
+                        diag.alerts.motors_stuck,
                     )
 
                 # Determine obstruction status
@@ -1361,8 +1363,10 @@ class StarlinkDashboard(QMainWindow):
                 self.dish_connected = is_operational
 
                 logger.debug(
-                    f"Retrieved Starlink diagnostics: connected={is_operational}, "
-                    f"service={service_status}, obstruction={obstruction_status}"
+                    "Retrieved Starlink diagnostics: connected=%s, service=%s, obstruction=%s",
+                    is_operational,
+                    service_status,
+                    obstruction_status,
                 )
                 return stats
             else:
@@ -1370,7 +1374,7 @@ class StarlinkDashboard(QMainWindow):
                 return default_stats
 
         except Exception as error:
-            logger.error(f"Error retrieving Starlink diagnostics: {error}")
+            logger.error("Error retrieving Starlink diagnostics: %s", error)
             import traceback
 
             logger.error(traceback.format_exc())
@@ -1449,7 +1453,7 @@ class StarlinkDashboard(QMainWindow):
             return "\n".join(message_parts) if message_parts else "Connected - No issues detected"
 
         except Exception as error:
-            logger.error(f"Error formatting status message: {error}")
+            logger.error("Error formatting status message: %s", error)
             import traceback
 
             logger.error(traceback.format_exc())
@@ -1482,7 +1486,7 @@ class StarlinkDashboard(QMainWindow):
             )
 
         except Exception as error:
-            logger.error(f"Failed to refresh stats: {error}")
+            logger.error("Failed to refresh stats: %s", error)
             self.status_bar.showMessage(f"Error: {error}")
 
     def update_metrics(self, stats: dict[str, Any]):

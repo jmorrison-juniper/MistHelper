@@ -57,7 +57,7 @@ class SiteClientInsightsService:
             else:  # No clients returned for the site
                 print(f"! No clients found at site {site_name}")  # Inform the user
         except Exception as exception:  # Retrieval failed - warn and keep the empty list
-            logging.warning(f"Could not retrieve client list: {exception}")  # Trace the failure
+            logging.warning("Could not retrieve client list: %s", exception)  # Trace the failure
         return clients  # Hand back whatever clients were found (possibly empty)
 
     @staticmethod
@@ -101,11 +101,11 @@ class SiteClientInsightsService:
                     client_insight_data["client_mac"] = normalized_client_mac  # Tag the client MAC
                     all_client_data.append(client_insight_data)  # Accumulate the record
                     metrics_retrieved += 1  # Count this successful metric
-                    logging.debug(f"Retrieved client insight data for metric: {metric}")  # Trace success
+                    logging.debug("Retrieved client insight data for metric: %s", metric)  # Trace success
                 else:  # Metric returned no data
-                    logging.debug(f"No data available for client metric: {metric}")  # Trace empty result
+                    logging.debug("No data available for client metric: %s", metric)  # Trace empty result
             except Exception as metric_error:  # Per-metric API failure - log and continue
-                logging.debug(f"Failed to get client insight data for metric {metric}: {metric_error}")  # Trace
+                logging.debug("Failed to get client insight data for metric %s: %s", metric, metric_error)  # Trace
                 continue  # Skip to the next metric
         return all_client_data, metrics_retrieved  # Collected records plus success count
 
@@ -123,10 +123,12 @@ class SiteClientInsightsService:
             processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV
             deps.DataExporter.write_with_format_selection(processed, filename)  # Write the export file
             print(f"! {metrics_retrieved} client insight metrics exported to {filename}")  # User summary
-            logging.info(f"Exported {metrics_retrieved} client insight metrics at {site_name} to {filename}")  # Trace
+            logging.info(
+                "Exported %s client insight metrics at %s to %s", metrics_retrieved, site_name, filename
+            )  # Trace
         else:  # No data collected for any metric
             print(f"! 0 client insights exported to {filename} (no data available)")  # User summary
-            logging.warning(f"No client insight data available at {site_name}")  # Warn on empty run
+            logging.warning("No client insight data available at %s", site_name)  # Warn on empty run
             deps.DataExporter.write_with_format_selection([], filename)  # Write an empty export for consistency
 
     @classmethod
@@ -171,7 +173,7 @@ class SiteClientInsightsService:
         normalized_client_mac = deps.SiteClientExporter._normalize_client_mac_or_none(client_mac)  # Validate/normalize
         if not normalized_client_mac:  # MAC failed format validation
             print(f"! Invalid client MAC address format: {client_mac}")  # Inform the user
-            logging.error(f"Invalid client MAC address format provided for client insights: {client_mac}")  # Trace
+            logging.error("Invalid client MAC address format provided for client insights: %s", client_mac)  # Trace
             return  # Abort the workflow
 
         filename = f"SiteClientInsights_{sanitized_site_name}_{normalized_client_mac.replace(':', '')}.csv"  # Out file
@@ -192,5 +194,5 @@ class SiteClientInsightsService:
             cls._export_client_data(deps, all_client_data, metrics_retrieved, filename, site_name)  # Export results
         except Exception as exception:  # Unexpected top-level failure
             print(f"! Error exporting client insights: {exception}")  # User-facing error
-            logging.error(f"Failed to export client insights at {site_name}: {exception}")  # Trace the failure
+            logging.error("Failed to export client insights at %s: %s", site_name, exception)  # Trace the failure
             deps.DataExporter.write_with_format_selection([], filename)  # Write empty export on failure

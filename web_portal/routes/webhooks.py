@@ -52,7 +52,7 @@ def receive_webhook() -> tuple:
     elif topic in _STATS_TOPICS:
         _handle_stats(router, payload)
     else:
-        logging.debug(f"Unhandled webhook topic: {topic}")
+        logging.debug("Unhandled webhook topic: %s", topic)
 
     return jsonify({"status": "ok"}), 200
 
@@ -74,7 +74,7 @@ def _handle_audit(router: Any | None, payload: dict) -> None:
         try:
             router.handle_webhook_audit(event)
         except Exception as error:
-            logging.warning(f"Audit snapshot failed: {error}")
+            logging.warning("Audit snapshot failed: %s", error)
 
 
 def _handle_stats(router: Any | None, payload: dict) -> None:
@@ -88,4 +88,4 @@ def _handle_stats(router: Any | None, payload: dict) -> None:
         if redis_writer is not None and hasattr(redis_writer, "ingest_webhook"):
             redis_writer.ingest_webhook(events, topic)
     except Exception as error:
-        logging.warning(f"Stats ingestion failed for {topic}: {error}")
+        logging.warning("Stats ingestion failed for %s: %s", topic, error)

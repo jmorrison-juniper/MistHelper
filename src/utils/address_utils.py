@@ -247,7 +247,7 @@ class AddressUtils:
     ) -> dict[str, Any]:
         """Parse address components with defensive heuristics."""
         if debug:
-            logging.debug(f"PARSE_ADDRESS: Input: '{address_string}'")
+            logging.debug("PARSE_ADDRESS: Input: '%s'", address_string)
         result: dict[str, Any] = {
             "address": None,
             "city": None,
@@ -270,7 +270,7 @@ class AddressUtils:
         except Exception as exception:
             result["parse_reason"] = f"exception: {exception!s}"
             if debug:
-                logging.warning(f"PARSE_ADDRESS: Exception during parsing: {exception}")
+                logging.warning("PARSE_ADDRESS: Exception during parsing: %s", exception)
             return result
 
     @staticmethod
@@ -285,7 +285,7 @@ class AddressUtils:
             return AddressUtils._parse_components(address_string, debug=debug)
         try:
             if debug:
-                logging.debug(f"USADDRESS_PARSE: Attempting for: '{address_string}'")
+                logging.debug("USADDRESS_PARSE: Attempting for: '%s'", address_string)
             parsed = normalize_address_record(address_string)
             result: dict[str, Any] = {
                 "address": parsed.get("address_line_1", ""),
@@ -358,7 +358,7 @@ class AddressUtils:
         parse_status = _check_parse_status(mist_address, comparison_address, field_weights)
         if not parse_status["mist_parseable"] or not parse_status["comparison_parseable"]:
             if debug:
-                logging.debug(f"ENHANCED_COMPARE: Unparseable: {parse_status}")
+                logging.debug("ENHANCED_COMPARE: Unparseable: %s", parse_status)
             return {
                 "overall_similarity": 0.0,
                 "is_match": False,
@@ -465,7 +465,7 @@ def _parse_address_parts(
     result["is_parseable"] = True
     result["parse_reason"] = "success"
     if debug:
-        logging.debug(f"PARSE_ADDRESS: Parsed result: {result}")
+        logging.debug("PARSE_ADDRESS: Parsed result: %s", result)
     return result
 
 
@@ -530,7 +530,7 @@ def _check_single_skip(
     skip_reason = skip_entry.get("Reason", "Address in skip list")
     if comp_addr == skip_addr and comp_city == skip_city and comp_state == skip_state and comp_zip == skip_zip:
         if debug:
-            logging.debug(f"ADDRESS_SKIP: Exact match - {comp_addr}")
+            logging.debug("ADDRESS_SKIP: Exact match - %s", comp_addr)
         return True, skip_reason
     return _check_partial_skip(
         comp_addr,
@@ -588,7 +588,7 @@ def _check_partial_skip(
         return False, ""
     if _is_sufficient_match(matching, skip_fields):
         if debug:
-            logging.debug(f"ADDRESS_SKIP: Partial match - {comp_addr}")
+            logging.debug("ADDRESS_SKIP: Partial match - %s", comp_addr)
         return True, skip_reason
     return False, ""
 
@@ -637,7 +637,7 @@ def _compare_fields(
             failed.append(field)
         if debug:
             logging.debug(
-                f"ENHANCED_COMPARE: {field} similarity: {similarity:.1f}%" f" (threshold: {threshold * 0.75:.1f}%)"
+                "ENHANCED_COMPARE: %s similarity: %.1f%% (threshold: %.1f%%)", field, similarity, threshold * 0.75
             )
     return similarities, failed
 
@@ -778,8 +778,8 @@ class NominatimValidator:
         """Log entry point with input parameters."""
         if self.debug:
             logging.debug("ENTRY: NominatimValidator.validate()")
-            logging.debug(f"  mist_address: {mist_address}")
-            logging.debug(f"  comparison_address: {comparison_address}")
+            logging.debug("  mist_address: %s", mist_address)
+            logging.debug("  comparison_address: %s", comparison_address)
 
     def _build_address_string(
         self,
@@ -936,8 +936,8 @@ class NominatimValidator:
             return self._parse_geocode_response(response, parts, source)
         except Exception as exc:
             if self.debug:
-                logging.debug(f"GEOCODE [{source}]: {exc}")
-                logging.debug(f"GEOCODE [{source}]: {traceback.format_exc()}")
+                logging.debug("GEOCODE [%s]: %s", source, exc)
+                logging.debug("GEOCODE [%s]: %s", source, traceback.format_exc())
             return self._create_empty_result(str(exc))
 
     def _create_address_key(self, address_dict: dict[str, Any]) -> str:

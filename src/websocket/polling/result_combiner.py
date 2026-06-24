@@ -23,9 +23,9 @@ def combine_segments(
         logger.debug("combine_segments called with empty list")  # Post-action log
         return None
     if debug_mode:  # Verbatim diagnostic prints preserved from original implementation
-        logger.debug(f"Combining {len(final_results)} result segments")
-        logger.debug(f"Total wait time: {elapsed:.2f} seconds")
-        logger.debug(f"Total checks performed: {check_count}")
+        logger.debug("Combining %s result segments", len(final_results))
+        logger.debug("Total wait time: %.2f seconds", elapsed)
+        logger.debug("Total checks performed: %s", check_count)
         print(f"[DEBUG] Combining {len(final_results)} result segments")
         print(f"[DEBUG] Total wait time: {elapsed:.2f} seconds")
         print(f"[DEBUG] Total checks performed: {check_count}")
@@ -41,7 +41,7 @@ def combine_segments(
             print("[DEBUG] WARNING: Final result is empty - this may indicate an issue")
         print(f"[DEBUG] Session {session_id} result collection complete")
         print("[DEBUG] " + "=" * 60)
-    logger.info(f"Command completed with {len(final_results)} message segments")  # Post-action log
+    logger.info("Command completed with %s message segments", len(final_results))  # Post-action log
     return final_result
 
 

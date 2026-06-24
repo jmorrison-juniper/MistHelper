@@ -597,7 +597,7 @@ class RoutingUtils:
             return route_entries
 
         except (json.JSONDecodeError, KeyError, TypeError) as error:
-            logging.warning(f"Failed to parse SSR routing JSON: {error}")
+            logging.warning("Failed to parse SSR routing JSON: %s", error)
             return []
 
     # =====================================================================
@@ -985,7 +985,7 @@ class RoutingUtils:
                 )
             return device_info
         except Exception as error:
-            logging.warning(f"Could not verify device compatibility: {error}")
+            logging.warning("Could not verify device compatibility: %s", error)
             if debug_mode:
                 print(f"[DEBUG] Device check failed: {error}")
             print("   -> Proceeding with standard command")
@@ -1118,7 +1118,7 @@ class RoutingUtils:
     ) -> str | None:
         """Execute the forwarding table command via REST API."""
         print("-> Issuing show forwarding table command...")
-        logging.debug(f"Forwarding table payload: {payload}")
+        logging.debug("Forwarding table payload: %s", payload)
 
         if debug_mode:
             print(f"[DEBUG] Forwarding table payload = {payload}")
@@ -1200,7 +1200,7 @@ class RoutingUtils:
         device_context = f"device {device_id}"
         if device_info:
             device_context = f"{device_info.get('type', 'unknown')}" f" {device_info.get('name', device_id[:8])}"
-        logging.info(f"WebSocket {operation} completed successfully for {device_context}")
+        logging.info("WebSocket %s completed successfully for %s", operation, device_context)
 
     def _display_forwarding_table_output(
         self,
@@ -1284,7 +1284,7 @@ class RoutingUtils:
                 if debug_mode:
                     print("[DEBUG] WebSocket cleanup completed")
         except Exception as cleanup_error:
-            logging.warning(f"WebSocket cleanup error: {cleanup_error}")
+            logging.warning("WebSocket cleanup error: %s", cleanup_error)
 
     # =====================================================================
     # ORCHESTRATOR: ROUTING TABLE (Switches)
@@ -1465,7 +1465,7 @@ class RoutingUtils:
     ) -> str | None:
         """Execute the routing table command via REST API."""
         print("-> Issuing show route command...")
-        logging.debug(f"Route payload: {payload}")
+        logging.debug("Route payload: %s", payload)
 
         if debug_mode:
             print(f"[DEBUG] Route payload = {payload}")
@@ -1744,7 +1744,7 @@ class RoutingUtils:
     ) -> str | None:
         """Execute the SSR/SRX routing table API call."""
         print(f"\n-> Executing SSR/SRX routing table query" f" on device {device_id}...")
-        logging.debug(f"Request body: {request_body}")
+        logging.debug("Request body: %s", request_body)
 
         if debug_mode:
             print(f"[DEBUG] Request body = {request_body}")
@@ -1780,7 +1780,7 @@ class RoutingUtils:
 
         except Exception as api_error:
             print(f"! Error calling SSR/SRX" f" routing table API: {api_error}")
-            logging.error(f"SSR/SRX routing table" f" API error: {api_error}")
+            logging.error("SSR/SRX routing table API error: %s", api_error)
             if debug_mode:
                 import traceback
 

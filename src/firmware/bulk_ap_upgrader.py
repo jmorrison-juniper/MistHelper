@@ -107,7 +107,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         """Execute the bulk AP firmware upgrade workflow."""
         logging.info("Starting advanced bulk AP firmware upgrade by site...")
         logging.debug("BulkAPFirmwareUpgrader.execute() initiated")
-        logging.debug(f"Using org_id: {self.org_id}")
+        logging.debug("Using org_id: %s", self.org_id)
 
         if self.dry_run:
             print("\n  >> DRY-RUN MODE: No actual upgrades will be performed <<")
@@ -151,7 +151,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         self.sites_to_upgrade = self.sites_override or []
         site_names = ", ".join(s.get("name", "?") for s in self.sites_to_upgrade)
         print(f"\n  Using pre-selected sites: {site_names}")
-        logging.info(f"Using {len(self.sites_to_upgrade)} override sites")
+        logging.info("Using %s override sites", len(self.sites_to_upgrade))
         return bool(self.sites_to_upgrade)
 
     def _determine_sites_interactive(self) -> bool:
@@ -195,7 +195,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                         site_names.append(row[0].strip())
         except Exception as error:
             print(f" Error reading site list: {error}")
-            logging.error(f"Failed to read site list from {csv_path}: {error}")
+            logging.error("Failed to read site list from %s: %s", csv_path, error)
         return site_names
 
     def _fetch_org_sites_for_lookup(self) -> list[dict[str, Any]]:
@@ -211,7 +211,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             return all_sites
         except Exception as error:
             print(f" Failed to fetch org sites: {error}")
-            logging.error(f"Failed to fetch sites for org {self.org_id}: {error}")
+            logging.error("Failed to fetch sites for org %s: %s", self.org_id, error)
             return []
 
     def _resolve_site_names(self, site_names: list[str], all_sites: list[dict[str, Any]]) -> bool:
@@ -439,7 +439,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                     if device_id:
                         lookup[device_id] = stats
         except Exception as error:
-            logging.error(f"Failed to fetch stats for site {site_name}: {error}")
+            logging.error("Failed to fetch stats for site %s: %s", site_name, error)
         return lookup
 
     def _process_aps_with_stats(self, stats_lookup: dict[str, Any]) -> None:
@@ -991,7 +991,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                 print(" Upgrade cancelled.")
                 return False
             print(" User confirmed. Proceeding...")
-            logging.info(f"User confirmed upgrade for {total} devices" f" across {sites_count} sites")
+            logging.info("User confirmed upgrade for %s devices across %s sites", total, sites_count)
             return True
         except (KeyboardInterrupt, EOFError):
             return False
@@ -1082,7 +1082,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         if self.dry_run:
             print(f"      [DRY-RUN] Would upgrade {len(device_ids)}" f" devices to {version}")
             logging.info(
-                f"DRY-RUN: Would call upgradeSiteDevices for site" f" {site_name} with {len(device_ids)} devices"
+                "DRY-RUN: Would call upgradeSiteDevices for site %s with %s devices", site_name, len(device_ids)
             )
             self.successful_upgrades += len(site_data["devices"])
             return
@@ -1136,8 +1136,10 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         if self.dry_run:
             print(f"         [DRY-RUN] {version}: Would upgrade" f" {len(devices)} devices ({models_str})")
             logging.info(
-                f"DRY-RUN: Would call upgradeSiteDevices for version"
-                f" {version} at {site_name} with {len(device_ids)} devices"
+                "DRY-RUN: Would call upgradeSiteDevices for version %s at %s with %s devices",
+                version,
+                site_name,
+                len(device_ids),
             )
             self.successful_upgrades += len(devices)
             return
@@ -1260,12 +1262,12 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                 families[ap_type] = sorted(models)
 
             logging.info(
-                f"Fetched {len(families)} AP families with" f" {sum(len(m) for m in families.values())} total models"
+                "Fetched %s AP families with %s total models", len(families), sum(len(m) for m in families.values())
             )
             return families
 
         except Exception as error:
-            logging.warning(f"Failed to fetch AP model families from API: {error}")
+            logging.warning("Failed to fetch AP model families from API: %s", error)
             print("   Warning: Could not fetch AP models from API")
             return {}
 
@@ -1542,7 +1544,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                 successful += 1
             except Exception as error:
                 print(f"   [FAIL] {site_name}: {error}")
-                logging.error(f"Failed to configure auto-upgrade for site" f" {site_name}: {error}")
+                logging.error("Failed to configure auto-upgrade for site %s: %s", site_name, error)
                 failed += 1
 
         return successful, failed
@@ -1613,7 +1615,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             with open(tracking_file, "w", encoding="utf-8") as f:
                 json.dump(tracking_data, f, indent=2)
         except Exception as error:
-            logging.warning(f"Failed to save tracking: {error}")
+            logging.warning("Failed to save tracking: %s", error)
 
     # =========================================================================
     # STEP 11: WRITE RESULTS
@@ -1666,6 +1668,6 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                 print(f"   Successful: {self.successful_upgrades}")
                 print(f"   Failed: {self.failed_upgrades}")
             print(f"   Results: {filename}")
-            logging.info(f"Upgrade results written to {filename}")
+            logging.info("Upgrade results written to %s", filename)
         except Exception as error:
             print(f"! Failed to write results: {error}")

@@ -85,7 +85,7 @@ class OrgDeviceInventoryMSPOrchestrator:
                 orgs_data = [orgs_data]
         except Exception as error:
             print(f"X Failed to retrieve organizations: {error}")
-            logging.error("listMspOrgs failed for msp_id=%s: %s", msp_id, error, exc_info=True)
+            logging.exception("listMspOrgs failed for msp_id=%s: %s", msp_id, error)
             return []
         logging.debug("Received %d orgs from MSP %s", len(orgs_data), msp_name)
         return orgs_data
@@ -315,7 +315,7 @@ class OrgDeviceInventoryMSPOrchestrator:
                 )
             except Exception as error:
                 print(f"    X Error processing {child_org_name}: {error}")
-                logging.error("run_for_org failed for org %s: %s", child_org_id, error, exc_info=True)
+                logging.exception("run_for_org failed for org %s: %s", child_org_id, error)
 
         logging.info("MSP inventory complete for %d orgs", len(orgs_data))
         print(f"\nMSP inventory summary complete. Processed {len(orgs_data)} organizations.")

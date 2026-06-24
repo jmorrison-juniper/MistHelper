@@ -130,7 +130,7 @@ class ShellExecutor:
             return success, cleaned_output, ""
         except Exception as shell_error:  # noqa: BLE001 - top-level fallback mirrors original behavior
             error_msg = f"Shell execution error: {type(shell_error).__name__}: {shell_error}"
-            self.logger.error(error_msg, exc_info=True)
+            self.logger.exception(error_msg)
             return False, "", error_msg
 
     # ------------------------------------------------------------------

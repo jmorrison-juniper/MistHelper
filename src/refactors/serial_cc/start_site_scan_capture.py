@@ -43,7 +43,7 @@ class SiteScanCaptureService:
             logging.info("User selected all APs - launching multi-AP captures")  # Trace the all-AP path
             return None, "all"  # Signal the all-AP path (launched by caller)
         normalized_ap_mac = manager.normalize_mac_address(ap_mac)  # Normalize the single AP MAC
-        logging.debug(f"Selected and normalized AP MAC: {normalized_ap_mac}")  # Trace the normalized MAC
+        logging.debug("Selected and normalized AP MAC: %s", normalized_ap_mac)  # Trace the normalized MAC
         return normalized_ap_mac, "single"  # Single-AP capture path
 
     @staticmethod
@@ -58,7 +58,7 @@ class SiteScanCaptureService:
             "Enter choice [1-3] (default 2): ", default_value="2", context="band"
         )  # Read the band choice
         band = _BAND_MAP.get(band_choice, "5")  # Map to a band code, defaulting to 5 GHz
-        logging.debug(f"Band selected: {band} (choice: {band_choice})")  # Trace the resolved band
+        logging.debug("Band selected: %s (choice: %s)", band, band_choice)  # Trace the resolved band
         return band  # Resolved band code
 
     @staticmethod
@@ -81,11 +81,11 @@ class SiteScanCaptureService:
             )  # Read the 6 GHz channel
         try:  # Validate the channel parses as an integer
             channel = int(channel_str)  # Parse the channel
-            logging.debug(f"Channel selected: {channel}")  # Trace the channel
+            logging.debug("Channel selected: %s", channel)  # Trace the channel
             return channel  # Validated channel
         except ValueError:  # Non-numeric channel
             print(f"\n! Invalid channel: {channel_str}")  # Inform the user
-            logging.error(f"Invalid channel value: {channel_str}")  # Trace the failure
+            logging.error("Invalid channel value: %s", channel_str)  # Trace the failure
             return None  # Abort
 
     @staticmethod
@@ -103,10 +103,10 @@ class SiteScanCaptureService:
             "Enter choice (default 1): ", default_value="1", context="bandwidth"
         )  # Read the bandwidth choice
         bandwidth = _BANDWIDTH_MAP.get(bw_choice, "20")  # Map to MHz, defaulting to 20 MHz
-        logging.debug(f"Bandwidth selected: {bandwidth} MHz (choice: {bw_choice})")  # Trace the resolved bandwidth
+        logging.debug("Bandwidth selected: %s MHz (choice: %s)", bandwidth, bw_choice)  # Trace the resolved bandwidth
         if band == "24" and bandwidth not in ["20", "40"]:  # 2.4 GHz only supports 20/40 MHz
             print(f"\n! Invalid bandwidth {bandwidth} for 2.4 GHz band")  # Inform the user
-            logging.error(f"Invalid bandwidth {bandwidth} for 2.4 GHz band")  # Trace the failure
+            logging.error("Invalid bandwidth %s for 2.4 GHz band", bandwidth)  # Trace the failure
             return None  # Abort
         return bandwidth  # Validated bandwidth
 
@@ -123,13 +123,13 @@ class SiteScanCaptureService:
             duration = int(duration_str)  # Parse the duration
             if duration < 60 or duration > 86400:  # Enforce the API's allowed range
                 print("\n! Duration must be between 60 and 86400 seconds (API requirement)")  # Inform the user
-                logging.error(f"Duration out of range: {duration}")  # Trace the range failure
+                logging.error("Duration out of range: %s", duration)  # Trace the range failure
                 return None  # Abort
-            logging.debug(f"Duration set: {duration} seconds")  # Trace the duration
+            logging.debug("Duration set: %s seconds", duration)  # Trace the duration
             return duration  # Validated duration
         except ValueError:  # Non-numeric duration
             print(f"\n! Invalid duration: {duration_str}")  # Inform the user
-            logging.error(f"Invalid duration value: {duration_str}")  # Trace the failure
+            logging.error("Invalid duration value: %s", duration_str)  # Trace the failure
             return None  # Abort
 
     @staticmethod
@@ -143,13 +143,13 @@ class SiteScanCaptureService:
             num_packets = int(num_packets_str)  # Parse the count
             if num_packets < 0 or num_packets > 10000:  # Enforce the allowed range
                 print("\n! Number of packets must be between 0 and 10000")  # Inform the user
-                logging.error(f"Packet count out of range: {num_packets}")  # Trace the range failure
+                logging.error("Packet count out of range: %s", num_packets)  # Trace the range failure
                 return None  # Abort
-            logging.debug(f"Packet count set: {num_packets}")  # Trace the count
+            logging.debug("Packet count set: %s", num_packets)  # Trace the count
             return num_packets  # Validated count
         except ValueError:  # Non-numeric count
             print(f"\n! Invalid number of packets: {num_packets_str}")  # Inform the user
-            logging.error(f"Invalid packet count value: {num_packets_str}")  # Trace the failure
+            logging.error("Invalid packet count value: %s", num_packets_str)  # Trace the failure
             return None  # Abort
 
     @staticmethod
@@ -177,7 +177,7 @@ class SiteScanCaptureService:
             "format": capture.capture_format,
             "max_pkt_len": 1300,
         }  # Scan-capture payload (max packet length fixed at 1300 bytes)
-        logging.debug(f"Payload constructed: {payload}")  # Trace the constructed payload
+        logging.debug("Payload constructed: %s", payload)  # Trace the constructed payload
         return payload  # Completed payload
 
     @staticmethod
@@ -225,7 +225,7 @@ class SiteScanCaptureService:
                         logging.info("User cancelled capture due to existing capture on AP")  # Trace the cancel
                         return False  # Signal cancel
         except Exception as error:  # Pre-check API failure - warn and proceed
-            logging.warning(f"Failed to check for existing captures: {error}")  # Trace the failure
+            logging.warning("Failed to check for existing captures: %s", error)  # Trace the failure
         return True  # Proceed with the capture
 
     @classmethod
@@ -235,12 +235,12 @@ class SiteScanCaptureService:
         logging.info("Starting site scan capture")  # Trace workflow start
 
         site_id = prompt_utils.select_site_with_logging()  # Prompt for the target site
-        logging.debug(f"Site selection returned: {site_id}")  # Trace the selection
+        logging.debug("Site selection returned: %s", site_id)  # Trace the selection
         if not site_id:  # No site chosen
             logging.warning("No site_id returned from selection - aborting capture")  # Trace the abort
             return  # Abort the workflow
 
-        logging.debug(f"Proceeding with scan capture configuration for site: {site_id}")  # Trace progress
+        logging.debug("Proceeding with scan capture configuration for site: %s", site_id)  # Trace progress
         print("\n" + "-" * 80)  # Top divider
         print(" SCAN RADIO CAPTURE CONFIGURATION")  # Section title
         print("-" * 80)  # Bottom divider

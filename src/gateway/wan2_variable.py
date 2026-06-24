@@ -108,7 +108,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         if not changes:
             print(f"\n  No templates found with {self._search_pattern}" " port configurations.")
             print("  No changes needed.")
-            logging.info("Menu #104: No templates require modification" f" (searched for {self._search_pattern})")
+            logging.info("Menu #104: No templates require modification (searched for %s)", self._search_pattern)
             return
 
         if not self._preview_and_confirm(changes):
@@ -183,9 +183,9 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
                 " from template impact analysis (early filter)"
             )
             logging.info(
-                f"Menu #104: Excluded {excluded} sites matching prefix"
-                f" '{self._site_exclude_prefix}'"
-                " from WAN2 template operation"
+                "Menu #104: Excluded %s sites matching prefix '%s' from WAN2 template operation",
+                excluded,
+                self._site_exclude_prefix,
             )
         return filtered
 
@@ -194,7 +194,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         sites: list[dict[str, str]],
     ) -> dict[str, int]:
         """Count how many sites are assigned to each template."""
-        logging.info(f"Processing {len(sites)} sites for template assignment counts")
+        logging.info("Processing %s sites for template assignment counts", len(sites))
         counts: dict[str, int] = {}
         for site in sites:
             tid = site.get("gatewaytemplate_id", "").strip()
@@ -254,7 +254,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
                 selected = [template_list[i] for i in indices if 0 <= i < len(template_list)]
             except (ValueError, IndexError) as exc:
                 print(f" Invalid selection: {exc}")
-                logging.error(f"Invalid template selection in Menu #104: {exc}")
+                logging.error("Invalid template selection in Menu #104: %s", exc)
                 return None
 
         if not selected:
@@ -322,17 +322,17 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         name = template_info["name"]
 
         try:
-            logging.debug(f"Fetching template configuration for {name}")
+            logging.debug("Fetching template configuration for %s", name)
             resp = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(self._apisession, self._org_id, tid)
             config = resp.data if hasattr(resp, "data") else {}
 
             if not isinstance(config, dict):
-                logging.warning(f"Template {name} returned invalid data structure")
+                logging.warning("Template %s returned invalid data structure", name)
                 return None
 
             port_config = config.get("port_config", {})
             if not isinstance(port_config, dict):
-                logging.debug(f"Template {name} has no port_config")
+                logging.debug("Template %s has no port_config", name)
                 return None
 
             ports_to_replace = self._find_matching_ports(port_config, name)
@@ -348,7 +348,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
             }
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            logging.error(f"Error analyzing template {name}: {exc}")
+            logging.error("Error analyzing template %s: %s", name, exc)
             logging.error(traceback.format_exc())
             print(f"\n  !? Error analyzing template '{name}': {exc}")
             return None  # pylint: disable=useless-return
@@ -374,9 +374,9 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
                 suffix = key[len(search) :]
                 new_key = f"{replace}{suffix}"
                 replacements.append((key, new_key))
-                logging.info(f"Found subinterface in template {template_name}:" f" {key} -> {new_key}")
+                logging.info("Found subinterface in template %s: %s -> %s", template_name, key, new_key)
             elif search in key:
-                logging.warning(f"Found complex port pattern in template" f" {template_name}: {key}")
+                logging.warning("Found complex port pattern in template %s: %s", template_name, key)
                 print(f"\n  !? Template '{template_name}'" f" uses complex port pattern: '{key}'")
                 print("     This requires manual review" " - cannot automatically replace")
 
@@ -393,7 +393,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
 
         max_workers = min(10, len(templates_to_modify))
         logging.info(
-            f"Fetching {len(templates_to_modify)} template configurations" f" in parallel (max {max_workers} workers)"
+            "Fetching %s template configurations in parallel (max %s workers)", len(templates_to_modify), max_workers
         )
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -500,7 +500,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
                 if old_key in port_config:
                     port_config[new_key] = port_config.pop(old_key)
                     changes_list.append(f"'{old_key}' -> '{new_key}'")
-                    logging.debug(f"Template {name}: Replaced {old_key}" f" with {new_key}")
+                    logging.debug("Template %s: Replaced %s with %s", name, old_key, new_key)
 
             if not changes_list:
                 result["status"] = "SKIPPED"
@@ -512,9 +512,9 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
 
             if self._dry_run:
                 result["status"] = "DRY-RUN"
-                logging.info(f"DRY-RUN: Would update template {name}" f" with changes: {result['changes_made']}")
+                logging.info("DRY-RUN: Would update template %s with changes: %s", name, result["changes_made"])
             else:
-                logging.debug(f"Updating template {name} via API")
+                logging.debug("Updating template %s via API", name)
                 resp = mistapi_mod.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
                     self._apisession,
                     self._org_id,
@@ -523,16 +523,16 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
                 )
                 if resp.status_code == 200:
                     result["status"] = "SUCCESS"
-                    logging.info(f"Successfully updated template {name}")
+                    logging.info("Successfully updated template %s", name)
                 else:
                     result["status"] = "FAILED"
                     result["error"] = f"API returned status {resp.status_code}"
-                    logging.error(f"Failed to update template {name}:" f" status {resp.status_code}")
+                    logging.error("Failed to update template %s: status %s", name, resp.status_code)
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
             result["status"] = "ERROR"
             result["error"] = str(exc)
-            logging.error(f"Error updating template {name}: {exc}")
+            logging.error("Error updating template %s: %s", name, exc)
             logging.error(traceback.format_exc())
 
         return result
@@ -563,8 +563,9 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         affected, site_to_template = self._build_affected_site_set(sites, migrated_template_ids)
 
         logging.info(
-            f"Device migration scope: {len(affected)} sites using"
-            f" migrated templates (out of {len(sites)} total sites)"
+            "Device migration scope: %s sites using migrated templates (out of %s total sites)",
+            len(affected),
+            len(sites),
         )
         print(f"  >> Optimization: Checking only {len(affected)}" f" affected sites (not all {len(sites)} sites)")
 
@@ -604,7 +605,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
             tid = site.get("gatewaytemplate_id", "").strip()
 
             if self._site_exclude_prefix and name.startswith(self._site_exclude_prefix):
-                logging.debug(f"Skipping excluded site {name}" " from device migration scope")
+                logging.debug("Skipping excluded site %s from device migration scope", name)
                 continue
 
             if sid and tid:
@@ -637,10 +638,10 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
                     if match:
                         devices.append(match)
             except Exception as exc:  # pylint: disable=broad-exception-caught
-                logging.error(f"Error checking devices at site {sid}: {exc}")
+                logging.error("Error checking devices at site %s: %s", sid, exc)
                 continue
 
-        logging.info(f"Found {len(devices)} devices with" f" {self._search_pattern} overrides needing migration")
+        logging.info("Found %s devices with %s overrides needing migration", len(devices), self._search_pattern)
         return devices
 
     def _check_device_override(
@@ -665,7 +666,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         has_override = any(k == search or k.startswith(f"{search}.") for k in port_config)
 
         if has_override:
-            logging.info(f"Found device '{name}' with {search}" f" override at site {site_id}")
+            logging.info("Found device '%s' with %s override at site %s", name, search, site_id)
             return {
                 "site_id": site_id,
                 "device_id": did,
@@ -706,7 +707,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
 
         try:
             with connection_semaphore:
-                logging.debug(f"Fetching device config for {name} ({did})")
+                logging.debug("Fetching device config for %s (%s)", name, did)
                 resp = mistapi.api.v1.sites.devices.getSiteDevice(self._apisession, sid, did)
                 config = getattr(resp, "data", {})
 
@@ -739,23 +740,23 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
                 if self._dry_run:
                     result["status"] = "DRY-RUN"
                     logging.info(
-                        "DRY-RUN: Would migrate port overrides" f" for device {name}:" f" {result['ports_migrated']}"
+                        "DRY-RUN: Would migrate port overrides for device %s: %s", name, result["ports_migrated"]
                     )
                 else:
-                    logging.debug(f"Updating device {name} via API")
+                    logging.debug("Updating device %s via API", name)
                     update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(self._apisession, sid, did, body=config)
                     if update_resp.status_code == 200:
                         result["status"] = "SUCCESS"
-                        logging.info("Successfully migrated port overrides" f" for device {name}")
+                        logging.info("Successfully migrated port overrides for device %s", name)
                     else:
                         result["status"] = "FAILED"
                         result["error"] = f"API returned status" f" {update_resp.status_code}"
-                        logging.error(f"Failed to update device {name}:" f" status {update_resp.status_code}")
+                        logging.error("Failed to update device %s: status %s", name, update_resp.status_code)
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
             result["status"] = "ERROR"
             result["error"] = str(exc)
-            logging.error(f"Error migrating device {name}: {exc}")
+            logging.error("Error migrating device %s: %s", name, exc)
             logging.error(traceback.format_exc())
 
         return result
@@ -784,7 +785,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
             if new_key:
                 port_config[new_key] = port_config.pop(key)
                 renamed.append(f"{key}->{new_key}")
-                logging.debug(f"Device {device_name}: Renamed {key} to {new_key}")
+                logging.debug("Device %s: Renamed %s to %s", device_name, key, new_key)
         return renamed
 
     # ------------------------------------------------------------------ #
@@ -829,7 +830,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         print(f"  Failed: {failed}")
         print("  Device migration report:" " GatewayDevice_WAN2_Override_Migration.csv")
 
-        logging.info(f"Device override migration:" f" {success} successful, {failed} failed")
+        logging.info("Device override migration: %s successful, %s failed", success, failed)
         return results
 
     def _migrate_devices_fast(self, devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -838,7 +839,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
 
         count = len(devices)
         print(f"\n  !? Fast mode enabled: Processing {count}" " devices with connection pooling")
-        logging.info(f"Fast mode: Using connection pool" f" for {count} device migrations")
+        logging.info("Fast mode: Using connection pool for %s device migrations", count)
 
         results, failed = self._pool_fn(
             work_items=devices,
@@ -847,7 +848,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         )
 
         if failed:
-            logging.warning(f"Fast mode: {len(failed)} device migrations failed")
+            logging.warning("Fast mode: %s device migrations failed", len(failed))
         return list(results)
 
     def _migrate_devices_sequential(
@@ -862,7 +863,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         else:
             print(f"\n  Sequential mode: Processing {count} devices")
 
-        logging.info(f"Sequential mode: Processing {count}" " devices one at a time")
+        logging.info("Sequential mode: Processing %s devices one at a time", count)
         results: list[dict[str, Any]] = []
         dummy_semaphore = threading.Semaphore(1)
 
@@ -995,18 +996,19 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
     ) -> None:
         """Log operation summary for audit trail."""
         logging.warning(
-            f"Menu #104 DESTRUCTIVE operation complete"
-            f" ({self._operation_mode.upper()} mode):"
-            f" {success_count} templates updated,"
-            f" {failure_count} failed"
+            "Menu #104 DESTRUCTIVE operation complete (%s mode): %s templates updated, %s failed",
+            self._operation_mode.upper(),
+            success_count,
+            failure_count,
         )
         if devices_needing_migration:
             dev_ok = sum(1 for r in device_results if r["status"] == "SUCCESS")
             dev_fail = len(device_results) - dev_ok
             logging.warning(
-                f"Device override migration"
-                f" ({self._operation_mode.upper()} mode):"
-                f" {dev_ok} successful, {dev_fail} failed"
+                "Device override migration (%s mode): %s successful, %s failed",
+                self._operation_mode.upper(),
+                dev_ok,
+                dev_fail,
             )
 
     def _print_dry_run_guidance(

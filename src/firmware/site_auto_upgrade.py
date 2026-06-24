@@ -73,7 +73,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
         self.msp_all_sites_mode = False
         self.org_name = ""
         self.shared_versions: dict[str, str] | None = None
-        logging.debug(f"SiteAutoUpgradeConfigurator initialized: org_id={org_id}, dry_run={dry_run}")
+        logging.debug("SiteAutoUpgradeConfigurator initialized: org_id=%s, dry_run=%s", org_id, dry_run)
 
     # ------------------------------------------------------------------
     # Static entry point
@@ -139,7 +139,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
 
     def run_msp_mode(self) -> tuple[bool, int]:
         """Execute configuration workflow for MSP mode (all sites)."""
-        logging.debug(f"Entering run_msp_mode() for org: {self.org_name}")
+        logging.debug("Entering run_msp_mode() for org: %s", self.org_name)
 
         if not self._step1_fetch_sites():
             return (False, 0)
@@ -159,7 +159,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
                 return (False, 0)
 
         success, count = self._apply_auto_upgrade_config()
-        logging.info(f"MSP mode complete for {self.org_name}: success={success}, sites={count}")
+        logging.info("MSP mode complete for %s: success=%s, sites=%s", self.org_name, success, count)
         return (success, count)
 
     def _auto_select_versions(self) -> bool:
@@ -177,7 +177,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
             self.custom_versions[model] = selected
             print(f"    {model}: {self.custom_versions[model]}")
 
-        logging.info(f"Auto-selected versions for {len(self.custom_versions)} model(s)")
+        logging.info("Auto-selected versions for %s model(s)", len(self.custom_versions))
         return bool(self.custom_versions)
 
     def _apply_auto_upgrade_config(self) -> tuple[bool, int]:
@@ -220,7 +220,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
 
     def run(self) -> None:
         """Execute the interactive configuration workflow."""
-        logging.debug(f"Entering run() for org_id={self.org_id}")
+        logging.debug("Entering run() for org_id=%s", self.org_id)
         _print_intro_header(self.dry_run)
 
         if not self._step1_fetch_sites():
@@ -254,7 +254,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
             return True
         except Exception as exc:
             print(f"  X Error fetching sites: {exc}")
-            logging.error(f"SiteAutoUpgradeConfigurator: Failed to fetch sites: {exc}")
+            logging.error("SiteAutoUpgradeConfigurator: Failed to fetch sites: %s", exc)
             return False
 
     # ------------------------------------------------------------------
@@ -336,7 +336,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
                 count = len(self.current_site_versions)
                 print(f"  + Current auto-upgrade settings found ({count} model(s) configured)")
         except Exception as exc:
-            logging.debug(f"Could not fetch current site settings: {exc}")
+            logging.debug("Could not fetch current site settings: %s", exc)
 
     def _select_from_list(self) -> bool:
         """Display numbered list and allow index/range selection."""
@@ -405,7 +405,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
             return True
         except Exception as exc:
             print(f"  X Error fetching firmware versions: {exc}")
-            logging.error(f"SiteAutoUpgradeConfigurator: Failed to fetch versions: {exc}")
+            logging.error("SiteAutoUpgradeConfigurator: Failed to fetch versions: %s", exc)
             return False
 
     def _build_model_version_map(self) -> None:
@@ -562,7 +562,7 @@ def _handle_msp_mode(
     select_orgs_fn: SelectOrgsFromMspFn | None,
 ) -> None:
     """Handle MSP privilege detection and mode selection."""
-    logging.debug(f"MSP privileges detected: {len(msp_privileges)} MSP(s)")
+    logging.debug("MSP privileges detected: %s MSP(s)", len(msp_privileges))
     print("\n" + "=" * 70)
     print("  SITE AUTO-UPGRADE CONFIGURATION")
     print("=" * 70 + "\n")
@@ -1181,7 +1181,7 @@ def _apply_settings_to_sites(
             successful += 1
         except Exception as exc:
             print(f"    [FAIL] {site_name}: {exc}")
-            logging.error(f"Failed to configure auto-upgrade for site {site_name}: {exc}")
+            logging.error("Failed to configure auto-upgrade for site %s: %s", site_name, exc)
             failed += 1
     return (successful, failed)
 

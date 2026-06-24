@@ -28,7 +28,9 @@ class ImportInitializationService:
             manager._import_packages_concurrently(packages, required=required, skip_deps=skip_deps)  # Parallel path
             return  # Concurrent path handles its own per-package logging
         for module_name, package_spec in packages.items():  # Small groups import sequentially
-            logging.info(f"  Checking {kind} dependency: {module_name} ({package_spec or 'built-in'})")  # Trace check
+            logging.info(
+                "  Checking %s dependency: %s (%s)", kind, module_name, package_spec or "built-in"
+            )  # Trace check
             result = manager.import_module_safely(
                 module_name,
                 package_spec,
@@ -37,11 +39,11 @@ class ImportInitializationService:
                 skip_upgrade=True,
             )  # Attempt the import (no upgrade here; upgrades happen in the dependency phase)
             if result:  # Import succeeded
-                logging.info(f"  [OK] {module_name}: Available")  # Trace availability
+                logging.info("  [OK] %s: Available", module_name)  # Trace availability
             elif required:  # Required import failed - this is an error
-                logging.error(f"  [FAIL] {module_name}: Failed to import")  # Trace required failure
+                logging.error("  [FAIL] %s: Failed to import", module_name)  # Trace required failure
             else:  # Optional import failed - non-fatal warning
-                logging.warning(f"  [WARN] {module_name}: Not available")  # Trace optional absence
+                logging.warning("  [WARN] %s: Not available", module_name)  # Trace optional absence
 
     @staticmethod
     def _log_summary(manager: Any, elapsed_time: float) -> None:
@@ -55,15 +57,15 @@ class ImportInitializationService:
             [package_name for package_name in manager.imports.keys() if package_name in manager.optional_packages]
         )  # Optional packages that imported successfully
 
-        logging.info(f"Import initialization completed in {elapsed_time:.2f} seconds")  # Trace elapsed time
-        logging.info(f"Required dependencies: {successful_required}/{total_required} successful")  # Required summary
-        logging.info(f"Optional dependencies: {optional_imported}/{len(manager.optional_packages)} available")  # Opt
+        logging.info("Import initialization completed in %.2f seconds", elapsed_time)  # Trace elapsed time
+        logging.info("Required dependencies: %s/%s successful", successful_required, total_required)  # Required summary
+        logging.info("Optional dependencies: %s/%s available", optional_imported, len(manager.optional_packages))  # Opt
 
         if manager.installed_packages:  # Some packages were installed during this run
-            logging.info(f"Newly installed packages: {', '.join(manager.installed_packages)}")  # List installs
+            logging.info("Newly installed packages: %s", ", ".join(manager.installed_packages))  # List installs
 
         if manager.failed_imports:  # Some imports failed
-            logging.error(f"Failed imports: {', '.join(manager.failed_imports)}")  # List failures
+            logging.error("Failed imports: %s", ", ".join(manager.failed_imports))  # List failures
 
     @classmethod
     def execute(cls, manager: Any, skip_deps: bool = False) -> tuple[bool, dict[str, Any]]:

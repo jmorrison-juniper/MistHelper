@@ -29,7 +29,7 @@ class DebugResultSaver:
                 json.dump(payload, handle, indent=2, default=str)
             logging.debug("TUI_DEBUG: Raw result saved to %s", filepath)  # Action log after write
         except Exception as error:  # Never let debug saving raise
-            logging.error("TUI_DEBUG: Failed to save debug result: %s", error, exc_info=True)
+            logging.exception("TUI_DEBUG: Failed to save debug result: %s", error)
 
     @staticmethod
     def _build_filepath(func_name: str) -> str:

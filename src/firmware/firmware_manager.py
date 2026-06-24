@@ -99,7 +99,7 @@ class FirmwareManager:
             _mod.msp_privileges = getattr(_main, "msp_privileges", [])  # type: ignore[attr-defined]
             _mod.PROGRESS_EMITTER = getattr(_main, "PROGRESS_EMITTER", None)  # type: ignore[attr-defined]
 
-        logging.info(f"FirmwareManager initialized for org_id: {org_id}")
+        logging.info("FirmwareManager initialized for org_id: %s", org_id)
 
     def _compare_version_parts(self, current_parts: list[str], target_parts: list[str]) -> bool:
         """Compare version part lists numerically; return True if target is older than current."""
@@ -150,7 +150,7 @@ class FirmwareManager:
             return self._compare_version_parts(current_parts, target_parts)
 
         except Exception as e:
-            logging.warning(f"Could not compare versions {current_version} vs {target_version}: {e}")
+            logging.warning("Could not compare versions %s vs %s: %s", current_version, target_version, e)
             # If we can't compare, err on the side of caution and allow the upgrade
             return False
 
@@ -171,10 +171,10 @@ class FirmwareManager:
             try:
                 choice = self._safe_input_fn("Select scope (1-6): ", context="firmware_manager").strip()
                 if choice in ["1", "2", "3", "4", "5", "6"]:
-                    logging.debug(f"User selected scope: {choice}")
+                    logging.debug("User selected scope: %s", choice)
                     return choice
                 print(" Invalid selection. Please choose 1-6.")
-                logging.debug(f"Invalid scope selection: {choice}")
+                logging.debug("Invalid scope selection: %s", choice)
             except KeyboardInterrupt:
                 print("\n Operation cancelled by user.")
                 return None
@@ -226,7 +226,7 @@ class FirmwareManager:
                 print(" No site selected. Exiting.")
                 logging.warning("No site selected in specific site mode")
                 return
-            logging.debug(f"Selected site filter: {site_filter}")
+            logging.debug("Selected site filter: %s", site_filter)
 
         # Handle monitoring mode (option 5)
         if scope_choice == "5":
@@ -296,7 +296,7 @@ class FirmwareManager:
 
                 if result is None:
                     print("\n   Error fetching upgrade status. Retrying...")
-                    logging.warning(f"Monitoring iteration {iteration} failed")
+                    logging.warning("Monitoring iteration %s failed", iteration)
                 elif result == 0:
                     # No active upgrades found
                     print("\n  All upgrades completed!")
@@ -378,7 +378,7 @@ class FirmwareManager:
             self._print_upgrade_job_progress_summary(details)
         except Exception as e:
             print(f"    Error fetching details: {e}")
-            logging.error(f"Error fetching upgrade job {job_id}: {e}")
+            logging.error("Error fetching upgrade job %s: %s", job_id, e)
 
     def _show_org_level_upgrade_jobs(self):  # type: ignore[no-untyped-def]
         """Display org-level upgrade jobs with full configuration details including P2P settings.
@@ -428,7 +428,7 @@ class FirmwareManager:
 
         except Exception as e:
             print(f"  Error fetching org-level upgrades: {e}")
-            logging.error(f"Error in _show_org_level_upgrade_jobs: {e}")
+            logging.error("Error in _show_org_level_upgrade_jobs: %s", e)
 
     def _fetch_device_stats_for_monitoring(self, site_filter: str | None) -> Any:
         """Fetch fresh device statistics from API for monitoring purposes."""
@@ -516,7 +516,7 @@ class FirmwareManager:
             self._print_active_upgrades_table(active_upgrades)
             return len(active_upgrades)
         except Exception as e:
-            logging.error(f"Error in monitoring check: {e}", exc_info=True)
+            logging.exception("Error in monitoring check: %s", e)
             return None
 
     def _upgrade_ap_firmware_by_gateway_template(self):  # type: ignore[no-untyped-def]
@@ -572,7 +572,7 @@ class FirmwareManager:
 
         if not sites_to_upgrade:
             print(f" No sites found using template '{selected_template_name}'.")
-            logging.warning(f"No sites found for template {selected_template_name} (ID: {selected_template_id})")
+            logging.warning("No sites found for template %s (ID: %s)", selected_template_name, selected_template_id)
             return
 
         print("\n  Template Selection Summary:")
@@ -581,9 +581,9 @@ class FirmwareManager:
         print(f"   Sites in Template: {len(sites_to_upgrade)}")
 
         # Log site details
-        logging.info(f"Template-based upgrade: '{selected_template_name}' with {len(sites_to_upgrade)} sites")
+        logging.info("Template-based upgrade: '%s' with %s sites", selected_template_name, len(sites_to_upgrade))
         for site_info in sites_to_upgrade:
-            logging.debug(f"  Site: {site_info['name']} (ID: {site_info['id']})")
+            logging.debug("  Site: %s (ID: %s)", site_info["name"], site_info["id"])
 
         # Step 5: Execute firmware upgrade using existing bulk upgrade logic
         # Convert sites_to_upgrade to the format expected by bulk_upgrade_ap_firmware_by_site
@@ -626,7 +626,7 @@ class FirmwareManager:
         """Log per-template site counts at DEBUG level."""
         for template_id, sites in template_sites_mapping.items():
             template_name = next((name for name, tid in template_name_to_id.items() if tid == template_id), "Unknown")
-            logging.debug(f"Template '{template_name}': {len(sites)} sites")
+            logging.debug("Template '%s': %s sites", template_name, len(sites))
 
     def _load_template_sites_mapping(self):  # type: ignore[no-untyped-def]
         """Load gateway templates and create mapping of templates to their assigned sites.
@@ -649,13 +649,13 @@ class FirmwareManager:
                     if name and tid:
                         template_name_to_id[name] = tid
                         template_sites_mapping[tid] = []
-            logging.info(f"Loaded {len(template_name_to_id)} gateway templates")
+            logging.info("Loaded %s gateway templates", len(template_name_to_id))
             site_list_path = self._get_csv_path_fn("SiteList.csv")
             self._map_sites_to_template(template_sites_mapping, site_list_path)
             self._log_template_mapping_stats(template_sites_mapping, template_name_to_id)
             return template_name_to_id, template_sites_mapping
         except Exception as e:
-            logging.error(f"Failed to load template-sites mapping: {e}")
+            logging.error("Failed to load template-sites mapping: %s", e)
             print(f"! Failed to load template and site data: {e}")
             return {}, {}
 
@@ -698,13 +698,13 @@ class FirmwareManager:
                 # Check if input is an index number
                 if user_input in template_index_map:
                     template_id, template_name = template_index_map[user_input]
-                    logging.debug(f"Template selected by index {user_input}: {template_name}")
+                    logging.debug("Template selected by index %s: %s", user_input, template_name)
                     return template_id, template_name
 
                 # Check if input matches a template name exactly
                 if user_input in template_name_to_id:
                     template_id = template_name_to_id[user_input]
-                    logging.debug(f"Template selected by name: {user_input}")
+                    logging.debug("Template selected by name: %s", user_input)
                     return template_id, user_input
 
                 # No match found
@@ -729,7 +729,9 @@ class FirmwareManager:
             Results of the upgrade operation
         """
         logging.info(
-            f"Executing template-based firmware upgrade for template '{template_name}' with {len(sites_to_upgrade)} sites"  # noqa: E501
+            "Executing template-based firmware upgrade for template '%s' with %s sites",
+            template_name,
+            len(sites_to_upgrade),
         )
 
         print("\n  Template-Based Upgrade Execution")
@@ -800,7 +802,7 @@ class FirmwareManager:
                     return self._execute_msp_multi_org_upgrade()  # type: ignore[no-untyped-call]
                 else:
                     print(f"   Invalid selection. Please choose {'/'.join(valid_choices)}.")
-                    logging.debug(f"Invalid mode selection: {mode_choice}")
+                    logging.debug("Invalid mode selection: %s", mode_choice)
             except KeyboardInterrupt:
                 print("\n\n  Firmware upgrade cancelled by user.")
                 logging.info("Firmware upgrade cancelled during mode selection")
@@ -1044,7 +1046,7 @@ class FirmwareManager:
 
         except Exception as e:
             print(f"    X Error fetching organizations: {e}")
-            logging.error(f"Failed to fetch MSP orgs for upgrade: {e}")
+            logging.error("Failed to fetch MSP orgs for upgrade: %s", e)
             return None
 
     def _fetch_and_validate_org_sites(self, target_org_id: str) -> list[dict[str, Any]] | None:
@@ -1153,7 +1155,7 @@ class FirmwareManager:
 
         except Exception as e:
             print(f"      X Error fetching sites: {e}")
-            logging.error(f"Failed to fetch org sites for upgrade: {e}")
+            logging.error("Failed to fetch org sites for upgrade: %s", e)
             return None
 
     def _parse_range_token(self, part: str, max_count: int, selected_indices: list[int]) -> None:
@@ -1172,7 +1174,7 @@ class FirmwareManager:
                 elif idx >= max_count:
                     print(f"      !? Index {idx + 1} out of range (max: {max_count})")
         except ValueError:
-            logging.warning(f"Invalid range format: {part}")
+            logging.warning("Invalid range format: %s", part)
 
     def _parse_single_token(self, part: str, max_count: int, selected_indices: list[int]) -> None:
         """Parse a single index token like '3' (1-based) and append 0-based index if valid."""
@@ -1183,7 +1185,7 @@ class FirmwareManager:
             elif idx >= max_count:
                 print(f"      !? Index {idx + 1} out of range (max: {max_count})")
         except ValueError:
-            logging.warning(f"Invalid index: {part}")
+            logging.warning("Invalid index: %s", part)
 
     def _parse_selection_input(self, user_input: str, max_count: int) -> list:  # type: ignore[type-arg]
         """Parse user selection input into list of 0-based indices.
@@ -1294,7 +1296,7 @@ class FirmwareManager:
                     }
                 )
 
-                logging.info(f"MSP upgrade {'simulated' if dry_run else 'completed'} for org: {target_org_name}")
+                logging.info("MSP upgrade %s for org: %s", "simulated" if dry_run else "completed", target_org_name)
 
             except KeyboardInterrupt:
                 print(f"\n  Upgrade interrupted at organization: {target_org_name}")
@@ -1326,7 +1328,7 @@ class FirmwareManager:
             except Exception as e:
                 error_msg = str(e)
                 print(f"  X Error upgrading {target_org_name}: {error_msg}")
-                logging.error(f"MSP upgrade failed for org {target_org_name}: {e}")
+                logging.error("MSP upgrade failed for org %s: %s", target_org_name, e)
 
                 results.append(
                     {
@@ -1398,7 +1400,11 @@ class FirmwareManager:
 
         mode_str = "DRY-RUN " if dry_run else ""
         logging.info(
-            f"MSP {mode_str}upgrade summary: {len(completed)} completed, {len(failed)} failed, {len(interrupted)} interrupted"  # noqa: E501
+            "MSP %supgrade summary: %s completed, %s failed, %s interrupted",
+            mode_str,
+            len(completed),
+            len(failed),
+            len(interrupted),
         )
 
     def _select_msp_for_upgrade(self):  # type: ignore[no-untyped-def]
@@ -1522,7 +1528,7 @@ class FirmwareManager:
                     return self._upgrade_switch_firmware_by_gateway_template()  # type: ignore[no-untyped-call]
                 else:
                     print("  Invalid selection. Please choose 1 or 2.")
-                    logging.debug(f"Invalid mode selection: {mode_choice}")
+                    logging.debug("Invalid mode selection: %s", mode_choice)
             except (EOFError, KeyboardInterrupt):
                 print("\n  Operation cancelled by user.")
                 logging.info("Switch firmware upgrade cancelled (EOF or interrupt) - SSH/container safe exit")
@@ -1608,7 +1614,7 @@ class FirmwareManager:
         sites_to_upgrade = template_sites_mapping.get(selected_template_id, [])
 
         print(f"\n  Template '{selected_template_name}' includes {len(sites_to_upgrade)} sites")
-        logging.info(f"Template {selected_template_name} has {len(sites_to_upgrade)} assigned sites")
+        logging.info("Template %s has %s assigned sites", selected_template_name, len(sites_to_upgrade))
 
         return self._execute_template_based_switch_upgrade(sites_to_upgrade, selected_template_name)  # type: ignore[no-untyped-call]
 
@@ -1678,7 +1684,7 @@ class FirmwareManager:
                     return self._upgrade_ssr_firmware_by_gateway_template()  # type: ignore[no-untyped-call]
                 else:
                     print("  Invalid selection. Please choose 1 or 2.")
-                    logging.debug(f"Invalid mode selection: {mode_choice}")
+                    logging.debug("Invalid mode selection: %s", mode_choice)
             except (EOFError, KeyboardInterrupt):
                 print("\n  Operation cancelled by user.")
                 logging.info("SSR firmware upgrade cancelled (EOF or interrupt) - SSH/container safe exit")
@@ -1696,15 +1702,15 @@ class FirmwareManager:
             org_info = mistapi.api.v1.orgs.orgs.getOrg(self.apisession, self.org_id)
             if org_info.status_code != 200:
                 print(f"X  Error accessing organization: {org_info.status_code}")
-                logger.error(f"Failed to access organization {self.org_id}: {org_info.status_code}")
+                logger.error("Failed to access organization %s: %s", self.org_id, org_info.status_code)
                 return "", {"error": "Organization access failed"}
             org_name = org_info.data.get("name", "Unknown")
             print(f"!? Organization: {org_name}")
-            logger.debug(f"Organization validated: {org_name}")
+            logger.debug("Organization validated: %s", org_name)
             return org_name, None
         except Exception as e:
             print(f"X  Error validating organization: {str(e)}")
-            logger.error(f"Organization validation failed: {str(e)}")
+            logger.error("Organization validation failed: %s", str(e))
             return "", {"error": f"Organization validation error: {str(e)}"}
 
     def _prompt_ssr_site_selection(
@@ -1783,7 +1789,7 @@ class FirmwareManager:
             return self._prompt_ssr_site_selection(all_sites)
         except Exception as e:
             print(f"X  Error during site discovery: {str(e)}")
-            logger.error(f"Site discovery failed: {str(e)}")
+            logger.error("Site discovery failed: %s", str(e))
             return [], {"error": f"Site discovery error: {str(e)}"}
 
     def _select_ssr_upgrade_strategy(self) -> str:
@@ -1876,7 +1882,7 @@ class FirmwareManager:
         )
         if versions_response.status_code != 200:
             print(f"X  Error retrieving SSR firmware versions: {versions_response.status_code}")
-            logger.error(f"Failed to retrieve SSR versions: {versions_response.status_code}")
+            logger.error("Failed to retrieve SSR versions: %s", versions_response.status_code)
             return []
         available_versions: list[dict[str, Any]] = []
         for version_obj in versions_response.data or []:
@@ -1981,7 +1987,7 @@ class FirmwareManager:
             self._display_ssr_inventory_info()
             return self._select_ssr_version_from_list(available_versions), None
         except Exception as e:
-            logger.error(f"SSR firmware discovery failed: {str(e)}")
+            logger.error("SSR firmware discovery failed: %s", str(e))
             return "", {"error": f"SSR firmware discovery error: {str(e)}"}
 
     def _confirm_ssr_upgrade(
@@ -2043,7 +2049,7 @@ class FirmwareManager:
             "start_time": datetime.now().isoformat(),
             "site_results": [],
         }
-        logger.info(f"Starting SSR firmware upgrade operation: {results['operation_id']}")
+        logger.info("Starting SSR firmware upgrade operation: %s", results["operation_id"])
         return results
 
     def _load_org_ssr_inventory(self) -> dict[str, dict[str, Any]]:
@@ -2058,7 +2064,7 @@ class FirmwareManager:
         try:
             response = mistapi.api.v1.orgs.inventory.getOrgInventory(self.apisession, self.org_id, type="gateway")
             if response.status_code != 200:
-                logger.error(f"Failed to get org inventory: {response.status_code}")
+                logger.error("Failed to get org inventory: %s", response.status_code)
                 print("X  Failed to validate SSR inventory")
                 return inventory
             for gw in response.data or []:
@@ -2074,7 +2080,7 @@ class FirmwareManager:
                     }
             print(f"!? Found {len(inventory)} SSR device(s) in organization inventory")
         except Exception as e:
-            logger.error(f"Error getting org SSR inventory: {e}")
+            logger.error("Error getting org SSR inventory: %s", e)
             print(f"X  Error validating SSR inventory: {e}")
         return inventory
 
@@ -2090,7 +2096,7 @@ class FirmwareManager:
         print(f"  -> Discovering SSRs at {site_name}...")
         response = mistapi.api.v1.sites.devices.listSiteDevices(self.apisession, site_id, type="gateway")
         if response.status_code != 200:
-            logger.error(f"Failed to retrieve devices for site {site_name}: {response.status_code}")
+            logger.error("Failed to retrieve devices for site %s: %s", site_name, response.status_code)
             return []
         ssrs = []
         for device in response.data or []:
@@ -2099,10 +2105,10 @@ class FirmwareManager:
             dev_id = device.get("id", "")
             if dev_type == "gateway" and (any(p in model for p in ssr_models) or "SSR" in model):
                 ssrs.append(device)
-                logger.info(f"Identified SSR device: {dev_id} (model: {model})")
+                logger.info("Identified SSR device: %s (model: %s)", dev_id, model)
                 print(f"    -> Identified SSR: {model} ({dev_id})")
             else:
-                logger.debug(f"Skipping non-SSR device: {dev_id} (model: {model})")
+                logger.debug("Skipping non-SSR device: %s (model: %s)", dev_id, model)
         return ssrs
 
     def _validate_ssr_devices_for_version(
@@ -2121,23 +2127,23 @@ class FirmwareManager:
         skipped: list[str] = []
         for dev_id in device_ids:
             if dev_id not in inventory:
-                logger.warning(f"Device {dev_id} not found in org SSR inventory - skipping")
+                logger.warning("Device %s not found in org SSR inventory - skipping", dev_id)
                 print(f"    !? Device {dev_id} not in SSR inventory - skipping")
                 skipped.append(dev_id)
                 continue
             info = inventory[dev_id]
             current = info.get("version", "")
             if current == target_version:
-                logger.info(f"Device {dev_id} already at target version {target_version} - skipping")
+                logger.info("Device %s already at target version %s - skipping", dev_id, target_version)
                 print(f"    -> Device {dev_id} already at version {target_version} - skipping")
                 skipped.append(dev_id)
             elif self._is_firmware_downgrade(current, target_version):  # type: ignore[no-untyped-call]
-                logger.warning(f"Device {dev_id} downgrade rejected: {current} -> {target_version}")
+                logger.warning("Device %s downgrade rejected: %s -> %s", dev_id, current, target_version)
                 print(f"    ! Downgrade detected: {info['model']} ({current} -> {target_version}) - skipping")
                 skipped.append(dev_id)
             else:
                 validated.append(dev_id)
-                logger.info(f"Validated SSR {dev_id}: {info['model']} {current} -> {target_version}")
+                logger.info("Validated SSR %s: %s %s -> %s", dev_id, info["model"], current, target_version)
                 print(f"    -> Upgrade needed: {info['model']} ({current} -> {target_version})")
         return validated, skipped
 
@@ -2164,21 +2170,21 @@ class FirmwareManager:
                 text = f"Status: {response.status_code}"
             text_lower = text.lower()
             if "already at the requested fw version" in text_lower:
-                logger.info(f"SSR upgrade skipped at {site_name}: already at target version")
+                logger.info("SSR upgrade skipped at %s: already at target version", site_name)
                 print(f"  - SSRs at {site_name} already at target version")
                 site_result["skip_reason"] = "already_at_version"
             elif "downgrade fw version not allowed" in text_lower:
-                logger.warning(f"SSR downgrade rejected at {site_name}")
+                logger.warning("SSR downgrade rejected at %s", site_name)
                 print(f"  ! Firmware downgrade not allowed at {site_name}")
                 site_result["skip_reason"] = "downgrade_not_allowed"
             else:
-                logger.error(f"SSR upgrade API error: {text}")
+                logger.error("SSR upgrade API error: %s", text)
                 print(f"  -> API Response: {text}")
                 error = f"Upgrade initiation failed for {site_name}: {response.status_code}"
                 print(f"  X  {error}")
                 site_result["error"] = error
         except Exception as exc:
-            logger.error(f"Could not read response details: {exc}")
+            logger.error("Could not read response details: %s", exc)
             site_result["error"] = f"Upgrade initiation failed for {site_name}: {response.status_code}"
         return site_result
 
@@ -2204,7 +2210,7 @@ class FirmwareManager:
         }
         if not upgrade_config["auto_reboot"]:
             upgrade_body["reboot_at"] = -1
-        logger.info(f"SSR upgrade request: {upgrade_body}")
+        logger.info("SSR upgrade request: %s", upgrade_body)
         print(
             f"  -> channel='{upgrade_config['channel']}', version='{target_version}', strategy='{upgrade_config['strategy']}'"  # noqa: E501
         )
@@ -2213,7 +2219,7 @@ class FirmwareManager:
         if response.status_code in [200, 202]:
             print(f"  !? Firmware upgrade initiated for {len(validated_ids)} SSR(s)")
             site_result["upgrade_initiated"] = True
-            logger.info(f"Successfully initiated SSR firmware upgrade at {site_name}")
+            logger.info("Successfully initiated SSR firmware upgrade at %s", site_name)
             return site_result
         return self._handle_ssr_upgrade_error_response(site_name, response, site_result)
 
@@ -2233,7 +2239,7 @@ class FirmwareManager:
         site_id = site.get("id")
         site_name = site.get("name", "Unknown")
         print(f"\n[{site_index}/{total_sites}] Processing site: {site_name}")
-        logger.info(f"Processing site {site_index}/{total_sites}: {site_name} (ID: {site_id})")
+        logger.info("Processing site %s/%s: %s (ID: %s)", site_index, total_sites, site_name, site_id)
         site_result: dict[str, Any] = {
             "site_id": site_id,
             "site_name": site_name,
@@ -2264,7 +2270,7 @@ class FirmwareManager:
             print(f"  X  {error_msg}")
             site_result["error"] = error_msg
             results["errors"].append(error_msg)
-            logger.error(f"Site processing error for {site_name}: {str(e)}")
+            logger.error("Site processing error for %s: %s", site_name, str(e))
         results["sites_processed"] += 1
         results["site_results"].append(site_result)
 
@@ -2283,7 +2289,9 @@ class FirmwareManager:
         print("Monitor progress through Mist dashboard or API.")
         print("Check individual SSR status for completion and connectivity.")
         print("Verify SD-WAN tunnel re-establishment after reboots.")
-        logging.getLogger(__name__).info(f"SSR firmware upgrade operation completed: {results['operation_id']}")
+        # Issue #433 Phase A: hand-converted; codemod doesn't yet detect the
+        # logging.getLogger(__name__).<level>(...) dynamic-call pattern.
+        logging.getLogger(__name__).info("SSR firmware upgrade operation completed: %s", results["operation_id"])
 
     def _run_ssr_site_upgrades(
         self,
@@ -2312,7 +2320,7 @@ class FirmwareManager:
             results["end_time"] = datetime.now().isoformat()
             results["error"] = str(e)
             print(f"\nX  Critical error in SSR firmware upgrade: {str(e)}")
-            logger.error(f"Critical error in SSR firmware upgrade: {str(e)}")
+            logger.error("Critical error in SSR firmware upgrade: %s", str(e))
         return results
 
     def _bulk_upgrade_ssr_firmware_by_site(self, sites_to_upgrade_override=None):  # type: ignore[no-untyped-def]
@@ -2345,7 +2353,7 @@ class FirmwareManager:
         - Monitor upgrade progress closely for rapid intervention
         """
         logger = logging.getLogger(__name__)
-        logger.debug(f"Starting bulk SSR firmware upgrade - org_id: {self.org_id}")
+        logger.debug("Starting bulk SSR firmware upgrade - org_id: %s", self.org_id)
 
         org_name, error = self._validate_org_for_ssr_upgrade()
         if error:
@@ -2426,7 +2434,7 @@ class FirmwareManager:
         sites_to_upgrade = template_sites_mapping.get(selected_template_id, [])
 
         print(f"\n  Template '{selected_template_name}' includes {len(sites_to_upgrade)} sites")
-        logging.info(f"Template {selected_template_name} has {len(sites_to_upgrade)} assigned sites")
+        logging.info("Template %s has %s assigned sites", selected_template_name, len(sites_to_upgrade))
 
         return self._execute_template_based_ssr_upgrade(sites_to_upgrade, selected_template_name)  # type: ignore[no-untyped-call]
 

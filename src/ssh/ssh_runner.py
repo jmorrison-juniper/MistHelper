@@ -50,7 +50,7 @@ class EnhancedSSHRunner:
         self.client = None
         self.logger = logger or logging.getLogger("ssh_runner_v2")
         self.managed_known_hosts_path: str | None = None
-        self.logger.debug(f"EnhancedSSHRunner initialized with timeout={timeout}")
+        self.logger.debug("EnhancedSSHRunner initialized with timeout=%s", timeout)
 
     @staticmethod
     def _get_data_directory() -> str:
@@ -154,7 +154,7 @@ class EnhancedSSHRunner:
             if hasattr(os, "chmod"):
                 os.chmod(log_dir, 0o700)
         except OSError as e:
-            self.logger.error(f"Failed to create log directory {log_dir}: {e}")
+            self.logger.error("Failed to create log directory %s: %s", log_dir, e)
             # Fallback to data directory
             log_dir = data_dir
             safe_hostname = f"fallback_{safe_hostname}"
@@ -174,9 +174,9 @@ class EnhancedSSHRunner:
                     f.write(f"{safe_message}\n")
                     f.flush()  # Ensure data is written immediately
             except OSError as e:
-                self.logger.error(f"IO error writing to host log {host_log_file}: {e}")
+                self.logger.error("IO error writing to host log %s: %s", host_log_file, e)
             except UnicodeEncodeError as e:
-                self.logger.error(f"Unicode encoding error writing to host log {host_log_file}: {e}")
+                self.logger.error("Unicode encoding error writing to host log %s: %s", host_log_file, e)
                 # Try writing a sanitized version
                 try:
                     safe_message = message.encode("ascii", errors="replace").decode("ascii")
@@ -186,7 +186,7 @@ class EnhancedSSHRunner:
                 except Exception:
                     self.logger.error("Failed to write sanitized message to host log")
             except Exception as e:
-                self.logger.error(f"Unexpected error writing to host log {host_log_file}: {e}")
+                self.logger.error("Unexpected error writing to host log %s: %s", host_log_file, e)
 
         return host_log_file, write_to_host_log
 
@@ -213,8 +213,8 @@ class EnhancedSSHRunner:
             return False, "", error_msg
 
         try:
-            self.logger.debug(f"Executing command: '{command}' (shell_mode={use_shell})")
-            self.logger.debug(f"Command execution method: {'shell' if use_shell else 'direct'}")
+            self.logger.debug("Executing command: '%s' (shell_mode=%s)", command, use_shell)
+            self.logger.debug("Command execution method: %s", "shell" if use_shell else "direct")
 
             command_start = time.time()
 
@@ -236,7 +236,7 @@ class EnhancedSSHRunner:
             return False, "", error_msg
         except Exception as e:
             error_msg = f"Execution error: {type(e).__name__}: {e}"
-            self.logger.error(error_msg, exc_info=True)
+            self.logger.exception(error_msg)
             return False, "", error_msg
 
     def _execute_direct(
@@ -258,17 +258,20 @@ class EnhancedSSHRunner:
             exit_status = stdout.channel.recv_exit_status()
             command_time = time.time() - start_time
 
-            self.logger.debug(f"Command completed in {command_time:.2f} seconds with exit status: {exit_status}")
+            self.logger.debug("Command completed in %.2f seconds with exit status: %s", command_time, exit_status)
             # Escape newlines and special characters for clean logging
             stdout_sample = stdout_output[:200].replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
             self.logger.debug(
-                f"STDOUT ({len(stdout_output)} chars): {stdout_sample}{'...' if len(stdout_output) > 200 else ''}"
+                "STDOUT (%s chars): %s%s", len(stdout_output), stdout_sample, "..." if len(stdout_output) > 200 else ""
             )
 
             if stderr_output:
                 stderr_sample = stderr_output[:200].replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
                 self.logger.warning(
-                    f"STDERR ({len(stderr_output)} chars): {stderr_sample}{'...' if len(stderr_output) > 200 else ''}"
+                    "STDERR (%s chars): %s%s",
+                    len(stderr_output),
+                    stderr_sample,
+                    "..." if len(stderr_output) > 200 else "",
                 )
 
             print(f"- [{hostname}] Command completed with exit status: {exit_status}")
@@ -276,7 +279,7 @@ class EnhancedSSHRunner:
 
         except Exception as e:
             # If PTY fails, try without PTY
-            self.logger.warning(f"exec_command with PTY failed: {e}, trying without PTY")
+            self.logger.warning("exec_command with PTY failed: %s, trying without PTY", e)
             try:
                 stdin, stdout, stderr = self.client.exec_command(command, timeout=self.timeout)  # nosec B601
                 stdout_output = stdout.read().decode("utf-8", errors="ignore")
@@ -285,12 +288,12 @@ class EnhancedSSHRunner:
                 command_time = time.time() - start_time
 
                 self.logger.debug(
-                    f"Command completed (no PTY) in {command_time:.2f} seconds with exit status: {exit_status}"
+                    "Command completed (no PTY) in %.2f seconds with exit status: %s", command_time, exit_status
                 )
                 print(f"- [{hostname}] Command completed with exit status: {exit_status}")
                 return exit_status == 0, stdout_output, stderr_output
             except Exception as e2:
-                self.logger.error(f"Both PTY and non-PTY exec_command failed: {e2}")
+                self.logger.error("Both PTY and non-PTY exec_command failed: %s", e2)
                 raise e2
 
     # T013b: _execute_with_shell moved to src.ssh.shell_execution.shell_executor.ShellExecutor.

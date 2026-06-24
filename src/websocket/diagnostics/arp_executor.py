@@ -80,7 +80,7 @@ class ArpDeviceExecutor:
             )
         except Exception as device_check_error:  # noqa: BLE001  # Match legacy broad catch
             logging.warning(  # Action log after failed lookup
-                f"Could not verify device compatibility: {device_check_error}"
+                "Could not verify device compatibility: %s", device_check_error
             )
             if debug_mode:  # Mirror legacy debug echo of the failure
                 print(f"[DEBUG] Device check failed: {device_check_error}")
