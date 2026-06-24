@@ -58,12 +58,11 @@ class SingleCommandRunner:
             )
             return single_cmd_success
         except Exception as run_error:  # noqa: BLE001 - top-level fallback mirrors original behavior
-            logger.error(
+            logger.exception(
                 "[%s] Unexpected error during SSH command execution: %s: %s",
                 hostname,
                 type(run_error).__name__,
                 run_error,
-                exc_info=True,
             )
             write_to_host_log(f"[ERROR] Unexpected error: {run_error}")
             return False

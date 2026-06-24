@@ -52,7 +52,7 @@ class SSHRunnerManager:
             return False
         except Exception as error:  # noqa: BLE001 - surface any fatal error to operator
             print(f"[ERROR] Fatal error: {error}")
-            logging.error("SSH Runner error: %s", error, exc_info=True)
+            logging.exception("SSH Runner error: %s", error)
             SSHRunnerManager._emit_completion(emitter, op_start, cancelled=False)
             return False
 
@@ -434,4 +434,4 @@ class SSHRunnerManager:
 
         except Exception as error:  # noqa: BLE001
             print(f"! Error: {error}")
-            logging.error("SSH by template error: %s", error, exc_info=True)
+            logging.exception("SSH by template error: %s", error)

@@ -125,7 +125,7 @@ class SwitchVcStatsService:
         """Emit first-row sample and compact summary table for debug logs."""
         if not all_vc_stats:  # Nothing to preview when export rows are empty
             return  # Exit early with no preview output
-        logging.debug(f"Sample VC stats row: {all_vc_stats[0]}")  # Log first row for raw payload visibility
+        logging.debug("Sample VC stats row: %s", all_vc_stats[0])  # Log first row for raw payload visibility
         try:  # PrettyTable may fail if columns are malformed; keep preview non-fatal
             from prettytable import PrettyTable  # Lazy import to match existing MistHelper display behavior
 
@@ -144,7 +144,7 @@ class SwitchVcStatsService:
             table.field_names = [field for field in summary_fields if field in all_vc_stats[0]]  # Keep present cols
             for row in all_vc_stats:  # Add one summary row per switch
                 table.add_row([row.get(field, "") for field in table.field_names])  # Extract display fields
-            logging.debug("\n" + table.get_string())  # Emit rendered summary table to debug log
+            logging.debug("\n%s", table.get_string())  # Emit rendered summary table to debug log
         except Exception as preview_error:  # Never fail export because preview generation failed
             logging.debug("Skipping VC stats PrettyTable preview due to error: %s", preview_error)  # Trace skip cause
 

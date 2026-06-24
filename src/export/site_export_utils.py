@@ -101,13 +101,13 @@ class SiteExportUtils(SiteInsightsExporter):
             logging.debug("Resolved site_name=%s for site_id=%s", site_name, site_id)  # Log result.
             return site_name  # Return resolved name.
         except Exception as e:
-            logging.error(f"Error getting site name: {e}")  # Preserve legacy error string.
+            logging.error("Error getting site name: %s", e)  # Preserve legacy error string.
             return site_id  # Fall back to raw site_id.
 
     @staticmethod
     def _call_site_api(api_call, site_id, api_kwargs):  # type: ignore[no-untyped-def]
         """Invoke site API call, respecting limit-parameter support; return paginated rawdata."""
-        logging.debug(f"Making site-specific API call: {api_call.__name__} with site_id: {site_id}")
+        logging.debug("Making site-specific API call: %s with site_id: %s", api_call.__name__, site_id)
         try:
             sig = inspect.signature(api_call)  # Inspect signature to detect limit support.
             supports_limit = "limit" in sig.parameters  # Gate limit kwarg on actual support.
@@ -117,7 +117,7 @@ class SiteExportUtils(SiteInsightsExporter):
             logging.info("Calling %s with limit=1000 for site %s", api_call.__name__, site_id)  # Log before call.
             response = api_call(apisession, site_id, limit=1000, **api_kwargs)  # Call with limit.
         else:
-            logging.debug(f"API function {api_call.__name__} does not support 'limit' parameter")
+            logging.debug("API function %s does not support 'limit' parameter", api_call.__name__)
             logging.info("Calling %s without limit for site %s", api_call.__name__, site_id)  # Log before call.
             response = api_call(apisession, site_id, **api_kwargs)  # Call without limit.
         rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Paginate response.
@@ -138,27 +138,27 @@ class SiteExportUtils(SiteInsightsExporter):
             print(table)  # Preserve legacy debug table output.
             logging.debug("Site data displayed in table format (debug mode).")
         else:
-            logging.info(f"Site {data_type} export completed - {len(data)} records saved to {filename}.")
+            logging.info("Site %s export completed - %s records saved to %s.", data_type, len(data), filename)
 
     @staticmethod
     def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # type: ignore[no-untyped-def]
         """Generic function to export site-specific data to CSV."""
-        logging.info(f"Starting export of site {data_type}...")
+        logging.info("Starting export of site %s...", data_type)
         site_id = PromptUtils.select_site()  # Prompt operator for target site.
         if not site_id:
             logging.error("No site selected. Exiting.")
             return  # Abort when operator declines.
         site_name = SiteExportUtils._resolve_site_name(site_id)  # Resolve display name for site_id.
-        logging.info(f"Exporting {data_type} for site: {site_name}")
+        logging.info("Exporting %s for site: %s", data_type, site_name)
         safe_data_type = data_type.replace(" ", "").replace("-", "").title()  # Sanitize for filename.
         safe_site_name = site_name.replace(" ", "_").replace("-", "_")  # Sanitize for filename.
         filename = f"Site{safe_data_type}_{safe_site_name}.csv"  # Preserve legacy filename format.
         try:
             rawdata = SiteExportUtils._call_site_api(api_call, site_id, api_kwargs)  # Fetch site data.
             if rawdata is None:
-                logging.warning(f"! No data returned from API for {data_type} at site {site_name}. Skipping.")
+                logging.warning("! No data returned from API for %s at site %s. Skipping.", data_type, site_name)
                 return  # Abort on empty response.
-            logging.info(f"Fetched {len(rawdata)} raw records for {data_type} from site {site_name}.")
+            logging.info("Fetched %s raw records for %s from site %s.", len(rawdata), data_type, site_name)
             if sort_key:
                 rawdata = sorted(rawdata, key=lambda x: x.get(sort_key, ""))  # Stable sort by key.
             data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested JSON.
@@ -169,10 +169,10 @@ class SiteExportUtils(SiteInsightsExporter):
                 filename if os.path.dirname(filename) else os.path.join("data", filename)
             )  # Compose absolute-style display path preserved.
             print(f"! {len(data)} records exported to {full_file_path}")  # Preserve operator output.
-            logging.info(f"Site {data_type} data written to {filename} ({len(data)} rows).")
+            logging.info("Site %s data written to %s (%s rows).", data_type, filename, len(data))
             SiteExportUtils._display_or_log_results(data, data_type, filename)  # Display or log summary.
         except Exception as e:
-            logging.error(f"! Error during site {data_type} export for {site_name}: {e}")
+            logging.error("! Error during site %s export for %s: %s", data_type, site_name, e)
             raise  # Re-raise to preserve legacy bubbling.
 
     @staticmethod
@@ -190,7 +190,7 @@ class SiteExportUtils(SiteInsightsExporter):
             sites = mistapi.get_all(response=response, mist_session=apisession)
             site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
         except Exception as exception:
-            logging.error(f"Error getting site name: {exception}")
+            logging.error("Error getting site name: %s", exception)
             site_name = site_id
 
         safe_site_name = site_name.replace(" ", "_").replace("-", "_")
@@ -223,14 +223,14 @@ class SiteExportUtils(SiteInsightsExporter):
             if rows:
                 DataExporter.write_with_format_selection(rows, filename)  # type: ignore[no-untyped-call]
                 print(f"! {len(rows)} records exported to data\\{filename}")
-                logging.info(f"Exported {len(rows)} site SLE metric insight records to {filename}")
+                logging.info("Exported %s site SLE metric insight records to %s", len(rows), filename)
             else:
                 print(f"! 0 records exported to data\\{filename} (no metrics available)")
-                logging.warning(f"No site SLE metric insight data available for site {site_name}")
+                logging.warning("No site SLE metric insight data available for site %s", site_name)
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
         except Exception as exception:
             print(f"! Error exporting site SLE metric insights: {exception}")
-            logging.error(f"Failed to export site SLE metric insights for site {site_name}: {exception}")
+            logging.error("Failed to export site SLE metric insights for site %s: %s", site_name, exception)
             DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
     @staticmethod
@@ -301,7 +301,7 @@ class SiteExportUtils(SiteInsightsExporter):
             DataExporter.write_with_format_selection(rows, filename, api_function_name="getSiteStats")
             logging.info("Exported %d site stats records to %s", len(rows), filename)
         except Exception as exception:
-            logging.error("Failed to export site stats: %s", exception, exc_info=True)
+            logging.exception("Failed to export site stats: %s", exception)
 
     @staticmethod
     def gateway_metrics() -> None:  # type: ignore[no-untyped-def]
@@ -320,7 +320,7 @@ class SiteExportUtils(SiteInsightsExporter):
             DataExporter.write_with_format_selection(rows, filename, api_function_name="getSiteGatewayMetrics")
             logging.info("Exported %d gateway metric records to %s", len(rows), filename)
         except Exception as exception:
-            logging.error("Failed to export gateway metrics: %s", exception, exc_info=True)
+            logging.exception("Failed to export gateway metrics: %s", exception)
 
     @staticmethod
     def switches_metrics() -> None:  # type: ignore[no-untyped-def]
@@ -339,7 +339,7 @@ class SiteExportUtils(SiteInsightsExporter):
             DataExporter.write_with_format_selection(rows, filename, api_function_name="getSiteSwitchesMetrics")
             logging.info("Exported %d switches metric records to %s", len(rows), filename)
         except Exception as exception:
-            logging.error("Failed to export switches metrics: %s", exception, exc_info=True)
+            logging.exception("Failed to export switches metrics: %s", exception)
 
     @staticmethod
     def beacons_stats() -> None:  # type: ignore[no-untyped-def]
@@ -368,7 +368,7 @@ class SiteExportUtils(SiteInsightsExporter):
             DataExporter.write_with_format_selection(rows, filename, api_function_name="getSiteWxRulesUsage")
             logging.info("Exported %d WxRules usage records to %s", len(rows), filename)
         except Exception as exception:
-            logging.error("Failed to export WxRules usage: %s", exception, exc_info=True)
+            logging.exception("Failed to export WxRules usage: %s", exception)
 
     @staticmethod
     def assets_stats() -> None:  # type: ignore[no-untyped-def]
@@ -408,7 +408,7 @@ class SiteExportUtils(SiteInsightsExporter):
             DataExporter.write_with_format_selection(rows, filename, api_function_name="getSiteCurrentChannelPlanning")
             logging.info("Exported %d channel planning records to %s", len(rows), filename)
         except Exception as exception:
-            logging.error("Failed to export channel planning: %s", exception, exc_info=True)
+            logging.exception("Failed to export channel planning: %s", exception)
 
     @staticmethod
     def zone_config_analysis() -> None:

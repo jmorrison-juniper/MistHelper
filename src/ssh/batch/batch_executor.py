@@ -54,12 +54,11 @@ class BatchExecutor:
             )
             return overall_success
         except Exception as run_error:  # noqa: BLE001 - top-level fallback mirrors original behavior
-            logger.error(
+            logger.exception(
                 "[%s] Unexpected error during multi-command execution: %s: %s",
                 hostname,
                 type(run_error).__name__,
                 run_error,
-                exc_info=True,
             )
             write_to_host_log(f"[ERROR] Unexpected error: {run_error}")  # Verbatim error log line
             overall_success = False

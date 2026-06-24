@@ -7,12 +7,20 @@ workflows with dry-run capability.
 Extracted from MistHelper.py for maintainability.
 """
 
-# pylint: disable=too-many-lines,logging-fstring-interpolation
+# pylint: disable=too-many-lines
 
 from __future__ import annotations
 
 import logging
 from typing import Any
+
+from src.dataclasses.family_selection_context import (  # Issue #433 Phase B: 5-field bundle for family selection.
+    FamilySelectionContext,
+)
+from src.dataclasses.site_auto_upgrade_deps import (  # Issue #433 Phase B: bundles DI params (5-Item Rule).
+    SiteAutoUpgradeCoreDeps,
+    SiteAutoUpgradeMspDeps,
+)
 
 # ---------------------------------------------------------------------------
 # Type aliases for injected dependencies
@@ -40,28 +48,24 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
     def __init__(
         self,
         org_id: str,
-        apisession: Any,
-        safe_input_fn: SafeInputFn,
-        fetch_sites_fn: FetchSitesFn,
-        check_stop_fn: CheckStopFn,
-        dry_run: bool = False,
+        deps: SiteAutoUpgradeCoreDeps,
     ) -> None:
         """Initialize the configurator.
 
+        Issue #433 Phase B: signature reduced from 6 params to 2 via the
+        SiteAutoUpgradeCoreDeps dataclass.
+
         Args:
             org_id: Mist organization ID.
-            apisession: Authenticated mistapi session.
-            safe_input_fn: Function for safe user input (prompt, context) -> str.
-            fetch_sites_fn: Function to fetch all sites for an org (org_id) -> list.
-            check_stop_fn: Function to check for stop signal () -> bool.
-            dry_run: If True, skip actual API calls.
+            deps: Bundle of injected dependencies (apisession, safe_input_fn,
+                fetch_sites_fn, check_stop_fn, dry_run).
         """
-        self.org_id = org_id
-        self.apisession = apisession
-        self.safe_input_fn = safe_input_fn
-        self.fetch_sites_fn = fetch_sites_fn
-        self.check_stop_fn = check_stop_fn
-        self.dry_run = dry_run
+        self.org_id = org_id  # Org id for every API call this configurator makes.
+        self.apisession = deps.apisession  # Authenticated mistapi session.
+        self.safe_input_fn = deps.safe_input_fn  # Prompt helper with EOF + interrupt safety.
+        self.fetch_sites_fn = deps.fetch_sites_fn  # Callable returning all sites for an org.
+        self.check_stop_fn = deps.check_stop_fn  # Predicate that signals operator stop request.
+        self.dry_run = deps.dry_run  # When True, skip API mutations; only print planned changes.
         self.all_sites: list[dict[str, Any]] = []
         self.selected_sites: list[dict[str, Any]] = []
         self.available_versions: list[Any] = []
@@ -73,14 +77,16 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
         self.msp_all_sites_mode = False
         self.org_name = ""
         self.shared_versions: dict[str, str] | None = None
-        logging.debug(f"SiteAutoUpgradeConfigurator initialized: org_id={org_id}, dry_run={dry_run}")
+        logging.debug(  # Action-log post-init state.
+            "SiteAutoUpgradeConfigurator initialized: org_id=%s, dry_run=%s", org_id, deps.dry_run
+        )
 
     # ------------------------------------------------------------------
     # Static entry point
     # ------------------------------------------------------------------
 
     @staticmethod
-    def execute(
+    def execute(  # noqa: PLR0913, STRUCT-PARAMS  # External entrypoint signature kept stable for MistHelper.py callers; deps dataclass refactor would break public API.
         apisession: Any,
         msp_privileges: list[Any],
         safe_input_fn: SafeInputFn,
@@ -104,34 +110,31 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
             select_msps_fn: Function to select MSPs (for MSP mode).
             select_orgs_fn: Function to select orgs from MSP (for MSP mode).
         """
-        logging.debug("Entering SiteAutoUpgradeConfigurator.execute()")
-        logging.info("Starting Site Auto-Upgrade Configuration workflow")
+        logging.debug("Entering SiteAutoUpgradeConfigurator.execute()")  # Action-log entry.
+        logging.info("Starting Site Auto-Upgrade Configuration workflow")  # Action-log start.
 
-        if dry_run:
+        if dry_run:  # When the operator chose dry-run, advertise it loudly so they aren't surprised.
             logging.info("DRY-RUN MODE enabled - no API calls will be made")
 
-        if msp_privileges and len(msp_privileges) > 0:
-            _handle_msp_mode(
-                apisession=apisession,
-                msp_privileges=msp_privileges,
-                safe_input_fn=safe_input_fn,
-                get_org_id_fn=get_org_id_fn,
-                fetch_sites_fn=fetch_sites_fn,
-                check_stop_fn=check_stop_fn,
-                dry_run=dry_run,
-                select_msps_fn=select_msps_fn,
-                select_orgs_fn=select_orgs_fn,
-            )
-            return
-
-        _run_single_org(
+        # Issue #433 Phase B: bundle the 5 always-needed DI params into one dataclass so the
+        # downstream entry points (_handle_msp_mode, _run_single_org) stay within the 5-Item Rule.
+        core_deps = SiteAutoUpgradeCoreDeps(
             apisession=apisession,
             safe_input_fn=safe_input_fn,
-            get_org_id_fn=get_org_id_fn,
             fetch_sites_fn=fetch_sites_fn,
             check_stop_fn=check_stop_fn,
             dry_run=dry_run,
         )
+
+        if msp_privileges and len(msp_privileges) > 0:  # MSP-licensed account: offer the multi-org workflow.
+            msp_deps = SiteAutoUpgradeMspDeps(  # MSP-only extras bundled separately.
+                select_msps_fn=select_msps_fn,
+                select_orgs_fn=select_orgs_fn,
+            )
+            _handle_msp_mode(core_deps, msp_deps, get_org_id_fn)  # 3 params: core + MSP extras + single-org fallback.
+            return  # MSP mode handles the rest of the workflow internally.
+
+        _run_single_org(core_deps, get_org_id_fn)  # Non-MSP account: jump straight to single-org workflow.
 
     # ------------------------------------------------------------------
     # MSP mode helpers
@@ -139,7 +142,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
 
     def run_msp_mode(self) -> tuple[bool, int]:
         """Execute configuration workflow for MSP mode (all sites)."""
-        logging.debug(f"Entering run_msp_mode() for org: {self.org_name}")
+        logging.debug("Entering run_msp_mode() for org: %s", self.org_name)
 
         if not self._step1_fetch_sites():
             return (False, 0)
@@ -159,7 +162,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
                 return (False, 0)
 
         success, count = self._apply_auto_upgrade_config()
-        logging.info(f"MSP mode complete for {self.org_name}: success={success}, sites={count}")
+        logging.info("MSP mode complete for %s: success=%s, sites=%s", self.org_name, success, count)
         return (success, count)
 
     def _auto_select_versions(self) -> bool:
@@ -177,7 +180,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
             self.custom_versions[model] = selected
             print(f"    {model}: {self.custom_versions[model]}")
 
-        logging.info(f"Auto-selected versions for {len(self.custom_versions)} model(s)")
+        logging.info("Auto-selected versions for %s model(s)", len(self.custom_versions))
         return bool(self.custom_versions)
 
     def _apply_auto_upgrade_config(self) -> tuple[bool, int]:
@@ -220,7 +223,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
 
     def run(self) -> None:
         """Execute the interactive configuration workflow."""
-        logging.debug(f"Entering run() for org_id={self.org_id}")
+        logging.debug("Entering run() for org_id=%s", self.org_id)
         _print_intro_header(self.dry_run)
 
         if not self._step1_fetch_sites():
@@ -254,7 +257,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
             return True
         except Exception as exc:
             print(f"  X Error fetching sites: {exc}")
-            logging.error(f"SiteAutoUpgradeConfigurator: Failed to fetch sites: {exc}")
+            logging.error("SiteAutoUpgradeConfigurator: Failed to fetch sites: %s", exc)
             return False
 
     # ------------------------------------------------------------------
@@ -336,7 +339,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
                 count = len(self.current_site_versions)
                 print(f"  + Current auto-upgrade settings found ({count} model(s) configured)")
         except Exception as exc:
-            logging.debug(f"Could not fetch current site settings: {exc}")
+            logging.debug("Could not fetch current site settings: %s", exc)
 
     def _select_from_list(self) -> bool:
         """Display numbered list and allow index/range selection."""
@@ -405,7 +408,7 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
             return True
         except Exception as exc:
             print(f"  X Error fetching firmware versions: {exc}")
-            logging.error(f"SiteAutoUpgradeConfigurator: Failed to fetch versions: {exc}")
+            logging.error("SiteAutoUpgradeConfigurator: Failed to fetch versions: %s", exc)
             return False
 
     def _build_model_version_map(self) -> None:
@@ -454,12 +457,14 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
 
             _apply_family_selection(
                 choice,
-                family,
-                models,
-                sorted_versions,
-                current_version,
-                self.model_version_map,
                 self.custom_versions,
+                FamilySelectionContext(  # Issue #433 Phase B: 5-field bundle for the prompt inputs.
+                    family=family,
+                    models=models,
+                    sorted_versions=sorted_versions,
+                    current_version=current_version,
+                    model_version_map=self.model_version_map,
+                ),
             )
 
         if not self.custom_versions:
@@ -481,9 +486,11 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
         print("\n  Configure when auto-upgrades should occur.\n")
 
         self.schedule["day_of_week"] = _prompt_day_of_week(self.safe_input_fn)
-        self.schedule["time_of_day"] = _prompt_time_of_day(
-            self.safe_input_fn,
-            self._parse_time_input,
+        self.schedule["time_of_day"] = (
+            _prompt_time_of_day(  # Issue #433 Phase B: was self._parse_time_input; canonical helper inlined.
+                self.safe_input_fn,
+                parse_time_input,
+            )
         )
 
         day_display = self.schedule.get("day_of_week", "daily")
@@ -494,14 +501,9 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
             time_display = "any time"
         print(f"  + Schedule: {day_display} at {time_display}")
 
-    @staticmethod
-    def _parse_time_input(time_input: str) -> str:
-        """Parse various time formats to HH:MM for the API.
-
-        Accepts: 02:00, 2:00, 14:00, 2AM, 2PM, 02:00AM, etc.
-        Returns: HH:MM format string, or 'any' for any time.
-        """
-        return parse_time_input(time_input)
+    # Issue #433 Phase B: _parse_time_input static method removed (ARCH-DELEGATE).
+    # The 1-line forwarder to module-level parse_time_input is replaced by direct
+    # callers using parse_time_input() at the call site; see L486 in this file.
 
     # ------------------------------------------------------------------
     # Step 6: Confirm and apply
@@ -551,77 +553,57 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
 
 
 def _handle_msp_mode(
-    apisession: Any,
-    msp_privileges: list[Any],
-    safe_input_fn: SafeInputFn,
+    core: SiteAutoUpgradeCoreDeps,
+    msp: SiteAutoUpgradeMspDeps,
     get_org_id_fn: GetOrgIdFn,
-    fetch_sites_fn: FetchSitesFn,
-    check_stop_fn: CheckStopFn,
-    dry_run: bool,
-    select_msps_fn: SelectMspsFn | None,
-    select_orgs_fn: SelectOrgsFromMspFn | None,
 ) -> None:
-    """Handle MSP privilege detection and mode selection."""
-    logging.debug(f"MSP privileges detected: {len(msp_privileges)} MSP(s)")
-    print("\n" + "=" * 70)
+    """Handle MSP privilege detection and mode selection.
+
+    Issue #433 Phase B: signature reduced from 9 params to 3 via the
+    SiteAutoUpgradeCoreDeps + SiteAutoUpgradeMspDeps dataclasses.
+    """
+    logging.debug("Entering _handle_msp_mode")  # Action-log entry.
+    print("\n" + "=" * 70)  # Visual banner -- ASCII only per logging standards.
     print("  SITE AUTO-UPGRADE CONFIGURATION")
     print("=" * 70 + "\n")
-    if dry_run:
+    if core.dry_run:  # Dry-run banner only when relevant so non-dry runs aren't cluttered.
         print("  >> DRY-RUN MODE: No actual changes will be made <<\n")
     print("  MSP privileges detected. Select operation mode:\n")
     print("    [1] Single Organization - configure auto-upgrade for current org")
     print("    [2] MSP Multi-Org - configure ALL sites across multiple orgs\n")
 
     try:
-        mode = safe_input_fn("  Select mode (1-2) [1]: ", "msp_mode_select").strip() or "1"
-    except SystemExit:
+        mode = core.safe_input_fn("  Select mode (1-2) [1]: ", "msp_mode_select").strip() or "1"
+    except SystemExit:  # safe_input raises SystemExit on container/SSH EOF -- bail cleanly.
         return
 
-    if mode == "2":
-        logging.info("User selected MSP Multi-Org mode")
-        _execute_msp_mode(
-            apisession=apisession,
-            safe_input_fn=safe_input_fn,
-            fetch_sites_fn=fetch_sites_fn,
-            check_stop_fn=check_stop_fn,
-            dry_run=dry_run,
-            select_msps_fn=select_msps_fn,
-            select_orgs_fn=select_orgs_fn,
-        )
-        return
+    if mode == "2":  # Operator chose multi-org MSP workflow.
+        logging.info("User selected MSP Multi-Org mode")  # Action-log the operator's choice.
+        _execute_msp_mode(core, msp)  # 2-param dispatcher (dataclass + MSP-extras dataclass).
+        return  # MSP mode owns the rest of the workflow.
 
-    _run_single_org(
-        apisession=apisession,
-        safe_input_fn=safe_input_fn,
-        get_org_id_fn=get_org_id_fn,
-        fetch_sites_fn=fetch_sites_fn,
-        check_stop_fn=check_stop_fn,
-        dry_run=dry_run,
-    )
+    _run_single_org(core, get_org_id_fn)  # Fall back to single-org workflow with 2 params.
 
 
 def _run_single_org(
-    apisession: Any,
-    safe_input_fn: SafeInputFn,
+    core: SiteAutoUpgradeCoreDeps,
     get_org_id_fn: GetOrgIdFn,
-    fetch_sites_fn: FetchSitesFn,
-    check_stop_fn: CheckStopFn,
-    dry_run: bool,
 ) -> None:
-    """Run single-org configuration workflow."""
-    org_id = get_org_id_fn()
-    if not org_id:
+    """Run single-org configuration workflow.
+
+    Issue #433 Phase B: signature reduced from 6 params to 2 via the
+    SiteAutoUpgradeCoreDeps dataclass.
+    """
+    logging.debug("Entering _run_single_org")  # Action-log entry.
+    org_id = get_org_id_fn()  # Prompt operator (or read cache) for the target org id.
+    if not org_id:  # No org id means the operator cancelled or no orgs are available.
         print("  X No organization selected")
-        return
-    configurator = SiteAutoUpgradeConfigurator(
+        return  # Bail out cleanly -- nothing to do.
+    configurator = SiteAutoUpgradeConfigurator(  # Build the per-org workflow class (issue #433: deps via dataclass).
         org_id=org_id,
-        apisession=apisession,
-        safe_input_fn=safe_input_fn,
-        fetch_sites_fn=fetch_sites_fn,
-        check_stop_fn=check_stop_fn,
-        dry_run=dry_run,
+        deps=core,
     )
-    configurator.run()
+    configurator.run()  # Run the 6-step interactive workflow inside the configurator.
 
 
 def _msp_select_entities(
@@ -694,131 +676,117 @@ def _msp_get_firmware_config(
 
 
 def _msp_confirm_and_apply(
+    core: SiteAutoUpgradeCoreDeps,
     selected_orgs: list[dict[str, Any]],
-    apisession: Any,
-    safe_input_fn: SafeInputFn,
-    fetch_sites_fn: FetchSitesFn,
-    check_stop_fn: CheckStopFn,
-    dry_run: bool,
     shared_schedule: dict[str, str],
     shared_versions: dict[str, str] | None,
 ) -> None:
-    """Display summary, confirm, and apply MSP configuration."""
-    _display_msp_pre_apply_summary(
+    """Display summary, confirm, and apply MSP configuration.
+
+    Issue #433 Phase B: signature reduced from 8 params to 4 via the
+    SiteAutoUpgradeCoreDeps dataclass.
+    """
+    logging.debug("Entering _msp_confirm_and_apply")  # Action-log entry.
+    _display_msp_pre_apply_summary(  # Show operator the planned changes before they pull the trigger.
         shared_schedule,
         shared_versions,
         selected_orgs,
     )
 
     try:
-        final_confirm = (
-            safe_input_fn(
+        final_confirm = (  # Read the Y/n confirmation; defaults to Y on bare Enter for the common case.
+            core.safe_input_fn(
                 "  Apply this configuration? (Y/n): ",
                 "msp_final_confirm",
             )
             .strip()
             .lower()
         )
-    except SystemExit:
+    except SystemExit:  # safe_input raises SystemExit on container/SSH EOF -- bail cleanly.
         return
 
-    if final_confirm in ["n", "no"]:
+    if final_confirm in ["n", "no"]:  # Explicit no -> abort without making changes.
         print("  Cancelled.")
         return
 
-    print("\n" + "-" * 70)
+    print("\n" + "-" * 70)  # Visual step separator -- ASCII only per logging standards.
     print("  STEP 6: Applying Configuration")
     print("-" * 70)
 
-    all_results = _apply_to_all_orgs(
-        selected_orgs=selected_orgs,
-        apisession=apisession,
-        safe_input_fn=safe_input_fn,
-        fetch_sites_fn=fetch_sites_fn,
-        check_stop_fn=check_stop_fn,
-        dry_run=dry_run,
-        shared_schedule=shared_schedule,
-        shared_versions=shared_versions,
-    )
-    _print_msp_summary(all_results, dry_run)
+    all_results = _apply_to_all_orgs(core, selected_orgs, shared_schedule, shared_versions)  # 4-param.
+    _print_msp_summary(all_results, core.dry_run)  # Final results table for the operator.
 
 
 def _execute_msp_mode(
-    apisession: Any,
-    safe_input_fn: SafeInputFn,
-    fetch_sites_fn: FetchSitesFn,
-    check_stop_fn: CheckStopFn,
-    dry_run: bool,
-    select_msps_fn: SelectMspsFn | None,
-    select_orgs_fn: SelectOrgsFromMspFn | None,
+    core: SiteAutoUpgradeCoreDeps,
+    msp: SiteAutoUpgradeMspDeps,
 ) -> None:
-    """Execute MSP multi-organization auto-upgrade configuration."""
-    logging.debug("Entering _execute_msp_mode()")
+    """Execute MSP multi-organization auto-upgrade configuration.
 
-    if not select_msps_fn or not select_orgs_fn:
+    Issue #433 Phase B: signature reduced from 7 params to 2 via the
+    SiteAutoUpgradeCoreDeps + SiteAutoUpgradeMspDeps dataclasses.
+    """
+    logging.debug("Entering _execute_msp_mode")  # Action-log entry.
+
+    if not msp.select_msps_fn or not msp.select_orgs_fn:  # MSP DI is optional at call boundary; guard here.
         print("  X MSP functions not available")
-        return
+        return  # Bail out -- caller did not wire in MSP selection functions.
 
-    selected_orgs = _msp_select_entities(select_msps_fn, select_orgs_fn)
-    if not selected_orgs:
-        return
+    selected_orgs = _msp_select_entities(msp.select_msps_fn, msp.select_orgs_fn)  # Step 1 + 2: pick MSPs and orgs.
+    if not selected_orgs:  # Operator cancelled the selection.
+        return  # Cleanly exit -- nothing to apply.
 
-    shared_versions = _msp_get_firmware_config(
-        apisession,
+    shared_versions = _msp_get_firmware_config(  # Step 3: pick firmware versions to apply across all orgs.
+        core.apisession,
         selected_orgs,
-        safe_input_fn,
+        core.safe_input_fn,
     )
-    if shared_versions is None:
-        return
+    if shared_versions is None:  # None means the operator cancelled the firmware-version prompt.
+        return  # Cleanly exit -- nothing to apply.
 
-    print("\n" + "-" * 70)
+    print("\n" + "-" * 70)  # Visual step separator -- ASCII only per logging standards.
     print("  STEP 4: Schedule Configuration")
     print("-" * 70 + "\n")
-    shared_schedule = _get_shared_schedule(safe_input_fn)
-    if shared_schedule is None:
-        return
+    shared_schedule = _get_shared_schedule(core.safe_input_fn)  # Step 4 + 5: pick day/time for all orgs.
+    if shared_schedule is None:  # Operator cancelled the schedule prompt.
+        return  # Cleanly exit -- nothing to apply.
 
-    _msp_confirm_and_apply(
+    _msp_confirm_and_apply(  # Step 6: confirm + apply across every org (4-param signature).
+        core,
         selected_orgs,
-        apisession,
-        safe_input_fn,
-        fetch_sites_fn,
-        check_stop_fn,
-        dry_run,
         shared_schedule,
         shared_versions if shared_versions else None,
     )
 
 
 def _apply_to_all_orgs(
+    core: SiteAutoUpgradeCoreDeps,
     selected_orgs: list[dict[str, Any]],
-    apisession: Any,
-    safe_input_fn: SafeInputFn,
-    fetch_sites_fn: FetchSitesFn,
-    check_stop_fn: CheckStopFn,
-    dry_run: bool,
     shared_schedule: dict[str, Any],
     shared_versions: dict[str, str] | None,
 ) -> list[dict[str, Any]]:
-    """Apply configuration to all selected organizations."""
-    all_results: list[dict[str, Any]] = []
-    for idx, org_info in enumerate(selected_orgs, start=1):
-        org_id = org_info["id"]
-        org_name = org_info["name"]
+    """Apply configuration to all selected organizations.
 
-        print(f"\n{'=' * 70}")
+    Issue #433 Phase B: signature reduced from 8 params to 4 via the
+    SiteAutoUpgradeCoreDeps dataclass.
+    """
+    logging.debug("Entering _apply_to_all_orgs for %d org(s)", len(selected_orgs))  # Action-log entry.
+    all_results: list[dict[str, Any]] = []  # Accumulate one result dict per org.
+    for idx, org_info in enumerate(selected_orgs, start=1):  # 1-based index for human-readable progress.
+        org_id = org_info["id"]  # Pull the org id for the configurator + log lines.
+        org_name = org_info["name"]  # Pull the org name purely for operator-visible logs.
+
+        print(f"\n{'=' * 70}")  # Visual per-org separator -- ASCII only per logging standards.
         print(f"  ORGANIZATION {idx}/{len(selected_orgs)}: {org_name}")
         print("=" * 70)
 
-        configurator = SiteAutoUpgradeConfigurator(
-            org_id=org_id,
-            apisession=apisession,
-            safe_input_fn=safe_input_fn,
-            fetch_sites_fn=fetch_sites_fn,
-            check_stop_fn=check_stop_fn,
-            dry_run=dry_run,
+        configurator = (
+            SiteAutoUpgradeConfigurator(  # Build the per-org workflow class (issue #433: deps via dataclass).
+                org_id=org_id,
+                deps=core,
+            )
         )
-        configurator.msp_all_sites_mode = True
+        configurator.msp_all_sites_mode = True  # Skip the site-selection prompt in MSP mode.
         configurator.org_name = org_name
         configurator.schedule = shared_schedule.copy()
         configurator.shared_versions = shared_versions
@@ -959,29 +927,30 @@ def _display_family_versions(
 
 def _apply_family_selection(
     choice: str,
-    family: str,
-    models: list[str],
-    sorted_versions: list[str],
-    current_version: str | None,
-    model_version_map: dict[str, list[Any]],
     custom_versions: dict[str, str],
+    ctx: FamilySelectionContext,
 ) -> None:
-    """Apply user's version selection for a model family."""
-    if choice and choice.isdigit():
-        idx = int(choice) - 1
-        if 0 <= idx < len(sorted_versions):
-            selected = sorted_versions[idx]
-            for model in models:
-                model_versions = _extract_version_strings(
-                    model_version_map.get(model, []),
+    """Apply user's version selection for a model family.
+
+    Issue #433 Phase B: signature reduced from 7 params to 3 via the
+    FamilySelectionContext dataclass.
+    """
+    logging.debug("Entering _apply_family_selection for family %s", ctx.family)  # Action-log entry.
+    if choice and choice.isdigit():  # Operator typed a number -> they picked a specific version.
+        idx = int(choice) - 1  # Translate from 1-based display to 0-based list index.
+        if 0 <= idx < len(ctx.sorted_versions):  # Guard the index against off-by-one mistakes.
+            selected = ctx.sorted_versions[idx]  # Pull the chosen version string.
+            for model in ctx.models:  # Apply the same chosen version across every model in this family.
+                model_versions = _extract_version_strings(  # Pull the per-model version list to validate availability.
+                    ctx.model_version_map.get(model, []),
                 )
-                if selected in model_versions:
-                    custom_versions[model] = selected
-            print(f"    + Set {family} models to {selected}")
-    elif not choice and current_version:
-        print(f"    + Keeping {family} models at {current_version}")
-    elif not choice:
-        print(f"    - Skipped {family} family")
+                if selected in model_versions:  # Only set when the chosen version actually exists for this model.
+                    custom_versions[model] = selected  # Record the selection in the operator-mutable dict.
+            print(f"    + Set {ctx.family} models to {selected}")  # Confirm to operator with the chosen version.
+    elif not choice and ctx.current_version:  # Bare Enter + currently-set version -> keep current.
+        print(f"    + Keeping {ctx.family} models at {ctx.current_version}")
+    elif not choice:  # Bare Enter + no current version -> skip this family entirely.
+        print(f"    - Skipped {ctx.family} family")
 
 
 def _extract_version_strings(entries: list[Any]) -> list[str]:
@@ -1181,7 +1150,7 @@ def _apply_settings_to_sites(
             successful += 1
         except Exception as exc:
             print(f"    [FAIL] {site_name}: {exc}")
-            logging.error(f"Failed to configure auto-upgrade for site {site_name}: {exc}")
+            logging.error("Failed to configure auto-upgrade for site %s: %s", site_name, exc)
             failed += 1
     return (successful, failed)
 

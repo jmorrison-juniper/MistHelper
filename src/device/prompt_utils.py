@@ -138,8 +138,8 @@ class PromptNetworkDeviceUtils:
 
         except Exception as error:  # Catch all exceptions so a single failure does not crash the capture flow
             print(f"\n! Error fetching APs: {error}")
-            logging.error(  # Log full traceback so operators can diagnose API failures
-                "Exception in PromptNetworkDeviceUtils.select_ap_mac: %s", error, exc_info=True
+            logging.exception(  # Log full traceback so operators can diagnose API failures
+                "Exception in PromptNetworkDeviceUtils.select_ap_mac: %s", error
             )
             return None
 
@@ -214,7 +214,7 @@ class PromptNetworkDeviceUtils:
 
         except Exception as error:  # Broad catch keeps capture flow alive on API failures
             print(f"\n! Error fetching gateways: {error}")
-            logging.error("Exception in PromptNetworkDeviceUtils.select_gateway_mac: %s", error, exc_info=True)
+            logging.exception("Exception in PromptNetworkDeviceUtils.select_gateway_mac: %s", error)
             return None
 
     def select_switch_mac(self, site_id: str) -> str | None:
@@ -288,7 +288,7 @@ class PromptNetworkDeviceUtils:
 
         except Exception as error:  # Broad catch keeps capture flow alive on API failures
             print(f"\n! Error fetching switches: {error}")
-            logging.error("Exception in PromptNetworkDeviceUtils.select_switch_mac: %s", error, exc_info=True)
+            logging.exception("Exception in PromptNetworkDeviceUtils.select_switch_mac: %s", error)
             return None
 
     def select_ports_from_device(  # type: ignore[no-untyped-def]  # noqa: C901, PLR0912, PLR0915
@@ -379,7 +379,7 @@ class PromptNetworkDeviceUtils:
 
         except Exception as error:  # Catch all so one bad device doesn't abort the whole capture flow
             print(f"\n! Error fetching port information: {error}")
-            logging.error("Exception in PromptNetworkDeviceUtils.select_ports_from_device: %s", error, exc_info=True)
+            logging.exception("Exception in PromptNetworkDeviceUtils.select_ports_from_device: %s", error)
             return None
 
     # ------------------------------------------------------------------

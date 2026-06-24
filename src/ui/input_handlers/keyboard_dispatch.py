@@ -33,8 +33,12 @@ class KeyboardDispatchTable:
         if tui.debug_mode:  # Trace key + state for debugging
             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
             logging.debug(
-                f"TUI_DEBUG: [{ts}] Key pressed: {key!r} "
-                f"(state={tui.execution_state}, path={tui.current_path}, selection={tui.current_selection})"
+                "TUI_DEBUG: [%s] Key pressed: %r (state=%s, path=%s, selection=%s)",
+                ts,
+                key,
+                tui.execution_state,
+                tui.current_path,
+                tui.current_selection,
             )
         if tui.execution_state == "viewing_results":  # Results-grid mode dispatch
             return self._dispatch_with(self._results_handlers, key, "viewing_results")
@@ -49,7 +53,7 @@ class KeyboardDispatchTable:
         handler = table.get(key)  # O(1) dispatch lookup
         if handler is None:  # Unknown key for this mode
             if self._tui.debug_mode:
-                logging.debug(f"TUI_DEBUG: Unhandled key in {mode} mode: {key!r}")
+                logging.debug("TUI_DEBUG: Unhandled key in %s mode: %r", mode, key)
             return
         logging.info("TUI: dispatching key %s in %s mode", key, mode)  # Action log: before handler
         handler()  # Run bound handler

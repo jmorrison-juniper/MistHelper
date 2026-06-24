@@ -104,13 +104,18 @@ class SLEMetricsService:
                     all_sle_data.append(aggregated_result)  # Accumulate the aggregated record
                     retrieved += 1  # Count this successful category fetch
                     logging.debug(
-                        f"Successfully retrieved sites SLE data for metric analysis: {metric} with SLE: {sle_category} ({len(sites_sle_data)} sites)"  # noqa: E501
+                        "Successfully retrieved sites SLE data for metric analysis: %s with SLE: %s (%s sites)",
+                        metric,
+                        sle_category,
+                        len(sites_sle_data),
                     )  # Trace success with site count
                 else:  # No sites returned for this category
-                    logging.debug(f"No sites SLE data available for metric: {metric} with SLE: {sle_category}")  # Trace
+                    logging.debug(
+                        "No sites SLE data available for metric: %s with SLE: %s", metric, sle_category
+                    )  # Trace
             except Exception as sites_error:  # Category-level API failure - log and continue
                 logging.debug(
-                    f"Failed to get sites SLE data for metric '{metric}' with SLE '{sle_category}': {sites_error}"  # noqa: E501
+                    "Failed to get sites SLE data for metric '%s' with SLE '%s': %s", metric, sle_category, sites_error
                 )  # Trace the per-category failure
                 continue  # Skip to the next category
         return retrieved  # Total successful category fetches for this metric
@@ -129,9 +134,9 @@ class SLEMetricsService:
             sle_data["org_id"] = org_id  # Tag the owning org
             sle_data["data_source"] = "org_sle_specialized"  # Tag the data source
             all_sle_data.append(sle_data)  # Accumulate the specialized record
-            logging.debug(f"Successfully retrieved specialized SLE data for metric: {metric}")  # Trace success
+            logging.debug("Successfully retrieved specialized SLE data for metric: %s", metric)  # Trace success
             return 1, 0  # One retrieved, none failed
-        logging.debug(f"No data available for specialized SLE metric: {metric}")  # Trace empty result
+        logging.debug("No data available for specialized SLE metric: %s", metric)  # Trace empty result
         return 0, 1  # None retrieved, one failed (no data)
 
     @classmethod
@@ -165,7 +170,7 @@ class SLEMetricsService:
                 failed += metric_failed  # Add this metric's failures
             except Exception as metric_error:  # Unexpected metric-level failure
                 failed += 1  # Count the failed metric
-                logging.debug(f"Failed to get specialized SLE data for metric '{metric}': {metric_error}")  # Trace
+                logging.debug("Failed to get specialized SLE data for metric '%s': %s", metric, metric_error)  # Trace
             finally:  # Always advance progress for this metric, success or failure
                 progress.tick(metric)  # One work unit done
         return retrieved, failed  # Cumulative specialized results
@@ -190,10 +195,10 @@ class SLEMetricsService:
             }  # Build the org-aggregated record (summary always calculated when sites exist)
             all_sle_data.append(org_aggregated)  # Accumulate the aggregated record
             logging.debug(
-                f"Successfully aggregated SLE data for {len(sites_sle_data)} sites in category: {sle_category}"  # noqa: E501
+                "Successfully aggregated SLE data for %s sites in category: %s", len(sites_sle_data), sle_category
             )  # Trace success with site count
             return 1, 0  # One retrieved, none failed
-        logging.debug(f"No sites SLE data available for category: {sle_category}")  # Trace empty category
+        logging.debug("No sites SLE data available for category: %s", sle_category)  # Trace empty category
         return 0, 1  # None retrieved, one failed (no data)
 
     @classmethod
@@ -217,7 +222,7 @@ class SLEMetricsService:
                 failed += category_failed  # Add this category's failures
             except Exception as category_error:  # Unexpected category-level failure
                 failed += 1  # Count the failed category
-                logging.debug(f"Failed to get SLE data for category '{sle_category}': {category_error}")  # Trace
+                logging.debug("Failed to get SLE data for category '%s': %s", sle_category, category_error)  # Trace
             finally:  # Always advance progress for this category, success or failure
                 progress.tick(sle_category)  # One work unit done
         return retrieved, failed  # Cumulative category results
@@ -231,7 +236,9 @@ class SLEMetricsService:
             deps.DataExporter.write_with_format_selection(processed, "OrgSLEMetrics.csv")  # Write the export file
             print(f"! {metrics_retrieved} organization SLE data sources exported to OrgSLEMetrics.csv")  # User summary
             logging.info(
-                f"Exported {len(processed)} org SLE data points from {metrics_retrieved} sources to OrgSLEMetrics.csv"  # noqa: E501
+                "Exported %s org SLE data points from %s sources to OrgSLEMetrics.csv",
+                len(processed),
+                metrics_retrieved,
             )  # Trace export volume
         else:  # No data collected from any source
             print("! 0 organization SLE metrics exported to OrgSLEMetrics.csv (no data available)")  # User summary
@@ -270,12 +277,14 @@ class SLEMetricsService:
             metrics_failed = specialized_failed + category_failed  # Total failed fetches
 
             print(f"! SLE data retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")  # Summary
-            logging.info(f"Org SLE data: {metrics_retrieved} retrieved successfully, {metrics_failed} failed")  # Trace
+            logging.info(
+                "Org SLE data: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed
+            )  # Trace
 
             cls._export_results(deps, all_sle_data, metrics_retrieved)  # Flatten + export (or write empty)
 
         except Exception as exception:  # Any unexpected top-level failure still writes an empty export
             print(f"! Error exporting organization SLE metrics: {exception}")  # User-facing error
-            logging.error(f"Failed to export org SLE metrics: {exception}")  # Trace the failure
+            logging.error("Failed to export org SLE metrics: %s", exception)  # Trace the failure
             deps.DataExporter.write_with_format_selection([], "OrgSLEMetrics.csv")  # Write empty export on failure
         progress.complete()  # Always emit the progress-complete event

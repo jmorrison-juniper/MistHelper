@@ -49,8 +49,8 @@ class WifiClientsExporter:
 
             self._finalize_export(enriched, clients, sessions, site_name)  # Flatten + escape + write final CSV.
         except Exception as exception:
-            logging.error(  # Log failure with traceback for root-cause analysis.
-                "! Failed to fetch WiFi data for site %s: %s", site_id, exception, exc_info=True
+            logging.exception(  # Log failure with traceback for root-cause analysis.
+                "! Failed to fetch WiFi data for site %s: %s", site_id, exception
             )
             print(f"! Failed to fetch WiFi data: {exception}")  # Preserve legacy operator-facing error output.
 

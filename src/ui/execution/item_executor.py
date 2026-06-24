@@ -50,7 +50,7 @@ class ItemExecutor:
         except Exception as error:  # Any other failure -> log + display
             tui.last_error = str(error)
             print(f"\n[ERROR] {error}")
-            logging.error("TUI: Execution of %s failed - %s", func_name, error, exc_info=True)
+            logging.exception("TUI: Execution of %s failed - %s", func_name, error)
         finally:
             self._wait_and_restore_raw()  # Resume raw mode for TUI
         logging.debug("TUI: prompt-exec done for %s", func_name)  # Action log after run

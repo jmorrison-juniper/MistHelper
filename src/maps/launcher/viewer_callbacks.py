@@ -188,8 +188,9 @@ class MapViewerCallbacks:
 
         if button_id == "delete-btn":  # User clicked the red "Delete map" button
             logging.warning(  # Audit log captures who/what is being deleted
-                f"Delete panel opened for map '{current_map_name}' "
-                f"(ID: {config.get('map_id') if config else 'unknown'})"
+                "Delete panel opened for map '%s' (ID: %s)",
+                current_map_name,
+                config.get("map_id") if config else "unknown",
             )
             return (
                 {  # Show the panel (display: block) with destructive-red styling
@@ -230,7 +231,7 @@ class MapViewerCallbacks:
         button_id = ctx.triggered[0]["prop_id"].split(".")[0]  # Component id that fired
 
         if button_id == "clone-btn":  # User clicked the green "Clone map" button
-            logging.info(f"Clone panel opened for map {self._state.map_id}")  # Audit trail
+            logging.info("Clone panel opened for map %s", self._state.map_id)  # Audit trail
             return {  # Show the panel (display: block) with success-green styling
                 "display": "block",
                 "padding": "12px 20px",
@@ -270,19 +271,19 @@ class MapViewerCallbacks:
                 "Robot Auto-Zone: AI-powered zone detection"
                 " - analyzes walls and creates location zones automatically"
             )
-            logging.info(f"Utilities: Auto-Zone requested for map {map_id}")  # Audit trail
+            logging.info("Utilities: Auto-Zone requested for map %s", map_id)  # Audit trail
             return html.Span(msg, style={"color": "#667eea", "fontWeight": "bold"})  # Purple = info
         if button_id == "change-image-btn":  # Replace map image request
             msg = "! Change Image: Use Mist API updateSiteMapImage - feature requires file upload"
-            logging.info(f"Utilities: Change Image requested for map {map_id}")  # Audit trail
+            logging.info("Utilities: Change Image requested for map %s", map_id)  # Audit trail
             return html.Span(msg, style={"color": "#ff8800"})  # Orange = warning
         if button_id == "remove-image-btn":  # Destructive: remove map image
             msg = "! Remove Image: Use Mist API deleteSiteMapImage - DESTRUCTIVE operation"
-            logging.warning(f"Utilities: Remove Image requested for map {map_id}")  # Warning-level audit
+            logging.warning("Utilities: Remove Image requested for map %s", map_id)  # Warning-level audit
             return html.Span(msg, style={"color": "#ff4444"})  # Red = destructive
         if button_id == "rename-btn":  # Rename map request
             msg = "! Rename: Use Mist API updateSiteMap with new name - requires text input"
-            logging.info(f"Utilities: Rename requested for map {map_id}")  # Audit trail
+            logging.info("Utilities: Rename requested for map %s", map_id)  # Audit trail
             return html.Span(msg, style={"color": "#ff8800"})  # Orange = warning
 
         return ""  # Fallback: empty status
@@ -371,7 +372,7 @@ class MapViewerCallbacks:
             html.P("Click button again to exit mode", style={"fontSize": "10px", "color": "#888", "margin": "4px 0"}),
         ]
 
-        logging.info(f"Map origin updated to ({new_origin_x:.1f}, {new_origin_y:.1f})")  # Preserve audit log
+        logging.info("Map origin updated to (%.1f, %.1f)", new_origin_x, new_origin_y)  # Preserve audit log
         return status, current_fig
 
     @staticmethod
@@ -414,19 +415,19 @@ class MapViewerCallbacks:
         try:
             backup_path = self._backup_before_delete(config_site_id, config_map_id, config_map_name)  # Safety net
             logging.warning(  # Destructive-operation audit log
-                f"DESTRUCTIVE: Deleting map '{config_map_name}' (ID: {config_map_id}) from site {config_site_id}"
+                "DESTRUCTIVE: Deleting map '%s' (ID: %s) from site %s", config_map_name, config_map_id, config_site_id
             )
             delete_response = self._state.mistapi_ref.api.v1.sites.maps.deleteSiteMap(  # Mist API mutation
                 self._state.api_session_ref, site_id=config_site_id, map_id=config_map_id
             )
             return self._render_delete_result(delete_response, config_map_name, config_map_id, current_trigger)
         except Exception as delete_error:  # noqa: BLE001 - preserve original broad-except behavior
-            logging.error(f"Error deleting map: {delete_error}", exc_info=True)  # Capture stack trace
+            logging.exception("Error deleting map: %s", delete_error)  # Capture stack trace
             return html.Span(f"Error: {str(delete_error)[:50]}", style={"color": "#ff4444"}), no_update
 
     def _backup_before_delete(self, site_id: str | None, map_id: str | None, map_name: str) -> Any:
         """Run pre-delete backup and log the outcome; return backup path or None."""
-        logging.info(f"Creating safety backup before deleting map '{map_name}'")  # Audit trail
+        logging.info("Creating safety backup before deleting map '%s'", map_name)  # Audit trail
         backup_path = self._state.maps_manager_ref._backup_map_geometry(  # Call MapsManager helper
             api_session=self._state.api_session_ref,
             site_id=site_id,
@@ -435,7 +436,7 @@ class MapViewerCallbacks:
             backup_reason="pre_delete",
         )
         if backup_path:  # Backup succeeded
-            logging.info(f"Pre-delete backup saved: {backup_path}")  # Path for operator recovery
+            logging.info("Pre-delete backup saved: %s", backup_path)  # Path for operator recovery
         else:
             logging.warning("Pre-delete backup failed - proceeding with deletion anyway")  # Non-fatal warning
         return backup_path  # Return for caller (currently informational only)
@@ -451,7 +452,7 @@ class MapViewerCallbacks:
         from dash import html, no_update  # Local import keeps module import-light
 
         if delete_response.status_code in [200, 204]:  # Success status codes from Mist API
-            logging.info(f"Map '{map_name}' (ID: {map_id}) deleted successfully")  # Audit success
+            logging.info("Map '%s' (ID: %s) deleted successfully", map_name, map_id)  # Audit success
             new_cache_bust = {"trigger": current_trigger + 1}  # Increment to invalidate caches
             return (
                 html.Span(
@@ -460,7 +461,7 @@ class MapViewerCallbacks:
                 ),
                 new_cache_bust,
             )
-        logging.error(f"Map deletion failed: HTTP {delete_response.status_code}")  # Audit failure
+        logging.error("Map deletion failed: HTTP %s", delete_response.status_code)  # Audit failure
         return (
             html.Span(f"Delete failed: HTTP {delete_response.status_code}", style={"color": "#ff4444"}),
             no_update,
@@ -504,7 +505,7 @@ class MapViewerCallbacks:
 
         if current_zone.get("zone_id"):  # A zone is already selected
             logging.info(
-                f"Zone management: Edit zone {current_zone.get('zone_name')} requested for map {self._state.map_id}"
+                "Zone management: Edit zone %s requested for map %s", current_zone.get("zone_name"), self._state.map_id
             )
             return (
                 html.Div(
@@ -532,7 +533,9 @@ class MapViewerCallbacks:
 
         zone_id = current_zone.get("zone_id")  # Zone UUID for the API delete
         zone_name = current_zone.get("zone_name", "Unknown")  # Display name for logs
-        logging.warning(f"Zone management: Deleting zone {zone_name} (ID: {zone_id}) from site {self._state.site_id}")
+        logging.warning(
+            "Zone management: Deleting zone %s (ID: %s) from site %s", zone_name, zone_id, self._state.site_id
+        )
 
         try:
             delete_response = self._state.mistapi_ref.api.v1.sites.zones.deleteSiteZone(  # Mist API mutation
@@ -540,7 +543,7 @@ class MapViewerCallbacks:
             )
             return self._render_zone_delete_result(delete_response, zone_name, current_zone)
         except Exception as del_error:  # noqa: BLE001 - preserve original broad-except behavior
-            logging.error(f"Error deleting zone: {del_error}", exc_info=True)  # Capture stack trace
+            logging.exception("Error deleting zone: %s", del_error)  # Capture stack trace
             return (
                 html.Div(
                     [
@@ -561,7 +564,7 @@ class MapViewerCallbacks:
         from dash import html  # html widgets for status output
 
         if delete_response.status_code in [200, 204]:  # Success status codes from Mist API
-            logging.info(f"Zone {zone_name} deleted successfully")  # Audit success
+            logging.info("Zone %s deleted successfully", zone_name)  # Audit success
             return html.Div(
                 [
                     html.P(
@@ -574,7 +577,7 @@ class MapViewerCallbacks:
                 "zone_id": None,
                 "zone_name": None,
             }  # Clear selection after delete
-        logging.error(f"Zone deletion failed: HTTP {delete_response.status_code}")  # Audit failure
+        logging.error("Zone deletion failed: HTTP %s", delete_response.status_code)  # Audit failure
         return (
             html.Div(
                 [
@@ -711,7 +714,7 @@ class MapViewerCallbacks:
         map_id_local = config.get("map_id") if config else None  # Filter for clients/zones/walls on this map
 
         if not site_id_local:  # Missing site_id is a misconfiguration; skip refresh
-            logging.warning(f"Live data refresh: site_id is None, skipping refresh. Config: {config}")  # Audit
+            logging.warning("Live data refresh: site_id is None, skipping refresh. Config: %s", config)  # Audit
             return no_update, updated_refresh_times
         if not map_id_local:  # Missing map_id is a misconfiguration; skip refresh
             logging.warning("Live data refresh: map_id is None, skipping refresh")  # Audit
@@ -728,25 +731,27 @@ class MapViewerCallbacks:
             self._refresh_walls_silent(site_id_local, map_id_local, current_fig)  # Side-effect log of wall count
             timestamp = datetime.now().strftime("%H:%M:%S")  # Human-readable timestamp for audit log
             logging.info(  # Preserve original completion audit message
-                f"Live data refresh: Client positions updated at {timestamp} "
-                f"- WiFi: {len(wifi_data['x'])}, Wired: {len(wired_data['x'])}"
+                "Live data refresh: Client positions updated at %s - WiFi: %s, Wired: %s",
+                timestamp,
+                len(wifi_data["x"]),
+                len(wired_data["x"]),
             )
             return current_fig, updated_refresh_times
         except Exception as refresh_error:  # noqa: BLE001 - preserve original broad-except behavior
-            logging.error(f"Live data refresh: Error refreshing clients: {refresh_error}", exc_info=True)  # Audit
+            logging.exception("Live data refresh: Error refreshing clients: %s", refresh_error)  # Audit
             return no_update, updated_refresh_times
 
     def _fetch_fresh_clients(self, site_id: str, map_id: str) -> list[dict[str, Any]] | None:
         """Fetch site wireless clients and filter for this map (returns None on API error)."""
         logging.info(  # Preserve original "fetching" audit log
-            f"Live data refresh: Fetching client positions for map {map_id} (site: {site_id})"
+            "Live data refresh: Fetching client positions for map %s (site: %s)", map_id, site_id
         )
         clients_response = self._state.mistapi_ref.api.v1.sites.stats.listSiteWirelessClientsStats(  # Mist API call
             self._state.api_session_ref, site_id=site_id, limit=1000
         )
         if clients_response.status_code != 200:  # API error => caller short-circuits
             logging.warning(  # Audit failure with HTTP status
-                f"Live data refresh: Failed to fetch clients - HTTP {clients_response.status_code}"
+                "Live data refresh: Failed to fetch clients - HTTP %s", clients_response.status_code
             )
             return None
         all_clients = self._state.mistapi_ref.get_all(  # Pagination helper exhausts the result set
@@ -756,7 +761,7 @@ class MapViewerCallbacks:
             c for c in all_clients if c.get("map_id") == map_id and c.get("x") is not None and c.get("y") is not None
         ]
         logging.info(  # Preserve original "found" audit log
-            f"Live data refresh: Found {len(fresh_clients)} clients on map (total: {len(all_clients)})"
+            "Live data refresh: Found %s clients on map (total: %s)", len(fresh_clients), len(all_clients)
         )
         logging.debug("Live data refresh: client fetch complete count=%d", len(fresh_clients))  # Detail trace
         return fresh_clients
@@ -805,21 +810,21 @@ class MapViewerCallbacks:
                 trace["hovertext"] = wifi["hover"]  # Replace hover HTML
                 trace_updated = True  # At least the WiFi trace was updated
                 logging.info(  # Preserve original audit log
-                    f"Live data refresh: Updated WiFi clients trace with "
-                    f"{len(wifi['x'])} clients, coords sample: "
-                    f"{wifi['x'][:3] if wifi['x'] else 'empty'}"
+                    "Live data refresh: Updated WiFi clients trace with %s clients, coords sample: %s",
+                    len(wifi["x"]),
+                    wifi["x"][:3] if wifi["x"] else "empty",
                 )
             elif "wired client" in trace_name and "link" not in trace_name:  # Wired client trace
                 trace["x"] = wired["x"]  # Replace X coords
                 trace["y"] = wired["y"]  # Replace Y coords
                 trace["hovertext"] = wired["hover"]  # Replace hover HTML
                 logging.info(  # Preserve original audit log
-                    f"Live data refresh: Updated Wired clients trace with {len(wired['x'])} clients"
+                    "Live data refresh: Updated Wired clients trace with %s clients", len(wired["x"])
                 )
         if not trace_updated:  # Warn when neither trace was found
             logging.warning(  # Preserve original warning identifying the available trace names
-                f"Live data refresh: Could not find 'Clients' trace to update. "
-                f"Available traces: {[t.get('name', 'unnamed') for t in current_fig['data']]}"
+                "Live data refresh: Could not find 'Clients' trace to update. Available traces: %s",
+                [t.get("name", "unnamed") for t in current_fig["data"]],
             )
 
     @staticmethod
@@ -848,7 +853,7 @@ class MapViewerCallbacks:
                 }
             )
         current_fig["layout"]["annotations"] = new_annotations  # Commit the replacement
-        logging.info(f"Live data refresh: Updated {len(wifi['names'])} client label annotations")  # Audit
+        logging.info("Live data refresh: Updated %s client label annotations", len(wifi["names"]))  # Audit
 
     def _refresh_zones_silent(self, site_id: str, map_id: str) -> None:
         """Fetch zones for logging visibility only; swallow errors per original behavior."""
@@ -861,9 +866,9 @@ class MapViewerCallbacks:
                     response=zones_response, mist_session=self._state.api_session_ref
                 )
                 zones_on_map = [z for z in all_zones if z.get("map_id") == map_id]  # Filter to this map
-                logging.info(f"Live data refresh: Found {len(zones_on_map)} zones on map")  # Audit
+                logging.info("Live data refresh: Found %s zones on map", len(zones_on_map))  # Audit
         except Exception as zone_refresh_error:  # noqa: BLE001 - preserve original broad-except behavior
-            logging.warning(f"Live data refresh: Error refreshing zones: {zone_refresh_error}")  # Audit warning
+            logging.warning("Live data refresh: Error refreshing zones: %s", zone_refresh_error)  # Audit warning
 
     def _refresh_walls_silent(self, site_id: str, map_id: str, current_fig: dict[str, Any]) -> None:
         """Fetch map walls for logging visibility only; swallow errors per original behavior."""
@@ -875,13 +880,13 @@ class MapViewerCallbacks:
                 map_data_fresh = map_response.data  # Raw map payload
                 wall_path = map_data_fresh.get("wall_path", {})  # Walls live under wall_path
                 wall_nodes = wall_path.get("nodes", [])  # Node list (may be empty)
-                logging.info(f"Live data refresh: Map has {len(wall_nodes)} wall nodes")  # Audit
+                logging.info("Live data refresh: Map has %s wall nodes", len(wall_nodes))  # Audit
                 if wall_nodes:  # Preserve the original 'walls' trace touch (no mutation, parity only)
                     for trace in current_fig["data"]:  # Walk every trace
                         if trace.get("name", "").lower() == "walls":  # Find the walls trace
                             break  # Original code intentionally does no work here
         except Exception as wall_refresh_error:  # noqa: BLE001 - preserve original broad-except behavior
-            logging.warning(f"Live data refresh: Error refreshing walls: {wall_refresh_error}")  # Audit warning
+            logging.warning("Live data refresh: Error refreshing walls: %s", wall_refresh_error)  # Audit warning
 
     def update_coverage_heatmap(
         self,
@@ -919,19 +924,19 @@ class MapViewerCallbacks:
             self._apply_coverage_trace(current_fig, grid_info, layer_values)  # Mutate Plotly trace in place
             timestamp = datetime.now().strftime("%H:%M:%S")  # Human-readable timestamp for audit
             logging.info(  # Preserve original completion audit log
-                f"Live data refresh: RF coverage updated at {timestamp} - {len(results)} points"
+                "Live data refresh: RF coverage updated at %s - %s points", timestamp, len(results)
             )
             return current_fig, updated_refresh_times
         except Exception as refresh_error:  # noqa: BLE001 - preserve original broad-except behavior
-            logging.error(  # Capture stack trace
-                f"Live data refresh: Error refreshing RF coverage: {refresh_error}", exc_info=True
+            logging.exception(  # Capture stack trace
+                "Live data refresh: Error refreshing RF coverage: %s", refresh_error
             )
             return no_update, updated_refresh_times
 
     def _fetch_coverage_results(self, site_id: str, map_id: str) -> tuple[list[Any], list[str]] | None:
         """Call the coverage endpoint and validate the payload; return (results, result_def) or None."""
         logging.info(  # Preserve original audit log
-            f"Live data refresh: Fetching RF coverage data for map {map_id} (site: {site_id})"
+            "Live data refresh: Fetching RF coverage data for map %s (site: %s)", map_id, site_id
         )
         coverage_url = f"/api/v1/sites/{site_id}/location/coverage"  # Mist coverage endpoint path
         coverage_params = {  # Query parameters mirroring the original request
@@ -944,7 +949,7 @@ class MapViewerCallbacks:
         coverage_response = self._state.api_session_ref.mist_get(coverage_url, query=coverage_params)  # API call
         if coverage_response.status_code != 200:  # Network or auth failure
             logging.warning(  # Preserve original warning text
-                f"Live data refresh: Failed to fetch RF coverage - HTTP {coverage_response.status_code}"
+                "Live data refresh: Failed to fetch RF coverage - HTTP %s", coverage_response.status_code
             )
             return None
         coverage_data = coverage_response.data  # Parsed JSON payload
@@ -956,7 +961,7 @@ class MapViewerCallbacks:
         if not results or not result_def:  # Empty payload => nothing to render
             logging.info("Live data refresh: No coverage data available")  # Audit
             return None
-        logging.info(f"Live data refresh: Processing {len(results)} coverage grid points")  # Audit
+        logging.info("Live data refresh: Processing %s coverage grid points", len(results))  # Audit
         return results, result_def
 
     @staticmethod
@@ -969,7 +974,7 @@ class MapViewerCallbacks:
         ppm_local = config.get("ppm", 10) if config else 10  # Pixel/meter conversion for the grid
         if not site_id_local:  # Missing site_id is a misconfiguration; skip refresh
             logging.warning(  # Preserve original audit warning text
-                f"Live data refresh: RF coverage - site_id is None, skipping. Config: {config}"
+                "Live data refresh: RF coverage - site_id is None, skipping. Config: %s", config
             )
             return None
         if not map_id_local:  # Missing map_id is a misconfiguration; skip refresh
@@ -985,7 +990,7 @@ class MapViewerCallbacks:
             y_idx = result_def.index("y")  # Column index for Y (meters)
         except ValueError as index_error:  # result_def missing required column
             logging.warning(  # Preserve original warning text
-                f"Live data refresh: Missing expected fields in result_def: {index_error}"
+                "Live data refresh: Missing expected fields in result_def: %s", index_error
             )
             return None
         if "max_rssi" in result_def:  # Prefer max_rssi when available
@@ -1066,7 +1071,7 @@ class MapViewerCallbacks:
                 trace["zmax"] = grid_info["max_rssi"]  # Color scale upper bound
                 trace["visible"] = "rf_heatmap" in (layer_values or [])  # Visibility follows toggle
                 logging.debug(  # Preserve original debug audit
-                    f"Live data refresh: Updated RF coverage heatmap with {grid_info['cell_count']} cells"
+                    "Live data refresh: Updated RF coverage heatmap with %s cells", grid_info["cell_count"]
                 )
                 break  # Only one coverage trace expected
 
@@ -1104,7 +1109,7 @@ class MapViewerCallbacks:
                 )
             return self._perform_clone(site_id_local, source_map_id, new_name_clean, source_map, current_trigger)
         except Exception as clone_error:  # noqa: BLE001 - preserve original broad-except behavior
-            logging.error("Clone operation failed: %s", clone_error, exc_info=True)  # Capture stack trace
+            logging.exception("Clone operation failed: %s", clone_error)  # Capture stack trace
             return (
                 html.Span(
                     "! Clone operation failed. Check server logs for details.",
@@ -1468,7 +1473,7 @@ class MapViewerCallbacks:
                 no_update,
             )
         except Exception as save_error:  # noqa: BLE001 - preserve original broad-except behavior
-            logging.error("Drawing tool: Error saving shape - %s", save_error, exc_info=True)  # Audit failure
+            logging.exception("Drawing tool: Error saving shape - %s", save_error)  # Audit failure
             return html.Span(f"Error: {str(save_error)[:50]}", style={"color": "#ff4444"}), no_update
 
     def _save_zone_shape(  # noqa: PLR0913 - mirror of original save-zone branch
@@ -1691,7 +1696,7 @@ class MapViewerCallbacks:
             logging.error("Drawing tool: Delete paths failed - %s", error_msg)
             return html.Span(f"Failed: {error_msg[:50]}", style={"color": "#ff4444"}), no_update
         except Exception as del_error:  # noqa: BLE001 - preserve broad-except behavior
-            logging.error("Drawing tool: Error deleting paths - %s", del_error, exc_info=True)
+            logging.exception("Drawing tool: Error deleting paths - %s", del_error)
             return html.Span(f"Error: {str(del_error)[:50]}", style={"color": "#ff4444"}), no_update
 
     def _delete_wayfinding_paths(
@@ -1722,7 +1727,7 @@ class MapViewerCallbacks:
             logging.error("Drawing tool: Delete wayfinding failed - %s", error_msg)
             return html.Span(f"Failed: {error_msg[:50]}", style={"color": "#ff4444"}), no_update
         except Exception as del_error:  # noqa: BLE001 - preserve broad-except behavior
-            logging.error("Drawing tool: Error deleting wayfinding - %s", del_error, exc_info=True)
+            logging.exception("Drawing tool: Error deleting wayfinding - %s", del_error)
             return html.Span(f"Error: {str(del_error)[:50]}", style={"color": "#ff4444"}), no_update
 
     def _delete_walls(self, site_id: str | None, map_id: str | None, current_trigger: int) -> tuple[Any, Any]:
@@ -1781,7 +1786,7 @@ class MapViewerCallbacks:
                 {"trigger": current_trigger + 1},
             )
         except Exception as del_error:  # noqa: BLE001 - preserve broad-except behavior
-            logging.error("Drawing tool: Error deleting zones - %s", del_error, exc_info=True)
+            logging.exception("Drawing tool: Error deleting zones - %s", del_error)
             return html.Span(f"Error: {str(del_error)[:50]}", style={"color": "#ff4444"}), no_update
 
     def _delete_zones_one_by_one(self, site_id: str | None, map_zones: list[dict[str, Any]]) -> tuple[int, int]:
@@ -1933,7 +1938,7 @@ class MapViewerCallbacks:
             new_store_data = self._state.serializer.build_named_items(fresh_maps, default_name="Unnamed")
             return new_options, new_store_data
         except Exception as refresh_error:  # Catch-all parity with original
-            logging.error("Error refreshing map dropdown: %s", refresh_error, exc_info=True)  # Mirror log
+            logging.exception("Error refreshing map dropdown: %s", refresh_error)  # Mirror log
             return no_update, no_update
 
     # ------------------------------------------------------------------
@@ -2026,7 +2031,7 @@ class MapViewerCallbacks:
         try:
             return self._perform_site_switch(selected_site_id, site_name, config)  # Heavy lifting
         except Exception as site_switch_error:  # Catch-all parity with original
-            logging.error("[SITE-SWITCH] Error: %s", site_switch_error, exc_info=True)
+            logging.exception("[SITE-SWITCH] Error: %s", site_switch_error)
             return no_update, no_update, no_update, no_update, no_update
 
     @staticmethod
@@ -2285,7 +2290,7 @@ class MapViewerCallbacks:
         try:
             return self._perform_url_map_switch(url_map_id, site_id_local, normalized_config)  # Heavy lifting
         except Exception as e:  # Catch-all parity with original
-            logging.error("URL map switch: Error loading map - %s", e, exc_info=True)
+            logging.exception("URL map switch: Error loading map - %s", e)
             return no_update, no_update
 
     def _prepare_url_map_switch(

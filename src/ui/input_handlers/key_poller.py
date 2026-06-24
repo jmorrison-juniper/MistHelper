@@ -52,21 +52,21 @@ class _WindowsKeyPoller:
             return None  # Caller will sleep and retry
         raw_byte = self._msvcrt.getch()  # Pull first byte from kbhit buffer
         if self._tui.debug_mode:  # Debug-mode trace of raw byte
-            logging.debug(f"TUI_DEBUG: Raw key byte received: {raw_byte!r}")
+            logging.debug("TUI_DEBUG: Raw key byte received: %r", raw_byte)
         if raw_byte in (b"\xe0", b"\x00"):  # Special-key escape prefixes
             return self._read_special_key()  # Delegate to second-byte dispatcher
         decoded = raw_byte.decode("utf-8", errors="ignore").lower()  # Normal printable -> lowercase string
-        logging.debug(f"TUI_DEBUG: Decoded key: {decoded!r}")  # Action log: after decode
+        logging.debug("TUI_DEBUG: Decoded key: %r", decoded)  # Action log: after decode
         return str(decoded)  # Coerce to plain str for typing
 
     def _read_special_key(self) -> str | None:
         """Resolve the second byte of a Windows special-key sequence."""
         second = self._msvcrt.getch()  # Read the follow-up byte
         if self._tui.debug_mode:  # Debug trace of second byte
-            logging.debug(f"TUI_DEBUG: Special key second byte: {second!r}")
+            logging.debug("TUI_DEBUG: Special key second byte: %r", second)
         mapped = _WINDOWS_SPECIAL_KEYS.get(second)  # Look up canonical name
         if mapped is None and self._tui.debug_mode:  # Unknown sequence -> log only
-            logging.debug(f"TUI_DEBUG: Unhandled special key: {second!r}")
+            logging.debug("TUI_DEBUG: Unhandled special key: %r", second)
         return mapped  # May be None for unknown keys
 
 
@@ -87,7 +87,7 @@ class _UnixKeyPoller:
             return None  # No data ready
         first_char = sys.stdin.read(1)  # Read the first byte
         if self._tui.debug_mode:  # Debug trace of raw byte
-            logging.debug(f"TUI_DEBUG: Unix raw key: {first_char!r}")
+            logging.debug("TUI_DEBUG: Unix raw key: %r", first_char)
         if first_char == "\x1b":  # ESC -> may begin a CSI sequence
             return self._parse_unix_csi()  # Delegate to CSI parser
         return first_char.lower()  # Plain printable key
@@ -99,7 +99,7 @@ class _UnixKeyPoller:
             return "escape"
         if not remaining.startswith("["):  # ESC followed by non-bracket -> ignore
             if self._tui.debug_mode:
-                logging.debug(f"TUI_DEBUG: Unix ESC + non-CSI: {remaining!r}")
+                logging.debug("TUI_DEBUG: Unix ESC + non-CSI: %r", remaining)
             return None
         arrow_code = remaining[1:2]  # Single-letter CSI terminator
         if arrow_code == "5" and remaining[2:3] == "~":  # CSI 5~  -> Page Up
@@ -108,7 +108,7 @@ class _UnixKeyPoller:
             return "page_down"
         mapped = _UNIX_CSI_LETTERS.get(arrow_code)  # Map A/B/C/D/H/F via dispatch dict
         if mapped is None and self._tui.debug_mode:  # Unknown CSI letter -> log only
-            logging.debug(f"TUI_DEBUG: Unrecognized CSI: ESC[{arrow_code}")
+            logging.debug("TUI_DEBUG: Unrecognized CSI: ESC[%s", arrow_code)
         return mapped  # None means unhandled
 
     def _read_csi_payload(self) -> str:
@@ -151,5 +151,5 @@ class KeyPoller:
             result: str | None = self._impl.poll()  # Delegate to platform implementation
             return result
         except Exception as error:  # Preserve original error-tolerant shape
-            logging.debug(f"TUI_MODE: Keyboard input error - {error}")
+            logging.debug("TUI_MODE: Keyboard input error - %s", error)
             return None

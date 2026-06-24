@@ -45,19 +45,19 @@ class MessageRouter:
             if event == "data":
                 self._handle_data(message_data)
                 return
-            self._logger.debug(f"Unhandled message event type: {event}")  # Unknown event
+            self._logger.debug("Unhandled message event type: %s", event)  # Unknown event
         except Exception as message_error:  # Match original broad except
-            self._logger.error(f"Error processing WebSocket message: {message_error}")
+            self._logger.error("Error processing WebSocket message: %s", message_error)
             self._logger.debug("Exception details:", exc_info=True)
-            self._logger.debug(f"Problematic message: {repr(message)}")
-            self._logger.debug(f"Message type: {type(message)}")
+            self._logger.debug("Problematic message: %s", repr(message))
+            self._logger.debug("Message type: %s", type(message))
         self._logger.debug("Routing complete")  # Post-action log
 
     def _trace_raw(self, message: Any) -> None:
         """Emit the raw-message trace preserved verbatim from the original."""
         if self._debug:
             print(f"[DEBUG] Raw WebSocket message received: {repr(message)} (type: {type(message)})")
-        self._logger.debug(f"Raw WebSocket message received: {repr(message)} (type: {type(message)})")
+        self._logger.debug("Raw WebSocket message received: %s (type: %s)", repr(message), type(message))
 
     def _parse(self, message: Any) -> dict[str, Any] | None:
         """Parse a string or dict message into a dict; return None to skip."""
@@ -66,11 +66,11 @@ class MessageRouter:
         if isinstance(message, dict):
             if self._debug:
                 print(f"[DEBUG] Received dict message: {message}")
-            self._logger.debug(f"Received dict message: {message}")
+            self._logger.debug("Received dict message: %s", message)
             return message
         if self._debug:
             print(f"[DEBUG] Unexpected message type: {type(message)}, content: {repr(message)}")
-        self._logger.warning(f"Unexpected message type: {type(message)}, content: {repr(message)}")
+        self._logger.warning("Unexpected message type: %s, content: %s", type(message), repr(message))
         return None
 
     def _parse_string(self, message: str) -> dict[str, Any] | None:
@@ -81,16 +81,16 @@ class MessageRouter:
             if self._debug:
                 print(f"[DEBUG] Failed to parse JSON message: {json_error}")
                 print(f"[DEBUG] Raw message content: {repr(message)}")
-            self._logger.warning(f"Failed to parse JSON message: {json_error}")
-            self._logger.debug(f"Raw message content: {repr(message)}")
+            self._logger.warning("Failed to parse JSON message: %s", json_error)
+            self._logger.debug("Raw message content: %s", repr(message))
             return None
         if self._debug:
             print(f"[DEBUG] Successfully parsed JSON message: {data}")
-        self._logger.debug(f"Successfully parsed JSON message: {data}")
+        self._logger.debug("Successfully parsed JSON message: %s", data)
         if not isinstance(data, dict):
             if self._debug:
                 print(f"[DEBUG] Message data is not a dict after parsing: {type(data)}")
-            self._logger.error(f"Message data is not a dict after parsing: {type(data)}")
+            self._logger.error("Message data is not a dict after parsing: %s", type(data))
             return None
         return data
 
@@ -122,7 +122,7 @@ class MessageRouter:
         channel = message_data.get("channel")
         if self._debug:
             print(f"[DEBUG] Channel subscription confirmed: {channel}")
-        self._logger.info(f"Channel subscription confirmed: {channel}")
+        self._logger.info("Channel subscription confirmed: %s", channel)
         if channel:  # Defensive — only track non-empty channel names
             self._confirmed.add(channel)
 
@@ -139,8 +139,8 @@ class MessageRouter:
         session_id = data_payload.get("session") if isinstance(data_payload, dict) else None
         self._trace_session(channel, session_id, data_payload)
         if not session_id:
-            self._logger.warning(f"Received data event without session ID. Full message: {message_data}")
-            self._logger.warning(f"Data payload: {data_payload}")
+            self._logger.warning("Received data event without session ID. Full message: %s", message_data)
+            self._logger.warning("Data payload: %s", data_payload)
             return
         self._store_segment(session_id, data_payload)
 
@@ -151,17 +151,17 @@ class MessageRouter:
                 data_payload = json.loads(data_payload)
                 if self._debug:
                     print(f"[DEBUG] Parsed nested JSON in data field: {data_payload}")
-                self._logger.debug(f"Parsed nested JSON in data field: {data_payload}")
+                self._logger.debug("Parsed nested JSON in data field: %s", data_payload)
             except json.JSONDecodeError:
                 if self._debug:
                     print(f"[DEBUG] Data field is string but not JSON: {data_payload}")
-                self._logger.warning(f"Data field is string but not JSON: {data_payload}")
+                self._logger.warning("Data field is string but not JSON: %s", data_payload)
                 return _SKIP  # Signal caller to abort routing
         if isinstance(data_payload, dict) and data_payload.get("event") == "data":
             actual_data = data_payload.get("data", {})
             if self._debug:
                 print(f"[DEBUG] Found nested event structure, extracting actual data: {actual_data}")
-            self._logger.debug(f"Found nested event structure, extracting actual data: {actual_data}")
+            self._logger.debug("Found nested event structure, extracting actual data: %s", actual_data)
             data_payload = actual_data
         return data_payload
 
@@ -174,8 +174,8 @@ class MessageRouter:
                 print(f"[DEBUG] Session ID extracted: {session_id}")
             else:
                 print("[DEBUG] No session ID found in data payload")
-        self._logger.debug(f"Processing data event - channel: {channel}, session: {session_id}")
-        self._logger.debug(f"Final data payload: {data_payload}")
+        self._logger.debug("Processing data event - channel: %s, session: %s", channel, session_id)
+        self._logger.debug("Final data payload: %s", data_payload)
 
     def _store_segment(self, session_id: str, data_payload: dict[str, Any]) -> None:
         """Append a message segment to the session list under lock."""
@@ -190,9 +190,9 @@ class MessageRouter:
                 if "raw" in data_payload:
                     print(f"[DEBUG] Raw data in stored message: {repr(data_payload['raw'])}")
                 print(f"[DEBUG] Complete stored message: {data_payload}")
-            self._logger.debug(f"Stored command result for session {session_id}: {data_payload}")
-            self._logger.debug(f"Command result segment received for session: {session_id}")
-            self._logger.debug(f"Total segments for session: {len(bucket)}")
+            self._logger.debug("Stored command result for session %s: %s", session_id, data_payload)
+            self._logger.debug("Command result segment received for session: %s", session_id)
+            self._logger.debug("Total segments for session: %s", len(bucket))
 
 
 # Sentinel used internally by MessageRouter to signal "skip this message".

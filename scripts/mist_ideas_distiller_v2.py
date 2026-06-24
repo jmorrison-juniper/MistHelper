@@ -100,7 +100,8 @@ class CacheLoader:
         total_endpoints = sum(len(endpoints) for endpoints in index.values())
         logger.info(
             "Loaded API index: %d categories, %d endpoints",
-            len(index), total_endpoints,
+            len(index),
+            total_endpoints,
         )
         return index
 
@@ -121,10 +122,7 @@ class ApiCoverageFilter:
 
     def filter_and_score(self, ideas: list[dict]) -> list[dict]:
         """Filter to buildable classifications, score API coverage + demand."""
-        kept = [
-            idea for idea in ideas
-            if idea.get("classification") in self.KEEP_CLASSIFICATIONS
-        ]
+        kept = [idea for idea in ideas if idea.get("classification") in self.KEEP_CLASSIFICATIONS]
         for idea in kept:
             self._score_api_coverage(idea)
             self._score_demand_signal(idea)
@@ -137,11 +135,13 @@ class ApiCoverageFilter:
         with_api = sum(1 for idea in kept if idea.get("api_score", 0) > 0)
         logger.info(
             "Pre-filter: %d -> %d ideas (removed GUI_ONLY/ALREADY_SUPPORTED)",
-            len(ideas), len(kept),
+            len(ideas),
+            len(kept),
         )
         logger.info(
             "  %d have API coverage > 0, %d have no coverage",
-            with_api, len(kept) - with_api,
+            with_api,
+            len(kept) - with_api,
         )
         return kept
 
@@ -193,9 +193,7 @@ class ApiCoverageFilter:
         """Extract meaningful words from API paths."""
         segments = path.strip("/").split("/")
         return [
-            seg.lower().replace("_", " ")
-            for seg in segments
-            if not seg.startswith("{") and seg not in ("api", "v1")
+            seg.lower().replace("_", " ") for seg in segments if not seg.startswith("{") and seg not in ("api", "v1")
         ]
 
 
@@ -219,7 +217,9 @@ class OllamaFleet:
             label = config["base_url"].replace("http://", "").split(":")[0]
             logger.info(
                 "  %s -> %s (num_ctx=%d)",
-                label, config["model"], config["num_ctx"],
+                label,
+                config["model"],
+                config["num_ctx"],
             )
         return list(self._configs)
 
@@ -228,9 +228,7 @@ class OllamaFleet:
         candidates = ["localhost", "192.168.1.86", "192.168.1.225"]
         explicit = os.environ.get("OLLAMA_SERVERS", "")
         if explicit:
-            candidates.extend(
-                host.strip() for host in explicit.split(",") if host.strip()
-            )
+            candidates.extend(host.strip() for host in explicit.split(",") if host.strip())
         found = [host for host in candidates if self._check_server(host)]
         logger.info("Discovered %d Ollama servers: %s", len(found), found)
         return found
@@ -239,6 +237,7 @@ class OllamaFleet:
     def _check_server(host: str) -> bool:
         """Check if an Ollama server is reachable."""
         import urllib.request
+
         try:
             url = f"http://{host}:{OLLAMA_PORT}/api/tags"
             request = urllib.request.Request(url, method="GET")
@@ -266,7 +265,10 @@ class OllamaFleet:
                     config["num_gpu"] = MOE_NUM_GPU
                     logger.info(
                         "[%s] MoE model detected (%s) -> num_gpu=%d, kv_cache_type=%s",
-                        host, model, MOE_NUM_GPU, KV_CACHE_TYPE,
+                        host,
+                        model,
+                        MOE_NUM_GPU,
+                        KV_CACHE_TYPE,
                     )
                 configs.append(config)
         return configs
@@ -275,6 +277,7 @@ class OllamaFleet:
     def _get_best_model(host: str) -> str | None:
         """Find the best loaded model on a server."""
         import urllib.request
+
         try:
             url = f"http://{host}:{OLLAMA_PORT}/api/tags"
             request = urllib.request.Request(url, method="GET")
@@ -294,6 +297,7 @@ class OllamaFleet:
     def _query_vram_usage(host: str) -> dict | None:
         """Query Ollama /api/ps for running model VRAM usage."""
         import urllib.request
+
         try:
             url = f"http://{host}:{OLLAMA_PORT}/api/ps"
             request = urllib.request.Request(url, method="GET")
@@ -319,11 +323,14 @@ class OllamaFleet:
             return OLLAMA_NUM_CTX_DEFAULT
         model_bytes = vram_info["size"]
         vram_bytes = vram_info["size_vram"]
-        gib = 1024 ** 3
+        gib = 1024**3
         if vram_bytes < model_bytes * 0.9:
             logger.info(
                 "[%s] Model partially offloaded (%.1f/%.1f GiB in VRAM) -> num_ctx=%d",
-                host, vram_bytes / gib, model_bytes / gib, OLLAMA_NUM_CTX_DEFAULT,
+                host,
+                vram_bytes / gib,
+                model_bytes / gib,
+                OLLAMA_NUM_CTX_DEFAULT,
             )
             return OLLAMA_NUM_CTX_DEFAULT
         vram_gib = vram_bytes / gib
@@ -333,7 +340,11 @@ class OllamaFleet:
         num_ctx = cls._clamp_power_of_two(max_tokens)
         logger.info(
             "[%s] VRAM: %.1f/%.0f GiB, headroom: %.1f GiB -> num_ctx=%d",
-            host, vram_gib, total_gib, headroom, num_ctx,
+            host,
+            vram_gib,
+            total_gib,
+            headroom,
+            num_ctx,
         )
         return num_ctx
 
@@ -403,13 +414,19 @@ class AiClient:
                     return text.strip()
                 logger.warning(
                     "[%s] Empty response (attempt %d/%d)",
-                    self.label, attempt, MAX_RETRIES,
+                    self.label,
+                    attempt,
+                    MAX_RETRIES,
                 )
             except Exception as exc:
                 delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
                 logger.warning(
                     "[%s] AI call failed (attempt %d/%d): %s -- retry %.1fs",
-                    self.label, attempt, MAX_RETRIES, str(exc)[:120], delay,
+                    self.label,
+                    attempt,
+                    MAX_RETRIES,
+                    str(exc)[:120],
+                    delay,
                 )
                 time.sleep(delay)
         return ""
@@ -500,15 +517,15 @@ class FleetRunner:
                     if progress["done"] % 5 == 0 or progress["done"] == progress["total"]:
                         logger.info(
                             "  %s [%d/%d] (worker-%d on %s)",
-                            self.pass_name, progress["done"],
-                            progress["total"], worker_id, client.label,
+                            self.pass_name,
+                            progress["done"],
+                            progress["total"],
+                            worker_id,
+                            client.label,
                         )
 
         with ThreadPoolExecutor(max_workers=len(self.fleet_configs)) as executor:
-            futures = [
-                executor.submit(worker, config, idx)
-                for idx, config in enumerate(self.fleet_configs)
-            ]
+            futures = [executor.submit(worker, config, idx) for idx, config in enumerate(self.fleet_configs)]
             for future in futures:
                 future.result()
 
@@ -558,7 +575,9 @@ class Consolidator:
         """Group ideas by theme, send batches to fleet, return clusters."""
         theme_groups = self._group_by_primary_theme(ideas)
         logger.info(
-            "Pass 1: %d ideas across %d themes", len(ideas), len(theme_groups),
+            "Pass 1: %d ideas across %d themes",
+            len(ideas),
+            len(theme_groups),
         )
 
         work_items = self._build_smart_batches(theme_groups)
@@ -591,103 +610,120 @@ class Consolidator:
             ideas = groups[theme]
             if len(ideas) >= MIN_THEME_SIZE_FOR_OWN_BATCH:
                 for start in range(0, len(ideas), CONSOLIDATION_BATCH_SIZE):
-                    batch = ideas[start:start + CONSOLIDATION_BATCH_SIZE]
+                    batch = ideas[start : start + CONSOLIDATION_BATCH_SIZE]
                     work_items.append({"theme": theme, "ideas": batch})
             else:
                 small_theme_pool.extend(ideas)
                 small_theme_names.append(theme)
                 if len(small_theme_pool) >= CONSOLIDATION_BATCH_SIZE:
-                    work_items.append({
-                        "theme": "cross-theme",
-                        "ideas": small_theme_pool[:CONSOLIDATION_BATCH_SIZE],
-                    })
+                    work_items.append(
+                        {
+                            "theme": "cross-theme",
+                            "ideas": small_theme_pool[:CONSOLIDATION_BATCH_SIZE],
+                        }
+                    )
                     small_theme_pool = small_theme_pool[CONSOLIDATION_BATCH_SIZE:]
                     small_theme_names = []
 
         if small_theme_pool:
-            work_items.append({
-                "theme": "cross-theme",
-                "ideas": small_theme_pool,
-            })
+            work_items.append(
+                {
+                    "theme": "cross-theme",
+                    "ideas": small_theme_pool,
+                }
+            )
 
         return work_items
 
     @staticmethod
     def _process_one_batch(client: AiClient, item: dict) -> list[dict]:
         """Send one batch to AI with FULL context (no truncation)."""
-        theme = item["theme"]
-        ideas = item["ideas"]
+        theme = item["theme"]  # Theme label used in prompt + cluster metadata.
+        ideas = item["ideas"]  # Idea dicts pulled from the upstream pool.
+        user_prompt = MistIdeasDistillerV2._build_idea_prompt(theme, ideas)  # Prompt assembly extracted.
+        result = client.call_json(CONSOLIDATION_SYSTEM, user_prompt)  # Single AI call returns parsed JSON.
+        result = MistIdeasDistillerV2._normalize_ai_response(result, theme, ideas)  # Coerce to list[dict].
+        valid_clusters = MistIdeasDistillerV2._validate_ai_clusters(result, theme, ideas)  # Filter+enrich.
+        if not valid_clusters:  # Empty result -> emit a single fallback cluster.
+            return [MistIdeasDistillerV2._make_fallback_cluster(theme, ideas)]  # Single-element list.
+        return valid_clusters  # Normal path: forward the AI-derived clusters.
 
-        idea_blocks = []
-        for idea in ideas:
-            title = idea.get("source_title", "Unknown")
-            description = idea.get("source_description", "")
-            comments = idea.get("source_comments", [])
-            demand = idea.get("demand_signal", 0)
-            foundational = idea.get("is_foundational", False)
+    @staticmethod
+    def _build_idea_block(idea: dict) -> str:
+        """Render a single idea dict into the TITLE / DESCRIPTION / COMMENTS block."""
+        title = idea.get("source_title", "Unknown")  # Plain-text title with a sane default.
+        description = idea.get("source_description", "")  # Body text; empty when missing.
+        comments = idea.get("source_comments", [])  # Optional list of top comments.
+        demand = idea.get("demand_signal", 0)  # Numeric demand score forwarded to the AI.
+        foundational = idea.get("is_foundational", False)  # Bool flag marks foundational ideas.
+        block = f"TITLE: {title}\nDESCRIPTION: {description}"  # Start with the two required lines.
+        if comments:  # Append the top-3 comments line only when comments are present.
+            top_comments = comments[:3]  # Cap at three so prompts stay reasonable.
+            block += "\nTOP COMMENTS: " + " | ".join(str(c) for c in top_comments)
+        block += f"\nDEMAND_SIGNAL: {demand}"  # Demand score always appended on its own line.
+        if foundational:  # Optional tag appended when the idea is flagged foundational.
+            block += " [FOUNDATIONAL]"
+        return block  # Return the assembled multi-line block.
 
-            block = f"TITLE: {title}\nDESCRIPTION: {description}"
-            if comments:
-                top_comments = comments[:3]
-                block += "\nTOP COMMENTS: " + " | ".join(str(c) for c in top_comments)
-            block += f"\nDEMAND_SIGNAL: {demand}"
-            if foundational:
-                block += " [FOUNDATIONAL]"
-            idea_blocks.append(block)
-
-        user_prompt = (
-            f"Theme: {theme}\n"
-            f"Number of ideas: {len(ideas)}\n"
-            f"{'='*40}\n\n"
-            + "\n---\n".join(idea_blocks)
+    @staticmethod
+    def _build_idea_prompt(theme: str, ideas: list[dict]) -> str:
+        """Render the per-theme prompt body fed to the consolidation AI call."""
+        idea_blocks = [MistIdeasDistillerV2._build_idea_block(idea) for idea in ideas]  # One block per idea.
+        return (
+            f"Theme: {theme}\n"  # Theme header.
+            f"Number of ideas: {len(ideas)}\n"  # Idea count helps the AI scope output.
+            f"{'=' * 40}\n\n"  # Separator line.
+            + "\n---\n".join(idea_blocks)  # Idea blocks joined by triple-dash markers.
         )
 
-        result = client.call_json(CONSOLIDATION_SYSTEM, user_prompt)
-        if not isinstance(result, list):
-            if isinstance(result, dict):
-                result = [result]
-            else:
-                first_title = ideas[0].get("source_title", theme) if ideas else theme
-                return [{
-                    "name": first_title,
-                    "description": f"Collection of {len(ideas)} {theme} feature requests",
-                    "idea_titles": [i.get("source_title", "") for i in ideas],
-                    "idea_count": len(ideas),
-                    "primary_theme": theme,
-                    "source_theme": theme,
-                    "total_demand": sum(i.get("demand_signal", 0) for i in ideas),
-                    "has_foundational": any(i.get("is_foundational") for i in ideas),
-                    "buildable_via_api": True,
-                }]
+    @staticmethod
+    def _normalize_ai_response(result: object, theme: str, ideas: list[dict]) -> list:
+        """Coerce arbitrary AI return shapes into a list[dict] for downstream filtering."""
+        if isinstance(result, list):  # Common case: already a list of dicts.
+            return result
+        if isinstance(result, dict):  # AI returned one cluster -> wrap in a list.
+            return [result]
+        # Unrecognized shape -> fall back to a single best-effort cluster.
+        return [MistIdeasDistillerV2._make_fallback_cluster(theme, ideas)]
 
-        valid_clusters = []
-        for cluster in result:
-            if not isinstance(cluster, dict):
+    @staticmethod
+    def _validate_ai_clusters(result: list, theme: str, ideas: list[dict]) -> list[dict]:
+        """Drop non-dict entries and enrich valid clusters with theme metadata."""
+        valid_clusters: list[dict] = []  # Accumulator for the enriched cluster dicts.
+        for cluster in result:  # Iterate exactly once over the AI return.
+            if not isinstance(cluster, dict):  # Skip malformed entries with a warning.
                 logger.warning("Pass 1: Skipping non-dict item in response for theme=%s", theme)
                 continue
-            cluster["source_theme"] = theme
-            if "idea_titles" not in cluster:
-                cluster["idea_titles"] = [i.get("source_title", "") for i in ideas]
-            if "idea_count" not in cluster:
-                cluster["idea_count"] = len(cluster.get("idea_titles", []))
-            if "total_demand" not in cluster:
-                cluster["total_demand"] = sum(i.get("demand_signal", 0) for i in ideas)
-            valid_clusters.append(cluster)
+            MistIdeasDistillerV2._enrich_cluster(cluster, theme, ideas)  # Mutate in place.
+            valid_clusters.append(cluster)  # Keep the enriched cluster.
+        return valid_clusters  # Caller decides whether to fall back when empty.
 
-        if not valid_clusters:
-            first_title = ideas[0].get("source_title", theme) if ideas else theme
-            valid_clusters = [{
-                "name": first_title,
-                "description": f"Collection of {len(ideas)} {theme} feature requests",
-                "idea_titles": [i.get("source_title", "") for i in ideas],
-                "idea_count": len(ideas),
-                "primary_theme": theme,
-                "source_theme": theme,
-                "total_demand": sum(i.get("demand_signal", 0) for i in ideas),
-                "has_foundational": any(i.get("is_foundational") for i in ideas),
-                "buildable_via_api": True,
-            }]
-        return valid_clusters
+    @staticmethod
+    def _enrich_cluster(cluster: dict, theme: str, ideas: list[dict]) -> None:
+        """Add theme/idea-derived metadata to an AI-produced cluster in place."""
+        cluster["source_theme"] = theme  # Tag the cluster with its originating theme.
+        if "idea_titles" not in cluster:  # Default to all idea titles when AI omits the field.
+            cluster["idea_titles"] = [i.get("source_title", "") for i in ideas]
+        if "idea_count" not in cluster:  # Derive count from the titles list when missing.
+            cluster["idea_count"] = len(cluster.get("idea_titles", []))
+        if "total_demand" not in cluster:  # Sum demand signals when AI omits the field.
+            cluster["total_demand"] = sum(i.get("demand_signal", 0) for i in ideas)
+
+    @staticmethod
+    def _make_fallback_cluster(theme: str, ideas: list[dict]) -> dict:
+        """Build the single fallback cluster used when AI returns nothing useful."""
+        first_title = ideas[0].get("source_title", theme) if ideas else theme  # Defensive default.
+        return {
+            "name": first_title,  # Pick the first idea's title as the cluster name.
+            "description": f"Collection of {len(ideas)} {theme} feature requests",  # Generic blurb.
+            "idea_titles": [i.get("source_title", "") for i in ideas],  # Forward all titles.
+            "idea_count": len(ideas),  # Count of underlying ideas.
+            "primary_theme": theme,  # Forward the originating theme.
+            "source_theme": theme,  # Mirror the source theme tag for consistency.
+            "total_demand": sum(i.get("demand_signal", 0) for i in ideas),  # Total demand summed.
+            "has_foundational": any(i.get("is_foundational") for i in ideas),  # Bool union.
+            "buildable_via_api": True,  # Default optimistic flag for the downstream filter.
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -740,7 +776,8 @@ class CrossThemeConsolidator:
         batches = self._build_batches(clusters)
         logger.info(
             "Pass 1b: %d clusters in %d batches for cross-theme dedup",
-            len(clusters), len(batches),
+            len(clusters),
+            len(batches),
         )
 
         runner = FleetRunner(self.fleet_configs, "Pass 1b")
@@ -762,10 +799,7 @@ class CrossThemeConsolidator:
     @staticmethod
     def _build_batches(clusters: list[dict]) -> list[list[dict]]:
         """Split clusters into batches for processing."""
-        return [
-            clusters[i:i + CROSS_THEME_BATCH_SIZE]
-            for i in range(0, len(clusters), CROSS_THEME_BATCH_SIZE)
-        ]
+        return [clusters[i : i + CROSS_THEME_BATCH_SIZE] for i in range(0, len(clusters), CROSS_THEME_BATCH_SIZE)]
 
     def _dedup_batch(self, clusters: list[dict]) -> list[dict]:
         """Run a single batch through one AI call."""
@@ -788,11 +822,7 @@ class CrossThemeConsolidator:
             )
             summaries.append(summary)
 
-        user_prompt = (
-            f"Total clusters to review: {len(batch)}\n"
-            f"{'='*40}\n\n"
-            + "\n---\n".join(summaries)
-        )
+        user_prompt = f"Total clusters to review: {len(batch)}\n" f"{'='*40}\n\n" + "\n---\n".join(summaries)
 
         result = client.call_json(CROSS_THEME_SYSTEM, user_prompt)
         if not isinstance(result, list):
@@ -807,11 +837,7 @@ class CrossThemeConsolidator:
         for cluster in valid_clusters:
             if "idea_count" not in cluster:
                 merged_originals = cluster.get("merged_from", [])
-                original_counts = [
-                    b.get("idea_count", 1)
-                    for b in batch
-                    if b.get("name") in merged_originals
-                ]
+                original_counts = [b.get("idea_count", 1) for b in batch if b.get("name") in merged_originals]
                 cluster["idea_count"] = sum(original_counts) or 1
 
             if "idea_titles" not in cluster:
@@ -935,12 +961,14 @@ class FeasibilityScorer:
             category_words = set(ApiCoverageFilter._extract_words(category))
             if keywords & category_words:
                 for endpoint in endpoints[:5]:
-                    matched_endpoints.append({
-                        "category": category,
-                        "method": endpoint.get("method", ""),
-                        "path": endpoint.get("path", ""),
-                        "summary": endpoint.get("summary", ""),
-                    })
+                    matched_endpoints.append(
+                        {
+                            "category": category,
+                            "method": endpoint.get("method", ""),
+                            "path": endpoint.get("path", ""),
+                            "summary": endpoint.get("summary", ""),
+                        }
+                    )
             if len(matched_endpoints) >= 15:
                 break
         return matched_endpoints
@@ -952,9 +980,7 @@ class FeasibilityScorer:
             return "(No directly matching endpoints found)"
         lines = []
         for ep in endpoints:
-            lines.append(
-                f"  {ep['method']} {ep['path']} — {ep['summary']} [{ep['category']}]"
-            )
+            lines.append(f"  {ep['method']} {ep['path']} — {ep['summary']} [{ep['category']}]")
         return "\n".join(lines)
 
     @staticmethod
@@ -1057,7 +1083,7 @@ class StackRanker:
 
         if not all_ranked:
             logger.warning("Pass 3: No AI results, using local scoring")
-            return self._local_rank(scored_clusters)[:self.top_n]
+            return self._local_rank(scored_clusters)[: self.top_n]
 
         all_ranked.sort(key=lambda x: x.get("final_score", 0), reverse=True)
 
@@ -1080,10 +1106,10 @@ class StackRanker:
             )
             all_ranked.extend(supplement)
 
-        for idx, feature in enumerate(all_ranked[:self.top_n]):
+        for idx, feature in enumerate(all_ranked[: self.top_n]):
             feature["rank"] = idx + 1
 
-        return all_ranked[:self.top_n]
+        return all_ranked[: self.top_n]
 
     @staticmethod
     def _clean_feature_name(name: str) -> str:
@@ -1101,10 +1127,7 @@ class StackRanker:
         chunk_idx, clusters = item
         summaries = self._build_summaries(clusters)
 
-        user_prompt = (
-            f"Rank these {len(clusters)} features best-to-worst:\n\n"
-            + "\n".join(summaries)
-        )
+        user_prompt = f"Rank these {len(clusters)} features best-to-worst:\n\n" + "\n".join(summaries)
 
         result = client.call_json(RANKING_SYSTEM, user_prompt, json_mode=True)
         if isinstance(result, dict) and "ranked" in result:
@@ -1198,7 +1221,7 @@ class StackRanker:
     @staticmethod
     def _chunk_clusters(clusters: list[dict], chunk_size: int = 12) -> list[list[dict]]:
         """Split clusters into fleet-distributable chunks."""
-        return [clusters[i:i + chunk_size] for i in range(0, len(clusters), chunk_size)]
+        return [clusters[i : i + chunk_size] for i in range(0, len(clusters), chunk_size)]
 
 
 # ---------------------------------------------------------------------------
@@ -1214,14 +1237,11 @@ class DependencyOrderer:
         logger.info("Pass 4: Ordering %d features by dependencies", len(ranked))
 
         foundational = [
-            feature for feature in ranked
-            if feature.get("foundational_value", 0) >= 7
-               or feature.get("has_foundational", False)
+            feature
+            for feature in ranked
+            if feature.get("foundational_value", 0) >= 7 or feature.get("has_foundational", False)
         ]
-        standard = [
-            feature for feature in ranked
-            if feature not in foundational
-        ]
+        standard = [feature for feature in ranked if feature not in foundational]
 
         foundational.sort(
             key=lambda x: (
@@ -1238,7 +1258,8 @@ class DependencyOrderer:
 
         logger.info(
             "Pass 4: %d foundational (build first), %d standard",
-            len(foundational), len(standard),
+            len(foundational),
+            len(standard),
         )
         return ordered
 
@@ -1375,10 +1396,19 @@ class ReportGenerator:
         """Generate CSV export."""
         path = OUTPUT_DIR / "mist_ideas_top100.csv"
         fieldnames = [
-            "build_order", "build_phase", "name", "description",
-            "idea_count", "total_demand", "api_feasibility", "effort",
-            "user_impact", "foundational_value", "final_score",
-            "primary_theme", "justification",
+            "build_order",
+            "build_phase",
+            "name",
+            "description",
+            "idea_count",
+            "total_demand",
+            "api_feasibility",
+            "effort",
+            "user_impact",
+            "foundational_value",
+            "final_score",
+            "primary_theme",
+            "justification",
         ]
         with open(path, "w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
@@ -1549,8 +1579,7 @@ class DistillationPipeline:
         logger.info("=" * 60)
 
         self.stats["foundational_count"] = sum(
-            1 for f in features
-            if f.get("foundational_value", 0) >= 7 or f.get("has_foundational")
+            1 for f in features if f.get("foundational_value", 0) >= 7 or f.get("has_foundational")
         )
         ReportGenerator().generate_all(features, self.stats)
 
@@ -1586,7 +1615,10 @@ def main() -> None:
     )
     parser.add_argument("--verbose", action="store_true", help="Debug logging")
     parser.add_argument(
-        "--pass", type=int, default=0, dest="start_pass",
+        "--pass",
+        type=int,
+        default=0,
+        dest="start_pass",
         help="Resume from pass N (0=prefilter, 1=consolidation, 2=scoring, 3=ranking)",
     )
     args = parser.parse_args()

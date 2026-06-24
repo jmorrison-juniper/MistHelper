@@ -158,7 +158,7 @@ class GatewayExportUtils:
             with open(FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv"), encoding="utf-8") as csvfile:
                 gateway_configs = list(csv.DictReader(csvfile))  # Per-device config including mgmt overlay IP.
         except FileNotFoundError as exception:
-            logging.error(f"Required CSV file not found: {exception}")  # Preserve legacy error log.
+            logging.error("Required CSV file not found: %s", exception)  # Preserve legacy error log.
             print(f"! Error: Required CSV file not found: {exception}")  # Preserve legacy operator message.
             return None
         logging.debug(
@@ -216,11 +216,18 @@ class GatewayExportUtils:
             if mgmt_ip:
                 gateways_with_mgmt_ip += 1  # Track devices with a usable management IP.
                 logging.debug(
-                    f"Gateway {gateway_name}: Management IP {mgmt_ip}, Status: {status} (Template: {template_name})"
+                    "Gateway %s: Management IP %s, Status: %s (Template: %s)",
+                    gateway_name,
+                    mgmt_ip,
+                    status,
+                    template_name,
                 )  # Preserve legacy per-device debug log.
             else:
                 logging.debug(
-                    f"Gateway {gateway_name}: No management IP configured, Status: {status} (Template: {template_name})"
+                    "Gateway %s: No management IP configured, Status: %s (Template: %s)",
+                    gateway_name,
+                    status,
+                    template_name,
                 )  # Preserve legacy per-device debug log.
         return results, gateways_processed, gateways_with_mgmt_ip
 
@@ -322,7 +329,7 @@ class GatewayExportUtils:
                 csvfile.write("No matching data found.\n")  # Preserve legacy empty marker content.
             return  # Nothing else to persist.
         if debug:
-            logging.debug(f"Sample filtered row: {filtered_rows[0]}")
+            logging.debug("Sample filtered row: %s", filtered_rows[0])
         logging.info("Saving filtered gateway port configs to FilteredGatewayPortConfigs.csv")  # Log before save.
         DataExporter.write_with_format_selection(
             filtered_rows, "FilteredGatewayPortConfigs.csv"
@@ -404,11 +411,11 @@ class GatewayExportUtils:
                 site_name = site_name_lookup.get(site_id, "Unknown Site")
                 gateway_devices.append((site_id, device_id, device_name, site_name))
 
-            logging.info(f"! Fast mode: Loaded {len(gateway_devices)} gateway devices from cached data")
+            logging.info("! Fast mode: Loaded %s gateway devices from cached data", len(gateway_devices))
             return gateway_devices
 
         except Exception as exception:
-            logging.warning(f"! Fast mode failed, falling back to API calls: {exception}")
+            logging.warning("! Fast mode failed, falling back to API calls: %s", exception)
             org_id = ConfigUtils.get_cached_or_prompted_org_id()
             return GatewayExportUtils._get_devices_from_api(org_id)
 
@@ -417,7 +424,7 @@ class GatewayExportUtils:
         """Get gateway devices from API inventory and site list endpoints."""
         logging.info("[INFO] Fetching org inventory to find gateway devices...")
         devices = APICoreFetchUtils.all_inventory_with_limit(org_id)
-        logging.info(f"[INFO] Retrieved {len(devices)} devices from org inventory.")
+        logging.info("[INFO] Retrieved %s devices from org inventory.", len(devices))
 
         site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)
         sites = mistapi.get_all(response=site_response, mist_session=apisession)
@@ -432,7 +439,7 @@ class GatewayExportUtils:
                 site_name = site_name_lookup.get(site_id, "Unknown Site")
                 gateway_devices.append((site_id, device_id, device_name, site_name))
 
-        logging.info(f"[INFO] Found {len(gateway_devices)} gateway devices across the organization.")
+        logging.info("[INFO] Found %s gateway devices across the organization.", len(gateway_devices))
         return gateway_devices
 
     @staticmethod
@@ -440,14 +447,14 @@ class GatewayExportUtils:
         """Get site IDs that currently contain at least one gateway device."""
         logging.info("[INFO] Fetching org inventory to find sites with gateways...")
         devices = APICoreFetchUtils.all_inventory_with_limit(org_id)
-        logging.info(f"[INFO] Retrieved {len(devices)} devices from org inventory.")
+        logging.info("[INFO] Retrieved %s devices from org inventory.", len(devices))
 
         gateway_sites = {
             device["site_id"]
             for device in devices
             if device.get("type") == "gateway" and device.get("site_id") and str(device.get("site_id")).strip()
         }
-        logging.info(f"[INFO] Found {len(gateway_sites)} sites with at least one gateway.")
+        logging.info("[INFO] Found %s sites with at least one gateway.", len(gateway_sites))
 
         return list(gateway_sites)
 

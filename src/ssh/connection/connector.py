@@ -128,7 +128,7 @@ class SshConnector:
         try:
             self._trust_host_on_first_use(client, hostname, port)  # Enroll first-seen host key into managed store
         except Exception as enroll_error:  # noqa: BLE001 - log and re-raise as a connection failure
-            self.logger.error("TOFU enrollment failed for %s:%s: %s", hostname, port, enroll_error, exc_info=True)
+            self.logger.exception("TOFU enrollment failed for %s:%s: %s", hostname, port, enroll_error)
             print(f"[ERROR] Host key enrollment failed: {enroll_error}")
             return None
         return client  # Ready to attempt authentication

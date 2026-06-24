@@ -43,7 +43,7 @@ def cleanup_ws_connection(ws_manager: Any, debug_mode: bool = False) -> None:
             if debug_mode:
                 print("[DEBUG] WebSocket cleanup completed")
     except Exception as cleanup_error:
-        logging.warning(f"WebSocket cleanup error: {cleanup_error}")
+        logging.warning("WebSocket cleanup error: %s", cleanup_error)
 
 
 def get_mist_credentials(apisession: Any) -> tuple[str | None, str | None]:
@@ -135,8 +135,8 @@ class WebSocketManager:
                 self.logger.error("No API token found in session or environment")
                 return False
 
-            self.logger.debug(f"WebSocket URL: {self.websocket_url}")
-            self.logger.debug(f"Auth token configured (length: {len(mist_apitoken)} chars)")
+            self.logger.debug("WebSocket URL: %s", self.websocket_url)
+            self.logger.debug("Auth token configured (length: %s chars)", len(mist_apitoken))
             auth_header = f"Authorization: Token {mist_apitoken}"
             headers = [auth_header]
 
@@ -161,7 +161,7 @@ class WebSocketManager:
                 time.sleep(0.5)
                 timeout_counter += 1
                 if timeout_counter % 2 == 0:
-                    self.logger.debug(f"WebSocket handshake waiting... ({timeout_counter * 0.5:.1f}s)")
+                    self.logger.debug("WebSocket handshake waiting... (%.1fs)", timeout_counter * 0.5)
 
             if self.connected:
                 self.logger.info("WebSocket connection established successfully")
@@ -171,7 +171,7 @@ class WebSocketManager:
                 return False
 
         except Exception as connection_error:
-            self.logger.error(f"WebSocket connection failed: {connection_error}")
+            self.logger.error("WebSocket connection failed: %s", connection_error)
             return False
 
     def connect_and_subscribe(self, site_id: str, device_id: str, debug_mode: bool) -> bool:
@@ -230,11 +230,11 @@ class WebSocketManager:
             if self.websocket_connection is not None:
                 self.websocket_connection.send(json.dumps(subscription_message))
             self.subscribed_channels.add(channel_path)
-            self.logger.debug(f"Subscribed to channel: {channel_path}")
+            self.logger.debug("Subscribed to channel: %s", channel_path)
             return True
 
         except Exception as subscription_error:
-            self.logger.error(f"Channel subscription failed: {subscription_error}")
+            self.logger.error("Channel subscription failed: %s", subscription_error)
             return False
 
     def wait_for_subscription_confirmation(self, channel_path, timeout_seconds=10):  # type: ignore[no-untyped-def]
@@ -252,14 +252,14 @@ class WebSocketManager:
         debug_mode = getattr(self, "debug_mode", False) or os.getenv("DEBUG", "").lower() in ["true", "1", "yes"]
 
         if debug_mode:
-            self.logger.debug(f"Waiting for subscription confirmation for: {channel_path}")
+            self.logger.debug("Waiting for subscription confirmation for: %s", channel_path)
             print(f"[DEBUG] Waiting for subscription confirmation for: {channel_path}")
 
         while time.time() - start_time < timeout_seconds:
             # Check if subscription is confirmed
             if channel_path in self.confirmed_subscriptions:
                 if debug_mode:
-                    self.logger.debug(f"Subscription confirmed for: {channel_path}")
+                    self.logger.debug("Subscription confirmed for: %s", channel_path)
                     print(f"[DEBUG] Subscription confirmed for: {channel_path}")
                 return True
 
@@ -267,9 +267,9 @@ class WebSocketManager:
 
         # Timeout reached
         if debug_mode:
-            self.logger.debug(f"Timeout waiting for subscription confirmation: {channel_path}")
+            self.logger.debug("Timeout waiting for subscription confirmation: %s", channel_path)
             print(f"[DEBUG] Timeout waiting for subscription confirmation: {channel_path}")
-        self.logger.warning(f"Timeout waiting for subscription confirmation: {channel_path}")
+        self.logger.warning("Timeout waiting for subscription confirmation: %s", channel_path)
         return False
 
     def wait_for_command_result(
@@ -330,14 +330,14 @@ class WebSocketManager:
 
     def _on_error(self, websocket_connection, error):  # type: ignore[no-untyped-def]
         """Handle error events from connection."""
-        self.logger.debug(f"WebSocket error type: {type(error).__name__}")
-        self.logger.error(f"WebSocket error: {error}")
+        self.logger.debug("WebSocket error type: %s", type(error).__name__)
+        self.logger.error("WebSocket error: %s", error)
 
     def _on_close(self, websocket_connection, close_status_code, close_message):  # type: ignore[no-untyped-def]
         """Handle closed connection event."""
         self.connected = False
-        self.logger.debug(f"WebSocket close details: status_code={close_status_code}, message={close_message}")
-        self.logger.info(f"WebSocket connection closed (status: {close_status_code})")
+        self.logger.debug("WebSocket close details: status_code=%s, message=%s", close_status_code, close_message)
+        self.logger.info("WebSocket connection closed (status: %s)", close_status_code)
 
     def disconnect(self) -> None:
         """Close WebSocket connection and cleanup resources."""

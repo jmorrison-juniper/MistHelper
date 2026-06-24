@@ -60,7 +60,7 @@ class OrgDeviceInventorySummaryCore:
                         limit=1000,
                     )
             except Exception as error:
-                logging.error("searchOrgDevices switch page %d failed: %s", page_num, error, exc_info=True)
+                logging.exception("searchOrgDevices switch page %d failed: %s", page_num, error)
                 break
             page_data = getattr(response, "data", None) if response else None
             if not page_data or not isinstance(page_data, dict):
@@ -112,7 +112,7 @@ class OrgDeviceInventorySummaryCore:
             )
             all_records: list[dict] = mistapi.get_all(response=response, mist_session=apisession)
         except Exception as error:
-            logging.error("getOrgInventory gateway failed: %s", error, exc_info=True)
+            logging.exception("getOrgInventory gateway failed: %s", error)
             all_records = []
         logging.info("Gateway physical inventory complete: %d physical devices org=%s", len(all_records), target_org_id)
         return all_records
@@ -147,7 +147,7 @@ class OrgDeviceInventorySummaryCore:
             )
             all_records: list[dict] = mistapi.get_all(response=response, mist_session=apisession)  # Auto-paginate
         except Exception as error:  # Inventory fetch errors must not abort the larger summary run
-            logging.error("getOrgInventory AP fetch failed: %s", error, exc_info=True)  # Traceback for ops
+            logging.exception("getOrgInventory AP fetch failed: %s", error)  # Traceback for ops
             all_records = []  # Degrade gracefully so callers simply see no AP rows
         logging.debug("AP inventory fetched: %d records org=%s", len(all_records), target_org_id)  # Record size
         return all_records
@@ -196,7 +196,7 @@ class OrgDeviceInventorySummaryCore:
             )
             all_records: list[dict] = mistapi.get_all(response=response, mist_session=apisession)  # Auto-paginate
         except Exception as error:  # Inventory fetch errors must not abort the larger summary run
-            logging.error("getOrgInventory unassigned switch failed: %s", error, exc_info=True)  # Traceback for ops
+            logging.exception("getOrgInventory unassigned switch failed: %s", error)  # Traceback for ops
             all_records = []  # Degrade gracefully so callers simply see no unassigned rows
         unassigned = [record for record in all_records if not record.get("site_id")]  # site_id empty/None => unassigned
         logging.debug(
@@ -268,7 +268,7 @@ class OrgDeviceInventorySummaryCore:
                     type_rows = OrgDeviceInventorySummaryCore._aggregate_switch_counts(switch_records, distinct)
                     all_rows.extend(type_rows)
                 except Exception as error:
-                    logging.error("Switch %s count (VC-aware) failed: %s", distinct, error, exc_info=True)
+                    logging.exception("Switch %s count (VC-aware) failed: %s", distinct, error)
                 continue
             if device_type == "gateway":
                 logging.info("Fetching gateway %s counts with HA-aware method, org=%s", distinct, target_org_id)
@@ -277,7 +277,7 @@ class OrgDeviceInventorySummaryCore:
                     type_rows = OrgDeviceInventorySummaryCore._aggregate_gateway_counts(gateway_records, distinct)
                     all_rows.extend(type_rows)
                 except Exception as error:
-                    logging.error("Gateway %s count (HA-aware) failed: %s", distinct, error, exc_info=True)
+                    logging.exception("Gateway %s count (HA-aware) failed: %s", distinct, error)
                 continue
             # APs are counted from the full org inventory (the portal "Claim APs" source) so that
             # claimed-but-never-connected APs -- which countOrgDevices(distinct="version") drops --
@@ -287,7 +287,7 @@ class OrgDeviceInventorySummaryCore:
                     ap_records = OrgDeviceInventorySummaryCore._fetch_ap_inventory(target_org_id)
                 all_rows.extend(OrgDeviceInventorySummaryCore._aggregate_ap_counts(ap_records, distinct))
             except Exception as error:  # AP counting must never abort the combined report
-                logging.error("AP %s count from inventory failed: %s", distinct, error, exc_info=True)
+                logging.exception("AP %s count from inventory failed: %s", distinct, error)
         all_rows = OrgDeviceInventorySummaryCore._with_unassigned(all_rows, target_org_id, distinct, unassigned_records)
         all_rows.sort(key=lambda row: (row.get("device_type", ""), -int(row.get("count", 0))))
         logging.info("Total %s count rows after fetch and sort: %d", distinct, len(all_rows))
@@ -306,7 +306,7 @@ class OrgDeviceInventorySummaryCore:
             merged = OrgDeviceInventorySummaryCore._merge_counts(all_rows, unassigned_rows, distinct)
             return merged  # Combined assigned + unassigned rows
         except Exception as error:  # Fall back to assigned-only rows on any aggregation/merge failure
-            logging.error("Unassigned %s supplemental count failed: %s", distinct, error, exc_info=True)
+            logging.exception("Unassigned %s supplemental count failed: %s", distinct, error)
             return all_rows  # Degrade gracefully to the assigned-only counts
 
     @staticmethod

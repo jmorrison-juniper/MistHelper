@@ -194,12 +194,7 @@ class MultiHostRunner:
                     done, future_to_host, results, successful_hosts, failed_hosts, logger, iteration
                 )
         except Exception as loop_error:  # noqa: BLE001 - wait-loop failure fallback (verbatim trace)
-            logger.error(
-                "[TRACE] Multi-host wait loop failure: %s: %s",
-                type(loop_error).__name__,
-                loop_error,
-                exc_info=True,
-            )
+            logger.exception("[TRACE] Multi-host wait loop failure: %s: %s", type(loop_error).__name__, loop_error)
             for _future, host in future_to_host.items():  # Mark any unhandled hosts as failed (verbatim)
                 if host not in results:
                     results[host] = {"success": False, "summary": f"Loop failure: {loop_error}"}
@@ -227,7 +222,7 @@ class MultiHostRunner:
             try:
                 hostname, host_success, summary = future.result()
             except Exception as fut_error:  # noqa: BLE001 - mirror original safe-fallback path
-                logger.error("[TRACE] Future exception: %s: %s", type(fut_error).__name__, fut_error, exc_info=True)
+                logger.exception("[TRACE] Future exception: %s: %s", type(fut_error).__name__, fut_error)
                 hostname = future_to_host.get(future, "unknown")
                 host_success = False
                 summary = f"Error: {fut_error}"

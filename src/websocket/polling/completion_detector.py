@@ -104,8 +104,8 @@ class CompletionDetector:
     def _check_generic(self, lowered: str, check_count: int) -> str | None:
         """Scan flat indicator list, skipping generic ones for MAC tables."""
         if self.debug_mode and check_count % 100 == 1:  # Periodic debug trace preserved verbatim
-            self.logger.debug(f"Checking {len(_ALL_INDICATORS)} completion indicators")
-            self.logger.debug(f"Content sample for indicator check: {repr(lowered[:150])}")
+            self.logger.debug("Checking %s completion indicators", len(_ALL_INDICATORS))
+            self.logger.debug("Content sample for indicator check: %s", repr(lowered[:150]))
             print(f"[DEBUG] Checking {len(_ALL_INDICATORS)} completion indicators")
             print(f"[DEBUG] Content sample for indicator check: {repr(lowered[:150])}")
         mac_mode = "ethernet switching table" in lowered  # MAC-table-specific filter flag
@@ -114,7 +114,7 @@ class CompletionDetector:
                 continue
             if indicator in lowered:  # Substring match against the combined content
                 if self.debug_mode:
-                    self.logger.debug(f"FOUND completion indicator: '{indicator}'")
+                    self.logger.debug("FOUND completion indicator: '%s'", indicator)
                     print(f"[DEBUG] FOUND completion indicator: '{indicator}'")
                 return indicator  # Return the matching phrase as the completion reason
         return None  # No generic indicator matched
@@ -130,7 +130,7 @@ class CompletionDetector:
             if "packet loss" in line:  # Found the packet-loss line within the block
                 if self.debug_mode:
                     self.logger.debug("FOUND ping statistics completion pattern")
-                    self.logger.debug(f"Packet loss line: {repr(line[:100])}")
+                    self.logger.debug("Packet loss line: %s", repr(line[:100]))
                     print("[DEBUG] FOUND ping statistics completion pattern")
                     print(f"[DEBUG] Packet loss line: {repr(line[:100])}")
                 return "complete statistics block"
@@ -150,8 +150,8 @@ class CompletionDetector:
         if idle <= 3:  # Need >3 s of silence to call it done
             return None
         if self.debug_mode:
-            self.logger.debug(f"FOUND service ping completion: {pattern_count} patterns detected")
-            self.logger.debug(f"Service ping idle time: {idle:.1f}s")
+            self.logger.debug("FOUND service ping completion: %s patterns detected", pattern_count)
+            self.logger.debug("Service ping idle time: %.1fs", idle)
             print(f"[DEBUG] FOUND service ping completion: {pattern_count} patterns detected")
             print(f"[DEBUG] Service ping idle time: {idle:.1f}s")
         return "service ping pattern detected"
@@ -170,7 +170,7 @@ class CompletionDetector:
         """Emit the periodic service-ping debug trace preserved verbatim."""
         if not self.debug_mode or check_count % 200 != 1:
             return
-        self.logger.debug(f"Service ping pattern analysis: found {pattern_count} service ping indicators")
+        self.logger.debug("Service ping pattern analysis: found %s service ping indicators", pattern_count)
         print(f"[DEBUG] Service ping pattern analysis: found {pattern_count} service ping indicators")
         if "seq=" in lowered:
             self.logger.debug("Found seq= pattern in service ping output")
@@ -192,8 +192,8 @@ class CompletionDetector:
         if idle <= 2:  # Require >2 s of silence to declare done
             return None
         if self.debug_mode:
-            self.logger.debug(f"FOUND count-based service ping completion: {response_count} responses")
-            self.logger.debug(f"Idle time since last response: {idle:.1f}s")
+            self.logger.debug("FOUND count-based service ping completion: %s responses", response_count)
+            self.logger.debug("Idle time since last response: %.1fs", idle)
             print(f"[DEBUG] FOUND count-based service ping completion: {response_count} responses")
             print(f"[DEBUG] Idle time since last response: {idle:.1f}s")
         return f"count-based completion ({response_count} responses)"
@@ -236,8 +236,8 @@ class CompletionDetector:
             return None
         reason = f"mac table completion (detected {len(last_messages)} repeated identical messages)"
         if self.debug_mode:
-            self.logger.debug(f"FOUND MAC table completion: {len(last_messages)} repeated identical messages detected")
-            self.logger.debug(f"Repeated message: {repr(last_messages[0][:100])}")
+            self.logger.debug("FOUND MAC table completion: %s repeated identical messages detected", len(last_messages))
+            self.logger.debug("Repeated message: %s", repr(last_messages[0][:100]))
             print(f"[DEBUG] FOUND MAC table completion: {len(last_messages)} repeated identical messages detected")
             print(f"[DEBUG] Repeated message: {repr(last_messages[0][:100])}")
         return reason
@@ -257,7 +257,7 @@ class CompletionDetector:
         reason = f"mac table completion (idle timeout: {entry_count} entries, {idle_time:.1f}s idle)"
         if self.debug_mode:
             self.logger.debug(
-                f"FOUND MAC table completion via idle timeout: {entry_count} entries, {idle_time:.1f}s idle"
+                "FOUND MAC table completion via idle timeout: %s entries, %.1fs idle", entry_count, idle_time
             )
             print(f"[DEBUG] FOUND MAC table completion via idle timeout: {entry_count} entries, {idle_time:.1f}s idle")
         return reason

@@ -383,9 +383,7 @@ class MultiApScanCaptureWorkflow:
                 self._handle_launch_error(response)  # Dispatch error path.
         except Exception as error:
             print(f"\n! Error starting multi-AP capture: {error}")  # Preserve legacy exception message.
-            logging.error(
-                "Exception launching multi-AP capture: %s", error, exc_info=True
-            )  # Log exception with traceback.
+            logging.exception("Exception launching multi-AP capture: %s", error)  # Log exception with traceback.
 
     def run(self, site_id: str) -> None:
         """Execute the extracted multi-AP scan capture workflow."""

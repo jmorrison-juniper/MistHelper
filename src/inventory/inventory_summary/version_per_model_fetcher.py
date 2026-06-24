@@ -116,9 +116,7 @@ class VersionPerModelFetcher:
                 target_org_id
             )  # Reuse existing fetcher
         except Exception as error:  # Inventory fetch errors must not abort the whole summary run
-            logging.error(
-                "Switch inventory pre-fetch failed: %s", error, exc_info=True
-            )  # Capture traceback for postmortem
+            logging.exception("Switch inventory pre-fetch failed: %s", error)  # Capture traceback for postmortem
             records = []  # Degrade gracefully so per-model loop yields empty switch rows
         logging.debug("Switch pre-fetch returned %d records", len(records))  # Record outcome for diagnostics
         return records
@@ -138,9 +136,7 @@ class VersionPerModelFetcher:
                 target_org_id
             )  # Reuse existing fetcher
         except Exception as error:  # Inventory fetch errors must not abort the whole summary run
-            logging.error(
-                "Gateway inventory pre-fetch failed: %s", error, exc_info=True
-            )  # Capture traceback for postmortem
+            logging.exception("Gateway inventory pre-fetch failed: %s", error)  # Capture traceback for postmortem
             records = []  # Degrade gracefully so per-model loop yields empty gateway rows
         logging.debug("Gateway pre-fetch returned %d records", len(records))  # Record outcome for diagnostics
         return records

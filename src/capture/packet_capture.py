@@ -1467,7 +1467,7 @@ class PacketCaptureManager:
             self._handle_multi_ap_capture_result(response, site_id, duration, capture_format)
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"\n! Error starting multi-AP capture: {error}")
-            logging.error("Exception launching multi-AP capture: %s", error, exc_info=True)
+            logging.exception("Exception launching multi-AP capture: %s", error)
 
         logging.info("Multi-AP scan capture function completed")
 
@@ -1528,7 +1528,7 @@ class PacketCaptureManager:
 
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"\n! Error starting capture: {error}")
-            logging.error("Exception in _execute_site_capture: %s", error, exc_info=True)
+            logging.exception("Exception in _execute_site_capture: %s", error)
 
     def _fetch_completed_pcaps(self, site_id: str, iteration: int) -> list[dict[str, Any]]:
         """Fetch completed PCAPs from the API for the last 24 hours.
@@ -1605,7 +1605,7 @@ class PacketCaptureManager:
             response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(self.mist_session, site_id, payload)
         except Exception as capture_error:  # pylint: disable=broad-exception-caught
             print(f"  Error starting capture: {capture_error}")
-            logging.error("Exception starting capture: %s", capture_error, exc_info=True)
+            logging.exception("Exception starting capture: %s", capture_error)
             return None
 
         if response.status_code != 200:
@@ -1642,7 +1642,7 @@ class PacketCaptureManager:
             runner.run(site_id, payload)
         except Exception as loop_error:  # pylint: disable=broad-exception-caught
             print(f"\n! Unexpected error in capture loop: {loop_error}")
-            logging.error("Exception in capture loop: %s", loop_error, exc_info=True)
+            logging.exception("Exception in capture loop: %s", loop_error)
 
     def _print_loop_banner(self, payload: dict[str, Any]) -> None:
         """Print the continuous capture mode startup banner.
@@ -1787,7 +1787,7 @@ class PacketCaptureManager:
                 time.sleep(poll_interval)
 
             except Exception as poll_error:  # pylint: disable=broad-exception-caught
-                logging.error("Completion poll error: %s", poll_error, exc_info=True)
+                logging.exception("Completion poll error: %s", poll_error)
                 time.sleep(poll_interval)
 
         logging.warning("Capture %s completion check timed out after %ss", capture_id, max_wait)
@@ -2234,7 +2234,7 @@ class PacketCaptureManager:
 
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"\n! Error starting capture: {error}")
-            logging.error("Exception in _execute_org_capture: %s", error, exc_info=True)
+            logging.exception("Exception in _execute_org_capture: %s", error)
 
     def _monitor_capture_stream(self, channel: str, capture_id: str) -> None:
         """Monitor WebSocket stream for capture packets.
@@ -2270,7 +2270,7 @@ class PacketCaptureManager:
 
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"\n! Error subscribing to stream: {error}")
-            logging.error("Exception in _monitor_capture_stream: %s", error, exc_info=True)
+            logging.exception("Exception in _monitor_capture_stream: %s", error)
 
     def _read_stream_packets(self, channel: str, capture_id: str) -> None:
         """Read and count packets from WebSocket stream.
@@ -2396,7 +2396,7 @@ class PacketCaptureManager:
                 print(f"  Download manually from: {pcap_url}")
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"\n! Error downloading PCAP file: {error}")
-            logging.error("Exception in poll_and_download_pcap for %s: %s", capture_id, error, exc_info=True)
+            logging.exception("Exception in poll_and_download_pcap for %s: %s", capture_id, error)
             if pcap_url:
                 print(f"  Try downloading manually from: {pcap_url}")
 
@@ -2490,4 +2490,4 @@ class PacketCaptureManager:
             logging.info("Capture info exported to %s", filename)
 
         except Exception as error:  # pylint: disable=broad-exception-caught
-            logging.error("Failed to export capture info: %s", error, exc_info=True)
+            logging.exception("Failed to export capture info: %s", error)

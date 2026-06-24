@@ -111,7 +111,7 @@ class MarvisTroubleshootUtils:
             logging.debug("Marvis device response received (has_data=%s)", bool(response.data))  # Post-call summary
             MarvisTroubleshootUtils._handle_device_response(deps, response, device_mac, device_name)  # Dispatch result
         except Exception as error:  # noqa: BLE001 - bare Exception is the SDK contract
-            logging.error("Exception in device_performance: %s", error, exc_info=True)  # Log with traceback
+            logging.exception("Exception in device_performance: %s", error)  # Log with traceback
             print(f"! Failed to troubleshoot device: {error}")
             MarvisTroubleshootUtils._print_error_guidance("device")
 
@@ -140,7 +140,7 @@ class MarvisTroubleshootUtils:
             logging.debug("Marvis network response received (has_data=%s)", bool(response.data))  # Post-call summary
             MarvisTroubleshootUtils._handle_network_response(deps, response, site_id)  # Dispatch into display/save
         except Exception as error:  # noqa: BLE001
-            logging.error("Exception in network_connectivity: %s", error, exc_info=True)
+            logging.exception("Exception in network_connectivity: %s", error)
             print(f"! Failed to troubleshoot network: {error}")
             MarvisTroubleshootUtils._print_error_guidance("network")
 

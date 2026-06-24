@@ -101,7 +101,7 @@ class WanHubGroupNumberManager:
             logging.debug("Fetched %d gateway profiles", len(profiles))
             return profiles
         except Exception:
-            logging.error("Failed to fetch device profiles", exc_info=True)
+            logging.exception("Failed to fetch device profiles")
             print("! Error retrieving WAN Hub Profiles. Check API connectivity.")
             return []
 
@@ -119,7 +119,7 @@ class WanHubGroupNumberManager:
             logging.debug("Fetched %d hub-spoke VPNs out of %d total", len(hub_spoke), len(all_vpns))
             return hub_spoke, all_vpns
         except Exception:
-            logging.error("Failed to fetch org VPNs", exc_info=True)
+            logging.exception("Failed to fetch org VPNs")
             print("! Error retrieving VPN definitions. Check API connectivity.")
             return [], []
 
@@ -372,7 +372,7 @@ class WanHubGroupNumberManager:
                     new_pod,
                 )
             except Exception:
-                logging.error("Failed to update VPN '%s'", vpn_name, exc_info=True)
+                logging.exception("Failed to update VPN '%s'", vpn_name)
                 print(f"  Error updating VPN '{vpn_name}'. Check logs for details.")
                 return
         print(f"  Updated {total_updated} paths for '{profile_name}' to pod {new_pod}.")
