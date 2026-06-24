@@ -16115,7 +16115,7 @@ class CLIShellManager:  # CLI shell over WebSocket.
                     return  # Issue #431: removed obsolete stop_listening() call (was a no-op stub)
                 mapped_key = keymap.get(key, key)  # Map the key.
                 data = f"\00{mapped_key}"  # Frame the data.
-                data_byte = bytearray(map(ord, data))  # Encode to bytes.
+                data_byte = bytes(map(ord, data))  # Immutable bytes: send_binary(payload: bytes) requires bytes.
                 if debug:  # Debug mode.
                     print(f"[DEBUG] Sending: {repr(data)}")  # Trace the send.
                 try:
@@ -16129,7 +16129,7 @@ class CLIShellManager:  # CLI shell over WebSocket.
 
         # Wake up Juniper SSR prompt
         time.sleep(1)  # Wait for connect.
-        ws.send_binary(bytearray(map(ord, "\00\n\n")))  # Send a wakeup.
+        ws.send_binary(bytes(map(ord, "\00\n\n")))  # Send a wakeup; bytes (not bytearray) matches send_binary.
         if debug:  # Debug mode.
             print("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # Trace the wakeup.
 
