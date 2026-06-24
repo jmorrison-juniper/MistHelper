@@ -6001,7 +6001,7 @@ class FilePathUtils:
     """
 
     @staticmethod
-    def get_csv_path(filename: str) -> str:
+    def get_csv_path(filename: str) -> str:  # Resolve a CSV name to a path under data/.
         """
         Helper function to ensure consistent CSV file paths in the data directory.
 
@@ -6012,20 +6012,20 @@ class FilePathUtils:
             str: Full path to the CSV file in the data directory
         """
         # Ensure data directory exists
-        data_dir = "data"
-        os.makedirs(data_dir, exist_ok=True)
+        data_dir = "data"  # All exports are confined to the data/ directory.
+        os.makedirs(data_dir, exist_ok=True)  # Create data/ on first use; no error if it exists.
 
         # If filename already includes a path, use it as-is
-        if os.path.dirname(filename):
-            return filename
+        if os.path.dirname(filename):  # Caller supplied an explicit directory.
+            return filename  # Respect caller-provided paths verbatim.
 
         # Otherwise, place it in the data directory
-        return os.path.join(data_dir, filename)
+        return os.path.join(data_dir, filename)  # Join bare names under data/ portably.
 
     @staticmethod
     def create_csv_template(
         filename: str, headers: list[str] | None = None, sample_data: list[list[str]] | None = None
-    ) -> str:
+    ) -> str:  # Create an empty CSV placeholder with optional headers.
         """
         Creates a basic CSV file placeholder in the correct location.
 
@@ -6037,70 +6037,70 @@ class FilePathUtils:
         Returns:
             str: Full path to the created file
         """
-        file_path = FilePathUtils.get_csv_path(filename)
+        file_path = FilePathUtils.get_csv_path(filename)  # Normalize the destination under data/.
 
         try:
             # Just create an empty file in the correct location
-            with open(file_path, "w", newline="", encoding="utf-8") as f:
-                if headers:
-                    writer = csv.writer(f)
-                    writer.writerow(headers)
+            with open(file_path, "w", newline="", encoding="utf-8") as f:  # Truncate/create the file.
+                if headers:  # Only write a header row when headers were provided.
+                    writer = csv.writer(f)  # Wrap the handle in a CSV writer.
+                    writer.writerow(headers)  # Emit the single header row.
                 # Don't write sample data - user will add their own content
 
-            logging.info("Created template file: %s", file_path)
-            return file_path
-        except Exception as error:
-            logging.error("Failed to create template file %s: %s", filename, error)
-            raise
+            logging.info("Created template file: %s", file_path)  # Record the created placeholder.
+            return file_path  # Hand the path back to the caller.
+        except Exception as error:  # Never leave a partial file without surfacing the cause.
+            logging.error("Failed to create template file %s: %s", filename, error)  # Log the failure cause.
+            raise  # Re-raise so callers can handle the failure.
 
 
 # ============================================================================
 # ENVIRONMENT UTILITIES CLASS
 # ============================================================================
-class EnvironmentUtils:
+class EnvironmentUtils:  # Centralized runtime/container environment detection.
     """
     Centralized environment detection utilities.
     Handles container detection, runtime environment identification, etc.
     """
 
     # Constants for container detection
-    TRUE_VALUES = {"1", "true", "yes", "on"}
-    OVERRIDE_ENV_VARS = ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER")
-    CONTAINER_ENV_VARS = (
+    TRUE_VALUES = {"1", "true", "yes", "on"}  # Strings treated as boolean-true in env vars.
+    OVERRIDE_ENV_VARS = ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER")  # Manual override switches.
+    CONTAINER_ENV_VARS = (  # Well-known vars set by container runtimes.
         "CONTAINER",
         "DOCKER_CONTAINER",
         "PODMAN_CONTAINER",
         "KUBERNETES_SERVICE_HOST",
         "CONTAINERD_NAMESPACE",
     )
-    CGROUP_INDICATORS = ("docker", "containerd", "podman", "lxc")
+    CGROUP_INDICATORS = ("docker", "containerd", "podman", "lxc")  # Substrings that mark a container cgroup.
 
     @staticmethod
-    def _check_override_env_vars() -> bool | None:
+    def _check_override_env_vars() -> bool | None:  # Honor an explicit operator override first.
         """Check for explicit container override environment variables."""
-        for explicit_var in EnvironmentUtils.OVERRIDE_ENV_VARS:
-            value = os.environ.get(explicit_var, "").strip().lower()
-            if value in EnvironmentUtils.TRUE_VALUES:
-                logging.debug("Container detection: override via %s=%s", explicit_var, value)
-                return True
-        return None
+        for explicit_var in EnvironmentUtils.OVERRIDE_ENV_VARS:  # Inspect each override switch.
+            value = os.environ.get(explicit_var, "").strip().lower()  # Normalize the configured value.
+            if value in EnvironmentUtils.TRUE_VALUES:  # Operator forced container mode on.
+                logging.debug("Container detection: override via %s=%s", explicit_var, value)  # Trace the override.
+                return True  # Short-circuit: treat as a container.
+        return None  # No override set; defer to other detectors.
 
     @staticmethod
-    def _check_dockerenv_file() -> bool:
+    def _check_dockerenv_file() -> bool:  # Detect Docker's /.dockerenv sentinel file.
         """Check for /.dockerenv sentinel file."""
-        if os.path.exists("/.dockerenv"):
-            logging.debug("Container detection: /.dockerenv present")
-            return True
-        return False
+        if os.path.exists("/.dockerenv"):  # Docker drops this file inside containers.
+            logging.debug("Container detection: /.dockerenv present")  # Trace the positive signal.
+            return True  # Sentinel present means containerized.
+        return False  # Absent sentinel is inconclusive here.
 
     @staticmethod
-    def _check_container_env_vars() -> bool:
+    def _check_container_env_vars() -> bool:  # Detect container runtimes via env vars.
         """Check for well-known container environment variables."""
-        for env_var in EnvironmentUtils.CONTAINER_ENV_VARS:
-            if os.environ.get(env_var):
-                logging.debug("Container detection: environment variable %s present", env_var)
-                return True
-        return False
+        for env_var in EnvironmentUtils.CONTAINER_ENV_VARS:  # Probe each known runtime variable.
+            if os.environ.get(env_var):  # Any non-empty value signals a container.
+                logging.debug("Container detection: environment variable %s present", env_var)  # Trace which one.
+                return True  # Treat as containerized.
+        return False  # None present; inconclusive here.
 
     @staticmethod
     def _check_cgroup_markers() -> bool:
@@ -6108,43 +6108,43 @@ class EnvironmentUtils:
         try:
             with open("/proc/1/cgroup", encoding="utf-8", errors="ignore") as cgroup_file:
                 cgroup_content = cgroup_file.read().lower()
-                for indicator in EnvironmentUtils.CGROUP_INDICATORS:
-                    if indicator in cgroup_content:
-                        logging.debug("Container detection: cgroup indicator '%s' found", indicator)
-                        return True
-        except (FileNotFoundError, PermissionError):
-            pass
-        return False
+                for indicator in EnvironmentUtils.CGROUP_INDICATORS:  # Scan cgroup text for each runtime marker.
+                    if indicator in cgroup_content:  # Marker substring present in cgroup.
+                        logging.debug("Container detection: cgroup indicator '%s' found", indicator)  # marker found.
+                        return True  # Containerized: a marker was found.
+        except (FileNotFoundError, PermissionError):  # No cgroup file or no access (host/non-Linux).
+            pass  # Treat missing cgroup as not-containerized.
+        return False  # No cgroup markers: not a container.
 
     @staticmethod
-    def _check_runtime_user() -> bool:
+    def _check_runtime_user() -> bool:  # Detect the container's dedicated service user.
         """Check if running as the 'misthelper' user."""
         try:
             import pwd  # Unix only
 
             current_user_name = pwd.getpwuid(os.getuid()).pw_name  # type: ignore[attr-defined]
-            if current_user_name == "misthelper":
-                logging.debug("Container detection: running as user 'misthelper'")
-                return True
+            if current_user_name == "misthelper":  # Image runs as the misthelper user.
+                logging.debug("Container detection: running as user 'misthelper'")  # Trace the user-based signal.
+                return True  # Running as misthelper means containerized.
         except Exception:  # nosec B110
-            pass
-        return False
+            pass  # Ignore lookup failures on host systems.
+        return False  # User signal absent: inconclusive.
 
     @staticmethod
-    def _check_app_path_with_sshd() -> bool:
+    def _check_app_path_with_sshd() -> bool:  # Detect the /app + sshd image layout.
         """Check for canonical container path /app with sshd presence."""
         try:
-            this_file_dir = os.path.abspath(os.path.dirname(__file__))
-            if this_file_dir.startswith("/app") and os.path.exists("/app/MistHelper.py"):
-                if os.path.exists("/usr/sbin/sshd"):
-                    logging.debug("Container detection: /app path with MistHelper.py and sshd present")
-                    return True
+            this_file_dir = os.path.abspath(os.path.dirname(__file__))  # Absolute directory of this module.
+            if this_file_dir.startswith("/app") and os.path.exists("/app/MistHelper.py"):  # In the image path.
+                if os.path.exists("/usr/sbin/sshd"):  # Image ships the SSH daemon.
+                    logging.debug("Container detection: /app path with MistHelper.py and sshd present")  # image signal.
+                    return True  # Layout matches the container image.
         except Exception:  # nosec B110
-            pass
-        return False
+            pass  # Ignore path-probing errors on host.
+        return False  # Layout not present: inconclusive.
 
     @staticmethod
-    def is_running_in_container() -> bool:
+    def is_running_in_container() -> bool:  # Public aggregate container check.
         """Determine if execution appears to be inside a container.
 
         Detection strategy is deliberately multi-factor and conservative. A positive
@@ -6163,12 +6163,12 @@ class EnvironmentUtils:
         """
         try:
             # Check override first (explicit operator control)
-            override_result = EnvironmentUtils._check_override_env_vars()
-            if override_result is not None:
-                return override_result
+            override_result = EnvironmentUtils._check_override_env_vars()  # Operator override wins first.
+            if override_result is not None:  # Override explicitly set the answer.
+                return override_result  # Honor the forced value.
 
             # Check standard indicators in order of reliability
-            checks = [
+            checks = [  # Ordered fallback detectors.
                 EnvironmentUtils._check_dockerenv_file,
                 EnvironmentUtils._check_container_env_vars,
                 EnvironmentUtils._check_cgroup_markers,
@@ -6176,18 +6176,18 @@ class EnvironmentUtils:
                 EnvironmentUtils._check_app_path_with_sshd,
             ]
 
-            for check in checks:
-                if check():
-                    return True
+            for check in checks:  # Run each detector in order.
+                if check():  # First positive detector wins.
+                    return True  # A detector confirmed container.
 
-        except Exception as container_detection_error:
-            logging.debug("Container detection failed with exception: %s", container_detection_error)
+        except Exception as container_detection_error:  # Never let detection crash startup.
+            logging.debug("Container detection failed with exception: %s", container_detection_error)  # log failure.
 
-        logging.debug("Container detection: no container indicators found - running in direct mode")
-        return False
+        logging.debug("Container detection: no container indicators found - running in direct mode")  # direct mode.
+        return False  # Default: not containerized.
 
     @staticmethod
-    def is_debug_mode() -> bool:
+    def is_debug_mode() -> bool:  # Report whether debug logging is on.
         """
         Check if debug mode is enabled via command line arguments.
         Delegates to module-level is_debug_mode() for consistency.
@@ -6201,14 +6201,14 @@ class EnvironmentUtils:
 # ============================================================================
 # VALIDATION UTILITIES CLASS
 # ============================================================================
-class ValidationUtils:
+class ValidationUtils:  # Input validators for API identifiers.
     """
     Centralized validation utilities for input validation and sanitization.
     All validation functions should be static methods in this class.
     """
 
     @staticmethod
-    def validate_site_id(site_id: str | None, function_name: str = "unknown") -> bool:
+    def validate_site_id(site_id: str | None, function_name: str = "unknown") -> bool:  # Guard site_id before API use.
         """
         Validates that site_id is not None or empty before making API calls.
 
@@ -6222,20 +6222,20 @@ class ValidationUtils:
         Raises:
             ValueError: If site_id is None or empty
         """
-        if site_id is None:
-            error_msg = f"! site_id is None in {function_name}. Cannot make API call."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
+        if site_id is None:  # Reject a missing site_id.
+            error_msg = f"! site_id is None in {function_name}. Cannot make API call."  # Build the failure message.
+            logging.error(error_msg)  # Log before raising.
+            raise ValueError(error_msg)  # Abort the call with context.
 
-        if isinstance(site_id, str) and site_id.strip() == "":
-            error_msg = f"! site_id is empty string in {function_name}. Cannot make API call."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
+        if isinstance(site_id, str) and site_id.strip() == "":  # Reject empty/whitespace site_id.
+            error_msg = f"! site_id is empty string in {function_name}. Cannot make API call."  # empty-string msg.
+            logging.error(error_msg)  # Log before raising.
+            raise ValueError(error_msg)  # Abort the call.
 
-        return True
+        return True  # site_id passed validation.
 
     @staticmethod
-    def validate_device_id(device_id: str | None, function_name: str = "unknown") -> bool:
+    def validate_device_id(device_id: str | None, function_name: str = "unknown") -> bool:  # Guard device_id.
         """
         Validates that device_id is not None or empty before making API calls.
 
@@ -6249,20 +6249,20 @@ class ValidationUtils:
         Raises:
             ValueError: If device_id is None or empty
         """
-        if device_id is None:
-            error_msg = f"! device_id is None in {function_name}. Cannot make API call."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
+        if device_id is None:  # Reject a missing device_id.
+            error_msg = f"! device_id is None in {function_name}. Cannot make API call."  # Build the failure message.
+            logging.error(error_msg)  # Log before raising.
+            raise ValueError(error_msg)  # Abort the call with context.
 
-        if isinstance(device_id, str) and device_id.strip() == "":
-            error_msg = f"! device_id is empty string in {function_name}. Cannot make API call."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
+        if isinstance(device_id, str) and device_id.strip() == "":  # Reject empty/whitespace device_id.
+            error_msg = f"! device_id is empty string in {function_name}. Cannot make API call."  # empty-string msg.
+            logging.error(error_msg)  # Log before raising.
+            raise ValueError(error_msg)  # Abort the call.
 
-        return True
+        return True  # device_id passed validation.
 
     @staticmethod
-    def validate_ping_target(target: str) -> bool:
+    def validate_ping_target(target: str) -> bool:  # Validate a ping destination string.
         """
         Validate ping target hostname or IP address.
 
@@ -6272,39 +6272,39 @@ class ValidationUtils:
         Returns:
             bool: True if valid target, False otherwise
         """
-        if not target or len(target.strip()) == 0:
-            return False
+        if not target or len(target.strip()) == 0:  # Reject empty targets.
+            return False  # Invalid: no target given.
 
-        target = target.strip()
+        target = target.strip()  # Normalize surrounding whitespace.
 
         # Check if it's a valid IP address
         try:
-            ipaddress.ip_address(target)
-            return True
-        except ValueError:
-            pass
+            ipaddress.ip_address(target)  # Parse as a literal IP.
+            return True  # Valid IP target.
+        except ValueError:  # Not an IP; try hostname.
+            pass  # Fall through to hostname check.
 
         # Check if it's a valid hostname
         # Basic hostname validation: alphanumeric, dots, hyphens
-        if re.match(r"^[a-zA-Z0-9.-]+$", target) and len(target) <= 253:
+        if re.match(r"^[a-zA-Z0-9.-]+$", target) and len(target) <= 253:  # Allow valid hostname charset/length.
             # Ensure it doesn't start or end with a dot or hyphen
-            if not target.startswith((".", "-")) and not target.endswith((".", "-")):
-                return True
+            if not target.startswith((".", "-")) and not target.endswith((".", "-")):  # Reject edge dot/dash.
+                return True  # Valid hostname target.
 
-        return False
+        return False  # Invalid ping target.
 
 
 # ============================================================================
 # CONFIGURATION UTILITIES CLASS
 # ============================================================================
-class ConfigUtils:
+class ConfigUtils:  # Org id and run-control helpers.
     """
     Centralized configuration utilities.
     Handles org_id retrieval, credentials, and configuration management.
     """
 
     @staticmethod
-    def get_cached_or_prompted_org_id() -> str:
+    def get_cached_or_prompted_org_id() -> str:  # Resolve org_id from cache/env/.env/prompt.
         """
         Get organization ID from various sources in order of preference:
         1. Global variable
@@ -6312,41 +6312,41 @@ class ConfigUtils:
         3. .env file
         4. Interactive prompt
         """
-        global org_id
+        global org_id  # Cache resolved id in the module global.
         # 1. Check global variable
-        if org_id:
-            logging.info("! Using org_id from global variable: %s", org_id)
+        if org_id:  # Reuse an already-resolved id.
+            logging.info("! Using org_id from global variable: %s", org_id)  # Trace the cached source.
             return org_id  # type: ignore[no-any-return]
         # 2. Check environment variable (set by dotenv or OS)
-        org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")
-        if org_id_env:
-            org_id = org_id_env
-            logging.info("! Loaded org_id from environment: %s", org_id)
-            return org_id
+        org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")  # Try environment variables next.
+        if org_id_env:  # Environment provided the id.
+            org_id = org_id_env  # Cache the env value.
+            logging.info("! Loaded org_id from environment: %s", org_id)  # Trace the env source.
+            return org_id  # Use the env id.
         # 3. Fallback: Try to load from .env manually (rarely needed)
         try:
-            with open(".env") as env_file:
-                for line in env_file:
-                    if line.strip().startswith("org_id="):
-                        org_id = line.strip().split("=", 1)[1].strip().strip('"')
-            if org_id:
-                logging.info("! Loaded org_id from .env: %s", org_id)
-                return org_id
-        except FileNotFoundError:
-            logging.warning("! .env file not found.")
+            with open(".env") as env_file:  # Fall back to the .env file.
+                for line in env_file:  # Scan each line for org_id.
+                    if line.strip().startswith("org_id="):  # Match the org_id assignment.
+                        org_id = line.strip().split("=", 1)[1].strip().strip('"')  # Extract and unquote the value.
+            if org_id:  # A value was parsed.
+                logging.info("! Loaded org_id from .env: %s", org_id)  # Trace the .env source.
+                return org_id  # Use the .env id.
+        except FileNotFoundError:  # No .env file present.
+            logging.warning("! .env file not found.")  # Warn that .env is missing.
         # 4. Prompt if still not set
-        logging.info("* No org_id found in .env or CLI. Prompting user...")
-        org_id_list = mistapi.cli.select_org(apisession)
-        if not org_id_list:
-            logging.error("Failed to retrieve org list. Check your API token and authentication.")
-            print("[ERROR] Unable to retrieve organizations. Your API token may be invalid or expired.")
-            print("[ERROR] Please update MIST_API_TOKEN in your .env file and try again.")
-            sys.exit(1)
-        org_id = org_id_list[0]
+        logging.info("* No org_id found in .env or CLI. Prompting user...")  # Prompt the user as last resort.
+        org_id_list = mistapi.cli.select_org(apisession)  # Interactive org selection.
+        if not org_id_list:  # Selection returned nothing.
+            logging.error("Failed to retrieve org list. Check your API token and authentication.")  # Log list failure.
+            print("[ERROR] Unable to retrieve organizations. Your API token may be invalid or expired.")  # Token hint.
+            print("[ERROR] Please update MIST_API_TOKEN in your .env file and try again.")  # Point to .env token.
+            sys.exit(1)  # Abort: no org to proceed with.
+        org_id = org_id_list[0]  # Use the first selected org.
         return org_id  # type: ignore[no-any-return]
 
     @staticmethod
-    def check_stop_signal() -> bool:
+    def check_stop_signal() -> bool:  # Check for the user stop sentinel.
         """Check for stop_loop.txt signal file and remove if found.
 
         Any long-running loop that iterates over sites or devices with API
@@ -6356,21 +6356,21 @@ class ConfigUtils:
         Returns:
             True if the stop signal was detected (caller should break).
         """
-        if os.path.exists("stop_loop.txt"):
+        if os.path.exists("stop_loop.txt"):  # Sentinel file requests a stop.
             try:
-                os.remove("stop_loop.txt")
-            except OSError:
-                pass
-            print(" Stop signal detected. Ending operation early.")
-            logging.info("Stop signal (stop_loop.txt) detected - operation stopped by user.")
-            return True
-        return False
+                os.remove("stop_loop.txt")  # Consume the sentinel once.
+            except OSError:  # Ignore removal races.
+                pass  # Best-effort cleanup only.
+            print(" Stop signal detected. Ending operation early.")  # Notify the user of early stop.
+            logging.info("Stop signal (stop_loop.txt) detected - operation stopped by user.")  # Log user stop.
+            return True  # Signal callers to stop.
+        return False  # No stop requested.
 
 
 # ============================================================================
 # API FETCH UTILITIES CLASS
 # ============================================================================
-class APICoreFetchUtils:
+class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
     """
     Core API Fetch Utilities
 
@@ -6419,7 +6419,7 @@ class APICoreFetchUtils:
 from src.api.tenant_fetch import APITenantFetchUtils  # Import the extracted instance class
 
 
-class APIFetchUtils:
+class APIFetchUtils:  # Higher-level org/site fetchers.
     """
     Centralized API fetch utilities.
     Groups all data fetching functions for better code organization.
@@ -6427,7 +6427,7 @@ class APIFetchUtils:
     """
 
     @staticmethod
-    def organization_services() -> list[dict[str, Any]]:
+    def organization_services() -> list[dict[str, Any]]:  # Fetch and flatten org services.
         """
         Fetch all services defined at the organization level using the Mist API.
 
@@ -6437,23 +6437,23 @@ class APIFetchUtils:
         SECURITY: Read-only operation fetching configuration data only.
         """
         try:
-            org_id = ConfigUtils.get_cached_or_prompted_org_id()
-            logging.info("Fetching organization services for org_id: %s", org_id)
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the target org.
+            logging.info("Fetching organization services for org_id: %s", org_id)  # Log before the API call.
 
             # Call the Mist API to get organization services
-            response = mistapi.api.v1.orgs.services.listOrgServices(apisession, org_id, limit=1000)
+            response = mistapi.api.v1.orgs.services.listOrgServices(apisession, org_id, limit=1000)  # List services.
 
-            if hasattr(response, "data") and response.data:
-                services_data = response.data
-                logging.info("Successfully retrieved %s organization services", len(services_data))
+            if hasattr(response, "data") and response.data:  # Only proceed with data.
+                services_data = response.data  # Unwrap the payload.
+                logging.info("Successfully retrieved %s organization services", len(services_data))  # Log the count.
 
                 # Extract service names and types for easier display
-                services_list = []
-                for service in services_data:
-                    if isinstance(service, dict):
-                        service_name = service.get("name", "unnamed")
-                        service_type = service.get("type", "custom")
-                        service_desc = service.get("description", "")
+                services_list = []  # Accumulate normalized rows.
+                for service in services_data:  # Walk each service.
+                    if isinstance(service, dict):  # Skip non-dict entries.
+                        service_name = service.get("name", "unnamed")  # Default missing names.
+                        service_type = service.get("type", "custom")  # Default missing type.
+                        service_desc = service.get("description", "")  # Default missing description.
                         services_list.append(
                             {
                                 "name": service_name,
@@ -6463,18 +6463,18 @@ class APIFetchUtils:
                             }
                         )
 
-                return services_list
+                return services_list  # Return normalized services.
 
             else:
-                logging.warning("No organization services found or response data is empty")
-                return []
+                logging.warning("No organization services found or response data is empty")  # Warn on empty response.
+                return []  # No services to return.
 
-        except Exception as error:
-            logging.error("Failed to fetch organization services: %s", error)
-            return []
+        except Exception as error:  # Never crash on API failure.
+            logging.error("Failed to fetch organization services: %s", error)  # Log the fetch failure.
+            return []  # Degrade to empty list.
 
     @staticmethod
-    def all_site_settings(apisession, org_id, limit=1000):
+    def all_site_settings(apisession, org_id, limit=1000):  # Fetch settings for every site.
         """
         Fetches configuration settings for all sites in the organization.
 
@@ -6486,29 +6486,29 @@ class APIFetchUtils:
         Returns:
             List of dictionaries, each containing the settings for a site.
         """
-        logging.info("Fetching all site settings...")
+        logging.info("Fetching all site settings...")  # Log before fetching sites.
 
         # Use mistapi.get_all to ensure pagination is handled for all sites
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites first.
 
-        all_configs = []
+        all_configs = []  # Collect per-site settings.
         for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]
-            if ConfigUtils.check_stop_signal():
-                break
-            site_id = site.get("id")
-            site_name = site.get("name", "Unnamed Site")
+            if ConfigUtils.check_stop_signal():  # Honor a user stop request.
+                break  # Stop iterating sites.
+            site_id = site.get("id")  # Target site id.
+            site_name = site.get("name", "Unnamed Site")  # Friendly site label.
             try:
                 # Fetch the site settings using the Mist API
-                config = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data
-                config["site_id"] = site_id
-                config["site_name"] = site_name
-                all_configs.append(config)
-                logging.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)
-            except Exception as error:
-                logging.warning("! Failed to fetch config for %s (ID: %s): %s", site_name, site_id, error)
+                config = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data  # Fetch site settings.
+                config["site_id"] = site_id  # Tag with site id.
+                config["site_name"] = site_name  # Tag with site name.
+                all_configs.append(config)  # Collect the setting.
+                logging.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)  # Log fetched config.
+            except Exception as error:  # Skip sites that fail.
+                logging.warning("! Failed to fetch config for %s (ID: %s): %s", site_name, site_id, error)  # log fail.
 
-        logging.info("Fetched settings for %s sites.", len(all_configs))
-        return all_configs
+        logging.info("Fetched settings for %s sites.", len(all_configs))  # Log total fetched.
+        return all_configs  # Return all site settings.
 
     @staticmethod
     def gateway_device_configs(apisession, org_id, fast=False, max_workers=None):  # noqa: C901, PLR0915
@@ -6525,116 +6525,116 @@ class APIFetchUtils:
         Returns:
             List of device configuration dictionaries.
         """
-        logging.info("Fetching org inventory to find gateway devices...")
+        logging.info("Fetching org inventory to find gateway devices...")  # Log before inventory fetch.
         try:
-            response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)
-            inventory = mistapi.get_all(response=response, mist_session=apisession)
-        except Exception as error:
-            logging.error("! Failed to fetch org inventory: %s", error)
-            return []
+            response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)  # Fetch inventory.
+            inventory = mistapi.get_all(response=response, mist_session=apisession)  # Page through all devices.
+        except Exception as error:  # Inventory fetch failed.
+            logging.error("! Failed to fetch org inventory: %s", error)  # Log the failure.
+            return []  # Degrade to empty list.
 
-        logging.info("Found %s total devices in org inventory.", len(inventory))
+        logging.info("Found %s total devices in org inventory.", len(inventory))  # Log device count.
 
         # Load site names from SiteList.csv for enrichment
-        site_name_lookup = {}
+        site_name_lookup = {}  # Map site id to name.
         try:
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-            with open(site_list_path, encoding="utf-8") as file_handle:
-                reader = csv.DictReader(file_handle)
-                site_name_lookup = {row.get("id"): row.get("name", "Unnamed Site") for row in reader}
-        except Exception as error:
-            logging.warning("! Failed to load SiteList.csv for site names: %s", error)
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Locate the site list CSV.
+            with open(site_list_path, encoding="utf-8") as file_handle:  # Read site names from CSV.
+                reader = csv.DictReader(file_handle)  # Parse CSV rows.
+                site_name_lookup = {row.get("id"): row.get("name", "Unnamed Site") for row in reader}  # id->name map.
+        except Exception as error:  # CSV missing or unreadable.
+            logging.warning("! Failed to load SiteList.csv for site names: %s", error)  # Warn names may be unknown.
 
         # Filter for gateway devices and build work list
-        work_items = []
-        for device in inventory:
-            if device.get("type") == "gateway":
-                site_id = device.get("site_id")
-                device_id = device.get("id")
-                if site_id and device_id:
-                    site_name = site_name_lookup.get(site_id, "Unknown")
-                    work_items.append((site_id, device_id, site_name))
+        work_items = []  # Build gateway work list.
+        for device in inventory:  # Scan inventory devices.
+            if device.get("type") == "gateway":  # Only gateways need configs.
+                site_id = device.get("site_id")  # Owning site id.
+                device_id = device.get("id")  # Device id.
+                if site_id and device_id:  # Require both ids.
+                    site_name = site_name_lookup.get(site_id, "Unknown")  # Resolve site name.
+                    work_items.append((site_id, device_id, site_name))  # Queue the fetch.
 
-        logging.info("Prepared %s gateway device config API calls.", len(work_items))
+        logging.info("Prepared %s gateway device config API calls.", len(work_items))  # Log planned API calls.
 
-        def fetch_config(work_item, connection_semaphore):
+        def fetch_config(work_item, connection_semaphore):  # Fetch one device's config.
             """Fetch configuration for a single device with retry logic."""
-            work_site_id, work_device_id, work_site_name = work_item
+            work_site_id, work_device_id, work_site_name = work_item  # Unpack the work item.
 
             with connection_semaphore:  # Limit concurrent connections
                 try:
-                    logging.debug("Fetching config for %s (%s)", work_device_id, work_site_name)
-                    config_response = mistapi.api.v1.sites.devices.getSiteDevice(
+                    logging.debug("Fetching config for %s (%s)", work_device_id, work_site_name)  # Trace the fetch.
+                    config_response = mistapi.api.v1.sites.devices.getSiteDevice(  # Call the device API.
                         apisession, work_site_id, work_device_id
                     )
-                    config = getattr(config_response, "data", {})
-                    if config:
+                    config = getattr(config_response, "data", {})  # Unwrap data safely.
+                    if config:  # Only keep non-empty configs.
                         # Add site metadata for enrichment
-                        config["site_name"] = work_site_name
-                        config["site_id"] = work_site_id
-                        logging.debug("! Config fetched for %s", work_device_id)
-                        return config
+                        config["site_name"] = work_site_name  # Tag with site name.
+                        config["site_id"] = work_site_id  # Tag with site id.
+                        logging.debug("! Config fetched for %s", work_device_id)  # Trace success.
+                        return config  # Return the config.
                     else:
-                        logging.warning("! Empty config for device %s", work_device_id)
-                except Exception as inner_error:
-                    logging.error("! Failed to fetch config for device %s: %s", work_device_id, inner_error)
-                    return None
+                        logging.warning("! Empty config for device %s", work_device_id)  # Warn on empty config.
+                except Exception as inner_error:  # Isolate per-device failures.
+                    logging.error("! Failed to fetch config for device %s: %s", work_device_id, inner_error)  # log err.
+                    return None  # Mark this device failed.
 
-        def retry_fetch_config(failed_items, connection_semaphore):
+        def retry_fetch_config(failed_items, connection_semaphore):  # Retry failed device fetches.
             """Retry wrapper for device config fetching."""
-            max_retries = int(os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1"))
-            retry_results = []
+            max_retries = int(os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1"))  # Configurable retry count.
+            retry_results = []  # Collect retried configs.
 
-            for failed_work_item in failed_items:
-                failed_site_id, failed_device_id, failed_site_name = failed_work_item
+            for failed_work_item in failed_items:  # Walk failed items.
+                failed_site_id, failed_device_id, failed_site_name = failed_work_item  # Unpack the failed item.
 
-                for attempt in range(max_retries + 1):
+                for attempt in range(max_retries + 1):  # Bounded retry loop.
                     result = fetch_config(failed_work_item, connection_semaphore)  # type: ignore[no-untyped-call]
-                    if result is not None:
-                        retry_results.append(result)
-                        break
-                    if attempt < max_retries:
+                    if result is not None:  # Retry succeeded.
+                        retry_results.append(result)  # Keep the result.
+                        break  # Stop retrying this item.
+                    if attempt < max_retries:  # More attempts remain.
                         delay = 0.5 * (1.5**attempt)  # Exponential backoff
-                        logging.debug(
+                        logging.debug(  # Trace the retry/backoff.
                             "Retrying device %s in %.2fs (attempt %s/%s)",
                             failed_device_id,
                             delay,
                             attempt + 2,
                             max_retries + 1,
                         )
-                        time.sleep(delay)
+                        time.sleep(delay)  # Back off before retrying.
                 else:
-                    logging.warning(
+                    logging.warning(  # Warn after exhausting retries.
                         "! Failed to fetch config for device %s after %s attempts", failed_device_id, max_retries + 1
                     )
 
-            return retry_results
+            return retry_results  # Return retried configs.
 
         # Use connection pool management helper if fast mode is enabled
-        if fast:
-            successful_results, failed_items = execute_with_connection_pool_management(
+        if fast:  # Fast mode uses the pool.
+            successful_results, failed_items = execute_with_connection_pool_management(  # Pooled concurrent fetch.
                 work_items=work_items,
                 worker_function=fetch_config,
                 batch_description="gateway device configs",
                 retry_function=retry_fetch_config,
             )
-            all_device_configs = successful_results
+            all_device_configs = successful_results  # Start from successes.
         else:
             # Sequential processing for non-fast mode
-            all_device_configs = []
+            all_device_configs = []  # Sequential fallback path.
             # Create a dummy semaphore for sequential processing
-            dummy_semaphore = threading.Semaphore(1)
+            dummy_semaphore = threading.Semaphore(1)  # Serialize sequential fetches.
 
             for work_item in tqdm(work_items, desc="Fetching Configs", unit="device"):  # type: ignore[no-untyped-call]
                 result = fetch_config(work_item, dummy_semaphore)  # type: ignore[no-untyped-call]
-                if result is not None:
-                    all_device_configs.append(result)
+                if result is not None:  # Keep non-empty results.
+                    all_device_configs.append(result)  # Collect the config.
 
         # Filter out None results
-        all_device_configs = [config for config in all_device_configs if config is not None]
+        all_device_configs = [config for config in all_device_configs if config is not None]  # Drop any failures.
 
-        logging.info("! Completed fetching %s gateway device configs.", len(all_device_configs))
-        return all_device_configs
+        logging.info("! Completed fetching %s gateway device configs.", len(all_device_configs))  # Log completion.
+        return all_device_configs  # Return gateway configs.
 
 
 # ============================================================================
@@ -6642,7 +6642,7 @@ class APIFetchUtils:
 # ============================================================================
 
 
-class DataProcessingUtils:
+class DataProcessingUtils:  # JSON flattening/normalization.
     """
     Centralized data processing utilities.
     Groups all data transformation functions for better code organization.
@@ -6653,7 +6653,7 @@ class DataProcessingUtils:
     """
 
     @staticmethod
-    def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
+    def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:  # Flatten nested dict.
         """
         Recursively flattens a nested dictionary, joining keys with sep.
         Lists of dicts are flattened with indexed keys.
@@ -6668,21 +6668,21 @@ class DataProcessingUtils:
         Returns:
             dict: Flattened dictionary
         """
-        items: list[tuple[str, Any]] = []
-        for k, v in d.items():
-            k_str = str(k)
-            new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str
-            if isinstance(v, dict):
-                items.extend(DataProcessingUtils.flatten_dict(v, new_key, sep=sep).items())
-            elif isinstance(v, list):
-                if all(isinstance(i, dict) for i in v):
-                    for idx, item in enumerate(v):
+        items: list[tuple[str, Any]] = []  # Accumulate flattened pairs.
+        for k, v in d.items():  # Walk each key/value.
+            k_str = str(k)  # Stringify the key.
+            new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str  # Compose the dotted key.
+            if isinstance(v, dict):  # Recurse into nested dicts.
+                items.extend(DataProcessingUtils.flatten_dict(v, new_key, sep=sep).items())  # Merge nested results.
+            elif isinstance(v, list):  # Lists need index expansion.
+                if all(isinstance(i, dict) for i in v):  # List of dicts: index each.
+                    for idx, item in enumerate(v):  # Walk list items.
                         items.extend(DataProcessingUtils.flatten_dict(item, f"{new_key}{sep}{idx}", sep=sep).items())
                 else:
-                    items.append((new_key, ",".join(map(str, v))))
+                    items.append((new_key, ",".join(map(str, v))))  # Join scalar list as CSV.
             else:
-                items.append((new_key, v))
-        return dict(items)
+                items.append((new_key, v))  # Keep scalar value as-is.
+        return dict(items)  # Return the flat dict.
 
     @staticmethod
     def flatten_nested_fields(data: list[dict[str, Any]]) -> list[dict[str, Any]]:  # noqa: C901
@@ -6698,41 +6698,41 @@ class DataProcessingUtils:
         Returns:
             list: List of dictionaries with flattened nested fields
         """
-        flattened = []
-        for entry in data:
-            if not isinstance(entry, dict):
-                logging.debug("Skipping non-dictionary entry: %s", type(entry).__name__)
-                continue
+        flattened = []  # Collect flattened rows.
+        for entry in data:  # Process each record.
+            if not isinstance(entry, dict):  # Skip non-dict records.
+                logging.debug("Skipping non-dictionary entry: %s", type(entry).__name__)  # Trace skipped entry.
+                continue  # Move to next record.
 
-            new_entry = {}
-            for key, value in entry.items():
+            new_entry = {}  # Build the flattened row.
+            for key, value in entry.items():  # Walk each field.
                 # Try to parse stringified dicts/lists
-                if isinstance(value, str) and (value.startswith("{") or value.startswith("[")):
+                if isinstance(value, str) and (value.startswith("{") or value.startswith("[")):  # Maybe embedded JSON.
                     try:
-                        value = ast.literal_eval(value)
-                    except Exception:
+                        value = ast.literal_eval(value)  # Parse Python-literal JSON.
+                    except Exception:  # Literal parse failed.
                         try:
-                            value = json.loads(value)
+                            value = json.loads(value)  # Fall back to JSON parse.
                         except Exception:  # nosec B110
                             pass  # Leave as string if parsing fails
 
-                if isinstance(value, dict):
-                    flat = DataProcessingUtils.flatten_dict(value, parent_key=key)
-                    new_entry.update(flat)
-                elif isinstance(value, list):
-                    if all(isinstance(i, dict) for i in value):
-                        for idx, item in enumerate(value):
-                            flat = DataProcessingUtils.flatten_dict(item, parent_key=f"{key}_{idx}")
-                            new_entry.update(flat)
+                if isinstance(value, dict):  # Nested dict needs flattening.
+                    flat = DataProcessingUtils.flatten_dict(value, parent_key=key)  # Flatten the nested dict.
+                    new_entry.update(flat)  # Merge flattened keys.
+                elif isinstance(value, list):  # Lists need expansion.
+                    if all(isinstance(i, dict) for i in value):  # List of dicts: index each.
+                        for idx, item in enumerate(value):  # Walk list items.
+                            flat = DataProcessingUtils.flatten_dict(item, parent_key=f"{key}_{idx}")  # Flatten item.
+                            new_entry.update(flat)  # Merge item keys.
                     else:
-                        new_entry[key] = ",".join(map(str, value))
+                        new_entry[key] = ",".join(map(str, value))  # Join scalar list as CSV.
                 else:
-                    new_entry[key] = value
-            flattened.append(new_entry)
-        return flattened
+                    new_entry[key] = value  # Keep scalar value.
+            flattened.append(new_entry)  # Add the flattened row.
+        return flattened  # Return all flattened rows.
 
     @staticmethod
-    def convert_list_values_to_strings(data):
+    def convert_list_values_to_strings(data):  # Stringify list-valued fields.
         """
         Convert list, tuple, or set values to CSV-compatible comma-separated strings.
 
@@ -6742,15 +6742,15 @@ class DataProcessingUtils:
         Returns:
             Data with list values converted to strings
         """
-        for entry in data:
-            for key, value in entry.items():
-                if isinstance(value, (list, tuple, set)):
-                    logging.debug("Converting list/tuple/set at key '%s' to string", key)
-                    entry[key] = ",".join(map(str, value))
-        return data
+        for entry in data:  # Process each record.
+            for key, value in entry.items():  # Walk each field.
+                if isinstance(value, (list, tuple, set)):  # Only convert collections.
+                    logging.debug("Converting list/tuple/set at key '%s' to string", key)  # Trace the conversion.
+                    entry[key] = ",".join(map(str, value))  # Join as CSV string.
+        return data  # Return converted records.
 
     @staticmethod
-    def get_unique_keys(data):
+    def get_unique_keys(data):  # Collect the union of all keys.
         """
         Get all unique dictionary keys from a list of dictionaries.
         Returns a sorted list of string keys.
@@ -6761,13 +6761,13 @@ class DataProcessingUtils:
         Returns:
             list: Sorted list of unique keys as strings
         """
-        fields = set()
-        for entry in data:
-            fields.update(entry.keys())
-        return sorted(str(f) for f in fields)
+        fields = set()  # Accumulate distinct keys.
+        for entry in data:  # Scan each record.
+            fields.update(entry.keys())  # Add this record's keys.
+        return sorted(str(f) for f in fields)  # Return sorted field names.
 
     @staticmethod
-    def escape_multiline(data):
+    def escape_multiline(data):  # Escape newlines for CSV safety.
         """
         Escape multiline strings for CSV compatibility.
         Joins list values as comma-separated strings.
@@ -6779,13 +6779,13 @@ class DataProcessingUtils:
         Returns:
             Data with escaped multiline strings
         """
-        for entry in data:
-            for key, value in entry.items():
-                if isinstance(value, list):
-                    entry[key] = ",".join(map(str, value))
-                elif isinstance(value, str):
-                    entry[key] = value.replace("\n", "\\n").replace("\r", "")
-        return data
+        for entry in data:  # Process each record.
+            for key, value in entry.items():  # Walk each field.
+                if isinstance(value, list):  # Join lists to a string.
+                    entry[key] = ",".join(map(str, value))  # CSV-join the list.
+                elif isinstance(value, str):  # Escape string newlines.
+                    entry[key] = value.replace("\n", "\\n").replace("\r", "")  # Escape CR/LF for CSV.
+        return data  # Return escaped records.
 
 
 # MarvisDataUtils extracted to src/marvis/marvis_utils.py (issue #330).
@@ -6800,7 +6800,7 @@ marvis_data_utils = MarvisDataUtils(  # Instantiate with the two required data-p
 )
 
 
-class DatabaseSchemaUtils:
+class DatabaseSchemaUtils:  # Build SQLite DDL from data.
     """
     Centralized database schema utilities for SQLite operations.
     Groups all schema-related functions per the 5-Item Rule class organization.
@@ -6808,7 +6808,7 @@ class DatabaseSchemaUtils:
     """
 
     @staticmethod
-    def determine_api_function_name_from_context() -> str:
+    def determine_api_function_name_from_context() -> str:  # Infer API name from the call stack.
         """
         Attempts to determine the API function name from the current call stack.
         This helps identify which endpoint strategy to use for table schema.
@@ -6817,27 +6817,27 @@ class DatabaseSchemaUtils:
             str: The API function name if found, else 'unknown'
         """
         # Look through the call stack for known API function patterns
-        frame = inspect.currentframe()
+        frame = inspect.currentframe()  # Start at the current frame.
         try:
-            while frame:
-                function_name = frame.f_code.co_name
+            while frame:  # Walk up the stack.
+                function_name = frame.f_code.co_name  # Name of this frame's function.
                 # Check if this looks like an API function name
-                if any(
+                if any(  # Match known API call patterns.
                     pattern in function_name
                     for pattern in ["getOrg", "listOrg", "searchOrg", "getSite", "listSite", "searchSite"]
                 ):
-                    logging.debug("Detected API function name from stack: %s", function_name)
-                    return function_name
-                frame = frame.f_back
-        except Exception as error:
-            logging.debug("Error determining API function name: %s", error)
+                    logging.debug("Detected API function name from stack: %s", function_name)  # Trace detected name.
+                    return function_name  # Use the detected API name.
+                frame = frame.f_back  # Step to the caller frame.
+        except Exception as error:  # Stack inspection failed.
+            logging.debug("Error determining API function name: %s", error)  # Trace the inspection error.
         finally:
-            del frame
+            del frame  # Break the reference cycle.
 
-        return "unknown"
+        return "unknown"  # Fallback when undetected.
 
     @staticmethod
-    def get_endpoint_strategy(api_function_name: str, data_fields: list[str]) -> dict[str, Any]:
+    def get_endpoint_strategy(api_function_name: str, data_fields: list[str]) -> dict[str, Any]:  # Pick PK strategy.
         """
         Determines the appropriate database schema strategy for an API endpoint.
 
@@ -6849,29 +6849,29 @@ class DatabaseSchemaUtils:
             dict: Strategy configuration including primary key, indexes, etc.
         """
         # First check if we have a specific strategy for this endpoint
-        if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:
-            strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()
-            logging.debug("Using configured strategy for %s: %s", api_function_name, strategy["type"])
-            return strategy
+        if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:  # Use a configured strategy.
+            strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()  # Copy to avoid mutation.
+            logging.debug("Using configured strategy for %s: %s", api_function_name, strategy["type"])  # Trace pick.
+            return strategy  # Return configured strategy.
 
         # If no specific strategy, use intelligent defaults based on data structure
         strategy: dict[str, Any] = ENDPOINT_PRIMARY_KEY_STRATEGIES["default"].copy()  # type: ignore[no-redef]
 
         # Enhance default strategy based on available fields
-        if "id" in data_fields:
+        if "id" in data_fields:  # Default: key on id.
             # If data has an 'id' field, use it as unique constraint
-            strategy["unique_constraints"] = ["id"]
-            strategy["indexes"] = ["id"]
+            strategy["unique_constraints"] = ["id"]  # Enforce unique id.
+            strategy["indexes"] = ["id"]  # Index id for lookups.
             logging.debug("Enhanced default strategy for %s: adding unique constraint on 'id'", api_function_name)
 
         # Add common indexes for frequently queried fields
-        common_index_fields = ["org_id", "site_id", "device_id", "timestamp", "mac", "serial"]
-        for field_name in common_index_fields:
-            if field_name in data_fields and field_name not in strategy["indexes"]:
+        common_index_fields = ["org_id", "site_id", "device_id", "timestamp", "mac", "serial"]  # Common index columns.
+        for field_name in common_index_fields:  # Add indexes when present.
+            if field_name in data_fields and field_name not in strategy["indexes"]:  # Avoid duplicate indexes.
                 strategy["indexes"].append(field_name)  # type: ignore[attr-defined]
 
-        logging.debug("Using enhanced default strategy for %s: %s", api_function_name, strategy)
-        return strategy
+        logging.debug("Using enhanced default strategy for %s: %s", api_function_name, strategy)  # Trace strategy.
+        return strategy  # Return enhanced strategy.
 
     @staticmethod
     def build_create_table_sql(
@@ -6890,100 +6890,100 @@ class DatabaseSchemaUtils:
         Returns:
             str: Complete CREATE TABLE SQL statement
         """
-        datetime.now(UTC).isoformat()
+        datetime.now(UTC).isoformat()  # Timestamp the schema build.
 
         # Sanitize table name
-        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", table_name)
-        if not safe_table_name or safe_table_name[0].isdigit():
-            safe_table_name = f"table_{safe_table_name}"
+        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", table_name)  # Sanitize the table name.
+        if not safe_table_name or safe_table_name[0].isdigit():  # Names cannot start with a digit.
+            safe_table_name = f"table_{safe_table_name}"  # Prefix to make it valid.
 
         # Start building SQL
-        if strategy["type"] == "natural_pk":
+        if strategy["type"] == "natural_pk":  # Stable-UUID table path.
             # Use API id field(s) as primary key
-            pk_fields = strategy["primary_key"]
-            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+            pk_fields = strategy["primary_key"]  # Natural primary key columns.
+            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]  # Begin the CREATE TABLE.
 
             # Add all fields, with primary key fields getting special treatment
-            field_definitions = []
-            for field in fields:
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))
-                if field in pk_fields:
-                    field_definitions.append(f"{safe_field} TEXT NOT NULL")
+            field_definitions = []  # Column definitions.
+            for field in fields:  # Define each column.
+                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
+                if field in pk_fields:  # PK columns are NOT NULL.
+                    field_definitions.append(f"{safe_field} TEXT NOT NULL")  # Required PK column.
                 else:
-                    field_definitions.append(f"{safe_field} TEXT")
+                    field_definitions.append(f"{safe_field} TEXT")  # Optional column.
 
             # Add metadata fields
-            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
-            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: created time.
+            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: updated time.
 
-            sql_parts.append(", ".join(field_definitions))
+            sql_parts.append(", ".join(field_definitions))  # Join column defs.
 
             # Add primary key constraint
-            pk_constraint = f"PRIMARY KEY ({', '.join(pk_fields)})"
-            sql_parts.append(f", {pk_constraint}")
+            pk_constraint = f"PRIMARY KEY ({', '.join(pk_fields)})"  # Compose the PK clause.
+            sql_parts.append(f", {pk_constraint}")  # Append the PK clause.
 
-            sql_parts.append(")")
-            create_sql = "".join(sql_parts)
+            sql_parts.append(")")  # Close the column list.
+            create_sql = "".join(sql_parts)  # Assemble the DDL.
 
-        elif strategy["type"] == "composite_pk":
+        elif strategy["type"] == "composite_pk":  # Time-series table path.
             # Use composite primary key
-            pk_fields = strategy["primary_key"]
-            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+            pk_fields = strategy["primary_key"]  # Composite key columns.
+            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]  # Begin the CREATE TABLE.
 
-            field_definitions = []
-            for field in fields:
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))
-                if field in pk_fields:
-                    field_definitions.append(f"{safe_field} TEXT NOT NULL")
+            field_definitions = []  # Column definitions.
+            for field in fields:  # Define each column.
+                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
+                if field in pk_fields:  # PK columns are NOT NULL.
+                    field_definitions.append(f"{safe_field} TEXT NOT NULL")  # Required PK column.
                 else:
-                    field_definitions.append(f"{safe_field} TEXT")
+                    field_definitions.append(f"{safe_field} TEXT")  # Optional column.
 
             # Add metadata fields
-            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
-            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: created time.
+            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: updated time.
 
-            sql_parts.append(", ".join(field_definitions))
+            sql_parts.append(", ".join(field_definitions))  # Join column defs.
 
             # Add composite primary key constraint
-            available_pk_fields = [f for f in pk_fields if f in fields]
-            if available_pk_fields:
-                pk_constraint = f"PRIMARY KEY ({', '.join(available_pk_fields)})"
-                sql_parts.append(f", {pk_constraint}")
+            available_pk_fields = [f for f in pk_fields if f in fields]  # Only key on present columns.
+            if available_pk_fields:  # At least one PK column exists.
+                pk_constraint = f"PRIMARY KEY ({', '.join(available_pk_fields)})"  # Compose the PK clause.
+                sql_parts.append(f", {pk_constraint}")  # Append the PK clause.
 
-            sql_parts.append(")")
-            create_sql = "".join(sql_parts)
+            sql_parts.append(")")  # Close the column list.
+            create_sql = "".join(sql_parts)  # Assemble the DDL.
 
         else:  # auto_increment_with_unique
             # Use auto-increment primary key with unique constraints
-            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]
+            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]  # Begin the CREATE TABLE.
 
-            field_definitions = ["misthelper_internal_id INTEGER PRIMARY KEY AUTOINCREMENT"]
+            field_definitions = ["misthelper_internal_id INTEGER PRIMARY KEY AUTOINCREMENT"]  # Surrogate key column.
 
-            for field in fields:
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))
-                field_definitions.append(f"{safe_field} TEXT")
+            for field in fields:  # Define each column.
+                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
+                field_definitions.append(f"{safe_field} TEXT")  # Optional column.
 
             # Add metadata fields
-            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")
-            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")
+            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: created time.
+            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: updated time.
 
-            sql_parts.append(", ".join(field_definitions))
+            sql_parts.append(", ".join(field_definitions))  # Join column defs.
 
             # Add unique constraints if specified
-            unique_fields = [f for f in strategy["unique_constraints"] if f in fields]
-            if unique_fields:
-                for field in unique_fields:
-                    safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))
-                    sql_parts.append(f", UNIQUE({safe_field})")
+            unique_fields = [f for f in strategy["unique_constraints"] if f in fields]  # Unique cols present in data.
+            if unique_fields:  # Add unique constraints.
+                for field in unique_fields:  # Each unique column.
+                    safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
+                    sql_parts.append(f", UNIQUE({safe_field})")  # Append unique constraint.
 
-            sql_parts.append(")")
-            create_sql = "".join(sql_parts)
+            sql_parts.append(")")  # Close the column list.
+            create_sql = "".join(sql_parts)  # Assemble the DDL.
 
-        logging.debug("Generated CREATE TABLE SQL for %s: %s...", safe_table_name, create_sql[:100])
-        return create_sql
+        logging.debug("Generated CREATE TABLE SQL for %s: %s...", safe_table_name, create_sql[:100])  # Trace DDL.
+        return create_sql  # Return the CREATE TABLE.
 
     @staticmethod
-    def build_indexes_sql(table_name: str, fields: list[str], strategy: dict[str, Any]) -> list[str]:
+    def build_indexes_sql(table_name: str, fields: list[str], strategy: dict[str, Any]) -> list[str]:  # Build indexes.
         """
         Builds CREATE INDEX SQL statements for the specified strategy.
 
@@ -6995,24 +6995,24 @@ class DatabaseSchemaUtils:
         Returns:
             list: List of CREATE INDEX SQL statements
         """
-        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", table_name)
-        if not safe_table_name or safe_table_name[0].isdigit():
-            safe_table_name = f"table_{safe_table_name}"
+        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", table_name)  # Sanitize the table name.
+        if not safe_table_name or safe_table_name[0].isdigit():  # Names cannot start with a digit.
+            safe_table_name = f"table_{safe_table_name}"  # Prefix to make it valid.
 
-        index_sqls = []
+        index_sqls = []  # Collect index statements.
 
         # Create indexes for fields specified in strategy
-        for field_name in strategy.get("indexes", []):
-            if field_name in fields:
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field_name))
-                index_name = f"idx_{safe_table_name}_{safe_field}"
-                index_sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {safe_table_name} ({safe_field})"
-                index_sqls.append(index_sql)
+        for field_name in strategy.get("indexes", []):  # One index per configured field.
+            if field_name in fields:  # Only index present columns.
+                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field_name))  # Sanitize the column name.
+                index_name = f"idx_{safe_table_name}_{safe_field}"  # Deterministic index name.
+                index_sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {safe_table_name} ({safe_field})"  # index DDL.
+                index_sqls.append(index_sql)  # Collect the statement.
 
-        return index_sqls
+        return index_sqls  # Return all index DDL.
 
 
-class SQLiteDatabaseWriter:
+class SQLiteDatabaseWriter:  # Upsert records into SQLite.
     """
     Write list of dictionaries to SQLite database using hybrid primary key strategies.
 
@@ -7025,36 +7025,36 @@ class SQLiteDatabaseWriter:
         SQLiteDatabaseWriter(data, table_name, api_function_name).write()
     """
 
-    def __init__(self, data: list[dict[str, Any]], table_name: str, api_function_name: str | None = None):
+    def __init__(self, data: list[dict[str, Any]], table_name: str, api_function_name: str | None = None):  # capture.
         """Initialize writer with data, table name, and optional API function name."""
-        self.data = data
-        self.table_name = table_name
-        self.api_function_name = api_function_name
-        self.timestamp = datetime.now(UTC).isoformat()
-        self.processed_data: list[dict[str, Any]] = []
-        self.fields: list[str] = []
-        self.strategy: dict[str, Any] = {}
-        self.connection: sqlite3.Connection | None = None
-        self.cursor: sqlite3.Cursor | None = None
+        self.data = data  # Rows to persist.
+        self.table_name = table_name  # Destination table.
+        self.api_function_name = api_function_name  # Source API for strategy.
+        self.timestamp = datetime.now(UTC).isoformat()  # Write timestamp.
+        self.processed_data: list[dict[str, Any]] = []  # Normalized rows.
+        self.fields: list[str] = []  # Resolved column list.
+        self.strategy: dict[str, Any] = {}  # Chosen PK/index strategy.
+        self.connection: sqlite3.Connection | None = None  # Lazy DB connection.
+        self.cursor: sqlite3.Cursor | None = None  # Lazy DB cursor.
 
-    def write(self) -> bool:
+    def write(self) -> bool:  # Run the full upsert pipeline.
         """Main entry point - orchestrates the database write operation."""
-        self._log_entry()
-        if not self._validate_inputs():
-            return False
-        self._resolve_api_function_name()
-        if not self._ensure_database_directory():
-            return False
-        if not self._process_data():
-            return False
-        if not self._determine_fields_and_strategy():
-            return False
-        return self._execute_database_operations()
+        self._log_entry()  # Log the write start.
+        if not self._validate_inputs():  # Abort on invalid input.
+            return False  # Nothing written.
+        self._resolve_api_function_name()  # Infer API name if missing.
+        if not self._ensure_database_directory():  # Abort if dir not writable.
+            return False  # Nothing written.
+        if not self._process_data():  # Abort on processing failure.
+            return False  # Nothing written.
+        if not self._determine_fields_and_strategy():  # Abort if schema undetermined.
+            return False  # Abort: schema undetermined.
+        return self._execute_database_operations()  # Run the DB writes.
 
-    def _log_entry(self) -> None:
+    def _log_entry(self) -> None:  # Log write parameters.
         """Log entry point with input parameters."""
-        row_count = len(self.data) if self.data else 0
-        logging.debug(
+        row_count = len(self.data) if self.data else 0  # Count rows for the log.
+        logging.debug(  # Trace the write entry.
             "ENTRY: SQLiteDatabaseWriter.write(data_rows=%s, table_name=%s, api_function_name=%s) at %s",
             row_count,
             self.table_name,
@@ -7062,37 +7062,37 @@ class SQLiteDatabaseWriter:
             self.timestamp,
         )
 
-    def _validate_inputs(self) -> bool:
+    def _validate_inputs(self) -> bool:  # Validate data and table name.
         """Validate data and table name inputs."""
-        if not self._validate_data():
-            return False
-        return self._validate_table_name()
+        if not self._validate_data():  # Data must be valid.
+            return False  # Reject bad data.
+        return self._validate_table_name()  # Then validate table name.
 
-    def _validate_data(self) -> bool:
+    def _validate_data(self) -> bool:  # Ensure data is a non-empty list.
         """Validate that data is a non-empty list."""
-        if not self.data:
-            logging.warning("No data provided to write to table %s at %s", self.table_name, self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - no data to write")
-            return False
-        if not isinstance(self.data, list):
-            logging.error("Invalid data type: expected list, got %s at %s", type(self.data), self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid data type")
-            return False
-        return True
+        if not self.data:  # No rows to write.
+            logging.warning("No data provided to write to table %s at %s", self.table_name, self.timestamp)  # no data.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - no data to write")  # Trace early exit.
+            return False  # Reject empty data.
+        if not isinstance(self.data, list):  # Data must be a list.
+            logging.error("Invalid data type: expected list, got %s at %s", type(self.data), self.timestamp)  # type err
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid data type")  # Trace early exit.
+            return False  # Reject wrong type.
+        return True  # Data is valid.
 
-    def _validate_table_name(self) -> bool:
+    def _validate_table_name(self) -> bool:  # Ensure a usable table name.
         """Validate that table name is a non-empty string."""
-        if not self.table_name or not isinstance(self.table_name, str):
-            logging.error("Invalid table name: %s at %s", self.table_name, self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid table name")
-            return False
-        return True
+        if not self.table_name or not isinstance(self.table_name, str):  # Name must be a non-empty str.
+            logging.error("Invalid table name: %s at %s", self.table_name, self.timestamp)  # Log the bad name.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid table name")  # Trace early exit.
+            return False  # Reject bad name.
+        return True  # Name is valid.
 
-    def _resolve_api_function_name(self) -> None:
+    def _resolve_api_function_name(self) -> None:  # Backfill API name if missing.
         """Determine API function name from context if not provided."""
-        if not self.api_function_name:
-            self.api_function_name = DatabaseSchemaUtils.determine_api_function_name_from_context()
-        logging.debug(
+        if not self.api_function_name:  # Only when unset.
+            self.api_function_name = DatabaseSchemaUtils.determine_api_function_name_from_context()  # Infer from stack.
+        logging.debug(  # Trace the resolved name.
             "Processing %s rows for table %s using API function %s at %s",
             len(self.data),
             self.table_name,
@@ -7100,91 +7100,91 @@ class SQLiteDatabaseWriter:
             self.timestamp,
         )
 
-    def _ensure_database_directory(self) -> bool:
+    def _ensure_database_directory(self) -> bool:  # Create the DB directory.
         """Create database directory if it does not exist."""
-        db_dir = os.path.dirname(DATABASE_PATH)
-        if not db_dir or os.path.exists(db_dir):
-            return True
+        db_dir = os.path.dirname(DATABASE_PATH)  # Directory holding the DB.
+        if not db_dir or os.path.exists(db_dir):  # Already present or cwd.
+            return True  # Directory ready.
         try:
-            os.makedirs(db_dir, exist_ok=True)
-            logging.info("Created database directory: %s at %s", db_dir, self.timestamp)
-            return True
-        except OSError as error:
-            logging.error("Failed to create database directory %s: %s at %s", db_dir, error, self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - directory creation failed")
-            return False
+            os.makedirs(db_dir, exist_ok=True)  # Create the directory.
+            logging.info("Created database directory: %s at %s", db_dir, self.timestamp)  # Log the creation.
+            return True  # Directory ready.
+        except OSError as error:  # Creation failed.
+            logging.error("Failed to create database directory %s: %s at %s", db_dir, error, self.timestamp)  # dir err.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - directory creation failed")  # Trace early exit.
+            return False  # Cannot proceed without dir.
 
-    def _process_data(self) -> bool:
+    def _process_data(self) -> bool:  # Normalize data for SQLite.
         """Process data to handle formatting for database storage."""
         try:
             self.processed_data = DataProcessingUtils.escape_multiline(self.data)  # type: ignore[no-untyped-call]
-            logging.debug("Successfully processed data for SQLite compatibility at %s", self.timestamp)
-            return True
-        except Exception as error:
-            logging.error("Failed to process data: %s at %s", error, self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - data processing failed")
-            return False
+            logging.debug("Successfully processed data for SQLite compatibility at %s", self.timestamp)  # Trace ok.
+            return True  # Processing succeeded.
+        except Exception as error:  # Processing failed.
+            logging.error("Failed to process data: %s at %s", error, self.timestamp)  # Log the failure.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - data processing failed")  # Trace early exit.
+            return False  # Abort on failure.
 
-    def _determine_fields_and_strategy(self) -> bool:
+    def _determine_fields_and_strategy(self) -> bool:  # Resolve columns and strategy.
         """Get all unique fields and determine primary key strategy."""
         try:
             self.fields = DataProcessingUtils.get_unique_keys(self.processed_data)  # type: ignore[no-untyped-call]
-            if not self.fields:
-                logging.error("No fields found in data for table %s at %s", self.table_name, self.timestamp)
-                logging.debug("EXIT: SQLiteDatabaseWriter.write - no fields")
-                return False
-            api_func_name = self.api_function_name if self.api_function_name else ""
-            self.strategy = DatabaseSchemaUtils.get_endpoint_strategy(api_func_name, self.fields)
-            self._log_strategy_info()
-            return True
-        except Exception as error:
-            logging.error("Failed to determine fields and strategy: %s at %s", error, self.timestamp)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - field determination failed")
-            return False
+            if not self.fields:  # Need at least one field.
+                logging.error("No fields found in data for table %s at %s", self.table_name, self.timestamp)  # no flds
+                logging.debug("EXIT: SQLiteDatabaseWriter.write - no fields")  # Trace early exit.
+                return False  # Abort: no fields.
+            api_func_name = self.api_function_name if self.api_function_name else ""  # Default empty name.
+            self.strategy = DatabaseSchemaUtils.get_endpoint_strategy(api_func_name, self.fields)  # Pick the strategy.
+            self._log_strategy_info()  # Log the chosen strategy.
+            return True  # Fields and strategy ready.
+        except Exception as error:  # Determination failed.
+            logging.error("Failed to determine fields and strategy: %s at %s", error, self.timestamp)  # Log failure.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - field determination failed")  # Trace early exit.
+            return False  # Abort on failure.
 
-    def _log_strategy_info(self) -> None:
+    def _log_strategy_info(self) -> None:  # Log strategy and fields.
         """Log strategy selection details."""
-        logging.info(
+        logging.info(  # Log the strategy summary.
             "Using hybrid SQLite strategy '%s' for table %s: %s",
             self.strategy["type"],
             self.table_name,
             self.strategy["description"],
         )
-        logging.debug("Database fields determined: %s at %s", self.fields, self.timestamp)
-        logging.debug(
+        logging.debug("Database fields determined: %s at %s", self.fields, self.timestamp)  # Trace the field list.
+        logging.debug(  # Trace strategy details.
             "Endpoint %s mapped to %s strategy - eliminates need for artificial api_id fields",
             self.api_function_name,
             self.strategy["type"],
         )
 
-    def _execute_database_operations(self) -> bool:
+    def _execute_database_operations(self) -> bool:  # Connect, create, insert, commit.
         """Execute database operations with comprehensive error handling."""
         try:
-            self._connect_to_database()
-            self._create_table_and_indexes()
-            insert_mode = self._determine_insert_mode()
-            safe_fields = self._prepare_safe_fields()
-            successful_inserts = self._insert_all_rows(insert_mode, safe_fields)
-            self._commit_and_verify(successful_inserts)
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - success")
-            return True
-        except sqlite3.Error as error:
-            self._handle_sqlite_error(error)
-            return False
-        except Exception as error:
-            self._handle_unexpected_error(error)
-            return False
+            self._connect_to_database()  # Open the DB connection.
+            self._create_table_and_indexes()  # Ensure schema exists.
+            insert_mode = self._determine_insert_mode()  # Pick insert/upsert mode.
+            safe_fields = self._prepare_safe_fields()  # Sanitize column names.
+            successful_inserts = self._insert_all_rows(insert_mode, safe_fields)  # Insert all rows.
+            self._commit_and_verify(successful_inserts)  # Commit and verify counts.
+            logging.debug("EXIT: SQLiteDatabaseWriter.write - success")  # Trace success.
+            return True  # Write succeeded.
+        except sqlite3.Error as error:  # Handle SQLite errors.
+            self._handle_sqlite_error(error)  # Log and rollback.
+            return False  # Write failed.
+        except Exception as error:  # Handle unexpected errors.
+            self._handle_unexpected_error(error)  # Log and rollback.
+            return False  # Write failed.
         finally:
-            self._close_connection()
+            self._close_connection()  # Always close the connection.
 
-    def _connect_to_database(self) -> None:
+    def _connect_to_database(self) -> None:  # Open a SQLite connection.
         """Connect to SQLite database."""
-        logging.debug("Attempting to connect to database: %s at %s", DATABASE_PATH, self.timestamp)
-        self.connection = sqlite3.connect(DATABASE_PATH)
-        self.cursor = self.connection.cursor()
-        logging.info("Successfully connected to database: %s at %s", DATABASE_PATH, self.timestamp)
+        logging.debug("Attempting to connect to database: %s at %s", DATABASE_PATH, self.timestamp)  # Trace connect.
+        self.connection = sqlite3.connect(DATABASE_PATH)  # Open the database file.
+        self.cursor = self.connection.cursor()  # Create a cursor.
+        logging.info("Successfully connected to database: %s at %s", DATABASE_PATH, self.timestamp)  # Log connection.
 
-    def _create_table_and_indexes(self) -> None:
+    def _create_table_and_indexes(self) -> None:  # Create table then indexes.
         """Create table with strategy-appropriate schema and indexes."""
         assert (
             self.cursor is not None
@@ -7192,97 +7192,97 @@ class SQLiteDatabaseWriter:
         # Build the CREATE TABLE SQL using the strategy (natural/composite/auto-increment)
         create_table_sql = DatabaseSchemaUtils.build_create_table_sql(self.table_name, self.fields, self.strategy)
         self.cursor.execute(create_table_sql)  # Execute DDL to create or verify the table structure
-        logging.debug(
+        logging.debug(  # Trace the DDL.
             "Table %s created/verified with hybrid %s schema - using natural business keys from API",
             self.table_name,
             self.strategy["type"],
         )
-        index_sqls = DatabaseSchemaUtils.build_indexes_sql(self.table_name, self.fields, self.strategy)
-        for index_sql in index_sqls:
-            self.cursor.execute(index_sql)
-        if index_sqls:
-            logging.debug(
+        index_sqls = DatabaseSchemaUtils.build_indexes_sql(self.table_name, self.fields, self.strategy)  # Index DDL.
+        for index_sql in index_sqls:  # Create each index.
+            self.cursor.execute(index_sql)  # Execute the index DDL.
+        if index_sqls:  # Only log when indexes exist.
+            logging.debug(  # Trace index creation.
                 "Created %s performance indexes for table %s with %s strategy",
                 len(index_sqls),
                 self.table_name,
                 self.strategy["type"],
             )
 
-    def _determine_insert_mode(self) -> str:
+    def _determine_insert_mode(self) -> str:  # Choose upsert vs insert.
         """Determine insert strategy based on schema type."""
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
-        if self.strategy["type"] in ["natural_pk", "composite_pk"]:
-            logging.debug(
+        if self.strategy["type"] in ["natural_pk", "composite_pk"]:  # Keyed tables upsert.
+            logging.debug(  # Trace upsert mode.
                 "Using REPLACE mode for %s strategy - enables efficient upsert operations with natural keys",
                 self.strategy["type"],
             )
-            return "INSERT OR REPLACE"
-        safe_table = self._get_safe_table_name()
+            return "INSERT OR REPLACE"  # Upsert on conflict.
+        safe_table = self._get_safe_table_name()  # Sanitize for the clear.
         self.cursor.execute(f"DELETE FROM {safe_table}")  # nosec B608
-        logging.debug("Cleared existing data and using INSERT mode for auto-increment fallback strategy")
-        return "INSERT"
+        logging.debug("Cleared existing data and using INSERT mode for auto-increment fallback strategy")  # fallback.
+        return "INSERT"  # Plain insert (cleared table).
 
-    def _get_safe_table_name(self) -> str:
+    def _get_safe_table_name(self) -> str:  # Sanitize the table name.
         """Get sanitized table name safe for SQL."""
-        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", self.table_name)
-        if not safe_table_name or safe_table_name[0].isdigit():
-            safe_table_name = f"table_{safe_table_name}"
-        return safe_table_name
+        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", self.table_name)  # Strip unsafe chars.
+        if not safe_table_name or safe_table_name[0].isdigit():  # Cannot start with a digit.
+            safe_table_name = f"table_{safe_table_name}"  # Prefix to make valid.
+        return safe_table_name  # Return the safe name.
 
-    def _prepare_safe_fields(self) -> list[str]:
+    def _prepare_safe_fields(self) -> list[str]:  # Sanitize and add audit cols.
         """Prepare sanitized field names with metadata columns."""
-        safe_fields = [re.sub(r"[^a-zA-Z0-9_]", "_", str(field)) for field in self.fields]
-        safe_fields.extend(["misthelper_created_time", "misthelper_updated_time"])
-        return safe_fields
+        safe_fields = [re.sub(r"[^a-zA-Z0-9_]", "_", str(field)) for field in self.fields]  # Sanitize field names.
+        safe_fields.extend(["misthelper_created_time", "misthelper_updated_time"])  # Append audit timestamp cols.
+        return safe_fields  # Return the column list.
 
-    def _insert_all_rows(self, insert_mode: str, safe_fields: list[str]) -> int:
+    def _insert_all_rows(self, insert_mode: str, safe_fields: list[str]) -> int:  # Insert every processed row.
         """Insert all data rows and return count of successful inserts."""
-        current_time = datetime.now(UTC).isoformat()
-        successful_inserts = 0
-        for idx, row in enumerate(self.processed_data):
-            if self._insert_single_row(idx, row, insert_mode, safe_fields, current_time):
-                successful_inserts += 1
-        return successful_inserts
+        current_time = datetime.now(UTC).isoformat()  # One timestamp per batch.
+        successful_inserts = 0  # Count successes.
+        for idx, row in enumerate(self.processed_data):  # Insert each row.
+            if self._insert_single_row(idx, row, insert_mode, safe_fields, current_time):  # Count successful inserts.
+                successful_inserts += 1  # Tally the success.
+        return successful_inserts  # Return the success count.
 
-    def _insert_single_row(
+    def _insert_single_row(  # Insert one row safely.
         self, idx: int, row: dict[str, Any], insert_mode: str, safe_fields: list[str], current_time: str
     ) -> bool:
         """Insert a single row into the database."""
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
         try:
-            values = self._prepare_row_values(row, current_time)
-            insert_sql = self._build_insert_sql(insert_mode, safe_fields, len(values))
-            self.cursor.execute(insert_sql, values)
-            if idx < 3:
-                logging.debug(
+            values = self._prepare_row_values(row, current_time)  # Build the value tuple.
+            insert_sql = self._build_insert_sql(insert_mode, safe_fields, len(values))  # Build the INSERT SQL.
+            self.cursor.execute(insert_sql, values)  # Execute the insert.
+            if idx < 3:  # Sample-log the first rows.
+                logging.debug(  # Trace a sample insert.
                     "Row %s inserted into %s using %s at %s", idx, self.table_name, insert_mode, self.timestamp
                 )
-            return True
-        except Exception as error:
+            return True  # Row inserted.
+        except Exception as error:  # Per-row failure.
             logging.error("Failed to insert row %s into %s: %s at %s", idx, self.table_name, error, self.timestamp)
-            return False
+            return False  # Row failed.
 
-    def _prepare_row_values(self, row: dict[str, Any], current_time: str) -> list[str]:
+    def _prepare_row_values(self, row: dict[str, Any], current_time: str) -> list[str]:  # Stringify row values.
         """Prepare values for a single row including metadata."""
-        values = []
-        for field_name in self.fields:
-            value = row.get(field_name, "")
-            values.append("" if value is None else str(value))
-        values.extend([current_time, current_time])
-        return values
+        values = []  # Collect string values.
+        for field_name in self.fields:  # In field order.
+            value = row.get(field_name, "")  # Default missing fields.
+            values.append("" if value is None else str(value))  # Stringify; None -> empty.
+        values.extend([current_time, current_time])  # Append audit timestamps.
+        return values  # Return the value list.
 
-    def _build_insert_sql(self, insert_mode: str, safe_fields: list[str], value_count: int) -> str:
+    def _build_insert_sql(self, insert_mode: str, safe_fields: list[str], value_count: int) -> str:  # Compose INSERT.
         """Build parameterized INSERT SQL statement."""
-        placeholders = ", ".join(["?"] * value_count)
-        safe_table_name = self._get_safe_table_name()
-        return f"{insert_mode} INTO {safe_table_name} ({', '.join(safe_fields)}) VALUES ({placeholders})"
+        placeholders = ", ".join(["?"] * value_count)  # Bind placeholders.
+        safe_table_name = self._get_safe_table_name()  # Sanitize the table name.
+        return f"{insert_mode} INTO {safe_table_name} ({', '.join(safe_fields)}) VALUES ({placeholders})"  # Return SQL.
 
-    def _commit_and_verify(self, successful_inserts: int) -> None:
+    def _commit_and_verify(self, successful_inserts: int) -> None:  # Commit then verify row count.
         """Commit transaction and verify row count."""
         assert self.connection is not None, "Database connection not initialized"  # nosec B101
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
-        self.connection.commit()
-        logging.info(
+        self.connection.commit()  # Persist the transaction.
+        logging.info(  # Log inserts committed.
             "Successfully wrote %s/%s rows to table %s in database %s using %s strategy at %s",
             successful_inserts,
             len(self.processed_data),
@@ -7291,47 +7291,47 @@ class SQLiteDatabaseWriter:
             self.strategy["type"],
             self.timestamp,
         )
-        safe_table_name = self._get_safe_table_name()
+        safe_table_name = self._get_safe_table_name()  # Sanitize for the count query.
         self.cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")  # nosec B608
-        row_count = self.cursor.fetchone()[0]
-        logging.info(
+        row_count = self.cursor.fetchone()[0]  # Read the verified count.
+        logging.info(  # Log the verified count.
             "Database verification: %s rows confirmed in table %s at %s", row_count, self.table_name, self.timestamp
         )
 
-    def _handle_sqlite_error(self, error: sqlite3.Error) -> None:
+    def _handle_sqlite_error(self, error: sqlite3.Error) -> None:  # Log and roll back SQLite errors.
         """Handle SQLite-specific errors with rollback."""
-        logging.error("SQLite error when writing to %s: %s at %s", self.table_name, error, self.timestamp)
-        self._rollback_transaction()
-        logging.debug("EXIT: SQLiteDatabaseWriter.write - SQLite error")
+        logging.error("SQLite error when writing to %s: %s at %s", self.table_name, error, self.timestamp)  # sqlite err
+        self._rollback_transaction()  # Undo partial writes.
+        logging.debug("EXIT: SQLiteDatabaseWriter.write - SQLite error")  # Trace early exit.
 
-    def _handle_unexpected_error(self, error: Exception) -> None:
+    def _handle_unexpected_error(self, error: Exception) -> None:  # Log and roll back other errors.
         """Handle unexpected errors with rollback."""
         logging.error("Unexpected error when writing to table %s: %s at %s", self.table_name, error, self.timestamp)
-        self._rollback_transaction()
-        logging.debug("EXIT: SQLiteDatabaseWriter.write - unexpected error")
+        self._rollback_transaction()  # Undo partial writes.
+        logging.debug("EXIT: SQLiteDatabaseWriter.write - unexpected error")  # Trace early exit.
 
-    def _rollback_transaction(self) -> None:
+    def _rollback_transaction(self) -> None:  # Roll back the transaction.
         """Rollback transaction if connection exists."""
-        if not self.connection:
-            return
+        if not self.connection:  # Nothing to roll back.
+            return  # No connection open.
         try:
-            self.connection.rollback()
-            logging.debug("Transaction rolled back for table %s at %s", self.table_name, self.timestamp)
-        except Exception as rollback_error:
-            logging.error("Failed to rollback transaction: %s at %s", rollback_error, self.timestamp)
+            self.connection.rollback()  # Undo uncommitted writes.
+            logging.debug("Transaction rolled back for table %s at %s", self.table_name, self.timestamp)  # Trace undo.
+        except Exception as rollback_error:  # Rollback itself failed.
+            logging.error("Failed to rollback transaction: %s at %s", rollback_error, self.timestamp)  # rollback fail.
 
-    def _close_connection(self) -> None:
+    def _close_connection(self) -> None:  # Close the DB connection.
         """Close database connection (safety-critical: resource cleanup)."""
-        if not self.connection:
-            return
+        if not self.connection:  # Nothing to close.
+            return  # No connection open.
         try:
-            self.connection.close()
-            logging.debug("Database connection closed for table %s at %s", self.table_name, self.timestamp)
-        except Exception as error:
-            logging.error("Failed to close database connection: %s at %s", error, self.timestamp)
+            self.connection.close()  # Release the connection.
+            logging.debug("Database connection closed for table %s at %s", self.table_name, self.timestamp)  # closed.
+        except Exception as error:  # Close failed.
+            logging.error("Failed to close database connection: %s at %s", error, self.timestamp)  # log close error.
 
 
-class DataExporter:
+class DataExporter:  # Multi-backend export facade.
     """
     Handles data export operations for CSV and Redis/SQLite output formats.
     Centralizes all data saving logic that was previously scattered across functions.
@@ -7339,32 +7339,32 @@ class DataExporter:
     """
 
     _router: "DatabaseRouter | None" = None  # type: ignore[name-defined]
-    _router_initialized: bool = False
-    _last_snapshot_times: dict[str, float] = {}
+    _router_initialized: bool = False  # One-shot guard so the lazy router init runs exactly once per process.
+    _last_snapshot_times: dict[str, float] = {}  # Per-table last-snapshot epoch times used to throttle snapshots.
 
     @classmethod
-    def _init_router(cls) -> None:
+    def _init_router(cls) -> None:  # Lazy polyglot router init.
         """Initialize polyglot DatabaseRouter once (lazy, idempotent)."""
-        if cls._router_initialized:
-            return
-        cls._router_initialized = True
-        if not DB_LAYER_AVAILABLE:
-            logging.debug("Polyglot DB layer not installed - CSV/SQLite only")
-            return
-        try:
-            configure_db_logging()
-            config = DatabaseConfig.from_env()
-            cls._router = DatabaseRouter(
-                config,
-                strategies=ENDPOINT_PRIMARY_KEY_STRATEGIES,
+        if cls._router_initialized:  # Skip all work when a prior call already attempted initialization.
+            return  # Idempotent early-out keeps repeated export calls cheap.
+        cls._router_initialized = True  # Latch the guard before fallible work so a failure does not retry endlessly.
+        if not DB_LAYER_AVAILABLE:  # Optional polyglot dependency stack is not installed in this environment.
+            logging.debug("Polyglot DB layer not installed - CSV/SQLite only")  # Record the CSV/SQLite-only fallback.
+            return  # Nothing more to wire up without the polyglot DB layer present.
+        try:  # Router construction reads env and opens connections, so guard against any startup failure.
+            configure_db_logging()  # Route the DB layer's logger into MistHelper logging before first use.
+            config = DatabaseConfig.from_env()  # Build connection settings from .env so secrets stay out of code.
+            cls._router = DatabaseRouter(  # Cache the shared router on the class for every later export call.
+                config,  # Pass the env-derived connection/configuration object.
+                strategies=ENDPOINT_PRIMARY_KEY_STRATEGIES,  # Supply per-endpoint primary-key upsert strategies.
             )
-            logging.info("Polyglot DatabaseRouter initialized")
-        except Exception as error:
-            logging.warning("DatabaseRouter init failed, CSV/SQLite only: %s", error)
-            cls._router = None
+            logging.info("Polyglot DatabaseRouter initialized")  # Confirm the polyglot backend came up successfully.
+        except Exception as error:  # Never let optional-backend startup crash a core CSV/SQLite export.
+            logging.warning("DatabaseRouter init failed, CSV/SQLite only: %s", error)  # Surface the degraded mode.
+            cls._router = None  # Force the safe CSV/SQLite path when the router could not be constructed.
 
     @staticmethod
-    def write_with_format_selection(
+    def write_with_format_selection(  # Public export entry point.
         data: list[dict[str, Any]],
         filename_or_table: str,
         format_override: str | None = None,
@@ -7387,8 +7387,8 @@ class DataExporter:
         Returns:
             bool: True if successful, False otherwise
         """
-        output_format = format_override if format_override else OUTPUT_FORMAT
-        logging.debug(
+        output_format = format_override if format_override else OUTPUT_FORMAT  # Override or global format.
+        logging.debug(  # Trace the write request.
             "DataExporter.write_with_format_selection: rows=%s, target=%s, format=%s, api_func=%s",
             len(data) if data else 0,
             filename_or_table,
@@ -7396,66 +7396,66 @@ class DataExporter:
             api_function_name,
         )
 
-        if not DataExporter._validate_write_inputs(data, filename_or_table, output_format):
-            return False
+        if not DataExporter._validate_write_inputs(data, filename_or_table, output_format):  # Validate before writing.
+            return False  # Reject invalid input.
 
         try:
-            if output_format == "csv":
-                csv_ok = DataExporter._write_csv_format(data, filename_or_table, fieldnames=fieldnames)
+            if output_format == "csv":  # CSV branch.
+                csv_ok = DataExporter._write_csv_format(data, filename_or_table, fieldnames=fieldnames)  # Write CSV.
             else:
-                csv_ok = DataExporter._write_sqlite_format(data, filename_or_table, api_function_name)
-        except Exception as error:
+                csv_ok = DataExporter._write_sqlite_format(data, filename_or_table, api_function_name)  # Write SQLite.
+        except Exception as error:  # Never crash on write.
             logging.error("Failed to write data to %s in %s format: %s", filename_or_table, output_format, error)
-            return False
+            return False  # Write failed.
 
-        DataExporter._route_to_polyglot(data, api_function_name, raw_data=raw_data)
-        return csv_ok
+        DataExporter._route_to_polyglot(data, api_function_name, raw_data=raw_data)  # Mirror to polyglot DB.
+        return csv_ok  # Return the primary result.
 
-    _standalone_logged = False
+    _standalone_logged = False  # One-shot standalone log guard.
 
     @staticmethod
-    def _is_standalone_mode() -> bool:
+    def _is_standalone_mode() -> bool:  # Detect non-container standalone.
         """Auto-detect standalone mode: skip polyglot when not in a container."""
-        standalone_env = os.getenv("MISTHELPER_STANDALONE", "").lower()
-        if standalone_env == "true":
-            return True
-        if standalone_env == "false":
-            return False
-        if not EnvironmentUtils.is_running_in_container():
-            if not DataExporter._standalone_logged:
+        standalone_env = os.getenv("MISTHELPER_STANDALONE", "").lower()  # Read the override env.
+        if standalone_env == "true":  # Explicit standalone request.
+            return True  # Forced standalone.
+        if standalone_env == "false":  # Forced non-standalone.
+            return False  # Not standalone.
+        if not EnvironmentUtils.is_running_in_container():  # Auto-detect when not in container.
+            if not DataExporter._standalone_logged:  # Log once.
                 logging.info("Standalone mode auto-detected (not in container), skipping polyglot database")
-                DataExporter._standalone_logged = True
-            return True
-        return False
+                DataExporter._standalone_logged = True  # Latch the one-shot log.
+            return True  # Standalone outside a container.
+        return False  # Containerized: not standalone.
 
     @staticmethod
-    def _route_to_polyglot(
+    def _route_to_polyglot(  # Mirror writes to polyglot DB.
         data: list[dict[str, Any]],
         api_function_name: str | None,
         raw_data: list[dict[str, Any]] | None = None,
     ) -> None:
         """Send data to polyglot backends (ArangoDB/Redis) if available."""
-        if not api_function_name or not DB_LAYER_AVAILABLE:
-            return
-        if DataExporter._is_standalone_mode():
-            return
-        DataExporter._init_router()
-        if DataExporter._router is None:
-            return
+        if not api_function_name or not DB_LAYER_AVAILABLE:  # Need API name and DB layer.
+            return  # Skip polyglot mirror.
+        if DataExporter._is_standalone_mode():  # Standalone skips polyglot.
+            return  # Skip polyglot mirror.
+        DataExporter._init_router()  # Ensure the router exists.
+        if DataExporter._router is None:  # Router unavailable.
+            return  # Skip polyglot mirror.
         try:
-            polyglot_data = raw_data or data
-            result = DataExporter._router.write(polyglot_data, api_function_name)
-            logging.info(
+            polyglot_data = raw_data or data  # Prefer raw payload.
+            result = DataExporter._router.write(polyglot_data, api_function_name)  # Write to polyglot DB.
+            logging.info(  # Log the polyglot result.
                 "Polyglot write: backend=%s, written=%s, failed=%s",
                 result.backend,
                 result.records_written,
                 result.records_failed,
             )
-        except Exception as error:
-            logging.warning("Polyglot write failed (CSV preserved): %s", error)
+        except Exception as error:  # Never let polyglot break CSV.
+            logging.warning("Polyglot write failed (CSV preserved): %s", error)  # polyglot warn.
 
     @classmethod
-    def _check_periodic_snapshot(
+    def _check_periodic_snapshot(  # Throttle periodic snapshots.
         cls,
         api_function_name: str,
         threshold_seconds: float = 3600.0,
@@ -7465,50 +7465,50 @@ class DataExporter:
         Returns True if a snapshot should be taken (threshold exceeded).
         Updates the timestamp when returning True.
         """
-        now = time.time()
-        last_time = cls._last_snapshot_times.get(api_function_name, 0.0)
-        if (now - last_time) < threshold_seconds:
-            return False
-        cls._last_snapshot_times[api_function_name] = now
-        return True
+        now = time.time()  # Current time.
+        last_time = cls._last_snapshot_times.get(api_function_name, 0.0)  # Last snapshot time.
+        if (now - last_time) < threshold_seconds:  # Too soon for another.
+            return False  # Skip this snapshot.
+        cls._last_snapshot_times[api_function_name] = now  # Record snapshot time.
+        return True  # Allow the snapshot.
 
     @staticmethod
     def _validate_write_inputs(data: list[dict[str, Any]], filename_or_table: str, output_format: str) -> bool:
         """Validate inputs for write operation. Returns True if valid."""
-        if not data:
-            logging.warning("No data provided for output to %s", filename_or_table)
-            return False
+        if not data:  # No rows to write.
+            logging.warning("No data provided for output to %s", filename_or_table)  # warn no data.
+            return False  # Reject empty data.
 
-        if output_format not in ["csv", "sqlite"]:
-            logging.error("Invalid output format: %s. Must be 'csv' or 'sqlite'", output_format)
-            return False
+        if output_format not in ["csv", "sqlite"]:  # Only csv/sqlite allowed.
+            logging.error("Invalid output format: %s. Must be 'csv' or 'sqlite'", output_format)  # bad format.
+            return False  # Reject bad format.
 
-        return True
+        return True  # Inputs valid.
 
     @staticmethod
-    def _write_csv_format(
+    def _write_csv_format(  # Write rows to a CSV file.
         data: list[dict[str, Any]],
         filename_or_table: str,
         fieldnames: list[str] | None = None,
     ) -> bool:
         """Write data to CSV format.  Pass fieldnames to preserve a specific column order."""
         csv_filename = filename_or_table if filename_or_table.endswith(".csv") else f"{filename_or_table}.csv"
-        logging.info("Writing %s rows to CSV file: %s", len(data), csv_filename)
+        logging.info("Writing %s rows to CSV file: %s", len(data), csv_filename)  # Log CSV write.
         DataExporter.write_to_csv(data, csv_filename, fieldnames=fieldnames)  # Thread explicit column order through
-        return True
+        return True  # CSV written.
 
     @staticmethod
     def _write_sqlite_format(data: list[dict[str, Any]], filename_or_table: str, api_function_name: str | None) -> bool:
         """Write data to SQLite format. Returns True on success."""
         table_name = filename_or_table[:-4] if filename_or_table.endswith(".csv") else filename_or_table
-        logging.debug(
+        logging.debug(  # Trace SQLite write.
             "SQLite write: table=%s, api_function=%s, strategy lookup initiated", table_name, api_function_name
         )
-        logging.info("Writing %s rows to SQLite table: %s", len(data), table_name)
-        return SQLiteDatabaseWriter(data, table_name, api_function_name).write()
+        logging.info("Writing %s rows to SQLite table: %s", len(data), table_name)  # Log SQLite write.
+        return SQLiteDatabaseWriter(data, table_name, api_function_name).write()  # Run the writer.
 
     @staticmethod
-    def write_to_csv(
+    def write_to_csv(  # Low-level CSV writer.
         data: list[dict[str, Any]],
         csv_file: str,
         fieldnames: list[str] | None = None,
@@ -7528,57 +7528,57 @@ class DataExporter:
         """
         logging.debug("ENTRY: DataExporter.write_to_csv(data_rows=%s, csv_file=%s)", len(data) if data else 0, csv_file)
 
-        if not data:
-            logging.warning("No data provided to write to %s", csv_file)
-            logging.debug("EXIT: DataExporter.write_to_csv - no data to write")
-            return
+        if not data:  # No rows to write.
+            logging.warning("No data provided to write to %s", csv_file)  # warn no data.
+            logging.debug("EXIT: DataExporter.write_to_csv - no data to write")  # Trace early exit.
+            return  # Nothing to write.
 
         # Ensure data directory exists and construct proper file path
-        data_dir = "data"
-        os.makedirs(data_dir, exist_ok=True)
+        data_dir = "data"  # Confine to data/.
+        os.makedirs(data_dir, exist_ok=True)  # Ensure data/ exists.
 
         # If csv_file doesn't already include a path, place it in the data directory
-        if not os.path.dirname(csv_file):
-            csv_file_path = os.path.join(data_dir, csv_file)
+        if not os.path.dirname(csv_file):  # Bare filename.
+            csv_file_path = os.path.join(data_dir, csv_file)  # Place under data/.
         else:
-            csv_file_path = csv_file
+            csv_file_path = csv_file  # Use given path.
 
-        logging.debug("Preparing to write %s rows to %s...", len(data), csv_file_path)
+        logging.debug("Preparing to write %s rows to %s...", len(data), csv_file_path)  # Trace write prep.
         escaped_data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
         if fieldnames is not None:  # Caller supplied an explicit column order — use it as-is
             fields = fieldnames  # Preserve the requested column sequence without sorting
         else:
             fields = DataProcessingUtils.get_unique_keys(escaped_data)  # type: ignore[no-untyped-call]
-        logging.debug("CSV fields determined: %s", fields)
+        logging.debug("CSV fields determined: %s", fields)  # Trace fields.
 
         try:
-            logging.debug("File I/O: Attempting to open %s for writing", csv_file_path)
-            with open(csv_file_path, "w", newline="", encoding="utf-8") as file_handle:
-                writer = csv.DictWriter(file_handle, fieldnames=fields)
-                writer.writeheader()
-                logging.debug("File I/O: Successfully wrote CSV header to %s", csv_file_path)
+            logging.debug("File I/O: Attempting to open %s for writing", csv_file_path)  # Trace open.
+            with open(csv_file_path, "w", newline="", encoding="utf-8") as file_handle:  # Open CSV for writing.
+                writer = csv.DictWriter(file_handle, fieldnames=fields)  # Dict-based CSV writer.
+                writer.writeheader()  # Write the header row.
+                logging.debug("File I/O: Successfully wrote CSV header to %s", csv_file_path)  # Trace header.
 
-                for idx, row in enumerate(escaped_data):
-                    writer.writerow({field: row.get(field, "") for field in fields})
+                for idx, row in enumerate(escaped_data):  # Write each row.
+                    writer.writerow({field: row.get(field, "") for field in fields})  # Write row by field order.
                     if idx < 3:  # Log the first few rows for debugging
-                        logging.debug("Row %s written: %s", idx, row)
+                        logging.debug("Row %s written: %s", idx, row)  # Trace a row.
 
             logging.info("File I/O: Successfully wrote %s rows to %s", len(escaped_data), csv_file_path)
-            logging.debug("EXIT: DataExporter.write_to_csv - success")
+            logging.debug("EXIT: DataExporter.write_to_csv - success")  # Trace success.
 
-        except PermissionError as perm_error:
+        except PermissionError as perm_error:  # File locked/denied.
             logging.error("File I/O: Permission denied when writing to %s: %s", csv_file_path, perm_error)
-            print(f"! Cannot write to {csv_file_path}. Is it open in another program?")
-            logging.debug("EXIT: DataExporter.write_to_csv - permission error")
-            raise
-        except OSError as os_error:
-            logging.error("File I/O: OS error when writing to %s: %s", csv_file_path, os_error)
-            logging.debug("EXIT: DataExporter.write_to_csv - OS error")
-            raise
-        except Exception as unexpected_error:
+            print(f"! Cannot write to {csv_file_path}. Is it open in another program?")  # user hint.
+            logging.debug("EXIT: DataExporter.write_to_csv - permission error")  # Trace exit.
+            raise  # Propagate the error.
+        except OSError as os_error:  # OS-level write error.
+            logging.error("File I/O: OS error when writing to %s: %s", csv_file_path, os_error)  # os error.
+            logging.debug("EXIT: DataExporter.write_to_csv - OS error")  # Trace exit.
+            raise  # Propagate the error.
+        except Exception as unexpected_error:  # Unexpected write error.
             logging.error("File I/O: Unexpected error when writing to %s: %s", csv_file, unexpected_error)
-            logging.debug("EXIT: DataExporter.write_to_csv - unexpected error")
-            raise
+            logging.debug("EXIT: DataExporter.write_to_csv - unexpected error")  # Trace exit.
+            raise  # Propagate the error.
 
     # save_data_to_output removed per issue #431 (ARCH-DELEGATE). All call
     # sites now invoke DataExporter.write_with_format_selection(data, filename,
@@ -7586,7 +7586,7 @@ class DataExporter:
     # and accepts the identical (data, filename, api_function_name=) form.
 
     @staticmethod
-    def export_with_processing(data, filename, sort_key=None, api_function_name=None):
+    def export_with_processing(data, filename, sort_key=None, api_function_name=None):  # Process then export records.
         """
         Export data with standard processing (flatten, escape, sort).
         Common pattern used throughout the codebase.
@@ -7600,39 +7600,39 @@ class DataExporter:
         Returns:
             int: Number of records processed
         """
-        if not data:
-            logging.warning("No data to export for %s", filename)
-            return 0
+        if not data:  # Nothing to export.
+            logging.warning("No data to export for %s", filename)  # warn no data.
+            return 0  # Zero exported.
 
         # Filter to dict entries only (defensive)
-        raw_data = [entry for entry in data if isinstance(entry, dict)]
+        raw_data = [entry for entry in data if isinstance(entry, dict)]  # Keep dict rows only.
 
         # Sort if requested
-        if sort_key:
-            raw_data = sorted(raw_data, key=lambda x: x.get(sort_key, ""))
-            logging.debug("Data sorted by key: %s", sort_key)
+        if sort_key:  # Optional sort.
+            raw_data = sorted(raw_data, key=lambda x: x.get(sort_key, ""))  # Sort by key.
+            logging.debug("Data sorted by key: %s", sort_key)  # Trace the sort.
 
         # Apply standard processing for CSV/SQLite (flatten + escape)
-        processed_data = DataProcessingUtils.flatten_nested_fields(raw_data)
+        processed_data = DataProcessingUtils.flatten_nested_fields(raw_data)  # Flatten nested fields.
         processed_data = DataProcessingUtils.escape_multiline(processed_data)  # type: ignore[no-untyped-call]
 
         # Save flattened data to CSV/SQLite, pass raw to polyglot
-        success = DataExporter.write_with_format_selection(
+        success = DataExporter.write_with_format_selection(  # Write via selected backend.
             processed_data,
             filename,
             api_function_name=api_function_name,
             raw_data=raw_data,
         )
 
-        if success:
-            logging.info("Exported %s records to %s", len(processed_data), filename)
-            return len(processed_data)
+        if success:  # Export succeeded.
+            logging.info("Exported %s records to %s", len(processed_data), filename)  # Log export count.
+            return len(processed_data)  # Return rows exported.
         else:
-            logging.error("Failed to export data to %s", filename)
-            return 0
+            logging.error("Failed to export data to %s", filename)  # log export failure.
+            return 0  # Zero exported.
 
 
-class APIDataFetcher:
+class APIDataFetcher:  # Fetch, export, display a result.
     """
     Fetches data from Mist API, processes it, and exports to CSV/SQLite.
 
@@ -7646,7 +7646,7 @@ class APIDataFetcher:
         - Detailed logging for troubleshooting
     """
 
-    def __init__(
+    def __init__(  # Capture the fetch parameters.
         self,
         title: str,
         api_call: Any,
@@ -7666,45 +7666,45 @@ class APIDataFetcher:
             display_fields: Optional list of fields for table display
             **kwargs: Additional arguments passed to the API call
         """
-        self.title = title
-        self.api_call = api_call
-        self.filename = filename
-        self.sort_key = sort_key
-        self.display_fields = display_fields
-        self.kwargs = kwargs
+        self.title = title  # Human-readable title.
+        self.api_call = api_call  # Callable that fetches data.
+        self.filename = filename  # Output filename.
+        self.sort_key = sort_key  # Optional sort key.
+        self.display_fields = display_fields  # Columns to display.
+        self.kwargs = kwargs  # Extra API arguments.
 
-        self.org_id = ""
-        self.rawdata: list[dict[str, Any]] = []
-        self.smoothed: float | None = None
+        self.org_id = ""  # Resolved org id.
+        self.rawdata: list[dict[str, Any]] = []  # Raw API rows.
+        self.smoothed: float | None = None  # Smoothed delay metric.
 
-    def execute(self) -> None:
+    def execute(self) -> None:  # Run fetch/export/display.
         """Execute the complete API fetch workflow."""
-        self._log_entry()
-        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        self._log_entry()  # Log the run start.
+        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
 
         try:
-            self._fetch_api_data()
+            self._fetch_api_data()  # Fetch from the API.
 
-            if self.rawdata is None or len(self.rawdata) == 0:
-                logging.warning("! No data returned from API for %s. Skipping.", self.title)
-                logging.debug("EXIT: APIDataFetcher.execute - no data")
-                return
+            if self.rawdata is None or len(self.rawdata) == 0:  # No data returned.
+                logging.warning("! No data returned from API for %s. Skipping.", self.title)  # warn no data.
+                logging.debug("EXIT: APIDataFetcher.execute - no data")  # Trace early exit.
+                return  # Skip export.
 
-            self._export_and_display_data()
-            logging.debug("EXIT: APIDataFetcher.execute - success")
+            self._export_and_display_data()  # Export and display.
+            logging.debug("EXIT: APIDataFetcher.execute - success")  # Trace success.
 
-        except Exception as error:
-            self._handle_outer_exception(error)
-            raise
+        except Exception as error:  # Handle run failure.
+            self._handle_outer_exception(error)  # Log/report the failure.
+            raise  # Propagate the error.
 
     # =========================================================================
     # INITIALIZATION AND LOGGING METHODS
     # =========================================================================
 
-    def _log_entry(self) -> None:
+    def _log_entry(self) -> None:  # Log fetch parameters.
         """Log entry point with parameters."""
-        api_name = self.api_call.__name__
-        logging.debug(
+        api_name = self.api_call.__name__  # API callable name.
+        logging.debug(  # Trace the entry.
             "ENTRY: APIDataFetcher(title=%s, api_call=%s, filename=%s, sort_key=%s, kwargs=%s)",
             self.title,
             api_name,
@@ -7712,32 +7712,32 @@ class APIDataFetcher:
             self.sort_key,
             self.kwargs,
         )
-        logging.info("Starting data fetch: %s", self.title)
-        print(self.title)
+        logging.info("Starting data fetch: %s", self.title)  # Log fetch start.
+        print(self.title)  # Show the title.
 
     # =========================================================================
     # API CALL METHODS
     # =========================================================================
 
-    def _fetch_api_data(self) -> None:
+    def _fetch_api_data(self) -> None:  # Call the API and store rows.
         """Make API call and retrieve paginated results with retry on timeout."""
-        api_name = self.api_call.__name__
-        logging.debug("Making API call: %s with kwargs: %s", api_name, self.kwargs)
+        api_name = self.api_call.__name__  # API callable name.
+        logging.debug("Making API call: %s with kwargs: %s", api_name, self.kwargs)  # Trace the call.
 
-        response = self._call_api_with_retry(api_name)
-        self._apply_rate_limiting()
-        self._log_response_structure(response)
+        response = self._call_api_with_retry(api_name)  # Call with retry.
+        self._apply_rate_limiting()  # Throttle after the call.
+        self._log_response_structure(response)  # Trace response shape.
 
         try:
-            self.rawdata = mistapi.get_all(response=response, mist_session=apisession)
-            record_count = len(self.rawdata) if self.rawdata else 0
-            logging.debug("API call successful, retrieved %s raw records", record_count)
-        except KeyError as error:
-            self._handle_key_error(response, error)
-        except Exception as error:
-            self._handle_api_exception(error)
+            self.rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page through all rows.
+            record_count = len(self.rawdata) if self.rawdata else 0  # Count retrieved rows.
+            logging.debug("API call successful, retrieved %s raw records", record_count)  # Trace the count.
+        except KeyError as error:  # Malformed response key.
+            self._handle_key_error(response, error)  # Try to recover data.
+        except Exception as error:  # Other API failure.
+            self._handle_api_exception(error)  # Handle/raise the failure.
 
-    def _call_api_with_retry(self, api_name: str) -> Any:
+    def _call_api_with_retry(self, api_name: str) -> Any:  # Retry the API call.
         """Call API with retry logic for timeout and connection errors.
 
         Detects failures by checking response.status_code (None when mistapi
@@ -7750,17 +7750,17 @@ class APIDataFetcher:
         Returns:
             The API response object.
         """
-        last_response = None
-        for attempt in range(API_REQUEST_MAX_RETRIES + 1):
-            response = self.api_call(apisession, self.org_id, **self.kwargs)
-            last_response = response
+        last_response = None  # Track the last response.
+        for attempt in range(API_REQUEST_MAX_RETRIES + 1):  # Bounded retry loop.
+            response = self.api_call(apisession, self.org_id, **self.kwargs)  # Invoke the API.
+            last_response = response  # Remember it.
 
-            if self._is_response_valid(response):
-                return response
+            if self._is_response_valid(response):  # Good response?
+                return response  # Return on success.
 
-            if attempt < API_REQUEST_MAX_RETRIES:
-                delay = API_REQUEST_RETRY_DELAY * (2**attempt)
-                logging.warning(
+            if attempt < API_REQUEST_MAX_RETRIES:  # More attempts left.
+                delay = API_REQUEST_RETRY_DELAY * (2**attempt)  # Exponential backoff.
+                logging.warning(  # Warn and back off.
                     "API call %s failed (attempt %s/%s) - retrying in %.0fs",
                     api_name,
                     attempt + 1,
@@ -7770,218 +7770,218 @@ class APIDataFetcher:
                 print(
                     f"! API call timed out - retrying in {delay:.0f}s (attempt {attempt + 2}/{API_REQUEST_MAX_RETRIES + 1})"  # noqa: E501
                 )
-                time.sleep(delay)
+                time.sleep(delay)  # Wait before retry.
 
         logging.error("API call %s failed after %s attempts", api_name, API_REQUEST_MAX_RETRIES + 1)
-        return last_response
+        return last_response  # Return last response.
 
     @staticmethod
-    def _is_response_valid(response: Any) -> bool:
+    def _is_response_valid(response: Any) -> bool:  # Validate an API response.
         """Check if an API response indicates a successful call.
 
         Returns False when status_code is None (timeout/connection error
         swallowed by mistapi) or when it indicates a server error.
         """
-        status = getattr(response, "status_code", None)
-        if status is None:
-            return False
-        if status >= 500:
-            return False
-        return True
+        status = getattr(response, "status_code", None)  # Read status code.
+        if status is None:  # No status present.
+            return False  # Treat as invalid.
+        if status >= 500:  # Server error.
+            return False  # Retry on 5xx.
+        return True  # Response is usable.
 
-    def _apply_rate_limiting(self) -> None:
+    def _apply_rate_limiting(self) -> None:  # Sleep to respect rate limits.
         """Apply rate limiting delay between API calls."""
         self.smoothed, delay = RateLimitingUtils.get_rate_limited_delay(self.smoothed, apisession, _api_usage_cache)  # type: ignore[no-untyped-call]
-        logging.debug("Applying rate limit delay: %.2fs", delay)
-        time.sleep(delay)
+        logging.debug("Applying rate limit delay: %.2fs", delay)  # Trace the delay.
+        time.sleep(delay)  # Apply the delay.
 
-    def _log_response_structure(self, response: Any) -> None:
+    def _log_response_structure(self, response: Any) -> None:  # Trace the response shape.
         """Log API response structure for debugging."""
-        logging.debug("API response type: %s", type(response))
-        if not hasattr(response, "data"):
-            return
+        logging.debug("API response type: %s", type(response))  # Trace response type.
+        if not hasattr(response, "data"):  # No data attribute.
+            return  # Nothing to inspect.
 
-        logging.debug("Response.data type: %s", type(response.data))
-        if isinstance(response.data, dict):
-            logging.debug("Response.data keys: %s", list(response.data.keys()))
-        elif isinstance(response.data, list):
-            logging.debug("Response.data is list with %s items", len(response.data))
+        logging.debug("Response.data type: %s", type(response.data))  # Trace data type.
+        if isinstance(response.data, dict):  # Dict payload.
+            logging.debug("Response.data keys: %s", list(response.data.keys()))  # Trace dict keys.
+        elif isinstance(response.data, list):  # List payload.
+            logging.debug("Response.data is list with %s items", len(response.data))  # Trace list size.
 
     # =========================================================================
     # ERROR HANDLING METHODS
     # =========================================================================
 
-    def _handle_key_error(self, response: Any, error: KeyError) -> None:
+    def _handle_key_error(self, response: Any, error: KeyError) -> None:  # Recover from missing keys.
         """Handle missing 'results' key or other structure issues."""
-        logging.error("API response structure error - missing key: %s", error)
-        self._log_response_error_details(response)
+        logging.error("API response structure error - missing key: %s", error)  # log key error.
+        self._log_response_error_details(response)  # Log response details.
 
-        recovered_data = self._attempt_data_recovery(response)
+        recovered_data = self._attempt_data_recovery(response)  # Try to salvage rows.
 
-        if recovered_data:
-            self.rawdata = recovered_data
-            self._save_recovered_data()
+        if recovered_data:  # Recovery succeeded.
+            self.rawdata = recovered_data  # Use the recovered rows.
+            self._save_recovered_data()  # Persist them.
         else:
-            self._handle_no_recovery()
+            self._handle_no_recovery()  # Give up cleanly.
 
-    def _log_response_error_details(self, response: Any) -> None:
+    def _log_response_error_details(self, response: Any) -> None:  # Log response diagnostics.
         """Log detailed response information during error handling."""
-        has_data = hasattr(response, "data")
-        logging.error("Response details: type=%s, hasattr(data)=%s", type(response), has_data)
+        has_data = hasattr(response, "data")  # Has a data attribute?
+        logging.error("Response details: type=%s, hasattr(data)=%s", type(response), has_data)  # log details.
 
-        if has_data:
-            logging.error("Response.data type=%s", type(response.data))
-            if isinstance(response.data, dict):
-                logging.error("Available keys: %s", list(response.data.keys()))
+        if has_data:  # Inspect the data.
+            logging.error("Response.data type=%s", type(response.data))  # log data type.
+            if isinstance(response.data, dict):  # Dict payload.
+                logging.error("Available keys: %s", list(response.data.keys()))  # log keys.
 
-    def _attempt_data_recovery(self, response: Any) -> list[dict[str, Any]] | None:
+    def _attempt_data_recovery(self, response: Any) -> list[dict[str, Any]] | None:  # Salvage rows from odd shapes.
         """Attempt to recover data from alternate response structures."""
-        if not hasattr(response, "data"):
-            return None
+        if not hasattr(response, "data"):  # No data to recover.
+            return None  # Nothing to recover.
 
-        if isinstance(response.data, dict):
-            if "data" in response.data:
-                recovered = response.data.get("data", [])
-                logging.info("Recovered %s records from response.data['data']", len(recovered))
+        if isinstance(response.data, dict):  # Dict payload.
+            if "data" in response.data:  # Nested data key.
+                recovered = response.data.get("data", [])  # Pull nested rows.
+                logging.info("Recovered %s records from response.data['data']", len(recovered))  # log recovered.
                 return recovered  # type: ignore[no-any-return]
 
-        if isinstance(response.data, list):
-            logging.info("Recovered %s records from response.data (list)", len(response.data))
-            return response.data
+        if isinstance(response.data, list):  # List payload.
+            logging.info("Recovered %s records from response.data (list)", len(response.data))  # log recovered list.
+            return response.data  # Use the list directly.
 
-        return None
+        return None  # Nothing to recover.
 
-    def _save_recovered_data(self) -> None:
+    def _save_recovered_data(self) -> None:  # Persist recovered rows.
         """Save recovered data and notify user."""
-        print(f"! API returned unexpected structure. Recovered {len(self.rawdata)} records.")
-        api_name = self.api_call.__name__
+        print(f"! API returned unexpected structure. Recovered {len(self.rawdata)} records.")  # Tell the user.
+        api_name = self.api_call.__name__  # API callable name.
         DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-        logging.info("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))
+        logging.info("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))  # log saved.
 
-    def _handle_no_recovery(self) -> None:
+    def _handle_no_recovery(self) -> None:  # Report unrecoverable response.
         """Handle case where no data could be recovered."""
-        print("! API response missing expected 'results' key. No data could be recovered.")
-        logging.error("Unable to recover any data from malformed response for %s", self.title)
-        logging.debug("EXIT: APIDataFetcher - structure error, no recovery")
+        print("! API response missing expected 'results' key. No data could be recovered.")  # Tell the user.
+        logging.error("Unable to recover any data from malformed response for %s", self.title)  # log no recovery.
+        logging.debug("EXIT: APIDataFetcher - structure error, no recovery")  # Trace exit.
 
-    def _handle_api_exception(self, error: Exception) -> None:
+    def _handle_api_exception(self, error: Exception) -> None:  # Handle a fetch exception.
         """Handle exceptions during API data retrieval."""
-        logging.error("Exception occurred during API data retrieval: %s", error)
-        logging.error("Exception type: %s", type(error).__name__)
-        print(f"! Exception occurred during API call: {error}")
+        logging.error("Exception occurred during API data retrieval: %s", error)  # log exception.
+        logging.error("Exception type: %s", type(error).__name__)  # log type.
+        print(f"! Exception occurred during API call: {error}")  # Tell the user.
 
-        if self._is_rate_limit_error(error):
-            self._handle_rate_limit()
-            return
+        if self._is_rate_limit_error(error):  # Rate limited?
+            self._handle_rate_limit()  # Save partial and stop.
+            return  # Done.
 
-        self._emergency_save_and_raise(error)
+        self._emergency_save_and_raise(error)  # Save then raise.
 
-    def _is_rate_limit_error(self, error: Exception) -> bool:
+    def _is_rate_limit_error(self, error: Exception) -> bool:  # Detect HTTP 429.
         """Check if exception is HTTP 429 rate limit error."""
-        status_code = getattr(getattr(error, "response", None), "status_code", None)
-        return status_code == 429
+        status_code = getattr(getattr(error, "response", None), "status_code", None)  # Read the status code.
+        return status_code == 429  # True only on 429.
 
-    def _handle_rate_limit(self) -> None:
+    def _handle_rate_limit(self) -> None:  # Save partial on rate limit.
         """Handle HTTP 429 rate limit error."""
-        logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")
+        logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")  # warn rate limit.
 
-        if self.rawdata:
-            api_name = self.api_call.__name__
+        if self.rawdata:  # Have partial data?
+            api_name = self.api_call.__name__  # API callable name.
             DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
-            print(f"* Partial data saved: {len(self.rawdata)} records written to {self.filename}")
+            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))  # log partial.
+            print(f"* Partial data saved: {len(self.rawdata)} records written to {self.filename}")  # Tell the user.
 
-        logging.debug("EXIT: APIDataFetcher - rate limited")
+        logging.debug("EXIT: APIDataFetcher - rate limited")  # Trace exit.
 
-    def _emergency_save_and_raise(self, error: Exception) -> None:
+    def _emergency_save_and_raise(self, error: Exception) -> None:  # Save partial then re-raise.
         """Save partial data before re-raising exception."""
-        if self.rawdata:
+        if self.rawdata:  # Have partial data?
             try:
-                api_name = self.api_call.__name__
+                api_name = self.api_call.__name__  # API callable name.
                 DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
                 logging.info("Emergency save: %s partial records saved before error exit", len(self.rawdata))
                 print(f"* Emergency save: {len(self.rawdata)} partial records written to {self.filename}")
-            except Exception as save_error:
-                logging.error("Failed to save partial data during error handling: %s", save_error)
+            except Exception as save_error:  # Save failed.
+                logging.error("Failed to save partial data during error handling: %s", save_error)  # log save fail.
 
-        logging.debug("EXIT: APIDataFetcher - API error")
-        raise error
+        logging.debug("EXIT: APIDataFetcher - API error")  # Trace exit.
+        raise error  # Re-raise the original.
 
-    def _handle_outer_exception(self, error: Exception) -> None:
+    def _handle_outer_exception(self, error: Exception) -> None:  # Handle a top-level error.
         """Handle exceptions at the top level."""
-        logging.error("! Error during data fetch for %s: %s", self.title, error)
-        logging.error("Exception type: %s, Traceback info available in logs", type(error).__name__)
+        logging.error("! Error during data fetch for %s: %s", self.title, error)  # log error.
+        logging.error("Exception type: %s, Traceback info available in logs", type(error).__name__)  # log type.
 
-        if self.rawdata:
-            self._save_partial_data_on_error(error)
+        if self.rawdata:  # Have partial data?
+            self._save_partial_data_on_error(error)  # Save what we have.
         else:
-            print("! No data was collected before the error occurred")
+            print("! No data was collected before the error occurred")  # Tell the user none saved.
 
-        logging.debug("EXIT: APIDataFetcher - error")
+        logging.debug("EXIT: APIDataFetcher - error")  # Trace exit.
 
-    def _save_partial_data_on_error(self, error: Exception) -> None:
+    def _save_partial_data_on_error(self, error: Exception) -> None:  # Persist partial rows on error.
         """Save partial data when outer exception occurs."""
         try:
-            api_name = self.api_call.__name__
+            api_name = self.api_call.__name__  # API callable name.
             DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)  # type: ignore[no-untyped-call]
-            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
+            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))  # log partial.
 
-            print("\n!! PARTIAL DATA SAVED !!")
+            print("\n!! PARTIAL DATA SAVED !!")  # Notify the user.
             print(f"   * Despite the error, {len(self.rawdata)} records were successfully saved to {self.filename}")
-            print(f"   * Error: {str(error)}")
-            print("   * You can retry the operation later to get remaining data")
-        except Exception as save_error:
-            logging.error("Failed to save partial data in outer exception handler: %s", save_error)
-            print(f"! Critical: Could not save partial data. Error: {save_error}")
+            print(f"   * Error: {str(error)}")  # Show the error.
+            print("   * You can retry the operation later to get remaining data")  # Suggest a retry.
+        except Exception as save_error:  # Save failed.
+            logging.error("Failed to save partial data in outer exception handler: %s", save_error)  # log save fail.
+            print(f"! Critical: Could not save partial data. Error: {save_error}")  # Tell the user.
 
     # =========================================================================
     # DATA PROCESSING AND DISPLAY METHODS
     # =========================================================================
 
-    def _export_and_display_data(self) -> None:
+    def _export_and_display_data(self) -> None:  # Export then show a table.
         """Export data and display in table format."""
-        logging.info("Fetched %s raw records from API.", len(self.rawdata))
+        logging.info("Fetched %s raw records from API.", len(self.rawdata))  # log raw count.
 
-        api_name = self.api_call.__name__
+        api_name = self.api_call.__name__  # API callable name.
         DataExporter.export_with_processing(  # type: ignore[no-untyped-call]
             self.rawdata, self.filename, sort_key=self.sort_key, api_function_name=api_name
         )
-        print(f"! {len(self.rawdata)} records exported to {self.filename}")
+        print(f"! {len(self.rawdata)} records exported to {self.filename}")  # Tell the user.
 
-        self._display_table()
+        self._display_table()  # Render the table.
 
-    def _display_table(self) -> None:
+    def _display_table(self) -> None:  # Build and log a table.
         """Prepare and display data in PrettyTable format."""
-        data = self._prepare_data_for_display()
+        data = self._prepare_data_for_display()  # Normalize rows.
         fields = DataProcessingUtils.get_unique_keys(data)  # type: ignore[no-untyped-call]
-        logging.debug("Unique fields for table: %s", fields)
+        logging.debug("Unique fields for table: %s", fields)  # Trace fields.
 
-        table = self._build_pretty_table(data, fields)
-        logging.debug("\n%s", table.get_string())
+        table = self._build_pretty_table(data, fields)  # Build the table.
+        logging.debug("\n%s", table.get_string())  # Log the table.
 
-    def _prepare_data_for_display(self) -> list[dict[str, Any]]:
+    def _prepare_data_for_display(self) -> list[dict[str, Any]]:  # Filter, sort, flatten rows.
         """Prepare raw data for table display."""
-        data = [entry for entry in self.rawdata if isinstance(entry, dict)]
+        data = [entry for entry in self.rawdata if isinstance(entry, dict)]  # Dict rows only.
 
-        if self.sort_key:
+        if self.sort_key:  # Optional sort.
             sort_key_str: str = self.sort_key  # Type narrowing
-            data = sorted(data, key=lambda x: x.get(sort_key_str, ""))
+            data = sorted(data, key=lambda x: x.get(sort_key_str, ""))  # Sort by key.
 
-        data = DataProcessingUtils.flatten_nested_fields(data)
+        data = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
         data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
         return data  # type: ignore[no-any-return]
 
-    def _build_pretty_table(self, data: list[dict[str, Any]], fields: list[str]) -> Any:
+    def _build_pretty_table(self, data: list[dict[str, Any]], fields: list[str]) -> Any:  # Build a PrettyTable.
         """Build PrettyTable from processed data."""
-        table = PrettyTable()
-        table.field_names = self.display_fields if self.display_fields else fields
-        table.valign = "t"
+        table = PrettyTable()  # New table.
+        table.field_names = self.display_fields if self.display_fields else fields  # Choose columns.
+        table.valign = "t"  # Top-align cells.
 
         for item in tqdm(data, desc="Processing", unit="record"):  # type: ignore[no-untyped-call]
-            row = [item.get(field, "") for field in table.field_names]
-            table.add_row(row)
+            row = [item.get(field, "") for field in table.field_names]  # Build a row.
+            table.add_row(row)  # Add the row.
 
-        return table
+        return table  # Return the table.
 
 
 def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int, threading.Semaphore, int, str]:
@@ -8020,7 +8020,7 @@ def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int,
     )  # Return all pool configuration values as a bundle.
 
 
-def _pool_process_batch_wait_loop(
+def _pool_process_batch_wait_loop(  # Submit one batch to a thread pool.
     batch: list[Any],
     batch_number: int,
     total_batches: int,
@@ -8094,7 +8094,7 @@ def _pool_process_batch_wait_loop(
     return batch_successful, batch_failed  # Return batch-level results so caller can accumulate them.
 
 
-def _pool_log_batch_exception(
+def _pool_log_batch_exception(  # Log a batch-level exception with context.
     batch_exc: Exception, batch_index: int, batch_size: int, max_threads: int, threading_mode: str
 ) -> None:
     """Log a batch-level exception with full context then re-raise it."""
@@ -8162,7 +8162,7 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
     ) // batch_size  # Pre-compute total batch count for progress labels.
     # Issue #431: bundle the 4 constant params into a frozen dataclass so
     # the inner loop signature stays within the 5-Item Rule's <=5 limit.
-    batch_config = BatchWorkerConfig(
+    batch_config = BatchWorkerConfig(  # Bundle constant worker params per 5-Item Rule.
         worker_function=worker_function,
         connection_semaphore=connection_semaphore,
         max_threads=max_threads,
@@ -8217,7 +8217,7 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
 # PromptNetworkDeviceUtils -- extracted to src/device/prompt_utils.py (issue #332)
 
 
-class PromptClientUtils:
+class PromptClientUtils:  # Client selection prompt helpers.
     """
     Client Selection Prompts
 
@@ -8236,12 +8236,12 @@ class PromptClientUtils:
         Returns:
             str: The selected client MAC address (normalized) or None if no selection made
         """
-        logging.debug("Fetching connected clients for site: %s", site_id)
+        logging.debug("Fetching connected clients for site: %s", site_id)  # Log before fetching clients.
 
         try:
             # Fetch wireless clients using search endpoint (from clients module)
             wireless_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)
-            wireless_clients = (
+            wireless_clients = (  # Normalize wireless results payload.
                 wireless_response.data.get("results", [])
                 if hasattr(wireless_response.data, "get")
                 else wireless_response.data
@@ -8249,30 +8249,30 @@ class PromptClientUtils:
 
             # Fetch wired clients using search endpoint (from separate wired_clients module)
             wired_response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id)
-            wired_clients = (
+            wired_clients = (  # Normalize wired results payload.
                 wired_response.data.get("results", []) if hasattr(wired_response.data, "get") else wired_response.data
             )
 
-            all_clients = []
+            all_clients = []  # Combined client list for selection.
 
             # Process wireless clients
-            if wireless_clients:
-                for client in wireless_clients:
-                    client["connection_type"] = "Wireless"
-                    all_clients.append(client)
+            if wireless_clients:  # Only tag wireless when present.
+                for client in wireless_clients:  # Tag each wireless client.
+                    client["connection_type"] = "Wireless"  # Mark connection type for display.
+                    all_clients.append(client)  # Add wireless client to combined list.
 
             # Process wired clients
-            if wired_clients:
-                for client in wired_clients:
-                    client["connection_type"] = "Wired"
-                    all_clients.append(client)
+            if wired_clients:  # Only tag wired when present.
+                for client in wired_clients:  # Tag each wired client.
+                    client["connection_type"] = "Wired"  # Mark connection type for display.
+                    all_clients.append(client)  # Add wired client to combined list.
 
-            if not all_clients:
-                print("\n! No connected clients found at the selected site.")
-                logging.warning("No clients found for site_id: %s", site_id)
-                return None
+            if not all_clients:  # No clients means nothing to select.
+                print("\n! No connected clients found at the selected site.")  # Tell operator no clients found.
+                logging.warning("No clients found for site_id: %s", site_id)  # Log the empty-site condition.
+                return None  # Abort selection with no result.
 
-            logging.info(
+            logging.info(  # Log client counts for visibility.
                 "Found %s connected clients at site (%s wireless, %s wired)",
                 len(all_clients),
                 len(wireless_clients or []),
@@ -8283,62 +8283,62 @@ class PromptClientUtils:
             all_clients = sorted(all_clients, key=lambda x: (x.get("hostname", ""), x.get("username", "")))
 
             # Prepare selection table
-            table = PrettyTable()
-            table.field_names = ["Index", "Hostname/User", "MAC", "IP", "Type", "SSID/VLAN"]
-            table.max_width["Hostname/User"] = 25
-            index_to_client = {}
+            table = PrettyTable()  # Build selection table.
+            table.field_names = ["Index", "Hostname/User", "MAC", "IP", "Type", "SSID/VLAN"]  # Define table columns.
+            table.max_width["Hostname/User"] = 25  # Cap hostname width for readability.
+            index_to_client = {}  # Map index back to client object.
 
-            for idx, client in enumerate(all_clients):
+            for idx, client in enumerate(all_clients):  # Enumerate clients for indexed rows.
                 hostname = client.get("hostname", client.get("username", "Unknown"))[:25]
-                mac = client.get("mac", "Unknown")
-                ip = client.get("ip", "Unknown")
-                conn_type = client.get("connection_type", "Unknown")
+                mac = client.get("mac", "Unknown")  # Default MAC when missing.
+                ip = client.get("ip", "Unknown")  # Default IP when missing.
+                conn_type = client.get("connection_type", "Unknown")  # Read connection type for branching.
 
                 # SSID for wireless, VLAN for wired
-                if conn_type == "Wireless":
-                    network = client.get("ssid", "N/A")
+                if conn_type == "Wireless":  # Wireless rows show SSID.
+                    network = client.get("ssid", "N/A")  # Use SSID as network label.
                 else:
-                    network = f"VLAN {client.get('vlan_id', 'N/A')}"
+                    network = f"VLAN {client.get('vlan_id', 'N/A')}"  # Wired rows show VLAN label.
 
-                table.add_row([idx, hostname, mac, ip, conn_type, network])
-                index_to_client[idx] = client
+                table.add_row([idx, hostname, mac, ip, conn_type, network])  # Add client row to the table.
+                index_to_client[idx] = client  # Map index to client for lookup.
 
-            print("\n" + "=" * 80)
-            print(" SELECT CONNECTED CLIENT")
-            print("=" * 80)
-            print(f"  Found {len(all_clients)} connected clients")
-            print("=" * 80)
-            print(table)
-            print("\nOptions:")
-            print("  - Enter index number to select a client")
-            print("  - Enter 'm' to manually type MAC address")
-            print("  - Enter 'c' to cancel")
+            print("\n" + "=" * 80)  # Print selection header rule.
+            print(" SELECT CONNECTED CLIENT")  # Print selection title.
+            print("=" * 80)  # Print closing header rule.
+            print(f"  Found {len(all_clients)} connected clients")  # Show count of connected clients.
+            print("=" * 80)  # Print separator rule.
+            print(table)  # Render the client table.
+            print("\nOptions:")  # Print options heading.
+            print("  - Enter index number to select a client")  # Explain index selection.
+            print("  - Enter 'm' to manually type MAC address")  # Explain manual MAC option.
+            print("  - Enter 'c' to cancel")  # Explain cancel option.
 
             user_input = InputUtils.safe_input("\nEnter your choice: ", context="client_selection").strip()
-            logging.debug("User input for client selection: %s", user_input)
+            logging.debug("User input for client selection: %s", user_input)  # Log raw selection input.
 
             # Check for manual entry
-            if user_input.lower() == "m":
+            if user_input.lower() == "m":  # Branch: manual MAC entry.
                 manual_mac = InputUtils.safe_input("Enter client MAC address: ", context="manual_mac")
-                logging.info("User chose manual MAC entry: %s", manual_mac)
-                return manual_mac
+                logging.info("User chose manual MAC entry: %s", manual_mac)  # Log manual MAC choice.
+                return manual_mac  # Return manually typed MAC.
 
             # Check for cancel
-            if user_input.lower() == "c":
-                logging.info("User cancelled client selection")
-                return None
+            if user_input.lower() == "c":  # Branch: cancel selection.
+                logging.info("User cancelled client selection")  # Log cancellation.
+                return None  # Abort with no selection.
 
             # Validate index selection
-            if user_input.isdigit():
-                idx = int(user_input)
-                if idx in index_to_client:
-                    client_mac = index_to_client[idx].get("mac")
-                    client_hostname = index_to_client[idx].get(
+            if user_input.isdigit():  # Branch: numeric index choice.
+                idx = int(user_input)  # Parse index to integer.
+                if idx in index_to_client:  # Validate index exists.
+                    client_mac = index_to_client[idx].get("mac")  # Read MAC of chosen client.
+                    client_hostname = index_to_client[idx].get(  # Read hostname of chosen client.
                         "hostname", index_to_client[idx].get("username", "Unknown")
                     )
                     conn_type = index_to_client[idx].get("connection_type", "Unknown")
                     print(f"\n! Selected: {client_hostname} ({conn_type}) - MAC: {client_mac}")
-                    logging.info(
+                    logging.info(  # Log the selected client.
                         "User selected client by index: %s (hostname: %s, mac: %s, type: %s)",
                         idx,
                         client_hostname,
@@ -8347,18 +8347,18 @@ class PromptClientUtils:
                     )
                     return client_mac  # type: ignore[no-any-return]
                 else:
-                    print("\n! Invalid index")
-                    logging.error("Invalid client index: %s", idx)
-                    return None
+                    print("\n! Invalid index")  # Out-of-range index path.
+                    logging.error("Invalid client index: %s", idx)  # Log invalid index.
+                    return None  # Abort on invalid index.
             else:
                 print("\n! Please enter a valid index number, 'm' for manual, or 'c' to cancel")
-                logging.error("Invalid client selection input: %s", user_input)
-                return None
+                logging.error("Invalid client selection input: %s", user_input)  # Log invalid selection input.
+                return None  # Abort on bad input.
 
-        except Exception as error:
-            print(f"\n! Error fetching clients: {error}")
+        except Exception as error:  # Catch client-fetch errors.
+            print(f"\n! Error fetching clients: {error}")  # Show fetch error to operator.
             logging.exception("Exception in PromptClientUtils.select_client_mac: %s", error)
-            return None
+            return None  # Abort on error.
 
     @staticmethod
     def select_client(site_id: str | None = None) -> tuple[str | None, str | None, str | None]:
@@ -8372,33 +8372,33 @@ class PromptClientUtils:
         Returns:
             tuple: (client_mac, client_type, site_id) or (None, None, None) if no selection
         """
-        print("\n  Client Selection")
-        print("=" * 30)
+        print("\n  Client Selection")  # Print selection heading.
+        print("=" * 30)  # Print separator rule.
 
         site_id = PromptUtils._determine_search_scope(site_id)  # type: ignore[assignment]
         if site_id is False:  # type: ignore[comparison-overlap]  # User explicitly cancelled
-            return None, None, None
+            return None, None, None  # Abort when no org resolved.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id from cache/prompt.
 
         try:
-            all_clients = PromptUtils._fetch_all_clients(org_id, site_id)
-            if not all_clients:
-                print(" No clients found.")
-                return None, None, None
+            all_clients = PromptUtils._fetch_all_clients(org_id, site_id)  # Fetch all clients for org/site.
+            if not all_clients:  # Handle empty client set.
+                print(" No clients found.")  # Tell operator none found.
+                return None, None, None  # Abort with empty result.
 
-            sites_cache = PromptUtils._load_sites_cache(org_id)
-            PromptUtils._display_client_table(all_clients, sites_cache)
+            sites_cache = PromptUtils._load_sites_cache(org_id)  # Load sites cache for names.
+            PromptUtils._display_client_table(all_clients, sites_cache)  # Display the client table.
 
             return PromptUtils._handle_client_selection(all_clients, sites_cache, site_id)
 
-        except Exception as exception:
-            logging.error("Error during client selection: %s", exception)
-            print(f"! Error searching for clients: {exception}")
-            return None, None, None
+        except Exception as exception:  # Catch selection errors.
+            logging.error("Error during client selection: %s", exception)  # Log selection error.
+            print(f"! Error searching for clients: {exception}")  # Show error to operator.
+            return None, None, None  # Abort on error.
 
     @staticmethod
-    def select_site_and_device_ids(site_id=None, device_id=None):
+    def select_site_and_device_ids(site_id=None, device_id=None):  # Prompt for site and device ids.
         """
         Returns site_id and device_id, either from arguments or via interactive prompts.
 
@@ -8409,26 +8409,26 @@ class PromptClientUtils:
         Returns:
             tuple: (site_id, device_id) or (None, None) if selection failed
         """
-        if not site_id:
-            site_id = PromptUtils.select_site_id_from_csv()
-            if not site_id:
-                print(" No site selected.")
-                return None, None
+        if not site_id:  # Resolve site when not supplied.
+            site_id = PromptUtils.select_site_id_from_csv()  # Prompt site from CSV.
+            if not site_id:  # Handle no-site selection.
+                print(" No site selected.")  # Tell operator none selected.
+                return None, None  # Abort with no ids.
 
-        if not device_id:
+        if not device_id:  # Resolve device when not supplied.
             device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="all")
-            if not device_id:
-                print(" No device selected.")
-                return None, None
+            if not device_id:  # Handle no-device selection.
+                print(" No device selected.")  # Tell operator none selected.
+                return None, None  # Abort with no ids.
 
-        return site_id, device_id
+        return site_id, device_id  # Return resolved id pair.
 
     # ========================================================================
     # CLIENT SELECTION METHODS
     # ========================================================================
 
 
-class PromptUtils:
+class PromptUtils:  # General prompt helpers.
     """
     Centralized prompt utilities for user input and selection operations.
     Groups all interactive selection functions (sites, devices, ports, clients).
@@ -8436,7 +8436,7 @@ class PromptUtils:
     """
 
     @staticmethod
-    def select_device_id_from_inventory(
+    def select_device_id_from_inventory(  # Prompt device id from inventory.
         site_id: str, device_type: str = "all", csv_filename: str = "SiteInventory.csv"
     ) -> str | None:
         """
@@ -8457,81 +8457,81 @@ class PromptUtils:
         # IMPORTANT: Always use type=all to get all device types (APs, switches, gateways)
         # The Mist API defaults to only APs unless explicitly specified
         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
-        if not rawdata:
-            print("No devices found for the selected site.")
-            logging.warning("No devices found for site_id: %s", site_id)
-            return None
+        if not rawdata:  # Handle empty inventory.
+            print("No devices found for the selected site.")  # Tell operator none found.
+            logging.warning("No devices found for site_id: %s", site_id)  # Log empty inventory.
+            return None  # Abort with no device.
 
         # Filter devices locally based on requested device types
-        if device_type != "all":
-            requested_types = [dtype.strip() for dtype in device_type.split(",")]
-            filtered_data = []
-            for device in rawdata:
-                device_device_type = device.get("type", "").lower()
-                if device_device_type in requested_types:
-                    filtered_data.append(device)
-            rawdata = filtered_data
+        if device_type != "all":  # Filter by type when requested.
+            requested_types = [dtype.strip() for dtype in device_type.split(",")]  # Split requested types list.
+            filtered_data = []  # Collect matching devices.
+            for device in rawdata:  # Scan each device.
+                device_device_type = device.get("type", "").lower()  # Read normalized device type.
+                if device_device_type in requested_types:  # Keep devices of requested type.
+                    filtered_data.append(device)  # Add matching device.
+            rawdata = filtered_data  # Replace data with filtered set.
 
-            if not rawdata:
-                print(f"No devices of type '{device_type}' found at the selected site.")
+            if not rawdata:  # Handle empty filtered set.
+                print(f"No devices of type '{device_type}' found at the selected site.")  # Tell operator none of type.
                 logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)
-                return None
+                return None  # Abort with no device.
 
         # Sort, flatten, and sanitize the inventory data for display and CSV export
-        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
-        inventory = DataProcessingUtils.flatten_nested_fields(inventory)
+        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))  # Sort inventory by model.
+        inventory = DataProcessingUtils.flatten_nested_fields(inventory)  # Flatten nested device fields.
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
         DataExporter.write_with_format_selection(inventory, csv_filename)  # type: ignore[no-untyped-call]
-        logging.info("Device inventory for site_id %s written to %s", site_id, csv_filename)
+        logging.info("Device inventory for site_id %s written to %s", site_id, csv_filename)  # Log CSV write location.
 
         # Prepare PrettyTable for user selection
-        table = PrettyTable()
-        table.field_names = ["Index", "name", "mac", "model", "serial"]
-        index_to_device = {}
-        name_to_device = {}
+        table = PrettyTable()  # Build device selection table.
+        table.field_names = ["Index", "name", "mac", "model", "serial"]  # Define table columns.
+        index_to_device = {}  # Map index to device.
+        name_to_device = {}  # Map name to device.
 
         # Populate the table and lookup dictionaries
-        for idx, item in enumerate(inventory):
-            table.add_row(
+        for idx, item in enumerate(inventory):  # Enumerate devices for rows.
+            table.add_row(  # Add device row to table.
                 [idx, item.get("name", ""), item.get("mac", ""), item.get("model", ""), item.get("serial", "")]
             )
-            index_to_device[idx] = item
-            name_to_device[item.get("name", "")] = item
+            index_to_device[idx] = item  # Map index to device object.
+            name_to_device[item.get("name", "")] = item  # Map name to device object.
 
-        print(table)
-        logging.info("Displayed device selection table to user.")
+        print(table)  # Render the device table.
+        logging.info("Displayed device selection table to user.")  # Log table display.
 
-        user_input = InputUtils.safe_input(
+        user_input = InputUtils.safe_input(  # Read operator device choice.
             "Enter the index or name of the device to view device: ",
             context="device_inventory_selection",
         ).strip()
-        logging.debug("User input for device selection: %s", user_input)
+        logging.debug("User input for device selection: %s", user_input)  # Log raw device input.
 
         # Accept common dotted-index input (e.g., ".2") from interactive tests/operators.
-        normalized_input = user_input[1:] if user_input.startswith(".") else user_input
+        normalized_input = user_input[1:] if user_input.startswith(".") else user_input  # Strip leading dot prefix.
 
         # Try index selection
-        if normalized_input.isdigit():
-            idx = int(normalized_input)
-            if idx in index_to_device:
-                device_id = index_to_device[idx].get("id")
+        if normalized_input.isdigit():  # Branch: numeric index choice.
+            idx = int(normalized_input)  # Parse index to integer.
+            if idx in index_to_device:  # Validate index exists.
+                device_id = index_to_device[idx].get("id")  # Read selected device id.
                 logging.info("User selected device by index: %s (device_id: %s)", idx, device_id)
                 return device_id  # type: ignore[no-any-return]
             else:
-                logging.error(" Invalid index.")
-                return None
+                logging.error(" Invalid index.")  # Log invalid index.
+                return None  # Abort on invalid index.
 
         # Try name selection
-        if normalized_input in name_to_device:
-            device_id = name_to_device[normalized_input].get("id")
+        if normalized_input in name_to_device:  # Branch: name match.
+            device_id = name_to_device[normalized_input].get("id")  # Read device id by name.
             logging.info("User selected device by name: %s (device_id: %s)", normalized_input, device_id)
             return device_id  # type: ignore[no-any-return]
 
-        logging.error(" Device not found by name or index.")
-        return None
+        logging.error(" Device not found by name or index.")  # Log not-found device.
+        return None  # Abort on not found.
 
     @staticmethod
-    def select_site_id_from_csv(csv_file: str = "SiteList.csv") -> str | None:
+    def select_site_id_from_csv(csv_file: str = "SiteList.csv") -> str | None:  # Prompt site id from CSV.
         """
         Prompts the user to select a site by index or name from SiteList.csv.
         Returns the corresponding site ID.
@@ -8543,55 +8543,55 @@ class PromptUtils:
             str: The selected site ID or None if no selection made
         """
         # Ensure the site list CSV is fresh or generate it if missing/stale
-        CacheUtils.check_and_generate_csv(csv_file, OrgSiteExporter.sites)
+        CacheUtils.check_and_generate_csv(csv_file, OrgSiteExporter.sites)  # Ensure site CSV exists.
 
         # Get the full path to the CSV file in the data directory
-        csv_file_path = FilePathUtils.get_csv_path(csv_file)
+        csv_file_path = FilePathUtils.get_csv_path(csv_file)  # Resolve CSV file path.
 
         # Load the site list from CSV
-        with open(csv_file_path, encoding="utf-8") as file:
-            reader = list(csv.DictReader(file))
-            index_to_site = {i: row for i, row in enumerate(reader)}
-            name_to_site = {row["name"]: row for row in reader if "name" in row}
+        with open(csv_file_path, encoding="utf-8") as file:  # Open the site CSV.
+            reader = list(csv.DictReader(file))  # Read all CSV rows.
+            index_to_site = {i: row for i, row in enumerate(reader)}  # Map index to site row.
+            name_to_site = {row["name"]: row for row in reader if "name" in row}  # Map name to site row.
 
         # Display available sites to the user
-        print("\nAvailable Sites:")
-        for idx, row in index_to_site.items():
-            print(f"[{idx}] {row.get('name', 'Unnamed')}")
+        print("\nAvailable Sites:")  # Print available sites heading.
+        for idx, row in index_to_site.items():  # Enumerate site rows.
+            print(f"[{idx}] {row.get('name', 'Unnamed')}")  # Print each site option.
 
         user_input = InputUtils.safe_input("\nEnter site index or name: ", context="site_selection").strip()
-        logging.debug("User input for site selection: %s", user_input)
+        logging.debug("User input for site selection: %s", user_input)  # Log raw site input.
 
-        global LAST_SELECTED_SITE_ID
+        global LAST_SELECTED_SITE_ID  # Track last selected site globally.
 
         # Try index selection
-        if user_input.isdigit():
-            idx = int(user_input)
-            if idx in index_to_site:
-                site_id = index_to_site[idx].get("id")
-                print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")
-                logging.info("User selected site by index: %s (site_id: %s)", idx, site_id)
-                LAST_SELECTED_SITE_ID = site_id
-                return site_id
+        if user_input.isdigit():  # Branch: numeric index choice.
+            idx = int(user_input)  # Parse index to integer.
+            if idx in index_to_site:  # Validate index exists.
+                site_id = index_to_site[idx].get("id")  # Read selected site id.
+                print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")  # Confirm site selection.
+                logging.info("User selected site by index: %s (site_id: %s)", idx, site_id)  # Log index selection.
+                LAST_SELECTED_SITE_ID = site_id  # Remember last selected site.
+                return site_id  # Return selected site id.
             else:
-                print(" Invalid index.")
-                logging.warning("Invalid site index entered: %s", idx)
-                return None
+                print(" Invalid index.")  # Reject out-of-range index.
+                logging.warning("Invalid site index entered: %s", idx)  # Log invalid index.
+                return None  # Abort on invalid index.
 
         # Try name selection
-        if user_input in name_to_site:
-            site_id = name_to_site[user_input].get("id")
-            print(f"! Selected site: {user_input} (ID: {site_id})")
-            logging.info("User selected site by name: %s (site_id: %s)", user_input, site_id)
-            LAST_SELECTED_SITE_ID = site_id
-            return site_id
+        if user_input in name_to_site:  # Branch: name match.
+            site_id = name_to_site[user_input].get("id")  # Read site id by name.
+            print(f"! Selected site: {user_input} (ID: {site_id})")  # Confirm site selection.
+            logging.info("User selected site by name: %s (site_id: %s)", user_input, site_id)  # Log name selection.
+            LAST_SELECTED_SITE_ID = site_id  # Remember last selected site.
+            return site_id  # Return selected site id.
 
-        print(" Site not found by name or index.")
-        logging.warning("Site not found by name or index: %s", user_input)
-        return None
+        print(" Site not found by name or index.")  # Report not-found site.
+        logging.warning("Site not found by name or index: %s", user_input)  # Log not-found site.
+        return None  # Abort on not found.
 
     @staticmethod
-    def select_site() -> str | None:
+    def select_site() -> str | None:  # Convenience site selector.
         """
         Prompts the user to select a site and returns the site_id.
         Uses the existing CSV-based site selection functionality.
@@ -8599,30 +8599,30 @@ class PromptUtils:
         Returns:
             str: The selected site ID or None if no selection made
         """
-        return PromptUtils.select_site_id_from_csv()
+        return PromptUtils.select_site_id_from_csv()  # Delegate to CSV selector.
 
     @staticmethod
-    def select_site_with_logging() -> str | None:
+    def select_site_with_logging() -> str | None:  # Site selector with logging.
         """
         Prompts the user to select a site from the CSV list and logs the selection.
 
         Returns:
             str: The selected site ID or None if no selection made
         """
-        logging.info("Prompting user to select a site from SiteList.csv...")
-        site_id = PromptUtils.select_site_id_from_csv()
-        if site_id:
-            logging.info("! Selected site ID: %s", site_id)
+        logging.info("Prompting user to select a site from SiteList.csv...")  # Log selection prompt start.
+        site_id = PromptUtils.select_site_id_from_csv()  # Prompt site from CSV.
+        if site_id:  # Handle successful selection.
+            logging.info("! Selected site ID: %s", site_id)  # Log selected site id.
         else:
             logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
-        return site_id
+        return site_id  # Return selected site id.
 
     # PromptUtils.select_device removed per issue #431 (ARCH-DELEGATE).
     # Callers now use PromptUtils.select_device_id_from_inventory(site_id, device_type)
     # directly -- it is the canonical implementation and accepts the same arguments.
 
     @staticmethod
-    def _determine_search_scope(site_id: str | None) -> str | None | Literal[False]:
+    def _determine_search_scope(site_id: str | None) -> str | None | Literal[False]:  # Determine client search scope.
         """
         Determines whether to search site-specific or org-wide.
 
@@ -8631,10 +8631,10 @@ class PromptUtils:
             None: for org-wide search
             False: if user cancelled selection
         """
-        if site_id:
-            return site_id
+        if site_id:  # Use provided site directly.
+            return site_id  # Return supplied site id.
 
-        scope_choice = (
+        scope_choice = (  # Prompt for scope choice.
             InputUtils.safe_input(
                 "Search scope - (s)ite-specific or (o)rganization-wide? [s/o]: ",
                 context="client_search_scope",
@@ -8642,12 +8642,12 @@ class PromptUtils:
             .strip()
             .lower()
         )
-        if scope_choice == "s":
-            selected_site = PromptUtils.select_site()
-            if not selected_site:
-                print(" No site selected.")
-                return False
-            return selected_site
+        if scope_choice == "s":  # Branch: single-site scope.
+            selected_site = PromptUtils.select_site()  # Prompt to pick a site.
+            if not selected_site:  # Handle no-site selection.
+                print(" No site selected.")  # Tell operator none selected.
+                return False  # Signal scope failure.
+            return selected_site  # Return chosen site scope.
 
         return None  # Org-wide search
 
@@ -8659,19 +8659,19 @@ class PromptUtils:
         Returns:
             List of client dictionaries with client_type added.
         """
-        all_clients = []
+        all_clients = []  # Combined client accumulator.
 
-        if site_id:
-            print("! Searching for clients in selected site...")
-            wireless = PromptUtils._fetch_site_wireless_clients(site_id)
-            wired = PromptUtils._fetch_site_wired_clients(site_id)
+        if site_id:  # Branch: site-scoped search.
+            print("! Searching for clients in selected site...")  # Inform operator of site search.
+            wireless = PromptUtils._fetch_site_wireless_clients(site_id)  # Fetch site wireless clients.
+            wired = PromptUtils._fetch_site_wired_clients(site_id)  # Fetch site wired clients.
         else:
-            print("! Searching for clients across organization...")
-            wireless = PromptUtils._fetch_org_wireless_clients(org_id)
-            wired = PromptUtils._fetch_org_wired_clients(org_id)
+            print("! Searching for clients across organization...")  # Inform operator of org search.
+            wireless = PromptUtils._fetch_org_wireless_clients(org_id)  # Fetch org wireless clients.
+            wired = PromptUtils._fetch_org_wired_clients(org_id)  # Fetch org wired clients.
 
-        all_clients.extend(wireless)
-        all_clients.extend(wired)
+        all_clients.extend(wireless)  # Add wireless clients to list.
+        all_clients.extend(wired)  # Add wired clients to list.
 
         return sorted(all_clients, key=lambda x: (x.get("hostname", ""), x.get("mac", "")))
 
@@ -8680,71 +8680,71 @@ class PromptUtils:
         """Fetches wireless clients for a specific site."""
         try:
             response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id, limit=1000)
-            clients = mistapi.get_all(response=response, mist_session=apisession) or []
-            for client in clients:
-                client["client_type"] = "wireless"
-                client["source_site_id"] = site_id
-            logging.info("Found %s wireless clients in site", len(clients))
-            return clients
-        except Exception as exception:
-            logging.warning("Could not fetch wireless clients for site: %s", exception)
-            return []
+            clients = mistapi.get_all(response=response, mist_session=apisession) or []  # Page through all results.
+            for client in clients:  # Tag each client.
+                client["client_type"] = "wireless"  # Mark as wireless type.
+                client["source_site_id"] = site_id  # Record source site id.
+            logging.info("Found %s wireless clients in site", len(clients))  # Log wireless client count.
+            return clients  # Return wireless clients.
+        except Exception as exception:  # Catch fetch errors.
+            logging.warning("Could not fetch wireless clients for site: %s", exception)  # Log fetch failure.
+            return []  # Return empty on error.
 
     @staticmethod
     def _fetch_site_wired_clients(site_id: str) -> list[dict]:  # type: ignore[type-arg]
         """Fetches wired clients for a specific site."""
         try:
             response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id, limit=1000)
-            clients = mistapi.get_all(response=response, mist_session=apisession) or []
-            for client in clients:
-                client["client_type"] = "wired"
-                client["source_site_id"] = site_id
-            logging.info("Found %s wired clients in site", len(clients))
-            return clients
-        except Exception as exception:
-            logging.warning("Could not fetch wired clients for site: %s", exception)
-            return []
+            clients = mistapi.get_all(response=response, mist_session=apisession) or []  # Page through all results.
+            for client in clients:  # Tag each client.
+                client["client_type"] = "wired"  # Mark as wired type.
+                client["source_site_id"] = site_id  # Record source site id.
+            logging.info("Found %s wired clients in site", len(clients))  # Log wired client count.
+            return clients  # Return wired clients.
+        except Exception as exception:  # Catch fetch errors.
+            logging.warning("Could not fetch wired clients for site: %s", exception)  # Log fetch failure.
+            return []  # Return empty on error.
 
     @staticmethod
     def _fetch_org_wireless_clients(org_id: str) -> list[dict]:  # type: ignore[type-arg]
         """Fetches wireless clients for the entire organization."""
         try:
             response = mistapi.api.v1.orgs.clients.searchOrgWirelessClients(apisession, org_id, limit=1000)
-            clients = mistapi.get_all(response=response, mist_session=apisession) or []
-            for client in clients:
-                client["client_type"] = "wireless"
-            logging.info("Found %s wireless clients in organization", len(clients))
-            return clients
-        except Exception as exception:
-            logging.warning("Could not fetch wireless clients for org: %s", exception)
-            return []
+            clients = mistapi.get_all(response=response, mist_session=apisession) or []  # Page through all results.
+            for client in clients:  # Tag each client.
+                client["client_type"] = "wireless"  # Mark as wireless type.
+            logging.info("Found %s wireless clients in organization", len(clients))  # Log wireless client count.
+            return clients  # Return wireless clients.
+        except Exception as exception:  # Catch fetch errors.
+            logging.warning("Could not fetch wireless clients for org: %s", exception)  # Log fetch failure.
+            return []  # Return empty on error.
 
     @staticmethod
     def _fetch_org_wired_clients(org_id: str) -> list[dict]:  # type: ignore[type-arg]
         """Fetches wired clients for the entire organization."""
         try:
             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(apisession, org_id, limit=1000)
-            clients = mistapi.get_all(response=response, mist_session=apisession) or []
-            for client in clients:
-                client["client_type"] = "wired"
-            logging.info("Found %s wired clients in organization", len(clients))
-            return clients
-        except Exception as exception:
-            logging.warning("Could not fetch wired clients for org: %s", exception)
-            return []
+            clients = mistapi.get_all(response=response, mist_session=apisession) or []  # Page through all results.
+            for client in clients:  # Tag each client.
+                client["client_type"] = "wired"  # Mark as wired type.
+            logging.info("Found %s wired clients in organization", len(clients))  # Log wired client count.
+            return clients  # Return wired clients.
+        except Exception as exception:  # Catch fetch errors.
+            logging.warning("Could not fetch wired clients for org: %s", exception)  # Log fetch failure.
+            return []  # Return empty on error.
 
     @staticmethod
-    def _load_sites_cache(org_id: str) -> dict[str, str]:
+    def _load_sites_cache(org_id: str) -> dict[str, str]:  # Load site id-to-name cache.
         """Loads site ID to name mapping for display purposes."""
         try:
-            print(" Loading site information...")
-            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-            cache = {site["id"]: site["name"] for site in sites}
-            logging.info("Cached %s sites for client display", len(cache))
-            return cache
-        except Exception as exception:
-            logging.warning("Could not fetch sites for display: %s", exception)
-            return {}
+            print(" Loading site information...")  # Inform operator of load.
+            sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all sites for org.
+            cache = {site["id"]: site["name"] for site in sites}  # Build id-to-name map.
+            logging.info("Cached %s sites for client display", len(cache))  # Log cached site count.
+            return cache  # Return the cache.
+        except Exception as exception:  # Catch fetch errors.
+            logging.warning("Could not fetch sites for display: %s", exception)  # Log fetch failure.
+            return {}  # Return empty cache on error.
 
     @staticmethod
     def _display_client_table(all_clients: list[dict], sites_cache: dict[str, str]) -> dict[int, dict]:  # type: ignore[type-arg]
@@ -8754,47 +8754,47 @@ class PromptUtils:
         Returns:
             Dictionary mapping index to client data.
         """
-        table = PrettyTable()
+        table = PrettyTable()  # Build client display table.
         table.field_names = ["#", "Hostname", "MAC Address", "Type", "IP Address", "SSID/VLAN", "Site", "Status"]
-        table.align["#"] = "r"
-        table.align["Hostname"] = "l"
-        table.align["MAC Address"] = "l"
-        table.align["Type"] = "c"
-        table.align["IP Address"] = "l"
-        table.align["SSID/VLAN"] = "l"
-        table.align["Site"] = "l"
-        table.align["Status"] = "c"
-        table.max_width["Hostname"] = 20
-        table.max_width["IP Address"] = 16
-        table.max_width["SSID/VLAN"] = 15
-        table.max_width["Site"] = 15
+        table.align["#"] = "r"  # Right-align index column.
+        table.align["Hostname"] = "l"  # Left-align hostname.
+        table.align["MAC Address"] = "l"  # Left-align MAC.
+        table.align["Type"] = "c"  # Center type column.
+        table.align["IP Address"] = "l"  # Left-align IP.
+        table.align["SSID/VLAN"] = "l"  # Left-align SSID/VLAN.
+        table.align["Site"] = "l"  # Left-align site.
+        table.align["Status"] = "c"  # Center status column.
+        table.max_width["Hostname"] = 20  # Cap hostname width.
+        table.max_width["IP Address"] = 16  # Cap IP width.
+        table.max_width["SSID/VLAN"] = 15  # Cap SSID/VLAN width.
+        table.max_width["Site"] = 15  # Cap site width.
 
-        for idx, client in enumerate(all_clients):
-            row = PromptUtils._format_client_row(idx, client, sites_cache)
-            table.add_row(row)
+        for idx, client in enumerate(all_clients):  # Enumerate clients for rows.
+            row = PromptUtils._format_client_row(idx, client, sites_cache)  # Format a client row.
+            table.add_row(row)  # Add row to table.
 
-        print(f"\n  Found {len(all_clients)} clients:")
-        print(table)
+        print(f"\n  Found {len(all_clients)} clients:")  # Show client count.
+        print(table)  # Render the table.
 
-        wireless_count = sum(1 for c in all_clients if c.get("client_type") == "wireless")
-        wired_count = sum(1 for c in all_clients if c.get("client_type") == "wired")
-        print(f"\n  Summary: {wireless_count} wireless, {wired_count} wired clients")
-        print("\n  [+] = Online  [~] = Recently seen  [-] = Offline")
-        print("---" * 20)
+        wireless_count = sum(1 for c in all_clients if c.get("client_type") == "wireless")  # Count wireless clients.
+        wired_count = sum(1 for c in all_clients if c.get("client_type") == "wired")  # Count wired clients.
+        print(f"\n  Summary: {wireless_count} wireless, {wired_count} wired clients")  # Print client summary.
+        print("\n  [+] = Online  [~] = Recently seen  [-] = Offline")  # Explain status legend.
+        print("---" * 20)  # Print separator rule.
 
         # Return mapping of index to client data
-        return {idx: client for idx, client in enumerate(all_clients)}
+        return {idx: client for idx, client in enumerate(all_clients)}  # Return index-to-client map.
 
     @staticmethod
     def _format_client_row(idx: int, client: dict, sites_cache: dict[str, str]) -> list:  # type: ignore[type-arg]
         """Formats a single client row for the selection table."""
-        site_name = PromptUtils._get_client_site_name(client, sites_cache)
-        status = PromptUtils._get_client_status(client)
+        site_name = PromptUtils._get_client_site_name(client, sites_cache)  # Resolve site name for row.
+        status = PromptUtils._get_client_status(client)  # Resolve status marker.
         hostname = PromptUtils._truncate_string(client.get("hostname", client.get("name", "Unknown")) or "Unknown", 20)
-        ip_address = PromptUtils._format_client_ip(client)
-        ssid_vlan = PromptUtils._format_client_ssid_vlan(client)
+        ip_address = PromptUtils._format_client_ip(client)  # Format client IP.
+        ssid_vlan = PromptUtils._format_client_ssid_vlan(client)  # Format SSID/VLAN field.
 
-        return [
+        return [  # Return formatted row cells.
             idx,
             hostname,
             client.get("mac", "Unknown"),
@@ -8808,51 +8808,51 @@ class PromptUtils:
     @staticmethod
     def _get_client_site_name(client: dict, sites_cache: dict[str, str]) -> str:  # type: ignore[type-arg]
         """Gets site name from cache or returns site ID."""
-        site_id = client.get("site_id", "")
-        if site_id in sites_cache:
-            return sites_cache[site_id]
-        return site_id if site_id else ""
+        site_id = client.get("site_id", "")  # Read client site id.
+        if site_id in sites_cache:  # Branch: site found in cache.
+            return sites_cache[site_id]  # Return cached site name.
+        return site_id if site_id else ""  # Fallback to raw site id.
 
     @staticmethod
     def _get_client_status(client: dict) -> str:  # type: ignore[type-arg]
         """Determines client connection status indicator."""
-        if client.get("connected", True):
-            status = "[+]"
+        if client.get("connected", True):  # Branch: client connected.
+            status = "[+]"  # Mark online status.
         else:
-            status = "[-]"
+            status = "[-]"  # Mark offline status.
 
-        if "last_seen" in client:
-            last_seen = client.get("last_seen", 0)
-            current_time = int(time.time())
+        if "last_seen" in client:  # Branch: last_seen present.
+            last_seen = client.get("last_seen", 0)  # Read last_seen timestamp.
+            current_time = int(time.time())  # Capture current time.
             if current_time - last_seen > 300:  # More than 5 minutes ago
-                status = "[~]"
+                status = "[~]"  # Mark recently-seen status.
 
-        return status
+        return status  # Return status marker.
 
     @staticmethod
     def _format_client_ip(client: dict) -> str:  # type: ignore[type-arg]
         """Formats client IP address, handling arrays."""
-        ip_address = client.get("ip", "")
-        if isinstance(ip_address, list):
-            return ip_address[0] if ip_address else "N/A"
-        return ip_address if ip_address and ip_address != "[]" else "N/A"
+        ip_address = client.get("ip", "")  # Read client IP field.
+        if isinstance(ip_address, list):  # Branch: IP is a list.
+            return ip_address[0] if ip_address else "N/A"  # Return first IP or N/A.
+        return ip_address if ip_address and ip_address != "[]" else "N/A"  # Return IP or N/A.
 
     @staticmethod
     def _format_client_ssid_vlan(client: dict) -> str:  # type: ignore[type-arg]
         """Formats client SSID/VLAN, handling arrays."""
-        ssid_vlan = client.get("ssid", client.get("vlan", ""))
-        if isinstance(ssid_vlan, list):
-            ssid_vlan = str(ssid_vlan[0]) if ssid_vlan else "N/A"
-        elif not ssid_vlan or ssid_vlan == "[]":
-            ssid_vlan = "N/A"
-        return PromptUtils._truncate_string(str(ssid_vlan), 15)
+        ssid_vlan = client.get("ssid", client.get("vlan", ""))  # Read SSID or VLAN field.
+        if isinstance(ssid_vlan, list):  # Branch: value is a list.
+            ssid_vlan = str(ssid_vlan[0]) if ssid_vlan else "N/A"  # Use first element or N/A.
+        elif not ssid_vlan or ssid_vlan == "[]":  # Branch: empty value.
+            ssid_vlan = "N/A"  # Default to N/A.
+        return PromptUtils._truncate_string(str(ssid_vlan), 15)  # Truncate for column width.
 
     @staticmethod
-    def _truncate_string(value: str, max_length: int) -> str:
+    def _truncate_string(value: str, max_length: int) -> str:  # Truncate helper.
         """Truncates string with ellipsis if too long."""
-        if len(value) > max_length:
-            return value[: max_length - 3] + "..."
-        return value
+        if len(value) > max_length:  # Branch: over max length.
+            return value[: max_length - 3] + "..."  # Truncate with ellipsis.
+        return value  # Return unchanged value.
 
     @staticmethod
     def _handle_client_selection(
@@ -8867,26 +8867,26 @@ class PromptUtils:
             tuple: (client_mac, client_type, site_id) or (None, None, None)
         """
         try:
-            max_index = len(all_clients) - 1
-            user_input = InputUtils.safe_input(
+            max_index = len(all_clients) - 1  # Compute max valid index.
+            user_input = InputUtils.safe_input(  # Read operator choice.
                 f"\n  Enter client index (0-{max_index}) or 'q' to quit: ",
                 context="client_selection_index",
             ).strip()
 
-            if user_input.lower() in ["q", "quit", "exit"]:
-                print(" Exiting client selection...")
-                return None, None, None
+            if user_input.lower() in ["q", "quit", "exit"]:  # Branch: quit commands.
+                print(" Exiting client selection...")  # Inform operator of exit.
+                return None, None, None  # Abort with no selection.
 
-            idx = int(user_input)
-            if 0 <= idx <= max_index:
+            idx = int(user_input)  # Parse index to integer.
+            if 0 <= idx <= max_index:  # Validate index range.
                 return PromptUtils._extract_selected_client(all_clients[idx], sites_cache, default_site_id)
             else:
                 print(f"! Invalid index. Please enter a number between 0 and {max_index}.")
-                return None, None, None
+                return None, None, None  # Abort on invalid index.
 
-        except ValueError:
-            print(" Please enter a valid number or 'q' to quit.")
-            return None, None, None
+        except ValueError:  # Catch non-numeric input.
+            print(" Please enter a valid number or 'q' to quit.")  # Prompt for valid input.
+            return None, None, None  # Abort on bad input.
 
     @staticmethod
     def _extract_selected_client(
@@ -8895,20 +8895,20 @@ class PromptUtils:
         default_site_id: str | None,
     ) -> tuple[str, str, str]:
         """Extracts and displays selected client information."""
-        client_mac = client.get("mac", "")
-        client_type = client.get("client_type", "unknown")
-        client_site_id = client.get("site_id", default_site_id) or ""
-        hostname = client.get("hostname", client.get("name", "Unknown"))
+        client_mac = client.get("mac", "")  # Read client MAC.
+        client_type = client.get("client_type", "unknown")  # Read client type.
+        client_site_id = client.get("site_id", default_site_id) or ""  # Resolve client site id.
+        hostname = client.get("hostname", client.get("name", "Unknown"))  # Read hostname/name.
 
-        print("\n Selected client:")
-        print(f"   Name: {hostname}")
-        print(f"   MAC: {client_mac}")
-        print(f"   Type: {client_type}")
-        if client_site_id and client_site_id in sites_cache:
-            print(f"   Site: {sites_cache[client_site_id]}")
+        print("\n Selected client:")  # Print selection heading.
+        print(f"   Name: {hostname}")  # Show client name.
+        print(f"   MAC: {client_mac}")  # Show client MAC.
+        print(f"   Type: {client_type}")  # Show client type.
+        if client_site_id and client_site_id in sites_cache:  # Branch: known site.
+            print(f"   Site: {sites_cache[client_site_id]}")  # Show resolved site name.
 
         logging.info("User selected client: MAC=%s, type=%s, site=%s", client_mac, client_type, client_site_id)
-        return client_mac, client_type, client_site_id
+        return client_mac, client_type, client_site_id  # Return client id triple.
 
 
 # NOTE: show_site_device_inventory() has been refactored into SiteDeviceExporter.device_inventory()
@@ -8919,14 +8919,14 @@ class PromptUtils:
 # ============================================================================
 
 
-class DeviceUtils:
+class DeviceUtils:  # Device helper utilities.
     """
     Centralized device-related utilities.
     Handles device lookups, port parsing, MAC address operations, etc.
     """
 
     @staticmethod
-    def get_all_ap_macs_from_site(site_id: str) -> list[str]:
+    def get_all_ap_macs_from_site(site_id: str) -> list[str]:  # Get all AP MACs for a site.
         """
         Fetch all AP MAC addresses from a site.
 
@@ -8936,24 +8936,24 @@ class DeviceUtils:
         Returns:
             list: List of AP MAC addresses, or empty list if error/none found
         """
-        logging.debug("Fetching all AP MACs for site: %s", site_id)
+        logging.debug("Fetching all AP MACs for site: %s", site_id)  # Log before AP fetch.
 
         try:
             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
-            if not rawdata:
-                logging.warning("No APs found for site_id: %s", site_id)
-                return []
+            if not rawdata:  # Handle empty AP set.
+                logging.warning("No APs found for site_id: %s", site_id)  # Log no APs found.
+                return []  # Return empty list.
 
-            ap_macs = [ap.get("mac") for ap in rawdata if ap.get("mac")]
-            logging.info("Found %s AP MACs at site", len(ap_macs))
-            return ap_macs
+            ap_macs = [ap.get("mac") for ap in rawdata if ap.get("mac")]  # Collect AP MAC addresses.
+            logging.info("Found %s AP MACs at site", len(ap_macs))  # Log AP MAC count.
+            return ap_macs  # Return AP MACs.
 
-        except Exception as error:
-            logging.exception("Exception in DeviceUtils.get_all_ap_macs_from_site: %s", error)
-            return []
+        except Exception as error:  # Catch fetch errors.
+            logging.exception("Exception in DeviceUtils.get_all_ap_macs_from_site: %s", error)  # Log the exception.
+            return []  # Return empty on error.
 
     @staticmethod
-    def expand_port_range_string(port_range_string: str) -> list[str]:
+    def expand_port_range_string(port_range_string: str) -> list[str]:  # Expand a port-range string.
         """
         Expands a port range string from device config into individual port names.
 
@@ -8969,32 +8969,32 @@ class DeviceUtils:
         Returns:
             list: List of individual port names
         """
-        expanded_ports = []
+        expanded_ports = []  # Accumulator for expanded ports.
 
         # Split by comma to handle multiple ranges
-        port_parts = [part.strip() for part in port_range_string.split(",")]
+        port_parts = [part.strip() for part in port_range_string.split(",")]  # Split on comma into parts.
 
-        for port_part in port_parts:
+        for port_part in port_parts:  # Process each part.
             # Check if this is a range (e.g., "ge-0/0/0-2")
-            if "-" in port_part:
+            if "-" in port_part:  # Branch: range expression.
                 # Try to match pattern like "ge-0/0/0-2"
-                match = re.match(r"^(.+/)(\d+)-(\d+)$", port_part)
-                if match:
+                match = re.match(r"^(.+/)(\d+)-(\d+)$", port_part)  # Match prefix and numeric range.
+                if match:  # Branch: valid range match.
                     prefix = match.group(1)  # e.g., "ge-0/0/"
                     start_num = int(match.group(2))  # e.g., 0
                     end_num = int(match.group(3))  # e.g., 2
 
                     # Expand the range
-                    for port_num in range(start_num, end_num + 1):
-                        expanded_ports.append(f"{prefix}{port_num}")
+                    for port_num in range(start_num, end_num + 1):  # Iterate the numeric range.
+                        expanded_ports.append(f"{prefix}{port_num}")  # Append each expanded port.
                 else:
                     # Couldn't parse as range, treat as single port
-                    expanded_ports.append(port_part)
+                    expanded_ports.append(port_part)  # Keep literal when unmatched.
             else:
                 # Single port name
-                expanded_ports.append(port_part)
+                expanded_ports.append(port_part)  # Keep single non-range port.
 
-        return expanded_ports
+        return expanded_ports  # Return expanded port list.
 
     @staticmethod
     def get_device_identifier(device: dict[str, Any], warn_on_missing: bool = False) -> str:
@@ -9009,34 +9009,34 @@ class DeviceUtils:
             str: Device identifier (name, serial, or device_id)
         """
         # Try name first
-        name = device.get("name", "").strip()
-        if name:
+        name = device.get("name", "").strip()  # Try name field first.
+        if name:  # Branch: name present.
             return name  # type: ignore[no-any-return]
 
         # Fall back to serial
-        serial = device.get("serial", "").strip()
-        if serial:
-            if warn_on_missing:
+        serial = device.get("serial", "").strip()  # Fall back to serial.
+        if serial:  # Branch: serial present.
+            if warn_on_missing:  # Branch: warn flag set.
                 logging.warning("Device %s missing name field, using serial as identifier", serial)
             return serial  # type: ignore[no-any-return]
 
         # Fall back to device_id
-        device_id = device.get("id", "").strip()
-        if device_id:
-            if warn_on_missing:
+        device_id = device.get("id", "").strip()  # Fall back to device id.
+        if device_id:  # Branch: id present.
+            if warn_on_missing:  # Branch: warn flag set.
                 logging.warning("Device %s missing name and serial, using device_id as identifier", device_id)
             return device_id  # type: ignore[no-any-return]
 
         # Last resort
-        if warn_on_missing:
-            logging.warning("Device found with no name, serial, or id - using 'UNKNOWN'")
-        return "UNKNOWN"
+        if warn_on_missing:  # Branch: warn flag set.
+            logging.warning("Device found with no name, serial, or id - using 'UNKNOWN'")  # Warn no identifier fields.
+        return "UNKNOWN"  # Last-resort placeholder id.
 
 
 # ============================================================================
 # ORGANIZATION TICKET MANAGER CLASS
 # ============================================================================
-class OrgTicketManager:
+class OrgTicketManager:  # Support ticket operations.
     """
     Full lifecycle management for Juniper Mist support tickets.
 
@@ -9052,7 +9052,7 @@ class OrgTicketManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def list_tickets() -> None:
+    def list_tickets() -> None:  # List org support tickets.
         """Menu 188: Export all organization support tickets to CSV/SQLite."""
         logging.info("Menu 188: Starting organization ticket list export")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.list_tickets()")  # Debug trace
@@ -9072,7 +9072,7 @@ class OrgTicketManager:
             raise  # Re-raise so caller sees the failure
 
     @staticmethod
-    def create_ticket() -> None:
+    def create_ticket() -> None:  # Create a support ticket.
         """Menu 189: Create a new support ticket in the organization."""
         logging.info("Menu 189: Starting support ticket creation")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.create_ticket()")  # Debug trace
@@ -9116,7 +9116,7 @@ class OrgTicketManager:
             raise  # Re-raise for upstream error handling
 
     @staticmethod
-    def add_comment() -> None:
+    def add_comment() -> None:  # Add a comment to a ticket.
         """Menu 190: Add a comment (with optional attachment) to an existing ticket."""
         logging.info("Menu 190: Starting add comment to ticket")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.add_comment()")  # Debug trace
@@ -9152,7 +9152,7 @@ class OrgTicketManager:
         )
 
     @staticmethod
-    def update_ticket() -> None:
+    def update_ticket() -> None:  # Update a support ticket.
         """Menu 191: Update fields on an existing support ticket."""
         logging.info("Menu 191: Starting ticket update")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.update_ticket()")  # Debug trace
@@ -9191,7 +9191,7 @@ class OrgTicketManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _prompt_subject() -> str:
+    def _prompt_subject() -> str:  # Prompt for ticket subject.
         """Prompt user for ticket subject line."""
         return InputUtils.safe_input(  # Use EOF-safe input wrapper
             "  Enter ticket subject: ",  # Prompt text for ticket title
@@ -9201,7 +9201,7 @@ class OrgTicketManager:
         )
 
     @staticmethod
-    def _prompt_ticket_type() -> str:
+    def _prompt_ticket_type() -> str:  # Prompt for ticket type.
         """Prompt user to select a ticket type from valid options."""
         print("\n  Ticket types:")  # Section header for type selection
         for index, ticket_type in enumerate(OrgTicketManager.TICKET_TYPES, 1):  # Number each type for selection
@@ -9221,7 +9221,7 @@ class OrgTicketManager:
         return OrgTicketManager.TICKET_TYPES[0]  # Default to 'question' for invalid input
 
     @staticmethod
-    def _prompt_ticket_id() -> str:
+    def _prompt_ticket_id() -> str:  # Prompt for ticket id.
         """Prompt user for ticket UUID."""
         return InputUtils.safe_input(  # Use EOF-safe input wrapper
             "  Enter ticket ID: ",  # Prompt text for ticket UUID
@@ -9231,7 +9231,7 @@ class OrgTicketManager:
         )
 
     @staticmethod
-    def _build_update_body() -> dict[str, str]:
+    def _build_update_body() -> dict[str, str]:  # Build ticket update body.
         """Collect fields to update from user prompts."""
         body: dict[str, str] = {}  # Accumulate changed fields in a dict
 
@@ -9290,7 +9290,7 @@ class OrgTicketManager:
             OrgTicketManager._submit_text_comment(org_id, ticket_id, comment_text)  # Submit text comment
 
     @staticmethod
-    def _submit_text_comment(org_id: str, ticket_id: str, comment_text: str) -> None:
+    def _submit_text_comment(org_id: str, ticket_id: str, comment_text: str) -> None:  # Submit a text-only comment.
         """Submit a text-only comment to a ticket."""
         logging.info("Adding text comment to ticket %s", ticket_id)  # Log before API call
         body = {"comment": comment_text}  # Build comment request body
@@ -9305,7 +9305,7 @@ class OrgTicketManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def view_ticket() -> None:
+    def view_ticket() -> None:  # View a single ticket.
         """Menu 192: View a single ticket with full comments and history."""
         logging.info("Menu 192: Starting ticket detail viewer")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.view_ticket()")  # Debug trace
@@ -9326,7 +9326,7 @@ class OrgTicketManager:
         logging.info("Menu 192: Ticket detail view complete for %s", ticket_id)  # Log success
 
     @staticmethod
-    def export_ticket_details() -> None:
+    def export_ticket_details() -> None:  # Export ticket details to file.
         """Menu 193: Export all tickets with full details and comments to CSV/SQLite."""
         logging.info("Menu 193: Starting full ticket detail export")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.export_ticket_details()")  # Debug trace
@@ -9375,7 +9375,7 @@ class OrgTicketManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _select_ticket(org_id: str) -> str:
+    def _select_ticket(org_id: str) -> str:  # Prompt to select a ticket.
         """List tickets and let user pick by index, or enter ID manually."""
         logging.info("Fetching ticket list for selection (org %s)", org_id)  # Log before API call
         try:
@@ -9432,7 +9432,7 @@ class OrgTicketManager:
             return ""  # Return empty to signal cancellation
 
     @staticmethod
-    def _fetch_ticket_detail(org_id: str, ticket_id: str) -> dict:
+    def _fetch_ticket_detail(org_id: str, ticket_id: str) -> dict:  # Fetch one ticket detail.
         """Fetch full ticket data including comments via getOrgTicket."""
         logging.info("Fetching detail for ticket %s", ticket_id)  # Log before API call
         try:
@@ -9448,7 +9448,7 @@ class OrgTicketManager:
             return {}  # Return empty dict to signal failure
 
     @staticmethod
-    def _display_ticket_detail(ticket_data: dict) -> None:
+    def _display_ticket_detail(ticket_data: dict) -> None:  # Display ticket detail.
         """Format and display a ticket with its full comment history."""
         print("\n  " + "=" * 60)  # Top separator bar
         print(f"  Ticket: {ticket_data.get('subject', '(no subject)')}")  # Display subject
@@ -9481,7 +9481,7 @@ class OrgTicketManager:
 # ============================================================================
 # ORGANIZATION ALARM & EVENT EXPORTER CLASS
 # ============================================================================
-class OrgAlarmEventExporter:
+class OrgAlarmEventExporter:  # Org alarm/event exporters.
     """
     Focused exporter for alarm and event time-series data from the Mist API.
 
@@ -9502,7 +9502,7 @@ class OrgAlarmEventExporter:
     """
 
     @staticmethod
-    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):
+    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # Generic org export helper.
         """
         Generic helper to export organization data via APIDataFetcher.
 
@@ -9512,10 +9512,10 @@ class OrgAlarmEventExporter:
             sort_key: Field to sort results by
             **api_kwargs: Additional arguments for the API call
         """
-        logging.info("Starting export of organization %s...", data_type)
-        safe_data_type = data_type.replace(" ", "").replace("-", "").title()
-        filename = f"Org{safe_data_type}.csv"
-        APIDataFetcher(
+        logging.info("Starting export of organization %s...", data_type)  # Log export start.
+        safe_data_type = data_type.replace(" ", "").replace("-", "").title()  # Sanitize data type for filename.
+        filename = f"Org{safe_data_type}.csv"  # Build output CSV name.
+        APIDataFetcher(  # Fetch and write the data.
             title=f"Organization {data_type.title()}:",
             api_call=api_call,
             filename=filename,
@@ -9525,16 +9525,16 @@ class OrgAlarmEventExporter:
         ).execute()
 
     @staticmethod
-    def alarms():
+    def alarms():  # Export open org alarms.
         """
         Export open organization alarms from the past 24 hours to OrgAlarms.csv.
         """
-        logging.info("Menu #20: Starting organization alarms export")
-        logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("open org alarms export", hours)
+        logging.info("Menu #20: Starting organization alarms export")  # Log alarms menu start.
+        logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")  # Trace entry for debugging.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
+        TimeUtils.log_dynamic_lookback("open org alarms export", hours)  # Log chosen lookback window.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch and write alarms.
                 title="Search all Org Alarms:",
                 api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
                 filename="OrgAlarms.csv",
@@ -9543,14 +9543,14 @@ class OrgAlarmEventExporter:
                 acked=False,
             ).execute()
             logging.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
-            logging.debug("EXIT: OrgAlarmEventExporter.alarms - success")
-        except Exception as error:
-            logging.error("Failed to export open org alarms: %s", error)
-            logging.debug("EXIT: OrgAlarmEventExporter.alarms - error")
-            raise
+            logging.debug("EXIT: OrgAlarmEventExporter.alarms - success")  # Trace successful exit.
+        except Exception as error:  # Catch export errors.
+            logging.error("Failed to export open org alarms: %s", error)  # Log export failure.
+            logging.debug("EXIT: OrgAlarmEventExporter.alarms - error")  # Trace error exit.
+            raise  # Re-raise to caller.
 
     @staticmethod
-    def alarm_templates():
+    def alarm_templates():  # Export org alarm templates.
         """Export alarm templates to OrgAlarmTemplates.csv."""
         OrgAlarmEventExporter._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates,
@@ -9559,10 +9559,10 @@ class OrgAlarmEventExporter:
         )
 
     @staticmethod
-    def events():
+    def events():  # Export org events.
         """Export organization events to OrgEvents.csv."""
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("org events export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
+        TimeUtils.log_dynamic_lookback("org events export", hours)  # Log chosen lookback window.
         OrgAlarmEventExporter._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
             data_type="events",
@@ -9571,35 +9571,35 @@ class OrgAlarmEventExporter:
         )
 
     @staticmethod
-    def device_events():
+    def device_events():  # Export org device events.
         """
         Export all device events from the past 24 hours to OrgDeviceEvents.csv.
         """
-        logging.info("Menu #21: Starting device events export")
-        logging.info("Search Org Device Events:")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("recent device events export", hours)
-        duration_param = f"{hours}h"
-        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+        logging.info("Menu #21: Starting device events export")  # Log device events menu start.
+        logging.info("Search Org Device Events:")  # Log search start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
+        TimeUtils.log_dynamic_lookback("recent device events export", hours)  # Log chosen lookback window.
+        duration_param = f"{hours}h"  # Format duration param.
+        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(  # Search org device events.
             apisession, org_id, device_type="all", limit=1000, duration=duration_param
         )
-        rawdata = mistapi.get_all(response=response, mist_session=apisession)
-        events = rawdata
-        logging.info(
+        rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page through all events.
+        events = rawdata  # Alias rawdata as events.
+        logging.info(  # Log fetched event count.
             "Fetched %s device events from the past %s hours (duration=%s).", len(events), hours, duration_param
         )
         DataExporter.write_with_format_selection(events, "OrgDeviceEvents.csv")  # type: ignore[no-untyped-call]
-        logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))
-        print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")
+        logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))  # Log written event count.
+        print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")  # Confirm export to operator.
         logging.info("Menu #21: Device events export completed - %s events", len(events))
-        if events:
-            logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))
+        if events:  # Branch: events present.
+            logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))  # Debug-dump sample events.
 
     @staticmethod
-    def device_events_52w() -> None:
+    def device_events_52w() -> None:  # Export 52-week device events.
         """Delegated 52-week device event export entrypoint."""
-        exporter = DeviceEvents52wExporter(
+        exporter = DeviceEvents52wExporter(  # Build the 52w exporter.
             apisession=apisession,
             mistapi=mistapi,
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
@@ -9609,13 +9609,13 @@ class OrgAlarmEventExporter:
             database_path=DATABASE_PATH,
             logger=logging,
         )
-        exporter.export()
+        exporter.export()  # Run the export.
 
 
 # ============================================================================
 # ORGANIZATION DATA EXPORT UTILITIES CLASS
 # ============================================================================
-class OrgSiteExporter:
+class OrgSiteExporter:  # Org site exporters.
     """
     Organization Site Data Exporter
 
@@ -9624,51 +9624,51 @@ class OrgSiteExporter:
     """
 
     @staticmethod
-    def sites():
+    def sites():  # Export the org site list.
         """
         Fetches and exports the list of all sites in the organization.
         Output format determined by global OUTPUT_FORMAT setting.
         Uses APIDataFetcher to handle API call and output writing.
         """
-        logging.info("Starting export of organization site list...")
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("11", "sites", 1)
-        op_start = time.time()
-        APIDataFetcher(
+        logging.info("Starting export of organization site list...")  # Log site export start.
+        emitter = PROGRESS_EMITTER  # Capture progress emitter.
+        if emitter:  # Branch: emitter present.
+            emitter.emit_progress_start("11", "sites", 1)  # Emit progress start.
+        op_start = time.time()  # Record operation start time.
+        APIDataFetcher(  # Fetch and write sites.
             title="Site List:",
             api_call=mistapi.api.v1.orgs.sites.listOrgSites,
             filename="SiteList",
             sort_key="name",
             limit=1000,
         ).execute()
-        output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"
-        logging.info("Completed site list export and wrote results to %s.", output_desc)
-        if emitter:
+        output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"  # Describe output backend.
+        logging.info("Completed site list export and wrote results to %s.", output_desc)  # Log site export success.
+        if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete("11", "sites", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def sites_list_api():
+    def sites_list_api():  # Export sites via list API.
         """
         Uses the 'list' sites API endpoint (not 'search') to export all sites to SiteList_ListAPI.csv,
         but only if the file does not already exist.
         """
-        output_file = "SiteList_ListAPI.csv"
-        if os.path.exists(output_file):
-            logging.info("! Using cached %s (already exists)", output_file)
-            print(f"! Using cached {output_file} (already exists)")
-            return
-        logging.info("Fetching all sites using the 'list' sites API endpoint...")
-        print("Fetching all sites using the 'list' sites API endpoint...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-        if not sites:
-            logging.warning(" No sites returned from API.")
-            print(" No sites returned from API.")
-            return
-        sites = DataProcessingUtils.flatten_nested_fields(sites)
+        output_file = "SiteList_ListAPI.csv"  # Define output filename.
+        if os.path.exists(output_file):  # Branch: cached file exists.
+            logging.info("! Using cached %s (already exists)", output_file)  # Log cache reuse.
+            print(f"! Using cached {output_file} (already exists)")  # Inform operator of cache.
+            return  # Skip re-fetch.
+        logging.info("Fetching all sites using the 'list' sites API endpoint...")  # Log fetch start.
+        print("Fetching all sites using the 'list' sites API endpoint...")  # Inform operator of fetch.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all sites.
+        if not sites:  # Branch: no sites returned.
+            logging.warning(" No sites returned from API.")  # Log empty result.
+            print(" No sites returned from API.")  # Inform operator none returned.
+            return  # Skip write.
+        sites = DataProcessingUtils.flatten_nested_fields(sites)  # Flatten nested site fields.
         # Normalize nested JSON structures into a flat row-per-record format for CSV/DB output
-        sites = DataProcessingUtils.flatten_nested_fields(sites)
+        sites = DataProcessingUtils.flatten_nested_fields(sites)  # Flatten again post-merge.
         sites = DataProcessingUtils.escape_multiline(sites)  # type: ignore[no-untyped-call]
         # Write to the configured output backend (CSV or SQLite) via the DataExporter abstraction
         DataExporter.write_with_format_selection(sites, output_file)  # type: ignore[no-untyped-call]
@@ -9676,63 +9676,63 @@ class OrgSiteExporter:
         print(f"! Sites exported to {output_file}")  # Inform the user on stdout
 
     @staticmethod
-    def sites_with_location():
+    def sites_with_location():  # Export sites with location.
         """
         Export a list of sites with all available fields to SitesWithLocations.csv.
         """
-        print("Sites with Location and Timezone Info:")
-        logging.info("Listing Sites with Full Info:")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug("Using org_id: %s for site location export.", org_id)
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-        logging.info("Fetched %s sites from the organization.", len(sites))
-        flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)
+        print("Sites with Location and Timezone Info:")  # Inform operator of export.
+        logging.info("Listing Sites with Full Info:")  # Log listing start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
+        logging.debug("Using org_id: %s for site location export.", org_id)  # Log org id used.
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all sites.
+        logging.info("Fetched %s sites from the organization.", len(sites))  # Log fetched site count.
+        flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)  # Flatten nested site fields.
         sanitized_sites = DataProcessingUtils.escape_multiline(flattened_sites)  # type: ignore[no-untyped-call]
         DataExporter.write_with_format_selection(sanitized_sites, "SitesWithLocations.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(sanitized_sites)} sites exported to SitesWithLocations.csv")
-        logging.info(" Full site data written to SitesWithLocations.csv")
+        print(f"! {len(sanitized_sites)} sites exported to SitesWithLocations.csv")  # Confirm export to operator.
+        logging.info(" Full site data written to SitesWithLocations.csv")  # Log write success.
 
     @staticmethod
-    def current_guests():
+    def current_guests():  # Export current guest users.
         """
         Export all current guest users in the org to OrgCurrentGuests.csv
         """
-        print("Current and Historical Guest Users:")
-        logging.info("Exporting all current guest users in the org...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug("Using org_id: %s for current guest export.", org_id)
+        print("Current and Historical Guest Users:")  # Inform operator of export.
+        logging.info("Exporting all current guest users in the org...")  # Log guest export start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
+        logging.debug("Using org_id: %s for current guest export.", org_id)  # Log org id used.
         response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(apisession, org_id, limit=1000)
-        guests = mistapi.get_all(response=response, mist_session=apisession)
-        logging.info("Fetched %s current guest users from API.", len(guests))
-        guests = DataProcessingUtils.flatten_nested_fields(guests)
+        guests = mistapi.get_all(response=response, mist_session=apisession)  # Page through all guests.
+        logging.info("Fetched %s current guest users from API.", len(guests))  # Log fetched guest count.
+        guests = DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
         DataExporter.write_with_format_selection(guests, "OrgCurrentGuests.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(guests)} current guest users exported to OrgCurrentGuests.csv")
-        logging.info(" Current guests exported to OrgCurrentGuests.csv")
+        print(f"! {len(guests)} current guest users exported to OrgCurrentGuests.csv")  # Confirm export to operator.
+        logging.info(" Current guests exported to OrgCurrentGuests.csv")  # Log write success.
 
     @staticmethod
-    def historical_guests():
+    def historical_guests():  # Export 7-day guest history.
         """
         Export all guest users from the last 7 days to OrgHistoricalGuests.csv
         """
-        logging.info("Exporting all guest users from the last 7 days...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        end_time = int(time.time())
-        start_time = end_time - 7 * 24 * 3600
+        logging.info("Exporting all guest users from the last 7 days...")  # Log historical export start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
+        end_time = int(time.time())  # Capture end time as now.
+        start_time = end_time - 7 * 24 * 3600  # Compute 7-day start time.
         logging.debug("Fetching guest authorizations from %s to %s (epoch seconds).", start_time, end_time)
-        response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(
+        response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(  # Search guests in window.
             apisession, org_id, limit=1000, start=start_time, end=end_time
         )
-        guests = mistapi.get_all(response=response, mist_session=apisession)
-        logging.info("Fetched %s historical guest users from API.", len(guests))
-        guests = DataProcessingUtils.flatten_nested_fields(guests)
+        guests = mistapi.get_all(response=response, mist_session=apisession)  # Page through all guests.
+        logging.info("Fetched %s historical guest users from API.", len(guests))  # Log fetched guest count.
+        guests = DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
         DataExporter.write_with_format_selection(guests, "OrgHistoricalGuests.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(guests)} historical guest users exported to OrgHistoricalGuests.csv")
-        logging.info(" Historical guests exported to OrgHistoricalGuests.csv")
+        logging.info(" Historical guests exported to OrgHistoricalGuests.csv")  # Log write success.
 
 
-class OrgInventoryExporter:
+class OrgInventoryExporter:  # Org inventory exporters.
     """
     Organization Inventory and Device Exporter
 
@@ -9741,16 +9741,16 @@ class OrgInventoryExporter:
     """
 
     @staticmethod
-    def inventory():
+    def inventory():  # Export org device inventory.
         """
         Fetches and exports the full inventory of devices in the organization to OrgInventory.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
-        logging.info("Starting export of organization device inventory...")
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("12", "inventory", 1)
-        op_start = time.time()
+        logging.info("Starting export of organization device inventory...")  # Log inventory export start.
+        emitter = PROGRESS_EMITTER  # Capture progress emitter.
+        if emitter:  # Branch: emitter present.
+            emitter.emit_progress_start("12", "inventory", 1)  # Emit progress start.
+        op_start = time.time()  # Record operation start time.
         APIDataFetcher(
             title="Org Inventory:",
             api_call=mistapi.api.v1.orgs.inventory.getOrgInventory,
@@ -9760,28 +9760,28 @@ class OrgInventoryExporter:
             limit=1000,
         ).execute()
         logging.info("Completed organization inventory export and wrote results to OrgInventory.csv.")
-        if emitter:
+        if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete("12", "inventory", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def devices():
+    def devices():  # Export all org devices.
         """
         Fetches and exports a list of all devices in the organization to OrgDevices.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
-        logging.info("Starting export of all organization devices...")
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("17", "devices", 1)
-        op_start = time.time()
-        APIDataFetcher(
+        logging.info("Starting export of all organization devices...")  # Log devices export start.
+        emitter = PROGRESS_EMITTER  # Capture progress emitter.
+        if emitter:  # Branch: emitter present.
+            emitter.emit_progress_start("17", "devices", 1)  # Emit progress start.
+        op_start = time.time()  # Record operation start time.
+        APIDataFetcher(  # Fetch and write devices.
             title="Org Devices:",
             api_call=mistapi.api.v1.orgs.devices.listOrgDevices,
             filename="OrgDevices.csv",
             sort_key="type",
         ).execute()
         logging.info("Completed organization devices export and wrote results to OrgDevices.csv.")
-        if emitter:
+        if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete("17", "devices", 1, 1, False, time.time() - op_start)
 
     @staticmethod
@@ -9806,7 +9806,7 @@ class OrgInventoryExporter:
         return org_name_for_filename  # Return resolved display name for downstream filename sanitization.
 
     @staticmethod
-    def _build_safe_org_name(org_name_for_filename: str) -> str:
+    def _build_safe_org_name(org_name_for_filename: str) -> str:  # Build filesystem-safe org name.
         """Sanitize organization name so generated filenames stay filesystem-safe."""
         return "".join(  # Build safe filename character-by-character to preserve readable names.
             character if character.isalnum() or character in "-_" else "_" for character in org_name_for_filename
@@ -9862,7 +9862,7 @@ class OrgInventoryExporter:
             )  # Preserve root-cause detail without aborting menu 25.
 
     @staticmethod
-    def _load_combined_inventory_rows() -> list[dict[str, str]]:
+    def _load_combined_inventory_rows() -> list[dict[str, str]]:  # Load combined inventory rows.
         """Load enriched device rows from AllDevicesWithSiteInfo.csv."""
         devices_with_site_info_path = FilePathUtils.get_csv_path(
             "AllDevicesWithSiteInfo.csv"
@@ -9873,7 +9873,7 @@ class OrgInventoryExporter:
             return list(csv.DictReader(file))  # Materialize all rows so weekly grouping can iterate more than once.
 
     @staticmethod
-    def _partition_combined_inventory_rows(
+    def _partition_combined_inventory_rows(  # Partition combined inventory rows.
         all_devices: list[dict[str, str]],
     ) -> tuple[list[dict[str, str]], list[dict[str, str]], int]:
         """Separate physical inventory rows from virtual VC placeholders and count duplicates."""
@@ -9899,7 +9899,7 @@ class OrgInventoryExporter:
         )  # Return physical rows plus shell diagnostics for logging.
 
     @staticmethod
-    def _log_combined_inventory_vc_summary(
+    def _log_combined_inventory_vc_summary(  # Log virtual-chassis summary.
         all_devices: list[dict[str, str]],
         site_configs: list[dict[str, str]],
         empty_vc_shells: list[dict[str, str]],
@@ -9930,7 +9930,7 @@ class OrgInventoryExporter:
             )  # Confirm report logic remains intentional.
 
     @staticmethod
-    def _build_combined_inventory_weekly_row(
+    def _build_combined_inventory_weekly_row(  # Build one weekly inventory row.
         device: dict[str, str],
         end_customer_name: str | None,
         end_customer_account_id: str | None,
@@ -9952,7 +9952,7 @@ class OrgInventoryExporter:
         }
 
     @staticmethod
-    def _build_combined_inventory_weekly_data(
+    def _build_combined_inventory_weekly_data(  # Build weekly inventory dataset.
         site_configs: list[dict[str, str]],
         end_customer_name: str | None,
         end_customer_account_id: str | None,
@@ -9989,7 +9989,7 @@ class OrgInventoryExporter:
         return weekly_data, summary_data  # Return both detailed buckets and summary counts for file writers.
 
     @staticmethod
-    def _write_combined_inventory_weekly_csvs(
+    def _write_combined_inventory_weekly_csvs(  # Write weekly inventory CSVs.
         output_folder: str,
         fieldnames: list[str],
         weekly_data: defaultdict[str, list[dict[str, str | None]]],
@@ -10012,7 +10012,7 @@ class OrgInventoryExporter:
                 writer.writerows(rows)  # Write all device rows for this ISO week.
 
     @staticmethod
-    def _write_combined_inventory_summary(
+    def _write_combined_inventory_summary(  # Write combined inventory summary.
         output_folder: str,
         summary_data: defaultdict[tuple[int, int], int],
     ) -> None:
@@ -10029,7 +10029,7 @@ class OrgInventoryExporter:
                 summary_writer.writerow([year, week, count])  # Persist per-week device totals.
 
     @staticmethod
-    def _write_combined_inventory_master_csv(
+    def _write_combined_inventory_master_csv(  # Write combined inventory master CSV.
         output_folder: str,
         safe_org_name: str,
         site_configs: list[dict[str, str]],
@@ -10071,7 +10071,7 @@ class OrgInventoryExporter:
         return master_csv_filename, len(master_csv_data)  # Return metadata for final user-facing summary message.
 
     @staticmethod
-    def combined_inventory_with_site_info():
+    def combined_inventory_with_site_info():  # Export devices with site info.
         """
         Combines fresh AllDevicesWithSiteInfo data into multiple CSV files
         grouped by calendar week based on 'created_time' field.
@@ -10160,81 +10160,81 @@ class OrgInventoryExporter:
             fast (bool): If True, enables optimized processing mode with enhanced caching
                         and concurrent site lookups where applicable.
         """
-        print("All Devices with Site and Address Info:")
-        logging.info("Fetching All Devices with Site Info...")
-        if fast:
-            logging.info(" Fast mode enabled for devices with site info export")
+        print("All Devices with Site and Address Info:")  # Inform operator of export.
+        logging.info("Fetching All Devices with Site Info...")  # Log fetch start.
+        if fast:  # Branch: fast mode.
+            logging.info(" Fast mode enabled for devices with site info export")  # Log fast mode enabled.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
 
         # Ensure required CSV files are available, using caching where possible
-        if fast:
+        if fast:  # Branch: fast mode path.
             # Use cached data when fast mode is enabled
-            CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
+            CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure site CSV cached.
             CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgInventoryExporter.inventory)
 
             # Load from cached CSV files instead of making API calls
-            site_lookup = {}
+            site_lookup = {}  # Init site lookup map.
             try:
-                site_list_path = FilePathUtils.get_csv_path("SiteList.csv")
-                with open(site_list_path, encoding="utf-8") as file:
-                    reader = csv.DictReader(file)
-                    site_lookup = {
+                site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve site CSV path.
+                with open(site_list_path, encoding="utf-8") as file:  # Open cached site CSV.
+                    reader = csv.DictReader(file)  # Read site CSV rows.
+                    site_lookup = {  # Build site lookup from CSV.
                         row["id"]: {"name": row.get("name", ""), "address": row.get("address", "")} for row in reader
                     }
-                logging.debug("Loaded %s sites from cached SiteList.csv", len(site_lookup))
-            except Exception as exception:
+                logging.debug("Loaded %s sites from cached SiteList.csv", len(site_lookup))  # Log loaded site count.
+            except Exception as exception:  # Catch CSV load error.
                 logging.warning("Failed to load from cached SiteList.csv, falling back to API: %s", exception)
                 # Fallback to API if cached data fails
-                sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-                site_lookup = {
+                sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch sites from API.
+                site_lookup = {  # Build site lookup from API.
                     site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
                 }
-                logging.debug("Loaded %s sites from API fallback", len(site_lookup))
+                logging.debug("Loaded %s sites from API fallback", len(site_lookup))  # Log API fallback count.
 
             # Load inventory from cached CSV
-            inventory = []
+            inventory = []  # Init inventory list.
             try:
-                inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")
-                with open(inventory_path, encoding="utf-8") as file:
-                    reader = csv.DictReader(file)
-                    inventory = list(reader)
+                inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")  # Resolve inventory CSV path.
+                with open(inventory_path, encoding="utf-8") as file:  # Open cached inventory CSV.
+                    reader = csv.DictReader(file)  # Read inventory CSV rows.
+                    inventory = list(reader)  # Materialize inventory rows.
                 logging.debug("Loaded %s devices from cached OrgInventory.csv", len(inventory))
-            except Exception as exception:
+            except Exception as exception:  # Catch CSV load error.
                 logging.warning("Failed to load from cached OrgInventory.csv, falling back to API: %s", exception)
                 # Fallback to API if cached data fails
-                inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
-                logging.debug("Loaded %s devices from API fallback", len(inventory))
+                inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch inventory from API.
+                logging.debug("Loaded %s devices from API fallback", len(inventory))  # Log API fallback count.
         else:
             # Original behavior: fetch directly from API
             # Fetch all sites and build a lookup dictionary for site info
-            sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-            site_lookup = {
+            sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch sites from API.
+            site_lookup = {  # Build site lookup from API.
                 site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
             }
-            logging.debug("Loaded %s sites for lookup.", len(site_lookup))
+            logging.debug("Loaded %s sites for lookup.", len(site_lookup))  # Log loaded site count.
 
             # Fetch org inventory (all devices)
-            inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
-            logging.debug("Loaded %s devices from org inventory.", len(inventory))
+            inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch inventory from API.
+            logging.debug("Loaded %s devices from org inventory.", len(inventory))  # Log loaded device count.
 
-        def split_address(address):
+        def split_address(address):  # Parse address into parts.
             """
             Splits a full address string into street, city, state, zip, and country.
             Returns empty strings if parsing fails.
             """
             try:
-                parts = address.split(", ")
-                street = parts[0]
-                city = parts[1]
-                state_zip = parts[2].split()
-                state = state_zip[0]
-                zip_code = state_zip[1]
-                country = parts[3]
-                return street, city, state, zip_code, country
-            except Exception as exception:
-                logging.debug("Failed to split address '%s': %s", address, exception)
-                return address, "", "", "", ""
+                parts = address.split(", ")  # Split on comma separators.
+                street = parts[0]  # Extract street.
+                city = parts[1]  # Extract city.
+                state_zip = parts[2].split()  # Split state and zip.
+                state = state_zip[0]  # Extract state.
+                zip_code = state_zip[1]  # Extract zip code.
+                country = parts[3]  # Extract country.
+                return street, city, state, zip_code, country  # Return parsed address parts.
+            except Exception as exception:  # Catch parse errors.
+                logging.debug("Failed to split address '%s': %s", address, exception)  # Log parse failure.
+                return address, "", "", "", ""  # Return raw address fallback.
 
         # Build mac -> site_id lookup for VC member site inheritance.
         # Physical VC members have vc_mac but no site_id in the API response.
@@ -10247,12 +10247,12 @@ class OrgInventoryExporter:
             mac = device.get("mac", "")  # Get device MAC address
             if mac and device.get("site_id"):  # Any device with a site assignment
                 mac_to_site_id[mac] = device["site_id"]  # Index for vc_mac lookups
-        logging.info(
+        logging.info(  # Log enrichment start.
             "Built mac->site_id lookup with %d entries for VC member site inheritance",
             len(mac_to_site_id),
         )
 
-        enriched_devices = []
+        enriched_devices = []  # Init enriched device list.
         vc_inherited_count = 0  # Track how many physical members inherited site info from their VC
         for device in tqdm(inventory, desc="Processing Devices", unit="device"):  # type: ignore[no-untyped-call]
             site_id = device.get("site_id")  # Check if device has its own site_id
@@ -10275,22 +10275,22 @@ class OrgInventoryExporter:
             enriched_devices.append(device)  # Add enriched device to output list
             logging.debug("Enriched device %s (%s) with site info.", device.get("name", ""), device.get("mac", ""))
         if vc_inherited_count:  # Log inheritance summary if any members were fixed
-            logging.info(
+            logging.info(  # Log enrichment progress.
                 "%d physical VC members inherited site info from their VC parent",
                 vc_inherited_count,
             )
 
         # Flatten nested fields and escape multiline strings for CSV compatibility
-        enriched_devices = DataProcessingUtils.flatten_nested_fields(enriched_devices)
+        enriched_devices = DataProcessingUtils.flatten_nested_fields(enriched_devices)  # Flatten enriched fields.
         enriched_devices = DataProcessingUtils.escape_multiline(enriched_devices)  # type: ignore[no-untyped-call]
-        enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))
+        enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))  # Sort by site name.
         DataExporter.write_with_format_selection(enriched_devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(enriched_devices)} devices exported to AllDevicesWithSiteInfo.csv")
         logging.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(enriched_devices))
 
         # Display a summary table in logs
-        table = PrettyTable()
-        table.field_names = [
+        table = PrettyTable()  # Build display table.
+        table.field_names = [  # Define table columns.
             "name",
             "mac",
             "model",
@@ -10303,8 +10303,8 @@ class OrgInventoryExporter:
             "zip_code",
             "country",
         ]
-        for dev in enriched_devices:
-            table.add_row(
+        for dev in enriched_devices:  # Iterate enriched devices.
+            table.add_row(  # Add device row to table.
                 [
                     dev.get("name", ""),
                     dev.get("mac", ""),
@@ -10319,73 +10319,73 @@ class OrgInventoryExporter:
                     dev.get("country", ""),
                 ]
             )
-        logging.debug("\n%s", table.get_string())
+        logging.debug("\n%s", table.get_string())  # Debug-log the table.
 
     @staticmethod
-    def gateways_with_site_info():
+    def gateways_with_site_info():  # Export gateways with site info.
         """
         Fetches all gateway devices in the organization, enriches them with site and address info,
         and exports the result to GatewaysWithSiteInfo.csv. Also logs and displays a summary table.
         """
-        print("Gateways with Site and Address Info:")
-        logging.info("Fetching Gateways with Site Info...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        print("Gateways with Site and Address Info:")  # Inform operator of export.
+        logging.info("Fetching Gateways with Site Info...")  # Log fetch start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
 
         # Fetch site list and build a lookup dictionary for site info
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch sites from API.
         site_lookup = {site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites}
-        logging.debug("Loaded %s sites for lookup.", len(site_lookup))
+        logging.debug("Loaded %s sites for lookup.", len(site_lookup))  # Log loaded site count.
 
         # Fetch org inventory (all devices)
-        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
-        logging.debug("Loaded %s devices from org inventory.", len(inventory))
+        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch inventory from API.
+        logging.debug("Loaded %s devices from org inventory.", len(inventory))  # Log loaded device count.
 
-        def split_address(address):
+        def split_address(address):  # Parse address into parts.
             """
             Splits a full address string into street, city, state, zip, and country.
             Returns empty strings if parsing fails.
             """
             try:
-                parts = address.split(", ")
-                street = parts[0]
-                city = parts[1]
-                state_zip = parts[2].split()
-                state = state_zip[0]
-                zip_code = state_zip[1]
-                country = parts[3]
-                return street, city, state, zip_code, country
-            except Exception as exception:
-                logging.debug("Failed to split address '%s': %s", address, exception)
-                return address, "", "", "", ""
+                parts = address.split(", ")  # Split on comma separators.
+                street = parts[0]  # Extract street.
+                city = parts[1]  # Extract city.
+                state_zip = parts[2].split()  # Split state and zip.
+                state = state_zip[0]  # Extract state.
+                zip_code = state_zip[1]  # Extract zip code.
+                country = parts[3]  # Extract country.
+                return street, city, state, zip_code, country  # Return parsed address parts.
+            except Exception as exception:  # Catch parse errors.
+                logging.debug("Failed to split address '%s': %s", address, exception)  # Log parse failure.
+                return address, "", "", "", ""  # Return raw address fallback.
 
         # Filter for gateways and enrich with site info
-        gateways = []
+        gateways = []  # Init gateway list.
         for device in tqdm(inventory, desc="Processing Gateways", unit="device"):  # type: ignore[no-untyped-call]
-            if device.get("type") == "gateway":
-                site_id = device.get("site_id")
-                site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})
-                device["site_name"] = site_info["name"]
-                device["site_address"] = site_info["address"]
+            if device.get("type") == "gateway":  # Branch: device is gateway.
+                site_id = device.get("site_id")  # Read device site id.
+                site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})  # Look up site info.
+                device["site_name"] = site_info["name"]  # Attach site name.
+                device["site_address"] = site_info["address"]  # Attach site address.
                 street, city, state, zip_code, country = split_address(site_info["address"])  # type: ignore[no-untyped-call]
-                device["street"] = street
-                device["city"] = city
-                device["state"] = state
-                device["zip_code"] = zip_code
-                device["country"] = country
-                gateways.append(device)
-        logging.info("Enriched %s gateway devices with site info.", len(gateways))
+                device["street"] = street  # Attach street.
+                device["city"] = city  # Attach city.
+                device["state"] = state  # Attach state.
+                device["zip_code"] = zip_code  # Attach zip code.
+                device["country"] = country  # Attach country.
+                gateways.append(device)  # Add gateway to list.
+        logging.info("Enriched %s gateway devices with site info.", len(gateways))  # Log enriched gateway count.
 
         # Flatten nested fields and escape multiline strings for CSV compatibility
-        gateways = DataProcessingUtils.flatten_nested_fields(gateways)
+        gateways = DataProcessingUtils.flatten_nested_fields(gateways)  # Flatten gateway fields.
         gateways = DataProcessingUtils.escape_multiline(gateways)  # type: ignore[no-untyped-call]
-        gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))
+        gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))  # Sort by site name.
         DataExporter.write_with_format_selection(gateways, "GatewaysWithSiteInfo.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(gateways)} gateways exported to GatewaysWithSiteInfo.csv")
-        logging.info("Gateway data written to GatewaysWithSiteInfo.csv")
+        print(f"! {len(gateways)} gateways exported to GatewaysWithSiteInfo.csv")  # Confirm export to operator.
+        logging.info("Gateway data written to GatewaysWithSiteInfo.csv")  # Log write success.
 
         # Display a summary table in logs
-        table = PrettyTable()
-        table.field_names = [
+        table = PrettyTable()  # Build display table.
+        table.field_names = [  # Define table columns.
             "name",
             "mac",
             "model",
@@ -10397,8 +10397,8 @@ class OrgInventoryExporter:
             "zip_code",
             "country",
         ]
-        for gateway in gateways:
-            table.add_row(
+        for gateway in gateways:  # Iterate gateways for rows.
+            table.add_row(  # Add gateway row to table.
                 [
                     gateway.get("name", ""),
                     gateway.get("mac", ""),
@@ -10412,10 +10412,10 @@ class OrgInventoryExporter:
                     gateway.get("country", ""),
                 ]
             )
-        logging.debug("\n%s", table.get_string())
+        logging.debug("\n%s", table.get_string())  # Debug-log the table.
 
 
-class OrgDeviceStatsExporter:
+class OrgDeviceStatsExporter:  # Org device-stats exporters.
     """
     Organization Device Statistics Exporter
 
@@ -10424,7 +10424,7 @@ class OrgDeviceStatsExporter:
     """
 
     @staticmethod
-    def device_stats(fast: bool = False):
+    def device_stats(fast: bool = False):  # Export org device stats.
         """Export statistics for all devices in the organization to OrgDeviceStats.csv.
 
         Fast Mode Behavior:
@@ -10432,30 +10432,30 @@ class OrgDeviceStatsExporter:
             - Falls back to normal fetch otherwise.
         SECURITY: Read-only operation; safe to cache.
         """
-        output_file = "OrgDeviceStats.csv"
-        if fast and os.path.exists(output_file):
+        output_file = "OrgDeviceStats.csv"  # Define output filename.
+        if fast and os.path.exists(output_file):  # Branch: fast cache check.
             try:
-                mtime = os.path.getmtime(output_file)
-                age_minutes = (time.time() - mtime) / 60.0
-                if age_minutes < CSV_FRESHNESS_MINUTES:
-                    logging.info(
+                mtime = os.path.getmtime(output_file)  # Read file modified time.
+                age_minutes = (time.time() - mtime) / 60.0  # Compute file age in minutes.
+                if age_minutes < CSV_FRESHNESS_MINUTES:  # Branch: cache still fresh.
+                    logging.info(  # Log cache reuse.
                         " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
                         output_file,
                         age_minutes,
                         CSV_FRESHNESS_MINUTES,
                     )
                     print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
-                    return
-            except Exception as e:
-                logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)
-        logging.info("Starting export of organization device statistics...")
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("13", "device_stats", 1)
-        op_start = time.time()
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("org device statistics export", hours)
-        APIDataFetcher(
+                    return  # Skip re-fetch.
+            except Exception as e:  # Catch freshness-check error.
+                logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)  # Log freshness failure.
+        logging.info("Starting export of organization device statistics...")  # Log stats export start.
+        emitter = PROGRESS_EMITTER  # Capture progress emitter.
+        if emitter:  # Branch: emitter present.
+            emitter.emit_progress_start("13", "device_stats", 1)  # Emit progress start.
+        op_start = time.time()  # Record operation start time.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
+        TimeUtils.log_dynamic_lookback("org device statistics export", hours)  # Log chosen lookback window.
+        APIDataFetcher(  # Fetch and write device stats.
             title="Org Device Stats:",
             api_call=mistapi.api.v1.orgs.stats.listOrgDevicesStats,
             filename=output_file,
@@ -10464,11 +10464,11 @@ class OrgDeviceStatsExporter:
             duration=f"{hours}h",
             limit=1000,
         ).execute()
-        if emitter:
+        if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete("13", "device_stats", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def _port_stats_cache_hit(output_file: str, fast: bool) -> bool:
+    def _port_stats_cache_hit(output_file: str, fast: bool) -> bool:  # Check port-stats cache hit.
         """Return True when fast mode can safely reuse a fresh cached CSV."""
         if not fast or not os.path.exists(
             output_file
@@ -10497,7 +10497,7 @@ class OrgDeviceStatsExporter:
         return False  # Cache was missing, stale, or unreadable, so a fresh fetch is required.
 
     @staticmethod
-    def _load_port_stats_sites(org_id: str) -> list[tuple[str | None, str]]:
+    def _load_port_stats_sites(org_id: str) -> list[tuple[str | None, str]]:  # Load sites for port stats.
         """Load site identifiers and names for fast-mode per-site port stats collection."""
         try:  # Prefer cached site CSV because it avoids one extra API call in fast mode.
             CacheUtils.check_and_generate_csv(
@@ -10540,7 +10540,7 @@ class OrgDeviceStatsExporter:
         return sites  # Return normalized site tuples for the fast-mode worker pool.
 
     @staticmethod
-    def _fetch_site_port_stats(site_info, connection_semaphore):
+    def _fetch_site_port_stats(site_info, connection_semaphore):  # Fetch port stats for a site.
         """Fetch one site's switch/gateway port stats with bounded concurrency and retries."""
         site_id, site_name = site_info  # Unpack tuple so logging and API calls have stable local names.
         for attempt in range(
@@ -10596,7 +10596,7 @@ class OrgDeviceStatsExporter:
         return []  # Defensive fallback keeps return type stable even if retry loop exits unexpectedly.
 
     @staticmethod
-    def _retry_failed_site_port_stats(failed_sites, connection_semaphore):
+    def _retry_failed_site_port_stats(failed_sites, connection_semaphore):  # Retry failed site port stats.
         """Retry previously failed site fetches using a smaller worker pool."""
         retry_results = []  # Accumulate successful retry rows so they can merge with first-pass results.
         still_failed = []  # Track sites that remain failed after dedicated retry attempts.
@@ -10641,7 +10641,7 @@ class OrgDeviceStatsExporter:
         return retry_results, still_failed  # Return recovered rows and sites that remain unresolved.
 
     @staticmethod
-    def _flatten_site_port_results(successful_results):
+    def _flatten_site_port_results(successful_results):  # Flatten site port results.
         """Flatten pooled worker results into one list of port-stat rows."""
         all_port_stats = []  # Accumulate all site-level rows into one export list.
         for index, result_list in enumerate(
@@ -10659,7 +10659,7 @@ class OrgDeviceStatsExporter:
         return all_port_stats  # Return flattened org-wide port-stat list for sorting and export.
 
     @staticmethod
-    def _save_device_port_stats_output(all_port_stats, output_file: str) -> None:
+    def _save_device_port_stats_output(all_port_stats, output_file: str) -> None:  # Save device port stats output.
         """Sort, sanitize, and persist collected port-stat rows."""
         if not all_port_stats:  # Empty dataset should skip file creation and clearly tell the operator why.
             logging.warning(" No port statistics collected. CSV not created.")  # Log absence of exportable data.
@@ -10684,7 +10684,7 @@ class OrgDeviceStatsExporter:
         )  # Record successful export count in logs.
 
     @staticmethod
-    def _run_fast_device_port_stats(output_file: str) -> None:
+    def _run_fast_device_port_stats(output_file: str) -> None:  # Run fast device port stats.
         """Execute fast-mode site-parallel port stats collection and output."""
         logging.info(
             "* Fast mode: Parallelizing port stats retrieval across sites"
@@ -10788,7 +10788,7 @@ class OrgDeviceStatsExporter:
         ).execute()  # Execute org-level pagination and export through the shared fetcher.
 
     @staticmethod
-    def vpn_peer_stats(fast: bool = False):
+    def vpn_peer_stats(fast: bool = False):  # Export VPN peer stats.
         """Export VPN peer path statistics to OrgVPNPeerStats.csv.
 
         Fast Mode Behavior:
@@ -10796,8 +10796,8 @@ class OrgDeviceStatsExporter:
             - Normal fetch otherwise.
         SECURITY: Read-only; safe to cache.
         """
-        output_file = "OrgVPNPeerStats.csv"
-        if fast and os.path.exists(output_file):
+        output_file = "OrgVPNPeerStats.csv"  # Define output filename.
+        if fast and os.path.exists(output_file):  # Branch: fast cache check.
             try:
                 mtime = os.path.getmtime(output_file)
                 age_minutes = (time.time() - mtime) / 60.0
@@ -10997,14 +10997,14 @@ class OfflineDeviceReporter:
 
         sorted_sites = sorted(site_counts.items(), key=lambda item: item[1], reverse=True)[:5]
         if sorted_sites:
-            print("\nTop 5 Sites:")
-            for rank, (site_name, count) in enumerate(sorted_sites, 1):
-                print(f"  {rank}. {site_name}: {count} offline")
+            print("\nTop 5 Sites:")  # Header for the leaderboard.
+            for rank, (site_name, count) in enumerate(sorted_sites, 1):  # Rank each top site.
+                print(f"  {rank}. {site_name}: {count} offline")  # Print rank and count.
 
     @staticmethod
-    def _present_results(offline_records: list[dict[str, str]]) -> None:
+    def _present_results(offline_records: list[dict[str, str]]) -> None:  # Render and save offline results.
         """Display PrettyTable and save CSV for offline devices."""
-        display_fields = [
+        display_fields = [  # Columns to display.
             "Device Name",
             "Device Type",
             "Site Name",
@@ -11015,142 +11015,142 @@ class OfflineDeviceReporter:
             "Offline Duration",
             "Status",
         ]
-        total_count = len(offline_records)
-        show_count = min(total_count, OfflineDeviceReporter.MAX_DISPLAY_ROWS)
+        total_count = len(offline_records)  # Total offline rows.
+        show_count = min(total_count, OfflineDeviceReporter.MAX_DISPLAY_ROWS)  # Cap displayed rows.
 
-        print(f"\n--- Offline Devices (showing {show_count} of {total_count}) ---")
-        table = PrettyTable()
-        table.field_names = display_fields
-        for record in offline_records[:show_count]:
-            table.add_row([record.get(field, "") for field in display_fields])
-        print(table)
+        print(f"\n--- Offline Devices (showing {show_count} of {total_count}) ---")  # Header with counts.
+        table = PrettyTable()  # Build the table.
+        table.field_names = display_fields  # Set columns.
+        for record in offline_records[:show_count]:  # Show capped rows.
+            table.add_row([record.get(field, "") for field in display_fields])  # Add each row.
+        print(table)  # Print the table.
 
         # Save CSV with all records
         csv_records = [{field: record.get(field, "") for field in display_fields} for record in offline_records]
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"OfflineDeviceReport_{timestamp_str}.csv"
-        DataExporter.write_with_format_selection(
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")  # Timestamp for the filename.
+        filename = f"OfflineDeviceReport_{timestamp_str}.csv"  # Build the CSV name.
+        DataExporter.write_with_format_selection(  # Write via selected backend.
             data=csv_records,
             filename_or_table=filename,
             api_function_name="listOrgDevicesStats",
         )
-        logging.info("CSV saved: data/%s (%s devices)", filename, total_count)
-        print(f"\nCSV saved: data/{filename} ({total_count} devices)")
+        logging.info("CSV saved: data/%s (%s devices)", filename, total_count)  # log CSV saved.
+        print(f"\nCSV saved: data/{filename} ({total_count} devices)")  # Tell the user.
 
     @staticmethod
-    def execute() -> None:
+    def execute() -> None:  # Run the offline report.
         """Main entry point for offline device report (Menu 158)."""
-        print("\n=== Offline Device Report ===")
-        logging.info("Starting offline device report...")
-        start_time = time.time()
+        print("\n=== Offline Device Report ===")  # Header.
+        logging.info("Starting offline device report...")  # Log start.
+        start_time = time.time()  # Start the timer.
 
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            print("! No organization selected. Exiting.")
-            return
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not current_org_id:  # No org selected.
+            print("! No organization selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
-        threshold_hours = OfflineDeviceReporter._prompt_threshold()
-        print(f"Threshold: {threshold_hours} hours\n")
+        threshold_hours = OfflineDeviceReporter._prompt_threshold()  # Prompt offline threshold.
+        print(f"Threshold: {threshold_hours} hours\n")  # Echo the threshold.
 
         try:
-            site_lookup, all_devices = OfflineDeviceReporter._fetch_data(current_org_id)
-        except Exception as error:
-            logging.error("Failed to fetch data from Mist API: %s", error)
-            print("! Failed to fetch data. Please check your API credentials and network connection.")
-            return
+            site_lookup, all_devices = OfflineDeviceReporter._fetch_data(current_org_id)  # Fetch sites and devices.
+        except Exception as error:  # Fetch failed.
+            logging.error("Failed to fetch data from Mist API: %s", error)  # log fetch error.
+            print("! Failed to fetch data. Please check your API credentials and network connection.")  # Tell the user.
+            return  # Abort.
 
-        if not all_devices:
-            logging.info("No devices found in organization")
-            print("No devices found in this organization.")
-            return
+        if not all_devices:  # No devices found.
+            logging.info("No devices found in organization")  # Log it.
+            print("No devices found in this organization.")  # Tell the user.
+            return  # Abort.
 
         offline_records = OfflineDeviceReporter._process_devices(all_devices, site_lookup, threshold_hours)
 
-        if not offline_records:
-            print(f"No devices found offline for more than {threshold_hours} hours. All clear!")
-            logging.info("No devices offline beyond %sh threshold", threshold_hours)
-            return
+        if not offline_records:  # None offline.
+            print(f"No devices found offline for more than {threshold_hours} hours. All clear!")  # All-clear message.
+            logging.info("No devices offline beyond %sh threshold", threshold_hours)  # Log all-clear.
+            return  # Abort.
 
-        OfflineDeviceReporter._display_summary(len(all_devices), offline_records, threshold_hours)
-        OfflineDeviceReporter._present_results(offline_records)
+        OfflineDeviceReporter._display_summary(len(all_devices), offline_records, threshold_hours)  # Print the summary.
+        OfflineDeviceReporter._present_results(offline_records)  # Render and save results.
 
-        elapsed = time.time() - start_time
-        logging.info("Offline device report completed in %.1f seconds", elapsed)
-        print(f"\nReport completed in {elapsed:.1f} seconds")
+        elapsed = time.time() - start_time  # Compute elapsed time.
+        logging.info("Offline device report completed in %.1f seconds", elapsed)  # log duration.
+        print(f"\nReport completed in {elapsed:.1f} seconds")  # Tell the user.
 
 
-class OrgDeviceInventorySummary:
+class OrgDeviceInventorySummary:  # Org device inventory summary.
     """Delegation façade for extracted Org Device Inventory Summary modules."""
 
-    _DEVICE_TYPES: tuple[str, ...] = ("ap", "switch", "gateway")
+    _DEVICE_TYPES: tuple[str, ...] = ("ap", "switch", "gateway")  # Device types to tally.
 
     @staticmethod
-    def _get_summary_impl() -> Any:
+    def _get_summary_impl() -> Any:  # Build the summary core.
         """Configure and return extracted single-org summary implementation."""
         from src.inventory.org_device_inventory_summary import (  # noqa: PLC0415
             OrgDeviceInventorySummaryCore,
             configure_org_device_inventory_summary_dependencies,
         )
 
-        configure_org_device_inventory_summary_dependencies(
+        configure_org_device_inventory_summary_dependencies(  # Wire summary dependencies.
             apisession_dependency=apisession,
             mistapi_dependency=mistapi,
             data_exporter=DataExporter,
             org_id_value=org_id,
         )
-        return OrgDeviceInventorySummaryCore
+        return OrgDeviceInventorySummaryCore  # Return the core class.
 
     @staticmethod
-    def _get_msp_impl() -> Any:
+    def _get_msp_impl() -> Any:  # Build the MSP orchestrator.
         """Configure and return extracted MSP orchestration implementation."""
         from src.inventory.org_device_inventory_msp import (  # noqa: PLC0415
             OrgDeviceInventoryMSPOrchestrator,
             configure_org_device_inventory_msp_dependencies,
         )
 
-        configure_org_device_inventory_msp_dependencies(
+        configure_org_device_inventory_msp_dependencies(  # Wire MSP dependencies.
             apisession_dependency=apisession,
             input_utils=InputUtils,
             data_exporter=DataExporter,
             msp_privileges_value=msp_privileges,
         )
-        return OrgDeviceInventoryMSPOrchestrator
+        return OrgDeviceInventoryMSPOrchestrator  # Return the orchestrator.
 
     @staticmethod
-    def execute() -> None:
+    def execute() -> None:  # Run the summary.
         """Single-org entry point for menu operation 13."""
-        OrgDeviceInventorySummary._get_summary_impl().execute()
+        OrgDeviceInventorySummary._get_summary_impl().execute()  # Delegate to the core.
 
     @staticmethod
-    def _resolve_active_msp() -> "dict[str, Any] | None":
+    def _resolve_active_msp() -> "dict[str, Any] | None":  # Resolve the active MSP.
         """Delegate MSP selection prompt to extracted MSP orchestrator."""
-        return OrgDeviceInventorySummary._get_msp_impl()._resolve_active_msp()
+        return OrgDeviceInventorySummary._get_msp_impl()._resolve_active_msp()  # Delegate to the orchestrator.
 
     @staticmethod
-    def _run_single_msp_org() -> None:
+    def _run_single_msp_org() -> None:  # Run a single MSP org.
         """Delegate single-org MSP flow to extracted MSP orchestrator."""
         OrgDeviceInventorySummary._get_msp_impl().run_single_msp_org(
             OrgDeviceInventorySummary._get_summary_impl().run_for_org  # Bind extracted core run_for_org as callback.
         )
 
     @staticmethod
-    def execute_msp() -> None:
+    def execute_msp() -> None:  # Run the MSP flow.
         """Delegate batch MSP execution to extracted MSP orchestrator."""
         OrgDeviceInventorySummary._get_msp_impl().execute_msp(
             OrgDeviceInventorySummary._get_summary_impl().run_for_org  # Bind extracted core run_for_org as callback.
         )
 
     @staticmethod
-    def dispatch() -> None:
+    def dispatch() -> None:  # Dispatch summary vs MSP.
         """Delegate menu operation 13 interactive dispatch to extracted MSP orchestrator."""
-        OrgDeviceInventorySummary._get_msp_impl().dispatch(
+        OrgDeviceInventorySummary._get_msp_impl().dispatch(  # Delegate to the orchestrator.
             single_org_fn=OrgDeviceInventorySummary.execute,
             select_org_fn=OrgDeviceInventorySummary._run_single_msp_org,
             batch_fn=OrgDeviceInventorySummary.execute_msp,
         )
 
 
-class OrgTemplateExporter:
+class OrgTemplateExporter:  # Org template exporters.
     """
     Organization Template Exporter
 
@@ -11159,65 +11159,65 @@ class OrgTemplateExporter:
     """
 
     @staticmethod
-    def all_templates():
+    def all_templates():  # Export all template types.
         """
         Export all organization templates (gateway, network, RF, site, AP) to CSV files.
         """
-        logging.info("Starting export of organization templates...")
+        logging.info("Starting export of organization templates...")  # Log start.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch gateway templates.
                 title="Gateway Templates:",
                 api_call=mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates,
                 filename="OrgGatewayTemplates.csv",
                 sort_key="name",
                 limit=1000,
             ).execute()
-        except Exception as e:
-            logging.error("Failed to export gateway templates: %s", e)
+        except Exception as e:  # Gateway export failed.
+            logging.error("Failed to export gateway templates: %s", e)  # log gateway error.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch network templates.
                 title="Network Templates:",
                 api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
                 filename="OrgNetworkTemplates.csv",
                 sort_key="name",
                 limit=1000,
             ).execute()
-        except Exception as e:
-            logging.error("Failed to export network templates: %s", e)
+        except Exception as e:  # Network export failed.
+            logging.error("Failed to export network templates: %s", e)  # log network error.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch RF templates.
                 title="RF Templates:",
                 api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
                 filename="OrgRfTemplates.csv",
                 sort_key="name",
                 limit=1000,
             ).execute()
-        except Exception as e:
-            logging.error("Failed to export RF templates: %s", e)
+        except Exception as e:  # RF export failed.
+            logging.error("Failed to export RF templates: %s", e)  # log RF error.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch site templates.
                 title="Site Templates:",
                 api_call=mistapi.api.v1.orgs.sitetemplates.listOrgSiteTemplates,
                 filename="OrgSiteTemplates.csv",
                 sort_key="name",
                 limit=1000,
             ).execute()
-        except Exception as e:
-            logging.error("Failed to export site templates: %s", e)
+        except Exception as e:  # Site export failed.
+            logging.error("Failed to export site templates: %s", e)  # log site error.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch AP templates.
                 title="AP Templates:",
                 api_call=mistapi.api.v1.orgs.aptemplates.listOrgAptemplates,
                 filename="OrgApTemplates.csv",
                 sort_key="name",
                 limit=1000,
             ).execute()
-        except Exception as e:
-            logging.error("Failed to export AP templates: %s", e)
-        logging.info(" Organization templates export completed")
+        except Exception as e:  # AP export failed.
+            logging.error("Failed to export AP templates: %s", e)  # log AP error.
+        logging.info(" Organization templates export completed")  # Log completion.
 
     @staticmethod
-    def network_templates():
+    def network_templates():  # Export network templates.
         """Export network templates to OrgNetworkTemplates.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
@@ -11226,14 +11226,14 @@ class OrgTemplateExporter:
         )
 
     @staticmethod
-    def rf_templates():
+    def rf_templates():  # Export RF templates.
         """Export RF templates to OrgRfTemplates.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates, data_type="rf templates", sort_key="name"
         )
 
     @staticmethod
-    def ap_templates():
+    def ap_templates():  # Export AP templates.
         """Export AP templates to OrgApTemplates.csv."""
         print("Export Organization AP Templates:")  # Header line for this export operation
         logging.info(
@@ -11261,48 +11261,48 @@ class OrgTemplateExporter:
             processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON into flat CSV rows
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-            print(f"! {len(processed)} AP templates exported to {filename}")
-            logging.info("Exported %s AP templates to %s.", len(processed), filename)
-        except Exception as e:
-            logging.error("Failed to export AP templates: %s", e)
+            print(f"! {len(processed)} AP templates exported to {filename}")  # Tell the user.
+            logging.info("Exported %s AP templates to %s.", len(processed), filename)  # Log export count.
+        except Exception as e:  # AP export failed.
+            logging.error("Failed to export AP templates: %s", e)  # log AP error.
             try:
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
-                pass
-            raise
+                pass  # Best-effort cleanup.
+            raise  # Re-raise to caller.
 
     @staticmethod
-    def switch_templates():
+    def switch_templates():  # Export switch templates.
         """Export switch templates to OrgSwitchTemplates.csv."""
-        print("Export Organization Switch Templates:")
-        logging.info("Starting export of organization switch templates (canonical networktemplates)...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        filename = "OrgSwitchTemplates.csv"
+        print("Export Organization Switch Templates:")  # Header.
+        logging.info("Starting export of organization switch templates (canonical networktemplates)...")  # Log start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        filename = "OrgSwitchTemplates.csv"  # Build the CSV name.
         try:
             response = mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates(apisession, org_id, limit=1000)
             switch_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
-            if not switch_profiles:
+            if not switch_profiles:  # None found.
                 print("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")
-                logging.info(
+                logging.info(  # Log zero exported.
                     "No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv"
                 )
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
-                return
-            processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)
+                return  # Abort.
+            processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-            print(f"! {len(processed)} switch templates exported to {filename}")
-            logging.info("Exported %s switch templates to %s.", len(processed), filename)
-        except Exception as e:
-            logging.error("Failed to export switch templates: %s", e)
+            print(f"! {len(processed)} switch templates exported to {filename}")  # Tell the user.
+            logging.info("Exported %s switch templates to %s.", len(processed), filename)  # Log export count.
+        except Exception as e:  # Export failed.
+            logging.error("Failed to export switch templates: %s", e)  # log error.
             try:
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
-                pass
-            raise
+                pass  # Best-effort cleanup.
+            raise  # Re-raise to caller.
 
 
-class OrgClientSecurityExporter:
+class OrgClientSecurityExporter:  # Org client security exporters.
     """
     Organization Client and Security Exporter
 
@@ -11311,14 +11311,14 @@ class OrgClientSecurityExporter:
     """
 
     @staticmethod
-    def wireless_clients():
+    def wireless_clients():  # Export wireless client security.
         """Export wireless client statistics for the entire organization to OrgWirelessClients.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.clients.searchOrgWirelessClients, data_type="wireless clients", sort_key="mac"
         )
 
     @staticmethod
-    def wired_clients():
+    def wired_clients():  # Export wired client security.
         """Export wired client statistics for the entire organization to OrgWiredClients.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients, data_type="wired clients", sort_key="mac"
@@ -11332,9 +11332,9 @@ class OrgClientSecurityExporter:
             - Cache hit: If all 3 output CSVs exist and are fresh, skip entirely.
             - Reduced lookback: Uses dynamic lookback (1h in test) instead of hardcoded 7d.
         """
-        from src.refactors.serial_cc.security_events import SecurityEventsService
+        from src.refactors.serial_cc.security_events import SecurityEventsService  # Import the events service.
 
-        SecurityEventsService.execute(fast)
+        SecurityEventsService.execute(fast)  # Run the security export.
 
     @staticmethod
     def rogue_clients(fast: bool = False):  # noqa: C901, PLR0915
@@ -11481,14 +11481,14 @@ class OrgClientSecurityExporter:
             logging.info("! %s rogue APs exported to OrgRogueAPs", len(all_rogue_aps))  # Log the export
             print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")  # Report the count to the user
         else:  # No rogue APs found anywhere
-            logging.info("No rogue APs found across all sites")
-            print(" No rogue APs detected across all sites")
+            logging.info("No rogue APs found across all sites")  # Log no rogues.
+            print(" No rogue APs detected across all sites")  # Tell the user.
 
 
-class FilterOperatorEngine:
+class FilterOperatorEngine:  # Filter operator evaluation engine.
     """Shared operator catalog, normalization, and evaluation for client search filtering."""
 
-    OPERATOR_CATALOG: list[str] = [
+    OPERATOR_CATALOG: list[str] = [  # Supported operator names.
         "is",
         "is not",
         "contains",
@@ -11503,7 +11503,7 @@ class FilterOperatorEngine:
         "is not null",
     ]
 
-    VALUE_REQUIRED_OPERATORS: frozenset[str] = frozenset(
+    VALUE_REQUIRED_OPERATORS: frozenset[str] = frozenset(  # Operators needing a value.
         {
             "is",
             "is not",
@@ -11516,68 +11516,68 @@ class FilterOperatorEngine:
         }
     )
 
-    REMOTE_PREFILTER_OPERATORS: frozenset[str] = frozenset(
+    REMOTE_PREFILTER_OPERATORS: frozenset[str] = frozenset(  # Operators pushed to the API.
         {
             "is",
         }
     )
 
     @staticmethod
-    def normalize_mac(mac_value: str) -> str:
+    def normalize_mac(mac_value: str) -> str:  # Normalize a MAC string.
         """Remove delimiters and lowercase for delimiter-insensitive comparison."""
-        if not mac_value:
-            return ""
-        return re.sub(r"[:\-.]", "", mac_value).lower()
+        if not mac_value:  # Empty input.
+            return ""  # Return empty.
+        return re.sub(r"[:\-.]", "", mac_value).lower()  # Strip separators; lowercase.
 
     @staticmethod
-    def normalize_text(text_value: str) -> str:
+    def normalize_text(text_value: str) -> str:  # Normalize free text.
         """Lowercase and strip for case-insensitive comparison."""
-        if not text_value:
-            return ""
-        return text_value.strip().lower()
+        if not text_value:  # Empty input.
+            return ""  # Return empty.
+        return text_value.strip().lower()  # Trim and lowercase.
 
     @staticmethod
     def evaluate_operator(field_value: str | None, operator: str, search_value: str, is_mac: bool = False) -> bool:
         """Evaluate a single operator against a field value. Returns True if record matches."""
-        if operator in ("is null", "is not null", "is blank", "is not blank"):
-            return FilterOperatorEngine._evaluate_null_blank(field_value, operator)
-        if field_value is None or str(field_value).strip() == "":
-            return False
+        if operator in ("is null", "is not null", "is blank", "is not blank"):  # Null/blank operators.
+            return FilterOperatorEngine._evaluate_null_blank(field_value, operator)  # Delegate null/blank check.
+        if field_value is None or str(field_value).strip() == "":  # Empty field fails value ops.
+            return False  # No match.
         normalized = FilterOperatorEngine._normalize_pair(str(field_value), search_value, is_mac)
         return FilterOperatorEngine._evaluate_value_operator(normalized[0], operator, normalized[1])
 
     @staticmethod
-    def validate_operator_value(operator: str, value: str, field_name: str) -> bool:
+    def validate_operator_value(operator: str, value: str, field_name: str) -> bool:  # Validate operator+value pair.
         """Validate that value-required operators have non-empty normalized values."""
-        if operator in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:
-            if not value or not value.strip():
+        if operator in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:  # Value-required operator?
+            if not value or not value.strip():  # Missing value.
                 logging.warning("Operator '%s' for %s requires a non-empty value", operator, field_name)
                 print(f"\n  Operator '{operator}' requires a value for {field_name}. Please try again.")
-                return False
-        return True
+                return False  # Invalid.
+        return True  # Valid.
 
     @staticmethod
-    def _evaluate_null_blank(field_value: str | None, operator: str) -> bool:
+    def _evaluate_null_blank(field_value: str | None, operator: str) -> bool:  # Evaluate null/blank operators.
         """Evaluate null/blank operators against a field value."""
-        if operator == "is null":
-            return field_value is None
-        if operator == "is not null":
-            return field_value is not None
-        if operator == "is blank":
-            return field_value is not None and str(field_value).strip() == ""
-        return field_value is not None and str(field_value).strip() != ""
+        if operator == "is null":  # is null.
+            return field_value is None  # True when absent.
+        if operator == "is not null":  # is not null.
+            return field_value is not None  # True when present.
+        if operator == "is blank":  # is blank.
+            return field_value is not None and str(field_value).strip() == ""  # True when present and empty.
+        return field_value is not None and str(field_value).strip() != ""  # is not blank result.
 
     @staticmethod
     def _normalize_pair(field_value: str, search_value: str, is_mac: bool) -> tuple[str, str]:
         """Normalize field and search values for comparison."""
-        if is_mac:
+        if is_mac:  # MAC comparison.
             return FilterOperatorEngine.normalize_mac(field_value), FilterOperatorEngine.normalize_mac(search_value)
         return FilterOperatorEngine.normalize_text(field_value), FilterOperatorEngine.normalize_text(search_value)
 
     @staticmethod
-    def _evaluate_value_operator(field: str, operator: str, search: str) -> bool:
+    def _evaluate_value_operator(field: str, operator: str, search: str) -> bool:  # Apply a value operator.
         """Evaluate value-based positional/equality operators."""
-        operator_map: dict[str, Any] = {
+        operator_map: dict[str, Any] = {  # Operator -> comparator map.
             "is": lambda f, s: f == s,
             "is not": lambda f, s: f != s,
             "contains": lambda f, s: s in f,
@@ -11587,105 +11587,105 @@ class FilterOperatorEngine:
             "ends with": lambda f, s: f.endswith(s),
             "doesn't end with": lambda f, s: not f.endswith(s),
         }
-        evaluator = operator_map.get(operator)
-        return evaluator(field, search) if evaluator else False
+        evaluator = operator_map.get(operator)  # Look up the comparator.
+        return evaluator(field, search) if evaluator else False  # Compare or default false.
 
 
-class GlobalWiredClientReportGenerator:
+class GlobalWiredClientReportGenerator:  # Global wired client report.
     """Generates organization-wide wired client reports with operator-based MAC/manufacturer filtering."""
 
     @staticmethod
-    def execute() -> None:
+    def execute() -> None:  # Run the report.
         """Main entry point from menu system."""
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        criteria = GlobalWiredClientReportGenerator._prompt_filter_criteria()
-        if criteria is False:
-            return
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        criteria = GlobalWiredClientReportGenerator._prompt_filter_criteria()  # Prompt for filters.
+        if criteria is False:  # User cancelled.
+            return  # Abort.
         records, remote_used = GlobalWiredClientReportGenerator._fetch_clients(org_id, criteria)
-        if not records:
-            logging.warning("No wired clients retrieved from API")
-            print("\n  No wired clients found in the organization.")
-            return
+        if not records:  # No records.
+            logging.warning("No wired clients retrieved from API")  # Warn none retrieved.
+            print("\n  No wired clients found in the organization.")  # Tell the user.
+            return  # Abort.
         matched, metadata = GlobalWiredClientReportGenerator._apply_filters(records, criteria, remote_used)
-        GlobalWiredClientReportGenerator._write_outputs(matched, metadata)
+        GlobalWiredClientReportGenerator._write_outputs(matched, metadata)  # Write the outputs.
 
     @staticmethod
-    def _prompt_filter_criteria() -> dict[str, str] | None | bool:
+    def _prompt_filter_criteria() -> dict[str, str] | None | bool:  # Prompt filter criteria.
         """Collect optional MAC and manufacturer filter criteria from user."""
-        print("\n--- Global Wired Client Report ---")
-        print("Optional filters (press Enter to skip):\n")
-        criteria: dict[str, str] = {}
+        print("\n--- Global Wired Client Report ---")  # Header.
+        print("Optional filters (press Enter to skip):\n")  # Explain skipping.
+        criteria: dict[str, str] = {}  # Collect criteria.
         mac_result = GlobalWiredClientReportGenerator._collect_single_filter("MAC address", "mac", criteria)
-        if mac_result is False:
-            return False
+        if mac_result is False:  # User cancelled.
+            return False  # Abort.
         mfg_result = GlobalWiredClientReportGenerator._collect_single_filter("Manufacturer", "mfg", criteria)
-        if mfg_result is False:
-            return False
-        return criteria if criteria else None
+        if mfg_result is False:  # User cancelled.
+            return False  # Abort.
+        return criteria if criteria else None  # Return criteria or None.
 
     @staticmethod
     def _collect_single_filter(field_label: str, key_prefix: str, criteria: dict[str, str]) -> bool | None:
         """Collect a single field operator and value. Returns False on validation failure."""
-        operator = GlobalWiredClientReportGenerator._prompt_operator(field_label)
-        if not operator:
-            return None
-        criteria[f"{key_prefix}_operator"] = operator
-        if operator not in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:
-            return True
+        operator = GlobalWiredClientReportGenerator._prompt_operator(field_label)  # Prompt the operator.
+        if not operator:  # No operator chosen.
+            return None  # Skip this field.
+        criteria[f"{key_prefix}_operator"] = operator  # Record the operator.
+        if operator not in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:  # Operator needs no value.
+            return True  # Done.
         value = InputUtils.safe_input(f"  Enter {field_label} value: ", context=f"wired_report_{key_prefix}_filter")
-        if not FilterOperatorEngine.validate_operator_value(operator, value, field_label):
-            return False
-        criteria[f"{key_prefix}_value"] = value
-        return True
+        if not FilterOperatorEngine.validate_operator_value(operator, value, field_label):  # Validate the value.
+            return False  # Invalid value.
+        criteria[f"{key_prefix}_value"] = value  # Record the value.
+        return True  # Done.
 
     @staticmethod
-    def _prompt_operator(field_name: str) -> str | None:
+    def _prompt_operator(field_name: str) -> str | None:  # Prompt an operator choice.
         """Display operator selection menu and return chosen operator or None."""
-        print(f"  {field_name} filter operator:")
-        print("    0. No filter (skip)")
-        for index, operator in enumerate(FilterOperatorEngine.OPERATOR_CATALOG, 1):
-            print(f"    {index}. {operator}")
-        choice = InputUtils.safe_input(
+        print(f"  {field_name} filter operator:")  # Label the field.
+        print("    0. No filter (skip)")  # No-filter option.
+        for index, operator in enumerate(FilterOperatorEngine.OPERATOR_CATALOG, 1):  # List operators.
+            print(f"    {index}. {operator}")  # Print each option.
+        choice = InputUtils.safe_input(  # Read the choice.
             f"  Select {field_name} operator (0-12, default 0): ",
             default_value="0",
             context=f"wired_report_{field_name.lower().replace(' ', '_')}_operator",
         )
-        if choice == "0" or not choice:
-            return None
+        if choice == "0" or not choice:  # Skip when zero/empty.
+            return None  # No operator.
         try:
-            index = int(choice) - 1
-            if 0 <= index < len(FilterOperatorEngine.OPERATOR_CATALOG):
-                selected = FilterOperatorEngine.OPERATOR_CATALOG[index]
-                logging.info("Selected %s operator: %s", field_name, selected)
-                return selected
-        except ValueError:
-            pass
-        print(f"  Invalid selection. No {field_name} filter will be applied.")
-        return None
+            index = int(choice) - 1  # Parse the index.
+            if 0 <= index < len(FilterOperatorEngine.OPERATOR_CATALOG):  # In range?
+                selected = FilterOperatorEngine.OPERATOR_CATALOG[index]  # Pick the operator.
+                logging.info("Selected %s operator: %s", field_name, selected)  # Log the choice.
+                return selected  # Return it.
+        except ValueError:  # Non-numeric input.
+            pass  # Ignore and fall through.
+        print(f"  Invalid selection. No {field_name} filter will be applied.")  # Tell the user invalid.
+        return None  # No operator.
 
     @staticmethod
     def _fetch_clients(org_id: str, criteria: dict[str, str] | None) -> tuple[list[dict[str, Any]], bool]:
         """Fetch org-wide wired clients with optional remote prefiltering."""
-        remote_params: dict[str, Any] = {"limit": 1000}
-        remote_used = False
-        if criteria:
+        remote_params: dict[str, Any] = {"limit": 1000}  # Base API params.
+        remote_used = False  # Track remote prefilter use.
+        if criteria:  # Have criteria.
             remote_used = GlobalWiredClientReportGenerator._build_remote_params(criteria, remote_params)
         try:
-            logging.info("Fetching organization wired clients...")
-            print("\n  Retrieving wired clients from organization...")
-            response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(
+            logging.info("Fetching organization wired clients...")  # Log the fetch.
+            print("\n  Retrieving wired clients from organization...")  # Tell the user.
+            response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(  # Call the API.
                 apisession,
                 org_id,
                 **remote_params,
             )
-            records = mistapi.get_all(response=response, mist_session=apisession) or []
-            logging.info("Retrieved %s wired client records", len(records))
-            print(f"  Retrieved {len(records)} wired client records")
-            return records, remote_used
-        except Exception as exception:
-            logging.exception("Failed to fetch wired clients: %s", exception)
-            print(f"\n  Error retrieving wired clients: {exception}")
-            return [], False
+            records = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all; default empty.
+            logging.info("Retrieved %s wired client records", len(records))  # Log the count.
+            print(f"  Retrieved {len(records)} wired client records")  # Tell the user.
+            return records, remote_used  # Return records and flag.
+        except Exception as exception:  # Fetch failed.
+            logging.exception("Failed to fetch wired clients: %s", exception)  # Log the exception.
+            print(f"\n  Error retrieving wired clients: {exception}")  # Tell the user.
+            return [], False  # Return empty.
 
     @staticmethod
     def _build_remote_params(criteria: dict[str, str], params: dict[str, Any]) -> bool:
@@ -11710,7 +11710,7 @@ class GlobalWiredClientReportGenerator:
         return remote_used  # Report whether any server-side prefilter was used
 
     @staticmethod
-    def _apply_filters(
+    def _apply_filters(  # Apply local filters.
         records: list[dict[str, Any]],
         criteria: dict[str, str] | None,
         remote_used: bool,
@@ -11740,7 +11740,7 @@ class GlobalWiredClientReportGenerator:
         return matched, metadata  # Return the filtered records plus metadata
 
     @staticmethod
-    def _record_matches(record: dict[str, Any], criteria: dict[str, str]) -> bool:
+    def _record_matches(record: dict[str, Any], criteria: dict[str, str]) -> bool:  # Test one record vs criteria.
         """Evaluate a single record against all active filter criteria with AND logic."""
         mac_operator = criteria.get("mac_operator")  # The MAC operator to evaluate, if any
         if mac_operator:  # A MAC filter is active
@@ -11761,7 +11761,7 @@ class GlobalWiredClientReportGenerator:
         return True  # The record passed every active criterion
 
     @staticmethod
-    def _build_metadata(
+    def _build_metadata(  # Build report metadata.
         retrieved: int,
         matched: int,
         remote_used: bool,
@@ -11776,182 +11776,182 @@ class GlobalWiredClientReportGenerator:
             "local_filter_used": local_used,
             "generated_at": datetime.now(UTC).isoformat(),  # UTC ISO timestamp for report metadata
         }
-        if criteria:
-            if criteria.get("mac_operator"):
-                metadata["mac_operator"] = criteria["mac_operator"]
-                metadata["mac_value"] = criteria.get("mac_value", "")
-            if criteria.get("mfg_operator"):
-                metadata["mfg_operator"] = criteria["mfg_operator"]
-                metadata["mfg_value"] = criteria.get("mfg_value", "")
-        return metadata
+        if criteria:  # Have criteria.
+            if criteria.get("mac_operator"):  # MAC filter present.
+                metadata["mac_operator"] = criteria["mac_operator"]  # Record MAC operator.
+                metadata["mac_value"] = criteria.get("mac_value", "")  # Record MAC value.
+            if criteria.get("mfg_operator"):  # Mfg filter present.
+                metadata["mfg_operator"] = criteria["mfg_operator"]  # Record mfg operator.
+                metadata["mfg_value"] = criteria.get("mfg_value", "")  # Record mfg value.
+        return metadata  # Return metadata.
 
     @staticmethod
-    def _write_outputs(matched: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
+    def _write_outputs(matched: list[dict[str, Any]], metadata: dict[str, Any]) -> None:  # Write all report outputs.
         """Write matched records to both local report artifact and standard export."""
-        matched_count = metadata["records_matched"]
-        retrieved_count = metadata["records_retrieved"]
-        print(f"\n  Matched {matched_count} of {retrieved_count} wired client records")
-        if matched_count == 0:
-            logging.info("Zero records matched filters -- producing empty outputs")
-            print("  No records matched the specified filters.")
-        GlobalWiredClientReportGenerator._write_standard_export(matched)
-        GlobalWiredClientReportGenerator._write_local_report(matched, metadata)
+        matched_count = metadata["records_matched"]  # Matched count.
+        retrieved_count = metadata["records_retrieved"]  # Retrieved count.
+        print(f"\n  Matched {matched_count} of {retrieved_count} wired client records")  # Tell the user.
+        if matched_count == 0:  # Nothing matched.
+            logging.info("Zero records matched filters -- producing empty outputs")  # Log empty result.
+            print("  No records matched the specified filters.")  # Tell the user.
+        GlobalWiredClientReportGenerator._write_standard_export(matched)  # Write the CSV export.
+        GlobalWiredClientReportGenerator._write_local_report(matched, metadata)  # Write the JSON summary.
 
     @staticmethod
-    def _write_standard_export(matched: list[dict[str, Any]]) -> None:
+    def _write_standard_export(matched: list[dict[str, Any]]) -> None:  # Write the standard CSV.
         """Write matched records through the standard CSV/SQLite export path."""
-        if matched:
-            flattened = DataProcessingUtils.flatten_nested_fields(matched)
+        if matched:  # Have matches.
+            flattened = DataProcessingUtils.flatten_nested_fields(matched)  # Flatten nested fields.
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
         else:
-            sanitized = []
-        DataExporter.write_with_format_selection(
+            sanitized = []  # No matches.
+        DataExporter.write_with_format_selection(  # Write via backend.
             sanitized,
             "GlobalWiredClientReport",
             api_function_name="globalWiredClientReport",
         )
-        logging.info("Standard export: %s records to GlobalWiredClientReport", len(sanitized))
+        logging.info("Standard export: %s records to GlobalWiredClientReport", len(sanitized))  # Log the export.
 
     @staticmethod
     def _write_local_report(matched: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
         """Write local report artifact with summary metadata to data/ directory."""
-        report_path = os.path.join("data", "GlobalWiredClientReport_summary.json")
-        report_payload: dict[str, Any] = {
+        report_path = os.path.join("data", "GlobalWiredClientReport_summary.json")  # Report file path.
+        report_payload: dict[str, Any] = {  # Build the payload.
             "summary": metadata,
             "record_count": len(matched),
         }
         try:
-            with open(report_path, "w", encoding="utf-8") as report_file:
-                json.dump(report_payload, report_file, indent=2, default=str)
-            logging.info("Local report artifact written to %s", report_path)
-            print(f"  Report summary written to {report_path}")
-        except OSError as error:
-            logging.error("Failed to write local report artifact: %s", error)
-            print(f"  Warning: Could not write report summary to {report_path}")
+            with open(report_path, "w", encoding="utf-8") as report_file:  # Open the report file.
+                json.dump(report_payload, report_file, indent=2, default=str)  # Dump JSON.
+            logging.info("Local report artifact written to %s", report_path)  # Log the write.
+            print(f"  Report summary written to {report_path}")  # Tell the user.
+        except OSError as error:  # Write failed.
+            logging.error("Failed to write local report artifact: %s", error)  # Log the error.
+            print(f"  Warning: Could not write report summary to {report_path}")  # Warn the user.
 
 
-class WiredClientManufacturerReportGenerator:
+class WiredClientManufacturerReportGenerator:  # Wired client manufacturer report.
     """Generates wired client reports filtered by interactive manufacturer selection."""
 
     @staticmethod
-    def execute() -> None:
+    def execute() -> None:  # Run the report.
         """Main entry point: always export ALL, then optionally filter by manufacturer."""
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        records = WiredClientManufacturerReportGenerator._fetch_all_clients(org_id)
-        if not records:
-            logging.warning("No wired clients retrieved from API")
-            print("\n  No wired clients found in the organization.")
-            return
-        WiredClientManufacturerReportGenerator._write_outputs(records, "")
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        records = WiredClientManufacturerReportGenerator._fetch_all_clients(org_id)  # Fetch all clients.
+        if not records:  # No records.
+            logging.warning("No wired clients retrieved from API")  # Warn none retrieved.
+            print("\n  No wired clients found in the organization.")  # Tell the user.
+            return  # Abort.
+        WiredClientManufacturerReportGenerator._write_outputs(records, "")  # Write the full export.
         summary = WiredClientManufacturerReportGenerator._build_manufacturer_summary(records)
-        selected = WiredClientManufacturerReportGenerator._prompt_selection(summary)
-        if not selected:
-            return
+        selected = WiredClientManufacturerReportGenerator._prompt_selection(summary)  # Prompt a selection.
+        if not selected:  # No selection.
+            return  # Abort.
         filtered = WiredClientManufacturerReportGenerator._filter_by_manufacturer(records, selected)
-        WiredClientManufacturerReportGenerator._write_outputs(filtered, selected)
+        WiredClientManufacturerReportGenerator._write_outputs(filtered, selected)  # Write the filtered export.
 
     @staticmethod
-    def _fetch_all_clients(org_id: str) -> list[dict[str, Any]]:
+    def _fetch_all_clients(org_id: str) -> list[dict[str, Any]]:  # Fetch all wired clients.
         """Fetch all wired clients across the organization without filters."""
         try:
-            logging.info("Fetching all organization wired clients for manufacturer report...")
-            print("\n  Retrieving all wired clients from organization...")
-            response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(
+            logging.info("Fetching all organization wired clients for manufacturer report...")  # Log the fetch.
+            print("\n  Retrieving all wired clients from organization...")  # Tell the user.
+            response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(  # Call the API.
                 apisession,
                 org_id,
                 limit=1000,
             )
-            records = mistapi.get_all(response=response, mist_session=apisession) or []
-            logging.info("Retrieved %s wired client records", len(records))
-            print(f"  Retrieved {len(records)} wired client records")
-            return records
-        except Exception as exception:
-            logging.exception("Failed to fetch wired clients: %s", exception)
-            print(f"\n  Error retrieving wired clients: {exception}")
-            return []
+            records = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all; default empty.
+            logging.info("Retrieved %s wired client records", len(records))  # Log the count.
+            print(f"  Retrieved {len(records)} wired client records")  # Tell the user.
+            return records  # Return records.
+        except Exception as exception:  # Fetch failed.
+            logging.exception("Failed to fetch wired clients: %s", exception)  # Log the exception.
+            print(f"\n  Error retrieving wired clients: {exception}")  # Tell the user.
+            return []  # Return empty.
 
     @staticmethod
     def _build_manufacturer_summary(records: list[dict[str, Any]]) -> list[tuple[str, int]]:
         """Extract unique manufacturers with client counts, sorted alphabetically."""
-        manufacturer_counts: dict[str, int] = {}
-        for record in records:
-            manufacturer = str(record.get("manufacture", "Unknown") or "Unknown").strip()
-            manufacturer_counts[manufacturer] = manufacturer_counts.get(manufacturer, 0) + 1
-        sorted_manufacturers = sorted(manufacturer_counts.items(), key=lambda item: item[0].lower())
-        return sorted_manufacturers
+        manufacturer_counts: dict[str, int] = {}  # Count map.
+        for record in records:  # Walk records.
+            manufacturer = str(record.get("manufacture", "Unknown") or "Unknown").strip()  # Normalize the manufacturer.
+            manufacturer_counts[manufacturer] = manufacturer_counts.get(manufacturer, 0) + 1  # Increment the count.
+        sorted_manufacturers = sorted(manufacturer_counts.items(), key=lambda item: item[0].lower())  # Sort by name.
+        return sorted_manufacturers  # Return the summary.
 
     @staticmethod
-    def _prompt_selection(summary: list[tuple[str, int]]) -> str | None:
+    def _prompt_selection(summary: list[tuple[str, int]]) -> str | None:  # Prompt manufacturer selection.
         """Display manufacturer list with counts and prompt user to select one."""
-        total_clients = sum(count for _, count in summary)
-        print(f"\n  Found {total_clients} clients from {len(summary)} manufacturers\n")
-        print(f"  {'#':<5} {'Manufacturer':<45} {'Count':>8}")
-        print(f"  {'-' * 5} {'-' * 45} {'-' * 8}")
-        for index, (manufacturer, count) in enumerate(summary, 1):
-            display_name = manufacturer[:44]
-            print(f"  {index:<5} {display_name:<45} {count:>8}")
-        choice = InputUtils.safe_input(
+        total_clients = sum(count for _, count in summary)  # Total client count.
+        print(f"\n  Found {total_clients} clients from {len(summary)} manufacturers\n")  # Tell the user.
+        print(f"  {'#':<5} {'Manufacturer':<45} {'Count':>8}")  # Column header.
+        print(f"  {'-' * 5} {'-' * 45} {'-' * 8}")  # Separator row.
+        for index, (manufacturer, count) in enumerate(summary, 1):  # List each manufacturer.
+            display_name = manufacturer[:44]  # Truncate long names.
+            print(f"  {index:<5} {display_name:<45} {count:>8}")  # Print the row.
+        choice = InputUtils.safe_input(  # Read the choice.
             "\n  Enter manufacturer number for filtered report (Enter to skip): ",
             default_value="",
             allow_empty=True,
             context="manufacturer_report_selection",
         )
-        if not choice:
-            return None
+        if not choice:  # No choice.
+            return None  # Abort.
         try:
-            selection_index = int(choice)
-        except ValueError:
-            print("  Invalid selection.")
-            return None
-        if 1 <= selection_index <= len(summary):
-            selected_manufacturer = summary[selection_index - 1][0]
-            logging.info("User selected manufacturer: %s", selected_manufacturer)
-            return selected_manufacturer
-        print("  Selection out of range.")
-        return None
+            selection_index = int(choice)  # Parse the selection.
+        except ValueError:  # Non-numeric input.
+            print("  Invalid selection.")  # Tell the user.
+            return None  # Abort.
+        if 1 <= selection_index <= len(summary):  # In range?
+            selected_manufacturer = summary[selection_index - 1][0]  # Pick the manufacturer.
+            logging.info("User selected manufacturer: %s", selected_manufacturer)  # Log the choice.
+            return selected_manufacturer  # Return it.
+        print("  Selection out of range.")  # Out of range.
+        return None  # Abort.
 
     @staticmethod
     def _filter_by_manufacturer(records: list[dict[str, Any]], manufacturer: str) -> list[dict[str, Any]]:
         """Filter records by selected manufacturer. Empty string means no filter (all records)."""
-        if not manufacturer:
-            return records
-        normalized_selection = manufacturer.strip().lower()
-        return [
+        if not manufacturer:  # No filter.
+            return records  # Return all.
+        normalized_selection = manufacturer.strip().lower()  # Normalize the selection.
+        return [  # Keep matching records.
             record
             for record in records
             if str(record.get("manufacture", "") or "").strip().lower() == normalized_selection
         ]
 
     @staticmethod
-    def _build_filename(manufacturer: str) -> str:
+    def _build_filename(manufacturer: str) -> str:  # Build the output filename.
         """Build a unique filename incorporating the selected manufacturer."""
-        if not manufacturer:
-            slug = "ALL"
+        if not manufacturer:  # No manufacturer.
+            slug = "ALL"  # Use ALL slug.
         else:
-            slug = re.sub(r"[^\w]+", "_", manufacturer).strip("_")[:40]
-        return f"WiredClientManufacturerReport_{slug}"
+            slug = re.sub(r"[^\w]+", "_", manufacturer).strip("_")[:40]  # Slugify the manufacturer.
+        return f"WiredClientManufacturerReport_{slug}"  # Return the filename.
 
     @staticmethod
-    def _write_outputs(filtered: list[dict[str, Any]], manufacturer: str) -> None:
+    def _write_outputs(filtered: list[dict[str, Any]], manufacturer: str) -> None:  # Write the export outputs.
         """Write filtered records through the standard CSV/SQLite export path."""
-        label = manufacturer if manufacturer else "ALL manufacturers"
-        filename = WiredClientManufacturerReportGenerator._build_filename(manufacturer)
-        print(f"\n  Exporting {len(filtered)} records for: {label}")
-        if filtered:
-            flattened = DataProcessingUtils.flatten_nested_fields(filtered)
+        label = manufacturer if manufacturer else "ALL manufacturers"  # Label for messages.
+        filename = WiredClientManufacturerReportGenerator._build_filename(manufacturer)  # Build the filename.
+        print(f"\n  Exporting {len(filtered)} records for: {label}")  # Tell the user.
+        if filtered:  # Have records.
+            flattened = DataProcessingUtils.flatten_nested_fields(filtered)  # Flatten nested fields.
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
         else:
-            sanitized = []
-        DataExporter.write_with_format_selection(
+            sanitized = []  # No records.
+        DataExporter.write_with_format_selection(  # Write via backend.
             sanitized,
             filename,
             api_function_name="wiredClientManufacturerReport",
         )
-        print(f"  Exported to: data/{filename}.csv")
+        print(f"  Exported to: data/{filename}.csv")  # Tell the user.
         logging.info("Manufacturer report exported: %s records for %s -> %s", len(sanitized), label, filename)
 
 
-class OrgAdminExporter:
+class OrgAdminExporter:  # Org admin/token exporters.
     """
     Organization Admin and License Exporter
 
@@ -11960,10 +11960,10 @@ class OrgAdminExporter:
     """
 
     @staticmethod
-    def api_tokens():
+    def api_tokens():  # Export API tokens.
         """Export organization API tokens to OrgApiTokens.csv."""
-        logging.info("Starting export of organization api tokens...")
-        APIDataFetcher(
+        logging.info("Starting export of organization api tokens...")  # Log start.
+        APIDataFetcher(  # Fetch and write tokens.
             title="Organization Api Tokens:",
             api_call=mistapi.api.v1.orgs.apitokens.listOrgApiTokens,
             filename="OrgApiTokens.csv",
@@ -11971,10 +11971,10 @@ class OrgAdminExporter:
         ).execute()
 
     @staticmethod
-    def admins():
+    def admins():  # Export admins.
         """Export organization admins to OrgAdmins.csv."""
-        logging.info("Starting export of organization admins...")
-        APIDataFetcher(
+        logging.info("Starting export of organization admins...")  # Log start.
+        APIDataFetcher(  # Fetch and write admins.
             title="Organization Admins:",
             api_call=mistapi.api.v1.orgs.admins.listOrgAdmins,
             filename="OrgAdmins.csv",
@@ -11982,62 +11982,62 @@ class OrgAdminExporter:
         ).execute()
 
     @staticmethod
-    def sso():
+    def sso():  # Export SSO config.
         """Export organization SSO configuration to OrgSso.csv."""
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.ssos.listOrgSsos, data_type="sso", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def licenses():
+    def licenses():  # Export licenses.
         """Export organization licenses to OrgLicenses.csv."""
-        logging.info("Starting export of organization licenses (canonical endpoint)...")
-        filename = "OrgLicenses.csv"
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        logging.info("Starting export of organization licenses (canonical endpoint)...")  # Log start.
+        filename = "OrgLicenses.csv"  # Build the CSV name.
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         try:
-            list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)
-            if list_func is None:
+            list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)  # Find the list function.
+            if list_func is None:  # Wrapper missing.
                 logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
-                raw_url = f"/api/v1/orgs/{current_org_id}/licenses"
-                if apisession is None:
-                    raise ValueError("API session not initialized")
-                response = apisession.mist_get(raw_url)
-                raw_items = getattr(response, "data", response) or []
+                raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Build the raw URL.
+                if apisession is None:  # No session.
+                    raise ValueError("API session not initialized")  # No session: fail loudly.
+                response = apisession.mist_get(raw_url)  # Direct GET fallback.
+                raw_items = getattr(response, "data", response) or []  # Unwrap data; default empty.
             else:
-                response = list_func(apisession, current_org_id, limit=1000)
+                response = list_func(apisession, current_org_id, limit=1000)  # Call the wrapper.
                 raw_items = mistapi.get_all(response=response, mist_session=apisession) or []
-            if not isinstance(raw_items, list):
-                logging.debug("License endpoint returned non-list payload; normalizing to list")
-                raw_items = [raw_items]
-            if not raw_items:
+            if not isinstance(raw_items, list):  # Normalize to a list.
+                logging.debug("License endpoint returned non-list payload; normalizing to list")  # Trace normalization.
+                raw_items = [raw_items]  # Wrap single item.
+            if not raw_items:  # No records.
                 logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
                 DataExporter.write_with_format_selection([], filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
-                return
-            processed = DataProcessingUtils.flatten_nested_fields(raw_items)
+                return  # Abort.
+            processed = DataProcessingUtils.flatten_nested_fields(raw_items)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(processed, filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
-            logging.info("Exported %s license records to %s.", len(processed), filename)
-        except Exception as e:
-            logging.error("Failed to export licenses: %s", e)
+            logging.info("Exported %s license records to %s.", len(processed), filename)  # Log export count.
+        except Exception as e:  # Export failed.
+            logging.error("Failed to export licenses: %s", e)  # Log the error.
             try:
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
-                pass
-            raise
+                pass  # Best-effort cleanup.
+            raise  # Re-raise to caller.
 
     @staticmethod
-    def usage():
+    def usage():  # Export license usage.
         """Export organization usage data to OrgUsage.csv."""
-        logging.info("Starting export of organization license usage...")
-        APIDataFetcher(
+        logging.info("Starting export of organization license usage...")  # Log start.
+        APIDataFetcher(  # Fetch and write usage.
             title="Organization License Usage:",
             api_call=mistapi.api.v1.orgs.licenses.getOrgLicensesBySite,
             filename="OrgUsage",
             sort_key="site_id",
         ).execute()
-        logging.info(" License usage data exported to OrgUsage")
-        print(" License usage data exported to OrgUsage")
+        logging.info(" License usage data exported to OrgUsage")  # Log completion.
+        print(" License usage data exported to OrgUsage")  # Tell the user.
 
 
-class SelfExportUtils:
+class SelfExportUtils:  # Self/account exporters.
     """
     Authenticated Self / Account Export Utilities
 
@@ -12047,7 +12047,7 @@ class SelfExportUtils:
     """
 
     @staticmethod
-    def audit_logs() -> None:
+    def audit_logs() -> None:  # Export audit logs.
         """Export audit log of changes made by the authenticated admin account to SelfAuditLogs.csv."""
         logging.info("Starting export of self (admin account) audit logs...")  # Log before operation
         filename = "SelfAuditLogs.csv"  # Output filename for self audit log entries
@@ -12068,7 +12068,7 @@ class SelfExportUtils:
                     "No self audit log records returned for the last %d hours", hours
                 )  # Warn on empty result
                 DataExporter.write_with_format_selection([], filename)  # Write empty file to signal successful run
-                return
+                return  # Abort.
             rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested change-detail dicts for CSV
             DataExporter.write_with_format_selection(
                 rows, filename, api_function_name="listSelfAuditLogs"
@@ -12078,7 +12078,7 @@ class SelfExportUtils:
             logging.exception("Failed to export self audit logs: %s", exception)  # Log full traceback
 
 
-class OrgConfigExporter:
+class OrgConfigExporter:  # Org config exporters.
     """
     Organization Configuration Exporter
 
@@ -12087,24 +12087,24 @@ class OrgConfigExporter:
     """
 
     @staticmethod
-    def psks():
+    def psks():  # Export PSKs.
         """Export organization PSKs to OrgPsks.csv."""
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.psks.listOrgPsks, data_type="psks", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def webhooks():
+    def webhooks():  # Export webhooks.
         """Export organization webhooks to OrgWebhooks.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.webhooks.listOrgWebhooks, data_type="webhooks", sort_key="name"
         )
 
     @staticmethod
-    def wlans():
+    def wlans():  # Export WLANs.
         """Export organization WLANs to OrgWlans.csv."""
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.wlans.listOrgWlans, data_type="wlans", sort_key="ssid")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def mx_edges():
+    def mx_edges():  # Export Mist Edges (MSP flow).
         """Export MX Edge data to OrgMxEdges.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.mxedges.listOrgMxEdges, data_type="mx edges", sort_key="name"
@@ -12151,94 +12151,94 @@ class OrgConfigExporter:
             return  # Abort the export -- no MSP access to query
 
         # MSP privileges available - let user select which MSP to query
-        print("")
-        print("=" * 60)
-        print("  MSP ORGANIZATION EXPORT")
-        print("=" * 60)
-        print("")
+        print("")  # Spacer.
+        print("=" * 60)  # Divider.
+        print("  MSP ORGANIZATION EXPORT")  # Section title.
+        print("=" * 60)  # Divider.
+        print("")  # Spacer.
 
-        selected_msp = None
-        if len(msp_privileges) == 1:
-            selected_msp = msp_privileges[0]
-            print(f"  Using MSP: {selected_msp['msp_name']}")
+        selected_msp = None  # No MSP selected yet.
+        if len(msp_privileges) == 1:  # Exactly one MSP.
+            selected_msp = msp_privileges[0]  # Auto-select it.
+            print(f"  Using MSP: {selected_msp['msp_name']}")  # Tell the user.
         else:
-            print("  Available MSPs:")
-            for idx, msp in enumerate(msp_privileges, start=1):
-                print(f"    {idx}. {msp['msp_name']} (role: {msp['role']})")
-            print("")
+            print("  Available MSPs:")  # List MSPs.
+            for idx, msp in enumerate(msp_privileges, start=1):  # Enumerate MSPs.
+                print(f"    {idx}. {msp['msp_name']} (role: {msp['role']})")  # Print each option.
+            print("")  # Spacer.
             try:
                 choice = InputUtils.safe_input("  Select MSP (number): ", context="msp_export").strip()
-                choice_idx = int(choice) - 1
-                if 0 <= choice_idx < len(msp_privileges):
-                    selected_msp = msp_privileges[choice_idx]
+                choice_idx = int(choice) - 1  # Parse the index.
+                if 0 <= choice_idx < len(msp_privileges):  # In range?
+                    selected_msp = msp_privileges[choice_idx]  # Pick the MSP.
                 else:
-                    print("X Invalid selection")
-                    return
-            except (ValueError, SystemExit):
-                print("X Invalid input")
-                return
+                    print("X Invalid selection")  # Tell the user invalid.
+                    return  # Abort.
+            except (ValueError, SystemExit):  # Bad input.
+                print("X Invalid input")  # Tell the user.
+                return  # Abort.
 
-        msp_id = selected_msp["msp_id"]
-        msp_name = selected_msp["msp_name"]
-        print(f"  Fetching organizations for MSP: {msp_name}...")
-        logging.info("Fetching MSP organizations for %s (ID: %s)", msp_name, msp_id)
+        msp_id = selected_msp["msp_id"]  # MSP id.
+        msp_name = selected_msp["msp_name"]  # MSP name.
+        print(f"  Fetching organizations for MSP: {msp_name}...")  # Tell the user.
+        logging.info("Fetching MSP organizations for %s (ID: %s)", msp_name, msp_id)  # Log the fetch.
 
         # Verify session is valid before API call
-        if apisession is None:
-            print("X No active API session")
-            logging.error("Cannot fetch MSP orgs - apisession is None")
-            return
+        if apisession is None:  # No session.
+            print("X No active API session")  # Tell the user.
+            logging.error("Cannot fetch MSP orgs - apisession is None")  # Log the error.
+            return  # Abort.
 
         try:
-            import mistapi.api.v1.msps.orgs as msp_orgs_api
+            import mistapi.api.v1.msps.orgs as msp_orgs_api  # Import MSP orgs API.
 
-            response = msp_orgs_api.listMspOrgs(apisession, msp_id)
+            response = msp_orgs_api.listMspOrgs(apisession, msp_id)  # List MSP orgs.
 
-            if not response or not hasattr(response, "data"):
-                print("X Failed to retrieve MSP organizations")
-                logging.error("listMspOrgs returned no data")
-                return
+            if not response or not hasattr(response, "data"):  # No data.
+                print("X Failed to retrieve MSP organizations")  # Tell the user.
+                logging.error("listMspOrgs returned no data")  # Log the error.
+                return  # Abort.
 
-            orgs_data = response.data
-            if not isinstance(orgs_data, list):
-                orgs_data = [orgs_data] if orgs_data else []
+            orgs_data = response.data  # Read the payload.
+            if not isinstance(orgs_data, list):  # Normalize to a list.
+                orgs_data = [orgs_data] if orgs_data else []  # Wrap single item.
 
-            if not orgs_data:
-                print("  No organizations found under this MSP")
-                logging.info("MSP has no organizations")
+            if not orgs_data:  # No orgs.
+                print("  No organizations found under this MSP")  # Tell the user.
+                logging.info("MSP has no organizations")  # Log it.
                 DataExporter.write_with_format_selection([], "MspOrganizations.csv")  # type: ignore[no-untyped-call]
-                return
+                return  # Abort.
 
             # Process and export
-            processed = DataProcessingUtils.flatten_nested_fields(orgs_data)
+            processed = DataProcessingUtils.flatten_nested_fields(orgs_data)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
 
             # Add MSP context to each record
-            for record in processed:
-                record["msp_id"] = msp_id
-                record["msp_name"] = msp_name
+            for record in processed:  # Tag each org.
+                record["msp_id"] = msp_id  # Add MSP id.
+                record["msp_name"] = msp_name  # Add MSP name.
 
             DataExporter.write_with_format_selection(processed, "MspOrganizations.csv")  # type: ignore[no-untyped-call]
-            print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")
-            logging.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))
+            print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")  # Tell the user.
+            logging.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))  # Log export count.
 
             # Show summary
-            print("")
-            print(f"  Organizations under {msp_name}:")
+            print("")  # Spacer.
+            print(f"  Organizations under {msp_name}:")  # Header.
             for org in orgs_data[:10]:  # Show first 10
-                org_name = org.get("name", "Unknown")
-                org_id = org.get("id", "N/A")
-                print(f"    - {org_name} ({org_id[:8]}...)")
-            if len(orgs_data) > 10:
-                print(f"    ... and {len(orgs_data) - 10} more")
-            print("")
+                org_name = org.get("name", "Unknown")  # Org name.
+                org_id = org.get("id", "N/A")  # Org id.
+                print(f"    - {org_name} ({org_id[:8]}...)")  # Print the org.
+            if len(orgs_data) > 10:  # More than shown.
+                print(f"    ... and {len(orgs_data) - 10} more")  # Note the remainder.
+            print("")  # Spacer.
 
-        except Exception as e:
-            print(f"X Error fetching MSP organizations: {e}")
-            logging.error("Failed to fetch MSP organizations: %s", e)
+        except Exception as e:  # Fetch failed.
+            print(f"X Error fetching MSP organizations: {e}")  # Tell the user.
+            logging.error("Failed to fetch MSP organizations: %s", e)  # Log the error.
 
 
-class OrgExportUtils:
+class OrgExportUtils:  # Generic org export helpers.
     """
     Centralized organization-level data export utilities.
     Groups all export_org_* functions for better code organization.
@@ -12246,7 +12246,7 @@ class OrgExportUtils:
     """
 
     @staticmethod
-    def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):
+    def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):  # Export an org endpoint.
         """
         Generic function to export organization-specific data to CSV.
 
@@ -12260,17 +12260,17 @@ class OrgExportUtils:
         Returns:
             None
         """
-        logging.info("Starting export of organization %s...", data_type)
+        logging.info("Starting export of organization %s...", data_type)  # Log start.
 
         # Create filename from data_type
-        safe_data_type = data_type.replace(" ", "").replace("-", "").title()
-        filename = f"Org{safe_data_type}.csv"
+        safe_data_type = data_type.replace(" ", "").replace("-", "").title()  # Sanitize for filename.
+        filename = f"Org{safe_data_type}.csv"  # Build the CSV name.
 
-        fetcher_kwargs = dict(api_kwargs)
-        if limit is not None:
-            fetcher_kwargs["limit"] = limit
+        fetcher_kwargs = dict(api_kwargs)  # Copy extra kwargs.
+        if limit is not None:  # Limit provided.
+            fetcher_kwargs["limit"] = limit  # Set the page limit.
 
-        APIDataFetcher(
+        APIDataFetcher(  # Fetch and write.
             title=f"Organization {data_type.title()}:",
             api_call=api_call,
             filename=filename,
@@ -12279,118 +12279,118 @@ class OrgExportUtils:
         ).execute()
 
     @staticmethod
-    def sites_sle_summary():
+    def sites_sle_summary():  # Export sites SLE summary.
         """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
-        print("Export Organization Sites SLE Summary:")
-        logging.info("Starting export of sites SLE summary...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        print("Export Organization Sites SLE Summary:")  # Header.
+        logging.info("Starting export of sites SLE summary...")  # Log start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
 
         # SLE types to export
-        sle_types = ["wifi", "wired", "wan"]
-        all_sites_sle_data = []
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("67", "sites_sle_summary", len(sle_types))
-        op_start = time.time()
-        items_done = 0
+        sle_types = ["wifi", "wired", "wan"]  # SLE types to fetch.
+        all_sites_sle_data = []  # Accumulate SLE rows.
+        emitter = PROGRESS_EMITTER  # Progress emitter.
+        if emitter:  # Emitter present.
+            emitter.emit_progress_start("67", "sites_sle_summary", len(sle_types))  # Signal progress start.
+        op_start = time.time()  # Start the timer.
+        items_done = 0  # Items processed.
 
-        for sle_type in sle_types:
+        for sle_type in sle_types:  # Fetch each SLE type.
             try:
-                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
+                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the SLE API.
                     apisession, org_id, sle=sle_type, duration="7d", limit=1000
                 )
                 sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
-                for site_data in sites_sle_data:
+                for site_data in sites_sle_data:  # Tag each row.
                     # Add SLE type identifier to the data
-                    site_data["sle_type"] = sle_type
-                    all_sites_sle_data.append(site_data)
+                    site_data["sle_type"] = sle_type  # Record the SLE type.
+                    all_sites_sle_data.append(site_data)  # Collect the row.
 
                 logging.debug("Retrieved SLE data for %s sites with SLE type: %s", len(sites_sle_data), sle_type)
-            except Exception as exception:
-                logging.warning("Failed to get sites SLE data for type %s: %s", sle_type, exception)
-                continue
+            except Exception as exception:  # Fetch failed.
+                logging.warning("Failed to get sites SLE data for type %s: %s", sle_type, exception)  # Warn and skip.
+                continue  # Next SLE type.
             finally:
-                items_done += 1
-                if emitter:
-                    emitter.emit_progress_tick(
+                items_done += 1  # Count this item.
+                if emitter:  # Emitter present.
+                    emitter.emit_progress_tick(  # Tick progress.
                         "67", "sites_sle_summary", len(sle_types), sle_type, items_done, len(sle_types) - items_done
                     )
 
-        if all_sites_sle_data:
-            processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)
+        if all_sites_sle_data:  # Have data.
+            processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")
-            logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))
+            print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")  # Tell the user.
+            logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))  # Log export count.
         else:
-            print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")
-            logging.warning("No sites SLE data available for organization")
+            print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")  # Tell the user zero.
+            logging.warning("No sites SLE data available for organization")  # Warn no data.
             DataExporter.write_with_format_selection([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
-        if emitter:
-            emitter.emit_progress_complete(
+        if emitter:  # Emitter present.
+            emitter.emit_progress_complete(  # Signal progress complete.
                 "67", "sites_sle_summary", len(sle_types), items_done, False, time.time() - op_start
             )
 
     @staticmethod
     def insight_metrics():  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide insight metrics to normalized CSV files."""
-        print("Export Organization Insight Metrics (Normalized):")
-        logging.info("Starting export of organization insight metrics with normalized structure...")
+        print("Export Organization Insight Metrics (Normalized):")  # Header.
+        logging.info("Starting export of organization insight metrics with normalized structure...")  # Log start.
 
         # First, refresh the available metrics from the API
-        print("! Refreshing available insight metrics from Mist API...")
+        print("! Refreshing available insight metrics from Mist API...")  # Tell the user.
         InsightMetricsUtils.export_const_insight_metrics()  # Refresh ConstInsightMetrics.csv before scope filtering
 
         # Get all metrics that support "org" scope
-        org_metrics = InsightMetricsUtils.get_by_scope("org")
+        org_metrics = InsightMetricsUtils.get_by_scope("org")  # Load org-scope metrics.
 
-        if not org_metrics:
-            print("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")
-            logging.error("No org-scope metrics found in const insight metrics")
+        if not org_metrics:  # No metrics.
+            print("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")  # Tell the user.
+            logging.error("No org-scope metrics found in const insight metrics")  # Log the error.
             # Create empty normalized files
             DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-            return
+            return  # Abort.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
 
         # Initialize normalized data collections
-        all_summary_data = []
-        all_time_series_data = []
-        all_results_data = []
-        all_sites_data = []
+        all_summary_data = []  # Summary rows.
+        all_time_series_data = []  # Time-series rows.
+        all_results_data = []  # Results rows.
+        all_sites_data = []  # Sites rows.
 
-        all_insight_data = []
-        metrics_retrieved = 0
-        metrics_failed = 0
+        all_insight_data = []  # Raw insight rows.
+        metrics_retrieved = 0  # Success count.
+        metrics_failed = 0  # Failure count.
 
-        print(f"! Retrieving {len(org_metrics)} different organization insight metrics...")
-        print("! Processing each metric individually with proper error handling...")
+        print(f"! Retrieving {len(org_metrics)} different organization insight metrics...")  # Tell the user.
+        print("! Processing each metric individually with proper error handling...")  # Tell the user.
 
         try:
             # Iterate through each org-scoped metric and retrieve it individually
-            for metric in org_metrics:
+            for metric in org_metrics:  # Fetch each metric.
                 try:
-                    logging.debug("Attempting to retrieve org insight metric: %s", metric)
+                    logging.debug("Attempting to retrieve org insight metric: %s", metric)  # Trace the attempt.
 
                     # For metrics that analyze sites, use getOrgSitesSle instead of getOrgSle
                     if "worst-sites" in metric or metric in ["sites-sle", "sites-sle-filtered"]:
                         # These metrics require site-level SLE data analysis
-                        sle_categories = ["wifi", "wan", "wired"]
+                        sle_categories = ["wifi", "wan", "wired"]  # SLE categories.
 
-                        for sle_category in sle_categories:
+                        for sle_category in sle_categories:  # Fetch each category.
                             try:
-                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
+                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the SLE API.
                                     apisession, org_id, sle=sle_category, duration="7d", limit=1000
                                 )
                                 sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
 
-                                if sites_data:
+                                if sites_data:  # Have data.
                                     # Create an aggregated insight result from sites data
-                                    insight_result = {
+                                    insight_result = {  # Build the result.
                                         "metric_type": f"{metric}_{sle_category}",
                                         "org_id": org_id,
                                         "sle_category": sle_category,
@@ -12400,8 +12400,8 @@ class OrgExportUtils:
                                         "original_metric": metric,
                                     }
 
-                                    all_insight_data.append(insight_result)
-                                    metrics_retrieved += 1
+                                    all_insight_data.append(insight_result)  # Collect the result.
+                                    metrics_retrieved += 1  # Count success.
                                     logging.debug(
                                         "Successfully retrieved sites data for insight metric: %s with SLE: %s (%s sites)",  # noqa: E501
                                         metric,
@@ -12409,79 +12409,79 @@ class OrgExportUtils:
                                         len(sites_data),
                                     )
                                 else:
-                                    logging.debug(
+                                    logging.debug(  # Trace empty.
                                         "No sites data available for insight metric: %s with SLE: %s",
                                         metric,
                                         sle_category,
                                     )
-                            except Exception as sites_error:
-                                logging.debug(
+                            except Exception as sites_error:  # Category fetch failed.
+                                logging.debug(  # Trace the failure.
                                     "Failed to get sites data for insight metric '%s' with SLE '%s': %s",
                                     metric,
                                     sle_category,
                                     sites_error,
                                 )
-                                continue
+                                continue  # Next category.
                     else:
                         # For other metrics, use getOrgSle directly
                         response = mistapi.api.v1.orgs.insights.getOrgSle(apisession, org_id, metric, duration="7d")
-                        insight_data = getattr(response, "data", response) or {}
+                        insight_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                        if insight_data:
+                        if insight_data:  # Have data.
                             # Add metric type identifier to each data point
-                            insight_data["metric_type"] = metric
-                            insight_data["org_id"] = org_id
-                            all_insight_data.append(insight_data)
-                            metrics_retrieved += 1
+                            insight_data["metric_type"] = metric  # Tag the metric.
+                            insight_data["org_id"] = org_id  # Tag the org.
+                            all_insight_data.append(insight_data)  # Collect the row.
+                            metrics_retrieved += 1  # Count success.
                             logging.debug("Successfully retrieved org insight data for metric: %s", metric)
                         else:
-                            logging.debug("No data available for org metric: %s", metric)
-                            metrics_failed += 1
+                            logging.debug("No data available for org metric: %s", metric)  # Trace empty.
+                            metrics_failed += 1  # Count failure.
 
-                except Exception as metric_error:
-                    metrics_failed += 1
+                except Exception as metric_error:  # Metric fetch failed.
+                    metrics_failed += 1  # Count failure.
                     logging.debug("Failed to get org insight data for metric '%s': %s", metric, metric_error)
                     # Continue with next metric instead of failing entirely
-                    continue
+                    continue  # Next metric.
 
             # Also try getOrgSitesSle for sites summary data
             try:
-                logging.debug("Attempting to retrieve org sites SLE summary")
+                logging.debug("Attempting to retrieve org sites SLE summary")  # Trace the attempt.
                 response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, duration="7d", limit=100)
                 sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
-                if sites_data:
-                    for item in sites_data:
-                        item["metric_type"] = "org_sites_sle_summary"
-                        item["org_id"] = org_id
-                        all_insight_data.append(item)
-                    metrics_retrieved += 1
+                if sites_data:  # Have data.
+                    for item in sites_data:  # Tag each row.
+                        item["metric_type"] = "org_sites_sle_summary"  # Tag the metric.
+                        item["org_id"] = org_id  # Tag the org.
+                        all_insight_data.append(item)  # Collect the row.
+                    metrics_retrieved += 1  # Count success.
                     logging.debug("Successfully retrieved org sites SLE data for %s sites", len(sites_data))
-            except Exception as sites_error:
-                metrics_failed += 1
-                logging.debug("Failed to get org sites SLE summary: %s", sites_error)
+            except Exception as sites_error:  # Summary fetch failed.
+                metrics_failed += 1  # Count failure.
+                logging.debug("Failed to get org sites SLE summary: %s", sites_error)  # Trace the failure.
 
             # Report results
             print(f"! Metric retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")
             logging.info("Org insight metrics: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed)
 
-            if all_insight_data:
-                print("! Parsing metrics into normalized data structures...")
+            if all_insight_data:  # Have data.
+                print("! Parsing metrics into normalized data structures...")  # Tell the user.
 
                 # Parse each metric into normalized structures
-                for metric_data in all_insight_data:
+                for metric_data in all_insight_data:  # Normalize each metric.
                     normalized = InsightMetricsUtils.parse_to_normalized_data(metric_data, org_id)
-                    all_summary_data.extend(normalized["summary"])
-                    all_time_series_data.extend(normalized["time_series"])
-                    all_results_data.extend(normalized["results"])
-                    all_sites_data.extend(normalized["sites_data"])
+                    all_summary_data.extend(normalized["summary"])  # Collect summary.
+                    all_time_series_data.extend(normalized["time_series"])  # Collect time-series.
+                    all_results_data.extend(normalized["results"])  # Collect results.
+                    all_sites_data.extend(normalized["sites_data"])  # Collect sites.
 
                 # Export to separate CSV files
-                print("! Exporting to normalized CSV files...")
+                print("! Exporting to normalized CSV files...")  # Tell the user.
 
                 # Summary data
                 processed_summary = DataProcessingUtils.escape_multiline(all_summary_data)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed_summary, "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-                print(f"  !? {len(processed_summary)} summary records -> OrgMetricsSummary.csv")
+                print(f"  !? {len(processed_summary)} summary records -> OrgMetricsSummary.csv")  # Tell the user.
 
                 # Time series data
                 processed_time_series = DataProcessingUtils.escape_multiline(all_time_series_data)  # type: ignore[no-untyped-call]
@@ -12491,31 +12491,31 @@ class OrgExportUtils:
                 # Results data
                 processed_results = DataProcessingUtils.escape_multiline(all_results_data)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed_results, "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-                print(f"  !? {len(processed_results)} results records -> OrgMetricsResults.csv")
+                print(f"  !? {len(processed_results)} results records -> OrgMetricsResults.csv")  # Tell the user.
 
                 # Sites data
                 processed_sites = DataProcessingUtils.escape_multiline(all_sites_data)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed_sites, "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-                print(f"  !? {len(processed_sites)} sites records -> OrgSitesData.csv")
+                print(f"  !? {len(processed_sites)} sites records -> OrgSitesData.csv")  # Tell the user.
 
                 print(
                     f"\n! Successfully exported {metrics_retrieved} organization insight metrics to 4 normalized CSV files"  # noqa: E501
                 )
-                logging.info(
+                logging.info(  # Log the export.
                     "Exported %s org insight data points from %s metrics to normalized CSV files",
                     len(all_insight_data),
                     metrics_retrieved,
                 )
 
                 # Also save a legacy combined file for compatibility
-                processed_legacy = DataProcessingUtils.flatten_nested_fields(all_insight_data)
+                processed_legacy = DataProcessingUtils.flatten_nested_fields(all_insight_data)  # Flatten nested fields.
                 processed_legacy = DataProcessingUtils.escape_multiline(processed_legacy)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed_legacy, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
-                print("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")
+                print("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")  # Tell the user.
 
             else:
-                print("! 0 organization insight metrics exported (no data available)")
-                logging.warning("No org insight data available - all metrics failed or returned empty")
+                print("! 0 organization insight metrics exported (no data available)")  # Tell the user zero.
+                logging.warning("No org insight data available - all metrics failed or returned empty")  # Warn no data.
                 # Create empty normalized files
                 DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
@@ -12523,9 +12523,9 @@ class OrgExportUtils:
                 DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
 
-        except Exception as exception:
-            print(f"! Error exporting organization insight metrics: {exception}")
-            logging.error("Failed to export org insight metrics: %s", exception)
+        except Exception as exception:  # Export failed.
+            print(f"! Error exporting organization insight metrics: {exception}")  # Tell the user.
+            logging.error("Failed to export org insight metrics: %s", exception)  # Log the error.
             # Create empty normalized files in case of error
             DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
@@ -12534,38 +12534,38 @@ class OrgExportUtils:
             DataExporter.write_with_format_selection([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def _nac_clients():
+    def _nac_clients():  # Export NAC clients.
         """Export NAC clients to OrgNacClients.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClients, data_type="nac clients", sort_key="mac"
         )
 
     @staticmethod
-    def _nac_tags():
+    def _nac_tags():  # Export NAC tags.
         """Export NAC tags to OrgNacTags.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nactags.listOrgNacTags, data_type="nac tags", sort_key="name"
         )
 
     @staticmethod
-    def _nac_portals():
+    def _nac_portals():  # Export NAC portals.
         """Export NAC portals to OrgNacPortals.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nacportals.listOrgNacPortals, data_type="nac portals", sort_key="name"
         )
 
     @staticmethod
-    def _nac_rules():
+    def _nac_rules():  # Export NAC rules.
         """Export NAC rules to OrgNacRules.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nacrules.listOrgNacRules, data_type="nac rules", sort_key="name"
         )
 
     @staticmethod
-    def _nac_events():
+    def _nac_events():  # Export NAC events.
         """Export NAC events to OrgNacEvents.csv."""
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("org NAC events export", hours)
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve lookback hours.
+        TimeUtils.log_dynamic_lookback("org NAC events export", hours)  # Log the window.
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClientEvents,
             data_type="nac events",
@@ -12574,42 +12574,42 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def _assets():
+    def _assets():  # Export assets.
         """Export organization assets to OrgAssets.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgAssets, data_type="assets", sort_key="name"
         )
 
     @staticmethod
-    def _bgp_peers():
+    def _bgp_peers():  # Export BGP peers.
         """Export BGP peer data to OrgBgpPeers.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgBgpStats, data_type="bgp peers", sort_key="peer_ip"
         )
 
     @staticmethod
-    def _tunnel_stats():
+    def _tunnel_stats():  # Export tunnel stats.
         """Export tunnel statistics to OrgTunnelStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgTunnelsStats, data_type="tunnel stats", sort_key="name"
         )
 
     @staticmethod
-    def _site_stats():
+    def _site_stats():  # Export site stats.
         """Export site statistics to OrgSiteStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.listOrgSiteStats, data_type="site stats", sort_key="name"
         )
 
     @staticmethod
-    def _mxedge_stats():
+    def _mxedge_stats():  # Export Mist Edge stats.
         """Export MX Edge statistics to OrgMxedgeStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.listOrgMxEdgesStats, data_type="mx edge stats", sort_key="name"
         )
 
     @staticmethod
-    def e911_report():
+    def e911_report():  # Export E911 report.
         """Export E911 report for the organization to OrgE911Report.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.exports.getOrgE911Report,
@@ -12619,7 +12619,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def jsi_pbn():
+    def jsi_pbn():  # Export JSI PBN.
         """Export JSI PBN (Product Bulletin Notifications) data to OrgJsiPbn.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiPbn,
@@ -12628,7 +12628,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def jsi_sirt():
+    def jsi_sirt():  # Export JSI SIRT.
         """Export JSI SIRT (Security Incident Response Team) advisories to OrgJsiSirt.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiSirt,
@@ -12637,7 +12637,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def ospf_stats():
+    def ospf_stats():  # Export OSPF stats.
         """Export OSPF adjacency statistics for the organization to OrgOspfStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.stats.searchOrgOspfStats,
@@ -12646,7 +12646,7 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def _security_intel_profiles():
+    def _security_intel_profiles():  # Export security intel profiles.
         """Export security intelligence profiles to OrgSecurityIntelProfiles.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles,
@@ -12655,14 +12655,14 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def _invites():
+    def _invites():  # Export invites.
         """Export organization invites to OrgInvites.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.invites.listOrgInvites, data_type="invites", sort_key="email"
         )
 
     @staticmethod
-    def audit_logs(full_history: bool = False, duration: str | None = None) -> None:
+    def audit_logs(full_history: bool = False, duration: str | None = None) -> None:  # Export audit logs.
         """
         Export organization audit logs to OrgAuditLogs.csv.
         Fetches all pages using mistapi.get_all.
@@ -12670,56 +12670,56 @@ class OrgExportUtils:
         If False, pulls only the last 24 hours.
         If duration is provided, uses it as the duration parameter.
         """
-        logging.info("Menu #22: Starting audit logs export")
+        logging.info("Menu #22: Starting audit logs export")  # Log start.
         logging.debug("ENTRY: OrgExportUtils.audit_logs(full_history=%s, duration=%s)", full_history, duration)
         try:
-            org_id = ConfigUtils.get_cached_or_prompted_org_id()
-            kwargs: dict[str, Any] = {"limit": 1000}
-            if duration:
-                kwargs["duration"] = duration
-                logging.info("Exporting audit logs for duration: %s", duration)
-            elif not full_history:
-                hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-                TimeUtils.log_dynamic_lookback("audit logs export", hours)
-                kwargs["duration"] = f"{hours}h"
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+            kwargs: dict[str, Any] = {"limit": 1000}  # Base API params.
+            if duration:  # Duration provided.
+                kwargs["duration"] = duration  # Set the duration.
+                logging.info("Exporting audit logs for duration: %s", duration)  # Log the window.
+            elif not full_history:  # No duration, recent only.
+                hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve lookback hours.
+                TimeUtils.log_dynamic_lookback("audit logs export", hours)  # Log the window.
+                kwargs["duration"] = f"{hours}h"  # Set the duration.
                 logging.info("Exporting only last %s hours of audit logs (duration=%sh).", hours, hours)
             else:
-                kwargs["start"] = 0
-                logging.info("Exporting full audit log history (start=0).")
-            logging.debug("Making API call with parameters: %s", kwargs)
-            response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)
-            if not rawdata:
-                logging.warning(" No audit logs returned from API.")
-                logging.debug("EXIT: OrgExportUtils.audit_logs - no data")
-                return
-            data = DataProcessingUtils.flatten_nested_fields(rawdata)
+                kwargs["start"] = 0  # Full history from start.
+                logging.info("Exporting full audit log history (start=0).")  # Log full history.
+            logging.debug("Making API call with parameters: %s", kwargs)  # Trace the params.
+            response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)  # List audit logs.
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            if not rawdata:  # No rows.
+                logging.warning(" No audit logs returned from API.")  # Warn none returned.
+                logging.debug("EXIT: OrgExportUtils.audit_logs - no data")  # Trace exit.
+                return  # Abort.
+            data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")
-            logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")
-            logging.info("Menu #22: Audit logs export completed - %s records", len(data))
-            logging.debug("EXIT: OrgExportUtils.audit_logs - success")
-        except Exception as e:
-            logging.error("Failed to export audit logs: %s", e)
-            logging.debug("EXIT: OrgExportUtils.audit_logs - error")
-            raise
+            print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")  # Tell the user.
+            logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")  # Log completion.
+            logging.info("Menu #22: Audit logs export completed - %s records", len(data))  # Log the count.
+            logging.debug("EXIT: OrgExportUtils.audit_logs - success")  # Trace success.
+        except Exception as e:  # Export failed.
+            logging.error("Failed to export audit logs: %s", e)  # Log the error.
+            logging.debug("EXIT: OrgExportUtils.audit_logs - error")  # Trace exit.
+            raise  # Re-raise to caller.
 
     @staticmethod
     def sle_metrics(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
-        from src.refactors.serial_cc.sle_metrics import SLEMetricsService
+        from src.refactors.serial_cc.sle_metrics import SLEMetricsService  # Import the SLE service.
 
-        SLEMetricsService.execute(fast)
+        SLEMetricsService.execute(fast)  # Run the SLE export.
 
     @staticmethod
-    def ssid_template_consolidation() -> None:
+    def ssid_template_consolidation() -> None:  # Consolidate SSID templates.
         """SSID template consolidation workflow (Menu #145). Delegates to src.ssid_consolidation."""
         from src.ssid_consolidation.ssid_template_consolidation import (  # noqa: PLC0415
             SSIDTemplateConsolidationManager as _Impl,
         )
 
-        _Impl.execute(
+        _Impl.execute(  # Delegate to the impl.
             apisession=apisession,
             page_limit=DEFAULT_API_PAGE_LIMIT,
             safe_input_fn=InputUtils.safe_input,
@@ -12728,13 +12728,13 @@ class OrgExportUtils:
         )
 
     @staticmethod
-    def e911_bssid_compliance_report() -> None:
+    def e911_bssid_compliance_report() -> None:  # E911 BSSID compliance report.
         """E911 BSSID compliance report (Menu #89). Delegates to src.reports.e911_bssid."""
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            print("! No organization selected. Exiting.")
-            return
-        E911BSSIDReportGenerator.execute(
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not current_org_id:  # No org.
+            print("! No organization selected. Exiting.")  # Tell the user.
+            return  # Abort.
+        E911BSSIDReportGenerator.execute(  # Run the report.
             apisession=apisession,
             page_limit=DEFAULT_API_PAGE_LIMIT,
             org_id=current_org_id,
@@ -12748,7 +12748,7 @@ class OrgExportUtils:
 # ============================================================================
 
 
-class SiteDeviceExporter:
+class SiteDeviceExporter:  # Site device exporters.
     """
     Site Device Data Exporter
 
@@ -12757,7 +12757,7 @@ class SiteDeviceExporter:
     """
 
     @staticmethod
-    def device_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):
+    def device_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):  # Export site device inventory.
         """
         Fetches and displays the device inventory for a given site.
 
@@ -12769,170 +12769,170 @@ class SiteDeviceExporter:
         SECURITY: Always fetch all device types from API first (type=all), then filter locally
         to avoid Mist API's default behavior of only returning APs.
         """
-        logging.info("Fetching device inventory for site_id=%s, device_type=%s", site_id, device_type)
+        logging.info("Fetching device inventory for site_id=%s, device_type=%s", site_id, device_type)  # Log the fetch.
 
         # IMPORTANT: Always use type=all to get all device types (APs, switches, gateways)
         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
-        if not rawdata:
-            print("No devices found for the selected site.")
-            logging.warning("No devices found for site_id=%s", site_id)
-            return
+        if not rawdata:  # No devices.
+            print("No devices found for the selected site.")  # Tell the user.
+            logging.warning("No devices found for site_id=%s", site_id)  # Warn none found.
+            return  # Abort.
 
         # Filter devices locally based on requested device types
-        if device_type != "all":
-            requested_types = [dtype.strip() for dtype in device_type.split(",")]
-            rawdata = [d for d in rawdata if d.get("type", "").lower() in requested_types]
+        if device_type != "all":  # Type filter requested.
+            requested_types = [dtype.strip() for dtype in device_type.split(",")]  # Parse requested types.
+            rawdata = [d for d in rawdata if d.get("type", "").lower() in requested_types]  # Keep matching devices.
 
-            if not rawdata:
-                print(f"No devices of type '{device_type}' found at the selected site.")
+            if not rawdata:  # None after filter.
+                print(f"No devices of type '{device_type}' found at the selected site.")  # Tell the user.
                 logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)
-                return
+                return  # Abort.
 
         # Sort inventory by model for easier viewing
-        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))
-        inventory = DataProcessingUtils.flatten_nested_fields(inventory)
+        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))  # Sort by model.
+        inventory = DataProcessingUtils.flatten_nested_fields(inventory)  # Flatten nested fields.
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
         fields = DataProcessingUtils.get_unique_keys(inventory)  # type: ignore[no-untyped-call]
 
         DataExporter.write_with_format_selection(inventory, csv_filename)  # type: ignore[no-untyped-call]
-        logging.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))
+        logging.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))  # Log the write.
 
         # Prepare PrettyTable for display
-        table = PrettyTable()
-        table.field_names = fields
+        table = PrettyTable()  # Build the table.
+        table.field_names = fields  # Set columns.
 
-        if "model" in fields:
+        if "model" in fields:  # Model column present.
             try:
-                table.sortby = "model"
-            except Exception as error:
-                logging.warning("! Could not sort table by 'model': %s", error)
+                table.sortby = "model"  # Sort by model.
+            except Exception as error:  # Sort failed.
+                logging.warning("! Could not sort table by 'model': %s", error)  # Warn sort failure.
 
-        for item in inventory:
-            row = [item.get(field, "") for field in fields]
-            table.add_row(row)
+        for item in inventory:  # Add each row.
+            row = [item.get(field, "") for field in fields]  # Build the row.
+            table.add_row(row)  # Add the row.
 
-        logging.debug("\n%s", table.get_string())
+        logging.debug("\n%s", table.get_string())  # Log the table.
 
     @staticmethod
-    def device_stats():
+    def device_stats():  # Export site device stats.
         """Export device statistics for a site to SiteDeviceStats.csv."""
-        print("Site Device Statistics:")
-        logging.info("Starting export of site device statistics...")
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            logging.error("No org_id available. Exiting.")
-            return
-        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        logging.info("Exporting device statistics for site: %s", site_name)
+        print("Site Device Statistics:")  # Header.
+        logging.info("Starting export of site device statistics...")  # Log start.
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            logging.error("No site selected. Exiting.")  # Log the error.
+            return  # Abort.
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not current_org_id:  # No org.
+            logging.error("No org_id available. Exiting.")  # Log the error.
+            return  # Abort.
+        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)  # List all sites.
+        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        logging.info("Exporting device statistics for site: %s", site_name)  # Log the export.
         try:
             response = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="all", limit=1000)
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)
-            if rawdata:
-                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            if rawdata:  # Have data.
+                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
-                filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"
+                filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"  # Build the CSV name.
                 DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
-                print(f"! {len(rawdata)} device stats exported to {filename}")
+                print(f"! {len(rawdata)} device stats exported to {filename}")  # Tell the user.
             else:
-                print("! No device statistics found for this site")
-        except Exception as e:
-            logging.error("Error fetching device stats for site %s: %s", site_name, e)
-            print(f"! Error fetching device statistics: {e}")
+                print("! No device statistics found for this site")  # Tell the user none.
+        except Exception as e:  # Fetch failed.
+            logging.error("Error fetching device stats for site %s: %s", site_name, e)  # Log the error.
+            print(f"! Error fetching device statistics: {e}")  # Tell the user.
 
     @staticmethod
-    def port_stats():
+    def port_stats():  # Export site port stats.
         """Export port statistics for a site to SitePortStats.csv."""
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("29", "port_stats", 1)
-        op_start = time.time()
+        emitter = PROGRESS_EMITTER  # Progress emitter.
+        if emitter:  # Emitter present.
+            emitter.emit_progress_start("29", "port_stats", 1)  # Signal progress start.
+        op_start = time.time()  # Start the timer.
         SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts, data_type="port stats", sort_key="mac"
         )
-        if emitter:
+        if emitter:  # Emitter present.
             emitter.emit_progress_complete("29", "port_stats", 1, 1, False, time.time() - op_start)
 
     @staticmethod
-    def device_virtual_chassis():
+    def device_virtual_chassis():  # Export device virtual chassis.
         """Export virtual chassis data for a site to SiteDeviceVirtualChassis.csv."""
-        print("Export Virtual Chassis Information:")
-        logging.info("Starting export of site device virtual chassis information...")
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
+        print("Export Virtual Chassis Information:")  # Header.
+        logging.info("Starting export of site device virtual chassis information...")  # Log start.
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            logging.error("No site selected. Exiting.")  # Log the error.
+            return  # Abort.
         # Issue #431: inlined PromptUtils.select_device -> canonical select_device_id_from_inventory.
-        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="switch")
-        if not device_id:
-            logging.error("No switch device selected. Exiting.")
-            return
-        response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
-        devices = mistapi.get_all(response=response, mist_session=apisession)
+        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="switch")  # Select a switch.
+        if not device_id:  # No switch.
+            logging.error("No switch device selected. Exiting.")  # Log the error.
+            return  # Abort.
+        response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")  # List site devices.
+        devices = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
         device_name = next((dev["name"] for dev in devices if dev["id"] == device_id), device_id)
-        logging.info("Exporting virtual chassis information for device: %s", device_name)
+        logging.info("Exporting virtual chassis information for device: %s", device_name)  # Log the export.
         try:
             response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)
-            if response.data:
-                vc_data = [response.data] if isinstance(response.data, dict) else response.data
-                flattened = DataProcessingUtils.flatten_nested_fields(vc_data)
+            if response.data:  # Have data.
+                vc_data = [response.data] if isinstance(response.data, dict) else response.data  # Normalize to a list.
+                flattened = DataProcessingUtils.flatten_nested_fields(vc_data)  # Flatten nested fields.
                 sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-                filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"
+                filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"  # Build the CSV name.
                 DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
-                logging.info("! Virtual chassis information exported to %s", filename)
-                if sanitized:
-                    print(f"\n!! Virtual Chassis Summary for {device_name}:")
-                    print(f"   * Records exported: {len(sanitized)}")
+                logging.info("! Virtual chassis information exported to %s", filename)  # Log the export.
+                if sanitized:  # Have records.
+                    print(f"\n!! Virtual Chassis Summary for {device_name}:")  # Header.
+                    print(f"   * Records exported: {len(sanitized)}")  # Show the count.
                     # If the flattened output includes a 'members' field, show a short summary
-                    if "members" in sanitized[0]:
-                        print(f"   * VC members: {sanitized[0].get('members', 'N/A')}")
-                    if "preprovisioned" in sanitized[0]:
+                    if "members" in sanitized[0]:  # Members present.
+                        print(f"   * VC members: {sanitized[0].get('members', 'N/A')}")  # Show members.
+                    if "preprovisioned" in sanitized[0]:  # Preprovisioned present.
                         print(f"   * Preprovisioned: {sanitized[0].get('preprovisioned', 'N/A')}")
-                    print(f"   * Data saved to: {filename}")
+                    print(f"   * Data saved to: {filename}")  # Show the path.
             else:
-                logging.warning("! No virtual chassis data returned for device %s", device_name)
-                print(f"! No virtual chassis data found for device {device_name}")
-        except Exception as e:
-            logging.error("! Failed to export virtual chassis information: %s", e)
-            print(f"! Failed to export virtual chassis information: {e}")
+                logging.warning("! No virtual chassis data returned for device %s", device_name)  # Warn no VC data.
+                print(f"! No virtual chassis data found for device {device_name}")  # Tell the user.
+        except Exception as e:  # Export failed.
+            logging.error("! Failed to export virtual chassis information: %s", e)  # Log the error.
+            print(f"! Failed to export virtual chassis information: {e}")  # Tell the user.
 
     @staticmethod
-    def devices():
+    def devices():  # Export site device list.
         """Export device data for a site to SiteDevices.csv."""
-        print("Site Device List:")
-        logging.info("Starting export of site device list...")
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            logging.error("No org_id available. Exiting.")
-            return
-        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        logging.info("Exporting device list for site: %s", site_name)
+        print("Site Device List:")  # Header.
+        logging.info("Starting export of site device list...")  # Log start.
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            logging.error("No site selected. Exiting.")  # Log the error.
+            return  # Abort.
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not current_org_id:  # No org.
+            logging.error("No org_id available. Exiting.")  # Log the error.
+            return  # Abort.
+        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)  # List all sites.
+        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        logging.info("Exporting device list for site: %s", site_name)  # Log the export.
         try:
             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
-            rawdata = getattr(response, "data", [])
-            if rawdata:
-                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+            rawdata = getattr(response, "data", [])  # Unwrap data; default empty.
+            if rawdata:  # Have data.
+                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
-                filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"
+                filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"  # Build the CSV name.
                 DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
-                print(f"! {len(rawdata)} devices exported to {filename}")
+                print(f"! {len(rawdata)} devices exported to {filename}")  # Tell the user.
             else:
-                print("! No devices found for this site")
-        except Exception as e:
-            logging.error("Error fetching devices for site %s: %s", site_name, e)
-            print(f"! Error fetching device data: {e}")
+                print("! No devices found for this site")  # Tell the user none.
+        except Exception as e:  # Fetch failed.
+            logging.error("Error fetching devices for site %s: %s", site_name, e)  # Log the error.
+            print(f"! Error fetching device data: {e}")  # Tell the user.
 
 
-class SiteClientExporter:
+class SiteClientExporter:  # Site client exporters.
     """
     Site Client Data Exporter
 
@@ -12941,54 +12941,54 @@ class SiteClientExporter:
     """
 
     @staticmethod
-    def clients():
+    def clients():  # Export site client stats.
         """Export client data for a site to SiteClients.csv."""
-        print("Site Client Statistics:")
-        logging.info("Starting export of site client statistics...")
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            logging.error("No site selected. Exiting.")
-            return
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            logging.error("No org_id available. Exiting.")
-            return
-        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        logging.info("Exporting client statistics for site: %s", site_name)
+        print("Site Client Statistics:")  # Header.
+        logging.info("Starting export of site client statistics...")  # Log start.
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            logging.error("No site selected. Exiting.")  # Log the error.
+            return  # Abort.
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not current_org_id:  # No org.
+            logging.error("No org_id available. Exiting.")  # Log the error.
+            return  # Abort.
+        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)  # List all sites.
+        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        logging.info("Exporting client statistics for site: %s", site_name)  # Log the export.
         try:
             response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=1000)
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)
-            if rawdata:
-                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            if rawdata:  # Have data.
+                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
                 sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
-                filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"
+                filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"  # Build the CSV name.
                 DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
-                print(f"! {len(rawdata)} client records exported to {filename}")
+                print(f"! {len(rawdata)} client records exported to {filename}")  # Tell the user.
             else:
-                print("! No client data found for this site")
-        except Exception as e:
-            logging.error("Error fetching client stats for site %s: %s", site_name, e)
-            print(f"! Error fetching client data: {e}")
+                print("! No client data found for this site")  # Tell the user none.
+        except Exception as e:  # Fetch failed.
+            logging.error("Error fetching client stats for site %s: %s", site_name, e)  # Log the error.
+            print(f"! Error fetching client data: {e}")  # Tell the user.
 
     @staticmethod
     def client_insights():  # noqa: C901, PLR0912, PLR0915
         """Delegated site client insights entrypoint preserved for compatibility."""
         from src.refactors.serial_cc.site_client_insights import SiteClientInsightsService
 
-        SiteClientInsightsService.execute()
+        SiteClientInsightsService.execute()  # Run the insights export.
 
     @staticmethod
-    def _normalize_client_mac_or_none(client_mac: str) -> str | None:
+    def _normalize_client_mac_or_none(client_mac: str) -> str | None:  # Normalize a client MAC.
         """Validate and normalize client MAC for site insights endpoints."""
-        if not client_mac:
-            return None
-        if not PacketCaptureManager.validate_mac_address(client_mac):
-            return None
-        return PacketCaptureManager.normalize_mac_address(client_mac)
+        if not client_mac:  # Empty input.
+            return None  # Return None.
+        if not PacketCaptureManager.validate_mac_address(client_mac):  # Invalid MAC.
+            return None  # Return None.
+        return PacketCaptureManager.normalize_mac_address(client_mac)  # Return normalized MAC.
 
     @staticmethod
-    def wifi_clients(site_id=None):
+    def wifi_clients(site_id=None):  # Export WiFi clients.
         """Compatibility facade that delegates WiFi client export to extracted exporter."""
         logging.info(
             "Delegating wifi_clients to WifiClientsExporter"
@@ -13012,14 +13012,14 @@ class SiteClientExporter:
         logging.debug("Completed delegated wifi_clients export workflow")  # Log delegated exporter completion.
 
     @staticmethod
-    def beacons():
+    def beacons():  # Export beacons.
         """Export beacons for a site to SiteBeacons.csv."""
         SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.sites.beacons.listSiteBeacons, data_type="beacons", sort_key="name"
         )
 
 
-class SiteConfigExporter:
+class SiteConfigExporter:  # Site config exporters.
     """
     Site Configuration Exporter
 
@@ -13028,93 +13028,93 @@ class SiteConfigExporter:
     """
 
     @staticmethod
-    def wlans(site_id=None):
+    def wlans(site_id=None):  # Export site WLANs.
         """Export effective WLANs for a site to SiteWlans.csv."""
-        logging.info("Starting export of site WLANs...")
+        logging.info("Starting export of site WLANs...")  # Log start.
 
-        if not site_id:
-            site_id = PromptUtils.select_site()
-            if not site_id:
-                logging.error("No site selected. Exiting.")
-                return
+        if not site_id:  # No site given.
+            site_id = PromptUtils.select_site()  # Select a site.
+            if not site_id:  # No site.
+                logging.error("No site selected. Exiting.")  # Log the error.
+                return  # Abort.
 
         try:
-            response = mistapi.api.v1.orgs.sites.listOrgSites(
+            response = mistapi.api.v1.orgs.sites.listOrgSites(  # List org sites.
                 apisession,
                 ConfigUtils.get_cached_or_prompted_org_id(),
             )
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next(
+            sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            site_name = next(  # Resolve site name.
                 (site["name"] for site in sites if site["id"] == site_id),
                 site_id,
             )
-        except Exception as exception:
-            logging.error("Error getting site name for WLAN export: %s", exception)
-            site_name = site_id
+        except Exception as exception:  # Name lookup failed.
+            logging.error("Error getting site name for WLAN export: %s", exception)  # Log the error.
+            site_name = site_id  # Fall back to id.
 
-        filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"
+        filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"  # Build the CSV name.
 
         try:
             # Prefer derived WLANs so inherited/template WLANs are included.
-            derived_response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(
+            derived_response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(  # List derived WLANs.
                 apisession,
                 site_id,
                 resolve=True,
             )
-            rawdata = mistapi.get_all(response=derived_response, mist_session=apisession)
-        except Exception as exception:
-            logging.warning(
+            rawdata = mistapi.get_all(response=derived_response, mist_session=apisession)  # Page all rows.
+        except Exception as exception:  # Derived fetch failed.
+            logging.warning(  # Warn the fallback.
                 "Failed to fetch derived WLANs for site %s, falling back to site-local WLANs: %s", site_id, exception
             )
             local_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=1000)
-            rawdata = mistapi.get_all(response=local_response, mist_session=apisession)
+            rawdata = mistapi.get_all(response=local_response, mist_session=apisession)  # Page all rows.
 
-        if not rawdata:
-            logging.warning("No data provided for output to %s", filename)
+        if not rawdata:  # No rows.
+            logging.warning("No data provided for output to %s", filename)  # Warn none.
             DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
-            print(f"! 0 records exported to data\\{filename}")
-            return
+            print(f"! 0 records exported to data\\{filename}")  # Tell the user zero.
+            return  # Abort.
 
-        processed = DataProcessingUtils.flatten_nested_fields(rawdata)
+        processed = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-        processed = sorted(processed, key=lambda row: row.get("ssid", ""))
+        processed = sorted(processed, key=lambda row: row.get("ssid", ""))  # Sort by SSID.
         DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-        print(f"! {len(processed)} records exported to data\\{filename}")
+        print(f"! {len(processed)} records exported to data\\{filename}")  # Tell the user.
         logging.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
 
     @staticmethod
-    def maps():
+    def maps():  # Export site maps.
         """Export maps for a site to SiteMaps.csv."""
         SiteExportUtils._export_data(api_call=mistapi.api.v1.sites.maps.listSiteMaps, data_type="maps", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def zones():
+    def zones():  # Export site zones.
         """Export zones for a site to SiteZones.csv."""
         SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.sites.zones.listSiteZones, data_type="zones", sort_key="name"
         )
 
     @staticmethod
-    def settings():
+    def settings():  # Export all site settings.
         """Export configuration settings for all sites to AllSiteConfigs.csv."""
-        print("Site Configuration Settings:")
-        logging.info("Starting export of all site configuration settings...")
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        logging.debug("Using org_id: %s for site settings export.", current_org_id)
+        print("Site Configuration Settings:")  # Header.
+        logging.info("Starting export of all site configuration settings...")  # Log start.
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        logging.debug("Using org_id: %s for site settings export.", current_org_id)  # Trace the org.
         data = APIFetchUtils.all_site_settings(apisession, current_org_id, limit=1000)  # type: ignore[no-untyped-call]
-        if data:
+        if data:  # Have data.
             logging.info("Fetched settings for %s sites. Flattening and sanitizing data...", len(data))
-            data = DataProcessingUtils.flatten_nested_fields(data)
+            data = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(data, "AllSiteConfigs.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")
-            logging.info(" Site configs saved to AllSiteConfigs.csv")
+            print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")  # Tell the user.
+            logging.info(" Site configs saved to AllSiteConfigs.csv")  # Log the save.
         else:
-            logging.warning(" No site configs found.")
-            print("! No site configurations found.")
+            logging.warning(" No site configs found.")  # Warn none found.
+            print("! No site configurations found.")  # Tell the user.
 
 
-class SiteAnomalyExporter:
+class SiteAnomalyExporter:  # Site anomaly exporters.
     """
     Site Anomaly and Event Exporter
 
@@ -13131,101 +13131,101 @@ class SiteAnomalyExporter:
         for all site-scoped metrics related to anomaly detection (capacity, coverage, roaming,
         client connectivity, AP availability, etc.).
         """
-        print("Export Site Anomaly Events:")
-        logging.info("Starting export of site anomaly events...")
+        print("Export Site Anomaly Events:")  # Header.
+        logging.info("Starting export of site anomaly events...")  # Log start.
 
         # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            print("! No site selected. Exiting.")
-            return
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            print("! No site selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
         # Get site name for filename
         try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception:
-            site_name = site_id
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)  # List the site.
+            sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        except Exception:  # Lookup failed.
+            site_name = site_id  # Fall back to id.
 
         # Clean site name for filename
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
-        filename = f"SiteAnomalyEvents_{sanitized_site_name}.csv"
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
+        filename = f"SiteAnomalyEvents_{sanitized_site_name}.csv"  # Build the CSV name.
 
         # Dynamically discover potential anomaly metrics from ConstInsightMetrics.csv
-        print("! Discovering potential anomaly metrics from Mist API definitions...")
-        potential_metrics = AnomalyMetricsDiscovery.discover()
+        print("! Discovering potential anomaly metrics from Mist API definitions...")  # Tell the user.
+        potential_metrics = AnomalyMetricsDiscovery.discover()  # Discover anomaly metrics.
 
         # Extract just the metric names for API calls
-        site_anomaly_metrics = [metric["metric_name"] for metric in potential_metrics]
+        site_anomaly_metrics = [metric["metric_name"] for metric in potential_metrics]  # Extract metric names.
 
         # Log discovered metrics
-        print(f"! Found {len(site_anomaly_metrics)} potential anomaly metrics:")
-        for metric_info in potential_metrics:
-            print(f"  - {metric_info['metric_name']}: {metric_info['description'][:60]}...")
+        print(f"! Found {len(site_anomaly_metrics)} potential anomaly metrics:")  # Tell the user.
+        for metric_info in potential_metrics:  # List each metric.
+            print(f"  - {metric_info['metric_name']}: {metric_info['description'][:60]}...")  # Print the metric.
 
-        if not site_anomaly_metrics:
+        if not site_anomaly_metrics:  # No metrics.
             print("! No potential anomaly metrics found. Please check ConstInsightMetrics.csv availability.")
-            return
+            return  # Abort.
 
-        all_anomaly_data = []
-        metrics_retrieved = 0
+        all_anomaly_data = []  # Accumulate anomaly rows.
+        metrics_retrieved = 0  # Success count.
 
-        print(f"! Retrieving {len(site_anomaly_metrics)} different site anomaly events...")
+        print(f"! Retrieving {len(site_anomaly_metrics)} different site anomaly events...")  # Tell the user.
 
         # Temporarily suppress mistapi error logging to keep console clean
         mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apiresponse"]
-        original_levels = {}
-        for logger_name in mistapi_loggers:
-            logger_instance = logging.getLogger(logger_name)
-            original_levels[logger_name] = logger_instance.level
+        original_levels = {}  # Save original levels.
+        for logger_name in mistapi_loggers:  # Quiet each logger.
+            logger_instance = logging.getLogger(logger_name)  # Get the logger.
+            original_levels[logger_name] = logger_instance.level  # Remember its level.
             logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
 
         try:
-            for metric in site_anomaly_metrics:
+            for metric in site_anomaly_metrics:  # Fetch each metric.
                 try:
                     # Call the site anomaly API endpoint
                     response = mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents(apisession, site_id, metric)
-                    anomaly_data = getattr(response, "data", response) or {}
+                    anomaly_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                    if anomaly_data:
+                    if anomaly_data:  # Have data.
                         # Add metric type identifier to each data point
-                        anomaly_data["metric_type"] = metric
-                        anomaly_data["site_id"] = site_id
-                        anomaly_data["site_name"] = site_name
-                        anomaly_data["data_type"] = "site_anomaly_events"
-                        all_anomaly_data.append(anomaly_data)
-                        metrics_retrieved += 1
-                        print(f"!? Retrieved {metric} anomaly events")
+                        anomaly_data["metric_type"] = metric  # Tag the metric.
+                        anomaly_data["site_id"] = site_id  # Tag the site.
+                        anomaly_data["site_name"] = site_name  # Tag the site name.
+                        anomaly_data["data_type"] = "site_anomaly_events"  # Tag the data type.
+                        all_anomaly_data.append(anomaly_data)  # Collect the row.
+                        metrics_retrieved += 1  # Count success.
+                        print(f"!? Retrieved {metric} anomaly events")  # Tell the user.
                         logging.debug("Successfully retrieved %s anomaly events for site %s", metric, site_id)
                     else:
-                        print(f"! No {metric} anomaly events available")
-                        logging.info("No %s anomaly events available for site %s", metric, site_id)
-                except Exception as metric_error:
-                    print(f"! Error retrieving {metric} anomaly events: {metric_error}")
+                        print(f"! No {metric} anomaly events available")  # Tell the user none.
+                        logging.info("No %s anomaly events available for site %s", metric, site_id)  # Log none.
+                except Exception as metric_error:  # Metric fetch failed.
+                    print(f"! Error retrieving {metric} anomaly events: {metric_error}")  # Tell the user.
                     logging.warning("Error retrieving %s anomaly events for site %s: %s", metric, site_id, metric_error)
 
             # Process and save all collected anomaly data
-            if all_anomaly_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_anomaly_data)
+            if all_anomaly_data:  # Have data.
+                processed = DataProcessingUtils.flatten_nested_fields(all_anomaly_data)  # Flatten nested fields.
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} site anomaly event types exported to {filename}")
-                logging.info(
+                print(f"! {metrics_retrieved} site anomaly event types exported to {filename}")  # Tell the user.
+                logging.info(  # Log the export.
                     "Exported %s site anomaly event types for %s to %s", metrics_retrieved, site_name, filename
                 )
             else:
-                print(f"! 0 anomaly events exported to {filename} (no data available)")
-                logging.warning("No anomaly events available for site %s", site_name)
+                print(f"! 0 anomaly events exported to {filename} (no data available)")  # Tell the user zero.
+                logging.warning("No anomaly events available for site %s", site_name)  # Warn none.
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
-        except Exception as exception:
-            print(f"! Error exporting site anomaly events: {exception}")
-            logging.error("Failed to export site anomaly events for %s: %s", site_name, exception)
+        except Exception as exception:  # Export failed.
+            print(f"! Error exporting site anomaly events: {exception}")  # Tell the user.
+            logging.error("Failed to export site anomaly events for %s: %s", site_name, exception)  # Log the error.
         finally:
             # Restore original logging levels
-            for logger_name, original_level in original_levels.items():
-                logging.getLogger(logger_name).setLevel(original_level)
+            for logger_name, original_level in original_levels.items():  # Restore logger levels.
+                logging.getLogger(logger_name).setLevel(original_level)  # Restore each level.
 
     @staticmethod
     def device_anomaly_events():  # noqa: C901, PLR0912, PLR0915
@@ -13234,104 +13234,104 @@ class SiteAnomalyExporter:
 
         Uses GET /api/v1/sites/:site_id/anomaly/:metric/device/:device_id endpoint to retrieve device anomaly events.
         """
-        print("Export Site Device Anomaly Events:")
-        logging.info("Starting export of site device anomaly events...")
+        print("Export Site Device Anomaly Events:")  # Header.
+        logging.info("Starting export of site device anomaly events...")  # Log start.
 
         # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            print("! No site selected. Exiting.")
-            return
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            print("! No site selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
         # Get site name for filename
         try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception:
-            site_name = site_id
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)  # List the site.
+            sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        except Exception:  # Lookup failed.
+            site_name = site_id  # Fall back to id.
 
         # Get device selection (issue #431: inlined PromptUtils.select_device).
-        device_selection = PromptUtils.select_device_id_from_inventory(site_id)
-        if not device_selection:
-            print("! No device selected. Exiting.")
-            return
+        device_selection = PromptUtils.select_device_id_from_inventory(site_id)  # Select a device.
+        if not device_selection:  # No device.
+            print("! No device selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
-        device_mac = device_selection[0]
-        device_name = device_selection[1]
+        device_mac = device_selection[0]  # Device MAC.
+        device_name = device_selection[1]  # Device name.
 
         # Clean names for filename
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
-        sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name)
-        filename = f"SiteDeviceAnomalyEvents_{sanitized_site_name}_{sanitized_device_name}.csv"
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
+        sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name)  # Sanitize the device name.
+        filename = f"SiteDeviceAnomalyEvents_{sanitized_site_name}_{sanitized_device_name}.csv"  # Build the CSV name.
 
         # Define device-specific anomaly metrics
-        device_anomaly_metrics = ["ap_availability", "throughput", "capacity"]
+        device_anomaly_metrics = ["ap_availability", "throughput", "capacity"]  # Device anomaly metrics.
 
-        all_device_anomaly_data = []
-        metrics_retrieved = 0
+        all_device_anomaly_data = []  # Accumulate anomaly rows.
+        metrics_retrieved = 0  # Success count.
 
         print(f"! Retrieving {len(device_anomaly_metrics)} different device anomaly events for {device_name}...")
 
         # Temporarily suppress mistapi error logging to keep console clean
         mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apiresponse"]
-        original_levels = {}
-        for logger_name in mistapi_loggers:
-            logger_instance = logging.getLogger(logger_name)
-            original_levels[logger_name] = logger_instance.level
+        original_levels = {}  # Save original levels.
+        for logger_name in mistapi_loggers:  # Quiet each logger.
+            logger_instance = logging.getLogger(logger_name)  # Get the logger.
+            original_levels[logger_name] = logger_instance.level  # Remember its level.
             logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
 
         try:
-            for metric in device_anomaly_metrics:
+            for metric in device_anomaly_metrics:  # Fetch each metric.
                 try:
                     # Call the site device anomaly API endpoint
-                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice(
+                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice(  # Get device anomalies.
                         apisession, site_id, metric, device_mac
                     )
-                    device_anomaly_data = getattr(response, "data", response) or {}
+                    device_anomaly_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                    if device_anomaly_data:
+                    if device_anomaly_data:  # Have data.
                         # Add metadata
-                        device_anomaly_data["metric_type"] = metric
-                        device_anomaly_data["site_id"] = site_id
-                        device_anomaly_data["site_name"] = site_name
-                        device_anomaly_data["device_mac"] = device_mac
-                        device_anomaly_data["device_name"] = device_name
-                        device_anomaly_data["data_type"] = "device_anomaly_events"
-                        all_device_anomaly_data.append(device_anomaly_data)
-                        metrics_retrieved += 1
-                        print(f"!? Retrieved {metric} device anomaly data")
+                        device_anomaly_data["metric_type"] = metric  # Tag the metric.
+                        device_anomaly_data["site_id"] = site_id  # Tag the site.
+                        device_anomaly_data["site_name"] = site_name  # Tag the site name.
+                        device_anomaly_data["device_mac"] = device_mac  # Tag the device MAC.
+                        device_anomaly_data["device_name"] = device_name  # Tag the device name.
+                        device_anomaly_data["data_type"] = "device_anomaly_events"  # Tag the data type.
+                        all_device_anomaly_data.append(device_anomaly_data)  # Collect the row.
+                        metrics_retrieved += 1  # Count success.
+                        print(f"!? Retrieved {metric} device anomaly data")  # Tell the user.
                         logging.debug("Successfully retrieved %s device anomaly data for %s", metric, device_mac)
                     else:
-                        print(f"! No {metric} device anomaly data available")
-                        logging.info("No %s device anomaly data available for %s", metric, device_mac)
-                except Exception as metric_error:
-                    print(f"! Error retrieving {metric} device anomaly data: {metric_error}")
-                    logging.warning(
+                        print(f"! No {metric} device anomaly data available")  # Tell the user none.
+                        logging.info("No %s device anomaly data available for %s", metric, device_mac)  # Log none.
+                except Exception as metric_error:  # Metric fetch failed.
+                    print(f"! Error retrieving {metric} device anomaly data: {metric_error}")  # Tell the user.
+                    logging.warning(  # Warn the failure.
                         "Error retrieving %s device anomaly data for %s: %s", metric, device_mac, metric_error
                     )
 
             # Process and save all collected device anomaly data
-            if all_device_anomaly_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_device_anomaly_data)
+            if all_device_anomaly_data:  # Have data.
+                processed = DataProcessingUtils.flatten_nested_fields(all_device_anomaly_data)  # Flatten nested fields.
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} device anomaly event types exported to {filename}")
-                logging.info(
+                print(f"! {metrics_retrieved} device anomaly event types exported to {filename}")  # Tell the user.
+                logging.info(  # Log the export.
                     "Exported %s device anomaly event types for %s to %s", metrics_retrieved, device_name, filename
                 )
             else:
-                print(f"! 0 device anomaly events exported to {filename} (no data available)")
-                logging.warning("No device anomaly events available for %s", device_name)
+                print(f"! 0 device anomaly events exported to {filename} (no data available)")  # Tell the user zero.
+                logging.warning("No device anomaly events available for %s", device_name)  # Warn none.
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
-        except Exception as exception:
-            print(f"! Error exporting device anomaly events: {exception}")
-            logging.error("Failed to export device anomaly events for %s: %s", device_name, exception)
+        except Exception as exception:  # Export failed.
+            print(f"! Error exporting device anomaly events: {exception}")  # Tell the user.
+            logging.error("Failed to export device anomaly events for %s: %s", device_name, exception)  # Log the error.
         finally:
             # Restore original logging levels
-            for logger_name, original_level in original_levels.items():
-                logging.getLogger(logger_name).setLevel(original_level)
+            for logger_name, original_level in original_levels.items():  # Restore logger levels.
+                logging.getLogger(logger_name).setLevel(original_level)  # Restore each level.
 
     @staticmethod
     def client_anomaly_events():  # noqa: C901, PLR0912, PLR0915
@@ -13341,49 +13341,49 @@ class SiteAnomalyExporter:
         Uses GET /api/v1/sites/:site_id/anomaly/:metric/client/:client_mac endpoint to retrieve client anomaly events
         including connection success rates, band-specific roaming performance, and throughput issues.
         """
-        print("Export Site Client Anomaly Events:")
-        logging.info("Starting export of site client anomaly events...")
+        print("Export Site Client Anomaly Events:")  # Header.
+        logging.info("Starting export of site client anomaly events...")  # Log start.
 
         # Get site selection
-        site_id = PromptUtils.select_site()
-        if not site_id:
-            print("! No site selected. Exiting.")
-            return
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site.
+            print("! No site selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
         # Get site name for filename
         try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)
-            sites = mistapi.get_all(response=response, mist_session=apisession)
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)
-        except Exception:
-            site_name = site_id
+            response = mistapi.api.v1.sites.listSites(apisession, site_id)  # List the site.
+            sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
+            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+        except Exception:  # Lookup failed.
+            site_name = site_id  # Fall back to id.
 
         # Use the guided client selection function with the site_id
-        client_mac, client_type, selected_site_id = PromptClientUtils.select_client(site_id)
-        if not client_mac:
-            print("! No client selected. Exiting.")
-            return
+        client_mac, client_type, selected_site_id = PromptClientUtils.select_client(site_id)  # Select a client.
+        if not client_mac:  # No client.
+            print("! No client selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
         # Get hostname from the client MAC (we'll need to look it up)
-        client_hostname = "Unknown"
+        client_hostname = "Unknown"  # Default hostname.
         try:
             # Search for the client to get hostname
-            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(  # List client stats.
                 apisession, site_id, limit=100, duration="1d"
             )
-            clients = getattr(response, "data", response) or []
+            clients = getattr(response, "data", response) or []  # Unwrap data; default empty.
 
-            for client in clients:
-                if client.get("mac") == client_mac:
-                    client_hostname = client.get("hostname", client.get("name", "Unknown"))
-                    break
+            for client in clients:  # Find the client.
+                if client.get("mac") == client_mac:  # MAC matches.
+                    client_hostname = client.get("hostname", client.get("name", "Unknown"))  # Read the hostname.
+                    break  # Stop searching.
 
-        except Exception as exception:
-            logging.warning("Could not retrieve client hostname for %s: %s", client_mac, exception)
+        except Exception as exception:  # Lookup failed.
+            logging.warning("Could not retrieve client hostname for %s: %s", client_mac, exception)  # Warn the failure.
             client_hostname = client_mac  # Fallback to MAC address
 
         # Clean names for filename
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
         filename = f"SiteClientAnomalyEvents_{sanitized_site_name}_{client_mac.replace(':', '')}.csv"
 
         # Define client-specific anomaly metrics (verified working metrics)
@@ -13393,8 +13393,8 @@ class SiteAnomalyExporter:
             "throughput",  # Client throughput anomalies
         ]
 
-        all_client_anomaly_data = []
-        metrics_retrieved = 0
+        all_client_anomaly_data = []  # Accumulate anomaly rows.
+        metrics_retrieved = 0  # Success count.
 
         print(
             f"! Retrieving {len(client_anomaly_metrics)} different client anomaly events for {client_mac} ({client_hostname})..."  # noqa: E501
@@ -13402,66 +13402,66 @@ class SiteAnomalyExporter:
 
         # Temporarily suppress mistapi error logging to keep console clean
         mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apiresponse"]
-        original_levels = {}
-        for logger_name in mistapi_loggers:
-            logger_instance = logging.getLogger(logger_name)
-            original_levels[logger_name] = logger_instance.level
+        original_levels = {}  # Save original levels.
+        for logger_name in mistapi_loggers:  # Quiet each logger.
+            logger_instance = logging.getLogger(logger_name)  # Get the logger.
+            original_levels[logger_name] = logger_instance.level  # Remember its level.
             logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
 
         try:
-            for metric in client_anomaly_metrics:
+            for metric in client_anomaly_metrics:  # Fetch each metric.
                 try:
                     # Call the site client anomaly API endpoint
-                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(
+                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(  # Get client anomalies.
                         apisession, site_id, client_mac, metric
                     )
-                    client_anomaly_data = getattr(response, "data", response) or {}
+                    client_anomaly_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                    if client_anomaly_data:
+                    if client_anomaly_data:  # Have data.
                         # Add metadata
-                        client_anomaly_data["metric_type"] = metric
-                        client_anomaly_data["site_id"] = site_id
-                        client_anomaly_data["site_name"] = site_name
-                        client_anomaly_data["client_mac"] = client_mac
-                        client_anomaly_data["client_hostname"] = client_hostname
-                        client_anomaly_data["data_type"] = "client_anomaly_events"
-                        all_client_anomaly_data.append(client_anomaly_data)
-                        metrics_retrieved += 1
-                        print(f"!? Retrieved {metric} client anomaly data")
+                        client_anomaly_data["metric_type"] = metric  # Tag the metric.
+                        client_anomaly_data["site_id"] = site_id  # Tag the site.
+                        client_anomaly_data["site_name"] = site_name  # Tag the site name.
+                        client_anomaly_data["client_mac"] = client_mac  # Tag the client MAC.
+                        client_anomaly_data["client_hostname"] = client_hostname  # Tag the hostname.
+                        client_anomaly_data["data_type"] = "client_anomaly_events"  # Tag the data type.
+                        all_client_anomaly_data.append(client_anomaly_data)  # Collect the row.
+                        metrics_retrieved += 1  # Count success.
+                        print(f"!? Retrieved {metric} client anomaly data")  # Tell the user.
                         logging.debug("Successfully retrieved %s client anomaly data for %s", metric, client_mac)
                     else:
-                        print(f"! No {metric} client anomaly data available")
-                        logging.info("No %s client anomaly data available for %s", metric, client_mac)
-                except Exception as metric_error:
-                    print(f"! Error retrieving {metric} client anomaly data: {metric_error}")
-                    logging.warning(
+                        print(f"! No {metric} client anomaly data available")  # Tell the user none.
+                        logging.info("No %s client anomaly data available for %s", metric, client_mac)  # Log none.
+                except Exception as metric_error:  # Metric fetch failed.
+                    print(f"! Error retrieving {metric} client anomaly data: {metric_error}")  # Tell the user.
+                    logging.warning(  # Warn the failure.
                         "Error retrieving %s client anomaly data for %s: %s", metric, client_mac, metric_error
                     )
 
             # Process and save all collected client anomaly data
-            if all_client_anomaly_data:
-                processed = DataProcessingUtils.flatten_nested_fields(all_client_anomaly_data)
+            if all_client_anomaly_data:  # Have data.
+                processed = DataProcessingUtils.flatten_nested_fields(all_client_anomaly_data)  # Flatten nested fields.
                 processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
                 DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")
-                logging.info(
+                print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")  # Tell the user.
+                logging.info(  # Log the export.
                     "Exported %s client anomaly event types for %s to %s", metrics_retrieved, client_mac, filename
                 )
             else:
-                print(f"! 0 client anomaly events exported to {filename} (no data available)")
-                logging.warning("No client anomaly events available for %s", client_mac)
+                print(f"! 0 client anomaly events exported to {filename} (no data available)")  # Tell the user zero.
+                logging.warning("No client anomaly events available for %s", client_mac)  # Warn none.
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
-        except Exception as exception:
-            print(f"! Error exporting client anomaly events: {exception}")
-            logging.error("Failed to export client anomaly events for %s: %s", client_mac, exception)
+        except Exception as exception:  # Export failed.
+            print(f"! Error exporting client anomaly events: {exception}")  # Tell the user.
+            logging.error("Failed to export client anomaly events for %s: %s", client_mac, exception)  # Log the error.
         finally:
             # Restore original logging levels
-            for logger_name, original_level in original_levels.items():
-                logging.getLogger(logger_name).setLevel(original_level)
+            for logger_name, original_level in original_levels.items():  # Restore logger levels.
+                logging.getLogger(logger_name).setLevel(original_level)  # Restore each level.
 
 
-class SitesByAPModelExporter:
+class SitesByAPModelExporter:  # Sites-by-AP-model exporter.
     """
     Sites by AP Model Exporter.
 
@@ -13474,46 +13474,46 @@ class SitesByAPModelExporter:
     @staticmethod
     def _get_ap_models(org_id: str) -> tuple[list[dict], list[str]]:  # type: ignore[type-arg]
         """Return (ap_inventory, sorted_unique_models) for the organisation."""
-        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)
-        aps = [d for d in inventory if d.get("type") == "ap"]
-        models = sorted({d.get("model", "") for d in aps if d.get("model")})
-        return aps, models
+        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch org inventory.
+        aps = [d for d in inventory if d.get("type") == "ap"]  # Keep only APs.
+        models = sorted({d.get("model", "") for d in aps if d.get("model")})  # Distinct sorted models.
+        return aps, models  # Return APs and models.
 
     @staticmethod
     def _prompt_model_selection(models: list[str], aps: list[dict]) -> str | None:  # type: ignore[type-arg]
         """Prompt user to select an AP model from the numbered list."""
-        print("\nAvailable AP models:")
-        for idx, model in enumerate(models, 1):
-            count = sum(1 for d in aps if d.get("model") == model)
-            print(f"  {idx:3d}. {model} ({count} APs)")
-        choice = InputUtils.safe_input(
+        print("\nAvailable AP models:")  # Header.
+        for idx, model in enumerate(models, 1):  # List each model.
+            count = sum(1 for d in aps if d.get("model") == model)  # Count APs per model.
+            print(f"  {idx:3d}. {model} ({count} APs)")  # Print the model.
+        choice = InputUtils.safe_input(  # Read the choice.
             "\nSelect model number (or Enter to cancel): ",
             context="ap_model_selection",
         )
-        if not choice.strip():
-            return None
+        if not choice.strip():  # Empty input.
+            return None  # No selection.
         try:
-            selected = int(choice.strip()) - 1
-            return models[selected] if 0 <= selected < len(models) else None
-        except (ValueError, IndexError):
-            print("! Invalid selection.")
-            return None
+            selected = int(choice.strip()) - 1  # Parse the index.
+            return models[selected] if 0 <= selected < len(models) else None  # Return the model or None.
+        except (ValueError, IndexError):  # Bad input.
+            print("! Invalid selection.")  # Tell the user.
+            return None  # No selection.
 
     @staticmethod
-    def _split_address(address: str) -> tuple[str, str, str, str, str]:
+    def _split_address(address: str) -> tuple[str, str, str, str, str]:  # Split an address string.
         """Split a full address string into street, city, state, zip, country."""
         try:
-            parts = address.split(", ")
-            street = parts[0]
-            city = parts[1]
-            state_zip = parts[2].split()
-            state = state_zip[0]
-            zip_code = state_zip[1]
-            country = parts[3]
-            return street, city, state, zip_code, country
-        except Exception as exception:
-            logging.debug("Failed to split address '%s': %s", address, exception)
-            return address, "", "", "", ""
+            parts = address.split(", ")  # Split on commas.
+            street = parts[0]  # Street part.
+            city = parts[1]  # City part.
+            state_zip = parts[2].split()  # State/zip part.
+            state = state_zip[0]  # State token.
+            zip_code = state_zip[1]  # Zip token.
+            country = parts[3]  # Country part.
+            return street, city, state, zip_code, country  # Return the parts.
+        except Exception as exception:  # Parse failed.
+            logging.debug("Failed to split address '%s': %s", address, exception)  # Trace the failure.
+            return address, "", "", "", ""  # Return address as street.
 
     @staticmethod
     def _build_export_rows(
@@ -13523,15 +13523,15 @@ class SitesByAPModelExporter:
     ) -> list[dict]:  # type: ignore[type-arg]
         """Group APs by site and build one CSV row per matching site."""
         grouped: dict[str, list[dict]] = {}  # type: ignore[type-arg]
-        for device in aps:
-            if device.get("model") == model and device.get("site_id"):
-                grouped.setdefault(device["site_id"], []).append(device)
-        rows = []
+        for device in aps:  # Walk APs.
+            if device.get("model") == model and device.get("site_id"):  # Match model with a site.
+                grouped.setdefault(device["site_id"], []).append(device)  # Group by site.
+        rows = []  # Accumulate rows.
         for site_id, devices in sorted(grouped.items(), key=lambda x: site_map.get(x[0], {}).get("name", "")):
-            site = site_map.get(site_id, {})
-            address = site.get("address", "")
+            site = site_map.get(site_id, {})  # Look up the site.
+            address = site.get("address", "")  # Read the address.
             street, city, state, zip_code, country = SitesByAPModelExporter._split_address(address)
-            rows.append(
+            rows.append(  # Append the row.
                 {
                     "site_id": site_id,
                     "site_name": site.get("name", ""),
@@ -13545,39 +13545,39 @@ class SitesByAPModelExporter:
                     "ap_macs": ", ".join(d.get("mac", "") for d in devices),
                 }
             )
-        return rows
+        return rows  # Return the rows.
 
     @staticmethod
-    def export_sites_by_ap_model() -> None:
+    def export_sites_by_ap_model() -> None:  # Export sites by AP model.
         """Export CSV of sites containing APs of a selected model with site address info."""
-        print("Export Sites by AP Model:")
-        logging.info("Starting export of sites by AP model...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        print("Export Sites by AP Model:")  # Header.
+        logging.info("Starting export of sites by AP model...")  # Log start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
 
-        print("! Fetching AP inventory from organization...")
-        aps, models = SitesByAPModelExporter._get_ap_models(org_id)
-        if not models:
-            print("! No APs found in organization inventory.")
-            return
+        print("! Fetching AP inventory from organization...")  # Tell the user.
+        aps, models = SitesByAPModelExporter._get_ap_models(org_id)  # Fetch APs and models.
+        if not models:  # No models.
+            print("! No APs found in organization inventory.")  # Tell the user.
+            return  # Abort.
 
-        model = SitesByAPModelExporter._prompt_model_selection(models, aps)
-        if not model:
-            return
+        model = SitesByAPModelExporter._prompt_model_selection(models, aps)  # Prompt a model.
+        if not model:  # No model.
+            return  # Abort.
 
-        print(f"! Fetching site details for sites with {model} APs...")
-        all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)
-        site_map = {site["id"]: site for site in all_sites if site.get("id")}
+        print(f"! Fetching site details for sites with {model} APs...")  # Tell the user.
+        all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites.
+        site_map = {site["id"]: site for site in all_sites if site.get("id")}  # Map site id to site.
 
-        rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)
-        if not rows:
-            print(f"! No sites found with {model} APs.")
-            return
+        rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)  # Build export rows.
+        if not rows:  # No rows.
+            print(f"! No sites found with {model} APs.")  # Tell the user.
+            return  # Abort.
 
-        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)
-        filename = f"SitesByAPModel_{safe_model}.csv"
+        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)  # Slugify the model.
+        filename = f"SitesByAPModel_{safe_model}.csv"  # Build the CSV name.
         DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")
-        print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")
-        logging.info("Exported %s sites with AP model %s", len(rows), model)
+        print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")  # Tell the user.
+        logging.info("Exported %s sites with AP model %s", len(rows), model)  # Log the export.
 
 
 # ============================================================================
@@ -13585,15 +13585,15 @@ class SitesByAPModelExporter:
 # ============================================================================
 
 
-class SiteExportUtils:
+class SiteExportUtils:  # Site export delegators.
     """Delegation wrapper for extracted site export implementation."""
 
     @staticmethod
-    def _configure_module():
+    def _configure_module():  # Configure the export module.
         """Configure extracted module dependencies and return module handle."""
         from src.export import site_export_utils as site_export_module  # noqa: PLC0415,I001
 
-        configure_site_export_utils_dependencies(
+        configure_site_export_utils_dependencies(  # Wire dependencies.
             apisession_dependency=apisession,
             prompt_utils=PromptUtils,
             config_utils=ConfigUtils,
@@ -13609,130 +13609,130 @@ class SiteExportUtils:
             tqdm_module=tqdm,
             mistapi_dependency=mistapi,
         )
-        return site_export_module
+        return site_export_module  # Return the module.
 
     @staticmethod
-    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):
+    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # Export a site endpoint.
         """Delegate generic site export flow to extracted module."""
-        module = SiteExportUtils._configure_module()
+        module = SiteExportUtils._configure_module()  # Configure the module.
         return module.SiteExportUtils._export_data(api_call, data_type, sort_key=sort_key, **api_kwargs)
 
     @staticmethod
-    def insight_metrics():
+    def insight_metrics():  # Export site insight metrics.
         """Menu #74 entry: configures deps then runs decomposed SiteMetricOperation."""
         SiteExportUtils._configure_module()  # Wire apisession / mistapi / DataExporter globals on the extracted module
         SiteMetricOperation.execute()  # Run the decomposed operation directly (no inheritance delegation)
 
     @staticmethod
-    def device_insights():
+    def device_insights():  # Export device insights.
         """Menu #76 entry: configures deps then runs decomposed DeviceMetricOperation."""
         SiteExportUtils._configure_module()  # Wire apisession / mistapi / DataExporter globals on the extracted module
         DeviceMetricOperation.execute()  # Run the decomposed operation directly (no inheritance delegation)
 
     @staticmethod
-    def insights():
+    def insights():  # Export site insights.
         """Menu #73 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.insights()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.insights()  # Delegate the export.
 
     @staticmethod
-    def _system_events():
+    def _system_events():  # Export system events.
         """Delegated site system events export."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils._system_events()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils._system_events()  # Delegate the export.
 
     @staticmethod
-    def _fast_roam_events():
+    def _fast_roam_events():  # Export fast-roam events.
         """Delegated site fast-roam events export."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils._fast_roam_events()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils._fast_roam_events()  # Delegate the export.
 
     @staticmethod
-    def ospf_stats():
+    def ospf_stats():  # Export OSPF stats.
         """Menu #70 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.ospf_stats()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.ospf_stats()  # Delegate the export.
 
     @staticmethod
-    def mxedge_upgrade_status():
+    def mxedge_upgrade_status():  # Export Mist Edge upgrades.
         """Menu #71 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.mxedge_upgrade_status()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.mxedge_upgrade_status()  # Delegate the export.
 
     @staticmethod
-    def auto_map_assignment_status():
+    def auto_map_assignment_status():  # Export auto-map status.
         """Menu #72 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.auto_map_assignment_status()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.auto_map_assignment_status()  # Delegate the export.
 
     @staticmethod
-    def site_stats() -> None:
+    def site_stats() -> None:  # Export site stats.
         """Menu #80 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.site_stats()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.site_stats()  # Delegate the export.
 
     @staticmethod
-    def gateway_metrics() -> None:
+    def gateway_metrics() -> None:  # Export gateway metrics.
         """Menu #81 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.gateway_metrics()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.gateway_metrics()  # Delegate the export.
 
     @staticmethod
-    def switches_metrics() -> None:
+    def switches_metrics() -> None:  # Export switch metrics.
         """Menu #82 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.switches_metrics()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.switches_metrics()  # Delegate the export.
 
     @staticmethod
-    def beacons_stats() -> None:
+    def beacons_stats() -> None:  # Export beacon stats.
         """Menu #83 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.beacons_stats()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.beacons_stats()  # Delegate the export.
 
     @staticmethod
-    def wxrules_usage() -> None:
+    def wxrules_usage() -> None:  # Export WxRules usage.
         """Menu #84 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.wxrules_usage()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.wxrules_usage()  # Delegate the export.
 
     @staticmethod
-    def assets_stats() -> None:
+    def assets_stats() -> None:  # Export asset stats.
         """Menu #85 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.assets_stats()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.assets_stats()  # Delegate the export.
 
     @staticmethod
-    def current_channel_planning() -> None:
+    def current_channel_planning() -> None:  # Export channel planning.
         """Menu #86 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.current_channel_planning()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.current_channel_planning()  # Delegate the export.
 
     @staticmethod
-    def zone_config_analysis() -> None:
+    def zone_config_analysis() -> None:  # Export zone analysis.
         """Menu #6 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils.zone_config_analysis()
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils.zone_config_analysis()  # Delegate the export.
 
     @staticmethod
-    def _classify_device_platform(device_model: str) -> str:
+    def _classify_device_platform(device_model: str) -> str:  # Classify a device platform.
         """Delegate device platform classification helper."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils._classify_device_platform(device_model)
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils._classify_device_platform(device_model)  # Delegate the call.
 
     @staticmethod
-    def _metric_supported_on_platform(metric_name: str, device_platform: str) -> bool:
+    def _metric_supported_on_platform(metric_name: str, device_platform: str) -> bool:  # Check metric platform support.
         """Delegate metric/platform support check to the extracted SiteExportUtils impl."""
         module = SiteExportUtils._configure_module()  # resolve wired src module
         return module.SiteExportUtils._metric_compatible_with_platform(metric_name, device_platform)  # call src impl
 
     @staticmethod
-    def _normalize_device_mac_or_none(device_mac: str) -> str | None:
+    def _normalize_device_mac_or_none(device_mac: str) -> str | None:  # Normalize a device MAC.
         """Delegate device MAC normalization helper."""
-        module = SiteExportUtils._configure_module()
-        return module.SiteExportUtils._normalize_device_mac_or_none(device_mac)
+        module = SiteExportUtils._configure_module()  # Configure the module.
+        return module.SiteExportUtils._normalize_device_mac_or_none(device_mac)  # Delegate the call.
 
 
-class GatewayHaExporter:
+class GatewayHaExporter:  # Gateway HA exporter.
     """
     Exporter for HA (High-Availability) gateway cluster information.
 
@@ -13743,7 +13743,7 @@ class GatewayHaExporter:
     """
 
     # Field names preserved from the stats_gateway response that describe HA state
-    HA_STAT_FIELDS = [
+    HA_STAT_FIELDS = [  # HA stat columns.
         "mac",
         "name",
         "model",
@@ -13761,7 +13761,7 @@ class GatewayHaExporter:
     ]
 
     @staticmethod
-    def ha_cluster_info() -> None:
+    def ha_cluster_info() -> None:  # Export HA cluster info.
         """Export HA gateway cluster info for a selected site (Menu #87).
 
         Flow:
@@ -13803,7 +13803,7 @@ class GatewayHaExporter:
             logging.exception("Failed to export HA gateway cluster info: %s", exception)  # Log full traceback
 
     @staticmethod
-    def _build_ha_rows(ha_gateways: list, site_id: str) -> list:
+    def _build_ha_rows(ha_gateways: list, site_id: str) -> list:  # Build HA summary rows.
         """Build merged rows combining gateway stats with cluster node pair membership.
 
         For each HA gateway, fetches the /ha endpoint to get the peer node MAC addresses,
@@ -13851,7 +13851,7 @@ class GatewayHaExporter:
         return rows  # Return the complete merged dataset
 
     @staticmethod
-    def _print_ha_summary(rows: list) -> None:
+    def _print_ha_summary(rows: list) -> None:  # Print the HA summary.
         """Print a formatted summary of HA gateway cluster pairs to the terminal.
 
         Args:
@@ -13876,12 +13876,12 @@ class GatewayHaExporter:
         print()  # Blank line after table for readability
 
 
-def _get_service_ping_manager_instance():
+def _get_service_ping_manager_instance():  # Build a ServicePingManager.
     """Create extracted ServicePingManager instance with MistHelper runtime dependencies."""
-    from src.websocket.service_ping_manager import ServicePingManager as _SPM
+    from src.websocket.service_ping_manager import ServicePingManager as _SPM  # Import the extracted class.
     from src.websocket.service_ping_manager import configure_service_ping_manager_dependencies as _configure_spm
 
-    _configure_spm(
+    _configure_spm(  # Wire dependencies.
         apisession_dependency=apisession,
         mistapi_dependency=mistapi,
         prompt_utils=PromptUtils,
@@ -13893,10 +13893,10 @@ def _get_service_ping_manager_instance():
         api_fetch_utils=APIFetchUtils,
     )
 
-    return _SPM()
+    return _SPM()  # Return the instance.
 
 
-class ServicePingManager:
+class ServicePingManager:  # Service ping facade.
     """Service ping manager (Menu 120).
 
     Implementation extracted to `src/websocket/service_ping_manager.py` and
@@ -13904,29 +13904,29 @@ class ServicePingManager:
     MistHelper menu orchestration and delegation only.
     """
 
-    from src.websocket.service_ping_manager import ServicePingManager as _Extracted
+    from src.websocket.service_ping_manager import ServicePingManager as _Extracted  # Import the extracted class.
 
-    DEFAULT_HOST = _Extracted.DEFAULT_HOST
-    DEFAULT_COUNT = _Extracted.DEFAULT_COUNT
-    DEFAULT_SIZE = _Extracted.DEFAULT_SIZE
-    MIN_SIZE = _Extracted.MIN_SIZE
-    MAX_SIZE = _Extracted.MAX_SIZE
-    DEFAULT_TENANT = _Extracted.DEFAULT_TENANT
-    DEFAULT_SERVICE = _Extracted.DEFAULT_SERVICE
+    DEFAULT_HOST = _Extracted.DEFAULT_HOST  # Re-export default host.
+    DEFAULT_COUNT = _Extracted.DEFAULT_COUNT  # Re-export default count.
+    DEFAULT_SIZE = _Extracted.DEFAULT_SIZE  # Re-export default size.
+    MIN_SIZE = _Extracted.MIN_SIZE  # Re-export min size.
+    MAX_SIZE = _Extracted.MAX_SIZE  # Re-export max size.
+    DEFAULT_TENANT = _Extracted.DEFAULT_TENANT  # Re-export default tenant.
+    DEFAULT_SERVICE = _Extracted.DEFAULT_SERVICE  # Re-export default service.
 
-    def __init__(self):
+    def __init__(self):  # Build the delegate.
         """Initialize wrapper by mirroring extracted manager state for test compatibility."""
-        extracted = _get_service_ping_manager_instance()
-        self.__dict__.update(extracted.__dict__)
-        self._delegate = extracted
+        extracted = _get_service_ping_manager_instance()  # Create the extracted instance.
+        self.__dict__.update(extracted.__dict__)  # Copy its state.
+        self._delegate = extracted  # Keep the delegate.
 
-    def __getattr__(self, name):
+    def __getattr__(self, name):  # Forward unknown attributes.
         """Delegate unknown attributes and methods to extracted implementation."""
-        return getattr(self._delegate, name)
+        return getattr(self._delegate, name)  # Delegate the attribute.
 
-    def execute(self) -> None:
+    def execute(self) -> None:  # Run the ping flow.
         """Execute menu 120 via the extracted service ping manager."""
-        self._delegate.execute()
+        self._delegate.execute()  # Delegate to the impl.
 
 
 # ============================================================================
@@ -13934,11 +13934,11 @@ class ServicePingManager:
 # ============================================================================
 
 
-def _get_routing_utils_instance():
+def _get_routing_utils_instance():  # Build a RoutingUtils.
     """Create RoutingUtils instance with MistHelper globals."""
-    from src.network.routing_utils import RoutingUtils as _RU
+    from src.network.routing_utils import RoutingUtils as _RU  # Import the extracted class.
 
-    return _RU(
+    return _RU(  # Wire dependencies.
         apisession=apisession,
         select_site_fn=PromptUtils.select_site_id_from_csv,
         select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(site_id, device_type=dtype),
@@ -13948,7 +13948,7 @@ def _get_routing_utils_instance():
     )
 
 
-class RoutingUtils:
+class RoutingUtils:  # Routing utils facade.
     """Routing utilities (Menus 6-8).
 
     Implementation extracted to src/network/routing_utils.py.
@@ -13957,19 +13957,19 @@ class RoutingUtils:
     """
 
     @staticmethod
-    def execute_show_forwarding_table():
+    def execute_show_forwarding_table():  # Show the forwarding table.
         """Execute show forwarding table on a gateway/SSR device via WebSocket."""
-        _get_routing_utils_instance().execute_show_forwarding_table()
+        _get_routing_utils_instance().execute_show_forwarding_table()  # Delegate to the impl.
 
     @staticmethod
-    def execute_show_routing_table():
+    def execute_show_routing_table():  # Show the routing table.
         """Execute show route command on switches via WebSocket."""
-        _get_routing_utils_instance().execute_show_routing_table()
+        _get_routing_utils_instance().execute_show_routing_table()  # Delegate to the impl.
 
     @staticmethod
-    def execute_show_ssr_routes():
+    def execute_show_ssr_routes():  # Show SSR routes.
         """Execute SSR/SRX routing table via dedicated API."""
-        _get_routing_utils_instance().execute_show_ssr_routes()
+        _get_routing_utils_instance().execute_show_ssr_routes()  # Delegate to the impl.
 
 
 # ============================================================================
@@ -13978,13 +13978,13 @@ class RoutingUtils:
 # ============================================================================
 
 
-def _get_duc_instance():
+def _get_duc_instance():  # Build DeviceUtilityCommands.
     """Create DeviceUtilityCommands instance with MistHelper globals."""
-    from src.device.utility_commands import (
+    from src.device.utility_commands import (  # Import the extracted class.
         DeviceUtilityCommands as _DUC,
     )
 
-    return _DUC(
+    return _DUC(  # Wire dependencies.
         apisession=apisession,
         select_site_fn=PromptUtils.select_site_id_from_csv,
         select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(site_id, device_type=dtype),
@@ -13994,7 +13994,7 @@ def _get_duc_instance():
     )
 
 
-class DeviceUtilityCommands:
+class DeviceUtilityCommands:  # Device utility command facade.
     """Device utility commands (Menus 123-157).
 
     Implementation extracted to src/device/utility_commands.py.
@@ -14002,186 +14002,186 @@ class DeviceUtilityCommands:
     access to MistHelper globals (apisession, utility classes).
     """
 
-    from src.device.utility_commands import (
+    from src.device.utility_commands import (  # Import the extracted class.
         DeviceUtilityCommands as _Extracted,
     )
 
-    DEVICE_TYPE_COMPATIBILITY_MAP = _Extracted.DEVICE_TYPE_COMPATIBILITY_MAP
+    DEVICE_TYPE_COMPATIBILITY_MAP = _Extracted.DEVICE_TYPE_COMPATIBILITY_MAP  # Re-export compatibility map.
 
     @staticmethod
-    def traceroute() -> None:
+    def traceroute() -> None:  # Run traceroute.
         """Menu 123: Traceroute from device to destination host."""
-        _get_duc_instance().traceroute()
+        _get_duc_instance().traceroute()  # Delegate to the impl.
 
     @staticmethod
-    def show_ospf_neighbors() -> None:
+    def show_ospf_neighbors() -> None:  # Show OSPF neighbors.
         """Menu 124: Show OSPF neighbors on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_neighbors()
+        _get_duc_instance().show_ospf_neighbors()  # Delegate to the impl.
 
     @staticmethod
-    def show_ospf_interfaces() -> None:
+    def show_ospf_interfaces() -> None:  # Show OSPF interfaces.
         """Menu 125: Show OSPF interfaces on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_interfaces()
+        _get_duc_instance().show_ospf_interfaces()  # Delegate to the impl.
 
     @staticmethod
-    def show_ospf_database() -> None:
+    def show_ospf_database() -> None:  # Show OSPF database.
         """Menu 126: Show OSPF database on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_database()
+        _get_duc_instance().show_ospf_database()  # Delegate to the impl.
 
     @staticmethod
-    def show_ospf_summary() -> None:
+    def show_ospf_summary() -> None:  # Show OSPF summary.
         """Menu 127: Show OSPF summary on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_summary()
+        _get_duc_instance().show_ospf_summary()  # Delegate to the impl.
 
     @staticmethod
-    def resolve_dns() -> None:
+    def resolve_dns() -> None:  # Resolve DNS.
         """Menu 135: Test DNS resolution on SSR gateway."""
-        _get_duc_instance().resolve_dns()
+        _get_duc_instance().resolve_dns()  # Delegate to the impl.
 
     @staticmethod
-    def monitor_traffic() -> None:
+    def monitor_traffic() -> None:  # Monitor traffic.
         """Menu 136: Monitor traffic on switch/SRX port."""
-        _get_duc_instance().monitor_traffic()
+        _get_duc_instance().monitor_traffic()  # Delegate to the impl.
 
     @staticmethod
-    def run_top() -> None:
+    def run_top() -> None:  # Run top.
         """Menu 137: Run top command on switch/SRX."""
-        _get_duc_instance().run_top()
+        _get_duc_instance().run_top()  # Delegate to the impl.
 
     @staticmethod
-    def show_session() -> None:
+    def show_session() -> None:  # Show sessions.
         """Menu 128: Show sessions on SSR/SRX gateway."""
-        _get_duc_instance().show_session()
+        _get_duc_instance().show_session()  # Delegate to the impl.
 
     @staticmethod
-    def show_service_path() -> None:
+    def show_service_path() -> None:  # Show the service path.
         """Menu 129: Show service path on SSR gateway."""
-        _get_duc_instance().show_service_path()
+        _get_duc_instance().show_service_path()  # Delegate to the impl.
 
     @staticmethod
-    def show_bgp_summary() -> None:
+    def show_bgp_summary() -> None:  # Show BGP summary.
         """Menu 130: Show BGP summary on switch or gateway."""
-        _get_duc_instance().show_bgp_summary()
+        _get_duc_instance().show_bgp_summary()  # Delegate to the impl.
 
     @staticmethod
-    def show_arp_table() -> None:
+    def show_arp_table() -> None:  # Show the ARP table.
         """Menu 131: Show ARP table on switch or gateway."""
-        _get_duc_instance().show_arp_table()
+        _get_duc_instance().show_arp_table()  # Delegate to the impl.
 
     @staticmethod
-    def show_dhcp_leases() -> None:
+    def show_dhcp_leases() -> None:  # Show DHCP leases.
         """Menu 132: Show DHCP leases on switch or gateway."""
-        _get_duc_instance().show_dhcp_leases()
+        _get_duc_instance().show_dhcp_leases()  # Delegate to the impl.
 
     @staticmethod
-    def show_dot1x() -> None:
+    def show_dot1x() -> None:  # Show 802.1X state.
         """Menu 133: Show 802.1X table on switch."""
-        _get_duc_instance().show_dot1x()
+        _get_duc_instance().show_dot1x()  # Delegate to the impl.
 
     @staticmethod
-    def show_evpn_database() -> None:
+    def show_evpn_database() -> None:  # Show EVPN database.
         """Menu 134: Show EVPN database on switch or gateway."""
-        _get_duc_instance().show_evpn_database()
+        _get_duc_instance().show_evpn_database()  # Delegate to the impl.
 
     @staticmethod
-    def locate_device() -> None:
+    def locate_device() -> None:  # Locate the device.
         """Menu 138: Locate device by blinking LED."""
-        _get_duc_instance().locate_device()
+        _get_duc_instance().locate_device()  # Delegate to the impl.
 
     @staticmethod
-    def unlocate_device() -> None:
+    def unlocate_device() -> None:  # Unlocate the device.
         """Menu 139: Stop device LED blinking."""
-        _get_duc_instance().unlocate_device()
+        _get_duc_instance().unlocate_device()  # Delegate to the impl.
 
     @staticmethod
-    def bounce_port() -> None:
+    def bounce_port() -> None:  # Bounce a port.
         """Menu 140: Bounce switch/gateway port."""
-        _get_duc_instance().bounce_port()
+        _get_duc_instance().bounce_port()  # Delegate to the impl.
 
     @staticmethod
-    def cable_test() -> None:
+    def cable_test() -> None:  # Run a cable test.
         """Menu 141: Run cable test on switch port."""
-        _get_duc_instance().cable_test()
+        _get_duc_instance().cable_test()  # Delegate to the impl.
 
     @staticmethod
-    def reprovision_device() -> None:
+    def reprovision_device() -> None:  # Reprovision the device.
         """Menu 142: Reprovision switch/gateway."""
-        _get_duc_instance().reprovision_device()
+        _get_duc_instance().reprovision_device()  # Delegate to the impl.
 
     @staticmethod
-    def readopt_device() -> None:
+    def readopt_device() -> None:  # Re-adopt the device.
         """Menu 143: Re-adopt switch device."""
-        _get_duc_instance().readopt_device()
+        _get_duc_instance().readopt_device()  # Delegate to the impl.
 
     @staticmethod
-    def get_ztp_password() -> None:
+    def get_ztp_password() -> None:  # Get the ZTP password.
         """Menu 144: Get ZTP password for switch/gateway."""
-        _get_duc_instance().get_ztp_password()
+        _get_duc_instance().get_ztp_password()  # Delegate to the impl.
 
     @staticmethod
-    def get_config_commands() -> None:
+    def get_config_commands() -> None:  # Get config commands.
         """Menu 145: Get configuration CLI commands for switch."""
-        _get_duc_instance().get_config_commands()
+        _get_duc_instance().get_config_commands()  # Delegate to the impl.
 
     @staticmethod
-    def upload_support_file() -> None:
+    def upload_support_file() -> None:  # Upload a support file.
         """Menu 146: Upload support file from switch/gateway."""
-        _get_duc_instance().upload_support_file()
+        _get_duc_instance().upload_support_file()  # Delegate to the impl.
 
     @staticmethod
-    def clear_arp_cache() -> None:
+    def clear_arp_cache() -> None:  # Clear the ARP cache.
         """Menu 147: Clear ARP cache."""
-        _get_duc_instance().clear_arp_cache()
+        _get_duc_instance().clear_arp_cache()  # Delegate to the impl.
 
     @staticmethod
-    def clear_bgp_routes() -> None:
+    def clear_bgp_routes() -> None:  # Clear BGP routes.
         """Menu 148: Clear BGP routes."""
-        _get_duc_instance().clear_bgp_routes()
+        _get_duc_instance().clear_bgp_routes()  # Delegate to the impl.
 
     @staticmethod
-    def clear_session() -> None:
+    def clear_session() -> None:  # Clear a session.
         """Menu 149: Clear session on SSR/SRX gateway."""
-        _get_duc_instance().clear_session()
+        _get_duc_instance().clear_session()  # Delegate to the impl.
 
     @staticmethod
-    def clear_mac_table() -> None:
+    def clear_mac_table() -> None:  # Clear the MAC table.
         """Menu 150: Clear MAC table."""
-        _get_duc_instance().clear_mac_table()
+        _get_duc_instance().clear_mac_table()  # Delegate to the impl.
 
     @staticmethod
-    def clear_bpdu_error() -> None:
+    def clear_bpdu_error() -> None:  # Clear a BPDU error.
         """Menu 151: Clear BPDU errors on switch."""
-        _get_duc_instance().clear_bpdu_error()
+        _get_duc_instance().clear_bpdu_error()  # Delegate to the impl.
 
     @staticmethod
-    def clear_learned_macs() -> None:
+    def clear_learned_macs() -> None:  # Clear learned MACs.
         """Menu 152: Clear learned MACs from switch port."""
-        _get_duc_instance().clear_learned_macs()
+        _get_duc_instance().clear_learned_macs()  # Delegate to the impl.
 
     @staticmethod
-    def clear_policy_hit_count() -> None:
+    def clear_policy_hit_count() -> None:  # Clear policy hit counts.
         """Menu 153: Clear policy hit count on SSR."""
-        _get_duc_instance().clear_policy_hit_count()
+        _get_duc_instance().clear_policy_hit_count()  # Delegate to the impl.
 
     @staticmethod
-    def release_dhcp_lease() -> None:
+    def release_dhcp_lease() -> None:  # Release a DHCP lease.
         """Menu 154: Release DHCP lease on switch/gateway."""
-        _get_duc_instance().release_dhcp_lease()
+        _get_duc_instance().release_dhcp_lease()  # Delegate to the impl.
 
     @staticmethod
-    def release_dhcp_ssr() -> None:
+    def release_dhcp_ssr() -> None:  # Release a DHCP lease (SSR).
         """Menu 155: Release DHCP lease on SSR/SRX."""
-        _get_duc_instance().release_dhcp_ssr()
+        _get_duc_instance().release_dhcp_ssr()  # Delegate to the impl.
 
     @staticmethod
-    def poll_switch_stats() -> None:
+    def poll_switch_stats() -> None:  # Poll switch stats.
         """Menu 156: Poll fresh statistics from switch."""
-        _get_duc_instance().poll_switch_stats()
+        _get_duc_instance().poll_switch_stats()  # Delegate to the impl.
 
     @staticmethod
-    def create_device_snapshot() -> None:
+    def create_device_snapshot() -> None:  # Create a device snapshot.
         """Menu 157: Create device snapshot on switch."""
-        _get_duc_instance().create_device_snapshot()
+        _get_duc_instance().create_device_snapshot()  # Delegate to the impl.
 
 
 # ==============================
@@ -14190,19 +14190,19 @@ class DeviceUtilityCommands:
 
 
 @dataclass
-class EndpointConfig:
+class EndpointConfig:  # Const endpoint descriptor.
     """Configuration for a discovered const endpoint."""
 
-    endpoint_name: str
-    module: object
-    function_name: str
-    filename: str
-    description: str
-    modname: str
+    endpoint_name: str  # Endpoint name.
+    module: object  # Source module.
+    function_name: str  # API function name.
+    filename: str  # Output filename.
+    description: str  # Human description.
+    modname: str  # Module path.
     special_handling: str | None = None  # 'all_models', 'all_countries', 'all_countries_channels', or None
 
 
-class ConstDefinitionsExporter:
+class ConstDefinitionsExporter:  # Const definitions exporter.
     """
     Exports all available const definitions from the Mist API to individual CSV files.
 
@@ -14218,137 +14218,137 @@ class ConstDefinitionsExporter:
         exporter.export_all()
     """
 
-    CACHE_MAX_AGE_HOURS = 24
+    CACHE_MAX_AGE_HOURS = 24  # Cache freshness window.
     FALLBACK_GATEWAY_MODELS = ["SRX300", "SRX320", "SRX320-POE", "SRX340", "SRX345", "SRX380"]
-    FALLBACK_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP", "CN", "IN", "BR"]
-    FALLBACK_CHANNEL_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP"]
+    FALLBACK_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP", "CN", "IN", "BR"]  # Fallback country list.
+    FALLBACK_CHANNEL_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP"]  # Fallback channel countries.
 
-    def __init__(self, api_session):
+    def __init__(self, api_session):  # Capture the session.
         """Initialize exporter with API session and counters."""
-        self.api_session = api_session
-        self.discovered_endpoints: dict[str, EndpointConfig] = {}
-        self.endpoints_processed = 0
-        self.endpoints_skipped_fresh = 0
-        self.endpoints_updated = 0
-        self.endpoints_failed = 0
+        self.api_session = api_session  # Store the session.
+        self.discovered_endpoints: dict[str, EndpointConfig] = {}  # Discovered endpoints.
+        self.endpoints_processed = 0  # Processed count.
+        self.endpoints_skipped_fresh = 0  # Skipped-fresh count.
+        self.endpoints_updated = 0  # Updated count.
+        self.endpoints_failed = 0  # Failed count.
 
-    def export_all(self) -> None:
+    def export_all(self) -> None:  # Export every const endpoint.
         """Main entry point: discover and export all const definitions."""
-        print("Export All Available Const Definitions (Dynamic Discovery):")
-        logging.info("Starting comprehensive dynamic export of all const definitions...")
+        print("Export All Available Const Definitions (Dynamic Discovery):")  # Header.
+        logging.info("Starting comprehensive dynamic export of all const definitions...")  # Log start.
 
         try:
-            self._discover_endpoints()
-            if not self.discovered_endpoints:
-                print("! No const endpoints discovered from mistapi library")
-                logging.error("Dynamic discovery found no const endpoints")
-                return
+            self._discover_endpoints()  # Discover endpoints.
+            if not self.discovered_endpoints:  # None found.
+                print("! No const endpoints discovered from mistapi library")  # Tell the user.
+                logging.error("Dynamic discovery found no const endpoints")  # Log the error.
+                return  # Abort.
 
-            self._process_all_endpoints()
-            self._print_summary()
+            self._process_all_endpoints()  # Process all endpoints.
+            self._print_summary()  # Print the summary.
 
-        except Exception as error:
-            print(f"! Critical error during dynamic const discovery: {error}")
-            logging.error("Critical error during dynamic const discovery: %s", error)
+        except Exception as error:  # Discovery failed.
+            print(f"! Critical error during dynamic const discovery: {error}")  # Tell the user.
+            logging.error("Critical error during dynamic const discovery: %s", error)  # Log the error.
 
-    def _discover_endpoints(self) -> None:
+    def _discover_endpoints(self) -> None:  # Discover const endpoints.
         """Discover all const modules in mistapi.api.v1.const package."""
-        import pkgutil
+        import pkgutil  # Import pkgutil.
 
-        import mistapi.api.v1.const as const_package
+        import mistapi.api.v1.const as const_package  # Import the const package.
 
-        print("! Dynamically discovering const endpoints from mistapi library...")
-        logging.info("Starting dynamic discovery of const endpoints")
+        print("! Dynamically discovering const endpoints from mistapi library...")  # Tell the user.
+        logging.info("Starting dynamic discovery of const endpoints")  # Log start.
 
         for _importer, modname, ispkg in pkgutil.iter_modules(const_package.__path__, const_package.__name__ + "."):
-            if ispkg:
-                continue
-            self._inspect_module(modname)
+            if ispkg:  # Skip subpackages.
+                continue  # Next module.
+            self._inspect_module(modname)  # Inspect the module.
 
         print(f"! Successfully discovered {len(self.discovered_endpoints)} const endpoints dynamically")
         logging.info("Dynamic discovery completed: %s endpoints found", len(self.discovered_endpoints))
 
-    def _inspect_module(self, modname: str) -> None:
+    def _inspect_module(self, modname: str) -> None:  # Inspect one const module.
         """Inspect a single const module for API functions."""
-        import importlib
+        import importlib  # Import importlib.
 
-        endpoint_name = modname.split(".")[-1]
-        if endpoint_name.startswith("_"):
-            return
+        endpoint_name = modname.split(".")[-1]  # Endpoint name from path.
+        if endpoint_name.startswith("_"):  # Skip private modules.
+            return  # Skip it.
 
-        print(f"  ! Inspecting const module: {endpoint_name}")
+        print(f"  ! Inspecting const module: {endpoint_name}")  # Tell the user.
 
         try:
-            module = importlib.import_module(modname)
-            functions = self._find_api_functions(module, endpoint_name)
+            module = importlib.import_module(modname)  # Import the module.
+            functions = self._find_api_functions(module, endpoint_name)  # Find API functions.
 
-            if not functions:
-                print(f"    ! No API functions found in {endpoint_name}")
-                logging.warning("No functions found in %s", endpoint_name)
-                return
+            if not functions:  # None found.
+                print(f"    ! No API functions found in {endpoint_name}")  # Tell the user.
+                logging.warning("No functions found in %s", endpoint_name)  # Warn none found.
+                return  # Skip it.
 
-            api_function = self._select_best_function(functions)
-            if api_function:
-                self._register_endpoint(endpoint_name, module, api_function, modname)
+            api_function = self._select_best_function(functions)  # Pick the best function.
+            if api_function:  # Function found.
+                self._register_endpoint(endpoint_name, module, api_function, modname)  # Register the endpoint.
             else:
-                print(f"    ! No suitable API functions found in {endpoint_name}")
+                print(f"    ! No suitable API functions found in {endpoint_name}")  # Tell the user none.
                 logging.warning("No API functions with mist_session parameter found in %s", endpoint_name)
 
-        except Exception as error:
-            module_display_name = modname.split(".")[-1] if modname else "unknown"
-            print(f"    ! Error inspecting {module_display_name}: {error}")
-            logging.error("Error inspecting const module %s: %s", module_display_name, error)
+        except Exception as error:  # Inspection failed.
+            module_display_name = modname.split(".")[-1] if modname else "unknown"  # Module display name.
+            print(f"    ! Error inspecting {module_display_name}: {error}")  # Tell the user.
+            logging.error("Error inspecting const module %s: %s", module_display_name, error)  # Log the error.
 
-    def _find_api_functions(self, module, endpoint_name: str) -> list[str]:
+    def _find_api_functions(self, module, endpoint_name: str) -> list[str]:  # Find candidate API functions.
         """Find all callable API functions in a module."""
-        import inspect
+        import inspect  # Import inspect.
 
-        functions = []
-        for name, obj in inspect.getmembers(module):
-            if not inspect.isfunction(obj) or name.startswith("_"):
+        functions = []  # Collect function names.
+        for name, obj in inspect.getmembers(module):  # Walk module members.
+            if not inspect.isfunction(obj) or name.startswith("_"):  # Skip non-functions/private.
                 continue
 
-            sig = inspect.signature(obj)
-            param_names = list(sig.parameters.keys())
-            has_session_param = "mist_session" in param_names or "apisession" in param_names
+            sig = inspect.signature(obj)  # Read the signature.
+            param_names = list(sig.parameters.keys())  # List parameter names.
+            has_session_param = "mist_session" in param_names or "apisession" in param_names  # Detect a session param.
 
-            if has_session_param and len(param_names) >= 1:
-                functions.append(name)
-                logging.debug("Found potential API function in %s: %s%s", endpoint_name, name, sig)
+            if has_session_param and len(param_names) >= 1:  # Looks like an API call.
+                functions.append(name)  # Keep the function.
+                logging.debug("Found potential API function in %s: %s%s", endpoint_name, name, sig)  # Trace the find.
 
-        return functions
+        return functions  # Return the functions.
 
-    def _select_best_function(self, functions: list[str]) -> str | None:
+    def _select_best_function(self, functions: list[str]) -> str | None:  # Pick the best function.
         """Select the best API function from a list (prefer list*, then get*)."""
-        for func_name in functions:
-            if func_name.lower().startswith("list"):
-                return func_name
+        for func_name in functions:  # Prefer list*.
+            if func_name.lower().startswith("list"):  # Name starts with list.
+                return func_name  # Use it.
 
-        for func_name in functions:
-            if func_name.lower().startswith("get"):
-                return func_name
+        for func_name in functions:  # Then prefer get*.
+            if func_name.lower().startswith("get"):  # Name starts with get.
+                return func_name  # Use it.
 
-        return functions[0] if functions else None
+        return functions[0] if functions else None  # Fall back to the first.
 
     def _register_endpoint(self, endpoint_name: str, module, api_function: str, modname: str) -> None:
         """Register an endpoint after analyzing its parameters."""
-        import inspect
+        import inspect  # Import inspect.
 
-        filename = self._build_filename(endpoint_name)
-        description = f"{endpoint_name.replace('_', ' ').title()} Definitions"
+        filename = self._build_filename(endpoint_name)  # Build the filename.
+        description = f"{endpoint_name.replace('_', ' ').title()} Definitions"  # Build the description.
 
-        sig = inspect.signature(getattr(module, api_function))
-        required_params = self._get_required_params(sig)
-        optional_params = self._get_optional_params(sig)
+        sig = inspect.signature(getattr(module, api_function))  # Read the signature.
+        required_params = self._get_required_params(sig)  # Required params.
+        optional_params = self._get_optional_params(sig)  # Optional params.
 
-        special_handling = self._determine_special_handling(
+        special_handling = self._determine_special_handling(  # Decide special handling.
             endpoint_name, api_function, required_params, optional_params, filename
         )
 
-        if special_handling == "skip":
-            return
+        if special_handling == "skip":  # Endpoint to skip.
+            return  # Skip it.
 
-        config = EndpointConfig(
+        config = EndpointConfig(  # Build the config.
             endpoint_name=endpoint_name,
             module=module,
             function_name=api_function,
@@ -14357,32 +14357,32 @@ class ConstDefinitionsExporter:
             modname=modname,
             special_handling=special_handling,
         )
-        self.discovered_endpoints[endpoint_name] = config
+        self.discovered_endpoints[endpoint_name] = config  # Register the endpoint.
 
-        print(f"    ! Found API function: {api_function}() -> {filename}")
-        logging.debug("Discovered %s: %s() -> %s", endpoint_name, api_function, filename)
+        print(f"    ! Found API function: {api_function}() -> {filename}")  # Tell the user.
+        logging.debug("Discovered %s: %s() -> %s", endpoint_name, api_function, filename)  # Trace the find.
 
-    def _build_filename(self, endpoint_name: str) -> str:
+    def _build_filename(self, endpoint_name: str) -> str:  # Build the const filename.
         """Convert endpoint_name to ConstTitleCase.csv filename."""
-        parts = endpoint_name.split("_")
-        title_name = "".join(word.capitalize() for word in parts)
-        return f"Const{title_name}.csv"
+        parts = endpoint_name.split("_")  # Split on underscores.
+        title_name = "".join(word.capitalize() for word in parts)  # Title-case the name.
+        return f"Const{title_name}.csv"  # Return the filename.
 
     def _get_required_params(self, sig) -> list:  # type: ignore[no-untyped-def, type-arg]
         """Extract required parameters from function signature."""
-        import inspect
+        import inspect  # Import inspect.
 
-        return [
+        return [  # List required params.
             p
             for p in sig.parameters.values()
             if p.default == inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]
         ]
 
-    def _get_optional_params(self, sig) -> list[str]:
+    def _get_optional_params(self, sig) -> list[str]:  # List optional params.
         """Extract optional parameter names from function signature."""
-        import inspect
+        import inspect  # Import inspect.
 
-        return [
+        return [  # List optional params.
             p.name
             for p in sig.parameters.values()
             if p.default != inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]
@@ -14397,412 +14397,412 @@ class ConstDefinitionsExporter:
         filename: str,
     ) -> str | None:
         """Determine special handling type for endpoint."""
-        if endpoint_name == "ap_channels" and "country_code" in optional_params:
+        if endpoint_name == "ap_channels" and "country_code" in optional_params:  # AP channels special case.
             print(f"    ! Found special endpoint {api_function}() with optional 'country_code' parameter")
-            print(f"    ! Will call for all available countries -> {filename}")
-            return "all_countries_channels"
+            print(f"    ! Will call for all available countries -> {filename}")  # Tell the user.
+            return "all_countries_channels"  # All-countries channels.
 
-        if not required_params:
-            return None
+        if not required_params:  # No required params.
+            return None  # Standard handling.
 
-        param_names = [p.name for p in required_params]
+        param_names = [p.name for p in required_params]  # Required param names.
 
-        if endpoint_name == "default_gateway_config" and "model" in param_names:
-            print(f"    ! Found special endpoint {api_function}() requiring 'model' parameter")
-            print(f"    ! Will call for all available gateway models -> {filename}")
-            return "all_models"
+        if endpoint_name == "default_gateway_config" and "model" in param_names:  # Gateway config special case.
+            print(f"    ! Found special endpoint {api_function}() requiring 'model' parameter")  # Tell the user.
+            print(f"    ! Will call for all available gateway models -> {filename}")  # Tell the user.
+            return "all_models"  # All-models handling.
 
-        if endpoint_name == "states" and "country_code" in param_names:
-            print(f"    ! Found special endpoint {api_function}() requiring 'country_code' parameter")
-            print(f"    ! Will call for all available countries -> {filename}")
-            return "all_countries"
+        if endpoint_name == "states" and "country_code" in param_names:  # States special case.
+            print(f"    ! Found special endpoint {api_function}() requiring 'country_code' parameter")  # Tell the user.
+            print(f"    ! Will call for all available countries -> {filename}")  # Tell the user.
+            return "all_countries"  # All-countries handling.
 
-        print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")
+        print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")  # Tell the user skip.
         logging.info("Skipping %s.%s() - requires parameters: %s", endpoint_name, api_function, param_names)
-        return "skip"
+        return "skip"  # Skip it.
 
-    def _process_all_endpoints(self) -> None:
+    def _process_all_endpoints(self) -> None:  # Process all endpoints.
         """Process each discovered endpoint."""
-        for _endpoint_name, config in self.discovered_endpoints.items():
-            self._process_single_endpoint(config)
+        for _endpoint_name, config in self.discovered_endpoints.items():  # Walk endpoints.
+            self._process_single_endpoint(config)  # Process each.
 
-    def _process_single_endpoint(self, config: EndpointConfig) -> None:
+    def _process_single_endpoint(self, config: EndpointConfig) -> None:  # Process one endpoint.
         """Process a single endpoint with cache checking and data export."""
-        print(f"\n! Processing {config.description} ({config.endpoint_name})...")
+        print(f"\n! Processing {config.description} ({config.endpoint_name})...")  # Tell the user.
 
         try:
-            if self._is_file_fresh(config):
-                self.endpoints_skipped_fresh += 1
-                self.endpoints_processed += 1
-                return
+            if self._is_file_fresh(config):  # File is fresh.
+                self.endpoints_skipped_fresh += 1  # Count skipped-fresh.
+                self.endpoints_processed += 1  # Count processed.
+                return  # Skip it.
 
-            self._fetch_and_export_endpoint(config)
-            self.endpoints_processed += 1
+            self._fetch_and_export_endpoint(config)  # Fetch and export.
+            self.endpoints_processed += 1  # Count processed.
 
-        except Exception as error:
-            print(f"! Critical error processing {config.endpoint_name}: {error}")
-            logging.error("Critical error processing %s: %s", config.endpoint_name, error)
-            self.endpoints_failed += 1
-            self.endpoints_processed += 1
+        except Exception as error:  # Processing failed.
+            print(f"! Critical error processing {config.endpoint_name}: {error}")  # Tell the user.
+            logging.error("Critical error processing %s: %s", config.endpoint_name, error)  # Log the error.
+            self.endpoints_failed += 1  # Count failed.
+            self.endpoints_processed += 1  # Count processed.
 
-    def _is_file_fresh(self, config: EndpointConfig) -> bool:
+    def _is_file_fresh(self, config: EndpointConfig) -> bool:  # Check cache freshness.
         """Check if cached file exists and is fresh enough to use."""
-        import os
-        import time
-        from datetime import datetime
+        import os  # Import os.
+        import time  # Import time.
+        from datetime import datetime  # Import datetime.
 
-        file_path = os.path.join("data", config.filename)
-        if not os.path.exists(file_path):
-            print(f"  ! {config.filename} not found - fetching fresh data from API...")
-            logging.info("%s not found, fetching from API", config.filename)
-            return False
+        file_path = os.path.join("data", config.filename)  # Build the file path.
+        if not os.path.exists(file_path):  # File missing.
+            print(f"  ! {config.filename} not found - fetching fresh data from API...")  # Tell the user.
+            logging.info("%s not found, fetching from API", config.filename)  # Log the fetch.
+            return False  # Not fresh.
 
         try:
-            file_mtime = os.path.getmtime(file_path)
-            file_age_hours = (time.time() - file_mtime) / 3600
-            file_timestamp = datetime.fromtimestamp(file_mtime).strftime("%Y-%m-%d %H:%M:%S")
+            file_mtime = os.path.getmtime(file_path)  # Read the mtime.
+            file_age_hours = (time.time() - file_mtime) / 3600  # Compute age in hours.
+            file_timestamp = datetime.fromtimestamp(file_mtime).strftime("%Y-%m-%d %H:%M:%S")  # Format the timestamp.
 
-            if file_age_hours < self.CACHE_MAX_AGE_HOURS:
+            if file_age_hours < self.CACHE_MAX_AGE_HOURS:  # Within the window.
                 print(f"  ! Found fresh {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
                 print(f"  ! Skipping API call - using cached data (cache valid for {self.CACHE_MAX_AGE_HOURS}h)")
                 logging.info("Using cached %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
-                return True
+                return True  # Fresh.
             else:
                 print(f"  ! Found stale {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
                 print(f"  ! File is older than {self.CACHE_MAX_AGE_HOURS}h threshold - fetching fresh data from API...")
                 logging.info("Refreshing stale %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
-                return False
+                return False  # Stale.
 
-        except Exception as error:
-            print(f"  ! Error checking file timestamp: {error}")
+        except Exception as error:  # Timestamp check failed.
+            print(f"  ! Error checking file timestamp: {error}")  # Tell the user.
             logging.warning("Could not check %s file timestamp, will fetch fresh data: %s", config.endpoint_name, error)
-            return False
+            return False  # Not fresh.
 
-    def _fetch_and_export_endpoint(self, config: EndpointConfig) -> None:
+    def _fetch_and_export_endpoint(self, config: EndpointConfig) -> None:  # Fetch and export an endpoint.
         """Fetch data from API and export to file."""
         print(f"  ! Requesting fresh {config.description.lower()} from Mist API using {config.function_name}()...")
 
         try:
-            const_data = self._fetch_endpoint_data(config)
-            self._export_data(config, const_data)
-        except Exception as error:
-            print(f"  ! Error exporting {config.description.lower()}: {error}")
+            const_data = self._fetch_endpoint_data(config)  # Fetch the data.
+            self._export_data(config, const_data)  # Export the data.
+        except Exception as error:  # Export failed.
+            print(f"  ! Error exporting {config.description.lower()}: {error}")  # Tell the user.
             logging.error("Failed to export %s from %s: %s", config.description.lower(), config.endpoint_name, error)
             DataExporter.write_with_format_selection([], config.filename)  # type: ignore[no-untyped-call]
-            self.endpoints_failed += 1
+            self.endpoints_failed += 1  # Count failed.
 
-    def _fetch_endpoint_data(self, config: EndpointConfig):
+    def _fetch_endpoint_data(self, config: EndpointConfig):  # Dispatch the fetch type.
         """Fetch data based on special handling type."""
-        if config.special_handling == "all_models":
-            return self._fetch_all_gateway_models(config)
-        elif config.special_handling == "all_countries":
-            return self._fetch_all_country_states(config)
-        elif config.special_handling == "all_countries_channels":
-            return self._fetch_all_country_channels(config)
+        if config.special_handling == "all_models":  # All-models case.
+            return self._fetch_all_gateway_models(config)  # Fetch per model.
+        elif config.special_handling == "all_countries":  # All-countries case.
+            return self._fetch_all_country_states(config)  # Fetch per country.
+        elif config.special_handling == "all_countries_channels":  # All-channels case.
+            return self._fetch_all_country_channels(config)  # Fetch per country.
         else:
-            return self._fetch_standard_endpoint(config)
+            return self._fetch_standard_endpoint(config)  # Standard fetch.
 
-    def _fetch_standard_endpoint(self, config: EndpointConfig):
+    def _fetch_standard_endpoint(self, config: EndpointConfig):  # Fetch a standard endpoint.
         """Fetch data from a standard endpoint with no special parameters."""
-        api_function = getattr(config.module, config.function_name)
-        response = api_function(self.api_session)
-        return getattr(response, "data", response) or {}
+        api_function = getattr(config.module, config.function_name)  # Resolve the function.
+        response = api_function(self.api_session)  # Call the API.
+        return getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
     def _fetch_all_gateway_models(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
         """Fetch gateway configs for all available models."""
 
         print(f"  ! Special handling: Calling {config.function_name}() for all available gateway models...")
 
-        gateway_models = self._get_gateway_models_list()
-        all_configs = []
-        successful = 0
-        failed = 0
+        gateway_models = self._get_gateway_models_list()  # List gateway models.
+        all_configs = []  # Accumulate configs.
+        successful = 0  # Success count.
+        failed = 0  # Failure count.
 
-        for model in gateway_models:
+        for model in gateway_models:  # Fetch each model.
             try:
-                api_function = getattr(config.module, config.function_name)
-                response = api_function(self.api_session, model=model)
-                model_data = getattr(response, "data", response) or {}
+                api_function = getattr(config.module, config.function_name)  # Resolve the function.
+                response = api_function(self.api_session, model=model)  # Call with the model.
+                model_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                if model_data:
-                    records = self._normalize_model_data(model, model_data)
-                    all_configs.extend(records)
-                    successful += 1
-            except Exception as error:
-                logging.warning("Failed to get gateway config for model %s: %s", model, error)
-                failed += 1
+                if model_data:  # Have data.
+                    records = self._normalize_model_data(model, model_data)  # Normalize model rows.
+                    all_configs.extend(records)  # Collect them.
+                    successful += 1  # Count success.
+            except Exception as error:  # Model fetch failed.
+                logging.warning("Failed to get gateway config for model %s: %s", model, error)  # Warn the failure.
+                failed += 1  # Count failure.
 
-        print(f"    ! Successfully retrieved configs for {successful} models, {failed} failed")
-        return all_configs
+        print(f"    ! Successfully retrieved configs for {successful} models, {failed} failed")  # Tell the user.
+        return all_configs  # Return all configs.
 
-    def _get_gateway_models_list(self) -> list[str]:
+    def _get_gateway_models_list(self) -> list[str]:  # List gateway models.
         """Get list of gateway models from device_models endpoint."""
-        import importlib
+        import importlib  # Import importlib.
 
         try:
             device_models_module = importlib.import_module("mistapi.api.v1.const.device_models")
-            device_models_function = device_models_module.listDeviceModels
-            response = device_models_function(self.api_session)
-            device_models_data = getattr(response, "data", response) or {}
+            device_models_function = device_models_module.listDeviceModels  # Resolve the function.
+            response = device_models_function(self.api_session)  # Call the API.
+            device_models_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-            gateway_models = self._extract_gateway_models(device_models_data)
+            gateway_models = self._extract_gateway_models(device_models_data)  # Extract gateway models.
 
-            if gateway_models:
+            if gateway_models:  # Have models.
                 print(f"    ! Discovered {len(gateway_models)} gateway models from device definitions")
-                return gateway_models
+                return gateway_models  # Return them.
 
-        except Exception as error:
-            logging.warning("Failed to get gateway models list: %s", error)
+        except Exception as error:  # Fetch failed.
+            logging.warning("Failed to get gateway models list: %s", error)  # Warn the failure.
 
         print(f"    ! Using fallback gateway models: {len(self.FALLBACK_GATEWAY_MODELS)} models")
-        return self.FALLBACK_GATEWAY_MODELS
+        return self.FALLBACK_GATEWAY_MODELS  # Use the fallback list.
 
-    def _extract_gateway_models(self, device_models_data) -> list[str]:
+    def _extract_gateway_models(self, device_models_data) -> list[str]:  # Filter to gateway models.
         """Extract gateway model names from device models data."""
-        gateway_models = []
+        gateway_models = []  # Collect model names.
 
-        if isinstance(device_models_data, dict):
-            for model_name, model_details in device_models_data.items():
-                if isinstance(model_details, dict):
-                    model_type = model_details.get("type", "").lower()
-                    if model_type == "gateway":
-                        gateway_models.append(model_name)
-        elif isinstance(device_models_data, list):
-            for model_item in device_models_data:
-                if isinstance(model_item, dict):
-                    model_name = model_item.get("model", model_item.get("name", ""))
-                    model_type = model_item.get("type", "").lower()
-                    if model_name and model_type == "gateway":
-                        gateway_models.append(model_name)
+        if isinstance(device_models_data, dict):  # Dict payload.
+            for model_name, model_details in device_models_data.items():  # Walk models.
+                if isinstance(model_details, dict):  # Dict details.
+                    model_type = model_details.get("type", "").lower()  # Read the type.
+                    if model_type == "gateway":  # Gateway type.
+                        gateway_models.append(model_name)  # Keep the model.
+        elif isinstance(device_models_data, list):  # List payload.
+            for model_item in device_models_data:  # Walk models.
+                if isinstance(model_item, dict):  # Dict item.
+                    model_name = model_item.get("model", model_item.get("name", ""))  # Read the name.
+                    model_type = model_item.get("type", "").lower()  # Read the type.
+                    if model_name and model_type == "gateway":  # Gateway with a name.
+                        gateway_models.append(model_name)  # Keep the model.
 
-        return gateway_models
+        return gateway_models  # Return gateway models.
 
     def _normalize_model_data(self, model: str, model_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize model data into list of records with model identifier."""
-        records = []
+        records = []  # Collect rows.
 
-        if isinstance(model_data, dict):
-            record = {"model": model}
-            record.update(model_data)
-            records.append(record)
-        elif isinstance(model_data, list):
-            for item in model_data:
-                if isinstance(item, dict):
-                    item["model"] = model
-            records.extend(model_data)
+        if isinstance(model_data, dict):  # Dict payload.
+            record = {"model": model}  # Start with the model.
+            record.update(model_data)  # Merge the data.
+            records.append(record)  # Collect the row.
+        elif isinstance(model_data, list):  # List payload.
+            for item in model_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    item["model"] = model  # Tag the model.
+            records.extend(model_data)  # Collect the items.
         else:
-            records.append({"model": model, "config": str(model_data)})
+            records.append({"model": model, "config": str(model_data)})  # Wrap scalar payload.
 
-        return records
+        return records  # Return the rows.
 
     def _fetch_all_country_states(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
         """Fetch states for all available countries."""
         print(f"  ! Special handling: Calling {config.function_name}() for all available countries...")
 
-        country_codes = self._get_country_codes_list()
-        all_states = []
-        successful = 0
-        failed = 0
+        country_codes = self._get_country_codes_list()  # List country codes.
+        all_states = []  # Accumulate states.
+        successful = 0  # Success count.
+        failed = 0  # Failure count.
 
-        for country_code in country_codes:
+        for country_code in country_codes:  # Fetch each country.
             try:
-                api_function = getattr(config.module, config.function_name)
-                response = api_function(self.api_session, country_code=country_code)
-                country_data = getattr(response, "data", response) or {}
+                api_function = getattr(config.module, config.function_name)  # Resolve the function.
+                response = api_function(self.api_session, country_code=country_code)  # Call with the country.
+                country_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                if country_data:
-                    records = self._normalize_states_data(country_code, country_data)
-                    all_states.extend(records)
-                    successful += 1
-            except Exception as error:
-                logging.warning("Failed to get states for country %s: %s", country_code, error)
-                failed += 1
+                if country_data:  # Have data.
+                    records = self._normalize_states_data(country_code, country_data)  # Normalize state rows.
+                    all_states.extend(records)  # Collect them.
+                    successful += 1  # Count success.
+            except Exception as error:  # Country fetch failed.
+                logging.warning("Failed to get states for country %s: %s", country_code, error)  # Warn the failure.
+                failed += 1  # Count failure.
 
-        print(f"    ! Successfully retrieved states for {successful} countries, {failed} failed")
-        return all_states
+        print(f"    ! Successfully retrieved states for {successful} countries, {failed} failed")  # Tell the user.
+        return all_states  # Return all states.
 
-    def _get_country_codes_list(self) -> list[str]:
+    def _get_country_codes_list(self) -> list[str]:  # List country codes.
         """Get list of valid country codes from countries endpoint."""
-        import importlib
+        import importlib  # Import importlib.
 
         try:
-            countries_module = importlib.import_module("mistapi.api.v1.const.countries")
-            countries_function = countries_module.listCountryCodes
-            response = countries_function(self.api_session)
-            countries_data = getattr(response, "data", response) or {}
+            countries_module = importlib.import_module("mistapi.api.v1.const.countries")  # Import countries.
+            countries_function = countries_module.listCountryCodes  # Resolve the function.
+            response = countries_function(self.api_session)  # Call the API.
+            countries_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-            country_codes = self._extract_country_codes(countries_data)
+            country_codes = self._extract_country_codes(countries_data)  # Extract country codes.
 
-            if country_codes:
-                original_count = len(country_codes)
+            if country_codes:  # Have codes.
+                original_count = len(country_codes)  # Remember the count.
                 country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
-                if len(country_codes) < original_count:
+                if len(country_codes) < original_count:  # Some were filtered.
                     logging.debug("Filtered out %s invalid country codes", original_count - len(country_codes))
-                print(f"    ! Discovered {len(country_codes)} country codes from country definitions")
-                return country_codes
+                print(f"    ! Discovered {len(country_codes)} country codes from country definitions")  # Tell the user.
+                return country_codes  # Return them.
 
-        except Exception as error:
-            logging.warning("Failed to get countries list: %s", error)
+        except Exception as error:  # Fetch failed.
+            logging.warning("Failed to get countries list: %s", error)  # Warn the failure.
 
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_COUNTRIES)} countries")
-        return self.FALLBACK_COUNTRIES
+        return self.FALLBACK_COUNTRIES  # Use the fallback list.
 
-    def _extract_country_codes(self, countries_data) -> list[str]:
+    def _extract_country_codes(self, countries_data) -> list[str]:  # Extract country codes.
         """Extract country codes from countries data."""
-        if isinstance(countries_data, dict):
-            return list(countries_data.keys())
-        elif isinstance(countries_data, list):
-            codes = []
-            for item in countries_data:
-                if isinstance(item, dict):
-                    code = item.get("code") or item.get("alpha2") or item.get("name", "")[:2].upper()
-                    if code:
-                        codes.append(code)
-            return codes
-        return []
+        if isinstance(countries_data, dict):  # Dict payload.
+            return list(countries_data.keys())  # Return the keys.
+        elif isinstance(countries_data, list):  # List payload.
+            codes = []  # Collect codes.
+            for item in countries_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    code = item.get("code") or item.get("alpha2") or item.get("name", "")[:2].upper()  # Resolve a code.
+                    if code:  # Have a code.
+                        codes.append(code)  # Keep it.
+            return codes  # Return the codes.
+        return []  # Unknown shape.
 
     def _normalize_states_data(self, country_code: str, country_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize states data into list of records with country identifier."""
-        records = []
+        records = []  # Collect rows.
 
-        if isinstance(country_data, dict):
-            for state_code, state_data in country_data.items():
-                if isinstance(state_data, dict):
-                    record = {"country_code": country_code, "state_code": state_code}
-                    record.update(state_data)
-                    records.append(record)
+        if isinstance(country_data, dict):  # Dict payload.
+            for state_code, state_data in country_data.items():  # Walk states.
+                if isinstance(state_data, dict):  # Dict state.
+                    record = {"country_code": country_code, "state_code": state_code}  # Build the row.
+                    record.update(state_data)  # Merge the data.
+                    records.append(record)  # Collect the row.
                 else:
-                    records.append(
+                    records.append(  # Scalar state value.
                         {"country_code": country_code, "state_code": state_code, "state_name": str(state_data)}
                     )
-        elif isinstance(country_data, list):
-            for item in country_data:
-                if isinstance(item, dict):
-                    item["country_code"] = country_code
-            records.extend(country_data)
+        elif isinstance(country_data, list):  # List payload.
+            for item in country_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    item["country_code"] = country_code  # Tag the country.
+            records.extend(country_data)  # Collect the items.
 
-        return records
+        return records  # Return the rows.
 
     def _fetch_all_country_channels(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
         """Fetch AP channels for all available countries."""
         print(f"  ! Special handling: Calling {config.function_name}() for all available countries...")
 
-        country_codes = self._get_channel_country_codes()
-        all_channels = []
-        successful = 0
-        failed = 0
+        country_codes = self._get_channel_country_codes()  # List channel countries.
+        all_channels = []  # Accumulate channels.
+        successful = 0  # Success count.
+        failed = 0  # Failure count.
 
-        for country_code in country_codes:
+        for country_code in country_codes:  # Fetch each country.
             try:
-                api_function = getattr(config.module, config.function_name)
-                response = api_function(self.api_session, country_code=country_code)
-                country_data = getattr(response, "data", response) or {}
+                api_function = getattr(config.module, config.function_name)  # Resolve the function.
+                response = api_function(self.api_session, country_code=country_code)  # Call with the country.
+                country_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                if country_data:
-                    records = self._normalize_channels_data(country_code, country_data)
-                    all_channels.extend(records)
-                    successful += 1
-            except Exception as error:
-                logging.debug("Failed to get AP channels for country %s: %s", country_code, error)
-                failed += 1
+                if country_data:  # Have data.
+                    records = self._normalize_channels_data(country_code, country_data)  # Normalize channel rows.
+                    all_channels.extend(records)  # Collect them.
+                    successful += 1  # Count success.
+            except Exception as error:  # Country fetch failed.
+                logging.debug("Failed to get AP channels for country %s: %s", country_code, error)  # Trace the failure.
+                failed += 1  # Count failure.
 
-        print(f"    ! Successfully retrieved AP channels for {successful} countries, {failed} failed")
-        return all_channels
+        print(f"    ! Successfully retrieved AP channels for {successful} countries, {failed} failed")  # Tell the user.
+        return all_channels  # Return all channels.
 
-    def _get_channel_country_codes(self) -> list[str]:
+    def _get_channel_country_codes(self) -> list[str]:  # List channel countries.
         """Get list of country codes for AP channel lookup."""
-        import importlib
+        import importlib  # Import importlib.
 
         try:
-            countries_module = importlib.import_module("mistapi.api.v1.const.countries")
-            countries_function = countries_module.listCountryCodes
-            response = countries_function(self.api_session)
-            countries_data = getattr(response, "data", response) or {}
+            countries_module = importlib.import_module("mistapi.api.v1.const.countries")  # Import countries.
+            countries_function = countries_module.listCountryCodes  # Resolve the function.
+            response = countries_function(self.api_session)  # Call the API.
+            countries_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-            country_codes = self._extract_channel_country_codes(countries_data)
+            country_codes = self._extract_channel_country_codes(countries_data)  # Extract country codes.
 
-            if country_codes:
-                original_count = len(country_codes)
+            if country_codes:  # Have codes.
+                original_count = len(country_codes)  # Remember the count.
                 country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
-                if len(country_codes) < original_count:
-                    logging.debug(
+                if len(country_codes) < original_count:  # Some were filtered.
+                    logging.debug(  # Trace the filter.
                         "Filtered out %s invalid country codes for ap_channels", original_count - len(country_codes)
                     )
-                print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")
-                return country_codes
+                print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")  # Tell the user.
+                return country_codes  # Return them.
 
-        except Exception as error:
-            logging.warning("Failed to get countries list for AP channels: %s", error)
+        except Exception as error:  # Fetch failed.
+            logging.warning("Failed to get countries list for AP channels: %s", error)  # Warn the failure.
 
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_CHANNEL_COUNTRIES)} countries")
-        return self.FALLBACK_CHANNEL_COUNTRIES
+        return self.FALLBACK_CHANNEL_COUNTRIES  # Use the fallback list.
 
-    def _extract_channel_country_codes(self, countries_data) -> list[str]:
+    def _extract_channel_country_codes(self, countries_data) -> list[str]:  # Extract channel countries.
         """Extract country codes from countries data for channel lookup."""
-        if isinstance(countries_data, dict):
-            return list(countries_data.keys())
-        elif isinstance(countries_data, list):
-            codes = []
-            for item in countries_data:
-                if isinstance(item, dict):
-                    code = item.get("alpha2") or item.get("code")
-                    if code:
-                        codes.append(code)
-            return codes
-        return []
+        if isinstance(countries_data, dict):  # Dict payload.
+            return list(countries_data.keys())  # Return the keys.
+        elif isinstance(countries_data, list):  # List payload.
+            codes = []  # Collect codes.
+            for item in countries_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    code = item.get("alpha2") or item.get("code")  # Resolve a code.
+                    if code:  # Have a code.
+                        codes.append(code)  # Keep it.
+            return codes  # Return the codes.
+        return []  # Unknown shape.
 
     def _normalize_channels_data(self, country_code: str, country_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize channels data into list of records with country identifier."""
-        records = []
+        records = []  # Collect rows.
 
-        if isinstance(country_data, dict):
-            record = {"country_code": country_code}
-            record.update(country_data)
-            records.append(record)
-        elif isinstance(country_data, list):
-            for item in country_data:
-                if isinstance(item, dict):
-                    item["country_code"] = country_code
-            records.extend(country_data)
+        if isinstance(country_data, dict):  # Dict payload.
+            record = {"country_code": country_code}  # Start with the country.
+            record.update(country_data)  # Merge the data.
+            records.append(record)  # Collect the row.
+        elif isinstance(country_data, list):  # List payload.
+            for item in country_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    item["country_code"] = country_code  # Tag the country.
+            records.extend(country_data)  # Collect the items.
 
-        return records
+        return records  # Return the rows.
 
-    def _export_data(self, config: EndpointConfig, const_data) -> None:
+    def _export_data(self, config: EndpointConfig, const_data) -> None:  # Export const data to CSV.
         """Convert data to list format and export to file."""
-        if not const_data:
+        if not const_data:  # No data.
             print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
             logging.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)
             DataExporter.write_with_format_selection([], config.filename)  # type: ignore[no-untyped-call]
-            self.endpoints_updated += 1
-            return
+            self.endpoints_updated += 1  # Count updated.
+            return  # Abort.
 
-        data_list = self._convert_to_list(config.endpoint_name, const_data)
+        data_list = self._convert_to_list(config.endpoint_name, const_data)  # Normalize to a list.
         processed = DataProcessingUtils.escape_multiline(data_list)  # type: ignore[no-untyped-call]
         DataExporter.write_with_format_selection(processed, config.filename)  # type: ignore[no-untyped-call]
 
-        print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")
+        print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")  # Tell the user.
         logging.info("Exported %s fresh %s to %s", len(processed), config.description.lower(), config.filename)
-        self.endpoints_updated += 1
+        self.endpoints_updated += 1  # Count updated.
 
     def _convert_to_list(self, endpoint_name: str, const_data) -> list:  # type: ignore[no-untyped-def, type-arg]
         """Convert various data formats to list of records for CSV."""
-        if isinstance(const_data, list):
-            return const_data
+        if isinstance(const_data, list):  # List payload.
+            return const_data  # Return it.
 
-        if not isinstance(const_data, dict):
-            return [const_data] if const_data else []
+        if not isinstance(const_data, dict):  # Non-dict payload.
+            return [const_data] if const_data else []  # Wrap or empty.
 
-        if endpoint_name == "insight_metrics":
-            return self._convert_insight_metrics(const_data)
+        if endpoint_name == "insight_metrics":  # Insight metrics special case.
+            return self._convert_insight_metrics(const_data)  # Convert metrics.
 
-        return self._convert_standard_dict(const_data)
+        return self._convert_standard_dict(const_data)  # Standard dict conversion.
 
     def _convert_insight_metrics(self, const_data: dict) -> list[dict]:  # type: ignore[type-arg]
         """Convert insight metrics nested structure to flat list."""
-        data_list = []
+        data_list = []  # Collect rows.
 
-        for metric_name, metric_details in const_data.items():
-            metric_row = {
+        for metric_name, metric_details in const_data.items():  # Walk metrics.
+            metric_row = {  # Build the row.
                 "metric_name": metric_name,
                 "description": metric_details.get("description", ""),
                 "type": metric_details.get("type", ""),
@@ -14812,58 +14812,58 @@ class ConstDefinitionsExporter:
                 "intervals": self._format_intervals(metric_details.get("intervals", {})),
                 "report_intervals": self._format_report_intervals(metric_details.get("report_intervals", {})),
             }
-            data_list.append(metric_row)
+            data_list.append(metric_row)  # Collect the row.
 
-        return data_list
+        return data_list  # Return the rows.
 
     def _format_intervals(self, intervals: dict) -> str:  # type: ignore[type-arg]
         """Format intervals dictionary to string representation."""
-        if not intervals:
-            return ""
+        if not intervals:  # No intervals.
+            return ""  # Empty string.
 
-        interval_info = []
-        for interval_name, interval_data in intervals.items():
+        interval_info = []  # Collect interval text.
+        for interval_name, interval_data in intervals.items():  # Walk intervals.
             interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s, max_age:{interval_data.get('max_age', 'N/A')}s)"  # noqa: E501
-            interval_info.append(interval_str)
+            interval_info.append(interval_str)  # Collect the text.
 
-        return "; ".join(interval_info)
+        return "; ".join(interval_info)  # Join with semicolons.
 
     def _format_report_intervals(self, report_intervals: dict) -> str:  # type: ignore[type-arg]
         """Format report intervals dictionary to string representation."""
-        if not report_intervals:
-            return ""
+        if not report_intervals:  # No intervals.
+            return ""  # Empty string.
 
-        report_interval_info = []
-        for interval_name, interval_data in report_intervals.items():
-            interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s)"
-            report_interval_info.append(interval_str)
+        report_interval_info = []  # Collect interval text.
+        for interval_name, interval_data in report_intervals.items():  # Walk intervals.
+            interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s)"  # Format the interval.
+            report_interval_info.append(interval_str)  # Collect the text.
 
-        return "; ".join(report_interval_info)
+        return "; ".join(report_interval_info)  # Join with semicolons.
 
     def _convert_standard_dict(self, const_data: dict) -> list[dict]:  # type: ignore[type-arg]
         """Convert standard dictionary to list of records."""
-        data_list = []
+        data_list = []  # Collect rows.
 
-        for key, value in const_data.items():
-            if isinstance(value, dict):
-                row = {"name": key}
-                row.update(value)
-                data_list.append(row)
+        for key, value in const_data.items():  # Walk entries.
+            if isinstance(value, dict):  # Dict value.
+                row = {"name": key}  # Start with the name.
+                row.update(value)  # Merge the value.
+                data_list.append(row)  # Collect the row.
             else:
-                data_list.append({"name": key, "value": str(value)})
+                data_list.append({"name": key, "value": str(value)})  # Scalar value row.
 
-        return data_list
+        return data_list  # Return the rows.
 
-    def _print_summary(self) -> None:
+    def _print_summary(self) -> None:  # Print the export summary.
         """Print export summary statistics."""
-        print("\n! Dynamic Const Export Summary:")
-        print(f"  ! Total endpoints discovered: {len(self.discovered_endpoints)}")
-        print(f"  ! Total endpoints processed: {self.endpoints_processed}")
-        print(f"  ! Fresh files skipped: {self.endpoints_skipped_fresh}")
-        print(f"  ! Files updated/created: {self.endpoints_updated}")
-        print(f"  ! Failed endpoints: {self.endpoints_failed}")
+        print("\n! Dynamic Const Export Summary:")  # Header.
+        print(f"  ! Total endpoints discovered: {len(self.discovered_endpoints)}")  # Discovered count.
+        print(f"  ! Total endpoints processed: {self.endpoints_processed}")  # Processed count.
+        print(f"  ! Fresh files skipped: {self.endpoints_skipped_fresh}")  # Skipped-fresh count.
+        print(f"  ! Files updated/created: {self.endpoints_updated}")  # Updated count.
+        print(f"  ! Failed endpoints: {self.endpoints_failed}")  # Failed count.
 
-        logging.info(
+        logging.info(  # Log the totals.
             "Dynamic const export completed: %s discovered, %s processed, %s skipped (fresh), %s updated, %s failed",
             len(self.discovered_endpoints),
             self.endpoints_processed,
@@ -14876,7 +14876,7 @@ class ConstDefinitionsExporter:
 # ============================================================================
 # INSIGHT METRICS UTILITIES CLASS
 # ============================================================================
-class InsightMetricsUtils:
+class InsightMetricsUtils:  # Insight-metrics helpers.
     """
     Utilities for working with Mist insight metrics.
 
@@ -14885,28 +14885,28 @@ class InsightMetricsUtils:
     """
 
     @staticmethod
-    def export_const_insight_metrics() -> None:
+    def export_const_insight_metrics() -> None:  # Export const insight metrics.
         """
         Export available const insight metrics via the ConstDefinitionsExporter.
 
         Refreshes data/ConstInsightMetrics.csv so scope-filtering helpers can read it.
         """
         print("Export Available Insight Metrics:")  # User-facing banner for the const insight metrics export
-        print("! Note: This function now uses the dynamic comprehensive const export system")
-        print("! For best results, consider using Menu 82: Export All Const Definitions")
+        print("! Note: This function now uses the dynamic comprehensive const export system")  # Tell the user.
+        print("! For best results, consider using Menu 82: Export All Const Definitions")  # Tell the user.
         logging.info("Legacy const insight metrics export called - using ConstDefinitionsExporter class")
 
         exporter = ConstDefinitionsExporter(apisession)  # type: ignore[no-untyped-call]
-        exporter.export_all()
+        exporter.export_all()  # Run the dynamic export.
 
-        insight_metrics_file = os.path.join("data", "ConstInsightMetrics.csv")
-        if os.path.exists(insight_metrics_file):
-            print("! ConstInsightMetrics.csv is available in the dynamic export results")
+        insight_metrics_file = os.path.join("data", "ConstInsightMetrics.csv")  # Expected output file.
+        if os.path.exists(insight_metrics_file):  # File present.
+            print("! ConstInsightMetrics.csv is available in the dynamic export results")  # Tell the user.
         else:
             print("! Warning: ConstInsightMetrics.csv was not created during dynamic export")
 
     @staticmethod
-    def get_by_scope(target_scope: str) -> list[str]:
+    def get_by_scope(target_scope: str) -> list[str]:  # List metrics for a scope.
         """
         Read ConstInsightMetrics.csv and return metrics supporting the specified scope.
 
@@ -14916,54 +14916,54 @@ class InsightMetricsUtils:
         Returns:
             List of metric names that support the target scope
         """
-        csv_path = os.path.join("data", "ConstInsightMetrics.csv")
-        metrics_for_scope: list[str] = []
-        normalized_target_scope = (target_scope or "").strip().lower()
+        csv_path = os.path.join("data", "ConstInsightMetrics.csv")  # CSV path.
+        metrics_for_scope: list[str] = []  # Matching metric names.
+        normalized_target_scope = (target_scope or "").strip().lower()  # Normalize the target scope.
 
         try:
-            if not os.path.exists(csv_path):
-                logging.warning("ConstInsightMetrics.csv not found at %s", csv_path)
-                return []
+            if not os.path.exists(csv_path):  # File missing.
+                logging.warning("ConstInsightMetrics.csv not found at %s", csv_path)  # Warn it is missing.
+                return []  # Return empty.
 
-            with open(csv_path, encoding="utf-8") as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    scopes = row.get("scopes", "")
-                    metric_name = row.get("metric_name", "")
+            with open(csv_path, encoding="utf-8") as csvfile:  # Open the CSV.
+                reader = csv.DictReader(csvfile)  # Parse rows.
+                for row in reader:  # Walk rows.
+                    scopes = row.get("scopes", "")  # Read the scopes.
+                    metric_name = row.get("metric_name", "")  # Read the metric name.
 
-                    if not metric_name:
-                        continue
+                    if not metric_name:  # No name.
+                        continue  # Skip it.
 
-                    if not scopes:
-                        continue
+                    if not scopes:  # No scopes.
+                        continue  # Skip it.
 
-                    parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)
+                    parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)  # Parse the scopes.
                     # Skip placeholder/template metrics that require token substitution.
-                    if "{" in metric_name or "}" in metric_name:
-                        continue
+                    if "{" in metric_name or "}" in metric_name:  # Templated name.
+                        continue  # Skip it.
 
-                    if normalized_target_scope in parsed_scopes:
-                        metrics_for_scope.append(metric_name)
+                    if normalized_target_scope in parsed_scopes:  # Scope matches.
+                        metrics_for_scope.append(metric_name)  # Keep the metric.
 
-            logging.debug(
+            logging.debug(  # Trace the count.
                 "Found %s metrics for scope '%s': %s", len(metrics_for_scope), target_scope, metrics_for_scope
             )
-            return metrics_for_scope
+            return metrics_for_scope  # Return the metrics.
 
-        except Exception as exception:
-            logging.error("Error reading ConstInsightMetrics.csv: %s", exception)
-            return []
+        except Exception as exception:  # Read failed.
+            logging.error("Error reading ConstInsightMetrics.csv: %s", exception)  # Log the error.
+            return []  # Return empty.
 
     @staticmethod
-    def _parse_scopes(scopes_text: str) -> set[str]:
+    def _parse_scopes(scopes_text: str) -> set[str]:  # Parse a scopes string.
         """Parse scope strings from CSV into normalized tokens."""
-        if not scopes_text:
-            return set()
-        normalized = scopes_text.strip().lower()
+        if not scopes_text:  # Empty input.
+            return set()  # Empty set.
+        normalized = scopes_text.strip().lower()  # Lowercase it.
         normalized = normalized.replace("[", "").replace("]", "").replace('"', "").replace("'", "")
-        normalized = normalized.replace(";", ",")
-        tokens = [token.strip() for token in normalized.split(",") if token.strip()]
-        return set(tokens)
+        normalized = normalized.replace(";", ",")  # Normalize separators.
+        tokens = [token.strip() for token in normalized.split(",") if token.strip()]  # Split into tokens.
+        return set(tokens)  # Return the token set.
 
     @staticmethod
     def parse_to_normalized_data(metric_data: dict, org_id: str) -> dict[str, list]:  # type: ignore[type-arg]
@@ -14980,21 +14980,21 @@ class InsightMetricsUtils:
         normalized_data: dict[str, list] = {"summary": [], "time_series": [], "results": [], "sites_data": []}  # type: ignore[type-arg]
 
         try:
-            metric_type = metric_data.get("metric_type", "unknown")
+            metric_type = metric_data.get("metric_type", "unknown")  # Read the metric type.
 
             summary_data = InsightMetricsUtils._extract_summary(metric_data, org_id, metric_type)
-            normalized_data["summary"].append(summary_data)
+            normalized_data["summary"].append(summary_data)  # Collect it.
 
             time_series = InsightMetricsUtils._extract_time_series(metric_data, org_id, metric_type)
-            normalized_data["time_series"].extend(time_series)
+            normalized_data["time_series"].extend(time_series)  # Collect it.
 
-            results = InsightMetricsUtils._extract_results(metric_data, org_id, metric_type)
-            normalized_data["results"] = results
+            results = InsightMetricsUtils._extract_results(metric_data, org_id, metric_type)  # Extract results.
+            normalized_data["results"] = results  # Store them.
 
-            sites = InsightMetricsUtils._extract_sites_data(metric_data, org_id, metric_type)
-            normalized_data["sites_data"] = sites
+            sites = InsightMetricsUtils._extract_sites_data(metric_data, org_id, metric_type)  # Extract sites data.
+            normalized_data["sites_data"] = sites  # Store it.
 
-            logging.debug(
+            logging.debug(  # Trace the parse.
                 "Normalized metric %s: %s summary, %s time series, %s results, %s sites",
                 metric_type,
                 len(normalized_data["summary"]),
@@ -15003,16 +15003,16 @@ class InsightMetricsUtils:
                 len(normalized_data["sites_data"]),
             )
 
-        except Exception as exception:
-            logging.error("Error parsing insight metric data: %s", exception)
-            logging.debug("Failed metric data structure: %s", metric_data)
+        except Exception as exception:  # Parse failed.
+            logging.error("Error parsing insight metric data: %s", exception)  # Log the error.
+            logging.debug("Failed metric data structure: %s", metric_data)  # Trace the structure.
 
-        return normalized_data
+        return normalized_data  # Return normalized data.
 
     @staticmethod
     def _extract_summary(metric_data: dict, org_id: str, metric_type: str) -> dict:  # type: ignore[type-arg]
         """Extract summary data from metric."""
-        summary_data = {
+        summary_data = {  # Build the summary.
             "org_id": org_id,
             "metric_type": metric_type,
             "data_source": metric_data.get("data_source", ""),
@@ -15029,7 +15029,7 @@ class InsightMetricsUtils:
             "totalTunnelCount": metric_data.get("totalTunnelCount", ""),
         }
 
-        scalar_fields = [
+        scalar_fields = [  # Scalar fields to copy.
             "ap-health",
             "ap-redundancy",
             "capacity",
@@ -15054,31 +15054,31 @@ class InsightMetricsUtils:
             "time-to-connect",
         ]
 
-        for field_name in scalar_fields:
-            if field_name in metric_data:
-                summary_data[field_name] = metric_data[field_name]
+        for field_name in scalar_fields:  # Copy each field.
+            if field_name in metric_data:  # Field present.
+                summary_data[field_name] = metric_data[field_name]  # Copy the value.
 
-        return summary_data
+        return summary_data  # Return the summary.
 
     @staticmethod
     def _extract_time_series(metric_data: dict, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
         """Extract time series data from metric."""
         time_series_records = []  # type: ignore[var-annotated]
 
-        rt_field = metric_data.get("rt", "")
-        if not (rt_field and isinstance(rt_field, str) and "," in rt_field):
-            return time_series_records
+        rt_field = metric_data.get("rt", "")  # Read the rt field.
+        if not (rt_field and isinstance(rt_field, str) and "," in rt_field):  # Not a CSV series.
+            return time_series_records  # No time-series.
 
-        timestamps = rt_field.split(",")
+        timestamps = rt_field.split(",")  # Split the timestamps.
         time_series_fields = ["num_clients", "num_aps", "num_gateways", "num_switches", "num_mxedges", "num_mxtunnels"]
 
-        for field_name in time_series_fields:
-            field_data = metric_data.get(field_name, "")
-            if field_data and isinstance(field_data, str) and "," in field_data:
-                values = field_data.split(",")
+        for field_name in time_series_fields:  # Walk each field.
+            field_data = metric_data.get(field_name, "")  # Read the field.
+            if field_data and isinstance(field_data, str) and "," in field_data:  # CSV series present.
+                values = field_data.split(",")  # Split the values.
                 for index, (timestamp, value) in enumerate(zip(timestamps, values, strict=False)):
-                    if value and value != "None":
-                        time_series_records.append(
+                    if value and value != "None":  # Skip empty values.
+                        time_series_records.append(  # Collect the point.
                             {
                                 "org_id": org_id,
                                 "metric_type": metric_type,
@@ -15089,74 +15089,74 @@ class InsightMetricsUtils:
                             }
                         )
 
-        return time_series_records
+        return time_series_records  # Return the series.
 
     @staticmethod
     def _extract_results(metric_data: dict, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
         """Extract results array data from metric."""
         results_data = []  # type: ignore[var-annotated]
 
-        for key, value in metric_data.items():
-            if not (key.startswith("results_") and "_" in key):
+        for key, value in metric_data.items():  # Walk metric fields.
+            if not (key.startswith("results_") and "_" in key):  # Only results_* keys.
                 continue
 
-            parts = key.split("_", 2)
-            if len(parts) < 3:
-                continue
+            parts = key.split("_", 2)  # Split the key.
+            if len(parts) < 3:  # Too few parts.
+                continue  # Skip it.
 
-            result_index = parts[1]
-            result_field = parts[2]
+            result_index = parts[1]  # Result index.
+            result_field = parts[2]  # Result field.
 
             existing_result = next((r for r in results_data if r["result_index"] == result_index), None)
 
-            if existing_result is None:
-                existing_result = {
+            if existing_result is None:  # None yet.
+                existing_result = {  # Start a new result.
                     "org_id": org_id,
                     "metric_type": metric_type,
                     "result_index": int(result_index) if result_index.isdigit() else result_index,
                 }
-                results_data.append(existing_result)
+                results_data.append(existing_result)  # Collect it.
 
-            existing_result[result_field] = value
+            existing_result[result_field] = value  # Set the field.
 
-        return results_data
+        return results_data  # Return the results.
 
     @staticmethod
     def _extract_sites_data(metric_data: dict, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
         """Extract sites data from metric."""
-        sites_records = []
+        sites_records = []  # Collect site rows.
 
-        sites_data = metric_data.get("sites_data", [])
-        if isinstance(sites_data, list):
-            for site_data in sites_data:
-                if isinstance(site_data, dict):
-                    site_record = {"org_id": org_id, "metric_type": metric_type}
-                    site_record.update(site_data)
-                    sites_records.append(site_record)
+        sites_data = metric_data.get("sites_data", [])  # Read sites data.
+        if isinstance(sites_data, list):  # List payload.
+            for site_data in sites_data:  # Walk sites.
+                if isinstance(site_data, dict):  # Dict site.
+                    site_record = {"org_id": org_id, "metric_type": metric_type}  # Tag the site.
+                    site_record.update(site_data)  # Merge the data.
+                    sites_records.append(site_record)  # Collect the row.
 
-        for key, value in metric_data.items():
-            if not (key.startswith("sites_data_") and "_" in key):
+        for key, value in metric_data.items():  # Walk metric fields.
+            if not (key.startswith("sites_data_") and "_" in key):  # Only sites_data_* keys.
                 continue
 
-            parts = key.split("_", 2)
-            if len(parts) < 3:
-                continue
+            parts = key.split("_", 2)  # Split the key.
+            if len(parts) < 3:  # Too few parts.
+                continue  # Skip it.
 
-            site_index = parts[2]
-            site_field = parts[3] if len(parts) > 3 else "value"
+            site_index = parts[2]  # Site index.
+            site_field = parts[3] if len(parts) > 3 else "value"  # Site field.
 
-            existing_site = next(
+            existing_site = next(  # Find existing site.
                 (s for s in sites_records if s.get("site_index") == site_index and s.get("metric_type") == metric_type),
                 None,
             )
 
-            if existing_site is None:
+            if existing_site is None:  # None yet.
                 existing_site = {"org_id": org_id, "metric_type": metric_type, "site_index": site_index}
-                sites_records.append(existing_site)
+                sites_records.append(existing_site)  # Collect it.
 
-            existing_site[site_field] = value
+            existing_site[site_field] = value  # Set the field.
 
-        return sites_records
+        return sites_records  # Return the sites.
 
 
 # NOTE: create_test_sites_from_csv moved to SiteConfigManager.create_test_sites_from_csv
@@ -15170,7 +15170,7 @@ class InsightMetricsUtils:
 # ============================================================================
 # DATA COLLECTION MANAGER CLASS
 # ============================================================================
-class DataCollectionManager:
+class DataCollectionManager:  # Continuous data collector.
     """
     Manages automated data collection and support package generation operations.
 
@@ -15182,7 +15182,7 @@ class DataCollectionManager:
     """
 
     @staticmethod
-    def continuous_loop():
+    def continuous_loop():  # Run the collection loop.
         """
         Menu 76: Continuously collect core organizational data.
 
@@ -15195,72 +15195,72 @@ class DataCollectionManager:
 
         Stop by pressing CTRL+C or creating 'stop_loop.txt' file.
         """
-        logging.info("Starting DataCollectionManager.continuous_loop")
-        print(" Starting continuous data collection loop...")
-        print("   This will collect core organizational data every 5 seconds")
-        print("   Press CTRL+C to stop or create 'stop_loop.txt' file")
+        logging.info("Starting DataCollectionManager.continuous_loop")  # Log start.
+        print(" Starting continuous data collection loop...")  # Tell the user.
+        print("   This will collect core organizational data every 5 seconds")  # Tell the user.
+        print("   Press CTRL+C to stop or create 'stop_loop.txt' file")  # Tell the user how to stop.
 
-        loop_count = 0
+        loop_count = 0  # Iteration counter.
 
         try:
-            while True:
-                loop_count += 1
+            while True:  # Loop until stopped.
+                loop_count += 1  # Count the iteration.
                 print(f"\n  Loop iteration {loop_count} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-                if DataCollectionManager._check_stop_signal():
-                    break
+                if DataCollectionManager._check_stop_signal():  # Stop requested.
+                    break  # Exit the loop.
 
-                DataCollectionManager._execute_collection_cycle(loop_count)
+                DataCollectionManager._execute_collection_cycle(loop_count)  # Run one cycle.
 
-        except KeyboardInterrupt:
-            print("\n  Continuous data collection loop stopped by user.")
-        except Exception as e:
-            logging.error("Fatal error in continuous loop: %s", e)
-            print(f"! Fatal error in continuous loop: {e}")
+        except KeyboardInterrupt:  # User pressed Ctrl+C.
+            print("\n  Continuous data collection loop stopped by user.")  # Tell the user.
+        except Exception as e:  # Unexpected failure.
+            logging.error("Fatal error in continuous loop: %s", e)  # Log the error.
+            print(f"! Fatal error in continuous loop: {e}")  # Tell the user.
 
-        print(" Continuous data collection loop ended.")
+        print(" Continuous data collection loop ended.")  # Tell the user ended.
 
     @staticmethod
-    def _check_stop_signal() -> bool:
+    def _check_stop_signal() -> bool:  # Check the stop signal.
         """Check for stop file signal and remove if found."""
-        return ConfigUtils.check_stop_signal()
+        return ConfigUtils.check_stop_signal()  # Delegate to config utils.
 
     @staticmethod
-    def _execute_collection_cycle(loop_count: int) -> None:
+    def _execute_collection_cycle(loop_count: int) -> None:  # Run one collection cycle.
         """Execute one cycle of data collection with rate limiting."""
         try:
-            print("  Collecting site list...")
+            print("  Collecting site list...")  # Tell the user.
             OrgSiteExporter.sites()  # type: ignore[no-untyped-call]
-            time.sleep(0.75)
+            time.sleep(0.75)  # Pace the API.
 
-            print("  Collecting organization inventory...")
+            print("  Collecting organization inventory...")  # Tell the user.
             OrgInventoryExporter.inventory()  # type: ignore[no-untyped-call]
-            time.sleep(0.75)
+            time.sleep(0.75)  # Pace the API.
 
-            print("  Collecting organization device stats...")
-            OrgDeviceStatsExporter.device_stats()
-            time.sleep(0.75)
+            print("  Collecting organization device stats...")  # Tell the user.
+            OrgDeviceStatsExporter.device_stats()  # Export device stats.
+            time.sleep(0.75)  # Pace the API.
 
-            print("  Collecting organization device port stats...")
-            OrgDeviceStatsExporter.device_port_stats()
-            time.sleep(0.75)
+            print("  Collecting organization device port stats...")  # Tell the user.
+            OrgDeviceStatsExporter.device_port_stats()  # Export port stats.
+            time.sleep(0.75)  # Pace the API.
 
-            print("  Collecting VPN peer path stats...")
-            OrgDeviceStatsExporter.vpn_peer_stats()
-            time.sleep(0.75)
+            print("  Collecting VPN peer path stats...")  # Tell the user.
+            OrgDeviceStatsExporter.vpn_peer_stats()  # Export VPN peer stats.
+            time.sleep(0.75)  # Pace the API.
 
-            print(f"  Loop {loop_count} completed successfully")
+            print(f"  Loop {loop_count} completed successfully")  # Tell the user.
 
-        except KeyboardInterrupt:
+        except KeyboardInterrupt:  # Propagate Ctrl+C.
             raise  # Re-raise to outer handler
-        except Exception as e:
-            logging.error("Error in collection cycle %s: %s", loop_count, e)
-            print(f"  Error in loop {loop_count}: {e}")
-            print("  Continuing to next iteration...")
-            time.sleep(5)
+        except Exception as e:  # Cycle failed.
+            logging.error("Error in collection cycle %s: %s", loop_count, e)  # Log the error.
+            print(f"  Error in loop {loop_count}: {e}")  # Tell the user.
+            print("  Continuing to next iteration...")  # Tell the user.
+            time.sleep(5)  # Back off then retry.
 
     @staticmethod
-    def generate_support_packages():
+    def generate_support_packages():  # Generate support packages.
         """
         Menu 78: Generate support package CSV for each site with alarms or events.
 
@@ -15269,23 +15269,23 @@ class DataCollectionManager:
         - Device info, stats, port stats
         - Gateway speedtest results
         """
-        logging.info("DataCollectionManager.generate_support_packages starting")
+        logging.info("DataCollectionManager.generate_support_packages starting")  # Log start.
 
         # Ensure all required data is fresh
-        DataCollectionManager._refresh_support_data()
+        DataCollectionManager._refresh_support_data()  # Refresh support data.
 
         # Load all data sources
-        data_sources = DataCollectionManager._load_support_data_sources()
+        data_sources = DataCollectionManager._load_support_data_sources()  # Load support sources.
 
         # Generate packages for sites with alarms or events
-        DataCollectionManager._generate_site_packages(data_sources)
+        DataCollectionManager._generate_site_packages(data_sources)  # Generate per-site packages.
 
-        logging.info("Support packages generated for applicable sites.")
+        logging.info("Support packages generated for applicable sites.")  # Log completion.
 
     @staticmethod
-    def _refresh_support_data() -> None:
+    def _refresh_support_data() -> None:  # Refresh required CSVs.
         """Refresh all required CSV files for support package generation."""
-        required_files = [
+        required_files = [  # Required files and fetchers.
             ("OrgAlarms.csv", OrgAlarmEventExporter.alarms),
             ("OrgDeviceEvents.csv", OrgAlarmEventExporter.device_events),
             ("SiteList.csv", OrgSiteExporter.sites),
@@ -15295,13 +15295,13 @@ class DataCollectionManager:
             ("AllGatewayTestResults.csv", GatewayTestExporter.test_results_by_site),
         ]
 
-        for filename, func in required_files:
+        for filename, func in required_files:  # Refresh each file.
             CacheUtils.check_and_generate_csv(filename, func)  # type: ignore[arg-type]  # function is Callable
 
     @staticmethod
     def _load_support_data_sources() -> dict:  # type: ignore[type-arg]
         """Load all CSV data sources for support package assembly."""
-        sources = {
+        sources = {  # Load the data sources.
             "site_data": CacheUtils.load_csv_grouped_by_key("SiteList.csv", "id"),
             "alarms_data": CacheUtils.load_csv_grouped_by_key("OrgAlarms.csv", "site_id"),
             "events_data": CacheUtils.load_csv_grouped_by_key("OrgDeviceEvents.csv", "site_id"),
@@ -15312,27 +15312,27 @@ class DataCollectionManager:
         }
 
         # Load speedtest data if available
-        gateway_test_path = FilePathUtils.get_csv_path("AllGatewayTestResults.csv")
-        if os.path.exists(gateway_test_path):
+        gateway_test_path = FilePathUtils.get_csv_path("AllGatewayTestResults.csv")  # Speedtest CSV path.
+        if os.path.exists(gateway_test_path):  # File present.
             sources["speedtest_data"] = CacheUtils.load_csv_grouped_by_key("AllGatewayTestResults.csv", "site_id")
 
-        return sources
+        return sources  # Return the sources.
 
     @staticmethod
     def _generate_site_packages(data_sources: dict) -> None:  # type: ignore[type-arg]
         """Generate support package for each site with alarms or events."""
-        site_data = data_sources["site_data"]
+        site_data = data_sources["site_data"]  # Read the site data.
 
-        for site_id, _site_info in site_data.items():
+        for site_id, _site_info in site_data.items():  # Walk sites.
             # Skip sites without alarms or events
-            has_alarms = bool(data_sources["alarms_data"].get(site_id))
-            has_events = bool(data_sources["events_data"].get(site_id))
+            has_alarms = bool(data_sources["alarms_data"].get(site_id))  # Has alarms?
+            has_events = bool(data_sources["events_data"].get(site_id))  # Has events?
 
-            if not has_alarms and not has_events:
-                logging.info("Skipping site %s - no alarms or events", site_id)
-                continue
+            if not has_alarms and not has_events:  # Nothing to report.
+                logging.info("Skipping site %s - no alarms or events", site_id)  # Log the skip.
+                continue  # Skip it.
 
-            support_data = {
+            support_data = {  # Build the support data.
                 "alarms": data_sources["alarms_data"].get(site_id, []),
                 "events": data_sources["events_data"].get(site_id, []),
                 "devices": data_sources["devices_data"].get(site_id, []),
@@ -15341,15 +15341,15 @@ class DataCollectionManager:
                 "speedtests": data_sources["speedtest_data"].get(site_id, []),
             }
 
-            filename = f"SupportPackage_{site_id}.csv"
-            CacheUtils.write_support_data_to_csv(support_data, filename)
-            logging.info("Support package written for site %s", site_id)
+            filename = f"SupportPackage_{site_id}.csv"  # Build the CSV name.
+            CacheUtils.write_support_data_to_csv(support_data, filename)  # Write the package.
+            logging.info("Support package written for site %s", site_id)  # Log the write.
 
 
 # ============================================================================
 # INTERACTIVE DISPLAY UTILITIES CLASS
 # ============================================================================
-class InteractiveDisplayUtils:
+class InteractiveDisplayUtils:  # Interactive display utils.
     """
     Centralized interactive display utilities.
     Groups all interactive_display_* functions for better code organization.
@@ -15357,21 +15357,21 @@ class InteractiveDisplayUtils:
     """
 
     @staticmethod
-    def site_inventory():
+    def site_inventory():  # View site inventory.
         """
         Prompts the user to select a site and displays its device inventory.
         """
-        logging.info("Prompting user to select a site for device inventory view...")
-        print("Select a Site to View Device Inventory:")
-        site_id = PromptUtils.select_site_id_from_csv()
-        if site_id:
-            logging.info("User selected site_id: %s for inventory display.", site_id)
+        logging.info("Prompting user to select a site for device inventory view...")  # Log the prompt.
+        print("Select a Site to View Device Inventory:")  # Header.
+        site_id = PromptUtils.select_site_id_from_csv()  # Select a site.
+        if site_id:  # Site selected.
+            logging.info("User selected site_id: %s for inventory display.", site_id)  # Log the selection.
             SiteDeviceExporter.device_inventory(site_id)  # type: ignore[no-untyped-call]
         else:
-            logging.warning("No site selected or invalid input provided for site selection.")
+            logging.warning("No site selected or invalid input provided for site selection.")  # Warn none selected.
 
     @staticmethod
-    def device_stats(site_id=None, device_id=None):
+    def device_stats(site_id=None, device_id=None):  # View device stats.
         """
         Fetches and displays detailed statistics for a specific device.
 
@@ -15379,48 +15379,48 @@ class InteractiveDisplayUtils:
             site_id: Optional site ID (prompts if not provided)
             device_id: Optional device ID (prompts if not provided)
         """
-        logging.info("Prompting user to select a device for detailed statistics view...")
-        DeviceDataFetcher(
+        logging.info("Prompting user to select a device for detailed statistics view...")  # Log the prompt.
+        DeviceDataFetcher(  # Fetch and display.
             fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
             filename="DeviceStats.csv",
             description="Fetching detailed stats",
             site_id=site_id,
             device_id=device_id,
         ).fetch()
-        logging.info("Completed device_stats execution.")
+        logging.info("Completed device_stats execution.")  # Log completion.
 
     @staticmethod
-    def device_tests():
+    def device_tests():  # View device tests.
         """
         Prompts user to select a gateway device and displays its synthetic test stats.
         """
-        logging.info("Prompting user to select a gateway device for synthetic test stats view...")
-        DeviceDataFetcher(
+        logging.info("Prompting user to select a gateway device for synthetic test stats view...")  # Log the prompt.
+        DeviceDataFetcher(  # Fetch and display.
             fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
             filename="DeviceTestResults.csv",
             description="Fetching synthetic test stats",
             device_type="gateway",
         ).fetch()
-        logging.info("Completed device_tests execution.")
+        logging.info("Completed device_tests execution.")  # Log completion.
 
     @staticmethod
-    def device_config():
+    def device_config():  # View device config.
         """
         Prompts user to select a device and displays its configuration details.
         """
-        logging.info("Prompting user to select a device for configuration details view...")
-        DeviceDataFetcher(
+        logging.info("Prompting user to select a device for configuration details view...")  # Log the prompt.
+        DeviceDataFetcher(  # Fetch and display.
             fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
             filename="DeviceConfig.csv",
             description="Fetching device configuration",
         ).fetch()
-        logging.info("Completed device_config execution.")
+        logging.info("Completed device_config execution.")  # Log completion.
 
 
 # ============================================================================
 # GATEWAY EXPORT UTILITIES CLASS
 # ============================================================================
-class GatewayTestExporter:
+class GatewayTestExporter:  # Gateway synthetic test exporter.
     """
     Gateway Synthetic Test Exports
 
@@ -15439,25 +15439,25 @@ class GatewayTestExporter:
                         to minimize API calls.
         """
         # DEBUG: Log invocation context early so harness vs direct calls can be distinguished
-        logging.debug("[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast=%s", fast)
-        logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")
-        if fast:
+        logging.debug("[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast=%s", fast)  # Trace the entry.
+        logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")  # Log start.
+        if fast:  # Fast mode.
             logging.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
 
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("16", "synthetic_tests", 1)
-        op_start = time.time()
+        emitter = PROGRESS_EMITTER  # Progress emitter.
+        if emitter:  # Emitter present.
+            emitter.emit_progress_start("16", "synthetic_tests", 1)  # Signal progress start.
+        op_start = time.time()  # Start the timer.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        gateway_devices = GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)
-        all_stats = []
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        gateway_devices = GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)  # List gateways with sites.
+        all_stats = []  # Accumulate stats.
 
-        if not gateway_devices:
-            logging.warning("[WARN] No gateway devices found. Exiting synthetic tests export.")
-            return
+        if not gateway_devices:  # No gateways.
+            logging.warning("[WARN] No gateway devices found. Exiting synthetic tests export.")  # Warn none found.
+            return  # Abort.
 
-        def fetch_synthetic_test_stats_with_retry(
+        def fetch_synthetic_test_stats_with_retry(  # Fetch one device with retry.
             device_info, max_retries=None, retry_delay=None, connection_semaphore=None
         ):
             """
@@ -15470,87 +15470,87 @@ class GatewayTestExporter:
                 connection_semaphore: Semaphore to limit concurrent connections (optional)
             """
             # Use environment variables as defaults if not provided
-            if max_retries is None:
-                max_retries = FAST_MODE_MAX_RETRIES
-            if retry_delay is None:
-                retry_delay = FAST_MODE_RETRY_DELAY
+            if max_retries is None:  # Default max retries.
+                max_retries = FAST_MODE_MAX_RETRIES  # Use the fast-mode value.
+            if retry_delay is None:  # Default retry delay.
+                retry_delay = FAST_MODE_RETRY_DELAY  # Use the fast-mode value.
 
-            site_id, device_id, device_name, site_name = device_info
+            site_id, device_id, device_name, site_name = device_info  # Unpack the device info.
 
-            for attempt in range(max_retries + 1):
+            for attempt in range(max_retries + 1):  # Bounded retry loop.
                 try:
                     # Validate inputs before making API calls
-                    ValidationUtils.validate_site_id(site_id, "synthetic_tests")
-                    ValidationUtils.validate_device_id(device_id, "synthetic_tests")
+                    ValidationUtils.validate_site_id(site_id, "synthetic_tests")  # Validate the site id.
+                    ValidationUtils.validate_device_id(device_id, "synthetic_tests")  # Validate the device id.
 
                     # Use semaphore to limit concurrent connections if provided
-                    if connection_semaphore:
-                        with connection_semaphore:
-                            stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(
+                    if connection_semaphore:  # Pool present.
+                        with connection_semaphore:  # Acquire a slot.
+                            stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(  # Fetch synthetic tests.
                                 apisession, site_id, device_id
                             ).data
                     else:
-                        stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(
+                        stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(  # Fetch synthetic tests.
                             apisession, site_id, device_id
                         ).data
 
-                    stats["site_id"] = site_id
-                    stats["site_name"] = site_name
-                    stats["device_id"] = device_id
-                    stats["device_name"] = device_name
+                    stats["site_id"] = site_id  # Tag the site.
+                    stats["site_name"] = site_name  # Tag the site name.
+                    stats["device_id"] = device_id  # Tag the device.
+                    stats["device_name"] = device_name  # Tag the device name.
 
-                    if attempt > 0:
+                    if attempt > 0:  # After a retry.
                         logging.info("! Retry %s successful for device %s at site %s", attempt, device_name, site_name)
                     else:
-                        logging.info(
+                        logging.info(  # Log success.
                             "! Collected synthetic test stats for device %s at site %s", device_name, site_name
                         )
-                    return stats
+                    return stats  # Return the stats.
 
-                except Exception as exception:
-                    if attempt < max_retries:
+                except Exception as exception:  # Fetch failed.
+                    if attempt < max_retries:  # More attempts left.
                         # Fast mode: reduced backoff delay for quicker retries
-                        backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)
-                        logging.warning(
+                        backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)  # Exponential backoff.
+                        logging.warning(  # Warn and back off.
                             "! Attempt %s failed for device %s at site %s: %s",
                             attempt + 1,
                             device_id,
                             site_id,
                             exception,
                         )
-                        logging.info(
+                        logging.info(  # Log the retry.
                             "! Fast retry in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, max_retries + 1
                         )
-                        time.sleep(backoff_delay)
+                        time.sleep(backoff_delay)  # Wait before retry.
                     else:
-                        logging.error(
+                        logging.error(  # Out of retries.
                             "! Final attempt failed for device %s at site %s: %s", device_id, site_id, exception
                         )
-                        return None
+                        return None  # Give up this device.
 
-            return None
+            return None  # Return None.
 
-        if fast:
+        if fast:  # Fast concurrent path.
             # Concurrent processing mode with connection-aware threading + summary instrumentation
-            start_time = time.time()
+            start_time = time.time()  # Start the timer.
 
             # Define worker function for the connection pool helper
-            def fetch_device_stats(device_info, connection_semaphore):
+            def fetch_device_stats(device_info, connection_semaphore):  # Fetch one device.
                 """Worker function that fetches synthetic test stats for a single device."""
                 return fetch_synthetic_test_stats_with_retry(device_info, connection_semaphore=connection_semaphore)  # type: ignore[no-untyped-call]
 
             # Define retry function for failed devices
-            def retry_failed_devices(failed_devices, connection_semaphore):
-                retry_results = []
-                still_failed = []
-                retry_threads = min(
+            def retry_failed_devices(failed_devices, connection_semaphore):  # Retry failed devices.
+                retry_results = []  # Collect retry results.
+                still_failed = []  # Track still-failed.
+                retry_threads = min(  # Size the retry pool.
                     FAST_MODE_RETRY_THREADS, len(failed_devices), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
                 )
-                if retry_threads <= 0:
+                if retry_threads <= 0:  # No threads.
                     logging.warning(" FAST MODE: No available threads for retry; skipping retries")
-                    return [], failed_devices
-                with ThreadPoolExecutor(max_workers=retry_threads) as executor:
-                    retry_futures = {
+                    return [], failed_devices  # Return failed devices.
+                with ThreadPoolExecutor(max_workers=retry_threads) as executor:  # Run the retry pool.
+                    retry_futures = {  # Map futures to devices.
                         executor.submit(
                             fetch_synthetic_test_stats_with_retry,
                             device_info,
@@ -15562,30 +15562,30 @@ class GatewayTestExporter:
                     for future in tqdm(  # type: ignore[no-untyped-call]
                         as_completed(retry_futures), total=len(retry_futures), desc="Retrying Failed", unit="device"
                     ):
-                        device_info = retry_futures[future]
+                        device_info = retry_futures[future]  # Resolve the device info.
                         try:
-                            result = future.result()
-                            if result:
-                                retry_results.append(result)
-                                logging.info(" FAST RETRY OK: %s", device_info[2])
+                            result = future.result()  # Read the result.
+                            if result:  # Have a result.
+                                retry_results.append(result)  # Collect it.
+                                logging.info(" FAST RETRY OK: %s", device_info[2])  # Log retry success.
                             else:
-                                still_failed.append(device_info)
-                                logging.error(" FAST RETRY FAIL: %s", device_info[2])
-                        except Exception as exception:
-                            still_failed.append(device_info)
-                            logging.error(" FAST RETRY EXC: %s -> %s", device_info[2], exception)
-                return retry_results, still_failed
+                                still_failed.append(device_info)  # Still failed.
+                                logging.error(" FAST RETRY FAIL: %s", device_info[2])  # Log retry failure.
+                        except Exception as exception:  # Retry raised.
+                            still_failed.append(device_info)  # Still failed.
+                            logging.error(" FAST RETRY EXC: %s -> %s", device_info[2], exception)  # Log the exception.
+                return retry_results, still_failed  # Return results and failures.
 
-            successful_results, failed_devices = execute_with_connection_pool_management(
+            successful_results, failed_devices = execute_with_connection_pool_management(  # Run the pooled fetch.
                 work_items=gateway_devices,
                 worker_function=fetch_device_stats,
                 batch_description="devices",
                 retry_function=retry_failed_devices,
             )
 
-            duration = time.time() - start_time
-            all_stats.extend(successful_results)
-            logging.info(
+            duration = time.time() - start_time  # Compute the duration.
+            all_stats.extend(successful_results)  # Collect the results.
+            logging.info(  # Log the totals.
                 " FAST MODE SUMMARY (synthetic tests): ok=%s fail=%s total=%s elapsed=%.2fs",
                 len(successful_results),
                 len(failed_devices),
@@ -15594,34 +15594,34 @@ class GatewayTestExporter:
             )
         else:
             # Sequential processing with rate limiting (original behavior)
-            smoothed = None
+            smoothed = None  # No smoothed delay yet.
             for device_info in tqdm(gateway_devices, desc="Gateway Devices", unit="device"):  # type: ignore[no-untyped-call]
                 result = fetch_synthetic_test_stats_with_retry(  # type: ignore[no-untyped-call]
                     device_info, max_retries=FAST_MODE_SEQUENTIAL_MAX_RETRIES
                 )
-                if result:
-                    all_stats.append(result)
+                if result:  # Have a result.
+                    all_stats.append(result)  # Collect it.
 
                 # Apply rate limiting only in non-fast mode
                 smoothed, delay = RateLimitingUtils.get_rate_limited_delay(smoothed, apisession, _api_usage_cache)  # type: ignore[no-untyped-call]
-                logging.info("[INFO] Sleeping for %.2fs.", delay)
-                time.sleep(delay)
+                logging.info("[INFO] Sleeping for %.2fs.", delay)  # Log the sleep.
+                time.sleep(delay)  # Pace the API.
 
-        if all_stats:
-            filename = "AllGatewaySyntheticTests.csv"
-            flattened = DataProcessingUtils.flatten_nested_fields(all_stats)
+        if all_stats:  # Have stats.
+            filename = "AllGatewaySyntheticTests.csv"  # Build the CSV name.
+            flattened = DataProcessingUtils.flatten_nested_fields(all_stats)  # Flatten nested fields.
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
-            print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")
+            print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")  # Tell the user.
             logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
-            logging.info(
+            logging.info(  # Log the totals.
                 "! API Optimization: Saved %s listSiteDevices calls by using cached inventory", len(gateway_devices)
             )
         else:
-            logging.warning(" No synthetic test results found. CSV not created.")
-            print("! No synthetic test results found. CSV not created.")
-        if emitter:
-            emitter.emit_progress_complete(
+            logging.warning(" No synthetic test results found. CSV not created.")  # Warn none found.
+            print("! No synthetic test results found. CSV not created.")  # Tell the user.
+        if emitter:  # Emitter present.
+            emitter.emit_progress_complete(  # Signal progress complete.
                 "16",
                 "synthetic_tests",
                 len(gateway_devices) if gateway_devices else 0,
@@ -15631,52 +15631,52 @@ class GatewayTestExporter:
             )
 
     @staticmethod
-    def test_results_by_site(fast: bool = False) -> None:
+    def test_results_by_site(fast: bool = False) -> None:  # Export tests by site.
         """Delegator: all logic lives in src/refactors/serial_cc/test_results_by_site.py."""
         from src.refactors.serial_cc.test_results_by_site import GatewayTestResultsService  # noqa: PLC0415
 
         GatewayTestResultsService.execute(fast=fast)  # Delegate to extracted service; keeps CC at A(1)
 
 
-class GatewayStatsExporter:
+class GatewayStatsExporter:  # Gateway stats delegators.
     """Delegation wrapper for extracted gateway stats exporter implementation."""
 
     @staticmethod
-    def _configure_module():
+    def _configure_module():  # Configure the module.
         """Configure extracted gateway modules and return stats module handle."""
         from src.gateway import gateway_stats_exporter as stats_module  # noqa: PLC0415,I001
 
-        GatewayExportUtils._configure_module()
-        return stats_module
+        GatewayExportUtils._configure_module()  # Wire dependencies.
+        return stats_module  # Return the module.
 
     @staticmethod
-    def device_stats(fast=False):
+    def device_stats(fast=False):  # Export gateway device stats.
         """Delegated gateway device stats export entrypoint."""
-        module = GatewayStatsExporter._configure_module()
-        return module.GatewayStatsExporter.device_stats(fast=fast)
+        module = GatewayStatsExporter._configure_module()  # Configure the module.
+        return module.GatewayStatsExporter.device_stats(fast=fast)  # Delegate the export.
 
     @staticmethod
-    def device_stats_with_freshness(fast: bool = False) -> None:
+    def device_stats_with_freshness(fast: bool = False) -> None:  # Export with freshness.
         """Delegated freshness-aware gateway device stats export entrypoint."""
-        module = GatewayStatsExporter._configure_module()
-        return module.GatewayStatsExporter.device_stats_with_freshness(fast=fast)
+        module = GatewayStatsExporter._configure_module()  # Configure the module.
+        return module.GatewayStatsExporter.device_stats_with_freshness(fast=fast)  # Delegate the export.
 
     @staticmethod
-    def wan_port_conflicts():
+    def wan_port_conflicts():  # Export WAN port conflicts.
         """Delegated WAN port conflict analysis entrypoint."""
-        module = GatewayStatsExporter._configure_module()
-        return module.GatewayStatsExporter.wan_port_conflicts()
+        module = GatewayStatsExporter._configure_module()  # Configure the module.
+        return module.GatewayStatsExporter.wan_port_conflicts()  # Delegate the export.
 
 
-class GatewayExportUtils:
+class GatewayExportUtils:  # Gateway export delegators.
     """Delegation wrapper for extracted gateway export utility implementation."""
 
     @staticmethod
-    def _configure_module():
+    def _configure_module():  # Configure the module.
         """Configure extracted gateway modules and return gateway export module handle."""
         from src.gateway import gateway_export_utils as gateway_export_module  # noqa: PLC0415,I001
 
-        configure_gateway_export_utils_dependencies(
+        configure_gateway_export_utils_dependencies(  # Wire dependencies.
             apisession_dependency=apisession,
             mistapi_dependency=mistapi,
             config_utils=ConfigUtils,
@@ -15699,67 +15699,67 @@ class GatewayExportUtils:
             api_usage_cache=_api_usage_cache,
             tqdm_module=tqdm,
         )
-        return gateway_export_module
+        return gateway_export_module  # Return the module.
 
     @staticmethod
-    def _with_site_info():
+    def _with_site_info():  # Attach site info.
         """Delegated gateways-with-site-info export entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils._with_site_info()
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils._with_site_info()  # Delegate the call.
 
     @staticmethod
-    def management_ips(fast: bool = False) -> None:
+    def management_ips(fast: bool = False) -> None:  # Export management IPs.
         """Delegated gateway management IPs export entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils.management_ips(fast=fast)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils.management_ips(fast=fast)  # Delegate the export.
 
     @staticmethod
-    def device_configs(debug: bool = False, fast: bool = False) -> None:
+    def device_configs(debug: bool = False, fast: bool = False) -> None:  # Export device configs.
         """Delegated gateway device configs export entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils.device_configs(debug=debug, fast=fast)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils.device_configs(debug=debug, fast=fast)  # Delegate the export.
 
     @staticmethod
-    def templates():
+    def templates():  # Export gateway templates.
         """Delegated gateway template export entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils.templates()
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils.templates()  # Delegate the export.
 
     @staticmethod
-    def with_wan_overrides(fast: bool = False) -> None:
+    def with_wan_overrides(fast: bool = False) -> None:  # Export with WAN overrides.
         """Delegated gateway WAN override analysis entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils.with_wan_overrides(fast=fast)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils.with_wan_overrides(fast=fast)  # Delegate the export.
 
     @staticmethod
     def _get_devices_with_sites(org_id: str, fast: bool = False) -> list[tuple[str, str, str, str]]:
         """Delegated gateway device+site inventory helper entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)  # Delegate the call.
 
     @staticmethod
-    def _get_devices_from_cache() -> list[tuple[str, str, str, str]]:
+    def _get_devices_from_cache() -> list[tuple[str, str, str, str]]:  # List gateways from cache.
         """Delegated cached gateway inventory helper entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils._get_devices_from_cache()
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils._get_devices_from_cache()  # Delegate the call.
 
     @staticmethod
-    def _get_devices_from_api(org_id: str) -> list[tuple[str, str, str, str]]:
+    def _get_devices_from_api(org_id: str) -> list[tuple[str, str, str, str]]:  # List gateways from API.
         """Delegated API-based gateway inventory helper entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils._get_devices_from_api(org_id)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils._get_devices_from_api(org_id)  # Delegate the call.
 
     @staticmethod
-    def _get_site_ids_with_devices(org_id: str) -> list[str]:
+    def _get_site_ids_with_devices(org_id: str) -> list[str]:  # List sites with devices.
         """Delegated site-ID-with-gateway helper entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils._get_site_ids_with_devices(org_id)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils._get_site_ids_with_devices(org_id)  # Delegate the call.
 
     @staticmethod
-    def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:
+    def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:  # Migrate WAN2 variables.
         """Delegated WAN2 variable migration entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils.wan2_variable_migration(fast=fast, dry_run=dry_run)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils.wan2_variable_migration(fast=fast, dry_run=dry_run)  # Delegate the migration.
 
 
 # NOTE: generate_support_package moved to DataCollectionManager.generate_support_packages
@@ -15770,13 +15770,13 @@ class GatewayExportUtils:
 # ============================================================================
 
 
-class TroubleshootUtils:
+class TroubleshootUtils:  # Marvis troubleshoot delegators.
     """Delegation wrapper for extracted Marvis troubleshooting implementation."""
 
     @staticmethod
-    def _build_deps() -> MarvisTroubleshootDeps:
+    def _build_deps() -> MarvisTroubleshootDeps:  # Build the deps bundle.
         """Build dependency container for extracted troubleshooting logic."""
-        return MarvisTroubleshootDeps(
+        return MarvisTroubleshootDeps(  # Assemble the deps.
             apisession=apisession,
             mistapi=mistapi,
             config_utils=ConfigUtils,
@@ -15788,22 +15788,22 @@ class TroubleshootUtils:
         )
 
     @staticmethod
-    def client_connectivity() -> None:
+    def client_connectivity() -> None:  # Troubleshoot client connectivity.
         """Delegated client connectivity troubleshooting implementation."""
-        ExtractedMarvisTroubleshootUtils.client_connectivity(TroubleshootUtils._build_deps())
+        ExtractedMarvisTroubleshootUtils.client_connectivity(TroubleshootUtils._build_deps())  # Delegate to the impl.
 
     @staticmethod
-    def device_performance() -> None:
+    def device_performance() -> None:  # Diagnose device performance.
         """Delegated device performance troubleshooting implementation."""
-        ExtractedMarvisTroubleshootUtils.device_performance(TroubleshootUtils._build_deps())
+        ExtractedMarvisTroubleshootUtils.device_performance(TroubleshootUtils._build_deps())  # Delegate to the impl.
 
     @staticmethod
-    def network_connectivity() -> None:
+    def network_connectivity() -> None:  # Analyze network connectivity.
         """Delegated network connectivity troubleshooting implementation."""
-        ExtractedMarvisTroubleshootUtils.network_connectivity(TroubleshootUtils._build_deps())
+        ExtractedMarvisTroubleshootUtils.network_connectivity(TroubleshootUtils._build_deps())  # Delegate to the impl.
 
     @staticmethod
-    def launch_interactive() -> None:
+    def launch_interactive() -> None:  # Launch interactive Marvis.
         """
         Interactive Marvis (VNA) troubleshooting menu.
 
@@ -15814,75 +15814,75 @@ class TroubleshootUtils:
         4. View Marvis insights and capabilities
         """
         logging.info("Entering TroubleshootUtils.launch_interactive")  # Entry envelope for logging compliance
-        logging.debug("MARVIS DEBUG: Entering launch_interactive() method")
-        print(" Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting")
-        print("=" * 65)
-        print()
+        logging.debug("MARVIS DEBUG: Entering launch_interactive() method")  # Trace the entry.
+        print(" Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting")  # Header.
+        print("=" * 65)  # Divider.
+        print()  # Spacer.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         logging.debug("MARVIS DEBUG: Using org_id: %s for Marvis troubleshooting", org_id)  # %s not f-string
         logging.debug("MARVIS DEBUG: Session state - authenticated: %s", apisession is not None)  # %s not f-string
 
-        print(" Marvis AI Troubleshooting Options:")
-        print("1. Troubleshoot client connectivity issues (guided client selection)")
-        print("2. Diagnose device performance problems (guided device selection)")
-        print("3. Analyze network connectivity issues (site-level analysis)")
-        print("4. View organization Marvis insights and capabilities")
-        print("5. Exit")
-        print()
+        print(" Marvis AI Troubleshooting Options:")  # Menu header.
+        print("1. Troubleshoot client connectivity issues (guided client selection)")  # Option 1.
+        print("2. Diagnose device performance problems (guided device selection)")  # Option 2.
+        print("3. Analyze network connectivity issues (site-level analysis)")  # Option 3.
+        print("4. View organization Marvis insights and capabilities")  # Option 4.
+        print("5. Exit")  # Option 5.
+        print()  # Spacer.
 
         choice = InputUtils.safe_input("Select an option (1-5): ", context="marvis_launch_menu").strip()
         logging.debug("MARVIS DEBUG: User selected option: %s", choice)  # %s not f-string
 
-        if choice == "1":
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.client_connectivity()")
+        if choice == "1":  # Client connectivity.
+            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.client_connectivity()")  # Trace the call.
             TroubleshootUtils.client_connectivity()  # type: ignore[no-untyped-call]
-        elif choice == "2":
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.device_performance()")
+        elif choice == "2":  # Device performance.
+            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.device_performance()")  # Trace the call.
             TroubleshootUtils.device_performance()  # type: ignore[no-untyped-call]
-        elif choice == "3":
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.network_connectivity()")
+        elif choice == "3":  # Network connectivity.
+            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.network_connectivity()")  # Trace the call.
             TroubleshootUtils.network_connectivity()  # type: ignore[no-untyped-call]
-        elif choice == "4":
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.view_insights()")
-            TroubleshootUtils.view_insights()
-        elif choice == "5":
-            logging.debug("MARVIS DEBUG: User chose to exit")
-            print("Exiting Marvis troubleshooting.")
+        elif choice == "4":  # View insights.
+            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.view_insights()")  # Trace the call.
+            TroubleshootUtils.view_insights()  # Show the insights.
+        elif choice == "5":  # Exit option.
+            logging.debug("MARVIS DEBUG: User chose to exit")  # Trace the exit.
+            print("Exiting Marvis troubleshooting.")  # Tell the user.
             logging.info("Exiting TroubleshootUtils.launch_interactive via user exit choice")  # Exit envelope
-            return
+            return  # Return.
         else:
-            print(" Invalid option selected.")
+            print(" Invalid option selected.")  # Tell the user invalid.
             logging.warning("MARVIS DEBUG: Invalid troubleshooting option selected: %s", choice)  # %s not f-string
-            logging.debug("MARVIS DEBUG: Exiting launch_interactive() due to invalid choice")
+            logging.debug("MARVIS DEBUG: Exiting launch_interactive() due to invalid choice")  # Trace the exit.
         logging.info("Exiting TroubleshootUtils.launch_interactive with choice: %s", choice)  # Exit envelope
 
     @staticmethod
-    def view_insights() -> None:
+    def view_insights() -> None:  # View Marvis insights.
         """Delegated Marvis insights and capabilities view implementation."""
-        ExtractedMarvisTroubleshootUtils.view_insights(TroubleshootUtils._build_deps())
+        ExtractedMarvisTroubleshootUtils.view_insights(TroubleshootUtils._build_deps())  # Delegate to the impl.
 
     @staticmethod
-    def _display_usage_guide() -> None:
+    def _display_usage_guide() -> None:  # Show the usage guide.
         """Delegated helper for usage guide display."""
-        ExtractedMarvisTroubleshootUtils._display_usage_guide()
+        ExtractedMarvisTroubleshootUtils._display_usage_guide()  # Delegate to the impl.
 
 
 # ============================================================================
 # GATEWAY TEMPLATE CONFIGURATION MANAGER CLASS
 # Delegated to src.gateway.template_config
 # ============================================================================
-class GatewayTemplateConfigManager:
+class GatewayTemplateConfigManager:  # Gateway template config manager.
     """Delegation stub. Implementation in src.gateway.template_config."""
 
     @staticmethod
-    def extract():
+    def extract():  # Extract a template.
         """Menu 105: Extract DIA_Pico and Picocell configs. Delegated to src.gateway.template_config."""
         from src.gateway.template_config import (
             GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        Impl(
+        Impl(  # Run the impl.
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
             apisession=apisession,
             input_fn=InputUtils.safe_input,
@@ -15894,13 +15894,13 @@ class GatewayTemplateConfigManager:
         ).extract()
 
     @staticmethod
-    def apply():
+    def apply():  # Apply a template.
         """Menu 106: Apply extracted configs. Delegated to src.gateway.template_config."""
         from src.gateway.template_config import (
             GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        Impl(
+        Impl(  # Run the impl.
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
             apisession=apisession,
             input_fn=InputUtils.safe_input,
@@ -15912,13 +15912,13 @@ class GatewayTemplateConfigManager:
         ).apply()
 
     @staticmethod
-    def clone_by_location():
+    def clone_by_location():  # Clone by location.
         """Menu 111: Clone template by state/country. Delegated to src.gateway.template_config."""
         from src.gateway.template_config import (
             GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        Impl(
+        Impl(  # Run the impl.
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
             apisession=apisession,
             input_fn=InputUtils.safe_input,
@@ -15930,14 +15930,14 @@ class GatewayTemplateConfigManager:
         ).clone_by_location()
 
 
-class DeviceConfigTemplateClonerManager:
+class DeviceConfigTemplateClonerManager:  # Device config template cloner.
     """Menu 194: Clone device local config to a new gateway template.
 
     Delegated to src.gateway.device_template_cloner.
     """
 
     @staticmethod
-    def clone() -> None:
+    def clone() -> None:  # Clone a config.
         """Menu 194: Fetch gateway device config and create a new org-level gateway template."""
         from src.gateway.device_template_cloner import (  # pylint: disable=import-outside-toplevel
             DeviceConfigTemplateClonerManager as Impl,  # Import extracted implementation class
@@ -15956,14 +15956,14 @@ class DeviceConfigTemplateClonerManager:
 # ============================================================================
 # SSH RUNNER MANAGER CLASS
 # ============================================================================
-class SSHRunnerManager:
+class SSHRunnerManager:  # SSH runner delegators.
     """Delegation wrapper for extracted SSH runner manager implementation."""
 
     @staticmethod
-    def _build_deps() -> SSHRunnerManagerDeps:
+    def _build_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle.
         """Build dependency container for extracted SSH runner logic."""
-        cli_args = globals().get("args") if "args" in globals() else None
-        return SSHRunnerManagerDeps(
+        cli_args = globals().get("args") if "args" in globals() else None  # Read parsed CLI args.
+        return SSHRunnerManagerDeps(  # Assemble the deps.
             args=cli_args,
             progress_emitter=PROGRESS_EMITTER,
             enhanced_ssh_runner=EnhancedSSHRunner,
@@ -15974,20 +15974,20 @@ class SSHRunnerManager:
         )
 
     @staticmethod
-    def interactive():
+    def interactive():  # Run interactive SSH.
         """Delegated interactive SSH runner entrypoint."""
-        return ExtractedSSHRunnerManager.interactive(SSHRunnerManager._build_deps())
+        return ExtractedSSHRunnerManager.interactive(SSHRunnerManager._build_deps())  # Delegate to the impl.
 
     @staticmethod
-    def _load_gateway_data():
+    def _load_gateway_data():  # Load gateway data.
         """Delegated helper to load gateway management data."""
-        return ExtractedSSHRunnerManager._load_gateway_data(SSHRunnerManager._build_deps())
+        return ExtractedSSHRunnerManager._load_gateway_data(SSHRunnerManager._build_deps())  # Delegate to the impl.
 
 
 # ============================================================================
 # CLI SHELL MANAGER CLASS
 # ============================================================================
-class CLIShellManager:
+class CLIShellManager:  # CLI shell over WebSocket.
     """
     Manages interactive CLI shell sessions for network devices.
 
@@ -16007,15 +16007,15 @@ class CLIShellManager:
             debug: Enable debug mode for WebSocket tracing
         """
         site_id, device_id = PromptClientUtils.select_site_and_device_ids(site_id, device_id)  # type: ignore[no-untyped-call]
-        if not site_id or not device_id:
-            return
+        if not site_id or not device_id:  # Need both ids.
+            return  # Abort.
 
-        shell_url = CLIShellManager._create_session(site_id, device_id)
-        if shell_url:
-            CLIShellManager._run_interactive(shell_url, debug=debug)
+        shell_url = CLIShellManager._create_session(site_id, device_id)  # Create the session.
+        if shell_url:  # Have a URL.
+            CLIShellManager._run_interactive(shell_url, debug=debug)  # Run the shell.
 
     @staticmethod
-    def _create_session(site_id: str, device_id: str) -> str | None:
+    def _create_session(site_id: str, device_id: str) -> str | None:  # Create a shell session.
         """
         Creates a shell session and returns the WebSocket URL.
 
@@ -16028,11 +16028,11 @@ class CLIShellManager:
         """
         try:
             response = mistapi.api.v1.sites.devices.createSiteDeviceShellSession(apisession, site_id, device_id)
-            shell_data = response.data
+            shell_data = response.data  # Read the URL data.
             return shell_data.get("url")  # type: ignore[no-any-return]
-        except Exception as exception:
-            print(f"! Failed to create shell session: {exception}")
-            return None
+        except Exception as exception:  # Creation failed.
+            print(f"! Failed to create shell session: {exception}")  # Tell the user.
+            return None  # Return None.
 
     @staticmethod
     def _run_interactive(shell_url: str, debug: bool = False) -> None:  # noqa: C901, PLR0915
@@ -16043,28 +16043,28 @@ class CLIShellManager:
             shell_url: The WebSocket URL for the shell session
             debug: Enable debug mode for WebSocket tracing
         """
-        if not _has_pyte or pyte is None:
-            print("! Terminal emulation requires pyte. Install: pip install pyte")
-            return
+        if not _has_pyte or pyte is None:  # pyte missing.
+            print("! Terminal emulation requires pyte. Install: pip install pyte")  # Tell the user to install.
+            return  # Abort.
 
-        if debug:
-            websocket.enableTrace(True)
+        if debug:  # Debug mode.
+            websocket.enableTrace(True)  # Trace the WebSocket.
 
-        print(" Connecting to WebSocket shell...")
-        ws = websocket.create_connection(shell_url)
-        print(" Connected.")
+        print(" Connecting to WebSocket shell...")  # Tell the user.
+        ws = websocket.create_connection(shell_url)  # Open the WebSocket.
+        print(" Connected.")  # Tell the user.
 
-        screen = pyte.Screen(80, 40)
-        stream = pyte.Stream(screen)
+        screen = pyte.Screen(80, 40)  # Virtual screen.
+        stream = pyte.Stream(screen)  # Terminal stream.
 
-        def resize_terminal():
-            cols, rows = shutil.get_terminal_size()
-            resize_msg = json.dumps({"resize": {"width": cols, "height": rows}})
+        def resize_terminal():  # Resize the terminal.
+            cols, rows = shutil.get_terminal_size()  # Read terminal size.
+            resize_msg = json.dumps({"resize": {"width": cols, "height": rows}})  # Build the resize msg.
             if debug:  # Verbose troubleshooting output is enabled
                 print(f"[DEBUG] Sending resize: {resize_msg}")  # Show the terminal-resize control message being sent
             ws.send(resize_msg)  # Tell the remote PTY about the new terminal dimensions
 
-        def receive_websocket_data():
+        def receive_websocket_data():  # Receive WebSocket data.
             while ws.connected:  # Keep reading while the WebSocket stays open
                 try:
                     data = ws.recv()  # Block for the next chunk of terminal output
@@ -16085,9 +16085,9 @@ class CLIShellManager:
                     print(f"\n## Connection lost: {exception} ##")  # Notify the user the session dropped
                     return  # Exit the receive loop
 
-        def send_keyboard_input(key):
-            if ws.connected:
-                keymap = {
+        def send_keyboard_input(key):  # Send keyboard input.
+            if ws.connected:  # Socket connected.
+                keymap = {  # Key remap table.
                     "enter": "\n",
                     "space": " ",
                     "tab": "\t",
@@ -16097,31 +16097,31 @@ class CLIShellManager:
                     "right": "\x00\x1b[C",
                     "backspace": "\x08",
                 }
-                if key == "~":
-                    print("\n## Exit from shell ##")
-                    if ws.sock is not None:
-                        ws.sock.shutdown(2)
-                        ws.sock.close()
+                if key == "~":  # Exit key.
+                    print("\n## Exit from shell ##")  # Tell the user.
+                    if ws.sock is not None:  # Socket present.
+                        ws.sock.shutdown(2)  # Shut down the socket.
+                        ws.sock.close()  # Close the socket.
                     return  # Issue #431: removed obsolete stop_listening() call (was a no-op stub)
-                mapped_key = keymap.get(key, key)
-                data = f"\00{mapped_key}"
-                data_byte = bytearray(map(ord, data))
-                if debug:
-                    print(f"[DEBUG] Sending: {repr(data)}")
+                mapped_key = keymap.get(key, key)  # Map the key.
+                data = f"\00{mapped_key}"  # Frame the data.
+                data_byte = bytearray(map(ord, data))  # Encode to bytes.
+                if debug:  # Debug mode.
+                    print(f"[DEBUG] Sending: {repr(data)}")  # Trace the send.
                 try:
-                    ws.send_binary(data_byte)
-                except Exception as exception:
-                    print(f"\n## Send failed: {exception} ##")
-                    return
+                    ws.send_binary(data_byte)  # Send the bytes.
+                except Exception as exception:  # Send failed.
+                    print(f"\n## Send failed: {exception} ##")  # Tell the user.
+                    return  # Return.
 
         resize_terminal()  # type: ignore[no-untyped-call]
-        threading.Thread(target=receive_websocket_data).start()
+        threading.Thread(target=receive_websocket_data).start()  # Start the receiver thread.
 
         # Wake up Juniper SSR prompt
-        time.sleep(1)
-        ws.send_binary(bytearray(map(ord, "\00\n\n")))
-        if debug:
-            print("[DEBUG] Sent wakeup sequence to Juniper SSRs")
+        time.sleep(1)  # Wait for connect.
+        ws.send_binary(bytearray(map(ord, "\00\n\n")))  # Send a wakeup.
+        if debug:  # Debug mode.
+            print("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # Trace the wakeup.
 
         listen_keyboard(on_release=send_keyboard_input, delay_second_char=0, delay_other_chars=0, lower=False)  # type: ignore[no-untyped-call]
 
@@ -16129,7 +16129,7 @@ class CLIShellManager:
 # ============================================================================
 # ARP COMMAND MANAGER CLASS
 # ============================================================================
-class ARPCommandManager:
+class ARPCommandManager:  # ARP WebSocket command manager.
     """
     Manages ARP command execution via WebSocket for network devices.
 
@@ -16138,7 +16138,7 @@ class ARPCommandManager:
     """
 
     @staticmethod
-    def execute(site_id=None, device_id=None):
+    def execute(site_id=None, device_id=None):  # Run the ARP command.
         """
         Execute ARP command on a device and receive output via WebSocket.
 
@@ -16146,208 +16146,208 @@ class ARPCommandManager:
             site_id: Optional site ID (prompts if not provided)
             device_id: Optional device ID (prompts if not provided)
         """
-        if not site_id or not device_id:
+        if not site_id or not device_id:  # Prompt for ids.
             site_id, device_id = PromptClientUtils.select_site_and_device_ids(site_id, device_id)  # type: ignore[no-untyped-call]
-        if not site_id or not device_id:
-            return
+        if not site_id or not device_id:  # Need both ids.
+            return  # Abort.
 
-        mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")
-        mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")
+        mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")  # Resolve the host.
+        mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")  # Resolve the token.
 
-        if not mist_host or not mist_apitoken:
-            print(" Mist host or API token not found in session or environment.")
-            return
+        if not mist_host or not mist_apitoken:  # Missing credentials.
+            print(" Mist host or API token not found in session or environment.")  # Tell the user.
+            return  # Abort.
 
-        print(" Subscribing to WebSocket stream...")
+        print(" Subscribing to WebSocket stream...")  # Tell the user.
         session_id = ARPCommandManager._trigger_command(mist_host, mist_apitoken, site_id, device_id)  # type: ignore[no-untyped-call]
-        if session_id:
+        if session_id:  # Have a session.
             ARPCommandManager._listen_for_output(  # type: ignore[no-untyped-call]
                 mist_host.replace("api.", "api-ws."), mist_apitoken, site_id, device_id, session_id
             )
 
     @staticmethod
-    def _trigger_command(mist_host, mist_apitoken, site_id, device_id):
+    def _trigger_command(mist_host, mist_apitoken, site_id, device_id):  # Trigger the ARP command.
         """Trigger ARP command on device via REST API."""
-        url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/arp"
-        headers = {"Authorization": f"Token {mist_apitoken}"}
-        response = requests.post(url, headers=headers, json={}, timeout=30)
+        url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/arp"  # Build the URL.
+        headers = {"Authorization": f"Token {mist_apitoken}"}  # Auth header.
+        response = requests.post(url, headers=headers, json={}, timeout=30)  # POST the command.
 
-        if response.status_code == 200:
-            session_id = response.json().get("session")
-            print(f"! ARP command triggered. Session ID: {session_id}")
-            return session_id
+        if response.status_code == 200:  # Success.
+            session_id = response.json().get("session")  # Read the session id.
+            print(f"! ARP command triggered. Session ID: {session_id}")  # Tell the user.
+            return session_id  # Return the session.
         else:
-            print(f"! Failed to trigger ARP command: {response.status_code}")
-            print(response.text)
-            return None
+            print(f"! Failed to trigger ARP command: {response.status_code}")  # Tell the user fail.
+            print(response.text)  # Show the body.
+            return None  # Return None.
 
     @staticmethod
     def _listen_for_output(  # noqa: PLR0913
         mist_host, mist_apitoken, site_id, device_id, session_id, timeout=30, idle_timeout=3, debug=False
     ):
         """Listen for WebSocket command output from a device."""
-        if debug:
-            websocket.enableTrace(True)
+        if debug:  # Debug mode.
+            websocket.enableTrace(True)  # Trace the WebSocket.
 
-        ws_url = f"wss://{mist_host}/api-ws/v1/stream"
-        headers = [f"Authorization: Token {mist_apitoken}"]
-        subscribe_msg = {"subscribe": f"/sites/{site_id}/devices/{device_id}/cmd"}
+        ws_url = f"wss://{mist_host}/api-ws/v1/stream"  # Stream URL.
+        headers = [f"Authorization: Token {mist_apitoken}"]  # Auth header.
+        subscribe_msg = {"subscribe": f"/sites/{site_id}/devices/{device_id}/cmd"}  # Subscribe message.
 
-        output_lines: list[str] = []
-        buffer = ""
-        last_message_time = time.time()
+        output_lines: list[str] = []  # Collect output lines.
+        buffer = ""  # Reassembly buffer.
+        last_message_time = time.time()  # Last-message time.
 
-        def on_message(ws, message):
-            nonlocal last_message_time, buffer, output_lines
+        def on_message(ws, message):  # Handle a message.
+            nonlocal last_message_time, buffer, output_lines  # Share outer state.
             last_message_time, buffer = ARPCommandManager._handle_message(  # type: ignore[no-untyped-call]
                 message, session_id, buffer, output_lines, debug
             )
 
-        def on_close(ws, *args):
+        def on_close(ws, *args):  # Handle close.
             ARPCommandManager._handle_close(output_lines, debug)  # type: ignore[no-untyped-call]
 
-        def on_error(ws, error):
-            logging.error("! WebSocket error: %s", error)
+        def on_error(ws, error):  # Handle error.
+            logging.error("! WebSocket error: %s", error)  # Log the error.
 
-        def on_open(ws):
-            logging.info(" WebSocket opened. Subscribing...")
-            ws.send(json.dumps(subscribe_msg))
+        def on_open(ws):  # Handle open.
+            logging.info(" WebSocket opened. Subscribing...")  # Log the open.
+            ws.send(json.dumps(subscribe_msg))  # Send the subscribe.
 
-        ws = websocket.WebSocketApp(
+        ws = websocket.WebSocketApp(  # Build the WebSocket app.
             ws_url, header=headers, on_message=on_message, on_error=on_error, on_close=on_close, on_open=on_open
         )
 
-        def run_ws():
-            ws.run_forever()
+        def run_ws():  # Run the WebSocket.
+            ws.run_forever()  # Block on the socket.
 
-        ws_thread = threading.Thread(target=run_ws)
-        ws_thread.start()
+        ws_thread = threading.Thread(target=run_ws)  # Run it in a thread.
+        ws_thread.start()  # Start the thread.
 
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            time.sleep(1)
-            if time.time() - last_message_time > idle_timeout and output_lines:
-                logging.info(" Idle timeout reached. Closing WebSocket.")
-                ws.close()
-                break
+        start_time = time.time()  # Start the timer.
+        while time.time() - start_time < timeout:  # Poll until timeout.
+            time.sleep(1)  # Pace the poll.
+            if time.time() - last_message_time > idle_timeout and output_lines:  # Idle with output.
+                logging.info(" Idle timeout reached. Closing WebSocket.")  # Log the idle close.
+                ws.close()  # Close the socket.
+                break  # Stop polling.
 
-        if ws.keep_running:
-            logging.warning(" Timeout waiting for ARP output.")
-            ws.close()
+        if ws.keep_running:  # Still running.
+            logging.warning(" Timeout waiting for ARP output.")  # Warn the timeout.
+            ws.close()  # Close the socket.
 
     @staticmethod
-    def _handle_message(message, session_id, buffer, output_lines, debug=False):
+    def _handle_message(message, session_id, buffer, output_lines, debug=False):  # Parse one ARP message.
         """Handle incoming WebSocket message."""
-        last_message_time = time.time()
+        last_message_time = time.time()  # Record the time.
         try:
-            if debug:
-                logging.debug("WebSocket raw message received: %s", message)
+            if debug:  # Debug mode.
+                logging.debug("WebSocket raw message received: %s", message)  # Trace the raw message.
 
-            msg = json.loads(message)
-            data_str = msg.get("data", "{}")
-            data_obj = json.loads(data_str) if isinstance(data_str, str) else data_str
-            inner_data = data_obj.get("data", {})
-            if isinstance(inner_data, str):
-                inner_data = json.loads(inner_data)
+            msg = json.loads(message)  # Parse the JSON.
+            data_str = msg.get("data", "{}")  # Read the data string.
+            data_obj = json.loads(data_str) if isinstance(data_str, str) else data_str  # Parse nested JSON.
+            inner_data = data_obj.get("data", {})  # Read the inner data.
+            if isinstance(inner_data, str):  # String payload.
+                inner_data = json.loads(inner_data)  # Parse it.
 
-            if inner_data.get("session") == session_id:
-                raw_output = inner_data.get("raw", "")
-                buffer += raw_output
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    output_lines.append(line)
-                if debug:
-                    logging.debug("Processed WebSocket data: %s chars", len(raw_output))
+            if inner_data.get("session") == session_id:  # Session matches.
+                raw_output = inner_data.get("raw", "")  # Read the raw output.
+                buffer += raw_output  # Append to buffer.
+                while "\n" in buffer:  # Split on newlines.
+                    line, buffer = buffer.split("\n", 1)  # Pop one line.
+                    output_lines.append(line)  # Collect it.
+                if debug:  # Debug mode.
+                    logging.debug("Processed WebSocket data: %s chars", len(raw_output))  # Trace the size.
 
-        except json.JSONDecodeError as e:
-            logging.error("WebSocket message JSON decode error: %s", e)
-        except KeyError as e:
-            logging.warning("WebSocket message missing expected key: %s", e)
-        except Exception as e:
-            logging.error("Unexpected error parsing WebSocket message: %s", e)
+        except json.JSONDecodeError as e:  # JSON decode failed.
+            logging.error("WebSocket message JSON decode error: %s", e)  # Log the error.
+        except KeyError as e:  # Missing key.
+            logging.warning("WebSocket message missing expected key: %s", e)  # Warn the gap.
+        except Exception as e:  # Unexpected failure.
+            logging.error("Unexpected error parsing WebSocket message: %s", e)  # Log the error.
 
-        return last_message_time, buffer
+        return last_message_time, buffer  # Return time and buffer.
 
     @staticmethod
-    def _handle_close(output_lines, debug=False):
+    def _handle_close(output_lines, debug=False):  # Handle the close.
         """Handle WebSocket close and process output."""
-        logging.info(" WebSocket closed.")
-        if output_lines:
-            compiled_output = "\n".join(output_lines)
+        logging.info(" WebSocket closed.")  # Log the close.
+        if output_lines:  # Have output.
+            compiled_output = "\n".join(output_lines)  # Join the lines.
             ARPCommandManager._save_output(compiled_output)  # type: ignore[no-untyped-call]
             ARPCommandManager._export_to_csv("arp_output_raw.txt")  # type: ignore[no-untyped-call]
 
-            print("\n  ARP Output Received:\n")
-            rows = compiled_output.split("\n")
-            parsed_rows = [row.split("\t") for row in rows if row.strip()]
-            max_cols = max(len(row) for row in parsed_rows) if parsed_rows else 0
-            for row in parsed_rows:
-                while len(row) < max_cols:
-                    row.append("")
+            print("\n  ARP Output Received:\n")  # Tell the user.
+            rows = compiled_output.split("\n")  # Split into rows.
+            parsed_rows = [row.split("\t") for row in rows if row.strip()]  # Split each row.
+            max_cols = max(len(row) for row in parsed_rows) if parsed_rows else 0  # Max column count.
+            for row in parsed_rows:  # Pad each row.
+                while len(row) < max_cols:  # Pad short rows.
+                    row.append("")  # Append a cell.
 
-            if parsed_rows:
-                table = PrettyTable()
-                table.field_names = [f"Col {col_num + 1}" for col_num in range(max_cols)]
-                for row in parsed_rows:
-                    table.add_row(row)
+            if parsed_rows:  # Have rows.
+                table = PrettyTable()  # Build the table.
+                table.field_names = [f"Col {col_num + 1}" for col_num in range(max_cols)]  # Number the columns.
+                for row in parsed_rows:  # Add each row.
+                    table.add_row(row)  # Add the row.
 
-                if debug:
-                    print(table)
-                    logging.debug("\n%s", table.get_string())
+                if debug:  # Debug mode.
+                    print(table)  # Print the table.
+                    logging.debug("\n%s", table.get_string())  # Log the table.
                 else:
-                    print(f"! ARP output received with {len(parsed_rows)} rows.")
+                    print(f"! ARP output received with {len(parsed_rows)} rows.")  # Tell the user.
         else:
-            print(" No ARP output received for this session.")
-            logging.warning(" No ARP output received for this session.")
+            print(" No ARP output received for this session.")  # Tell the user none.
+            logging.warning(" No ARP output received for this session.")  # Warn none.
 
     @staticmethod
-    def _save_output(compiled_output, filename="arp_output_raw.txt"):
+    def _save_output(compiled_output, filename="arp_output_raw.txt"):  # Save raw output.
         """Save compiled output to file."""
         try:
-            file_path = FilePathUtils.get_csv_path(filename)
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(compiled_output)
-            logging.info("! ARP output saved to %s", file_path)
-        except Exception as e:
-            logging.error("! Failed to save ARP output to file: %s", e)
+            file_path = FilePathUtils.get_csv_path(filename)  # Build the path.
+            with open(file_path, "w", encoding="utf-8") as f:  # Open the file.
+                f.write(compiled_output)  # Write the output.
+            logging.info("! ARP output saved to %s", file_path)  # Log the save.
+        except Exception as e:  # Save failed.
+            logging.error("! Failed to save ARP output to file: %s", e)  # Log the error.
 
     @staticmethod
     def _export_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
         """Export ARP output to CSV files."""
         try:
-            txt_file_path = FilePathUtils.get_csv_path(txt_filename)
-            csv1_path = FilePathUtils.get_csv_path(csv1)
-            csv2_path = FilePathUtils.get_csv_path(csv2)
+            txt_file_path = FilePathUtils.get_csv_path(txt_filename)  # Source path.
+            csv1_path = FilePathUtils.get_csv_path(csv1)  # First CSV path.
+            csv2_path = FilePathUtils.get_csv_path(csv2)  # Second CSV path.
 
-            with open(txt_file_path, encoding="utf-8") as f:
-                raw_text = f.read()
+            with open(txt_file_path, encoding="utf-8") as f:  # Open the source.
+                raw_text = f.read()  # Read the text.
 
-            lines = raw_text.splitlines()
-            dataset1: list[list[str]] = []
-            dataset2: list[list[str]] = []
-            current_dataset = dataset1
+            lines = raw_text.splitlines()  # Split into lines.
+            dataset1: list[list[str]] = []  # First dataset.
+            dataset2: list[list[str]] = []  # Second dataset.
+            current_dataset = dataset1  # Start with the first.
 
-            for line in lines:
-                if "Total" in line:
-                    current_dataset = dataset2
+            for line in lines:  # Walk lines.
+                if "Total" in line:  # Total marker.
+                    current_dataset = dataset2  # Switch datasets.
                 else:
-                    columns = [col.strip() for col in line.split("\t") if col.strip()]
-                    if columns:
-                        current_dataset.append(columns)
+                    columns = [col.strip() for col in line.split("\t") if col.strip()]  # Split the columns.
+                    if columns:  # Have columns.
+                        current_dataset.append(columns)  # Collect the row.
 
-            with open(csv1_path, "w", newline="", encoding="utf-8") as f1:
-                writer = csv.writer(f1)
-                writer.writerows(dataset1)
+            with open(csv1_path, "w", newline="", encoding="utf-8") as f1:  # Open the first CSV.
+                writer = csv.writer(f1)  # CSV writer.
+                writer.writerows(dataset1)  # Write the rows.
 
-            with open(csv2_path, "w", newline="", encoding="utf-8") as f2:
-                writer = csv.writer(f2)
-                writer.writerows(dataset2)
+            with open(csv2_path, "w", newline="", encoding="utf-8") as f2:  # Open the second CSV.
+                writer = csv.writer(f2)  # CSV writer.
+                writer.writerows(dataset2)  # Write the rows.
 
-            print(f"! Saved {len(dataset1)} rows to {csv1_path}")
-            print(f"! Saved {len(dataset2)} rows to {csv2_path}")
+            print(f"! Saved {len(dataset1)} rows to {csv1_path}")  # Tell the user.
+            print(f"! Saved {len(dataset2)} rows to {csv2_path}")  # Tell the user.
 
-        except Exception as e:
-            print(f"! Failed to export ARP output to CSV: {e}")
+        except Exception as e:  # Export failed.
+            print(f"! Failed to export ARP output to CSV: {e}")  # Tell the user.
 
 
 # NOTE: listen_for_command_output removed - use ARPCommandManager._listen_for_output directly
@@ -16365,50 +16365,50 @@ from src.utils.address_utils import (
 from src.utils.rate_limiting import RateLimitingUtils  # noqa: E402
 
 
-class AddressComparisonCounters:
+class AddressComparisonCounters:  # Address comparison counters.
     """Track metrics for address comparison. Delegated to src.inventory.csv_comparator."""
 
-    def __init__(self):
+    def __init__(self):  # Build the counters.
         """Initialize all counter attributes and timing."""
         from src.inventory.csv_comparator import (
             AddressComparisonCounters as _Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        self._impl = _Impl()
+        self._impl = _Impl()  # Create the impl.
         # Expose attrs for direct access compatibility
-        self.total_devices = self._impl.total_devices
-        self.devices_enriched = self._impl.devices_enriched
-        self.devices_skipped = self._impl.devices_skipped
-        self.perfect_matches = self._impl.perfect_matches
-        self.mismatches_found = self._impl.mismatches_found
-        self.auto_corrections = self._impl.auto_corrections
-        self.comparison_failures = self._impl.comparison_failures
-        self.parse_failures = self._impl.parse_failures
-        self.parse_failure_reasons = self._impl.parse_failure_reasons
-        self.start_time = self._impl.start_time
-        self.end_time = self._impl.end_time
+        self.total_devices = self._impl.total_devices  # Mirror total devices.
+        self.devices_enriched = self._impl.devices_enriched  # Mirror enriched.
+        self.devices_skipped = self._impl.devices_skipped  # Mirror skipped.
+        self.perfect_matches = self._impl.perfect_matches  # Mirror perfect matches.
+        self.mismatches_found = self._impl.mismatches_found  # Mirror mismatches.
+        self.auto_corrections = self._impl.auto_corrections  # Mirror auto-corrections.
+        self.comparison_failures = self._impl.comparison_failures  # Mirror comparison failures.
+        self.parse_failures = self._impl.parse_failures  # Mirror parse failures.
+        self.parse_failure_reasons = self._impl.parse_failure_reasons  # Mirror failure reasons.
+        self.start_time = self._impl.start_time  # Mirror start time.
+        self.end_time = self._impl.end_time  # Mirror end time.
 
-    def start_timing(self):
+    def start_timing(self):  # Start timing.
         """Start the timing counter for performance tracking."""
-        self._impl.start_timing()
+        self._impl.start_timing()  # Delegate to the impl.
 
-    def end_timing(self):
+    def end_timing(self):  # End timing.
         """End the timing counter for performance tracking."""
-        self._impl.end_timing()
+        self._impl.end_timing()  # Delegate to the impl.
 
-    def get_duration(self):
+    def get_duration(self):  # Get the duration.
         """Get the elapsed time in seconds between start and end timing."""
-        return self._impl.get_duration()
+        return self._impl.get_duration()  # Delegate to the impl.
 
-    def log_summary(self):
+    def log_summary(self):  # Log the summary.
         """Log a comprehensive summary of all counter metrics."""
-        self._impl.log_summary()
+        self._impl.log_summary()  # Delegate to the impl.
 
 
-class InventoryCSVComparator:
+class InventoryCSVComparator:  # Inventory CSV comparator.
     """Compare Mist inventory with CSV. Delegated to src.inventory.csv_comparator."""
 
-    def __init__(
+    def __init__(  # Capture comparison inputs.
         self, fast: bool = False, address_check: bool = False, debug: bool = False, skip_ssl_verify: bool = True
     ):
         """
@@ -16424,7 +16424,7 @@ class InventoryCSVComparator:
             InventoryCSVComparator as _Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        self._impl = _Impl(
+        self._impl = _Impl(  # Build the impl.
             fast=fast,
             address_check=address_check,
             debug=debug,
@@ -16441,22 +16441,22 @@ class InventoryCSVComparator:
             address_validation_config_cls=AddressValidationConfig,
         )
 
-    def execute(self) -> None:
+    def execute(self) -> None:  # Run the comparison.
         """Execute the complete inventory comparison workflow."""
-        self._impl.execute()
+        self._impl.execute()  # Delegate to the impl.
 
 
 # ============================================================================
 # WAN2 MIGRATION MANAGER CLASS (delegated)
 # ============================================================================
-class WAN2MigrationManager:
+class WAN2MigrationManager:  # WAN2 migration manager.
     """Delegation wrapper for extracted WAN2 migration manager implementation."""
 
-    def __init__(self):
+    def __init__(self):  # Wire and build the impl.
         """Initialize delegated WAN2 manager with runtime dependencies."""
         from src.gateway import wan2_migration_manager as wan2_module  # noqa: PLC0415,I001
 
-        wan2_module.configure_wan2_migration_dependencies(
+        wan2_module.configure_wan2_migration_dependencies(  # Wire dependencies.
             apisession_dependency=apisession,
             config_utils=ConfigUtils,
             cache_utils=CacheUtils,
@@ -16468,13 +16468,13 @@ class WAN2MigrationManager:
             mistapi_dependency=mistapi,
             site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
         )
-        self._impl = wan2_module.WAN2MigrationManager()
+        self._impl = wan2_module.WAN2MigrationManager()  # Create the impl.
 
-    def set_site_variable(self):
+    def set_site_variable(self):  # Set a site variable.
         """Menu #149 delegated entrypoint."""
-        return self._impl.set_site_variable()
+        return self._impl.set_site_variable()  # Delegate to the impl.
 
-    def __getattr__(self, name):
+    def __getattr__(self, name):  # Forward unknown attributes.
         """Proxy attribute access to the extracted implementation."""
         return getattr(self._impl, name)  # Delegate to real impl for test compat
 
@@ -16482,7 +16482,7 @@ class WAN2MigrationManager:
 # ============================================================================
 # ORG CONFIG MIGRATION MANAGER CLASS
 # ============================================================================
-class OrgConfigMigrationManager:
+class OrgConfigMigrationManager:  # Org config migration manager.
     """
     Export and import org-level WAN/gateway configuration for cross-org migration.
 
@@ -16542,7 +16542,7 @@ class OrgConfigMigrationManager:
         },
     ]
 
-    def __init__(self, session, org_id_fn, safe_input_fn):
+    def __init__(self, session, org_id_fn, safe_input_fn):  # Capture session and helpers.
         """Initialize with API session, org_id resolver, and safe_input function."""
         self.session = session  # Authenticated mistapi session for API calls
         self.org_id_fn = org_id_fn  # Callable that returns current org_id (may prompt user)
@@ -16555,7 +16555,7 @@ class OrgConfigMigrationManager:
     # Public entry points
     # ------------------------------------------------------------------
 
-    def export_config(self) -> None:
+    def export_config(self) -> None:  # Export the org config.
         """Menu 176: Export org WAN/gateway config to a JSON bundle."""
         logging.info("Menu 176: Starting org config export")  # Log operation start for traceability
         self.org_id = self.org_id_fn()  # Resolve current org ID from cache or user prompt
@@ -16576,22 +16576,22 @@ class OrgConfigMigrationManager:
             results[config_type["key"]] = items  # Store under the type's key name
         return results  # Return complete results dict
 
-    def import_config(self) -> None:
+    def import_config(self) -> None:  # Import the org config.
         """Menu 177: Import a JSON bundle into the current org."""
         logging.info("Menu 177: Starting org config import")  # Log operation start for traceability
         self.org_id = self.org_id_fn()  # Resolve destination org ID from cache or user prompt
         filepath = self._select_import_file()  # Let user pick from available export bundles
         if not filepath:  # User cancelled or no files found
-            return
+            return  # Abort.
 
         bundle = self._load_and_validate_bundle(filepath)  # Parse JSON and validate structure
         if not bundle:  # Invalid or unreadable bundle
-            return
+            return  # Abort.
 
         self._display_bundle_preview(bundle)  # Show what the bundle contains before proceeding
         dry_run = self._prompt_dry_run()  # Ask if user wants preview-only mode
         if not dry_run and not self._confirm_import():  # Require typed IMPORT for real operations
-            return
+            return  # Abort.
 
         self._fetch_existing_objects()  # Cache destination org objects for conflict detection
         results = self._execute_import(bundle, dry_run)  # Run the dependency-ordered import
@@ -16602,7 +16602,7 @@ class OrgConfigMigrationManager:
     # Export helpers
     # ------------------------------------------------------------------
 
-    def _get_org_name(self) -> str:
+    def _get_org_name(self) -> str:  # Resolve the org name.
         """Fetch organization name from the API."""
         logging.info("Fetching org name for org %s", self.org_id)  # Log before API call
         try:
@@ -16615,7 +16615,7 @@ class OrgConfigMigrationManager:
             logging.warning("Could not fetch org name: %s", error)  # Log warning with error details
         return "Unknown"  # Fallback when API call fails
 
-    def _resolve_api_fn(self, dotted_path: str):
+    def _resolve_api_fn(self, dotted_path: str):  # Resolve an API function.
         """Resolve a dotted string like 'mistapi.api.v1.orgs.networks.listOrgNetworks' to a callable."""
         parts = dotted_path.split(".")  # Split dotted path into module segments
         current = mistapi  # Start from the top-level mistapi module
@@ -16691,7 +16691,7 @@ class OrgConfigMigrationManager:
     # Import helpers
     # ------------------------------------------------------------------
 
-    def _select_import_file(self) -> str:
+    def _select_import_file(self) -> str:  # Select an import file.
         """List available export bundles and let the user pick one."""
         import glob  # Local import -- only needed for this method
 
@@ -16724,7 +16724,7 @@ class OrgConfigMigrationManager:
             if 0 <= selected < len(files):  # Validate index is within range
                 return files[selected]  # Return the selected file path
         except (ValueError, IndexError):  # Handle non-numeric or out-of-range input
-            pass
+            pass  # Ignore and continue.
         print("  Invalid selection.")  # User feedback for bad input
         return ""  # Signal no valid selection
 
@@ -16773,7 +16773,7 @@ class OrgConfigMigrationManager:
         total = sum(counts.values())  # Total across all types
         print(f"  Total objects: {total}")  # Grand total for user awareness
 
-    def _prompt_dry_run(self) -> bool:
+    def _prompt_dry_run(self) -> bool:  # Prompt for dry-run.
         """Ask if the user wants a dry-run (preview only)."""
         choice = self.safe_input_fn(  # EOF-safe input for SSH/container contexts
             "\n  Run as dry-run (preview only)? [Y/n]: ",
@@ -16782,7 +16782,7 @@ class OrgConfigMigrationManager:
         )
         return choice.upper() != "N"  # Anything except explicit 'N' means dry-run
 
-    def _confirm_import(self) -> bool:
+    def _confirm_import(self) -> bool:  # Confirm the import.
         """Require typed 'IMPORT' confirmation for actual import."""
         print("\n  WARNING: This will create configuration objects in the destination org.")  # Safety warning
         print("  This operation cannot be automatically undone.")  # Emphasize irreversibility
@@ -16799,7 +16799,7 @@ class OrgConfigMigrationManager:
     # Conflict detection
     # ------------------------------------------------------------------
 
-    def _fetch_existing_objects(self) -> None:
+    def _fetch_existing_objects(self) -> None:  # Fetch existing objects.
         """Fetch current objects from destination org for conflict detection."""
         print("\n  Fetching existing config from destination org...")  # User feedback
         logging.info("Fetching existing objects from destination org for conflict detection")  # Log operation
@@ -16813,7 +16813,7 @@ class OrgConfigMigrationManager:
         existing_list = self._existing.get(type_key, [])  # Get cached objects for this type
         conflict = self._check_name_conflict(new_obj, existing_list)  # Check name collision first
         if conflict:  # Name match found -- return immediately
-            return conflict
+            return conflict  # Return the conflict.
 
         config_entry = next((ct for ct in self.CONFIG_TYPES if ct["key"] == type_key), None)  # Find config metadata
         if config_entry and config_entry.get("conflict_check"):  # Only check subnets for types that need it
@@ -16824,7 +16824,7 @@ class OrgConfigMigrationManager:
         """Check if an object with the same name already exists (case-insensitive)."""
         new_name = (new_obj.get("name") or "").lower()  # Normalize to lowercase for comparison
         if not new_name:  # Skip unnamed objects (shouldn't happen but be defensive)
-            return None
+            return None  # No conflict.
         for existing in existing_list:  # Check every existing object in destination
             existing_name = (existing.get("name") or "").lower()  # Normalize existing name
             if new_name == existing_name:  # Case-insensitive match found
@@ -16838,24 +16838,24 @@ class OrgConfigMigrationManager:
     def _check_subnet_overlap(self, new_obj: dict, existing_list: list, type_key: str) -> dict | None:  # type: ignore[type-arg]
         """Check for IP/subnet overlaps between new and existing objects."""
         if type_key == "networks":  # Networks use subnet field for CIDR
-            return self._check_network_subnet_overlap(new_obj, existing_list)
+            return self._check_network_subnet_overlap(new_obj, existing_list)  # Check subnet overlap.
         if type_key == "services":  # Services use addresses[] array
-            return self._check_service_address_overlap(new_obj, existing_list)
+            return self._check_service_address_overlap(new_obj, existing_list)  # Check address overlap.
         return None  # Other types don't have IP fields
 
     def _check_network_subnet_overlap(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
         """Check network subnet overlap using ipaddress module."""
         new_subnet = new_obj.get("subnet")  # Get the CIDR subnet string
         if not new_subnet:  # No subnet defined -- skip overlap check
-            return None
+            return None  # No conflict.
         try:
             new_net = ipaddress.ip_network(new_subnet, strict=False)  # Parse CIDR, allow host bits
         except ValueError:  # Invalid CIDR format -- skip gracefully
-            return None
+            return None  # No conflict.
         for existing in existing_list:  # Compare against each existing network
             existing_subnet = existing.get("subnet")  # Get existing network's CIDR
             if not existing_subnet:  # Skip existing networks without subnets
-                continue
+                continue  # Skip it.
             try:
                 existing_net = ipaddress.ip_network(existing_subnet, strict=False)  # Parse for comparison
                 if new_net.overlaps(existing_net):  # Check if any IP addresses are shared
@@ -16864,18 +16864,18 @@ class OrgConfigMigrationManager:
                         "detail": f"{new_subnet} overlaps with '{existing.get('name')}' ({existing_subnet})",
                     }
             except ValueError:  # Invalid existing CIDR -- skip and continue
-                continue
+                continue  # Skip it.
         return None  # No subnet overlaps found
 
     def _check_service_address_overlap(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
         """Check service address overlap for objects with addresses[] field."""
         new_addrs = new_obj.get("addresses", [])  # Get list of IP/CIDR addresses
         if not new_addrs:  # No addresses to check -- skip
-            return None
+            return None  # No conflict.
         for addr in new_addrs:  # Check each address in the new service
             overlap = self._check_single_address(addr, existing_list)  # Compare against all existing
             if overlap:  # First overlap found -- return immediately
-                return overlap
+                return overlap  # Return the overlap.
         return None  # No address overlaps found
 
     def _check_single_address(self, addr: str, existing_list: list) -> dict | None:  # type: ignore[type-arg]
@@ -16883,7 +16883,7 @@ class OrgConfigMigrationManager:
         try:
             new_net = ipaddress.ip_network(addr, strict=False)  # Parse address as network for overlap check
         except ValueError:  # Invalid address format -- skip
-            return None
+            return None  # No conflict.
         for existing in existing_list:  # Compare against each existing service
             for ex_addr in existing.get("addresses", []):  # Check each address in existing service
                 try:
@@ -16894,14 +16894,14 @@ class OrgConfigMigrationManager:
                             "detail": f"{addr} overlaps with '{existing.get('name')}' ({ex_addr})",
                         }
                 except ValueError:  # Invalid existing address -- skip and continue
-                    continue
+                    continue  # Skip it.
         return None  # No address overlap found
 
     # ------------------------------------------------------------------
     # ID remapping
     # ------------------------------------------------------------------
 
-    def _build_remap_entry(self, source_id: str, dest_id: str) -> None:
+    def _build_remap_entry(self, source_id: str, dest_id: str) -> None:  # Record an id remap.
         """Record a source-to-destination ID mapping."""
         self._remap_table[source_id] = dest_id  # Store mapping for cross-reference remapping
         logging.debug("ID remap: %s -> %s", source_id[:8], dest_id[:8])  # Log truncated IDs for tracing
@@ -16909,20 +16909,20 @@ class OrgConfigMigrationManager:
     def _remap_object_references(self, obj: dict, type_key: str) -> dict:  # type: ignore[type-arg]
         """Remap foreign ID references in an object using the remap table."""
         if type_key == "vpns":  # VPNs reference network IDs
-            self._remap_vpn_networks(obj)
+            self._remap_vpn_networks(obj)  # Remap VPN networks.
         elif type_key == "gateway_templates":  # Gateway templates reference network/VPN IDs
-            self._remap_gateway_template_refs(obj)
+            self._remap_gateway_template_refs(obj)  # Remap gateway refs.
         elif type_key == "device_profiles":  # Device profiles reference gateway template IDs
-            self._remap_device_profile_refs(obj)
+            self._remap_device_profile_refs(obj)  # Remap profile refs.
         elif type_key == "service_policies":  # Service policies reference service IDs
-            self._remap_service_policy_refs(obj)
+            self._remap_service_policy_refs(obj)  # Remap policy refs.
         return obj  # Return object with remapped references
 
     def _remap_vpn_networks(self, obj: dict) -> None:  # type: ignore[type-arg]
         """Remap network IDs inside VPN network entries."""
         networks = obj.get("networks", {})  # VPN networks is a dict of name->config
         if not isinstance(networks, dict):  # Guard against unexpected data shapes
-            return
+            return  # Abort.
         remapped: dict[str, dict] = {}  # type: ignore[type-arg] # Build new dict with remapped IDs
         for net_name, net_config in networks.items():  # Iterate each network entry
             if isinstance(net_config, dict) and "id" in net_config:  # Check if entry has an ID to remap
@@ -16950,7 +16950,7 @@ class OrgConfigMigrationManager:
         """Remap service IDs in service policy rules."""
         services = obj.get("services", [])  # Service policies contain a list of service refs
         if not isinstance(services, list):  # Guard against unexpected data shapes
-            return
+            return  # Abort.
         for service_entry in services:  # Iterate each service reference in the policy
             if isinstance(service_entry, dict) and "id" in service_entry:  # Has remappable ID
                 old_id = service_entry["id"]  # Capture source org's service ID
@@ -16974,7 +16974,7 @@ class OrgConfigMigrationManager:
         for config_type in sorted_types:  # Process each type in dependency order
             objects = bundle.get(config_type["key"], [])  # Get objects of this type from bundle
             if not objects:  # Skip empty types
-                continue
+                continue  # Skip it.
             self._import_type_batch(config_type, objects, dry_run, results)  # Import the batch
         return results  # Return all results for report
 
@@ -17009,8 +17009,8 @@ class OrgConfigMigrationManager:
 
         conflict = self._detect_conflicts(obj, type_key)  # Check for name/subnet conflicts
         if conflict:  # Conflict found -- skip and record
-            self._record_conflict(type_key, obj_name, source_id, conflict, results)
-            return
+            self._record_conflict(type_key, obj_name, source_id, conflict, results)  # Record the conflict.
+            return  # Skip it.
 
         cleaned = self._strip_source_fields(obj)  # Remove source-org-specific fields
         cleaned = self._remap_object_references(cleaned, type_key)  # Remap cross-references to dest IDs
@@ -17018,7 +17018,7 @@ class OrgConfigMigrationManager:
         if dry_run:  # Preview mode -- don't make API calls
             print(f"      {label}Would import: {obj_name}")  # Show what would happen
             results.append({"type": type_key, "name": obj_name, "status": "would_import"})  # Record for report
-            return
+            return  # Abort.
 
         self._create_and_record(config_type, cleaned, obj_name, source_id, results)  # Create via API
 
@@ -17035,7 +17035,7 @@ class OrgConfigMigrationManager:
         results.append({"type": type_key, "name": name, "status": "skipped", "reason": conflict["detail"]})  # Record
         existing_id = conflict.get("existing_id")  # Get destination org's matching object ID
         if existing_id and source_id:  # Both IDs available -- record mapping for cross-references
-            self._build_remap_entry(source_id, existing_id)
+            self._build_remap_entry(source_id, existing_id)  # Remap to existing id.
 
     def _create_and_record(  # type: ignore[type-arg]
         self,
@@ -17053,7 +17053,7 @@ class OrgConfigMigrationManager:
             response = create_fn(self.session, self.org_id, body=cleaned)  # Call Mist API to create
             new_id = self._extract_created_id(response)  # Extract new object ID from response
             if source_id and new_id:  # Record mapping for downstream cross-references
-                self._build_remap_entry(source_id, new_id)
+                self._build_remap_entry(source_id, new_id)  # Remap to new id.
             print(f"      OK: {name}")  # User feedback showing success
             logging.debug("Created %s '%s' with ID %s", type_key, name, new_id[:8] if new_id else "n/a")  # Log result
             results.append({"type": type_key, "name": name, "status": "imported"})  # Record success
@@ -17062,7 +17062,7 @@ class OrgConfigMigrationManager:
             logging.error("Failed to create %s '%s': %s", type_key, name, error)  # Log error with context
             results.append({"type": type_key, "name": name, "status": "failed", "reason": str(error)})  # Record failure
 
-    def _extract_created_id(self, response) -> str:
+    def _extract_created_id(self, response) -> str:  # Extract the created id.
         """Extract the new object ID from a create API response."""
         if hasattr(response, "data") and isinstance(response.data, dict):  # Check response has data dict
             return response.data.get("id", "")  # type: ignore[no-any-return] # Return the new ID
@@ -17084,13 +17084,13 @@ class OrgConfigMigrationManager:
         print("  " + "=" * 55)  # Report header separator
 
         if would_import:  # Show dry-run preview section if applicable
-            self._print_report_section("WOULD IMPORT (dry-run)", would_import)
+            self._print_report_section("WOULD IMPORT (dry-run)", would_import)  # Report would-import.
         if imported:  # Show successfully imported section
-            self._print_report_section("IMPORTED", imported)
+            self._print_report_section("IMPORTED", imported)  # Report imported.
         if skipped:  # Show skipped-due-to-conflicts section
-            self._print_report_section("SKIPPED (conflicts)", skipped)
+            self._print_report_section("SKIPPED (conflicts)", skipped)  # Report skipped.
         if failed:  # Show failed-to-import section
-            self._print_report_section("FAILED", failed)
+            self._print_report_section("FAILED", failed)  # Report failed.
 
         self._print_report_totals(imported, skipped, failed, would_import)  # Show grand totals
 
@@ -17108,19 +17108,19 @@ class OrgConfigMigrationManager:
         total = len(imported) + len(skipped) + len(failed) + len(would_import)  # Grand total
         print(f"  Total: {total} objects processed")  # Total line
         if would_import:  # Show dry-run count
-            print(f"    Would import: {len(would_import)}")
+            print(f"    Would import: {len(would_import)}")  # Show would-import count.
         if imported:  # Show imported count
-            print(f"    Imported:     {len(imported)}")
+            print(f"    Imported:     {len(imported)}")  # Show imported count.
         if skipped:  # Show skipped count
-            print(f"    Skipped:      {len(skipped)}")
+            print(f"    Skipped:      {len(skipped)}")  # Show skipped count.
         if failed:  # Show failed count
-            print(f"    Failed:       {len(failed)}")
+            print(f"    Failed:       {len(failed)}")  # Show failed count.
 
 
 # ============================================================================
 # WAN PROBE CONFIGURATION MANAGER CLASS
 # ============================================================================
-class WANProbeConfigManager:
+class WANProbeConfigManager:  # WAN probe config manager.
     """
     Manages WAN interface ICMP probe configuration for gateway templates.
 
@@ -17138,22 +17138,22 @@ class WANProbeConfigManager:
     # Default probe configuration - loaded from environment variables
     # MIST_WAN_PROBE_IPS: Comma-separated list of probe IPs (e.g., "192.151.29.254,18.154.184.32")
     # MIST_WAN_PROBE_PROFILE: Probe profile name (e.g., "lte")
-    DEFAULT_PROBE_IPS = [
+    DEFAULT_PROBE_IPS = [  # Default probe IPs.
         ip.strip() for ip in os.getenv("MIST_WAN_PROBE_IPS", "192.151.29.254,18.154.184.32").split(",") if ip.strip()
     ]
-    DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")
+    DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")  # Default probe profile.
 
-    def __init__(self):
+    def __init__(self):  # Init the manager state.
         """Initialize the WAN Probe Configuration Manager."""
-        self.org_id = None
-        self.templates = []
-        self.sites = []
-        self.template_site_counts: dict[str, int] = {}
-        self.probe_ips = self.DEFAULT_PROBE_IPS.copy()
-        self.probe_profile = self.DEFAULT_PROBE_PROFILE
+        self.org_id = None  # Resolved org id.
+        self.templates = []  # Loaded templates.
+        self.sites = []  # Loaded sites.
+        self.template_site_counts: dict[str, int] = {}  # Sites per template.
+        self.probe_ips = self.DEFAULT_PROBE_IPS.copy()  # Working probe IPs.
+        self.probe_profile = self.DEFAULT_PROBE_PROFILE  # Working probe profile.
 
     @classmethod
-    def configure(cls, dry_run: bool = False) -> None:
+    def configure(cls, dry_run: bool = False) -> None:  # Configure entry point.
         """
         Menu #166: Configure WAN Probe Override on Gateway Templates (DESTRUCTIVE)
 
@@ -17163,114 +17163,114 @@ class WANProbeConfigManager:
         Args:
             dry_run: If True, show what would change without making modifications
         """
-        manager = cls()
-        manager._execute(dry_run)
+        manager = cls()  # Build the manager.
+        manager._execute(dry_run)  # Run the flow.
 
-    def _execute(self, dry_run: bool) -> None:
+    def _execute(self, dry_run: bool) -> None:  # Run the probe config flow.
         """Main execution flow for WAN probe configuration."""
-        self._display_header(dry_run)
+        self._display_header(dry_run)  # Show the header.
 
-        if not self._initialize():
-            return
+        if not self._initialize():  # Initialize state.
+            return  # Abort.
 
-        if not self._load_data():
-            return
+        if not self._load_data():  # Load the data.
+            return  # Abort.
 
-        templates_to_modify = self._select_templates()
-        if not templates_to_modify:
-            return
+        templates_to_modify = self._select_templates()  # Select templates.
+        if not templates_to_modify:  # None selected.
+            return  # Abort.
 
-        templates_with_changes = self._analyze_templates(templates_to_modify)
-        if not templates_with_changes:
-            print("\n  No WAN interfaces found in selected templates.")
-            print("  No changes needed.")
-            logging.info("Menu #166: No WAN interfaces found in selected templates")
-            return
+        templates_with_changes = self._analyze_templates(templates_to_modify)  # Analyze templates.
+        if not templates_with_changes:  # No changes.
+            print("\n  No WAN interfaces found in selected templates.")  # Tell the user.
+            print("  No changes needed.")  # Tell the user.
+            logging.info("Menu #166: No WAN interfaces found in selected templates")  # Log it.
+            return  # Abort.
 
-        self._show_preview(templates_with_changes, dry_run)
+        self._show_preview(templates_with_changes, dry_run)  # Show the preview.
 
-        if not dry_run:
-            if not self._confirm_operation(len(templates_with_changes)):
-                return
+        if not dry_run:  # Real run.
+            if not self._confirm_operation(len(templates_with_changes)):  # Need confirmation.
+                return  # Abort.
 
-        results = self._apply_changes(templates_with_changes, dry_run)
-        self._generate_report(results, dry_run)
+        results = self._apply_changes(templates_with_changes, dry_run)  # Apply the changes.
+        self._generate_report(results, dry_run)  # Generate the report.
 
-    def _display_header(self, dry_run: bool) -> None:
+    def _display_header(self, dry_run: bool) -> None:  # Show the header.
         """Display operation header with configuration details."""
-        print("\n  DESTRUCTIVE: Configure WAN Interface ICMP Probe Settings")
-        print("=" * 70)
-        if dry_run:
-            print("  >> DRY-RUN MODE: No changes will be made to templates")
-            print("  >> This will show what WOULD be changed without modifying anything")
+        print("\n  DESTRUCTIVE: Configure WAN Interface ICMP Probe Settings")  # Header.
+        print("=" * 70)  # Divider.
+        if dry_run:  # Dry-run.
+            print("  >> DRY-RUN MODE: No changes will be made to templates")  # Tell the user.
+            print("  >> This will show what WOULD be changed without modifying anything")  # Tell the user.
         else:
-            print("  !? WARNING: This operation modifies gateway templates")
-            print("  !? All sites using affected templates will inherit the change")
-        print("=" * 70)
-        print("\n  Probe Configuration:")
-        print(f"    Probe IPs: {self.probe_ips}")
-        print(f"    Probe Profile: {self.probe_profile}")
-        print("=" * 70)
-        logging.warning("Menu #166 DESTRUCTIVE: Configure WAN Probe Override operation started")
+            print("  !? WARNING: This operation modifies gateway templates")  # Warn destructive.
+            print("  !? All sites using affected templates will inherit the change")  # Warn inheritance.
+        print("=" * 70)  # Divider.
+        print("\n  Probe Configuration:")  # Probe config header.
+        print(f"    Probe IPs: {self.probe_ips}")  # Show probe IPs.
+        print(f"    Probe Profile: {self.probe_profile}")  # Show probe profile.
+        print("=" * 70)  # Divider.
+        logging.warning("Menu #166 DESTRUCTIVE: Configure WAN Probe Override operation started")  # Log the start.
 
-    def _initialize(self) -> bool:
+    def _initialize(self) -> bool:  # Initialize state.
         """Initialize org_id. Returns True on success."""
-        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not self.org_id:
-            print(" Failed to get organization ID.")
-            logging.error("Menu #166: Could not obtain org_id")
-            return False
-        return True
+        self.org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not self.org_id:  # No org.
+            print(" Failed to get organization ID.")  # Tell the user.
+            logging.error("Menu #166: Could not obtain org_id")  # Log the error.
+            return False  # Abort.
+        return True  # Initialized.
 
-    def _load_data(self) -> bool:
+    def _load_data(self) -> bool:  # Load the data.
         """Load gateway templates and site data. Returns True on success."""
-        print("\n  Loading gateway template data...")
+        print("\n  Loading gateway template data...")  # Tell the user.
         CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Refresh sites CSV.
 
-        templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
-        with open(templates_path, encoding="utf-8") as file_handle:
-            self.templates = list(csv.DictReader(file_handle))
+        templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")  # Templates path.
+        with open(templates_path, encoding="utf-8") as file_handle:  # Open the CSV.
+            self.templates = list(csv.DictReader(file_handle))  # Read the templates.
 
-        if not self.templates:
-            print(" No gateway templates found.")
-            logging.warning("Menu #166: No gateway templates available")
-            return False
+        if not self.templates:  # No templates.
+            print(" No gateway templates found.")  # Tell the user.
+            logging.warning("Menu #166: No gateway templates available")  # Warn none.
+            return False  # Abort.
 
-        sites_path = FilePathUtils.get_csv_path("SiteList.csv")
-        with open(sites_path, encoding="utf-8") as file_handle:
-            self.sites = list(csv.DictReader(file_handle))
+        sites_path = FilePathUtils.get_csv_path("SiteList.csv")  # Sites path.
+        with open(sites_path, encoding="utf-8") as file_handle:  # Open the CSV.
+            self.sites = list(csv.DictReader(file_handle))  # Read the sites.
 
         # Build template site counts (excluding sites matching MIST_SITE_EXCLUDE_PREFIX)
-        for site in self.sites:
+        for site in self.sites:  # Walk sites.
             if MIST_SITE_EXCLUDE_PREFIX and site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX):
-                continue
-            template_id = site.get("gatewaytemplate_id", "").strip()
-            if template_id:
+                continue  # Skip it.
+            template_id = site.get("gatewaytemplate_id", "").strip()  # Read template id.
+            if template_id:  # Have a template.
                 self.template_site_counts[template_id] = self.template_site_counts.get(template_id, 0) + 1
 
         logging.info("Loaded %s gateway templates and %s sites", len(self.templates), len(self.sites))
-        return True
+        return True  # Loaded.
 
-    def _select_templates(self) -> list[dict[str, Any]]:
+    def _select_templates(self) -> list[dict[str, Any]]:  # Select templates.
         """Display templates and get user selection. Returns selected templates."""
-        templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())
+        templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())  # Sort by name.
 
-        print(f"\n  Available Gateway Templates ({len(templates_sorted)}):")
-        template_list = []
-        for idx, template in enumerate(templates_sorted, start=1):
-            template_id = template.get("id", "")
-            template_name = template.get("name", "Unnamed Template")
-            site_count = self.template_site_counts.get(template_id, 0)
+        print(f"\n  Available Gateway Templates ({len(templates_sorted)}):")  # Tell the user.
+        template_list = []  # Display rows.
+        for idx, template in enumerate(templates_sorted, start=1):  # Enumerate templates.
+            template_id = template.get("id", "")  # Template id.
+            template_name = template.get("name", "Unnamed Template")  # Template name.
+            site_count = self.template_site_counts.get(template_id, 0)  # Site count.
             template_list.append({"id": template_id, "name": template_name, "site_count": site_count})
-            print(f"   [{idx}] {template_name} ({site_count} sites)")
+            print(f"   [{idx}] {template_name} ({site_count} sites)")  # Print the option.
 
-        print("\n  Template Selection:")
-        print("   Enter template numbers (comma-separated, e.g., 1,3,5)")
-        print("   Or 'all' to modify all templates")
-        print("   Or 'cancel' to abort")
+        print("\n  Template Selection:")  # Selection header.
+        print("   Enter template numbers (comma-separated, e.g., 1,3,5)")  # Tell the user.
+        print("   Or 'all' to modify all templates")  # Tell the user.
+        print("   Or 'cancel' to abort")  # Tell the user.
 
-        selection = (
+        selection = (  # Read the selection.
             InputUtils.safe_input(
                 "\n  Selection: ",
                 context="wan_probe_template_selection",
@@ -17279,88 +17279,88 @@ class WANProbeConfigManager:
             .lower()
         )
 
-        if selection == "cancel":
-            print(" Operation cancelled.")
-            logging.info("Menu #166 cancelled by user at template selection")
-            return []
+        if selection == "cancel":  # User cancelled.
+            print(" Operation cancelled.")  # Tell the user.
+            logging.info("Menu #166 cancelled by user at template selection")  # Log the cancel.
+            return []  # Return empty.
 
-        if selection == "all":
-            return template_list
+        if selection == "all":  # Select all.
+            return template_list  # Return all templates.
 
         try:
-            indices = [int(idx.strip()) - 1 for idx in selection.split(",")]
-            selected = [template_list[idx] for idx in indices if 0 <= idx < len(template_list)]
-            if not selected:
-                print(" No valid templates selected.")
-                return []
-            return selected
-        except (ValueError, IndexError) as error:
-            print(f" Invalid selection: {error}")
-            logging.error("Menu #166: Invalid template selection: %s", error)
-            return []
+            indices = [int(idx.strip()) - 1 for idx in selection.split(",")]  # Parse the indices.
+            selected = [template_list[idx] for idx in indices if 0 <= idx < len(template_list)]  # Resolve to templates.
+            if not selected:  # None valid.
+                print(" No valid templates selected.")  # Tell the user.
+                return []  # Return empty.
+            return selected  # Return the selection.
+        except (ValueError, IndexError) as error:  # Bad input.
+            print(f" Invalid selection: {error}")  # Tell the user.
+            logging.error("Menu #166: Invalid template selection: %s", error)  # Log the error.
+            return []  # Return empty.
 
     def _analyze_templates(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Fetch and analyze templates for WAN interfaces. Returns templates with changes."""
-        print(f"\n  Analyzing {len(templates_to_modify)} templates for WAN interfaces...")
-        templates_with_changes = []
+        print(f"\n  Analyzing {len(templates_to_modify)} templates for WAN interfaces...")  # Tell the user.
+        templates_with_changes = []  # Collect changed templates.
 
-        def fetch_and_analyze(template_info: dict[str, Any]) -> dict[str, Any] | None:
+        def fetch_and_analyze(template_info: dict[str, Any]) -> dict[str, Any] | None:  # Analyze one template.
             """Worker function to fetch and analyze a single template."""
-            template_id = template_info["id"]
-            template_name = template_info["name"]
+            template_id = template_info["id"]  # Template id.
+            template_name = template_info["name"]  # Template name.
 
             try:
-                logging.debug("Fetching template configuration for %s", template_name)
-                response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(
+                logging.debug("Fetching template configuration for %s", template_name)  # Trace the fetch.
+                response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(  # Fetch the template.
                     apisession, self.org_id, template_id
                 )
-                config = response.data if hasattr(response, "data") else {}
+                config = response.data if hasattr(response, "data") else {}  # Unwrap the config.
 
-                if not isinstance(config, dict):
-                    logging.warning("Template %s returned invalid structure", template_name)
-                    return None
+                if not isinstance(config, dict):  # Invalid structure.
+                    logging.warning("Template %s returned invalid structure", template_name)  # Warn it.
+                    return None  # Skip it.
 
-                port_config = config.get("port_config", {})
-                if not isinstance(port_config, dict):
-                    logging.debug("Template %s has no port_config", template_name)
-                    return None
+                port_config = config.get("port_config", {})  # Read port config.
+                if not isinstance(port_config, dict):  # Invalid port config.
+                    logging.debug("Template %s has no port_config", template_name)  # Trace none.
+                    return None  # Skip it.
 
                 # Find all WAN interfaces
-                wan_interfaces = []
-                for port_name, port_settings in port_config.items():
-                    if isinstance(port_settings, dict) and port_settings.get("usage") == "wan":
-                        current_probe = port_settings.get("wan_probe_override", {})
+                wan_interfaces = []  # Collect WAN ports.
+                for port_name, port_settings in port_config.items():  # Walk ports.
+                    if isinstance(port_settings, dict) and port_settings.get("usage") == "wan":  # WAN-usage port.
+                        current_probe = port_settings.get("wan_probe_override", {})  # Read probe override.
                         current_ips = current_probe.get("ips", []) if isinstance(current_probe, dict) else []
-                        current_profile = (
+                        current_profile = (  # Read current profile.
                             current_probe.get("probe_profile", "") if isinstance(current_probe, dict) else ""
                         )
 
-                        wan_interfaces.append(
+                        wan_interfaces.append(  # Collect the interface.
                             {"port_name": port_name, "current_ips": current_ips, "current_profile": current_profile}
                         )
 
-                if wan_interfaces:
-                    return {
+                if wan_interfaces:  # Have WAN ports.
+                    return {  # Return the changes.
                         "id": template_id,
                         "name": template_name,
                         "site_count": template_info["site_count"],
                         "config": config,
                         "wan_interfaces": wan_interfaces,
                     }
-                return None
+                return None  # No WAN ports.
 
-            except Exception as error:
-                logging.error("Error analyzing template %s: %s", template_name, error)
-                logging.error(traceback.format_exc())
-                print(f"\n  !? Error analyzing template '{template_name}': {error}")
-                return None
+            except Exception as error:  # Analysis failed.
+                logging.error("Error analyzing template %s: %s", template_name, error)  # Log the error.
+                logging.error(traceback.format_exc())  # Log the traceback.
+                print(f"\n  !? Error analyzing template '{template_name}': {error}")  # Tell the user.
+                return None  # Skip it.
 
         # Parallel fetch with ThreadPoolExecutor
-        max_workers = min(10, len(templates_to_modify))
+        max_workers = min(10, len(templates_to_modify))  # Size the worker pool.
         logging.info("Fetching %s templates in parallel (max %s workers)", len(templates_to_modify), max_workers)
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            import concurrent.futures
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:  # Run the pool.
+            import concurrent.futures  # Import futures.
 
             future_map = {executor.submit(fetch_and_analyze, t): t for t in templates_to_modify}
 
@@ -17370,66 +17370,66 @@ class WANProbeConfigManager:
                 desc="Analyzing templates",
                 unit="template",
             ):
-                result = future.result()
-                if result:
-                    templates_with_changes.append(result)
+                result = future.result()  # Read the result.
+                if result:  # Have a result.
+                    templates_with_changes.append(result)  # Collect it.
 
-        return templates_with_changes
+        return templates_with_changes  # Return changed templates.
 
     def _show_preview(self, templates_with_changes: list[dict[str, Any]], dry_run: bool) -> None:
         """Display preview of changes to be made."""
-        total_interfaces = sum(len(t["wan_interfaces"]) for t in templates_with_changes)
-        total_sites = sum(t["site_count"] for t in templates_with_changes)
+        total_interfaces = sum(len(t["wan_interfaces"]) for t in templates_with_changes)  # Total interfaces.
+        total_sites = sum(t["site_count"] for t in templates_with_changes)  # Total sites.
 
-        print("\n  Preview of Changes:")
-        print(f"  {len(templates_with_changes)} templates with {total_interfaces} WAN interfaces")
-        print(f"  Affecting {total_sites} sites")
+        print("\n  Preview of Changes:")  # Header.
+        print(f"  {len(templates_with_changes)} templates with {total_interfaces} WAN interfaces")  # Show the counts.
+        print(f"  Affecting {total_sites} sites")  # Show affected sites.
 
-        for template in templates_with_changes:
-            print(f"\n   Template: {template['name']} ({template['site_count']} sites)")
-            for wan_if in template["wan_interfaces"]:
-                port = wan_if["port_name"]
-                current_ips = wan_if["current_ips"] or ["(none)"]
-                current_profile = wan_if["current_profile"] or "(none)"
-                print(f"     {port}:")
-                print(f"       Current: ips={current_ips}, profile={current_profile}")
-                print(f"       New:     ips={self.probe_ips}, profile={self.probe_profile}")
+        for template in templates_with_changes:  # Walk templates.
+            print(f"\n   Template: {template['name']} ({template['site_count']} sites)")  # Print the template.
+            for wan_if in template["wan_interfaces"]:  # Walk WAN ports.
+                port = wan_if["port_name"]  # Port name.
+                current_ips = wan_if["current_ips"] or ["(none)"]  # Current IPs.
+                current_profile = wan_if["current_profile"] or "(none)"  # Current profile.
+                print(f"     {port}:")  # Print the port.
+                print(f"       Current: ips={current_ips}, profile={current_profile}")  # Show current.
+                print(f"       New:     ips={self.probe_ips}, profile={self.probe_profile}")  # Show new.
 
-    def _confirm_operation(self, template_count: int) -> bool:
+    def _confirm_operation(self, template_count: int) -> bool:  # Confirm the operation.
         """Prompt for confirmation. Returns True if confirmed."""
-        print(f"\n  {'=' * 70}")
-        print(f"  !? CRITICAL: This will modify {template_count} gateway templates")
-        print("  !? Type 'APPLY' (all caps) to proceed or anything else to cancel")
-        print(f"  {'=' * 70}")
+        print(f"\n  {'=' * 70}")  # Divider.
+        print(f"  !? CRITICAL: This will modify {template_count} gateway templates")  # Warn destructive.
+        print("  !? Type 'APPLY' (all caps) to proceed or anything else to cancel")  # Ask to type APPLY.
+        print(f"  {'=' * 70}")  # Divider.
 
-        confirmation = InputUtils.safe_input(
+        confirmation = InputUtils.safe_input(  # Read the confirmation.
             "\n  Confirmation: ",
             context="wan_probe_apply_confirmation",
         ).strip()
-        if confirmation != "APPLY":
-            print(" Operation cancelled.")
-            logging.info("Menu #166 cancelled by user at final confirmation")
-            return False
-        return True
+        if confirmation != "APPLY":  # Not confirmed.
+            print(" Operation cancelled.")  # Tell the user.
+            logging.info("Menu #166 cancelled by user at final confirmation")  # Log the cancel.
+            return False  # Abort.
+        return True  # Confirmed.
 
     def _apply_changes(self, templates_with_changes: list[dict[str, Any]], dry_run: bool) -> list[dict[str, Any]]:
         """Apply probe configuration changes to templates. Returns results."""
-        print("\n  Applying WAN probe configuration...")
-        results = []
+        print("\n  Applying WAN probe configuration...")  # Tell the user.
+        results = []  # Collect results.
 
         for template in tqdm(templates_with_changes, desc="Updating templates", unit="template"):  # type: ignore[no-untyped-call]
-            result = self._update_single_template(template, dry_run)
-            results.append(result)
+            result = self._update_single_template(template, dry_run)  # Update one template.
+            results.append(result)  # Collect the result.
 
-        return results
+        return results  # Return all results.
 
     def _update_single_template(self, template: dict[str, Any], dry_run: bool) -> dict[str, Any]:
         """Update a single template's WAN probe configuration."""
-        template_id = template["id"]
-        template_name = template["name"]
-        config = template["config"]
+        template_id = template["id"]  # Template id.
+        template_name = template["name"]  # Template name.
+        config = template["config"]  # Template config.
 
-        result = {
+        result = {  # Build the result.
             "template_name": template_name,
             "template_id": template_id,
             "site_count": template["site_count"],
@@ -17439,58 +17439,58 @@ class WANProbeConfigManager:
         }
 
         try:
-            port_config = config.get("port_config", {})
-            interfaces_modified = []
+            port_config = config.get("port_config", {})  # Read port config.
+            interfaces_modified = []  # Track modified ports.
 
-            for wan_if in template["wan_interfaces"]:
-                port_name = wan_if["port_name"]
-                if port_name in port_config:
+            for wan_if in template["wan_interfaces"]:  # Walk WAN ports.
+                port_name = wan_if["port_name"]  # Port name.
+                if port_name in port_config:  # Port present.
                     # Set wan_probe_override
-                    port_config[port_name]["wan_probe_override"] = {
+                    port_config[port_name]["wan_probe_override"] = {  # Set the probe override.
                         "ips": self.probe_ips.copy(),
                         "probe_profile": self.probe_profile,
                     }
-                    interfaces_modified.append(port_name)
-                    logging.debug("Template %s: Updated %s probe config", template_name, port_name)
+                    interfaces_modified.append(port_name)  # Mark it modified.
+                    logging.debug("Template %s: Updated %s probe config", template_name, port_name)  # Trace the update.
 
-            if interfaces_modified:
-                config["port_config"] = port_config
-                result["interfaces_updated"] = interfaces_modified
+            if interfaces_modified:  # Any modifications.
+                config["port_config"] = port_config  # Store port config.
+                result["interfaces_updated"] = interfaces_modified  # Record updates.
 
-                if dry_run:
-                    result["status"] = "DRY-RUN"
+                if dry_run:  # Dry-run.
+                    result["status"] = "DRY-RUN"  # Mark dry-run.
                     logging.info("DRY-RUN: Would update template %s interfaces: %s", template_name, interfaces_modified)
                 else:
-                    logging.debug("Updating template %s via API", template_name)
-                    update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
+                    logging.debug("Updating template %s via API", template_name)  # Trace the update.
+                    update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(  # Update the template.
                         apisession, self.org_id, template_id, body=config
                     )
 
-                    if update_resp.status_code == 200:
-                        result["status"] = "SUCCESS"
-                        logging.info("Successfully updated template %s", template_name)
+                    if update_resp.status_code == 200:  # Success.
+                        result["status"] = "SUCCESS"  # Mark success.
+                        logging.info("Successfully updated template %s", template_name)  # Log success.
                     else:
-                        result["status"] = "FAILED"
-                        result["error"] = f"API returned status {update_resp.status_code}"
+                        result["status"] = "FAILED"  # Failed.
+                        result["error"] = f"API returned status {update_resp.status_code}"  # Record the error.
                         logging.error("Failed to update template %s: status %s", template_name, update_resp.status_code)
             else:
-                result["status"] = "SKIPPED"
-                result["error"] = "No WAN interfaces found in port_config"
+                result["status"] = "SKIPPED"  # Mark skipped.
+                result["error"] = "No WAN interfaces found in port_config"  # Record the reason.
 
-        except Exception as error:
-            result["status"] = "ERROR"
-            result["error"] = str(error)
-            logging.error("Error updating template %s: %s", template_name, error)
-            logging.error(traceback.format_exc())
+        except Exception as error:  # Update failed.
+            result["status"] = "ERROR"  # Mark error.
+            result["error"] = str(error)  # Record the error.
+            logging.error("Error updating template %s: %s", template_name, error)  # Log the error.
+            logging.error(traceback.format_exc())  # Log the traceback.
 
-        return result
+        return result  # Return the result.
 
-    def _generate_report(self, results: list[dict[str, Any]], dry_run: bool) -> None:
+    def _generate_report(self, results: list[dict[str, Any]], dry_run: bool) -> None:  # Generate the audit report.
         """Generate and display final report."""
         # Prepare report data
-        report_data = []
-        for result in results:
-            report_data.append(
+        report_data = []  # Collect report rows.
+        for result in results:  # Walk results.
+            report_data.append(  # Build a report row.
                 {
                     "template_name": result["template_name"],
                     "template_id": result["template_id"],
@@ -17506,46 +17506,46 @@ class WANProbeConfigManager:
                 }
             )
 
-        output_file = "GatewayTemplate_WAN_Probe_Config_Audit.csv"
+        output_file = "GatewayTemplate_WAN_Probe_Config_Audit.csv"  # Output filename.
         DataExporter.write_with_format_selection(report_data, output_file)  # type: ignore[no-untyped-call]
 
         # Calculate summary
-        total_interfaces = sum(len(r["interfaces_updated"]) for r in results)
+        total_interfaces = sum(len(r["interfaces_updated"]) for r in results)  # Total interfaces.
         total_sites = sum(r["site_count"] for r in results if r["status"] in ["SUCCESS", "DRY-RUN"])
 
-        if dry_run:
-            dry_run_count = sum(1 for r in results if r["status"] == "DRY-RUN")
-            print("\n  WAN Probe Configuration DRY-RUN Complete!")
-            print("=" * 70)
-            print("  >> DRY-RUN MODE: No actual changes were made")
-            print(f"  Templates Analyzed: {len(results)}")
-            print(f"  Would Update: {dry_run_count} templates")
-            print(f"  WAN Interfaces: {total_interfaces}")
-            print(f"  Sites Affected: {total_sites}")
-            print("\n  >> To apply changes, run without --dry-run flag")
+        if dry_run:  # Dry-run.
+            dry_run_count = sum(1 for r in results if r["status"] == "DRY-RUN")  # Count dry-runs.
+            print("\n  WAN Probe Configuration DRY-RUN Complete!")  # Tell the user.
+            print("=" * 70)  # Divider.
+            print("  >> DRY-RUN MODE: No actual changes were made")  # Tell the user.
+            print(f"  Templates Analyzed: {len(results)}")  # Show analyzed count.
+            print(f"  Would Update: {dry_run_count} templates")  # Show would-update.
+            print(f"  WAN Interfaces: {total_interfaces}")  # Show interfaces.
+            print(f"  Sites Affected: {total_sites}")  # Show sites.
+            print("\n  >> To apply changes, run without --dry-run flag")  # Tell the user.
         else:
-            success_count = sum(1 for r in results if r["status"] == "SUCCESS")
-            failure_count = len(results) - success_count
+            success_count = sum(1 for r in results if r["status"] == "SUCCESS")  # Count successes.
+            failure_count = len(results) - success_count  # Count failures.
 
-            print("\n  WAN Probe Configuration Complete!")
-            print("=" * 70)
-            print(f"  Templates Updated: {success_count}")
-            print(f"  Templates Failed: {failure_count}")
-            print(f"  WAN Interfaces Configured: {total_interfaces}")
-            print(f"  Sites Affected: {total_sites}")
+            print("\n  WAN Probe Configuration Complete!")  # Tell the user.
+            print("=" * 70)  # Divider.
+            print(f"  Templates Updated: {success_count}")  # Show updated count.
+            print(f"  Templates Failed: {failure_count}")  # Show failed count.
+            print(f"  WAN Interfaces Configured: {total_interfaces}")  # Show interfaces.
+            print(f"  Sites Affected: {total_sites}")  # Show sites.
 
-            if success_count > 0:
-                print("\n  Configuration Applied:")
-                print(f"    Probe IPs: {self.probe_ips}")
-                print(f"    Probe Profile: {self.probe_profile}")
+            if success_count > 0:  # Any success.
+                print("\n  Configuration Applied:")  # Tell the user.
+                print(f"    Probe IPs: {self.probe_ips}")  # Show probe IPs.
+                print(f"    Probe Profile: {self.probe_profile}")  # Show probe profile.
 
-            if failure_count > 0:
-                print(f"\n  !? {failure_count} templates failed - check audit report")
+            if failure_count > 0:  # Any failure.
+                print(f"\n  !? {failure_count} templates failed - check audit report")  # Warn the failures.
 
-        print(f"\n  Report saved to: {output_file}")
-        print("=" * 70)
+        print(f"\n  Report saved to: {output_file}")  # Tell the user.
+        print("=" * 70)  # Divider.
 
-        logging.warning(
+        logging.warning(  # Log the summary.
             "Menu #166 DESTRUCTIVE operation complete: %s templates updated",
             sum(1 for r in results if r["status"] == "SUCCESS"),
         )
@@ -17554,15 +17554,15 @@ class WANProbeConfigManager:
 # ============================================================================
 # WAN PROBE DEVICE OVERRIDE MANAGER CLASS (delegated)
 # ============================================================================
-class WANProbeDeviceOverrideManager:
+class WANProbeDeviceOverrideManager:  # WAN probe device override.
     """Delegation wrapper for extracted WAN probe device override manager implementation."""
 
     @classmethod
-    def configure(cls, dry_run: bool = False) -> None:
+    def configure(cls, dry_run: bool = False) -> None:  # Configure entry point.
         """Menu #167 delegated entrypoint."""
         from src.gateway import wan_probe_device_override_manager as wan_probe_module  # noqa: PLC0415,I001
 
-        wan_probe_module.configure_wan_probe_device_override_dependencies(
+        wan_probe_module.configure_wan_probe_device_override_dependencies(  # Wire dependencies.
             apisession_dependency=apisession,
             config_utils=ConfigUtils,
             cache_utils=CacheUtils,
@@ -17574,13 +17574,13 @@ class WANProbeDeviceOverrideManager:
             mistapi_dependency=mistapi,
             site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
         )
-        return wan_probe_module.WANProbeDeviceOverrideManager.configure(dry_run=dry_run)
+        return wan_probe_module.WANProbeDeviceOverrideManager.configure(dry_run=dry_run)  # Delegate the config.
 
 
 # ============================================================================
 # VIRTUAL CHASSIS MANAGER CLASS
 # ============================================================================
-class VirtualChassisManager:
+class VirtualChassisManager:  # Virtual chassis manager.
     """Virtual chassis to virtual MAC conversion operations (Menus 92-94).
 
     Implementation extracted to src/device/virtual_chassis.py.
@@ -17589,13 +17589,13 @@ class VirtualChassisManager:
     """
 
     @staticmethod
-    def convert_single(dry_run: bool = False) -> None:
+    def convert_single(dry_run: bool = False) -> None:  # Convert a single VC.
         """Convert a single VC switch to virtual MAC (Menu 92)."""
-        from src.device.virtual_chassis import (
+        from src.device.virtual_chassis import (  # Import the impl.
             VirtualChassisManager as _VC,
         )
 
-        _VC.convert_single(
+        _VC.convert_single(  # Delegate the conversion.
             apisession=apisession,
             select_site_fn=PromptUtils.select_site,
             safe_input_fn=InputUtils.safe_input,
@@ -17606,13 +17606,13 @@ class VirtualChassisManager:
         )
 
     @staticmethod
-    def convert_by_site_list() -> None:
+    def convert_by_site_list() -> None:  # Convert by site list.
         """Bulk convert VC switches from site list CSV (Menu 93)."""
-        from src.device.virtual_chassis import (
+        from src.device.virtual_chassis import (  # Import the impl.
             VirtualChassisManager as _VC,
         )
 
-        _VC.convert_by_site_list(
+        _VC.convert_by_site_list(  # Delegate the conversion.
             apisession=apisession,
             safe_input_fn=InputUtils.safe_input,
             get_csv_path_fn=FilePathUtils.get_csv_path,
@@ -17623,13 +17623,13 @@ class VirtualChassisManager:
         )
 
     @staticmethod
-    def check_status() -> None:
+    def check_status() -> None:  # Check VC status.
         """Check conversion status of all VC switches (Menu 94)."""
-        from src.device.virtual_chassis import (
+        from src.device.virtual_chassis import (  # Import the impl.
             VirtualChassisManager as _VC,
         )
 
-        _VC.check_status(
+        _VC.check_status(  # Delegate the check.
             get_csv_path_fn=FilePathUtils.get_csv_path,
             check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
             inventory_generator=OrgInventoryExporter.inventory,
@@ -17643,15 +17643,15 @@ class VirtualChassisManager:
 # ============================================================================
 # SITE CONFIGURATION MANAGER CLASS
 # ============================================================================
-class SiteConfigManager:
+class SiteConfigManager:  # Site config manager.
     """Delegation wrapper for extracted site configuration implementation."""
 
     @staticmethod
-    def _configure_module():
+    def _configure_module():  # Configure the module.
         """Configure extracted module dependencies and return the module handle."""
         from src.site import site_config_manager as site_config_module  # noqa: PLC0415,I001
 
-        site_config_module.configure_site_config_manager_dependencies(
+        site_config_module.configure_site_config_manager_dependencies(  # Wire dependencies.
             apisession_dependency=apisession,
             config_utils=ConfigUtils,
             file_path_utils=FilePathUtils,
@@ -17660,37 +17660,37 @@ class SiteConfigManager:
             mistapi_dependency=mistapi,
             default_api_page_limit=DEFAULT_API_PAGE_LIMIT,
         )
-        return site_config_module
+        return site_config_module  # Return the module.
 
     @staticmethod
-    def create_test_sites_from_csv():
+    def create_test_sites_from_csv():  # Create test sites from CSV.
         """Menu #171 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()
-        return module.SiteConfigManager.create_test_sites_from_csv()
+        module = SiteConfigManager._configure_module()  # Configure the module.
+        return module.SiteConfigManager.create_test_sites_from_csv()  # Delegate the call.
 
     @staticmethod
-    def create_country_rf_templates_and_assign():
+    def create_country_rf_templates_and_assign():  # Create country RF templates.
         """Menu #172 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()
-        return module.SiteConfigManager.create_country_rf_templates_and_assign()
+        module = SiteConfigManager._configure_module()  # Configure the module.
+        return module.SiteConfigManager.create_country_rf_templates_and_assign()  # Delegate the call.
 
     @staticmethod
-    def create_ap_model_device_profiles():
+    def create_ap_model_device_profiles():  # Create AP device profiles.
         """Menu #173 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()
-        return module.SiteConfigManager.create_ap_model_device_profiles()
+        module = SiteConfigManager._configure_module()  # Configure the module.
+        return module.SiteConfigManager.create_ap_model_device_profiles()  # Delegate the call.
 
     @staticmethod
-    def assign_aps_to_matching_device_profiles():
+    def assign_aps_to_matching_device_profiles():  # Assign APs to profiles.
         """Menu #174 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()
-        return module.SiteConfigManager.assign_aps_to_matching_device_profiles()
+        module = SiteConfigManager._configure_module()  # Configure the module.
+        return module.SiteConfigManager.assign_aps_to_matching_device_profiles()  # Delegate the call.
 
 
 # ============================================================================
 # DEVICE REBOOT MANAGER CLASS
 # ============================================================================
-class DeviceRebootManager:
+class DeviceRebootManager:  # Device reboot manager.
     """
     Manages device reboot operations with comprehensive safety checks and audit logging.
 
@@ -17703,67 +17703,67 @@ class DeviceRebootManager:
     """
 
     @staticmethod
-    def by_gateway_template_list():
+    def by_gateway_template_list():  # Reboot by template list.
         """
         Reboots all devices associated with gateway templates in GatewayTemplateRebootList.CSV.
         Logs results to GatewayTemplateRebootResults.CSV.
         """
-        logging.info("[Menu 91] Starting DeviceRebootManager.by_gateway_template_list")
+        logging.info("[Menu 91] Starting DeviceRebootManager.by_gateway_template_list")  # Log start.
 
         # Step 1: Validate reboot list file exists
-        reboot_targets = DeviceRebootManager._load_and_validate_reboot_targets()
-        if not reboot_targets:
-            return
+        reboot_targets = DeviceRebootManager._load_and_validate_reboot_targets()  # Load reboot targets.
+        if not reboot_targets:  # No targets.
+            return  # Abort.
 
         # Step 2: Display confirmation and get user consent
-        if not DeviceRebootManager._confirm_reboot_operation(reboot_targets):
-            return
+        if not DeviceRebootManager._confirm_reboot_operation(reboot_targets):  # Confirm the reboot.
+            return  # Abort.
 
         # Step 3: Execute reboots and collect results
-        results = DeviceRebootManager._execute_reboots(reboot_targets)
+        results = DeviceRebootManager._execute_reboots(reboot_targets)  # Execute the reboots.
 
         # Step 4: Export results to CSV
-        DeviceRebootManager._export_reboot_results(results)
+        DeviceRebootManager._export_reboot_results(results)  # Export the results.
 
     @staticmethod
     def _load_and_validate_reboot_targets() -> list[dict] | None:  # type: ignore[type-arg]
         """Load reboot list and return validated device targets."""
         # Check for reboot list file
-        reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")
-        if not os.path.exists(reboot_list_path):
-            DeviceRebootManager._handle_missing_reboot_file(reboot_list_path)
-            return None
+        reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")  # Reboot list path.
+        if not os.path.exists(reboot_list_path):  # File missing.
+            DeviceRebootManager._handle_missing_reboot_file(reboot_list_path)  # Handle the missing file.
+            return None  # Abort.
 
         # Ensure required CSVs are fresh
-        DeviceRebootManager._ensure_fresh_csv_cache()
+        DeviceRebootManager._ensure_fresh_csv_cache()  # Refresh the CSV cache.
 
         # Load template mappings
-        template_name_to_id = DeviceRebootManager._load_template_mappings()
-        if not template_name_to_id:
-            return None
+        template_name_to_id = DeviceRebootManager._load_template_mappings()  # Load template mappings.
+        if not template_name_to_id:  # No mappings.
+            return None  # Abort.
 
         # Load reboot template names
-        reboot_template_names = DeviceRebootManager._load_reboot_template_names()
-        if not reboot_template_names:
-            return None
+        reboot_template_names = DeviceRebootManager._load_reboot_template_names()  # Load reboot template names.
+        if not reboot_template_names:  # No names.
+            return None  # Abort.
 
         # Map names to IDs
         reboot_template_ids = DeviceRebootManager._map_template_names_to_ids(reboot_template_names, template_name_to_id)
-        if not reboot_template_ids:
-            return None
+        if not reboot_template_ids:  # No ids.
+            return None  # Abort.
 
         # Find target devices
         return DeviceRebootManager._find_reboot_target_devices(reboot_template_ids, template_name_to_id)
 
     @staticmethod
-    def _handle_missing_reboot_file(reboot_list_path: str) -> None:
+    def _handle_missing_reboot_file(reboot_list_path: str) -> None:  # Handle the missing file.
         """Handle missing reboot list file - offer to create template."""
-        logging.error(" GatewayTemplateRebootList.CSV not found.")
-        print(" GatewayTemplateRebootList.CSV not found.")
-        print(f"   Please create this file at: {reboot_list_path}")
-        print("   This file should contain template names to reboot, one per line.")
+        logging.error(" GatewayTemplateRebootList.CSV not found.")  # Log the missing file.
+        print(" GatewayTemplateRebootList.CSV not found.")  # Tell the user.
+        print(f"   Please create this file at: {reboot_list_path}")  # Show the path.
+        print("   This file should contain template names to reboot, one per line.")  # Explain the format.
 
-        user_input = (
+        user_input = (  # Prompt to create it.
             InputUtils.safe_input(
                 "   Would you like to create an empty file? (y/n): ",
                 context="gateway_reboot_create_template_file",
@@ -17771,118 +17771,118 @@ class DeviceRebootManager:
             .strip()
             .lower()
         )
-        if user_input in ["y", "yes"]:
+        if user_input in ["y", "yes"]:  # User said yes.
             try:
                 template_path = FilePathUtils.create_csv_template("GatewayTemplateRebootList.CSV")
-                print(f"! Empty file created at: {template_path}")
-                print("   Edit the file to add template names and run again.")
-            except Exception as error:
-                print(f"! Failed to create file: {error}")
+                print(f"! Empty file created at: {template_path}")  # Tell the user.
+                print("   Edit the file to add template names and run again.")  # Tell the user.
+            except Exception as error:  # Creation failed.
+                print(f"! Failed to create file: {error}")  # Tell the user.
 
     @staticmethod
-    def _ensure_fresh_csv_cache() -> None:
+    def _ensure_fresh_csv_cache() -> None:  # Refresh the CSV cache.
         """Ensure required CSV files are fresh."""
-        CacheUtils.check_and_generate_csv("OrgDevices.csv", OrgInventoryExporter.devices)
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)
+        CacheUtils.check_and_generate_csv("OrgDevices.csv", OrgInventoryExporter.devices)  # Refresh devices CSV.
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Refresh sites CSV.
         CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-        CacheUtils.check_and_generate_csv(
+        CacheUtils.check_and_generate_csv(  # Refresh gateway configs CSV.
             "AllSiteGatewayConfigs.csv",
             lambda: GatewayExportUtils.device_configs(fast=True),
         )
 
     @staticmethod
-    def _load_template_mappings() -> dict[str, str] | None:
+    def _load_template_mappings() -> dict[str, str] | None:  # Load template name->id.
         """Load template name to ID mapping from OrgGatewayTemplates.csv."""
-        template_name_to_id = {}
+        template_name_to_id = {}  # Name-to-id map.
         try:
-            gateway_templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")
-            with open(gateway_templates_path, encoding="utf-8") as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    name = row.get("name", "").strip()
-                    tid = row.get("id", "").strip()
-                    if name and tid:
-                        template_name_to_id[name] = tid
-            logging.info("Loaded %s gateway templates", len(template_name_to_id))
-        except Exception as error:
-            logging.error("! Failed to load gateway templates: %s", error)
-            print(f"! Failed to load gateway templates: {error}")
-            return None
+            gateway_templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")  # Templates path.
+            with open(gateway_templates_path, encoding="utf-8") as file:  # Open the CSV.
+                reader = csv.DictReader(file)  # Parse rows.
+                for row in reader:  # Walk rows.
+                    name = row.get("name", "").strip()  # Read the name.
+                    tid = row.get("id", "").strip()  # Read the id.
+                    if name and tid:  # Have both.
+                        template_name_to_id[name] = tid  # Map name to id.
+            logging.info("Loaded %s gateway templates", len(template_name_to_id))  # Log the count.
+        except Exception as error:  # Load failed.
+            logging.error("! Failed to load gateway templates: %s", error)  # Log the error.
+            print(f"! Failed to load gateway templates: {error}")  # Tell the user.
+            return None  # Abort.
 
-        if not template_name_to_id:
-            logging.warning(" No gateway templates found in OrgGatewayTemplates.csv")
-            print(" No gateway templates found in OrgGatewayTemplates.csv")
-            return None
+        if not template_name_to_id:  # No templates.
+            logging.warning(" No gateway templates found in OrgGatewayTemplates.csv")  # Warn none.
+            print(" No gateway templates found in OrgGatewayTemplates.csv")  # Tell the user.
+            return None  # Abort.
 
-        return template_name_to_id
+        return template_name_to_id  # Return the map.
 
     @staticmethod
-    def _load_reboot_template_names() -> set[str] | None:
+    def _load_reboot_template_names() -> set[str] | None:  # Load reboot template names.
         """Load template names from reboot list file."""
-        reboot_template_names = set()
+        reboot_template_names = set()  # Name set.
         try:
-            reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")
-            with open(reboot_list_path, encoding="utf-8") as file:
-                reader = csv.reader(file)
-                for row in reader:
-                    if row and row[0].strip():
-                        reboot_template_names.add(row[0].strip())
-            logging.info("Loaded %s template names from reboot list", len(reboot_template_names))
-        except Exception as error:
-            logging.error("! Failed to load reboot template list: %s", error)
-            print(f"! Failed to load reboot template list: {error}")
-            return None
-        return reboot_template_names if reboot_template_names else None
+            reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")  # Reboot list path.
+            with open(reboot_list_path, encoding="utf-8") as file:  # Open the CSV.
+                reader = csv.reader(file)  # Parse rows.
+                for row in reader:  # Walk rows.
+                    if row and row[0].strip():  # Non-empty name.
+                        reboot_template_names.add(row[0].strip())  # Collect it.
+            logging.info("Loaded %s template names from reboot list", len(reboot_template_names))  # Log the count.
+        except Exception as error:  # Load failed.
+            logging.error("! Failed to load reboot template list: %s", error)  # Log the error.
+            print(f"! Failed to load reboot template list: {error}")  # Tell the user.
+            return None  # Abort.
+        return reboot_template_names if reboot_template_names else None  # Return names or None.
 
     @staticmethod
-    def _map_template_names_to_ids(names: set[str], mapping: dict[str, str]) -> set[str] | None:
+    def _map_template_names_to_ids(names: set[str], mapping: dict[str, str]) -> set[str] | None:  # Map names to ids.
         """Map template names to IDs, logging matches and mismatches."""
-        reboot_template_ids = set()
-        for name in names:
-            if name in mapping:
-                reboot_template_ids.add(mapping[name])
-                logging.info("! Found template '%s' with ID '%s'", name, mapping[name])
+        reboot_template_ids = set()  # Id set.
+        for name in names:  # Walk names.
+            if name in mapping:  # Name found.
+                reboot_template_ids.add(mapping[name])  # Collect the id.
+                logging.info("! Found template '%s' with ID '%s'", name, mapping[name])  # Log the match.
             else:
-                logging.warning("! Template '%s' not found in OrgGatewayTemplates.csv", name)
-                print(f"! Template '{name}' not found in available templates")
+                logging.warning("! Template '%s' not found in OrgGatewayTemplates.csv", name)  # Warn not found.
+                print(f"! Template '{name}' not found in available templates")  # Tell the user.
 
-        if not reboot_template_ids:
-            logging.error(" No matching template IDs found for reboot")
-            print(" No matching template IDs found for reboot")
-            print("Available templates:")
-            for name, tid in mapping.items():
-                print(f"  - {name} ({tid})")
-            return None
+        if not reboot_template_ids:  # No matches.
+            logging.error(" No matching template IDs found for reboot")  # Log none.
+            print(" No matching template IDs found for reboot")  # Tell the user.
+            print("Available templates:")  # List available.
+            for name, tid in mapping.items():  # Walk templates.
+                print(f"  - {name} ({tid})")  # Print each.
+            return None  # Abort.
 
-        return reboot_template_ids
+        return reboot_template_ids  # Return the ids.
 
     @staticmethod
     def _find_reboot_target_devices(template_ids: set[str], mapping: dict[str, str]) -> list[dict] | None:  # type: ignore[type-arg]
         """Find gateway devices in sites using the target templates."""
-        template_id_to_name = {tid: name for name, tid in mapping.items()}
+        template_id_to_name = {tid: name for name, tid in mapping.items()}  # Invert the map.
 
         # Find sites using target templates
         site_to_template = DeviceRebootManager._find_sites_using_templates(template_ids, template_id_to_name)
-        if not site_to_template:
-            logging.warning(" No sites found using the specified gateway templates")
-            print(" No sites found using the specified gateway templates")
-            return None
+        if not site_to_template:  # No sites.
+            logging.warning(" No sites found using the specified gateway templates")  # Warn none.
+            print(" No sites found using the specified gateway templates")  # Tell the user.
+            return None  # Abort.
 
         # Find gateway devices in those sites
-        reboot_targets = []
+        reboot_targets = []  # Collect reboot targets.
         try:
-            gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")
-            with open(gateway_configs_path, encoding="utf-8") as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    device_site_id = row.get("site_id", "").strip()
-                    device_type = row.get("type", "").strip()
-                    device_id = row.get("id", "").strip()
-                    device_name = row.get("name", "").strip()
+            gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")  # Gateway configs path.
+            with open(gateway_configs_path, encoding="utf-8") as file:  # Open the CSV.
+                reader = csv.DictReader(file)  # Parse rows.
+                for row in reader:  # Walk rows.
+                    device_site_id = row.get("site_id", "").strip()  # Read the site id.
+                    device_type = row.get("type", "").strip()  # Read the type.
+                    device_id = row.get("id", "").strip()  # Read the device id.
+                    device_name = row.get("name", "").strip()  # Read the device name.
 
-                    if device_site_id in site_to_template and device_type == "gateway":
+                    if device_site_id in site_to_template and device_type == "gateway":  # Matching gateway.
                         template_id, template_name, site_name = site_to_template[device_site_id]
-                        reboot_targets.append(
+                        reboot_targets.append(  # Collect the target.
                             {
                                 "device_id": device_id,
                                 "device_name": device_name,
@@ -17892,11 +17892,11 @@ class DeviceRebootManager:
                                 "template_name": template_name,
                             }
                         )
-                        logging.info("Found gateway '%s' at site '%s'", device_name, site_name)
-        except Exception as error:
-            logging.error("! Failed to load gateway configs: %s", error)
-            print(f"! Failed to load gateway configs: {error}")
-            return None
+                        logging.info("Found gateway '%s' at site '%s'", device_name, site_name)  # Log the find.
+        except Exception as error:  # Load failed.
+            logging.error("! Failed to load gateway configs: %s", error)  # Log the error.
+            print(f"! Failed to load gateway configs: {error}")  # Tell the user.
+            return None  # Abort.
 
         if not reboot_targets:
             logging.warning(" No gateway devices found in sites using the specified templates")
@@ -18438,80 +18438,80 @@ class FirmwareUpgradeStatusChecker:
             }
         )
 
-    def _should_include_device(self, fw_info: dict[str, Any]) -> bool:
+    def _should_include_device(self, fw_info: dict[str, Any]) -> bool:  # Scope filter for one device row.
         """Check if device matches scope filter."""
-        fw_status = fw_info["fw_status"]
-        fw_progress = fw_info["fw_progress"]
-        fw_timestamp = fw_info["fw_timestamp"]
+        fw_status = fw_info["fw_status"]  # Current firmware lifecycle status.
+        fw_progress = fw_info["fw_progress"]  # Percent-complete when upgrading.
+        fw_timestamp = fw_info["fw_timestamp"]  # Last status-change epoch for staleness.
 
         if self.scope_choice == "3":  # Active upgrades only
-            is_active = fw_status in ("inprogress", "upgrading", "downloading")
-            if is_active and self._is_stale_upgrade(fw_progress, fw_timestamp):
-                return False
-            return is_active
+            is_active = fw_status in ("inprogress", "upgrading", "downloading")  # Live transfer/apply states.
+            if is_active and self._is_stale_upgrade(fw_progress, fw_timestamp):  # Drop upgrades stuck too long.
+                return False  # Exclude stale rows from the active view.
+            return is_active  # Otherwise include only live upgrades.
         elif self.scope_choice == "4":  # Failed upgrades only
             return fw_status == "failed"  # type: ignore[no-any-return]
-        return True
+        return True  # Default scope keeps every device.
 
-    def _create_progress_display(self, fw_info: dict[str, Any]) -> str:
+    def _create_progress_display(self, fw_info: dict[str, Any]) -> str:  # Build the progress cell text.
         """Create visual progress display for CSV."""
-        fw_status = fw_info["fw_status"]
-        fw_progress = fw_info["fw_progress"]
-        fw_timestamp = fw_info["fw_timestamp"]
+        fw_status = fw_info["fw_status"]  # Status selects which glyph to render.
+        fw_progress = fw_info["fw_progress"]  # Percent used to size the bar.
+        fw_timestamp = fw_info["fw_timestamp"]  # Timestamp detects stale rows.
 
-        if fw_status in ("inprogress", "upgrading", "downloading"):
-            if self._is_stale_upgrade(fw_progress, fw_timestamp):
-                return "[===============] 100% (Complete - Stale)"
-            if fw_progress is not None:
-                return DisplayUtils.create_progress_bar(fw_progress, bar_length=15)
-        elif fw_status in ("upgraded", "success"):
-            return "[===============] 100% (Complete)"
-        elif fw_status == "failed":
-            return "[!!!!! FAILED !!!!!]"
-        return "N/A"
+        if fw_status in ("inprogress", "upgrading", "downloading"):  # Device reports active work.
+            if self._is_stale_upgrade(fw_progress, fw_timestamp):  # No movement past threshold = stuck.
+                return "[===============] 100% (Complete - Stale)"  # Full bar but flag staleness.
+            if fw_progress is not None:  # A real percent is available.
+                return DisplayUtils.create_progress_bar(fw_progress, bar_length=15)  # Proportional bar.
+        elif fw_status in ("upgraded", "success"):  # Upgrade finished cleanly.
+            return "[===============] 100% (Complete)"  # Full bar marks completion.
+        elif fw_status == "failed":  # Upgrade ended in failure.
+            return "[!!!!! FAILED !!!!!]"  # Loud marker for failures.
+        return "N/A"  # Idle/unknown devices have no progress.
 
-    def _display_summary(self) -> None:
+    def _display_summary(self) -> None:  # Print the aggregate firmware report.
         """Display firmware status summary."""
-        print("\n  Firmware Status Summary:")
-        print(f"   X  Total devices analyzed: {self.summary['total_devices']}")
-        print(f"   X  Devices with upgrade info: {self.summary['devices_with_fwupdate']}")
-        print(f"   X  Upgrades in progress: {self.summary['upgrade_in_progress']}")
+        print("\n  Firmware Status Summary:")  # Section header.
+        print(f"   X  Total devices analyzed: {self.summary['total_devices']}")  # Devices examined.
+        print(f"   X  Devices with upgrade info: {self.summary['devices_with_fwupdate']}")  # With fw data.
+        print(f"   X  Upgrades in progress: {self.summary['upgrade_in_progress']}")  # Running upgrades.
 
-        self._display_average_progress()
+        self._display_average_progress()  # Mean progress line when upgrades are active.
 
-        print(f"   X  Upgrades completed: {self.summary['upgrade_completed']}")
-        print(f"   X  Upgrades failed: {self.summary['upgrade_failed']}")
-        print(f"   X  Unknown status: {self.summary['upgrade_unknown']}")
+        print(f"   X  Upgrades completed: {self.summary['upgrade_completed']}")  # Completed tally.
+        print(f"   X  Upgrades failed: {self.summary['upgrade_failed']}")  # Failed tally.
+        print(f"   X  Unknown status: {self.summary['upgrade_unknown']}")  # Unreadable-status tally.
 
-        self._display_status_distribution()
-        self._display_type_distribution()
-        self._display_version_distribution()
-        self._display_model_distribution()
+        self._display_status_distribution()  # Counts by raw firmware status.
+        self._display_type_distribution()  # Counts by device type.
+        self._display_version_distribution()  # Counts by firmware version.
+        self._display_model_distribution()  # Counts by hardware model.
 
-    def _display_average_progress(self) -> None:
+    def _display_average_progress(self) -> None:  # Show mean percent of in-progress upgrades.
         """Display average progress for in-progress upgrades."""
-        if self.summary["progress_count"] > 0:
-            avg_progress = self.summary["progress_total"] / self.summary["progress_count"]
-            progress_bar = DisplayUtils.create_progress_bar(int(avg_progress))
-            print(f"   X  Average upgrade progress: {progress_bar}")
+        if self.summary["progress_count"] > 0:  # Only when some upgrade reported progress.
+            avg_progress = self.summary["progress_total"] / self.summary["progress_count"]  # Mean percent.
+            progress_bar = DisplayUtils.create_progress_bar(int(avg_progress))  # Render mean as a bar.
+            print(f"   X  Average upgrade progress: {progress_bar}")  # Emit the averaged line.
 
-    def _display_status_distribution(self) -> None:
+    def _display_status_distribution(self) -> None:  # List device counts per firmware status.
         """Display status distribution."""
-        if self.summary["devices_by_status"]:
-            print("\n  Status Distribution:")
-            for status, count in sorted(self.summary["devices_by_status"].items()):
-                print(f"   X  {status}: {count} devices")
+        if self.summary["devices_by_status"]:  # Skip when no status data collected.
+            print("\n  Status Distribution:")  # Sub-section header.
+            for status, count in sorted(self.summary["devices_by_status"].items()):  # Alphabetical order.
+                print(f"   X  {status}: {count} devices")  # One line per status bucket.
 
-    def _display_type_distribution(self) -> None:
+    def _display_type_distribution(self) -> None:  # List device counts per device type.
         """Display device type distribution."""
-        print("\n  Device Type Distribution:")
-        if self.summary["devices_by_type"]:
-            sorted_types = sorted(self.summary["devices_by_type"].items(), key=lambda x: x[1], reverse=True)
-            for device_type, count in sorted_types:
-                type_display = self.DEVICE_TYPE_NAMES.get(device_type, device_type.upper())
-                print(f"   X  {type_display}: {count} devices")
+        print("\n  Device Type Distribution:")  # Sub-section header always shown.
+        if self.summary["devices_by_type"]:  # Render buckets when type data exists.
+            sorted_types = sorted(self.summary["devices_by_type"].items(), key=lambda x: x[1], reverse=True)  # desc.
+            for device_type, count in sorted_types:  # Walk each type bucket.
+                type_display = self.DEVICE_TYPE_NAMES.get(device_type, device_type.upper())  # Friendly label.
+                print(f"   X  {type_display}: {count} devices")  # One line per device type.
         else:
-            print("   X  No device type information available")
+            print("   X  No device type information available")  # Message when no type data gathered.
 
     def _display_version_distribution(self) -> None:
         """Display version distribution."""
