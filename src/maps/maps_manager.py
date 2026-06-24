@@ -32,6 +32,26 @@ import sys
 from math import cos, pi, radians, sin
 from typing import Any
 
+from src.dataclasses.map_clone_deps import MapCloneSummary, ZoneCloneResult  # Issue #433 Phase C T3: clone helpers.
+from src.dataclasses.map_marker_deps import DeviceMarkerStyle, MarkerPosition  # Issue #433 Phase C T3: marker helpers.
+from src.dataclasses.map_scaling_deps import (  # Issue #433 Phase C T3: scaling wizard inputs.
+    MapDimensions,
+    MapScalingFactors,
+    OriginalMapMetrics,
+    ScaleChoiceContext,
+)
+from src.dataclasses.map_viewer_deps import (  # Issue #433 Phase C T3: viewer launcher inputs.
+    HeatmapRenderCtx,
+    MapViewerData,
+    MapViewerOptional,
+    MapViewerScope,
+)
+from src.dataclasses.map_wizard_deps import (  # Issue #433 Phase C T3: replacement wizard inputs.
+    MapWizardApplyContext,
+    MapWizardApplyTarget,
+    MapWizardPreviewContext,
+    MapWizardSummaryContext,
+)
 from src.maps.launcher import MapViewerCallbacks, MapViewerState  # Wave-A callback extraction
 from src.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer
 from src.maps.plotly_map_callback_manager import PlotlyMapCallbackManager
@@ -1638,17 +1658,15 @@ class MapsManager:
             print(f"! Warning: Zone cloning failed: {zones_error}")
             return 0, 0
 
-    def _print_clone_summary(
-        self,
-        source_map: dict,
-        new_name: str,
-        cloned_map_id: str,
-        clone_payload: dict,
-        had_image: bool,
-        zones_cloned: int,
-        zones_failed: int,
-    ) -> None:
+    def _print_clone_summary(self, summary: MapCloneSummary, zone_result: ZoneCloneResult) -> None:
         """Print the final clone completion summary."""
+        source_map = summary.source_map  # Unpack original-map record from the bundle.
+        new_name = summary.new_name  # Unpack the user-chosen clone name from the bundle.
+        cloned_map_id = summary.cloned_map_id  # Unpack the new map's UUID from the bundle.
+        clone_payload = summary.clone_payload  # Unpack the body posted to Mist from the bundle.
+        had_image = summary.had_image  # Unpack the image-uploaded flag from the bundle.
+        zones_cloned = zone_result.cloned  # Unpack successful-zone count for the summary line.
+        zones_failed = zone_result.failed  # Unpack failed-zone count for the summary line.
         print(f"\n{'-' * 80}")
         print("CLONE COMPLETE")
         print(f"{'-' * 80}")
@@ -1701,7 +1719,14 @@ class MapsManager:
                 self._upload_clone_image(site_id, cloned_map_id, image_temp_path)
             zones_cloned, zones_failed = self._clone_zones(site_id, source_map_id, cloned_map_id)
             self._print_clone_summary(
-                source_map, new_name, cloned_map_id, clone_payload, bool(image_temp_path), zones_cloned, zones_failed
+                MapCloneSummary(
+                    source_map=source_map,
+                    new_name=new_name,
+                    cloned_map_id=cloned_map_id,
+                    clone_payload=clone_payload,
+                    had_image=bool(image_temp_path),
+                ),
+                ZoneCloneResult(cloned=zones_cloned, failed=zones_failed),
             )
             logging.info(
                 "Successfully cloned map %s to %s at site %s (zones: %s)",
@@ -1814,30 +1839,27 @@ class MapsManager:
 
     def _wizard_determine_scaling(
         self,
-        original_width_px: int,
-        original_height_px: int,
-        original_ppm: float,
-        original_width_m: float,
-        new_width_px: int,
-        new_height_px: int,
+        original: OriginalMapMetrics,
+        new_dimensions: tuple[int, int],
     ) -> tuple[str, float, float, float] | None:
         """Prompt user for scaling mode and return (scaling_mode, scale_x, scale_y, new_ppm).
 
         Returns None if the user cancels.
         """
+        new_width_px, new_height_px = new_dimensions  # Unpack new image pixel size for clarity.
         print(f"\n{'-' * 80}")
         print("STEP 3: Configure Scaling")
         print("-" * 80)
 
-        same_dimensions = new_width_px == original_width_px and new_height_px == original_height_px
+        same_dimensions = new_width_px == original.width_px and new_height_px == original.height_px
         if same_dimensions:
             print("\nImage dimensions match exactly - no coordinate translation needed.")
-            return "none", 1.0, 1.0, original_ppm
+            return "none", 1.0, 1.0, original.ppm
 
-        width_ratio = new_width_px / original_width_px if original_width_px > 0 else 1.0
-        height_ratio = new_height_px / original_height_px if original_height_px > 0 else 1.0
+        width_ratio = new_width_px / original.width_px if original.width_px > 0 else 1.0
+        height_ratio = new_height_px / original.height_px if original.height_px > 0 else 1.0
 
-        print(f"\n  Original: {original_width_px} x {original_height_px} px")
+        print(f"\n  Original: {original.width_px} x {original.height_px} px")
         print(f"  New:      {new_width_px} x {new_height_px} px")
         w_sign = "+" if width_ratio > 1 else ""
         h_sign = "+" if height_ratio > 1 else ""
@@ -1863,46 +1885,49 @@ class MapsManager:
             return None
 
         return self._apply_scale_choice(
-            scale_choice, width_ratio, height_ratio, original_ppm, original_width_m, new_width_px
+            scale_choice,
+            ScaleChoiceContext(
+                width_ratio=width_ratio,
+                height_ratio=height_ratio,
+                original_ppm=original.ppm,
+                original_width_m=original.width_m,
+                new_width_px=new_width_px,
+            ),
         )
 
     def _apply_scale_choice(
         self,
         scale_choice: str,
-        width_ratio: float,
-        height_ratio: float,
-        original_ppm: float,
-        original_width_m: float,
-        new_width_px: int,
+        ctx: ScaleChoiceContext,
     ) -> tuple[str, float, float, float]:
         """Map a scaling menu choice to (scaling_mode, scale_x, scale_y, new_ppm)."""
         if scale_choice == "2":
-            if original_width_m and original_width_m > 0:
-                new_ppm = new_width_px / original_width_m
+            if ctx.original_width_m and ctx.original_width_m > 0:
+                new_ppm = ctx.new_width_px / ctx.original_width_m
             else:
-                new_ppm = new_width_px / (new_width_px / original_ppm) if original_ppm else 1.0
+                new_ppm = ctx.new_width_px / (ctx.new_width_px / ctx.original_ppm) if ctx.original_ppm else 1.0
             print(f"\nPreserving physical positions. New PPM: {new_ppm:.2f}")
             return "preserve_physical", 1.0, 1.0, new_ppm
 
         if scale_choice == "3":
             try:
                 new_ppm_input = InputUtils.safe_input(
-                    f"Enter new PPM (current: {original_ppm:.2f}): ", context="_apply_scale_choice"
+                    f"Enter new PPM (current: {ctx.original_ppm:.2f}): ", context="_apply_scale_choice"
                 ).strip()
-                new_ppm = float(new_ppm_input) if new_ppm_input else original_ppm
+                new_ppm = float(new_ppm_input) if new_ppm_input else ctx.original_ppm
             except (ValueError, EOFError):
                 print("Invalid PPM value, using original")
-                new_ppm = original_ppm
-            print(f"\nUsing manual PPM: {new_ppm:.2f}, scaling: x={width_ratio:.4f}, y={height_ratio:.4f}")
-            return "manual_ppm", width_ratio, height_ratio, new_ppm
+                new_ppm = ctx.original_ppm
+            print(f"\nUsing manual PPM: {new_ppm:.2f}, scaling: x={ctx.width_ratio:.4f}, y={ctx.height_ratio:.4f}")
+            return "manual_ppm", ctx.width_ratio, ctx.height_ratio, new_ppm
 
         if scale_choice == "4":
             print("\nNo coordinate scaling - image replacement only")
-            return "none", 1.0, 1.0, original_ppm
+            return "none", 1.0, 1.0, ctx.original_ppm
 
         # Default: proportional (choice "1" or anything else)
-        print(f"\nUsing proportional scaling: x={width_ratio:.4f}, y={height_ratio:.4f}")
-        return "proportional", width_ratio, height_ratio, original_ppm
+        print(f"\nUsing proportional scaling: x={ctx.width_ratio:.4f}, y={ctx.height_ratio:.4f}")
+        return "proportional", ctx.width_ratio, ctx.height_ratio, ctx.original_ppm
 
     def _wizard_scale_path_nodes(self, nodes: list, scale_x: float, scale_y: float) -> list:
         """Return a copy of path nodes with x/y coordinates scaled."""
@@ -1916,10 +1941,13 @@ class MapsManager:
             scaled.append(scaled_node)
         return scaled
 
-    def _wizard_scale_geometry(
-        self, current_map: dict, scale_x: float, scale_y: float, new_width_px: int, new_height_px: int, new_ppm: float
-    ) -> dict:
+    def _wizard_scale_geometry(self, current_map: dict, factors: MapScalingFactors, dims: MapDimensions) -> dict:
         """Build the map-update body: dimensions, PPM, and scaled wall/wayfinding paths."""
+        scale_x = factors.x_factor  # Unpack x-axis scale factor for readability.
+        scale_y = factors.y_factor  # Unpack y-axis scale factor for readability.
+        new_width_px = dims.width_px  # Unpack new pixel width for the update body.
+        new_height_px = dims.height_px  # Unpack new pixel height for the update body.
+        new_ppm = dims.ppm  # Unpack new PPM so width_m/height_m can be recomputed.
         map_update: dict = {"width": new_width_px, "height": new_height_px, "ppm": new_ppm}
         if new_ppm and new_ppm > 0:
             map_update["width_m"] = new_width_px / new_ppm
@@ -2058,43 +2086,46 @@ class MapsManager:
         file_path, new_width_px, new_height_px = image_result
 
         scaling_result = self._wizard_determine_scaling(
-            original_width_px=current_map.get("width", 0),
-            original_height_px=current_map.get("height", 0),
-            original_ppm=current_map.get("ppm", 1.0),
-            original_width_m=current_map.get("width_m", 0),
-            new_width_px=new_width_px,
-            new_height_px=new_height_px,
+            OriginalMapMetrics(
+                width_px=current_map.get("width", 0),
+                height_px=current_map.get("height", 0),
+                ppm=current_map.get("ppm", 1.0),
+                width_m=current_map.get("width_m", 0),
+            ),
+            (new_width_px, new_height_px),
         )
         if scaling_result is None:
             return
         scaling_mode, scale_x, scale_y, new_ppm = scaling_result
+        # Issue #433 Phase C T3: pre-build the two shared bundles so all three
+        # wizard helpers (preview/apply/summary) get matching scaling state.
+        new_dims = MapDimensions(width_px=new_width_px, height_px=new_height_px, ppm=new_ppm)
+        new_factors = MapScalingFactors(mode=scaling_mode, x_factor=scale_x, y_factor=scale_y)
 
         backup_file = self._wizard_create_backup(site_id, map_id, map_name)
         if backup_file is None:
             return
 
         self._wizard_preview(
-            current_map, map_name, assets, new_width_px, new_height_px, new_ppm, scaling_mode, scale_x, scale_y
+            MapWizardPreviewContext(current_map=current_map, map_name=map_name, assets=assets),
+            new_dims,
+            new_factors,
         )
         if not self._wizard_confirm():
             return
 
         errors: list = []
         self._wizard_apply(
-            site_id,
-            map_id,
-            file_path,
-            current_map,
-            assets,
-            new_width_px,
-            new_height_px,
-            new_ppm,
-            scaling_mode,
-            scale_x,
-            scale_y,
-            errors,
+            MapWizardApplyTarget(site_id=site_id, map_id=map_id, file_path=file_path),
+            MapWizardApplyContext(current_map=current_map, assets=assets, errors=errors),
+            new_dims,
+            new_factors,
         )
-        self._wizard_print_summary(map_name, new_width_px, new_height_px, new_ppm, scaling_mode, backup_file, errors)
+        self._wizard_print_summary(
+            MapWizardSummaryContext(map_name=map_name, backup_file=backup_file, errors=errors),
+            new_dims,
+            new_factors,
+        )
         logging.info("wizard completed for %s: mode=%s errors=%d", map_id, scaling_mode, len(errors))
 
     def intelligent_map_replacement_wizard(self):
@@ -2194,17 +2225,20 @@ class MapsManager:
 
     def _wizard_preview(
         self,
-        current_map: dict,
-        map_name: str,
-        assets: dict,
-        new_width_px: int,
-        new_height_px: int,
-        new_ppm: float,
-        scaling_mode: str,
-        scale_x: float,
-        scale_y: float,
+        context: MapWizardPreviewContext,
+        dims: MapDimensions,
+        factors: MapScalingFactors,
     ) -> None:
         """Print step-5 preview of what will change."""
+        current_map = context.current_map  # Unpack current map record for original-dim lookup.
+        map_name = context.map_name  # Unpack human-readable map name for the heading.
+        assets = context.assets  # Unpack asset bundle for the coord-translation sample.
+        new_width_px = dims.width_px  # Unpack new pixel width for the preview line.
+        new_height_px = dims.height_px  # Unpack new pixel height for the preview line.
+        new_ppm = dims.ppm  # Unpack new PPM for the preview line.
+        scaling_mode = factors.mode  # Unpack scaling mode for the preview line.
+        scale_x = factors.x_factor  # Unpack x-axis factor for the translation sample.
+        scale_y = factors.y_factor  # Unpack y-axis factor for the translation sample.
         print(f"\n{'-' * 80}")
         print("STEP 5: Preview Changes")
         print("-" * 80)
@@ -2248,23 +2282,24 @@ class MapsManager:
 
     def _wizard_apply(
         self,
-        site_id: str,
-        map_id: str,
-        file_path: str,
-        current_map: dict,
-        assets: dict,
-        new_width_px: int,
-        new_height_px: int,
-        new_ppm: float,
-        scaling_mode: str,
-        scale_x: float,
-        scale_y: float,
-        errors: list,
+        target: MapWizardApplyTarget,
+        context: MapWizardApplyContext,
+        dims: MapDimensions,
+        factors: MapScalingFactors,
     ) -> None:
         """Apply all wizard changes: map update, image upload, and coordinate scaling."""
+        site_id = target.site_id  # Unpack site UUID for the API calls below.
+        map_id = target.map_id  # Unpack map UUID for the API calls below.
+        file_path = target.file_path  # Unpack path to the new image file being uploaded.
+        current_map = context.current_map  # Unpack pre-change map record for path scaling.
+        assets = context.assets  # Unpack asset bundle so each subtype helper can scale in place.
+        errors = context.errors  # Unpack the out-list helpers append failure descriptions to.
+        scale_x = factors.x_factor  # Unpack x-axis factor so the geometry helper builds the body.
+        scale_y = factors.y_factor  # Unpack y-axis factor so the geometry helper builds the body.
+        scaling_mode = factors.mode  # Unpack scaling mode to gate the asset-scaling block.
         print("\nApplying changes...")
         print("  Updating map properties...")
-        map_update = self._wizard_scale_geometry(current_map, scale_x, scale_y, new_width_px, new_height_px, new_ppm)
+        map_update = self._wizard_scale_geometry(current_map, factors, dims)
         try:
             resp = mistapi.api.v1.sites.maps.updateSiteMap(
                 self.apisession, site_id=site_id, map_id=map_id, body=map_update
@@ -2300,15 +2335,18 @@ class MapsManager:
 
     def _wizard_print_summary(
         self,
-        map_name: str,
-        new_width_px: int,
-        new_height_px: int,
-        new_ppm: float,
-        scaling_mode: str,
-        backup_file: str,
-        errors: list,
+        context: MapWizardSummaryContext,
+        dims: MapDimensions,
+        factors: MapScalingFactors,
     ) -> None:
         """Print the completion summary."""
+        map_name = context.map_name  # Unpack human-readable map name for the heading.
+        backup_file = context.backup_file  # Unpack pre-change backup path for the failure footer.
+        errors = context.errors  # Unpack accumulated apply errors for the optional warning block.
+        new_width_px = dims.width_px  # Unpack new pixel width for the summary line.
+        new_height_px = dims.height_px  # Unpack new pixel height for the summary line.
+        new_ppm = dims.ppm  # Unpack new PPM for the summary line.
+        scaling_mode = factors.mode  # Unpack scaling mode for the summary line.
         print(f"\n{'=' * 80}")
         print("MAP REPLACEMENT COMPLETE")
         print("=" * 80)
@@ -3057,16 +3095,18 @@ class MapsManager:
             if use_plotly:
                 logging.info("Launching Plotly/Dash viewer for map %s", map_name)
                 self._launch_plotly_viewer(
-                    map_data,
-                    devices_on_map,
-                    zones_on_map,
-                    clients_on_map,
-                    site_id,
-                    site_name,
-                    map_id,
-                    coverage_data,
-                    all_maps,
-                    all_sites,
+                    MapViewerScope(site_id=site_id, site_name=site_name, map_id=map_id),
+                    MapViewerData(
+                        map_data=map_data,
+                        devices=devices_on_map,
+                        zones=zones_on_map,
+                        clients=clients_on_map,
+                    ),
+                    MapViewerOptional(
+                        coverage_data=coverage_data,
+                        all_maps=all_maps,
+                        all_sites=all_sites,
+                    ),
                 )
             else:
                 logging.info("Launching matplotlib fallback viewer for map %s", map_name)
@@ -3295,13 +3335,15 @@ class MapsManager:
     def _add_device_orientation_markers(
         self,
         fig,
-        x: float,
-        y: float,
-        angle: float,
-        device_color: str,
-        type_cfg: dict,
+        position: MarkerPosition,
+        style: DeviceMarkerStyle,
     ) -> None:
         """Add a Mist-style crosshair and directional dot to show device orientation on the map."""
+        x = position.x  # Unpack device x pixel coord for the marker math below.
+        y = position.y  # Unpack device y pixel coord for the marker math below.
+        angle = style.angle  # Unpack Mist-degree orientation for math-angle conversion.
+        device_color = style.device_color  # Unpack status-driven color for the crosshair arms.
+        type_cfg = style.type_cfg  # Unpack per-type config (legend grouping, etc).
         crosshair_size = 40  # Crosshair arm length in pixels -- increased from 25 for visibility
         fig.add_trace(
             go.Scatter(
@@ -3525,18 +3567,21 @@ class MapsManager:
 
     def _launch_plotly_viewer(
         self,
-        map_data,
-        devices,
-        zones,
-        clients,
-        site_id,
-        site_name,
-        map_id,
-        coverage_data=None,
-        all_maps=None,
-        all_sites=None,
+        scope: MapViewerScope,
+        data: MapViewerData,
+        optional: MapViewerOptional,
     ):
         """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap."""
+        site_id = scope.site_id  # Unpack scope so the inner code paths stay readable.
+        site_name = scope.site_name  # Unpack the human-readable site name for the viewer title.
+        map_id = scope.map_id  # Unpack the map UUID needed by Dash callbacks downstream.
+        map_data = data.map_data  # Unpack the full map record (dimensions, walls, beacons, etc).
+        devices = data.devices  # Unpack the device list used to seed the placement layer.
+        zones = data.zones  # Unpack the zone list used to seed the zone polygon layer.
+        clients = data.clients  # Unpack the client list used to seed the connected-clients overlay.
+        coverage_data = optional.coverage_data  # Unpack the coverage payload (None disables heatmap).
+        all_maps = optional.all_maps  # Unpack the other-maps list (powers map-switcher dropdown).
+        all_sites = optional.all_sites  # Unpack the other-sites list (powers site-switcher dropdown).
         coverage_count = self._resolve_coverage_count(coverage_data)  # Helper extracts the ternary
         all_maps, all_sites = self._normalize_optional_lists(all_maps, all_sites)  # Drops 2 BoolOps from parent CC
         logging.info(  # Issue #433 Phase C: split long log template across two lines for E501 compliance.
@@ -3689,12 +3734,8 @@ class MapsManager:
 
         # Wave E2: heatmap conditional moved inside helper to drop parent if-check.
         self._maybe_add_heatmap_trace(
-            fig,
-            heatmap_renderer,
-            coverage_data=coverage_data,
-            ppm=ppm,
-            map_width=map_width,
-            map_height=map_height,
+            HeatmapRenderCtx(fig=fig, heatmap_renderer=heatmap_renderer, coverage_data=coverage_data),
+            MapDimensions(width_px=map_width, height_px=map_height, ppm=ppm),
         )
 
         # Wave E2: origin marker extracted to helper (drops 1 BoolOp + add_trace).
@@ -5033,19 +5074,24 @@ class MapsManager:
         for x, y, angle, device_color in zip(
             coords["x_coords"], coords["y_coords"], coords["orientations"], colors, strict=True
         ):
-            self._add_device_orientation_markers(fig, x, y, angle, device_color, type_cfg)
+            self._add_device_orientation_markers(
+                fig,
+                MarkerPosition(x=x, y=y),
+                DeviceMarkerStyle(angle=angle, device_color=device_color, type_cfg=type_cfg),
+            )
 
     @staticmethod
-    def _maybe_add_heatmap_trace(  # noqa: PLR0913 - mirrors original kwarg flow
-        fig: object,
-        heatmap_renderer: object,
-        *,
-        coverage_data: dict | None,
-        ppm: float,
-        map_width: int,
-        map_height: int,
+    def _maybe_add_heatmap_trace(
+        ctx: HeatmapRenderCtx,
+        dims: MapDimensions,
     ) -> None:
         """Build the RF coverage heatmap trace and add it to ``fig`` when non-None."""
+        fig = ctx.fig  # Unpack Plotly figure handle the heatmap trace appends to.
+        heatmap_renderer = ctx.heatmap_renderer  # Unpack renderer that converts coverage data to a trace.
+        coverage_data = ctx.coverage_data  # Unpack coverage payload (None skips the heatmap entirely).
+        ppm = dims.ppm  # Unpack pixels-per-meter ratio so the renderer scales the heatmap correctly.
+        map_width = dims.width_px  # Unpack map pixel width for the renderer bounds.
+        map_height = dims.height_px  # Unpack map pixel height for the renderer bounds.
         heatmap_trace = heatmap_renderer.build_heatmap_trace(
             coverage_data=coverage_data, ppm=ppm, map_width=map_width, map_height=map_height
         )
