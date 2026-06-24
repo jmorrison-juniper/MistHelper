@@ -3055,9 +3055,7 @@ def _configure_session_timeout(session_obj: Any) -> None:
                 if timeout is None:
                     timeout = self.default_timeout
                 # Issue #431: forward args verbatim; signature must match parent for adapter contract.
-                return super().send(
-                    request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies
-                )
+                return super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
 
         adapter = TimeoutAdapter(default_timeout=API_REQUEST_TIMEOUT)
         inner.mount("https://", adapter)
