@@ -120,17 +120,25 @@ class StructuralComplexityAnalyzer:
         violations: list[Violation] = []  # Collect findings across every function.
         for node in ast.walk(context.tree):  # Visit every node in the module.
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):  # Only functions are checked.
-                violations.extend(self._check_function(node))  # Append this function's findings.
+                violations.extend(self._check_function(node, context))  # Append this function's findings.
         return violations  # Return the combined list.
 
-    def _check_function(self, function: ast.FunctionDef | ast.AsyncFunctionDef) -> list[Violation]:
+    def _check_function(  # Signature gained `context` so noqa suppressions can be honored per-line.
+        self, function: ast.FunctionDef | ast.AsyncFunctionDef, context: AnalysisContext
+    ) -> list[Violation]:
         """Run every structural check against a single function."""
         found: list[Violation] = []  # Collect violations for this function.
-        self._maybe(found, self._check_parameters(function))  # Parameter-count rule.
-        self._maybe(found, self._check_length(function))  # Function-length rule.
-        self._maybe(found, self._check_complexity(function))  # Cyclomatic-complexity rule.
-        self._maybe(found, self._check_blocks(function))  # Logical-block-count rule.
-        self._maybe(found, self._check_nesting(function))  # Nesting-depth rule.
+        noqa = context.noqa_rules(function.lineno)  # Look up any noqa suppressions on the def line.
+        if "STRUCT-PARAMS" not in noqa:  # Skip param-count check when explicitly suppressed.
+            self._maybe(found, self._check_parameters(function))  # Parameter-count rule.
+        if "STRUCT-LENGTH" not in noqa:  # Skip length check when explicitly suppressed.
+            self._maybe(found, self._check_length(function))  # Function-length rule.
+        if "STRUCT-COMPLEXITY" not in noqa:  # Skip complexity check when explicitly suppressed.
+            self._maybe(found, self._check_complexity(function))  # Cyclomatic-complexity rule.
+        if "STRUCT-BLOCKS" not in noqa:  # Skip block-count check when explicitly suppressed.
+            self._maybe(found, self._check_blocks(function))  # Logical-block-count rule.
+        if "STRUCT-NESTING" not in noqa:  # Skip nesting check when explicitly suppressed.
+            self._maybe(found, self._check_nesting(function))  # Nesting-depth rule.
         return found  # Return all findings for this function.
 
     @staticmethod
