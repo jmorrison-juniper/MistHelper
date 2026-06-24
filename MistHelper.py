@@ -15198,69 +15198,69 @@ class DataCollectionManager:  # Continuous data collector.
         logging.info("Starting DataCollectionManager.continuous_loop")  # Log start.
         print(" Starting continuous data collection loop...")  # Tell the user.
         print("   This will collect core organizational data every 5 seconds")  # Tell the user.
-        print("   Press CTRL+C to stop or create 'stop_loop.txt' file")
+        print("   Press CTRL+C to stop or create 'stop_loop.txt' file")  # Tell the user how to stop.
 
-        loop_count = 0
+        loop_count = 0  # Iteration counter.
 
         try:
-            while True:
-                loop_count += 1
+            while True:  # Loop until stopped.
+                loop_count += 1  # Count the iteration.
                 print(f"\n  Loop iteration {loop_count} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-                if DataCollectionManager._check_stop_signal():
-                    break
+                if DataCollectionManager._check_stop_signal():  # Stop requested.
+                    break  # Exit the loop.
 
-                DataCollectionManager._execute_collection_cycle(loop_count)
+                DataCollectionManager._execute_collection_cycle(loop_count)  # Run one cycle.
 
-        except KeyboardInterrupt:
-            print("\n  Continuous data collection loop stopped by user.")
-        except Exception as e:
-            logging.error("Fatal error in continuous loop: %s", e)
-            print(f"! Fatal error in continuous loop: {e}")
+        except KeyboardInterrupt:  # User pressed Ctrl+C.
+            print("\n  Continuous data collection loop stopped by user.")  # Tell the user.
+        except Exception as e:  # Unexpected failure.
+            logging.error("Fatal error in continuous loop: %s", e)  # Log the error.
+            print(f"! Fatal error in continuous loop: {e}")  # Tell the user.
 
-        print(" Continuous data collection loop ended.")
+        print(" Continuous data collection loop ended.")  # Tell the user ended.
 
     @staticmethod
-    def _check_stop_signal() -> bool:
+    def _check_stop_signal() -> bool:  # Check the stop signal.
         """Check for stop file signal and remove if found."""
-        return ConfigUtils.check_stop_signal()
+        return ConfigUtils.check_stop_signal()  # Delegate to config utils.
 
     @staticmethod
-    def _execute_collection_cycle(loop_count: int) -> None:
+    def _execute_collection_cycle(loop_count: int) -> None:  # Run one collection cycle.
         """Execute one cycle of data collection with rate limiting."""
         try:
-            print("  Collecting site list...")
+            print("  Collecting site list...")  # Tell the user.
             OrgSiteExporter.sites()  # type: ignore[no-untyped-call]
-            time.sleep(0.75)
+            time.sleep(0.75)  # Pace the API.
 
-            print("  Collecting organization inventory...")
+            print("  Collecting organization inventory...")  # Tell the user.
             OrgInventoryExporter.inventory()  # type: ignore[no-untyped-call]
-            time.sleep(0.75)
+            time.sleep(0.75)  # Pace the API.
 
-            print("  Collecting organization device stats...")
-            OrgDeviceStatsExporter.device_stats()
-            time.sleep(0.75)
+            print("  Collecting organization device stats...")  # Tell the user.
+            OrgDeviceStatsExporter.device_stats()  # Export device stats.
+            time.sleep(0.75)  # Pace the API.
 
-            print("  Collecting organization device port stats...")
-            OrgDeviceStatsExporter.device_port_stats()
-            time.sleep(0.75)
+            print("  Collecting organization device port stats...")  # Tell the user.
+            OrgDeviceStatsExporter.device_port_stats()  # Export port stats.
+            time.sleep(0.75)  # Pace the API.
 
-            print("  Collecting VPN peer path stats...")
-            OrgDeviceStatsExporter.vpn_peer_stats()
-            time.sleep(0.75)
+            print("  Collecting VPN peer path stats...")  # Tell the user.
+            OrgDeviceStatsExporter.vpn_peer_stats()  # Export VPN peer stats.
+            time.sleep(0.75)  # Pace the API.
 
-            print(f"  Loop {loop_count} completed successfully")
+            print(f"  Loop {loop_count} completed successfully")  # Tell the user.
 
-        except KeyboardInterrupt:
+        except KeyboardInterrupt:  # Propagate Ctrl+C.
             raise  # Re-raise to outer handler
-        except Exception as e:
-            logging.error("Error in collection cycle %s: %s", loop_count, e)
-            print(f"  Error in loop {loop_count}: {e}")
-            print("  Continuing to next iteration...")
-            time.sleep(5)
+        except Exception as e:  # Cycle failed.
+            logging.error("Error in collection cycle %s: %s", loop_count, e)  # Log the error.
+            print(f"  Error in loop {loop_count}: {e}")  # Tell the user.
+            print("  Continuing to next iteration...")  # Tell the user.
+            time.sleep(5)  # Back off then retry.
 
     @staticmethod
-    def generate_support_packages():
+    def generate_support_packages():  # Generate support packages.
         """
         Menu 78: Generate support package CSV for each site with alarms or events.
 
@@ -15269,23 +15269,23 @@ class DataCollectionManager:  # Continuous data collector.
         - Device info, stats, port stats
         - Gateway speedtest results
         """
-        logging.info("DataCollectionManager.generate_support_packages starting")
+        logging.info("DataCollectionManager.generate_support_packages starting")  # Log start.
 
         # Ensure all required data is fresh
-        DataCollectionManager._refresh_support_data()
+        DataCollectionManager._refresh_support_data()  # Refresh support data.
 
         # Load all data sources
-        data_sources = DataCollectionManager._load_support_data_sources()
+        data_sources = DataCollectionManager._load_support_data_sources()  # Load support sources.
 
         # Generate packages for sites with alarms or events
-        DataCollectionManager._generate_site_packages(data_sources)
+        DataCollectionManager._generate_site_packages(data_sources)  # Generate per-site packages.
 
-        logging.info("Support packages generated for applicable sites.")
+        logging.info("Support packages generated for applicable sites.")  # Log completion.
 
     @staticmethod
-    def _refresh_support_data() -> None:
+    def _refresh_support_data() -> None:  # Refresh required CSVs.
         """Refresh all required CSV files for support package generation."""
-        required_files = [
+        required_files = [  # Required files and fetchers.
             ("OrgAlarms.csv", OrgAlarmEventExporter.alarms),
             ("OrgDeviceEvents.csv", OrgAlarmEventExporter.device_events),
             ("SiteList.csv", OrgSiteExporter.sites),
@@ -15295,13 +15295,13 @@ class DataCollectionManager:  # Continuous data collector.
             ("AllGatewayTestResults.csv", GatewayTestExporter.test_results_by_site),
         ]
 
-        for filename, func in required_files:
+        for filename, func in required_files:  # Refresh each file.
             CacheUtils.check_and_generate_csv(filename, func)  # type: ignore[arg-type]  # function is Callable
 
     @staticmethod
     def _load_support_data_sources() -> dict:  # type: ignore[type-arg]
         """Load all CSV data sources for support package assembly."""
-        sources = {
+        sources = {  # Load the data sources.
             "site_data": CacheUtils.load_csv_grouped_by_key("SiteList.csv", "id"),
             "alarms_data": CacheUtils.load_csv_grouped_by_key("OrgAlarms.csv", "site_id"),
             "events_data": CacheUtils.load_csv_grouped_by_key("OrgDeviceEvents.csv", "site_id"),
@@ -15312,27 +15312,27 @@ class DataCollectionManager:  # Continuous data collector.
         }
 
         # Load speedtest data if available
-        gateway_test_path = FilePathUtils.get_csv_path("AllGatewayTestResults.csv")
-        if os.path.exists(gateway_test_path):
+        gateway_test_path = FilePathUtils.get_csv_path("AllGatewayTestResults.csv")  # Speedtest CSV path.
+        if os.path.exists(gateway_test_path):  # File present.
             sources["speedtest_data"] = CacheUtils.load_csv_grouped_by_key("AllGatewayTestResults.csv", "site_id")
 
-        return sources
+        return sources  # Return the sources.
 
     @staticmethod
     def _generate_site_packages(data_sources: dict) -> None:  # type: ignore[type-arg]
         """Generate support package for each site with alarms or events."""
-        site_data = data_sources["site_data"]
+        site_data = data_sources["site_data"]  # Read the site data.
 
-        for site_id, _site_info in site_data.items():
+        for site_id, _site_info in site_data.items():  # Walk sites.
             # Skip sites without alarms or events
-            has_alarms = bool(data_sources["alarms_data"].get(site_id))
-            has_events = bool(data_sources["events_data"].get(site_id))
+            has_alarms = bool(data_sources["alarms_data"].get(site_id))  # Has alarms?
+            has_events = bool(data_sources["events_data"].get(site_id))  # Has events?
 
-            if not has_alarms and not has_events:
-                logging.info("Skipping site %s - no alarms or events", site_id)
-                continue
+            if not has_alarms and not has_events:  # Nothing to report.
+                logging.info("Skipping site %s - no alarms or events", site_id)  # Log the skip.
+                continue  # Skip it.
 
-            support_data = {
+            support_data = {  # Build the support data.
                 "alarms": data_sources["alarms_data"].get(site_id, []),
                 "events": data_sources["events_data"].get(site_id, []),
                 "devices": data_sources["devices_data"].get(site_id, []),
@@ -15341,15 +15341,15 @@ class DataCollectionManager:  # Continuous data collector.
                 "speedtests": data_sources["speedtest_data"].get(site_id, []),
             }
 
-            filename = f"SupportPackage_{site_id}.csv"
-            CacheUtils.write_support_data_to_csv(support_data, filename)
-            logging.info("Support package written for site %s", site_id)
+            filename = f"SupportPackage_{site_id}.csv"  # Build the CSV name.
+            CacheUtils.write_support_data_to_csv(support_data, filename)  # Write the package.
+            logging.info("Support package written for site %s", site_id)  # Log the write.
 
 
 # ============================================================================
 # INTERACTIVE DISPLAY UTILITIES CLASS
 # ============================================================================
-class InteractiveDisplayUtils:
+class InteractiveDisplayUtils:  # Interactive display utils.
     """
     Centralized interactive display utilities.
     Groups all interactive_display_* functions for better code organization.
@@ -15357,21 +15357,21 @@ class InteractiveDisplayUtils:
     """
 
     @staticmethod
-    def site_inventory():
+    def site_inventory():  # View site inventory.
         """
         Prompts the user to select a site and displays its device inventory.
         """
-        logging.info("Prompting user to select a site for device inventory view...")
-        print("Select a Site to View Device Inventory:")
-        site_id = PromptUtils.select_site_id_from_csv()
-        if site_id:
-            logging.info("User selected site_id: %s for inventory display.", site_id)
+        logging.info("Prompting user to select a site for device inventory view...")  # Log the prompt.
+        print("Select a Site to View Device Inventory:")  # Header.
+        site_id = PromptUtils.select_site_id_from_csv()  # Select a site.
+        if site_id:  # Site selected.
+            logging.info("User selected site_id: %s for inventory display.", site_id)  # Log the selection.
             SiteDeviceExporter.device_inventory(site_id)  # type: ignore[no-untyped-call]
         else:
-            logging.warning("No site selected or invalid input provided for site selection.")
+            logging.warning("No site selected or invalid input provided for site selection.")  # Warn none selected.
 
     @staticmethod
-    def device_stats(site_id=None, device_id=None):
+    def device_stats(site_id=None, device_id=None):  # View device stats.
         """
         Fetches and displays detailed statistics for a specific device.
 
@@ -15379,48 +15379,48 @@ class InteractiveDisplayUtils:
             site_id: Optional site ID (prompts if not provided)
             device_id: Optional device ID (prompts if not provided)
         """
-        logging.info("Prompting user to select a device for detailed statistics view...")
-        DeviceDataFetcher(
+        logging.info("Prompting user to select a device for detailed statistics view...")  # Log the prompt.
+        DeviceDataFetcher(  # Fetch and display.
             fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
             filename="DeviceStats.csv",
             description="Fetching detailed stats",
             site_id=site_id,
             device_id=device_id,
         ).fetch()
-        logging.info("Completed device_stats execution.")
+        logging.info("Completed device_stats execution.")  # Log completion.
 
     @staticmethod
-    def device_tests():
+    def device_tests():  # View device tests.
         """
         Prompts user to select a gateway device and displays its synthetic test stats.
         """
-        logging.info("Prompting user to select a gateway device for synthetic test stats view...")
-        DeviceDataFetcher(
+        logging.info("Prompting user to select a gateway device for synthetic test stats view...")  # Log the prompt.
+        DeviceDataFetcher(  # Fetch and display.
             fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
             filename="DeviceTestResults.csv",
             description="Fetching synthetic test stats",
             device_type="gateway",
         ).fetch()
-        logging.info("Completed device_tests execution.")
+        logging.info("Completed device_tests execution.")  # Log completion.
 
     @staticmethod
-    def device_config():
+    def device_config():  # View device config.
         """
         Prompts user to select a device and displays its configuration details.
         """
-        logging.info("Prompting user to select a device for configuration details view...")
-        DeviceDataFetcher(
+        logging.info("Prompting user to select a device for configuration details view...")  # Log the prompt.
+        DeviceDataFetcher(  # Fetch and display.
             fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
             filename="DeviceConfig.csv",
             description="Fetching device configuration",
         ).fetch()
-        logging.info("Completed device_config execution.")
+        logging.info("Completed device_config execution.")  # Log completion.
 
 
 # ============================================================================
 # GATEWAY EXPORT UTILITIES CLASS
 # ============================================================================
-class GatewayTestExporter:
+class GatewayTestExporter:  # Gateway synthetic test exporter.
     """
     Gateway Synthetic Test Exports
 
@@ -15439,25 +15439,25 @@ class GatewayTestExporter:
                         to minimize API calls.
         """
         # DEBUG: Log invocation context early so harness vs direct calls can be distinguished
-        logging.debug("[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast=%s", fast)
-        logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")
-        if fast:
+        logging.debug("[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast=%s", fast)  # Trace the entry.
+        logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")  # Log start.
+        if fast:  # Fast mode.
             logging.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
 
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("16", "synthetic_tests", 1)
-        op_start = time.time()
+        emitter = PROGRESS_EMITTER  # Progress emitter.
+        if emitter:  # Emitter present.
+            emitter.emit_progress_start("16", "synthetic_tests", 1)  # Signal progress start.
+        op_start = time.time()  # Start the timer.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        gateway_devices = GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)
-        all_stats = []
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        gateway_devices = GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)  # List gateways with sites.
+        all_stats = []  # Accumulate stats.
 
-        if not gateway_devices:
-            logging.warning("[WARN] No gateway devices found. Exiting synthetic tests export.")
-            return
+        if not gateway_devices:  # No gateways.
+            logging.warning("[WARN] No gateway devices found. Exiting synthetic tests export.")  # Warn none found.
+            return  # Abort.
 
-        def fetch_synthetic_test_stats_with_retry(
+        def fetch_synthetic_test_stats_with_retry(  # Fetch one device with retry.
             device_info, max_retries=None, retry_delay=None, connection_semaphore=None
         ):
             """
@@ -15470,87 +15470,87 @@ class GatewayTestExporter:
                 connection_semaphore: Semaphore to limit concurrent connections (optional)
             """
             # Use environment variables as defaults if not provided
-            if max_retries is None:
-                max_retries = FAST_MODE_MAX_RETRIES
-            if retry_delay is None:
-                retry_delay = FAST_MODE_RETRY_DELAY
+            if max_retries is None:  # Default max retries.
+                max_retries = FAST_MODE_MAX_RETRIES  # Use the fast-mode value.
+            if retry_delay is None:  # Default retry delay.
+                retry_delay = FAST_MODE_RETRY_DELAY  # Use the fast-mode value.
 
-            site_id, device_id, device_name, site_name = device_info
+            site_id, device_id, device_name, site_name = device_info  # Unpack the device info.
 
-            for attempt in range(max_retries + 1):
+            for attempt in range(max_retries + 1):  # Bounded retry loop.
                 try:
                     # Validate inputs before making API calls
-                    ValidationUtils.validate_site_id(site_id, "synthetic_tests")
-                    ValidationUtils.validate_device_id(device_id, "synthetic_tests")
+                    ValidationUtils.validate_site_id(site_id, "synthetic_tests")  # Validate the site id.
+                    ValidationUtils.validate_device_id(device_id, "synthetic_tests")  # Validate the device id.
 
                     # Use semaphore to limit concurrent connections if provided
-                    if connection_semaphore:
-                        with connection_semaphore:
-                            stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(
+                    if connection_semaphore:  # Pool present.
+                        with connection_semaphore:  # Acquire a slot.
+                            stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(  # Fetch synthetic tests.
                                 apisession, site_id, device_id
                             ).data
                     else:
-                        stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(
+                        stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(  # Fetch synthetic tests.
                             apisession, site_id, device_id
                         ).data
 
-                    stats["site_id"] = site_id
-                    stats["site_name"] = site_name
-                    stats["device_id"] = device_id
-                    stats["device_name"] = device_name
+                    stats["site_id"] = site_id  # Tag the site.
+                    stats["site_name"] = site_name  # Tag the site name.
+                    stats["device_id"] = device_id  # Tag the device.
+                    stats["device_name"] = device_name  # Tag the device name.
 
-                    if attempt > 0:
+                    if attempt > 0:  # After a retry.
                         logging.info("! Retry %s successful for device %s at site %s", attempt, device_name, site_name)
                     else:
-                        logging.info(
+                        logging.info(  # Log success.
                             "! Collected synthetic test stats for device %s at site %s", device_name, site_name
                         )
-                    return stats
+                    return stats  # Return the stats.
 
-                except Exception as exception:
-                    if attempt < max_retries:
+                except Exception as exception:  # Fetch failed.
+                    if attempt < max_retries:  # More attempts left.
                         # Fast mode: reduced backoff delay for quicker retries
-                        backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)
-                        logging.warning(
+                        backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)  # Exponential backoff.
+                        logging.warning(  # Warn and back off.
                             "! Attempt %s failed for device %s at site %s: %s",
                             attempt + 1,
                             device_id,
                             site_id,
                             exception,
                         )
-                        logging.info(
+                        logging.info(  # Log the retry.
                             "! Fast retry in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, max_retries + 1
                         )
-                        time.sleep(backoff_delay)
+                        time.sleep(backoff_delay)  # Wait before retry.
                     else:
-                        logging.error(
+                        logging.error(  # Out of retries.
                             "! Final attempt failed for device %s at site %s: %s", device_id, site_id, exception
                         )
-                        return None
+                        return None  # Give up this device.
 
-            return None
+            return None  # Return None.
 
-        if fast:
+        if fast:  # Fast concurrent path.
             # Concurrent processing mode with connection-aware threading + summary instrumentation
-            start_time = time.time()
+            start_time = time.time()  # Start the timer.
 
             # Define worker function for the connection pool helper
-            def fetch_device_stats(device_info, connection_semaphore):
+            def fetch_device_stats(device_info, connection_semaphore):  # Fetch one device.
                 """Worker function that fetches synthetic test stats for a single device."""
                 return fetch_synthetic_test_stats_with_retry(device_info, connection_semaphore=connection_semaphore)  # type: ignore[no-untyped-call]
 
             # Define retry function for failed devices
-            def retry_failed_devices(failed_devices, connection_semaphore):
-                retry_results = []
-                still_failed = []
-                retry_threads = min(
+            def retry_failed_devices(failed_devices, connection_semaphore):  # Retry failed devices.
+                retry_results = []  # Collect retry results.
+                still_failed = []  # Track still-failed.
+                retry_threads = min(  # Size the retry pool.
                     FAST_MODE_RETRY_THREADS, len(failed_devices), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
                 )
-                if retry_threads <= 0:
+                if retry_threads <= 0:  # No threads.
                     logging.warning(" FAST MODE: No available threads for retry; skipping retries")
-                    return [], failed_devices
-                with ThreadPoolExecutor(max_workers=retry_threads) as executor:
-                    retry_futures = {
+                    return [], failed_devices  # Return failed devices.
+                with ThreadPoolExecutor(max_workers=retry_threads) as executor:  # Run the retry pool.
+                    retry_futures = {  # Map futures to devices.
                         executor.submit(
                             fetch_synthetic_test_stats_with_retry,
                             device_info,
@@ -15562,30 +15562,30 @@ class GatewayTestExporter:
                     for future in tqdm(  # type: ignore[no-untyped-call]
                         as_completed(retry_futures), total=len(retry_futures), desc="Retrying Failed", unit="device"
                     ):
-                        device_info = retry_futures[future]
+                        device_info = retry_futures[future]  # Resolve the device info.
                         try:
-                            result = future.result()
-                            if result:
-                                retry_results.append(result)
-                                logging.info(" FAST RETRY OK: %s", device_info[2])
+                            result = future.result()  # Read the result.
+                            if result:  # Have a result.
+                                retry_results.append(result)  # Collect it.
+                                logging.info(" FAST RETRY OK: %s", device_info[2])  # Log retry success.
                             else:
-                                still_failed.append(device_info)
-                                logging.error(" FAST RETRY FAIL: %s", device_info[2])
-                        except Exception as exception:
-                            still_failed.append(device_info)
-                            logging.error(" FAST RETRY EXC: %s -> %s", device_info[2], exception)
-                return retry_results, still_failed
+                                still_failed.append(device_info)  # Still failed.
+                                logging.error(" FAST RETRY FAIL: %s", device_info[2])  # Log retry failure.
+                        except Exception as exception:  # Retry raised.
+                            still_failed.append(device_info)  # Still failed.
+                            logging.error(" FAST RETRY EXC: %s -> %s", device_info[2], exception)  # Log the exception.
+                return retry_results, still_failed  # Return results and failures.
 
-            successful_results, failed_devices = execute_with_connection_pool_management(
+            successful_results, failed_devices = execute_with_connection_pool_management(  # Run the pooled fetch.
                 work_items=gateway_devices,
                 worker_function=fetch_device_stats,
                 batch_description="devices",
                 retry_function=retry_failed_devices,
             )
 
-            duration = time.time() - start_time
-            all_stats.extend(successful_results)
-            logging.info(
+            duration = time.time() - start_time  # Compute the duration.
+            all_stats.extend(successful_results)  # Collect the results.
+            logging.info(  # Log the totals.
                 " FAST MODE SUMMARY (synthetic tests): ok=%s fail=%s total=%s elapsed=%.2fs",
                 len(successful_results),
                 len(failed_devices),
@@ -15594,34 +15594,34 @@ class GatewayTestExporter:
             )
         else:
             # Sequential processing with rate limiting (original behavior)
-            smoothed = None
+            smoothed = None  # No smoothed delay yet.
             for device_info in tqdm(gateway_devices, desc="Gateway Devices", unit="device"):  # type: ignore[no-untyped-call]
                 result = fetch_synthetic_test_stats_with_retry(  # type: ignore[no-untyped-call]
                     device_info, max_retries=FAST_MODE_SEQUENTIAL_MAX_RETRIES
                 )
-                if result:
-                    all_stats.append(result)
+                if result:  # Have a result.
+                    all_stats.append(result)  # Collect it.
 
                 # Apply rate limiting only in non-fast mode
                 smoothed, delay = RateLimitingUtils.get_rate_limited_delay(smoothed, apisession, _api_usage_cache)  # type: ignore[no-untyped-call]
-                logging.info("[INFO] Sleeping for %.2fs.", delay)
-                time.sleep(delay)
+                logging.info("[INFO] Sleeping for %.2fs.", delay)  # Log the sleep.
+                time.sleep(delay)  # Pace the API.
 
-        if all_stats:
-            filename = "AllGatewaySyntheticTests.csv"
-            flattened = DataProcessingUtils.flatten_nested_fields(all_stats)
+        if all_stats:  # Have stats.
+            filename = "AllGatewaySyntheticTests.csv"  # Build the CSV name.
+            flattened = DataProcessingUtils.flatten_nested_fields(all_stats)  # Flatten nested fields.
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
-            print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")
+            print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")  # Tell the user.
             logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
-            logging.info(
+            logging.info(  # Log the totals.
                 "! API Optimization: Saved %s listSiteDevices calls by using cached inventory", len(gateway_devices)
             )
         else:
-            logging.warning(" No synthetic test results found. CSV not created.")
-            print("! No synthetic test results found. CSV not created.")
-        if emitter:
-            emitter.emit_progress_complete(
+            logging.warning(" No synthetic test results found. CSV not created.")  # Warn none found.
+            print("! No synthetic test results found. CSV not created.")  # Tell the user.
+        if emitter:  # Emitter present.
+            emitter.emit_progress_complete(  # Signal progress complete.
                 "16",
                 "synthetic_tests",
                 len(gateway_devices) if gateway_devices else 0,
@@ -15631,52 +15631,52 @@ class GatewayTestExporter:
             )
 
     @staticmethod
-    def test_results_by_site(fast: bool = False) -> None:
+    def test_results_by_site(fast: bool = False) -> None:  # Export tests by site.
         """Delegator: all logic lives in src/refactors/serial_cc/test_results_by_site.py."""
         from src.refactors.serial_cc.test_results_by_site import GatewayTestResultsService  # noqa: PLC0415
 
         GatewayTestResultsService.execute(fast=fast)  # Delegate to extracted service; keeps CC at A(1)
 
 
-class GatewayStatsExporter:
+class GatewayStatsExporter:  # Gateway stats delegators.
     """Delegation wrapper for extracted gateway stats exporter implementation."""
 
     @staticmethod
-    def _configure_module():
+    def _configure_module():  # Configure the module.
         """Configure extracted gateway modules and return stats module handle."""
         from src.gateway import gateway_stats_exporter as stats_module  # noqa: PLC0415,I001
 
-        GatewayExportUtils._configure_module()
-        return stats_module
+        GatewayExportUtils._configure_module()  # Wire dependencies.
+        return stats_module  # Return the module.
 
     @staticmethod
-    def device_stats(fast=False):
+    def device_stats(fast=False):  # Export gateway device stats.
         """Delegated gateway device stats export entrypoint."""
-        module = GatewayStatsExporter._configure_module()
-        return module.GatewayStatsExporter.device_stats(fast=fast)
+        module = GatewayStatsExporter._configure_module()  # Configure the module.
+        return module.GatewayStatsExporter.device_stats(fast=fast)  # Delegate the export.
 
     @staticmethod
-    def device_stats_with_freshness(fast: bool = False) -> None:
+    def device_stats_with_freshness(fast: bool = False) -> None:  # Export with freshness.
         """Delegated freshness-aware gateway device stats export entrypoint."""
-        module = GatewayStatsExporter._configure_module()
-        return module.GatewayStatsExporter.device_stats_with_freshness(fast=fast)
+        module = GatewayStatsExporter._configure_module()  # Configure the module.
+        return module.GatewayStatsExporter.device_stats_with_freshness(fast=fast)  # Delegate the export.
 
     @staticmethod
-    def wan_port_conflicts():
+    def wan_port_conflicts():  # Export WAN port conflicts.
         """Delegated WAN port conflict analysis entrypoint."""
-        module = GatewayStatsExporter._configure_module()
-        return module.GatewayStatsExporter.wan_port_conflicts()
+        module = GatewayStatsExporter._configure_module()  # Configure the module.
+        return module.GatewayStatsExporter.wan_port_conflicts()  # Delegate the export.
 
 
-class GatewayExportUtils:
+class GatewayExportUtils:  # Gateway export delegators.
     """Delegation wrapper for extracted gateway export utility implementation."""
 
     @staticmethod
-    def _configure_module():
+    def _configure_module():  # Configure the module.
         """Configure extracted gateway modules and return gateway export module handle."""
         from src.gateway import gateway_export_utils as gateway_export_module  # noqa: PLC0415,I001
 
-        configure_gateway_export_utils_dependencies(
+        configure_gateway_export_utils_dependencies(  # Wire dependencies.
             apisession_dependency=apisession,
             mistapi_dependency=mistapi,
             config_utils=ConfigUtils,
@@ -15699,67 +15699,67 @@ class GatewayExportUtils:
             api_usage_cache=_api_usage_cache,
             tqdm_module=tqdm,
         )
-        return gateway_export_module
+        return gateway_export_module  # Return the module.
 
     @staticmethod
-    def _with_site_info():
+    def _with_site_info():  # Attach site info.
         """Delegated gateways-with-site-info export entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils._with_site_info()
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils._with_site_info()  # Delegate the call.
 
     @staticmethod
-    def management_ips(fast: bool = False) -> None:
+    def management_ips(fast: bool = False) -> None:  # Export management IPs.
         """Delegated gateway management IPs export entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils.management_ips(fast=fast)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils.management_ips(fast=fast)  # Delegate the export.
 
     @staticmethod
-    def device_configs(debug: bool = False, fast: bool = False) -> None:
+    def device_configs(debug: bool = False, fast: bool = False) -> None:  # Export device configs.
         """Delegated gateway device configs export entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils.device_configs(debug=debug, fast=fast)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils.device_configs(debug=debug, fast=fast)  # Delegate the export.
 
     @staticmethod
-    def templates():
+    def templates():  # Export gateway templates.
         """Delegated gateway template export entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils.templates()
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils.templates()  # Delegate the export.
 
     @staticmethod
-    def with_wan_overrides(fast: bool = False) -> None:
+    def with_wan_overrides(fast: bool = False) -> None:  # Export with WAN overrides.
         """Delegated gateway WAN override analysis entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils.with_wan_overrides(fast=fast)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils.with_wan_overrides(fast=fast)  # Delegate the export.
 
     @staticmethod
     def _get_devices_with_sites(org_id: str, fast: bool = False) -> list[tuple[str, str, str, str]]:
         """Delegated gateway device+site inventory helper entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)  # Delegate the call.
 
     @staticmethod
-    def _get_devices_from_cache() -> list[tuple[str, str, str, str]]:
+    def _get_devices_from_cache() -> list[tuple[str, str, str, str]]:  # List gateways from cache.
         """Delegated cached gateway inventory helper entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils._get_devices_from_cache()
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils._get_devices_from_cache()  # Delegate the call.
 
     @staticmethod
-    def _get_devices_from_api(org_id: str) -> list[tuple[str, str, str, str]]:
+    def _get_devices_from_api(org_id: str) -> list[tuple[str, str, str, str]]:  # List gateways from API.
         """Delegated API-based gateway inventory helper entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils._get_devices_from_api(org_id)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils._get_devices_from_api(org_id)  # Delegate the call.
 
     @staticmethod
-    def _get_site_ids_with_devices(org_id: str) -> list[str]:
+    def _get_site_ids_with_devices(org_id: str) -> list[str]:  # List sites with devices.
         """Delegated site-ID-with-gateway helper entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils._get_site_ids_with_devices(org_id)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils._get_site_ids_with_devices(org_id)  # Delegate the call.
 
     @staticmethod
-    def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:
+    def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:  # Migrate WAN2 variables.
         """Delegated WAN2 variable migration entrypoint."""
-        module = GatewayExportUtils._configure_module()
-        return module.GatewayExportUtils.wan2_variable_migration(fast=fast, dry_run=dry_run)
+        module = GatewayExportUtils._configure_module()  # Configure the module.
+        return module.GatewayExportUtils.wan2_variable_migration(fast=fast, dry_run=dry_run)  # Delegate the migration.
 
 
 # NOTE: generate_support_package moved to DataCollectionManager.generate_support_packages
@@ -15770,13 +15770,13 @@ class GatewayExportUtils:
 # ============================================================================
 
 
-class TroubleshootUtils:
+class TroubleshootUtils:  # Marvis troubleshoot delegators.
     """Delegation wrapper for extracted Marvis troubleshooting implementation."""
 
     @staticmethod
-    def _build_deps() -> MarvisTroubleshootDeps:
+    def _build_deps() -> MarvisTroubleshootDeps:  # Build the deps bundle.
         """Build dependency container for extracted troubleshooting logic."""
-        return MarvisTroubleshootDeps(
+        return MarvisTroubleshootDeps(  # Assemble the deps.
             apisession=apisession,
             mistapi=mistapi,
             config_utils=ConfigUtils,
@@ -15788,22 +15788,22 @@ class TroubleshootUtils:
         )
 
     @staticmethod
-    def client_connectivity() -> None:
+    def client_connectivity() -> None:  # Troubleshoot client connectivity.
         """Delegated client connectivity troubleshooting implementation."""
-        ExtractedMarvisTroubleshootUtils.client_connectivity(TroubleshootUtils._build_deps())
+        ExtractedMarvisTroubleshootUtils.client_connectivity(TroubleshootUtils._build_deps())  # Delegate to the impl.
 
     @staticmethod
-    def device_performance() -> None:
+    def device_performance() -> None:  # Diagnose device performance.
         """Delegated device performance troubleshooting implementation."""
-        ExtractedMarvisTroubleshootUtils.device_performance(TroubleshootUtils._build_deps())
+        ExtractedMarvisTroubleshootUtils.device_performance(TroubleshootUtils._build_deps())  # Delegate to the impl.
 
     @staticmethod
-    def network_connectivity() -> None:
+    def network_connectivity() -> None:  # Analyze network connectivity.
         """Delegated network connectivity troubleshooting implementation."""
-        ExtractedMarvisTroubleshootUtils.network_connectivity(TroubleshootUtils._build_deps())
+        ExtractedMarvisTroubleshootUtils.network_connectivity(TroubleshootUtils._build_deps())  # Delegate to the impl.
 
     @staticmethod
-    def launch_interactive() -> None:
+    def launch_interactive() -> None:  # Launch interactive Marvis.
         """
         Interactive Marvis (VNA) troubleshooting menu.
 
@@ -15814,75 +15814,75 @@ class TroubleshootUtils:
         4. View Marvis insights and capabilities
         """
         logging.info("Entering TroubleshootUtils.launch_interactive")  # Entry envelope for logging compliance
-        logging.debug("MARVIS DEBUG: Entering launch_interactive() method")
-        print(" Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting")
-        print("=" * 65)
-        print()
+        logging.debug("MARVIS DEBUG: Entering launch_interactive() method")  # Trace the entry.
+        print(" Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting")  # Header.
+        print("=" * 65)  # Divider.
+        print()  # Spacer.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         logging.debug("MARVIS DEBUG: Using org_id: %s for Marvis troubleshooting", org_id)  # %s not f-string
         logging.debug("MARVIS DEBUG: Session state - authenticated: %s", apisession is not None)  # %s not f-string
 
-        print(" Marvis AI Troubleshooting Options:")
-        print("1. Troubleshoot client connectivity issues (guided client selection)")
-        print("2. Diagnose device performance problems (guided device selection)")
-        print("3. Analyze network connectivity issues (site-level analysis)")
-        print("4. View organization Marvis insights and capabilities")
-        print("5. Exit")
-        print()
+        print(" Marvis AI Troubleshooting Options:")  # Menu header.
+        print("1. Troubleshoot client connectivity issues (guided client selection)")  # Option 1.
+        print("2. Diagnose device performance problems (guided device selection)")  # Option 2.
+        print("3. Analyze network connectivity issues (site-level analysis)")  # Option 3.
+        print("4. View organization Marvis insights and capabilities")  # Option 4.
+        print("5. Exit")  # Option 5.
+        print()  # Spacer.
 
         choice = InputUtils.safe_input("Select an option (1-5): ", context="marvis_launch_menu").strip()
         logging.debug("MARVIS DEBUG: User selected option: %s", choice)  # %s not f-string
 
-        if choice == "1":
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.client_connectivity()")
+        if choice == "1":  # Client connectivity.
+            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.client_connectivity()")  # Trace the call.
             TroubleshootUtils.client_connectivity()  # type: ignore[no-untyped-call]
-        elif choice == "2":
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.device_performance()")
+        elif choice == "2":  # Device performance.
+            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.device_performance()")  # Trace the call.
             TroubleshootUtils.device_performance()  # type: ignore[no-untyped-call]
-        elif choice == "3":
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.network_connectivity()")
+        elif choice == "3":  # Network connectivity.
+            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.network_connectivity()")  # Trace the call.
             TroubleshootUtils.network_connectivity()  # type: ignore[no-untyped-call]
-        elif choice == "4":
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.view_insights()")
-            TroubleshootUtils.view_insights()
-        elif choice == "5":
-            logging.debug("MARVIS DEBUG: User chose to exit")
-            print("Exiting Marvis troubleshooting.")
+        elif choice == "4":  # View insights.
+            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.view_insights()")  # Trace the call.
+            TroubleshootUtils.view_insights()  # Show the insights.
+        elif choice == "5":  # Exit option.
+            logging.debug("MARVIS DEBUG: User chose to exit")  # Trace the exit.
+            print("Exiting Marvis troubleshooting.")  # Tell the user.
             logging.info("Exiting TroubleshootUtils.launch_interactive via user exit choice")  # Exit envelope
-            return
+            return  # Return.
         else:
-            print(" Invalid option selected.")
+            print(" Invalid option selected.")  # Tell the user invalid.
             logging.warning("MARVIS DEBUG: Invalid troubleshooting option selected: %s", choice)  # %s not f-string
-            logging.debug("MARVIS DEBUG: Exiting launch_interactive() due to invalid choice")
+            logging.debug("MARVIS DEBUG: Exiting launch_interactive() due to invalid choice")  # Trace the exit.
         logging.info("Exiting TroubleshootUtils.launch_interactive with choice: %s", choice)  # Exit envelope
 
     @staticmethod
-    def view_insights() -> None:
+    def view_insights() -> None:  # View Marvis insights.
         """Delegated Marvis insights and capabilities view implementation."""
-        ExtractedMarvisTroubleshootUtils.view_insights(TroubleshootUtils._build_deps())
+        ExtractedMarvisTroubleshootUtils.view_insights(TroubleshootUtils._build_deps())  # Delegate to the impl.
 
     @staticmethod
-    def _display_usage_guide() -> None:
+    def _display_usage_guide() -> None:  # Show the usage guide.
         """Delegated helper for usage guide display."""
-        ExtractedMarvisTroubleshootUtils._display_usage_guide()
+        ExtractedMarvisTroubleshootUtils._display_usage_guide()  # Delegate to the impl.
 
 
 # ============================================================================
 # GATEWAY TEMPLATE CONFIGURATION MANAGER CLASS
 # Delegated to src.gateway.template_config
 # ============================================================================
-class GatewayTemplateConfigManager:
+class GatewayTemplateConfigManager:  # Gateway template config manager.
     """Delegation stub. Implementation in src.gateway.template_config."""
 
     @staticmethod
-    def extract():
+    def extract():  # Extract a template.
         """Menu 105: Extract DIA_Pico and Picocell configs. Delegated to src.gateway.template_config."""
         from src.gateway.template_config import (
             GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        Impl(
+        Impl(  # Run the impl.
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
             apisession=apisession,
             input_fn=InputUtils.safe_input,
@@ -15894,13 +15894,13 @@ class GatewayTemplateConfigManager:
         ).extract()
 
     @staticmethod
-    def apply():
+    def apply():  # Apply a template.
         """Menu 106: Apply extracted configs. Delegated to src.gateway.template_config."""
         from src.gateway.template_config import (
             GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        Impl(
+        Impl(  # Run the impl.
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
             apisession=apisession,
             input_fn=InputUtils.safe_input,
@@ -15912,13 +15912,13 @@ class GatewayTemplateConfigManager:
         ).apply()
 
     @staticmethod
-    def clone_by_location():
+    def clone_by_location():  # Clone by location.
         """Menu 111: Clone template by state/country. Delegated to src.gateway.template_config."""
         from src.gateway.template_config import (
             GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        Impl(
+        Impl(  # Run the impl.
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
             apisession=apisession,
             input_fn=InputUtils.safe_input,
@@ -15930,14 +15930,14 @@ class GatewayTemplateConfigManager:
         ).clone_by_location()
 
 
-class DeviceConfigTemplateClonerManager:
+class DeviceConfigTemplateClonerManager:  # Device config template cloner.
     """Menu 194: Clone device local config to a new gateway template.
 
     Delegated to src.gateway.device_template_cloner.
     """
 
     @staticmethod
-    def clone() -> None:
+    def clone() -> None:  # Clone a config.
         """Menu 194: Fetch gateway device config and create a new org-level gateway template."""
         from src.gateway.device_template_cloner import (  # pylint: disable=import-outside-toplevel
             DeviceConfigTemplateClonerManager as Impl,  # Import extracted implementation class
