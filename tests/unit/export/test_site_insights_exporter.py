@@ -16,7 +16,9 @@ def _configure_dependencies() -> None:
         data_processing_utils=SimpleNamespace(flatten_nested_fields=MagicMock(), escape_multiline=MagicMock()),
         data_exporter=SimpleNamespace(write_with_format_selection=MagicMock()),
         enhanced_ssh_runner=SimpleNamespace(sanitize_filename=MagicMock(side_effect=lambda value: value)),
-        insight_metrics_utils=SimpleNamespace(export_legacy=MagicMock(), get_by_scope=MagicMock(return_value=[])),
+        insight_metrics_utils=SimpleNamespace(
+            export_const_insight_metrics=MagicMock(), get_by_scope=MagicMock(return_value=[])
+        ),
         packet_capture_manager=SimpleNamespace(
             validate_mac_address=MagicMock(return_value=True),
             normalize_mac_address=MagicMock(return_value="aa:bb:cc:dd:ee:ff"),
