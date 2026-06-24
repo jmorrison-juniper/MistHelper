@@ -38,6 +38,7 @@ from src.maps.plotly_map_callback_manager import PlotlyMapCallbackManager
 from src.maps.plotly_map_figure_builder import PlotlyMapFigureBuilder
 from src.maps.plotly_map_serializer import PlotlyMapDataSerializer
 from src.maps.plotly_map_templates import DashTemplateManager
+from src.utils.input_utils import InputUtils  # Issue #433 Phase C: EOF-safe input wrapper for interactive prompts.
 
 # Optional visualization imports — use find_spec for availability checks
 PLOTLY_AVAILABLE = importlib.util.find_spec("plotly") is not None
@@ -308,7 +309,7 @@ class MapsManager:
         print("-" * 60)
 
         try:
-            selection = input("Enter site index or name: ").strip()
+            selection = InputUtils.safe_input("Enter site index or name: ", context="select_site").strip()
 
             # Try as index first
             try:
@@ -363,7 +364,9 @@ class MapsManager:
             print(f"  {idx}. {map_name} ({map_type}) - {has_image}")
         print(f"{'-' * 80}")
         try:
-            selection = input("\nSelect map number (or 0 to cancel): ").strip()
+            selection = InputUtils.safe_input(
+                "\nSelect map number (or 0 to cancel): ", context="_prompt_map_choice"
+            ).strip()
             map_idx = int(selection) - 1
             if map_idx < 0:
                 return None
@@ -925,7 +928,11 @@ class MapsManager:
             self._print_menu()
 
             try:
-                choice = input("\nEnter your selection number now: ").strip().upper()
+                choice = (
+                    InputUtils.safe_input("\nEnter your selection number now: ", context="run_interactive_menu")
+                    .strip()
+                    .upper()
+                )
             except EOFError:
                 logging.info("EOF detected in MapsManager menu - session disconnected")
                 return
@@ -1343,7 +1350,7 @@ class MapsManager:
     def _prompt_map_name(self) -> str | None:
         """Prompt user for a map name; return None if empty or EOF."""
         try:
-            map_name = input("Enter map name: ").strip()
+            map_name = InputUtils.safe_input("Enter map name: ", context="_prompt_map_name").strip()
         except EOFError:
             logging.info("EOF detected during map name input")
             return None
@@ -1358,15 +1365,21 @@ class MapsManager:
         print("  1. image (standard floor plan)")
         print("  2. google (Google Maps integration)")
         print("  3. baidu (Baidu Maps integration)")
-        type_choice = input("Select type (1-3, default=1): ").strip() or "1"
+        type_choice = InputUtils.safe_input("Select type (1-3, default=1): ", context="_prompt_map_type").strip() or "1"
         type_map = {"1": "image", "2": "google", "3": "baidu"}
         return type_map.get(type_choice, "image")
 
     def _prompt_image_dimensions(self) -> tuple[int, int, float]:
         """Prompt for image map dimensions; return (width, height, ppm) with defaults."""
-        width_input = input("Enter width in pixels (default=1024): ").strip()
-        height_input = input("Enter height in pixels (default=768): ").strip()
-        ppm_input = input("Enter pixels per meter (default=10): ").strip()
+        width_input = InputUtils.safe_input(
+            "Enter width in pixels (default=1024): ", context="_prompt_image_dimensions"
+        ).strip()
+        height_input = InputUtils.safe_input(
+            "Enter height in pixels (default=768): ", context="_prompt_image_dimensions"
+        ).strip()
+        ppm_input = InputUtils.safe_input(
+            "Enter pixels per meter (default=10): ", context="_prompt_image_dimensions"
+        ).strip()
         width = int(width_input) if width_input else 1024
         height = int(height_input) if height_input else 768
         ppm = float(ppm_input) if ppm_input else 10.0
@@ -1444,7 +1457,9 @@ class MapsManager:
         """Prompt for a clone name using the source map name as default; return None on EOF."""
         default_name = f"{source_map.get('name', 'Map')} (Copy)"
         try:
-            new_name = input(f"\nEnter name for cloned map [{default_name}]: ").strip()
+            new_name = InputUtils.safe_input(
+                f"\nEnter name for cloned map [{default_name}]: ", context="_prompt_clone_name"
+            ).strip()
         except EOFError:
             logging.info("EOF detected during clone name prompt")
             return None
@@ -1500,7 +1515,9 @@ class MapsManager:
         )
         print(zone_msg)
         print(f"{'-' * 80}")
-        confirm = input("\nProceed with full clone? (yes/no): ").strip().lower()
+        confirm = (
+            InputUtils.safe_input("\nProceed with full clone? (yes/no): ", context="_confirm_clone").strip().lower()
+        )
         if confirm not in ["yes", "y"]:
             print("\n! Clone cancelled")
             return False
@@ -1764,7 +1781,7 @@ class MapsManager:
         print("Supported formats: PNG, JPG, JPEG, GIF")
 
         try:
-            file_path = input("File path: ").strip()
+            file_path = InputUtils.safe_input("File path: ", context="_wizard_get_new_image").strip()
         except EOFError:
             logging.info("EOF detected during file path input")
             return None
@@ -1838,7 +1855,9 @@ class MapsManager:
         print("  4. No Scaling - Replace image only, keep all coordinates unchanged")
 
         try:
-            scale_choice = input("\nSelect scaling mode [1]: ").strip() or "1"
+            scale_choice = (
+                InputUtils.safe_input("\nSelect scaling mode [1]: ", context="_wizard_determine_scaling").strip() or "1"
+            )
         except EOFError:
             logging.info("EOF detected during scale mode selection")
             return None
@@ -1867,7 +1886,9 @@ class MapsManager:
 
         if scale_choice == "3":
             try:
-                new_ppm_input = input(f"Enter new PPM (current: {original_ppm:.2f}): ").strip()
+                new_ppm_input = InputUtils.safe_input(
+                    f"Enter new PPM (current: {original_ppm:.2f}): ", context="_apply_scale_choice"
+                ).strip()
                 new_ppm = float(new_ppm_input) if new_ppm_input else original_ppm
             except (ValueError, EOFError):
                 print("Invalid PPM value, using original")
@@ -2161,7 +2182,9 @@ class MapsManager:
 
         print("! Warning: Backup may not have completed fully")
         try:
-            proceed = input("Continue anyway? (yes/no): ").strip().lower()
+            proceed = (
+                InputUtils.safe_input("Continue anyway? (yes/no): ", context="_wizard_create_backup").strip().lower()
+            )
         except EOFError:
             return None
         if proceed not in ("yes", "y"):
@@ -2214,7 +2237,7 @@ class MapsManager:
         print("-" * 80)
         print("\n! WARNING: This will modify the map and update all device/zone positions.")
         try:
-            confirm = input("\nType 'REPLACE' to proceed: ").strip()
+            confirm = InputUtils.safe_input("\nType 'REPLACE' to proceed: ", context="_wizard_confirm").strip()
         except EOFError:
             logging.info("EOF detected during confirmation")
             return False
@@ -2376,7 +2399,7 @@ class MapsManager:
     # Placeholder methods for future implementation
     def _collect_property_input(self, prompt, current_value, value_type=str):
         """Collect a single property update from user with type validation."""
-        raw = input(f"{prompt} [{current_value}]: ").strip()
+        raw = InputUtils.safe_input(f"{prompt} [{current_value}]: ", context="_collect_property_input").strip()
         if not raw:
             return None
         if value_type is str:
@@ -2411,7 +2434,11 @@ class MapsManager:
         for key, value in update_payload.items():
             print(f"  {key}: {value}")
         print(f"{'-' * 80}")
-        confirm = input("\nApply these changes? (yes/no): ").strip().lower()
+        confirm = (
+            InputUtils.safe_input("\nApply these changes? (yes/no): ", context="_confirm_and_apply_map_update")
+            .strip()
+            .lower()
+        )
         if confirm not in ["yes", "y"]:
             print("\n! Update cancelled")
             return
@@ -2510,7 +2537,7 @@ class MapsManager:
 
             # Safety confirmation
             print("\nType 'DELETE' in uppercase to confirm deletion:")
-            confirmation = input("Confirmation: ").strip()
+            confirmation = InputUtils.safe_input("Confirmation: ", context="delete_site_map").strip()
 
             if confirmation != "DELETE":
                 print("\n! Deletion cancelled")
@@ -2541,7 +2568,12 @@ class MapsManager:
         """Prompt user for image file path and validate it; return path or None if invalid."""
         print("\nEnter the path to the image file:")
         print("Supported formats: PNG, JPG, JPEG, GIF, SVG")
-        file_path = input("File path: ").strip().strip('"').strip("'")
+        file_path = (
+            InputUtils.safe_input("File path: ", context="_prompt_and_validate_image_path")
+            .strip()
+            .strip('"')
+            .strip("'")
+        )
         if not file_path:
             print("\n! No file path provided")
             return None
@@ -2564,12 +2596,16 @@ class MapsManager:
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
         if file_size_mb > 10:
             print(f"\n! Warning: File size is {file_size_mb:.2f}MB")
-            if input("Continue with upload? (yes/no): ").strip().lower() not in ["yes", "y"]:
+            if InputUtils.safe_input(
+                "Continue with upload? (yes/no): ", context="_confirm_image_upload"
+            ).strip().lower() not in ["yes", "y"]:
                 print("\n! Upload cancelled")
                 return
         print(f"\nFile: {os.path.basename(file_path)}")
         print(f"Size: {file_size_mb:.2f}MB")
-        if input("\nUpload this image to the selected map? (yes/no): ").strip().lower() not in ["yes", "y"]:
+        if InputUtils.safe_input(
+            "\nUpload this image to the selected map? (yes/no): ", context="_confirm_image_upload"
+        ).strip().lower() not in ["yes", "y"]:
             print("\n! Upload cancelled")
             return
         print("\nUploading image...")
@@ -2664,7 +2700,10 @@ class MapsManager:
                 coordinates = f"{device.get('x', 'N/A')},{device.get('y', 'N/A')}"
                 print(f"{device_name:<30} {device_type:<10} {device_model:<20} {coordinates:<20}")
             print(f"{'-' * 80}")
-            if input("\nExport to CSV? (yes/no): ").strip().lower() in ["yes", "y"]:
+            if InputUtils.safe_input("\nExport to CSV? (yes/no): ", context="view_devices_on_map").strip().lower() in [
+                "yes",
+                "y",
+            ]:
                 self._export_map_devices_csv(devices_on_map, site_id, site_name)
             logging.info("Viewed %s devices on map %s", len(devices_on_map), map_id)
         except EOFError:
@@ -2797,7 +2836,14 @@ class MapsManager:
         logging.error("plotly not available")
         print("\n! Missing required package: plotly")
         print("! Install with: pip install plotly dash")
-        confirm = input("\nWould you like to continue without interactive features? (yes/no): ").strip().lower()
+        confirm = (
+            InputUtils.safe_input(
+                "\nWould you like to continue without interactive features? (yes/no): ",
+                context="_check_visualization_packages",
+            )
+            .strip()
+            .lower()
+        )
         if confirm not in ["yes", "y"]:
             logging.info("User declined matplotlib fallback")
             return None
@@ -3493,8 +3539,10 @@ class MapsManager:
         """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap."""
         coverage_count = self._resolve_coverage_count(coverage_data)  # Helper extracts the ternary
         all_maps, all_sites = self._normalize_optional_lists(all_maps, all_sites)  # Drops 2 BoolOps from parent CC
-        logging.info(
-            "_launch_plotly_viewer called - site: %s (%s), map_id: %s, devices: %s, zones: %s, clients: %s, coverage: %s, available_maps: %s, available_sites: %s",
+        logging.info(  # Issue #433 Phase C: split long log template across two lines for E501 compliance.
+            "_launch_plotly_viewer called - site: %s (%s), map_id: %s, "
+            "devices: %s, zones: %s, clients: %s, coverage: %s, "
+            "available_maps: %s, available_sites: %s",
             site_name,
             site_id,
             map_id,
@@ -6903,8 +6951,11 @@ def _setup_api_session(env_file: str):
             apisession = mistapi.APISession(env_file=env_file)
         else:
             print("No .env file found. Please provide Mist API credentials.")
-            host = input("Mist API Host [api.mist.com]: ").strip() or "api.mist.com"
-            token = input("API Token: ").strip()
+            host = (
+                InputUtils.safe_input("Mist API Host [api.mist.com]: ", context="_setup_api_session").strip()
+                or "api.mist.com"
+            )
+            token = InputUtils.safe_input("API Token: ", context="_setup_api_session").strip()
             apisession = mistapi.APISession(host=host, token=token)
         apisession.login()
         return apisession
@@ -6919,7 +6970,7 @@ def _prompt_org_selection(orgs: list) -> str:
     for idx, oid in enumerate(orgs, 1):
         print(f"  {idx}. {oid}")
     try:
-        choice = input("Select organization number: ").strip()
+        choice = InputUtils.safe_input("Select organization number: ", context="_prompt_org_selection").strip()
         return orgs[int(choice) - 1]
     except (ValueError, IndexError):
         print("Invalid selection")
@@ -6986,7 +7037,7 @@ Examples:
         if args.test:
             print("ERROR: Organization ID required for test mode. Set org_id in .env or use --org flag")
             sys.exit(1)
-        org_id = input("Organization ID: ").strip()
+        org_id = InputUtils.safe_input("Organization ID: ", context="main").strip()
 
     if not org_id:
         print("ERROR: Organization ID is required")
