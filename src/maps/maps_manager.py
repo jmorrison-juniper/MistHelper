@@ -6407,17 +6407,17 @@ class MapsManager:
                         api_session, site_id=site_id, type="all", limit=1000
                     )
                     if devices_response.status_code == 200 and devices_response.data:
-                        for d in devices_response.data:
-                            if d.get("map_id") == map_id and d.get("x") is not None:
+                        for device in devices_response.data:
+                            if device.get("map_id") == map_id and device.get("x") is not None:
                                 devices.append(
                                     {
-                                        "x": d.get("x"),
-                                        "y": d.get("y"),
-                                        "name": d.get("name", d.get("mac", "Unknown")),
-                                        "type": d.get("type", "ap"),
-                                        "status": d.get("status", "unknown"),
-                                        "mac": d.get("mac", ""),
-                                        "orientation": d.get("orientation", 0),
+                                        "x": device.get("x"),
+                                        "y": device.get("y"),
+                                        "name": device.get("name", device.get("mac", "Unknown")),
+                                        "type": device.get("type", "ap"),
+                                        "status": device.get("status", "unknown"),
+                                        "mac": device.get("mac", ""),
+                                        "orientation": device.get("orientation", 0),
                                     }
                                 )
                 except Exception as e:
@@ -6428,9 +6428,9 @@ class MapsManager:
                 try:
                     zones_response = mistapi.api.v1.sites.zones.listSiteZones(api_session, site_id=site_id)
                     if zones_response.status_code == 200 and zones_response.data:
-                        for z in zones_response.data:
-                            if z.get("map_id") == map_id:
-                                zones.append({"name": z.get("name", "Zone"), "vertices": z.get("vertices", [])})
+                        for zone in zones_response.data:
+                            if zone.get("map_id") == map_id:
+                                zones.append({"name": zone.get("name", "Zone"), "vertices": zone.get("vertices", [])})
                 except Exception as e:
                     logging.warning("Error fetching zones: %s", e)
 
@@ -6441,15 +6441,15 @@ class MapsManager:
                         api_session, site_id=site_id
                     )
                     if clients_response.status_code == 200 and clients_response.data:
-                        for c in clients_response.data:
-                            if c.get("map_id") == map_id and c.get("x") is not None:
+                        for client in clients_response.data:
+                            if client.get("map_id") == map_id and client.get("x") is not None:
                                 wifi_clients.append(
                                     {
-                                        "x": c.get("x"),
-                                        "y": c.get("y"),
-                                        "mac": c.get("mac", "Unknown"),
-                                        "ssid": c.get("ssid", "-"),
-                                        "name": c.get("hostname", "") or c.get("name", ""),
+                                        "x": client.get("x"),
+                                        "y": client.get("y"),
+                                        "mac": client.get("mac", "Unknown"),
+                                        "ssid": client.get("ssid", "-"),
+                                        "name": client.get("hostname", "") or client.get("name", ""),
                                     }
                                 )
                 except Exception as e:
@@ -6463,14 +6463,14 @@ class MapsManager:
                         api_session, site_id=site_id, map_id=map_id
                     )
                     if unconnected_response.status_code == 200 and unconnected_response.data:
-                        for c in unconnected_response.data:
-                            if c.get("x") is not None:
+                        for client in unconnected_response.data:
+                            if client.get("x") is not None:
                                 unconnected_clients.append(
                                     {
-                                        "x": c.get("x"),
-                                        "y": c.get("y"),
-                                        "mac": c.get("mac", "Unknown"),
-                                        "manufacture": c.get("manufacture", "-"),
+                                        "x": client.get("x"),
+                                        "y": client.get("y"),
+                                        "mac": client.get("mac", "Unknown"),
+                                        "manufacture": client.get("manufacture", "-"),
                                     }
                                 )
                 except Exception as e:
@@ -6481,9 +6481,15 @@ class MapsManager:
                 try:
                     ble_response = mistapi.api.v1.sites.stats.listSiteDiscoveredAssets(api_session, site_id=site_id)
                     if ble_response.status_code == 200 and ble_response.data:
-                        for d in ble_response.data:
-                            if d.get("map_id") == map_id and d.get("x") is not None:
-                                ble_devices.append({"x": d.get("x"), "y": d.get("y"), "mac": d.get("mac", "Unknown")})
+                        for device in ble_response.data:
+                            if device.get("map_id") == map_id and device.get("x") is not None:
+                                ble_devices.append(
+                                    {
+                                        "x": device.get("x"),
+                                        "y": device.get("y"),
+                                        "mac": device.get("mac", "Unknown"),
+                                    }
+                                )
                 except Exception as e:
                     logging.warning("Error fetching BLE devices: %s", e)
 
@@ -6492,14 +6498,14 @@ class MapsManager:
                 try:
                     assets_response = mistapi.api.v1.sites.stats.listSiteAssetsStats(api_session, site_id=site_id)
                     if assets_response.status_code == 200 and assets_response.data:
-                        for a in assets_response.data:
-                            if a.get("map_id") == map_id and a.get("x") is not None:
+                        for asset in assets_response.data:
+                            if asset.get("map_id") == map_id and asset.get("x") is not None:
                                 assets.append(
                                     {
-                                        "x": a.get("x"),
-                                        "y": a.get("y"),
-                                        "name": a.get("name", "Asset"),
-                                        "mac": a.get("mac", "-"),
+                                        "x": asset.get("x"),
+                                        "y": asset.get("y"),
+                                        "name": asset.get("name", "Asset"),
+                                        "mac": asset.get("mac", "-"),
                                     }
                                 )
                 except Exception as e:
@@ -6512,14 +6518,14 @@ class MapsManager:
                         api_session, site_id=site_id, map_id=map_id
                     )
                     if sdk_response.status_code == 200 and sdk_response.data:
-                        for c in sdk_response.data:
-                            if c.get("x") is not None:
+                        for client in sdk_response.data:
+                            if client.get("x") is not None:
                                 sdk_clients.append(
                                     {
-                                        "x": c.get("x"),
-                                        "y": c.get("y"),
-                                        "name": c.get("name", ""),
-                                        "uuid": c.get("uuid", "-"),
+                                        "x": client.get("x"),
+                                        "y": client.get("y"),
+                                        "name": client.get("name", ""),
+                                        "uuid": client.get("uuid", "-"),
                                     }
                                 )
                 except Exception as e:
