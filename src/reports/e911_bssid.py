@@ -685,7 +685,7 @@ class E911BSSIDReportGenerator:
         page_limit: int,
         org_id: str,
         safe_input_fn: Callable[..., str],
-        write_data_fn: Callable[..., None],
+        write_data_fn: Callable[..., bool],  # DataExporter.write_with_format_selection returns a success bool
     ) -> None:
         """Generate E911 BSSID compliance report (Menu 160).
 
@@ -754,7 +754,7 @@ class E911BSSIDReportGenerator:
         org_data: dict[str, Any],
         radio_macs_data: list[dict[str, Any]],
         site_state: dict[str, Any],
-        write_data_fn: Callable[..., None],
+        write_data_fn: Callable[..., bool],  # Matches execute(): exporter returns a success bool
         start_time: float,
     ) -> None:
         """Build rows, write CSV, display summary, and clean up."""

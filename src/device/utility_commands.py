@@ -25,7 +25,7 @@ import mistapi
 SelectSiteFn = Callable[[], str | None]
 SelectDeviceFn = Callable[[str, str], str | None]
 SafeInputFn = Callable[..., str]
-WriteExportFn = Callable[[list[dict[str, Any]], str, str], None]
+WriteExportFn = Callable[[list[dict[str, Any]], str, str], bool]  # Exporter returns a success bool, not None
 WebSocketManagerFactory = Callable[[Any], Any]
 
 
