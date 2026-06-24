@@ -107,8 +107,8 @@ from src.bootstrap.package_installer import (
     PackageInstaller,
 )  # Duplicate import; harmless re-import of package installer
 from src.capture.packet_capture import (
-    PacketCaptureManager as ExtractedPacketCaptureManager,
-)  # Import packet capture manager (renamed to avoid conflicts)
+    PacketCaptureManager,
+)  # Import packet capture manager directly under its canonical name (issue #431: alias removed)
 from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # Import 52-week device events export handler
 from src.export.site_export_utils import (
     configure_site_export_utils_dependencies,
@@ -1194,9 +1194,10 @@ def listen_keyboard(*args, **kwargs):  # Removed feature; harmless stub kept for
     return None  # No listener object to return
 
 
-def stop_listening():  # Removed feature; harmless stub kept for old call sites
-    """No-op fallback for removed keyboard listener functionality."""
-    pass  # Nothing to stop; intentionally a no-op
+# stop_listening() removed per issue #431: it was a `pass` no-op stub for a
+# legacy keyboard listener that has no real implementation. The single call
+# site inside `send_keyboard_input` (interactive SSR/SRX websocket shell) is
+# also removed below since stopping a never-started listener is a no-op.
 
 
 # ============================================================================
@@ -6273,8 +6274,8 @@ class DeviceDataFetcher:
         DisplayUtils.dict_list_as_pretty_table(processed)
 
 
-# Canonical ownership: runtime PacketCaptureManager resolves to the extracted src.capture.packet_capture implementation.
-PacketCaptureManager = ExtractedPacketCaptureManager
+# Issue #431: module-level alias `PacketCaptureManager = ExtractedPacketCaptureManager`
+# was removed. The canonical name is now imported directly at module top.
 
 
 class SFPTransceiverDataProcessor:
@@ -16915,8 +16916,7 @@ class CLIShellManager:
                     if ws.sock is not None:
                         ws.sock.shutdown(2)
                         ws.sock.close()
-                    stop_listening()  # type: ignore[no-untyped-call]
-                    return
+                    return  # Issue #431: removed obsolete stop_listening() call (was a no-op stub)
                 mapped_key = keymap.get(key, key)
                 data = f"\00{mapped_key}"
                 data_byte = bytearray(map(ord, data))
