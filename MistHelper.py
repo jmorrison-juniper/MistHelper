@@ -14518,291 +14518,291 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         successful = 0  # Success count.
         failed = 0  # Failure count.
 
-        for model in gateway_models:
+        for model in gateway_models:  # Fetch each model.
             try:
-                api_function = getattr(config.module, config.function_name)
-                response = api_function(self.api_session, model=model)
-                model_data = getattr(response, "data", response) or {}
+                api_function = getattr(config.module, config.function_name)  # Resolve the function.
+                response = api_function(self.api_session, model=model)  # Call with the model.
+                model_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                if model_data:
-                    records = self._normalize_model_data(model, model_data)
-                    all_configs.extend(records)
-                    successful += 1
-            except Exception as error:
-                logging.warning("Failed to get gateway config for model %s: %s", model, error)
-                failed += 1
+                if model_data:  # Have data.
+                    records = self._normalize_model_data(model, model_data)  # Normalize model rows.
+                    all_configs.extend(records)  # Collect them.
+                    successful += 1  # Count success.
+            except Exception as error:  # Model fetch failed.
+                logging.warning("Failed to get gateway config for model %s: %s", model, error)  # Warn the failure.
+                failed += 1  # Count failure.
 
-        print(f"    ! Successfully retrieved configs for {successful} models, {failed} failed")
-        return all_configs
+        print(f"    ! Successfully retrieved configs for {successful} models, {failed} failed")  # Tell the user.
+        return all_configs  # Return all configs.
 
-    def _get_gateway_models_list(self) -> list[str]:
+    def _get_gateway_models_list(self) -> list[str]:  # List gateway models.
         """Get list of gateway models from device_models endpoint."""
-        import importlib
+        import importlib  # Import importlib.
 
         try:
             device_models_module = importlib.import_module("mistapi.api.v1.const.device_models")
-            device_models_function = device_models_module.listDeviceModels
-            response = device_models_function(self.api_session)
-            device_models_data = getattr(response, "data", response) or {}
+            device_models_function = device_models_module.listDeviceModels  # Resolve the function.
+            response = device_models_function(self.api_session)  # Call the API.
+            device_models_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-            gateway_models = self._extract_gateway_models(device_models_data)
+            gateway_models = self._extract_gateway_models(device_models_data)  # Extract gateway models.
 
-            if gateway_models:
+            if gateway_models:  # Have models.
                 print(f"    ! Discovered {len(gateway_models)} gateway models from device definitions")
-                return gateway_models
+                return gateway_models  # Return them.
 
-        except Exception as error:
-            logging.warning("Failed to get gateway models list: %s", error)
+        except Exception as error:  # Fetch failed.
+            logging.warning("Failed to get gateway models list: %s", error)  # Warn the failure.
 
         print(f"    ! Using fallback gateway models: {len(self.FALLBACK_GATEWAY_MODELS)} models")
-        return self.FALLBACK_GATEWAY_MODELS
+        return self.FALLBACK_GATEWAY_MODELS  # Use the fallback list.
 
-    def _extract_gateway_models(self, device_models_data) -> list[str]:
+    def _extract_gateway_models(self, device_models_data) -> list[str]:  # Filter to gateway models.
         """Extract gateway model names from device models data."""
-        gateway_models = []
+        gateway_models = []  # Collect model names.
 
-        if isinstance(device_models_data, dict):
-            for model_name, model_details in device_models_data.items():
-                if isinstance(model_details, dict):
-                    model_type = model_details.get("type", "").lower()
-                    if model_type == "gateway":
-                        gateway_models.append(model_name)
-        elif isinstance(device_models_data, list):
-            for model_item in device_models_data:
-                if isinstance(model_item, dict):
-                    model_name = model_item.get("model", model_item.get("name", ""))
-                    model_type = model_item.get("type", "").lower()
-                    if model_name and model_type == "gateway":
-                        gateway_models.append(model_name)
+        if isinstance(device_models_data, dict):  # Dict payload.
+            for model_name, model_details in device_models_data.items():  # Walk models.
+                if isinstance(model_details, dict):  # Dict details.
+                    model_type = model_details.get("type", "").lower()  # Read the type.
+                    if model_type == "gateway":  # Gateway type.
+                        gateway_models.append(model_name)  # Keep the model.
+        elif isinstance(device_models_data, list):  # List payload.
+            for model_item in device_models_data:  # Walk models.
+                if isinstance(model_item, dict):  # Dict item.
+                    model_name = model_item.get("model", model_item.get("name", ""))  # Read the name.
+                    model_type = model_item.get("type", "").lower()  # Read the type.
+                    if model_name and model_type == "gateway":  # Gateway with a name.
+                        gateway_models.append(model_name)  # Keep the model.
 
-        return gateway_models
+        return gateway_models  # Return gateway models.
 
     def _normalize_model_data(self, model: str, model_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize model data into list of records with model identifier."""
-        records = []
+        records = []  # Collect rows.
 
-        if isinstance(model_data, dict):
-            record = {"model": model}
-            record.update(model_data)
-            records.append(record)
-        elif isinstance(model_data, list):
-            for item in model_data:
-                if isinstance(item, dict):
-                    item["model"] = model
-            records.extend(model_data)
+        if isinstance(model_data, dict):  # Dict payload.
+            record = {"model": model}  # Start with the model.
+            record.update(model_data)  # Merge the data.
+            records.append(record)  # Collect the row.
+        elif isinstance(model_data, list):  # List payload.
+            for item in model_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    item["model"] = model  # Tag the model.
+            records.extend(model_data)  # Collect the items.
         else:
-            records.append({"model": model, "config": str(model_data)})
+            records.append({"model": model, "config": str(model_data)})  # Wrap scalar payload.
 
-        return records
+        return records  # Return the rows.
 
     def _fetch_all_country_states(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
         """Fetch states for all available countries."""
         print(f"  ! Special handling: Calling {config.function_name}() for all available countries...")
 
-        country_codes = self._get_country_codes_list()
-        all_states = []
-        successful = 0
-        failed = 0
+        country_codes = self._get_country_codes_list()  # List country codes.
+        all_states = []  # Accumulate states.
+        successful = 0  # Success count.
+        failed = 0  # Failure count.
 
-        for country_code in country_codes:
+        for country_code in country_codes:  # Fetch each country.
             try:
-                api_function = getattr(config.module, config.function_name)
-                response = api_function(self.api_session, country_code=country_code)
-                country_data = getattr(response, "data", response) or {}
+                api_function = getattr(config.module, config.function_name)  # Resolve the function.
+                response = api_function(self.api_session, country_code=country_code)  # Call with the country.
+                country_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                if country_data:
-                    records = self._normalize_states_data(country_code, country_data)
-                    all_states.extend(records)
-                    successful += 1
-            except Exception as error:
-                logging.warning("Failed to get states for country %s: %s", country_code, error)
-                failed += 1
+                if country_data:  # Have data.
+                    records = self._normalize_states_data(country_code, country_data)  # Normalize state rows.
+                    all_states.extend(records)  # Collect them.
+                    successful += 1  # Count success.
+            except Exception as error:  # Country fetch failed.
+                logging.warning("Failed to get states for country %s: %s", country_code, error)  # Warn the failure.
+                failed += 1  # Count failure.
 
-        print(f"    ! Successfully retrieved states for {successful} countries, {failed} failed")
-        return all_states
+        print(f"    ! Successfully retrieved states for {successful} countries, {failed} failed")  # Tell the user.
+        return all_states  # Return all states.
 
-    def _get_country_codes_list(self) -> list[str]:
+    def _get_country_codes_list(self) -> list[str]:  # List country codes.
         """Get list of valid country codes from countries endpoint."""
-        import importlib
+        import importlib  # Import importlib.
 
         try:
-            countries_module = importlib.import_module("mistapi.api.v1.const.countries")
-            countries_function = countries_module.listCountryCodes
-            response = countries_function(self.api_session)
-            countries_data = getattr(response, "data", response) or {}
+            countries_module = importlib.import_module("mistapi.api.v1.const.countries")  # Import countries.
+            countries_function = countries_module.listCountryCodes  # Resolve the function.
+            response = countries_function(self.api_session)  # Call the API.
+            countries_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-            country_codes = self._extract_country_codes(countries_data)
+            country_codes = self._extract_country_codes(countries_data)  # Extract country codes.
 
-            if country_codes:
-                original_count = len(country_codes)
+            if country_codes:  # Have codes.
+                original_count = len(country_codes)  # Remember the count.
                 country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
-                if len(country_codes) < original_count:
+                if len(country_codes) < original_count:  # Some were filtered.
                     logging.debug("Filtered out %s invalid country codes", original_count - len(country_codes))
-                print(f"    ! Discovered {len(country_codes)} country codes from country definitions")
-                return country_codes
+                print(f"    ! Discovered {len(country_codes)} country codes from country definitions")  # Tell the user.
+                return country_codes  # Return them.
 
-        except Exception as error:
-            logging.warning("Failed to get countries list: %s", error)
+        except Exception as error:  # Fetch failed.
+            logging.warning("Failed to get countries list: %s", error)  # Warn the failure.
 
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_COUNTRIES)} countries")
-        return self.FALLBACK_COUNTRIES
+        return self.FALLBACK_COUNTRIES  # Use the fallback list.
 
-    def _extract_country_codes(self, countries_data) -> list[str]:
+    def _extract_country_codes(self, countries_data) -> list[str]:  # Extract country codes.
         """Extract country codes from countries data."""
-        if isinstance(countries_data, dict):
-            return list(countries_data.keys())
-        elif isinstance(countries_data, list):
-            codes = []
-            for item in countries_data:
-                if isinstance(item, dict):
-                    code = item.get("code") or item.get("alpha2") or item.get("name", "")[:2].upper()
-                    if code:
-                        codes.append(code)
-            return codes
-        return []
+        if isinstance(countries_data, dict):  # Dict payload.
+            return list(countries_data.keys())  # Return the keys.
+        elif isinstance(countries_data, list):  # List payload.
+            codes = []  # Collect codes.
+            for item in countries_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    code = item.get("code") or item.get("alpha2") or item.get("name", "")[:2].upper()  # Resolve a code.
+                    if code:  # Have a code.
+                        codes.append(code)  # Keep it.
+            return codes  # Return the codes.
+        return []  # Unknown shape.
 
     def _normalize_states_data(self, country_code: str, country_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize states data into list of records with country identifier."""
-        records = []
+        records = []  # Collect rows.
 
-        if isinstance(country_data, dict):
-            for state_code, state_data in country_data.items():
-                if isinstance(state_data, dict):
-                    record = {"country_code": country_code, "state_code": state_code}
-                    record.update(state_data)
-                    records.append(record)
+        if isinstance(country_data, dict):  # Dict payload.
+            for state_code, state_data in country_data.items():  # Walk states.
+                if isinstance(state_data, dict):  # Dict state.
+                    record = {"country_code": country_code, "state_code": state_code}  # Build the row.
+                    record.update(state_data)  # Merge the data.
+                    records.append(record)  # Collect the row.
                 else:
-                    records.append(
+                    records.append(  # Scalar state value.
                         {"country_code": country_code, "state_code": state_code, "state_name": str(state_data)}
                     )
-        elif isinstance(country_data, list):
-            for item in country_data:
-                if isinstance(item, dict):
-                    item["country_code"] = country_code
-            records.extend(country_data)
+        elif isinstance(country_data, list):  # List payload.
+            for item in country_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    item["country_code"] = country_code  # Tag the country.
+            records.extend(country_data)  # Collect the items.
 
-        return records
+        return records  # Return the rows.
 
     def _fetch_all_country_channels(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
         """Fetch AP channels for all available countries."""
         print(f"  ! Special handling: Calling {config.function_name}() for all available countries...")
 
-        country_codes = self._get_channel_country_codes()
-        all_channels = []
-        successful = 0
-        failed = 0
+        country_codes = self._get_channel_country_codes()  # List channel countries.
+        all_channels = []  # Accumulate channels.
+        successful = 0  # Success count.
+        failed = 0  # Failure count.
 
-        for country_code in country_codes:
+        for country_code in country_codes:  # Fetch each country.
             try:
-                api_function = getattr(config.module, config.function_name)
-                response = api_function(self.api_session, country_code=country_code)
-                country_data = getattr(response, "data", response) or {}
+                api_function = getattr(config.module, config.function_name)  # Resolve the function.
+                response = api_function(self.api_session, country_code=country_code)  # Call with the country.
+                country_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-                if country_data:
-                    records = self._normalize_channels_data(country_code, country_data)
-                    all_channels.extend(records)
-                    successful += 1
-            except Exception as error:
-                logging.debug("Failed to get AP channels for country %s: %s", country_code, error)
-                failed += 1
+                if country_data:  # Have data.
+                    records = self._normalize_channels_data(country_code, country_data)  # Normalize channel rows.
+                    all_channels.extend(records)  # Collect them.
+                    successful += 1  # Count success.
+            except Exception as error:  # Country fetch failed.
+                logging.debug("Failed to get AP channels for country %s: %s", country_code, error)  # Trace the failure.
+                failed += 1  # Count failure.
 
-        print(f"    ! Successfully retrieved AP channels for {successful} countries, {failed} failed")
-        return all_channels
+        print(f"    ! Successfully retrieved AP channels for {successful} countries, {failed} failed")  # Tell the user.
+        return all_channels  # Return all channels.
 
-    def _get_channel_country_codes(self) -> list[str]:
+    def _get_channel_country_codes(self) -> list[str]:  # List channel countries.
         """Get list of country codes for AP channel lookup."""
-        import importlib
+        import importlib  # Import importlib.
 
         try:
-            countries_module = importlib.import_module("mistapi.api.v1.const.countries")
-            countries_function = countries_module.listCountryCodes
-            response = countries_function(self.api_session)
-            countries_data = getattr(response, "data", response) or {}
+            countries_module = importlib.import_module("mistapi.api.v1.const.countries")  # Import countries.
+            countries_function = countries_module.listCountryCodes  # Resolve the function.
+            response = countries_function(self.api_session)  # Call the API.
+            countries_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
-            country_codes = self._extract_channel_country_codes(countries_data)
+            country_codes = self._extract_channel_country_codes(countries_data)  # Extract country codes.
 
-            if country_codes:
-                original_count = len(country_codes)
+            if country_codes:  # Have codes.
+                original_count = len(country_codes)  # Remember the count.
                 country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
-                if len(country_codes) < original_count:
-                    logging.debug(
+                if len(country_codes) < original_count:  # Some were filtered.
+                    logging.debug(  # Trace the filter.
                         "Filtered out %s invalid country codes for ap_channels", original_count - len(country_codes)
                     )
-                print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")
-                return country_codes
+                print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")  # Tell the user.
+                return country_codes  # Return them.
 
-        except Exception as error:
-            logging.warning("Failed to get countries list for AP channels: %s", error)
+        except Exception as error:  # Fetch failed.
+            logging.warning("Failed to get countries list for AP channels: %s", error)  # Warn the failure.
 
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_CHANNEL_COUNTRIES)} countries")
-        return self.FALLBACK_CHANNEL_COUNTRIES
+        return self.FALLBACK_CHANNEL_COUNTRIES  # Use the fallback list.
 
-    def _extract_channel_country_codes(self, countries_data) -> list[str]:
+    def _extract_channel_country_codes(self, countries_data) -> list[str]:  # Extract channel countries.
         """Extract country codes from countries data for channel lookup."""
-        if isinstance(countries_data, dict):
-            return list(countries_data.keys())
-        elif isinstance(countries_data, list):
-            codes = []
-            for item in countries_data:
-                if isinstance(item, dict):
-                    code = item.get("alpha2") or item.get("code")
-                    if code:
-                        codes.append(code)
-            return codes
-        return []
+        if isinstance(countries_data, dict):  # Dict payload.
+            return list(countries_data.keys())  # Return the keys.
+        elif isinstance(countries_data, list):  # List payload.
+            codes = []  # Collect codes.
+            for item in countries_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    code = item.get("alpha2") or item.get("code")  # Resolve a code.
+                    if code:  # Have a code.
+                        codes.append(code)  # Keep it.
+            return codes  # Return the codes.
+        return []  # Unknown shape.
 
     def _normalize_channels_data(self, country_code: str, country_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize channels data into list of records with country identifier."""
-        records = []
+        records = []  # Collect rows.
 
-        if isinstance(country_data, dict):
-            record = {"country_code": country_code}
-            record.update(country_data)
-            records.append(record)
-        elif isinstance(country_data, list):
-            for item in country_data:
-                if isinstance(item, dict):
-                    item["country_code"] = country_code
-            records.extend(country_data)
+        if isinstance(country_data, dict):  # Dict payload.
+            record = {"country_code": country_code}  # Start with the country.
+            record.update(country_data)  # Merge the data.
+            records.append(record)  # Collect the row.
+        elif isinstance(country_data, list):  # List payload.
+            for item in country_data:  # Walk items.
+                if isinstance(item, dict):  # Dict item.
+                    item["country_code"] = country_code  # Tag the country.
+            records.extend(country_data)  # Collect the items.
 
-        return records
+        return records  # Return the rows.
 
-    def _export_data(self, config: EndpointConfig, const_data) -> None:
+    def _export_data(self, config: EndpointConfig, const_data) -> None:  # Export const data to CSV.
         """Convert data to list format and export to file."""
-        if not const_data:
+        if not const_data:  # No data.
             print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
             logging.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)
             DataExporter.write_with_format_selection([], config.filename)  # type: ignore[no-untyped-call]
-            self.endpoints_updated += 1
-            return
+            self.endpoints_updated += 1  # Count updated.
+            return  # Abort.
 
-        data_list = self._convert_to_list(config.endpoint_name, const_data)
+        data_list = self._convert_to_list(config.endpoint_name, const_data)  # Normalize to a list.
         processed = DataProcessingUtils.escape_multiline(data_list)  # type: ignore[no-untyped-call]
         DataExporter.write_with_format_selection(processed, config.filename)  # type: ignore[no-untyped-call]
 
-        print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")
+        print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")  # Tell the user.
         logging.info("Exported %s fresh %s to %s", len(processed), config.description.lower(), config.filename)
-        self.endpoints_updated += 1
+        self.endpoints_updated += 1  # Count updated.
 
     def _convert_to_list(self, endpoint_name: str, const_data) -> list:  # type: ignore[no-untyped-def, type-arg]
         """Convert various data formats to list of records for CSV."""
-        if isinstance(const_data, list):
-            return const_data
+        if isinstance(const_data, list):  # List payload.
+            return const_data  # Return it.
 
-        if not isinstance(const_data, dict):
-            return [const_data] if const_data else []
+        if not isinstance(const_data, dict):  # Non-dict payload.
+            return [const_data] if const_data else []  # Wrap or empty.
 
-        if endpoint_name == "insight_metrics":
-            return self._convert_insight_metrics(const_data)
+        if endpoint_name == "insight_metrics":  # Insight metrics special case.
+            return self._convert_insight_metrics(const_data)  # Convert metrics.
 
-        return self._convert_standard_dict(const_data)
+        return self._convert_standard_dict(const_data)  # Standard dict conversion.
 
     def _convert_insight_metrics(self, const_data: dict) -> list[dict]:  # type: ignore[type-arg]
         """Convert insight metrics nested structure to flat list."""
-        data_list = []
+        data_list = []  # Collect rows.
 
-        for metric_name, metric_details in const_data.items():
-            metric_row = {
+        for metric_name, metric_details in const_data.items():  # Walk metrics.
+            metric_row = {  # Build the row.
                 "metric_name": metric_name,
                 "description": metric_details.get("description", ""),
                 "type": metric_details.get("type", ""),
@@ -14812,58 +14812,58 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                 "intervals": self._format_intervals(metric_details.get("intervals", {})),
                 "report_intervals": self._format_report_intervals(metric_details.get("report_intervals", {})),
             }
-            data_list.append(metric_row)
+            data_list.append(metric_row)  # Collect the row.
 
-        return data_list
+        return data_list  # Return the rows.
 
     def _format_intervals(self, intervals: dict) -> str:  # type: ignore[type-arg]
         """Format intervals dictionary to string representation."""
-        if not intervals:
-            return ""
+        if not intervals:  # No intervals.
+            return ""  # Empty string.
 
-        interval_info = []
-        for interval_name, interval_data in intervals.items():
+        interval_info = []  # Collect interval text.
+        for interval_name, interval_data in intervals.items():  # Walk intervals.
             interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s, max_age:{interval_data.get('max_age', 'N/A')}s)"  # noqa: E501
-            interval_info.append(interval_str)
+            interval_info.append(interval_str)  # Collect the text.
 
-        return "; ".join(interval_info)
+        return "; ".join(interval_info)  # Join with semicolons.
 
     def _format_report_intervals(self, report_intervals: dict) -> str:  # type: ignore[type-arg]
         """Format report intervals dictionary to string representation."""
-        if not report_intervals:
-            return ""
+        if not report_intervals:  # No intervals.
+            return ""  # Empty string.
 
-        report_interval_info = []
-        for interval_name, interval_data in report_intervals.items():
-            interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s)"
-            report_interval_info.append(interval_str)
+        report_interval_info = []  # Collect interval text.
+        for interval_name, interval_data in report_intervals.items():  # Walk intervals.
+            interval_str = f"{interval_name}({interval_data.get('interval', 'N/A')}s)"  # Format the interval.
+            report_interval_info.append(interval_str)  # Collect the text.
 
-        return "; ".join(report_interval_info)
+        return "; ".join(report_interval_info)  # Join with semicolons.
 
     def _convert_standard_dict(self, const_data: dict) -> list[dict]:  # type: ignore[type-arg]
         """Convert standard dictionary to list of records."""
-        data_list = []
+        data_list = []  # Collect rows.
 
-        for key, value in const_data.items():
-            if isinstance(value, dict):
-                row = {"name": key}
-                row.update(value)
-                data_list.append(row)
+        for key, value in const_data.items():  # Walk entries.
+            if isinstance(value, dict):  # Dict value.
+                row = {"name": key}  # Start with the name.
+                row.update(value)  # Merge the value.
+                data_list.append(row)  # Collect the row.
             else:
-                data_list.append({"name": key, "value": str(value)})
+                data_list.append({"name": key, "value": str(value)})  # Scalar value row.
 
-        return data_list
+        return data_list  # Return the rows.
 
-    def _print_summary(self) -> None:
+    def _print_summary(self) -> None:  # Print the export summary.
         """Print export summary statistics."""
-        print("\n! Dynamic Const Export Summary:")
-        print(f"  ! Total endpoints discovered: {len(self.discovered_endpoints)}")
-        print(f"  ! Total endpoints processed: {self.endpoints_processed}")
-        print(f"  ! Fresh files skipped: {self.endpoints_skipped_fresh}")
-        print(f"  ! Files updated/created: {self.endpoints_updated}")
-        print(f"  ! Failed endpoints: {self.endpoints_failed}")
+        print("\n! Dynamic Const Export Summary:")  # Header.
+        print(f"  ! Total endpoints discovered: {len(self.discovered_endpoints)}")  # Discovered count.
+        print(f"  ! Total endpoints processed: {self.endpoints_processed}")  # Processed count.
+        print(f"  ! Fresh files skipped: {self.endpoints_skipped_fresh}")  # Skipped-fresh count.
+        print(f"  ! Files updated/created: {self.endpoints_updated}")  # Updated count.
+        print(f"  ! Failed endpoints: {self.endpoints_failed}")  # Failed count.
 
-        logging.info(
+        logging.info(  # Log the totals.
             "Dynamic const export completed: %s discovered, %s processed, %s skipped (fresh), %s updated, %s failed",
             len(self.discovered_endpoints),
             self.endpoints_processed,
@@ -14876,7 +14876,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
 # ============================================================================
 # INSIGHT METRICS UTILITIES CLASS
 # ============================================================================
-class InsightMetricsUtils:
+class InsightMetricsUtils:  # Insight-metrics helpers.
     """
     Utilities for working with Mist insight metrics.
 
@@ -14885,28 +14885,28 @@ class InsightMetricsUtils:
     """
 
     @staticmethod
-    def export_const_insight_metrics() -> None:
+    def export_const_insight_metrics() -> None:  # Export const insight metrics.
         """
         Export available const insight metrics via the ConstDefinitionsExporter.
 
         Refreshes data/ConstInsightMetrics.csv so scope-filtering helpers can read it.
         """
         print("Export Available Insight Metrics:")  # User-facing banner for the const insight metrics export
-        print("! Note: This function now uses the dynamic comprehensive const export system")
-        print("! For best results, consider using Menu 82: Export All Const Definitions")
+        print("! Note: This function now uses the dynamic comprehensive const export system")  # Tell the user.
+        print("! For best results, consider using Menu 82: Export All Const Definitions")  # Tell the user.
         logging.info("Legacy const insight metrics export called - using ConstDefinitionsExporter class")
 
         exporter = ConstDefinitionsExporter(apisession)  # type: ignore[no-untyped-call]
-        exporter.export_all()
+        exporter.export_all()  # Run the dynamic export.
 
-        insight_metrics_file = os.path.join("data", "ConstInsightMetrics.csv")
-        if os.path.exists(insight_metrics_file):
-            print("! ConstInsightMetrics.csv is available in the dynamic export results")
+        insight_metrics_file = os.path.join("data", "ConstInsightMetrics.csv")  # Expected output file.
+        if os.path.exists(insight_metrics_file):  # File present.
+            print("! ConstInsightMetrics.csv is available in the dynamic export results")  # Tell the user.
         else:
             print("! Warning: ConstInsightMetrics.csv was not created during dynamic export")
 
     @staticmethod
-    def get_by_scope(target_scope: str) -> list[str]:
+    def get_by_scope(target_scope: str) -> list[str]:  # List metrics for a scope.
         """
         Read ConstInsightMetrics.csv and return metrics supporting the specified scope.
 
@@ -14916,54 +14916,54 @@ class InsightMetricsUtils:
         Returns:
             List of metric names that support the target scope
         """
-        csv_path = os.path.join("data", "ConstInsightMetrics.csv")
-        metrics_for_scope: list[str] = []
-        normalized_target_scope = (target_scope or "").strip().lower()
+        csv_path = os.path.join("data", "ConstInsightMetrics.csv")  # CSV path.
+        metrics_for_scope: list[str] = []  # Matching metric names.
+        normalized_target_scope = (target_scope or "").strip().lower()  # Normalize the target scope.
 
         try:
-            if not os.path.exists(csv_path):
-                logging.warning("ConstInsightMetrics.csv not found at %s", csv_path)
-                return []
+            if not os.path.exists(csv_path):  # File missing.
+                logging.warning("ConstInsightMetrics.csv not found at %s", csv_path)  # Warn it is missing.
+                return []  # Return empty.
 
-            with open(csv_path, encoding="utf-8") as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    scopes = row.get("scopes", "")
-                    metric_name = row.get("metric_name", "")
+            with open(csv_path, encoding="utf-8") as csvfile:  # Open the CSV.
+                reader = csv.DictReader(csvfile)  # Parse rows.
+                for row in reader:  # Walk rows.
+                    scopes = row.get("scopes", "")  # Read the scopes.
+                    metric_name = row.get("metric_name", "")  # Read the metric name.
 
-                    if not metric_name:
-                        continue
+                    if not metric_name:  # No name.
+                        continue  # Skip it.
 
-                    if not scopes:
-                        continue
+                    if not scopes:  # No scopes.
+                        continue  # Skip it.
 
-                    parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)
+                    parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)  # Parse the scopes.
                     # Skip placeholder/template metrics that require token substitution.
-                    if "{" in metric_name or "}" in metric_name:
-                        continue
+                    if "{" in metric_name or "}" in metric_name:  # Templated name.
+                        continue  # Skip it.
 
-                    if normalized_target_scope in parsed_scopes:
-                        metrics_for_scope.append(metric_name)
+                    if normalized_target_scope in parsed_scopes:  # Scope matches.
+                        metrics_for_scope.append(metric_name)  # Keep the metric.
 
-            logging.debug(
+            logging.debug(  # Trace the count.
                 "Found %s metrics for scope '%s': %s", len(metrics_for_scope), target_scope, metrics_for_scope
             )
-            return metrics_for_scope
+            return metrics_for_scope  # Return the metrics.
 
-        except Exception as exception:
-            logging.error("Error reading ConstInsightMetrics.csv: %s", exception)
-            return []
+        except Exception as exception:  # Read failed.
+            logging.error("Error reading ConstInsightMetrics.csv: %s", exception)  # Log the error.
+            return []  # Return empty.
 
     @staticmethod
-    def _parse_scopes(scopes_text: str) -> set[str]:
+    def _parse_scopes(scopes_text: str) -> set[str]:  # Parse a scopes string.
         """Parse scope strings from CSV into normalized tokens."""
-        if not scopes_text:
-            return set()
-        normalized = scopes_text.strip().lower()
+        if not scopes_text:  # Empty input.
+            return set()  # Empty set.
+        normalized = scopes_text.strip().lower()  # Lowercase it.
         normalized = normalized.replace("[", "").replace("]", "").replace('"', "").replace("'", "")
-        normalized = normalized.replace(";", ",")
-        tokens = [token.strip() for token in normalized.split(",") if token.strip()]
-        return set(tokens)
+        normalized = normalized.replace(";", ",")  # Normalize separators.
+        tokens = [token.strip() for token in normalized.split(",") if token.strip()]  # Split into tokens.
+        return set(tokens)  # Return the token set.
 
     @staticmethod
     def parse_to_normalized_data(metric_data: dict, org_id: str) -> dict[str, list]:  # type: ignore[type-arg]
@@ -14980,21 +14980,21 @@ class InsightMetricsUtils:
         normalized_data: dict[str, list] = {"summary": [], "time_series": [], "results": [], "sites_data": []}  # type: ignore[type-arg]
 
         try:
-            metric_type = metric_data.get("metric_type", "unknown")
+            metric_type = metric_data.get("metric_type", "unknown")  # Read the metric type.
 
             summary_data = InsightMetricsUtils._extract_summary(metric_data, org_id, metric_type)
-            normalized_data["summary"].append(summary_data)
+            normalized_data["summary"].append(summary_data)  # Collect it.
 
             time_series = InsightMetricsUtils._extract_time_series(metric_data, org_id, metric_type)
-            normalized_data["time_series"].extend(time_series)
+            normalized_data["time_series"].extend(time_series)  # Collect it.
 
-            results = InsightMetricsUtils._extract_results(metric_data, org_id, metric_type)
-            normalized_data["results"] = results
+            results = InsightMetricsUtils._extract_results(metric_data, org_id, metric_type)  # Extract results.
+            normalized_data["results"] = results  # Store them.
 
-            sites = InsightMetricsUtils._extract_sites_data(metric_data, org_id, metric_type)
-            normalized_data["sites_data"] = sites
+            sites = InsightMetricsUtils._extract_sites_data(metric_data, org_id, metric_type)  # Extract sites data.
+            normalized_data["sites_data"] = sites  # Store it.
 
-            logging.debug(
+            logging.debug(  # Trace the parse.
                 "Normalized metric %s: %s summary, %s time series, %s results, %s sites",
                 metric_type,
                 len(normalized_data["summary"]),
@@ -15003,16 +15003,16 @@ class InsightMetricsUtils:
                 len(normalized_data["sites_data"]),
             )
 
-        except Exception as exception:
-            logging.error("Error parsing insight metric data: %s", exception)
-            logging.debug("Failed metric data structure: %s", metric_data)
+        except Exception as exception:  # Parse failed.
+            logging.error("Error parsing insight metric data: %s", exception)  # Log the error.
+            logging.debug("Failed metric data structure: %s", metric_data)  # Trace the structure.
 
-        return normalized_data
+        return normalized_data  # Return normalized data.
 
     @staticmethod
     def _extract_summary(metric_data: dict, org_id: str, metric_type: str) -> dict:  # type: ignore[type-arg]
         """Extract summary data from metric."""
-        summary_data = {
+        summary_data = {  # Build the summary.
             "org_id": org_id,
             "metric_type": metric_type,
             "data_source": metric_data.get("data_source", ""),
@@ -15029,7 +15029,7 @@ class InsightMetricsUtils:
             "totalTunnelCount": metric_data.get("totalTunnelCount", ""),
         }
 
-        scalar_fields = [
+        scalar_fields = [  # Scalar fields to copy.
             "ap-health",
             "ap-redundancy",
             "capacity",
@@ -15054,31 +15054,31 @@ class InsightMetricsUtils:
             "time-to-connect",
         ]
 
-        for field_name in scalar_fields:
-            if field_name in metric_data:
-                summary_data[field_name] = metric_data[field_name]
+        for field_name in scalar_fields:  # Copy each field.
+            if field_name in metric_data:  # Field present.
+                summary_data[field_name] = metric_data[field_name]  # Copy the value.
 
-        return summary_data
+        return summary_data  # Return the summary.
 
     @staticmethod
     def _extract_time_series(metric_data: dict, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
         """Extract time series data from metric."""
         time_series_records = []  # type: ignore[var-annotated]
 
-        rt_field = metric_data.get("rt", "")
-        if not (rt_field and isinstance(rt_field, str) and "," in rt_field):
-            return time_series_records
+        rt_field = metric_data.get("rt", "")  # Read the rt field.
+        if not (rt_field and isinstance(rt_field, str) and "," in rt_field):  # Not a CSV series.
+            return time_series_records  # No time-series.
 
-        timestamps = rt_field.split(",")
+        timestamps = rt_field.split(",")  # Split the timestamps.
         time_series_fields = ["num_clients", "num_aps", "num_gateways", "num_switches", "num_mxedges", "num_mxtunnels"]
 
-        for field_name in time_series_fields:
-            field_data = metric_data.get(field_name, "")
-            if field_data and isinstance(field_data, str) and "," in field_data:
-                values = field_data.split(",")
+        for field_name in time_series_fields:  # Walk each field.
+            field_data = metric_data.get(field_name, "")  # Read the field.
+            if field_data and isinstance(field_data, str) and "," in field_data:  # CSV series present.
+                values = field_data.split(",")  # Split the values.
                 for index, (timestamp, value) in enumerate(zip(timestamps, values, strict=False)):
-                    if value and value != "None":
-                        time_series_records.append(
+                    if value and value != "None":  # Skip empty values.
+                        time_series_records.append(  # Collect the point.
                             {
                                 "org_id": org_id,
                                 "metric_type": metric_type,
@@ -15089,74 +15089,74 @@ class InsightMetricsUtils:
                             }
                         )
 
-        return time_series_records
+        return time_series_records  # Return the series.
 
     @staticmethod
     def _extract_results(metric_data: dict, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
         """Extract results array data from metric."""
         results_data = []  # type: ignore[var-annotated]
 
-        for key, value in metric_data.items():
-            if not (key.startswith("results_") and "_" in key):
+        for key, value in metric_data.items():  # Walk metric fields.
+            if not (key.startswith("results_") and "_" in key):  # Only results_* keys.
                 continue
 
-            parts = key.split("_", 2)
-            if len(parts) < 3:
-                continue
+            parts = key.split("_", 2)  # Split the key.
+            if len(parts) < 3:  # Too few parts.
+                continue  # Skip it.
 
-            result_index = parts[1]
-            result_field = parts[2]
+            result_index = parts[1]  # Result index.
+            result_field = parts[2]  # Result field.
 
             existing_result = next((r for r in results_data if r["result_index"] == result_index), None)
 
-            if existing_result is None:
-                existing_result = {
+            if existing_result is None:  # None yet.
+                existing_result = {  # Start a new result.
                     "org_id": org_id,
                     "metric_type": metric_type,
                     "result_index": int(result_index) if result_index.isdigit() else result_index,
                 }
-                results_data.append(existing_result)
+                results_data.append(existing_result)  # Collect it.
 
-            existing_result[result_field] = value
+            existing_result[result_field] = value  # Set the field.
 
-        return results_data
+        return results_data  # Return the results.
 
     @staticmethod
     def _extract_sites_data(metric_data: dict, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
         """Extract sites data from metric."""
-        sites_records = []
+        sites_records = []  # Collect site rows.
 
-        sites_data = metric_data.get("sites_data", [])
-        if isinstance(sites_data, list):
-            for site_data in sites_data:
-                if isinstance(site_data, dict):
-                    site_record = {"org_id": org_id, "metric_type": metric_type}
-                    site_record.update(site_data)
-                    sites_records.append(site_record)
+        sites_data = metric_data.get("sites_data", [])  # Read sites data.
+        if isinstance(sites_data, list):  # List payload.
+            for site_data in sites_data:  # Walk sites.
+                if isinstance(site_data, dict):  # Dict site.
+                    site_record = {"org_id": org_id, "metric_type": metric_type}  # Tag the site.
+                    site_record.update(site_data)  # Merge the data.
+                    sites_records.append(site_record)  # Collect the row.
 
-        for key, value in metric_data.items():
-            if not (key.startswith("sites_data_") and "_" in key):
+        for key, value in metric_data.items():  # Walk metric fields.
+            if not (key.startswith("sites_data_") and "_" in key):  # Only sites_data_* keys.
                 continue
 
-            parts = key.split("_", 2)
-            if len(parts) < 3:
-                continue
+            parts = key.split("_", 2)  # Split the key.
+            if len(parts) < 3:  # Too few parts.
+                continue  # Skip it.
 
-            site_index = parts[2]
-            site_field = parts[3] if len(parts) > 3 else "value"
+            site_index = parts[2]  # Site index.
+            site_field = parts[3] if len(parts) > 3 else "value"  # Site field.
 
-            existing_site = next(
+            existing_site = next(  # Find existing site.
                 (s for s in sites_records if s.get("site_index") == site_index and s.get("metric_type") == metric_type),
                 None,
             )
 
-            if existing_site is None:
+            if existing_site is None:  # None yet.
                 existing_site = {"org_id": org_id, "metric_type": metric_type, "site_index": site_index}
-                sites_records.append(existing_site)
+                sites_records.append(existing_site)  # Collect it.
 
-            existing_site[site_field] = value
+            existing_site[site_field] = value  # Set the field.
 
-        return sites_records
+        return sites_records  # Return the sites.
 
 
 # NOTE: create_test_sites_from_csv moved to SiteConfigManager.create_test_sites_from_csv
@@ -15170,7 +15170,7 @@ class InsightMetricsUtils:
 # ============================================================================
 # DATA COLLECTION MANAGER CLASS
 # ============================================================================
-class DataCollectionManager:
+class DataCollectionManager:  # Continuous data collector.
     """
     Manages automated data collection and support package generation operations.
 
@@ -15182,7 +15182,7 @@ class DataCollectionManager:
     """
 
     @staticmethod
-    def continuous_loop():
+    def continuous_loop():  # Run the collection loop.
         """
         Menu 76: Continuously collect core organizational data.
 
@@ -15195,9 +15195,9 @@ class DataCollectionManager:
 
         Stop by pressing CTRL+C or creating 'stop_loop.txt' file.
         """
-        logging.info("Starting DataCollectionManager.continuous_loop")
-        print(" Starting continuous data collection loop...")
-        print("   This will collect core organizational data every 5 seconds")
+        logging.info("Starting DataCollectionManager.continuous_loop")  # Log start.
+        print(" Starting continuous data collection loop...")  # Tell the user.
+        print("   This will collect core organizational data every 5 seconds")  # Tell the user.
         print("   Press CTRL+C to stop or create 'stop_loop.txt' file")
 
         loop_count = 0
