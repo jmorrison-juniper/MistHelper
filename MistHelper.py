@@ -1919,11 +1919,8 @@ class GlobalImportManager:
             logging.debug("Error checking/upgrading %s: %s", module_name, e)  # Log for diagnostics
             return True  # Non-critical failure -- never block startup on upgrade issues
 
-    def _get_actual_import_name(self, module_name: str) -> str:
-        """Get the actual import name for a given module name, handling mappings."""
-        return self.import_name_mappings.get(
-            module_name, module_name
-        )  # Map package name to import name, defaulting to itself
+    # _get_actual_import_name removed per issue #431 (ARCH-DELEGATE) -- callers
+    # now do `self.import_name_mappings.get(name, name)` inline.
 
     def import_module_safely(  # noqa: C901, PLR0912, PLR0915
         self,
@@ -1951,8 +1948,8 @@ class GlobalImportManager:
             if module_name in self.special_import_handlers:  # Some modules need custom construction logic
                 module = self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]  # Invoke the special handler
             else:  # Ordinary module -- import it directly
-                # Use mapping to get actual import name
-                actual_import_name = self._get_actual_import_name(module_name)  # Resolve package name to import name
+                # Issue #431 inlined _get_actual_import_name; resolve package -> import name.
+                actual_import_name = self.import_name_mappings.get(module_name, module_name)
                 module = __import__(actual_import_name)  # Import the module by its real import name
 
             self.imports[module_name] = module  # Cache the imported module for later global assignment
@@ -1998,8 +1995,8 @@ class GlobalImportManager:
 
                     importlib.invalidate_caches()  # Force Python to notice the newly installed files
 
-                    # Remove any cached failed imports
-                    actual_import_name = self._get_actual_import_name(module_name)  # Resolve the real import name again
+                    # Remove any cached failed imports (issue #431 inlined _get_actual_import_name).
+                    actual_import_name = self.import_name_mappings.get(module_name, module_name)
                     modules_to_clear = [actual_import_name, module_name]  # Both names may be cached as failed
                     for mod_name in modules_to_clear:  # Purge each possibly-cached name
                         if mod_name in sys.modules:  # A stale/failed entry exists in the module cache
@@ -2013,8 +2010,8 @@ class GlobalImportManager:
                     try:
                         if module_name in self.special_import_handlers:  # Use the special handler again if present
                             module = self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]  # Re-run the handler
-                        else:  # Ordinary module retry
-                            actual_import_name = self._get_actual_import_name(module_name)  # Resolve import name
+                        else:  # Ordinary module retry (issue #431 inlined _get_actual_import_name).
+                            actual_import_name = self.import_name_mappings.get(module_name, module_name)
                             module = __import__(actual_import_name)  # Re-import now that the package is installed
 
                         self.imports[module_name] = module  # Cache the now-successful import
@@ -2337,9 +2334,9 @@ class GlobalImportManager:
                 "websocket-client not available - WebSocket operations will be disabled"
             )  # WebSocket features disabled
 
-    def get_import(self, module_name: str) -> Any | None:
-        """Get an imported module by name."""
-        return self.imports.get(module_name)  # Return the cached module object, or None if it never imported
+    # get_import removed per issue #431 (ARCH-DELEGATE) -- callers access
+    # `self.imports.get(name)` directly. `self.imports` is the public
+    # dict already mutated elsewhere in this class.
 
     def is_available(self, module_name: str) -> bool:
         """Check if a module is available."""
@@ -2542,7 +2539,7 @@ class InputUtils:
             return True  # Progress bars are functional
 
         # Try to get tqdm from the import manager
-        tqdm_from_manager = import_manager.get_import("tqdm")  # Ask the manager for a cached real tqdm
+        tqdm_from_manager = import_manager.imports.get("tqdm")  # Issue #431: inlined get_import.
         if tqdm_from_manager:  # The manager has a usable tqdm
             tqdm = tqdm_from_manager  # Replace the fallback with the real implementation
             logging.info("Retrieved tqdm from import manager")  # Record the recovery
@@ -9035,19 +9032,9 @@ class PromptUtils:
             logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
         return site_id
 
-    @staticmethod
-    def select_device(site_id: str, device_type: str = "all") -> str | None:
-        """
-        Prompts the user to select a device from the specified site and returns the device_id.
-
-        Args:
-            site_id (str): The site ID to filter devices by
-            device_type (str): Filter by device type ("all", "switch", "gateway", "ap")
-
-        Returns:
-            str: The selected device ID or None if no selection made
-        """
-        return PromptUtils.select_device_id_from_inventory(site_id, device_type)
+    # PromptUtils.select_device removed per issue #431 (ARCH-DELEGATE).
+    # Callers now use PromptUtils.select_device_id_from_inventory(site_id, device_type)
+    # directly -- it is the canonical implementation and accepts the same arguments.
 
     @staticmethod
     def _determine_search_scope(site_id: str | None) -> str | None | Literal[False]:
@@ -13605,7 +13592,8 @@ class SiteDeviceExporter:
         if not site_id:
             logging.error("No site selected. Exiting.")
             return
-        device_id = PromptUtils.select_device(site_id, device_type="switch")
+        # Issue #431: inlined PromptUtils.select_device -> canonical select_device_id_from_inventory.
+        device_id = PromptUtils.select_device_id_from_inventory(site_id, device_type="switch")
         if not device_id:
             logging.error("No switch device selected. Exiting.")
             return
@@ -13989,8 +13977,8 @@ class SiteAnomalyExporter:
         except Exception:
             site_name = site_id
 
-        # Get device selection
-        device_selection = PromptUtils.select_device(site_id)
+        # Get device selection (issue #431: inlined PromptUtils.select_device).
+        device_selection = PromptUtils.select_device_id_from_inventory(site_id)
         if not device_selection:
             print("! No device selected. Exiting.")
             return
@@ -21300,9 +21288,8 @@ class BulkRadiusWLANConfigManager:
         print(f"    - fast_dot1x_timers:    {self.target_fast_dot1x}")
         print("")
 
-    def _safe_input(self, prompt: str, context: str = "bulk_radius_config") -> str:
-        """Universal input wrapper with EOF handling."""
-        return InputUtils.safe_input(prompt, context=context)
+    # _safe_input removed per issue #431 (ARCH-DELEGATE). Callers now use
+    # InputUtils.safe_input(prompt, context="bulk_radius_config") directly.
 
     def _get_org_id(self) -> bool:
         """Get organization ID from cache or prompt."""
@@ -21663,7 +21650,8 @@ class BulkRadiusWLANConfigManager:
         self._display_wlans()  # Show the selectable WLAN table
 
         print("  Enter selection (e.g., 'all', '1', '1,3,5', '1-5') or 'q' to cancel:")  # Explain the selection syntax
-        selection = self._safe_input("  > ", "wlan_selection")  # Read the user's WLAN selection
+        # Issue #431: inlined self._safe_input -> canonical InputUtils.safe_input.
+        selection = InputUtils.safe_input("  > ", context="wlan_selection")
 
         if not selection.strip():  # The user entered nothing
             print("\n[*] No selection made. Exiting.")  # Inform the user and exit
@@ -21688,7 +21676,8 @@ class BulkRadiusWLANConfigManager:
             "\n  WARNING: This will modify WLAN authentication settings."
         )  # Warn the user before the destructive step
         print("  Type 'APPLY' to proceed, or anything else to cancel.")  # Explain the required confirmation
-        confirm = self._safe_input("  > ", "apply_confirm")  # Read the confirmation keyword
+        # Issue #431: inlined self._safe_input -> canonical InputUtils.safe_input.
+        confirm = InputUtils.safe_input("  > ", context="apply_confirm")
 
         if confirm.strip() != "APPLY":  # The user did not type the exact confirmation word
             print("\n[*] Operation cancelled by user.")  # Acknowledge the cancellation

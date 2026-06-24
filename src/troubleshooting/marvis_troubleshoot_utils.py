@@ -88,7 +88,8 @@ class MarvisTroubleshootUtils:
             print(" No site selected.")
             return
 
-        device_id = deps.prompt_utils.select_device(site_id)  # Prompt for a device within the chosen site
+        # Issue #431: inlined deps.prompt_utils.select_device -> canonical select_device_id_from_inventory.
+        device_id = deps.prompt_utils.select_device_id_from_inventory(site_id)
         if not device_id:
             print(" No device selected.")
             return
