@@ -10997,14 +10997,14 @@ class OfflineDeviceReporter:
 
         sorted_sites = sorted(site_counts.items(), key=lambda item: item[1], reverse=True)[:5]
         if sorted_sites:
-            print("\nTop 5 Sites:")
-            for rank, (site_name, count) in enumerate(sorted_sites, 1):
-                print(f"  {rank}. {site_name}: {count} offline")
+            print("\nTop 5 Sites:")  # Header for the leaderboard.
+            for rank, (site_name, count) in enumerate(sorted_sites, 1):  # Rank each top site.
+                print(f"  {rank}. {site_name}: {count} offline")  # Print rank and count.
 
     @staticmethod
-    def _present_results(offline_records: list[dict[str, str]]) -> None:
+    def _present_results(offline_records: list[dict[str, str]]) -> None:  # Render and save offline results.
         """Display PrettyTable and save CSV for offline devices."""
-        display_fields = [
+        display_fields = [  # Columns to display.
             "Device Name",
             "Device Type",
             "Site Name",
@@ -11015,142 +11015,142 @@ class OfflineDeviceReporter:
             "Offline Duration",
             "Status",
         ]
-        total_count = len(offline_records)
-        show_count = min(total_count, OfflineDeviceReporter.MAX_DISPLAY_ROWS)
+        total_count = len(offline_records)  # Total offline rows.
+        show_count = min(total_count, OfflineDeviceReporter.MAX_DISPLAY_ROWS)  # Cap displayed rows.
 
-        print(f"\n--- Offline Devices (showing {show_count} of {total_count}) ---")
-        table = PrettyTable()
-        table.field_names = display_fields
-        for record in offline_records[:show_count]:
-            table.add_row([record.get(field, "") for field in display_fields])
-        print(table)
+        print(f"\n--- Offline Devices (showing {show_count} of {total_count}) ---")  # Header with counts.
+        table = PrettyTable()  # Build the table.
+        table.field_names = display_fields  # Set columns.
+        for record in offline_records[:show_count]:  # Show capped rows.
+            table.add_row([record.get(field, "") for field in display_fields])  # Add each row.
+        print(table)  # Print the table.
 
         # Save CSV with all records
         csv_records = [{field: record.get(field, "") for field in display_fields} for record in offline_records]
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"OfflineDeviceReport_{timestamp_str}.csv"
-        DataExporter.write_with_format_selection(
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")  # Timestamp for the filename.
+        filename = f"OfflineDeviceReport_{timestamp_str}.csv"  # Build the CSV name.
+        DataExporter.write_with_format_selection(  # Write via selected backend.
             data=csv_records,
             filename_or_table=filename,
             api_function_name="listOrgDevicesStats",
         )
-        logging.info("CSV saved: data/%s (%s devices)", filename, total_count)
-        print(f"\nCSV saved: data/{filename} ({total_count} devices)")
+        logging.info("CSV saved: data/%s (%s devices)", filename, total_count)  # log CSV saved.
+        print(f"\nCSV saved: data/{filename} ({total_count} devices)")  # Tell the user.
 
     @staticmethod
-    def execute() -> None:
+    def execute() -> None:  # Run the offline report.
         """Main entry point for offline device report (Menu 158)."""
-        print("\n=== Offline Device Report ===")
-        logging.info("Starting offline device report...")
-        start_time = time.time()
+        print("\n=== Offline Device Report ===")  # Header.
+        logging.info("Starting offline device report...")  # Log start.
+        start_time = time.time()  # Start the timer.
 
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        if not current_org_id:
-            print("! No organization selected. Exiting.")
-            return
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not current_org_id:  # No org selected.
+            print("! No organization selected. Exiting.")  # Tell the user.
+            return  # Abort.
 
-        threshold_hours = OfflineDeviceReporter._prompt_threshold()
-        print(f"Threshold: {threshold_hours} hours\n")
+        threshold_hours = OfflineDeviceReporter._prompt_threshold()  # Prompt offline threshold.
+        print(f"Threshold: {threshold_hours} hours\n")  # Echo the threshold.
 
         try:
-            site_lookup, all_devices = OfflineDeviceReporter._fetch_data(current_org_id)
-        except Exception as error:
-            logging.error("Failed to fetch data from Mist API: %s", error)
-            print("! Failed to fetch data. Please check your API credentials and network connection.")
-            return
+            site_lookup, all_devices = OfflineDeviceReporter._fetch_data(current_org_id)  # Fetch sites and devices.
+        except Exception as error:  # Fetch failed.
+            logging.error("Failed to fetch data from Mist API: %s", error)  # log fetch error.
+            print("! Failed to fetch data. Please check your API credentials and network connection.")  # Tell the user.
+            return  # Abort.
 
-        if not all_devices:
-            logging.info("No devices found in organization")
-            print("No devices found in this organization.")
-            return
+        if not all_devices:  # No devices found.
+            logging.info("No devices found in organization")  # Log it.
+            print("No devices found in this organization.")  # Tell the user.
+            return  # Abort.
 
         offline_records = OfflineDeviceReporter._process_devices(all_devices, site_lookup, threshold_hours)
 
-        if not offline_records:
-            print(f"No devices found offline for more than {threshold_hours} hours. All clear!")
-            logging.info("No devices offline beyond %sh threshold", threshold_hours)
-            return
+        if not offline_records:  # None offline.
+            print(f"No devices found offline for more than {threshold_hours} hours. All clear!")  # All-clear message.
+            logging.info("No devices offline beyond %sh threshold", threshold_hours)  # Log all-clear.
+            return  # Abort.
 
-        OfflineDeviceReporter._display_summary(len(all_devices), offline_records, threshold_hours)
-        OfflineDeviceReporter._present_results(offline_records)
+        OfflineDeviceReporter._display_summary(len(all_devices), offline_records, threshold_hours)  # Print the summary.
+        OfflineDeviceReporter._present_results(offline_records)  # Render and save results.
 
-        elapsed = time.time() - start_time
-        logging.info("Offline device report completed in %.1f seconds", elapsed)
-        print(f"\nReport completed in {elapsed:.1f} seconds")
+        elapsed = time.time() - start_time  # Compute elapsed time.
+        logging.info("Offline device report completed in %.1f seconds", elapsed)  # log duration.
+        print(f"\nReport completed in {elapsed:.1f} seconds")  # Tell the user.
 
 
-class OrgDeviceInventorySummary:
+class OrgDeviceInventorySummary:  # Org device inventory summary.
     """Delegation façade for extracted Org Device Inventory Summary modules."""
 
-    _DEVICE_TYPES: tuple[str, ...] = ("ap", "switch", "gateway")
+    _DEVICE_TYPES: tuple[str, ...] = ("ap", "switch", "gateway")  # Device types to tally.
 
     @staticmethod
-    def _get_summary_impl() -> Any:
+    def _get_summary_impl() -> Any:  # Build the summary core.
         """Configure and return extracted single-org summary implementation."""
         from src.inventory.org_device_inventory_summary import (  # noqa: PLC0415
             OrgDeviceInventorySummaryCore,
             configure_org_device_inventory_summary_dependencies,
         )
 
-        configure_org_device_inventory_summary_dependencies(
+        configure_org_device_inventory_summary_dependencies(  # Wire summary dependencies.
             apisession_dependency=apisession,
             mistapi_dependency=mistapi,
             data_exporter=DataExporter,
             org_id_value=org_id,
         )
-        return OrgDeviceInventorySummaryCore
+        return OrgDeviceInventorySummaryCore  # Return the core class.
 
     @staticmethod
-    def _get_msp_impl() -> Any:
+    def _get_msp_impl() -> Any:  # Build the MSP orchestrator.
         """Configure and return extracted MSP orchestration implementation."""
         from src.inventory.org_device_inventory_msp import (  # noqa: PLC0415
             OrgDeviceInventoryMSPOrchestrator,
             configure_org_device_inventory_msp_dependencies,
         )
 
-        configure_org_device_inventory_msp_dependencies(
+        configure_org_device_inventory_msp_dependencies(  # Wire MSP dependencies.
             apisession_dependency=apisession,
             input_utils=InputUtils,
             data_exporter=DataExporter,
             msp_privileges_value=msp_privileges,
         )
-        return OrgDeviceInventoryMSPOrchestrator
+        return OrgDeviceInventoryMSPOrchestrator  # Return the orchestrator.
 
     @staticmethod
-    def execute() -> None:
+    def execute() -> None:  # Run the summary.
         """Single-org entry point for menu operation 13."""
-        OrgDeviceInventorySummary._get_summary_impl().execute()
+        OrgDeviceInventorySummary._get_summary_impl().execute()  # Delegate to the core.
 
     @staticmethod
-    def _resolve_active_msp() -> "dict[str, Any] | None":
+    def _resolve_active_msp() -> "dict[str, Any] | None":  # Resolve the active MSP.
         """Delegate MSP selection prompt to extracted MSP orchestrator."""
-        return OrgDeviceInventorySummary._get_msp_impl()._resolve_active_msp()
+        return OrgDeviceInventorySummary._get_msp_impl()._resolve_active_msp()  # Delegate to the orchestrator.
 
     @staticmethod
-    def _run_single_msp_org() -> None:
+    def _run_single_msp_org() -> None:  # Run a single MSP org.
         """Delegate single-org MSP flow to extracted MSP orchestrator."""
         OrgDeviceInventorySummary._get_msp_impl().run_single_msp_org(
             OrgDeviceInventorySummary._get_summary_impl().run_for_org  # Bind extracted core run_for_org as callback.
         )
 
     @staticmethod
-    def execute_msp() -> None:
+    def execute_msp() -> None:  # Run the MSP flow.
         """Delegate batch MSP execution to extracted MSP orchestrator."""
         OrgDeviceInventorySummary._get_msp_impl().execute_msp(
             OrgDeviceInventorySummary._get_summary_impl().run_for_org  # Bind extracted core run_for_org as callback.
         )
 
     @staticmethod
-    def dispatch() -> None:
+    def dispatch() -> None:  # Dispatch summary vs MSP.
         """Delegate menu operation 13 interactive dispatch to extracted MSP orchestrator."""
-        OrgDeviceInventorySummary._get_msp_impl().dispatch(
+        OrgDeviceInventorySummary._get_msp_impl().dispatch(  # Delegate to the orchestrator.
             single_org_fn=OrgDeviceInventorySummary.execute,
             select_org_fn=OrgDeviceInventorySummary._run_single_msp_org,
             batch_fn=OrgDeviceInventorySummary.execute_msp,
         )
 
 
-class OrgTemplateExporter:
+class OrgTemplateExporter:  # Org template exporters.
     """
     Organization Template Exporter
 
@@ -11159,65 +11159,65 @@ class OrgTemplateExporter:
     """
 
     @staticmethod
-    def all_templates():
+    def all_templates():  # Export all template types.
         """
         Export all organization templates (gateway, network, RF, site, AP) to CSV files.
         """
-        logging.info("Starting export of organization templates...")
+        logging.info("Starting export of organization templates...")  # Log start.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch gateway templates.
                 title="Gateway Templates:",
                 api_call=mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates,
                 filename="OrgGatewayTemplates.csv",
                 sort_key="name",
                 limit=1000,
             ).execute()
-        except Exception as e:
-            logging.error("Failed to export gateway templates: %s", e)
+        except Exception as e:  # Gateway export failed.
+            logging.error("Failed to export gateway templates: %s", e)  # log gateway error.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch network templates.
                 title="Network Templates:",
                 api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
                 filename="OrgNetworkTemplates.csv",
                 sort_key="name",
                 limit=1000,
             ).execute()
-        except Exception as e:
-            logging.error("Failed to export network templates: %s", e)
+        except Exception as e:  # Network export failed.
+            logging.error("Failed to export network templates: %s", e)  # log network error.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch RF templates.
                 title="RF Templates:",
                 api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
                 filename="OrgRfTemplates.csv",
                 sort_key="name",
                 limit=1000,
             ).execute()
-        except Exception as e:
-            logging.error("Failed to export RF templates: %s", e)
+        except Exception as e:  # RF export failed.
+            logging.error("Failed to export RF templates: %s", e)  # log RF error.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch site templates.
                 title="Site Templates:",
                 api_call=mistapi.api.v1.orgs.sitetemplates.listOrgSiteTemplates,
                 filename="OrgSiteTemplates.csv",
                 sort_key="name",
                 limit=1000,
             ).execute()
-        except Exception as e:
-            logging.error("Failed to export site templates: %s", e)
+        except Exception as e:  # Site export failed.
+            logging.error("Failed to export site templates: %s", e)  # log site error.
         try:
-            APIDataFetcher(
+            APIDataFetcher(  # Fetch AP templates.
                 title="AP Templates:",
                 api_call=mistapi.api.v1.orgs.aptemplates.listOrgAptemplates,
                 filename="OrgApTemplates.csv",
                 sort_key="name",
                 limit=1000,
             ).execute()
-        except Exception as e:
-            logging.error("Failed to export AP templates: %s", e)
-        logging.info(" Organization templates export completed")
+        except Exception as e:  # AP export failed.
+            logging.error("Failed to export AP templates: %s", e)  # log AP error.
+        logging.info(" Organization templates export completed")  # Log completion.
 
     @staticmethod
-    def network_templates():
+    def network_templates():  # Export network templates.
         """Export network templates to OrgNetworkTemplates.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
@@ -11226,14 +11226,14 @@ class OrgTemplateExporter:
         )
 
     @staticmethod
-    def rf_templates():
+    def rf_templates():  # Export RF templates.
         """Export RF templates to OrgRfTemplates.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates, data_type="rf templates", sort_key="name"
         )
 
     @staticmethod
-    def ap_templates():
+    def ap_templates():  # Export AP templates.
         """Export AP templates to OrgApTemplates.csv."""
         print("Export Organization AP Templates:")  # Header line for this export operation
         logging.info(
@@ -11261,48 +11261,48 @@ class OrgTemplateExporter:
             processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON into flat CSV rows
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-            print(f"! {len(processed)} AP templates exported to {filename}")
-            logging.info("Exported %s AP templates to %s.", len(processed), filename)
-        except Exception as e:
-            logging.error("Failed to export AP templates: %s", e)
+            print(f"! {len(processed)} AP templates exported to {filename}")  # Tell the user.
+            logging.info("Exported %s AP templates to %s.", len(processed), filename)  # Log export count.
+        except Exception as e:  # AP export failed.
+            logging.error("Failed to export AP templates: %s", e)  # log AP error.
             try:
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
-                pass
-            raise
+                pass  # Best-effort cleanup.
+            raise  # Re-raise to caller.
 
     @staticmethod
-    def switch_templates():
+    def switch_templates():  # Export switch templates.
         """Export switch templates to OrgSwitchTemplates.csv."""
-        print("Export Organization Switch Templates:")
-        logging.info("Starting export of organization switch templates (canonical networktemplates)...")
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        filename = "OrgSwitchTemplates.csv"
+        print("Export Organization Switch Templates:")  # Header.
+        logging.info("Starting export of organization switch templates (canonical networktemplates)...")  # Log start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        filename = "OrgSwitchTemplates.csv"  # Build the CSV name.
         try:
             response = mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates(apisession, org_id, limit=1000)
             switch_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
-            if not switch_profiles:
+            if not switch_profiles:  # None found.
                 print("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")
-                logging.info(
+                logging.info(  # Log zero exported.
                     "No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv"
                 )
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
-                return
-            processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)
+                return  # Abort.
+            processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-            print(f"! {len(processed)} switch templates exported to {filename}")
-            logging.info("Exported %s switch templates to %s.", len(processed), filename)
-        except Exception as e:
-            logging.error("Failed to export switch templates: %s", e)
+            print(f"! {len(processed)} switch templates exported to {filename}")  # Tell the user.
+            logging.info("Exported %s switch templates to %s.", len(processed), filename)  # Log export count.
+        except Exception as e:  # Export failed.
+            logging.error("Failed to export switch templates: %s", e)  # log error.
             try:
                 DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
             except Exception:  # nosec B110
-                pass
-            raise
+                pass  # Best-effort cleanup.
+            raise  # Re-raise to caller.
 
 
-class OrgClientSecurityExporter:
+class OrgClientSecurityExporter:  # Org client security exporters.
     """
     Organization Client and Security Exporter
 
@@ -11311,14 +11311,14 @@ class OrgClientSecurityExporter:
     """
 
     @staticmethod
-    def wireless_clients():
+    def wireless_clients():  # Export wireless client security.
         """Export wireless client statistics for the entire organization to OrgWirelessClients.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.clients.searchOrgWirelessClients, data_type="wireless clients", sort_key="mac"
         )
 
     @staticmethod
-    def wired_clients():
+    def wired_clients():  # Export wired client security.
         """Export wired client statistics for the entire organization to OrgWiredClients.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients, data_type="wired clients", sort_key="mac"
@@ -11332,9 +11332,9 @@ class OrgClientSecurityExporter:
             - Cache hit: If all 3 output CSVs exist and are fresh, skip entirely.
             - Reduced lookback: Uses dynamic lookback (1h in test) instead of hardcoded 7d.
         """
-        from src.refactors.serial_cc.security_events import SecurityEventsService
+        from src.refactors.serial_cc.security_events import SecurityEventsService  # Import the events service.
 
-        SecurityEventsService.execute(fast)
+        SecurityEventsService.execute(fast)  # Run the security export.
 
     @staticmethod
     def rogue_clients(fast: bool = False):  # noqa: C901, PLR0915
@@ -11481,14 +11481,14 @@ class OrgClientSecurityExporter:
             logging.info("! %s rogue APs exported to OrgRogueAPs", len(all_rogue_aps))  # Log the export
             print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")  # Report the count to the user
         else:  # No rogue APs found anywhere
-            logging.info("No rogue APs found across all sites")
-            print(" No rogue APs detected across all sites")
+            logging.info("No rogue APs found across all sites")  # Log no rogues.
+            print(" No rogue APs detected across all sites")  # Tell the user.
 
 
-class FilterOperatorEngine:
+class FilterOperatorEngine:  # Filter operator evaluation engine.
     """Shared operator catalog, normalization, and evaluation for client search filtering."""
 
-    OPERATOR_CATALOG: list[str] = [
+    OPERATOR_CATALOG: list[str] = [  # Supported operator names.
         "is",
         "is not",
         "contains",
@@ -11503,7 +11503,7 @@ class FilterOperatorEngine:
         "is not null",
     ]
 
-    VALUE_REQUIRED_OPERATORS: frozenset[str] = frozenset(
+    VALUE_REQUIRED_OPERATORS: frozenset[str] = frozenset(  # Operators needing a value.
         {
             "is",
             "is not",
@@ -11516,68 +11516,68 @@ class FilterOperatorEngine:
         }
     )
 
-    REMOTE_PREFILTER_OPERATORS: frozenset[str] = frozenset(
+    REMOTE_PREFILTER_OPERATORS: frozenset[str] = frozenset(  # Operators pushed to the API.
         {
             "is",
         }
     )
 
     @staticmethod
-    def normalize_mac(mac_value: str) -> str:
+    def normalize_mac(mac_value: str) -> str:  # Normalize a MAC string.
         """Remove delimiters and lowercase for delimiter-insensitive comparison."""
-        if not mac_value:
-            return ""
-        return re.sub(r"[:\-.]", "", mac_value).lower()
+        if not mac_value:  # Empty input.
+            return ""  # Return empty.
+        return re.sub(r"[:\-.]", "", mac_value).lower()  # Strip separators; lowercase.
 
     @staticmethod
-    def normalize_text(text_value: str) -> str:
+    def normalize_text(text_value: str) -> str:  # Normalize free text.
         """Lowercase and strip for case-insensitive comparison."""
-        if not text_value:
-            return ""
-        return text_value.strip().lower()
+        if not text_value:  # Empty input.
+            return ""  # Return empty.
+        return text_value.strip().lower()  # Trim and lowercase.
 
     @staticmethod
     def evaluate_operator(field_value: str | None, operator: str, search_value: str, is_mac: bool = False) -> bool:
         """Evaluate a single operator against a field value. Returns True if record matches."""
-        if operator in ("is null", "is not null", "is blank", "is not blank"):
-            return FilterOperatorEngine._evaluate_null_blank(field_value, operator)
-        if field_value is None or str(field_value).strip() == "":
-            return False
+        if operator in ("is null", "is not null", "is blank", "is not blank"):  # Null/blank operators.
+            return FilterOperatorEngine._evaluate_null_blank(field_value, operator)  # Delegate null/blank check.
+        if field_value is None or str(field_value).strip() == "":  # Empty field fails value ops.
+            return False  # No match.
         normalized = FilterOperatorEngine._normalize_pair(str(field_value), search_value, is_mac)
         return FilterOperatorEngine._evaluate_value_operator(normalized[0], operator, normalized[1])
 
     @staticmethod
-    def validate_operator_value(operator: str, value: str, field_name: str) -> bool:
+    def validate_operator_value(operator: str, value: str, field_name: str) -> bool:  # Validate operator+value pair.
         """Validate that value-required operators have non-empty normalized values."""
-        if operator in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:
-            if not value or not value.strip():
+        if operator in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:  # Value-required operator?
+            if not value or not value.strip():  # Missing value.
                 logging.warning("Operator '%s' for %s requires a non-empty value", operator, field_name)
                 print(f"\n  Operator '{operator}' requires a value for {field_name}. Please try again.")
-                return False
-        return True
+                return False  # Invalid.
+        return True  # Valid.
 
     @staticmethod
-    def _evaluate_null_blank(field_value: str | None, operator: str) -> bool:
+    def _evaluate_null_blank(field_value: str | None, operator: str) -> bool:  # Evaluate null/blank operators.
         """Evaluate null/blank operators against a field value."""
-        if operator == "is null":
-            return field_value is None
-        if operator == "is not null":
-            return field_value is not None
-        if operator == "is blank":
-            return field_value is not None and str(field_value).strip() == ""
-        return field_value is not None and str(field_value).strip() != ""
+        if operator == "is null":  # is null.
+            return field_value is None  # True when absent.
+        if operator == "is not null":  # is not null.
+            return field_value is not None  # True when present.
+        if operator == "is blank":  # is blank.
+            return field_value is not None and str(field_value).strip() == ""  # True when present and empty.
+        return field_value is not None and str(field_value).strip() != ""  # is not blank result.
 
     @staticmethod
     def _normalize_pair(field_value: str, search_value: str, is_mac: bool) -> tuple[str, str]:
         """Normalize field and search values for comparison."""
-        if is_mac:
+        if is_mac:  # MAC comparison.
             return FilterOperatorEngine.normalize_mac(field_value), FilterOperatorEngine.normalize_mac(search_value)
         return FilterOperatorEngine.normalize_text(field_value), FilterOperatorEngine.normalize_text(search_value)
 
     @staticmethod
-    def _evaluate_value_operator(field: str, operator: str, search: str) -> bool:
+    def _evaluate_value_operator(field: str, operator: str, search: str) -> bool:  # Apply a value operator.
         """Evaluate value-based positional/equality operators."""
-        operator_map: dict[str, Any] = {
+        operator_map: dict[str, Any] = {  # Operator -> comparator map.
             "is": lambda f, s: f == s,
             "is not": lambda f, s: f != s,
             "contains": lambda f, s: s in f,
@@ -11587,105 +11587,105 @@ class FilterOperatorEngine:
             "ends with": lambda f, s: f.endswith(s),
             "doesn't end with": lambda f, s: not f.endswith(s),
         }
-        evaluator = operator_map.get(operator)
-        return evaluator(field, search) if evaluator else False
+        evaluator = operator_map.get(operator)  # Look up the comparator.
+        return evaluator(field, search) if evaluator else False  # Compare or default false.
 
 
-class GlobalWiredClientReportGenerator:
+class GlobalWiredClientReportGenerator:  # Global wired client report.
     """Generates organization-wide wired client reports with operator-based MAC/manufacturer filtering."""
 
     @staticmethod
-    def execute() -> None:
+    def execute() -> None:  # Run the report.
         """Main entry point from menu system."""
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        criteria = GlobalWiredClientReportGenerator._prompt_filter_criteria()
-        if criteria is False:
-            return
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        criteria = GlobalWiredClientReportGenerator._prompt_filter_criteria()  # Prompt for filters.
+        if criteria is False:  # User cancelled.
+            return  # Abort.
         records, remote_used = GlobalWiredClientReportGenerator._fetch_clients(org_id, criteria)
-        if not records:
-            logging.warning("No wired clients retrieved from API")
-            print("\n  No wired clients found in the organization.")
-            return
+        if not records:  # No records.
+            logging.warning("No wired clients retrieved from API")  # Warn none retrieved.
+            print("\n  No wired clients found in the organization.")  # Tell the user.
+            return  # Abort.
         matched, metadata = GlobalWiredClientReportGenerator._apply_filters(records, criteria, remote_used)
-        GlobalWiredClientReportGenerator._write_outputs(matched, metadata)
+        GlobalWiredClientReportGenerator._write_outputs(matched, metadata)  # Write the outputs.
 
     @staticmethod
-    def _prompt_filter_criteria() -> dict[str, str] | None | bool:
+    def _prompt_filter_criteria() -> dict[str, str] | None | bool:  # Prompt filter criteria.
         """Collect optional MAC and manufacturer filter criteria from user."""
-        print("\n--- Global Wired Client Report ---")
-        print("Optional filters (press Enter to skip):\n")
-        criteria: dict[str, str] = {}
+        print("\n--- Global Wired Client Report ---")  # Header.
+        print("Optional filters (press Enter to skip):\n")  # Explain skipping.
+        criteria: dict[str, str] = {}  # Collect criteria.
         mac_result = GlobalWiredClientReportGenerator._collect_single_filter("MAC address", "mac", criteria)
-        if mac_result is False:
-            return False
+        if mac_result is False:  # User cancelled.
+            return False  # Abort.
         mfg_result = GlobalWiredClientReportGenerator._collect_single_filter("Manufacturer", "mfg", criteria)
-        if mfg_result is False:
-            return False
-        return criteria if criteria else None
+        if mfg_result is False:  # User cancelled.
+            return False  # Abort.
+        return criteria if criteria else None  # Return criteria or None.
 
     @staticmethod
     def _collect_single_filter(field_label: str, key_prefix: str, criteria: dict[str, str]) -> bool | None:
         """Collect a single field operator and value. Returns False on validation failure."""
-        operator = GlobalWiredClientReportGenerator._prompt_operator(field_label)
-        if not operator:
-            return None
-        criteria[f"{key_prefix}_operator"] = operator
-        if operator not in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:
-            return True
+        operator = GlobalWiredClientReportGenerator._prompt_operator(field_label)  # Prompt the operator.
+        if not operator:  # No operator chosen.
+            return None  # Skip this field.
+        criteria[f"{key_prefix}_operator"] = operator  # Record the operator.
+        if operator not in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:  # Operator needs no value.
+            return True  # Done.
         value = InputUtils.safe_input(f"  Enter {field_label} value: ", context=f"wired_report_{key_prefix}_filter")
-        if not FilterOperatorEngine.validate_operator_value(operator, value, field_label):
-            return False
-        criteria[f"{key_prefix}_value"] = value
-        return True
+        if not FilterOperatorEngine.validate_operator_value(operator, value, field_label):  # Validate the value.
+            return False  # Invalid value.
+        criteria[f"{key_prefix}_value"] = value  # Record the value.
+        return True  # Done.
 
     @staticmethod
-    def _prompt_operator(field_name: str) -> str | None:
+    def _prompt_operator(field_name: str) -> str | None:  # Prompt an operator choice.
         """Display operator selection menu and return chosen operator or None."""
-        print(f"  {field_name} filter operator:")
-        print("    0. No filter (skip)")
-        for index, operator in enumerate(FilterOperatorEngine.OPERATOR_CATALOG, 1):
-            print(f"    {index}. {operator}")
-        choice = InputUtils.safe_input(
+        print(f"  {field_name} filter operator:")  # Label the field.
+        print("    0. No filter (skip)")  # No-filter option.
+        for index, operator in enumerate(FilterOperatorEngine.OPERATOR_CATALOG, 1):  # List operators.
+            print(f"    {index}. {operator}")  # Print each option.
+        choice = InputUtils.safe_input(  # Read the choice.
             f"  Select {field_name} operator (0-12, default 0): ",
             default_value="0",
             context=f"wired_report_{field_name.lower().replace(' ', '_')}_operator",
         )
-        if choice == "0" or not choice:
-            return None
+        if choice == "0" or not choice:  # Skip when zero/empty.
+            return None  # No operator.
         try:
-            index = int(choice) - 1
-            if 0 <= index < len(FilterOperatorEngine.OPERATOR_CATALOG):
-                selected = FilterOperatorEngine.OPERATOR_CATALOG[index]
-                logging.info("Selected %s operator: %s", field_name, selected)
-                return selected
-        except ValueError:
-            pass
-        print(f"  Invalid selection. No {field_name} filter will be applied.")
-        return None
+            index = int(choice) - 1  # Parse the index.
+            if 0 <= index < len(FilterOperatorEngine.OPERATOR_CATALOG):  # In range?
+                selected = FilterOperatorEngine.OPERATOR_CATALOG[index]  # Pick the operator.
+                logging.info("Selected %s operator: %s", field_name, selected)  # Log the choice.
+                return selected  # Return it.
+        except ValueError:  # Non-numeric input.
+            pass  # Ignore and fall through.
+        print(f"  Invalid selection. No {field_name} filter will be applied.")  # Tell the user invalid.
+        return None  # No operator.
 
     @staticmethod
     def _fetch_clients(org_id: str, criteria: dict[str, str] | None) -> tuple[list[dict[str, Any]], bool]:
         """Fetch org-wide wired clients with optional remote prefiltering."""
-        remote_params: dict[str, Any] = {"limit": 1000}
-        remote_used = False
-        if criteria:
+        remote_params: dict[str, Any] = {"limit": 1000}  # Base API params.
+        remote_used = False  # Track remote prefilter use.
+        if criteria:  # Have criteria.
             remote_used = GlobalWiredClientReportGenerator._build_remote_params(criteria, remote_params)
         try:
-            logging.info("Fetching organization wired clients...")
-            print("\n  Retrieving wired clients from organization...")
-            response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(
+            logging.info("Fetching organization wired clients...")  # Log the fetch.
+            print("\n  Retrieving wired clients from organization...")  # Tell the user.
+            response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(  # Call the API.
                 apisession,
                 org_id,
                 **remote_params,
             )
-            records = mistapi.get_all(response=response, mist_session=apisession) or []
-            logging.info("Retrieved %s wired client records", len(records))
-            print(f"  Retrieved {len(records)} wired client records")
-            return records, remote_used
-        except Exception as exception:
-            logging.exception("Failed to fetch wired clients: %s", exception)
-            print(f"\n  Error retrieving wired clients: {exception}")
-            return [], False
+            records = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all; default empty.
+            logging.info("Retrieved %s wired client records", len(records))  # Log the count.
+            print(f"  Retrieved {len(records)} wired client records")  # Tell the user.
+            return records, remote_used  # Return records and flag.
+        except Exception as exception:  # Fetch failed.
+            logging.exception("Failed to fetch wired clients: %s", exception)  # Log the exception.
+            print(f"\n  Error retrieving wired clients: {exception}")  # Tell the user.
+            return [], False  # Return empty.
 
     @staticmethod
     def _build_remote_params(criteria: dict[str, str], params: dict[str, Any]) -> bool:
@@ -11710,7 +11710,7 @@ class GlobalWiredClientReportGenerator:
         return remote_used  # Report whether any server-side prefilter was used
 
     @staticmethod
-    def _apply_filters(
+    def _apply_filters(  # Apply local filters.
         records: list[dict[str, Any]],
         criteria: dict[str, str] | None,
         remote_used: bool,
@@ -11740,7 +11740,7 @@ class GlobalWiredClientReportGenerator:
         return matched, metadata  # Return the filtered records plus metadata
 
     @staticmethod
-    def _record_matches(record: dict[str, Any], criteria: dict[str, str]) -> bool:
+    def _record_matches(record: dict[str, Any], criteria: dict[str, str]) -> bool:  # Test one record vs criteria.
         """Evaluate a single record against all active filter criteria with AND logic."""
         mac_operator = criteria.get("mac_operator")  # The MAC operator to evaluate, if any
         if mac_operator:  # A MAC filter is active
@@ -11761,7 +11761,7 @@ class GlobalWiredClientReportGenerator:
         return True  # The record passed every active criterion
 
     @staticmethod
-    def _build_metadata(
+    def _build_metadata(  # Build report metadata.
         retrieved: int,
         matched: int,
         remote_used: bool,
@@ -11776,182 +11776,182 @@ class GlobalWiredClientReportGenerator:
             "local_filter_used": local_used,
             "generated_at": datetime.now(UTC).isoformat(),  # UTC ISO timestamp for report metadata
         }
-        if criteria:
-            if criteria.get("mac_operator"):
-                metadata["mac_operator"] = criteria["mac_operator"]
-                metadata["mac_value"] = criteria.get("mac_value", "")
-            if criteria.get("mfg_operator"):
-                metadata["mfg_operator"] = criteria["mfg_operator"]
-                metadata["mfg_value"] = criteria.get("mfg_value", "")
-        return metadata
+        if criteria:  # Have criteria.
+            if criteria.get("mac_operator"):  # MAC filter present.
+                metadata["mac_operator"] = criteria["mac_operator"]  # Record MAC operator.
+                metadata["mac_value"] = criteria.get("mac_value", "")  # Record MAC value.
+            if criteria.get("mfg_operator"):  # Mfg filter present.
+                metadata["mfg_operator"] = criteria["mfg_operator"]  # Record mfg operator.
+                metadata["mfg_value"] = criteria.get("mfg_value", "")  # Record mfg value.
+        return metadata  # Return metadata.
 
     @staticmethod
-    def _write_outputs(matched: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
+    def _write_outputs(matched: list[dict[str, Any]], metadata: dict[str, Any]) -> None:  # Write all report outputs.
         """Write matched records to both local report artifact and standard export."""
-        matched_count = metadata["records_matched"]
-        retrieved_count = metadata["records_retrieved"]
-        print(f"\n  Matched {matched_count} of {retrieved_count} wired client records")
-        if matched_count == 0:
-            logging.info("Zero records matched filters -- producing empty outputs")
-            print("  No records matched the specified filters.")
-        GlobalWiredClientReportGenerator._write_standard_export(matched)
-        GlobalWiredClientReportGenerator._write_local_report(matched, metadata)
+        matched_count = metadata["records_matched"]  # Matched count.
+        retrieved_count = metadata["records_retrieved"]  # Retrieved count.
+        print(f"\n  Matched {matched_count} of {retrieved_count} wired client records")  # Tell the user.
+        if matched_count == 0:  # Nothing matched.
+            logging.info("Zero records matched filters -- producing empty outputs")  # Log empty result.
+            print("  No records matched the specified filters.")  # Tell the user.
+        GlobalWiredClientReportGenerator._write_standard_export(matched)  # Write the CSV export.
+        GlobalWiredClientReportGenerator._write_local_report(matched, metadata)  # Write the JSON summary.
 
     @staticmethod
-    def _write_standard_export(matched: list[dict[str, Any]]) -> None:
+    def _write_standard_export(matched: list[dict[str, Any]]) -> None:  # Write the standard CSV.
         """Write matched records through the standard CSV/SQLite export path."""
-        if matched:
-            flattened = DataProcessingUtils.flatten_nested_fields(matched)
+        if matched:  # Have matches.
+            flattened = DataProcessingUtils.flatten_nested_fields(matched)  # Flatten nested fields.
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
         else:
-            sanitized = []
-        DataExporter.write_with_format_selection(
+            sanitized = []  # No matches.
+        DataExporter.write_with_format_selection(  # Write via backend.
             sanitized,
             "GlobalWiredClientReport",
             api_function_name="globalWiredClientReport",
         )
-        logging.info("Standard export: %s records to GlobalWiredClientReport", len(sanitized))
+        logging.info("Standard export: %s records to GlobalWiredClientReport", len(sanitized))  # Log the export.
 
     @staticmethod
     def _write_local_report(matched: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
         """Write local report artifact with summary metadata to data/ directory."""
-        report_path = os.path.join("data", "GlobalWiredClientReport_summary.json")
-        report_payload: dict[str, Any] = {
+        report_path = os.path.join("data", "GlobalWiredClientReport_summary.json")  # Report file path.
+        report_payload: dict[str, Any] = {  # Build the payload.
             "summary": metadata,
             "record_count": len(matched),
         }
         try:
-            with open(report_path, "w", encoding="utf-8") as report_file:
-                json.dump(report_payload, report_file, indent=2, default=str)
-            logging.info("Local report artifact written to %s", report_path)
-            print(f"  Report summary written to {report_path}")
-        except OSError as error:
-            logging.error("Failed to write local report artifact: %s", error)
-            print(f"  Warning: Could not write report summary to {report_path}")
+            with open(report_path, "w", encoding="utf-8") as report_file:  # Open the report file.
+                json.dump(report_payload, report_file, indent=2, default=str)  # Dump JSON.
+            logging.info("Local report artifact written to %s", report_path)  # Log the write.
+            print(f"  Report summary written to {report_path}")  # Tell the user.
+        except OSError as error:  # Write failed.
+            logging.error("Failed to write local report artifact: %s", error)  # Log the error.
+            print(f"  Warning: Could not write report summary to {report_path}")  # Warn the user.
 
 
-class WiredClientManufacturerReportGenerator:
+class WiredClientManufacturerReportGenerator:  # Wired client manufacturer report.
     """Generates wired client reports filtered by interactive manufacturer selection."""
 
     @staticmethod
-    def execute() -> None:
+    def execute() -> None:  # Run the report.
         """Main entry point: always export ALL, then optionally filter by manufacturer."""
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()
-        records = WiredClientManufacturerReportGenerator._fetch_all_clients(org_id)
-        if not records:
-            logging.warning("No wired clients retrieved from API")
-            print("\n  No wired clients found in the organization.")
-            return
-        WiredClientManufacturerReportGenerator._write_outputs(records, "")
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        records = WiredClientManufacturerReportGenerator._fetch_all_clients(org_id)  # Fetch all clients.
+        if not records:  # No records.
+            logging.warning("No wired clients retrieved from API")  # Warn none retrieved.
+            print("\n  No wired clients found in the organization.")  # Tell the user.
+            return  # Abort.
+        WiredClientManufacturerReportGenerator._write_outputs(records, "")  # Write the full export.
         summary = WiredClientManufacturerReportGenerator._build_manufacturer_summary(records)
-        selected = WiredClientManufacturerReportGenerator._prompt_selection(summary)
-        if not selected:
-            return
+        selected = WiredClientManufacturerReportGenerator._prompt_selection(summary)  # Prompt a selection.
+        if not selected:  # No selection.
+            return  # Abort.
         filtered = WiredClientManufacturerReportGenerator._filter_by_manufacturer(records, selected)
-        WiredClientManufacturerReportGenerator._write_outputs(filtered, selected)
+        WiredClientManufacturerReportGenerator._write_outputs(filtered, selected)  # Write the filtered export.
 
     @staticmethod
-    def _fetch_all_clients(org_id: str) -> list[dict[str, Any]]:
+    def _fetch_all_clients(org_id: str) -> list[dict[str, Any]]:  # Fetch all wired clients.
         """Fetch all wired clients across the organization without filters."""
         try:
-            logging.info("Fetching all organization wired clients for manufacturer report...")
-            print("\n  Retrieving all wired clients from organization...")
-            response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(
+            logging.info("Fetching all organization wired clients for manufacturer report...")  # Log the fetch.
+            print("\n  Retrieving all wired clients from organization...")  # Tell the user.
+            response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(  # Call the API.
                 apisession,
                 org_id,
                 limit=1000,
             )
-            records = mistapi.get_all(response=response, mist_session=apisession) or []
-            logging.info("Retrieved %s wired client records", len(records))
-            print(f"  Retrieved {len(records)} wired client records")
-            return records
-        except Exception as exception:
-            logging.exception("Failed to fetch wired clients: %s", exception)
-            print(f"\n  Error retrieving wired clients: {exception}")
-            return []
+            records = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all; default empty.
+            logging.info("Retrieved %s wired client records", len(records))  # Log the count.
+            print(f"  Retrieved {len(records)} wired client records")  # Tell the user.
+            return records  # Return records.
+        except Exception as exception:  # Fetch failed.
+            logging.exception("Failed to fetch wired clients: %s", exception)  # Log the exception.
+            print(f"\n  Error retrieving wired clients: {exception}")  # Tell the user.
+            return []  # Return empty.
 
     @staticmethod
     def _build_manufacturer_summary(records: list[dict[str, Any]]) -> list[tuple[str, int]]:
         """Extract unique manufacturers with client counts, sorted alphabetically."""
-        manufacturer_counts: dict[str, int] = {}
-        for record in records:
-            manufacturer = str(record.get("manufacture", "Unknown") or "Unknown").strip()
-            manufacturer_counts[manufacturer] = manufacturer_counts.get(manufacturer, 0) + 1
-        sorted_manufacturers = sorted(manufacturer_counts.items(), key=lambda item: item[0].lower())
-        return sorted_manufacturers
+        manufacturer_counts: dict[str, int] = {}  # Count map.
+        for record in records:  # Walk records.
+            manufacturer = str(record.get("manufacture", "Unknown") or "Unknown").strip()  # Normalize the manufacturer.
+            manufacturer_counts[manufacturer] = manufacturer_counts.get(manufacturer, 0) + 1  # Increment the count.
+        sorted_manufacturers = sorted(manufacturer_counts.items(), key=lambda item: item[0].lower())  # Sort by name.
+        return sorted_manufacturers  # Return the summary.
 
     @staticmethod
-    def _prompt_selection(summary: list[tuple[str, int]]) -> str | None:
+    def _prompt_selection(summary: list[tuple[str, int]]) -> str | None:  # Prompt manufacturer selection.
         """Display manufacturer list with counts and prompt user to select one."""
-        total_clients = sum(count for _, count in summary)
-        print(f"\n  Found {total_clients} clients from {len(summary)} manufacturers\n")
-        print(f"  {'#':<5} {'Manufacturer':<45} {'Count':>8}")
-        print(f"  {'-' * 5} {'-' * 45} {'-' * 8}")
-        for index, (manufacturer, count) in enumerate(summary, 1):
-            display_name = manufacturer[:44]
-            print(f"  {index:<5} {display_name:<45} {count:>8}")
-        choice = InputUtils.safe_input(
+        total_clients = sum(count for _, count in summary)  # Total client count.
+        print(f"\n  Found {total_clients} clients from {len(summary)} manufacturers\n")  # Tell the user.
+        print(f"  {'#':<5} {'Manufacturer':<45} {'Count':>8}")  # Column header.
+        print(f"  {'-' * 5} {'-' * 45} {'-' * 8}")  # Separator row.
+        for index, (manufacturer, count) in enumerate(summary, 1):  # List each manufacturer.
+            display_name = manufacturer[:44]  # Truncate long names.
+            print(f"  {index:<5} {display_name:<45} {count:>8}")  # Print the row.
+        choice = InputUtils.safe_input(  # Read the choice.
             "\n  Enter manufacturer number for filtered report (Enter to skip): ",
             default_value="",
             allow_empty=True,
             context="manufacturer_report_selection",
         )
-        if not choice:
-            return None
+        if not choice:  # No choice.
+            return None  # Abort.
         try:
-            selection_index = int(choice)
-        except ValueError:
-            print("  Invalid selection.")
-            return None
-        if 1 <= selection_index <= len(summary):
-            selected_manufacturer = summary[selection_index - 1][0]
-            logging.info("User selected manufacturer: %s", selected_manufacturer)
-            return selected_manufacturer
-        print("  Selection out of range.")
-        return None
+            selection_index = int(choice)  # Parse the selection.
+        except ValueError:  # Non-numeric input.
+            print("  Invalid selection.")  # Tell the user.
+            return None  # Abort.
+        if 1 <= selection_index <= len(summary):  # In range?
+            selected_manufacturer = summary[selection_index - 1][0]  # Pick the manufacturer.
+            logging.info("User selected manufacturer: %s", selected_manufacturer)  # Log the choice.
+            return selected_manufacturer  # Return it.
+        print("  Selection out of range.")  # Out of range.
+        return None  # Abort.
 
     @staticmethod
     def _filter_by_manufacturer(records: list[dict[str, Any]], manufacturer: str) -> list[dict[str, Any]]:
         """Filter records by selected manufacturer. Empty string means no filter (all records)."""
-        if not manufacturer:
-            return records
-        normalized_selection = manufacturer.strip().lower()
-        return [
+        if not manufacturer:  # No filter.
+            return records  # Return all.
+        normalized_selection = manufacturer.strip().lower()  # Normalize the selection.
+        return [  # Keep matching records.
             record
             for record in records
             if str(record.get("manufacture", "") or "").strip().lower() == normalized_selection
         ]
 
     @staticmethod
-    def _build_filename(manufacturer: str) -> str:
+    def _build_filename(manufacturer: str) -> str:  # Build the output filename.
         """Build a unique filename incorporating the selected manufacturer."""
-        if not manufacturer:
-            slug = "ALL"
+        if not manufacturer:  # No manufacturer.
+            slug = "ALL"  # Use ALL slug.
         else:
-            slug = re.sub(r"[^\w]+", "_", manufacturer).strip("_")[:40]
-        return f"WiredClientManufacturerReport_{slug}"
+            slug = re.sub(r"[^\w]+", "_", manufacturer).strip("_")[:40]  # Slugify the manufacturer.
+        return f"WiredClientManufacturerReport_{slug}"  # Return the filename.
 
     @staticmethod
-    def _write_outputs(filtered: list[dict[str, Any]], manufacturer: str) -> None:
+    def _write_outputs(filtered: list[dict[str, Any]], manufacturer: str) -> None:  # Write the export outputs.
         """Write filtered records through the standard CSV/SQLite export path."""
-        label = manufacturer if manufacturer else "ALL manufacturers"
-        filename = WiredClientManufacturerReportGenerator._build_filename(manufacturer)
-        print(f"\n  Exporting {len(filtered)} records for: {label}")
-        if filtered:
-            flattened = DataProcessingUtils.flatten_nested_fields(filtered)
+        label = manufacturer if manufacturer else "ALL manufacturers"  # Label for messages.
+        filename = WiredClientManufacturerReportGenerator._build_filename(manufacturer)  # Build the filename.
+        print(f"\n  Exporting {len(filtered)} records for: {label}")  # Tell the user.
+        if filtered:  # Have records.
+            flattened = DataProcessingUtils.flatten_nested_fields(filtered)  # Flatten nested fields.
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
         else:
-            sanitized = []
-        DataExporter.write_with_format_selection(
+            sanitized = []  # No records.
+        DataExporter.write_with_format_selection(  # Write via backend.
             sanitized,
             filename,
             api_function_name="wiredClientManufacturerReport",
         )
-        print(f"  Exported to: data/{filename}.csv")
+        print(f"  Exported to: data/{filename}.csv")  # Tell the user.
         logging.info("Manufacturer report exported: %s records for %s -> %s", len(sanitized), label, filename)
 
 
-class OrgAdminExporter:
+class OrgAdminExporter:  # Org admin/token exporters.
     """
     Organization Admin and License Exporter
 
@@ -11960,10 +11960,10 @@ class OrgAdminExporter:
     """
 
     @staticmethod
-    def api_tokens():
+    def api_tokens():  # Export API tokens.
         """Export organization API tokens to OrgApiTokens.csv."""
-        logging.info("Starting export of organization api tokens...")
-        APIDataFetcher(
+        logging.info("Starting export of organization api tokens...")  # Log start.
+        APIDataFetcher(  # Fetch and write tokens.
             title="Organization Api Tokens:",
             api_call=mistapi.api.v1.orgs.apitokens.listOrgApiTokens,
             filename="OrgApiTokens.csv",
@@ -11971,10 +11971,10 @@ class OrgAdminExporter:
         ).execute()
 
     @staticmethod
-    def admins():
+    def admins():  # Export admins.
         """Export organization admins to OrgAdmins.csv."""
-        logging.info("Starting export of organization admins...")
-        APIDataFetcher(
+        logging.info("Starting export of organization admins...")  # Log start.
+        APIDataFetcher(  # Fetch and write admins.
             title="Organization Admins:",
             api_call=mistapi.api.v1.orgs.admins.listOrgAdmins,
             filename="OrgAdmins.csv",
@@ -11982,22 +11982,22 @@ class OrgAdminExporter:
         ).execute()
 
     @staticmethod
-    def sso():
+    def sso():  # Export SSO config.
         """Export organization SSO configuration to OrgSso.csv."""
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.ssos.listOrgSsos, data_type="sso", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def licenses():
+    def licenses():  # Export licenses.
         """Export organization licenses to OrgLicenses.csv."""
-        logging.info("Starting export of organization licenses (canonical endpoint)...")
-        filename = "OrgLicenses.csv"
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()
+        logging.info("Starting export of organization licenses (canonical endpoint)...")  # Log start.
+        filename = "OrgLicenses.csv"  # Build the CSV name.
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         try:
-            list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)
-            if list_func is None:
+            list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)  # Find the list function.
+            if list_func is None:  # Wrapper missing.
                 logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
-                raw_url = f"/api/v1/orgs/{current_org_id}/licenses"
-                if apisession is None:
+                raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Build the raw URL.
+                if apisession is None:  # No session.
                     raise ValueError("API session not initialized")
                 response = apisession.mist_get(raw_url)
                 raw_items = getattr(response, "data", response) or []
