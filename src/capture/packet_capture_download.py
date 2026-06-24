@@ -34,8 +34,8 @@ class PacketCaptureDownloadManager:
             print(
                 f"  Error fetching PCAP list: {list_error}"
             )  # Preserve the existing operator-facing error text for list failures.
-            logging.error(
-                "Exception listing PCAPs: %s", list_error, exc_info=True
+            logging.exception(
+                "Exception listing PCAPs: %s", list_error
             )  # Log the full list failure details for troubleshooting.
             return []  # Return no completed PCAPs so the loop can continue safely.
         if pcaps_response.status_code != 200:  # Guard non-success API responses before parsing payload content.
@@ -164,8 +164,8 @@ class PacketCaptureDownloadManager:
             return 1  # Preserve the prior success contract for callers aggregating download counts.
         except Exception as download_error:  # pylint: disable=broad-exception-caught
             print(f"      Error downloading: {download_error}")  # Preserve the existing operator-facing exception text.
-            logging.error(
-                "Download exception for %s: %s", capture_id, download_error, exc_info=True
+            logging.exception(
+                "Download exception for %s: %s", capture_id, download_error
             )  # Log the full transfer exception for debugging.
             return 0  # Preserve the prior failure contract when download exceptions occur.
 
@@ -222,8 +222,8 @@ class PacketCaptureDownloadManager:
                 )  # Preserve the manual-download guidance for cancelled waits.
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"\n! Error downloading PCAP file: {error}")  # Preserve the existing high-level download error text.
-            logging.error(
-                "Exception in poll_and_download_pcap for %s: %s", capture_id, error, exc_info=True
+            logging.exception(
+                "Exception in poll_and_download_pcap for %s: %s", capture_id, error
             )  # Log the full polling/download exception context.
             if pcap_url:  # Preserve the manual URL hint when one was already discovered.
                 print(
@@ -285,8 +285,8 @@ class PacketCaptureDownloadManager:
                         poll_interval
                     )  # Preserve the historic retry interval between successful-but-not-ready responses.
             except Exception as poll_error:  # pylint: disable=broad-exception-caught
-                logging.error(
-                    "Poll attempt %s exception: %s", poll_attempt, poll_error, exc_info=True
+                logging.exception(
+                    "Poll attempt %s exception: %s", poll_attempt, poll_error
                 )  # Log transient poll exceptions with full context before retrying.
                 sleep_fn(poll_interval)  # Preserve the retry pacing after poll exceptions.
         elapsed_total = int(time.time() - start_time)  # Compute the total elapsed wait time for the timeout message.

@@ -52,14 +52,16 @@ def _configure_dependencies(select_site_return: str | None = "site-1") -> tuple[
             escape_multiline=MagicMock(side_effect=lambda rows: rows),
             get_unique_keys=MagicMock(return_value=["name"]),
         ),
-        data_exporter=SimpleNamespace(save_data_to_output=exporter_mock),
+        data_exporter=SimpleNamespace(write_with_format_selection=exporter_mock),
         time_utils=SimpleNamespace(
             get_dynamic_lookback_hours=MagicMock(return_value=24), log_dynamic_lookback=MagicMock()
         ),
         enhanced_ssh_runner=SimpleNamespace(
             sanitize_filename=MagicMock(side_effect=lambda value: value.replace(" ", "_"))
         ),
-        insight_metrics_utils=SimpleNamespace(export_legacy=MagicMock(), get_by_scope=MagicMock(return_value=[])),
+        insight_metrics_utils=SimpleNamespace(
+            export_const_insight_metrics=MagicMock(), get_by_scope=MagicMock(return_value=[])
+        ),
         packet_capture_manager=SimpleNamespace(
             validate_mac_address=MagicMock(return_value=True),
             normalize_mac_address=MagicMock(return_value="aa:bb:cc:dd:ee:ff"),

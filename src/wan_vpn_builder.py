@@ -262,7 +262,7 @@ class WanVpnBuilder:
             logging.debug("Fetched %d gateway profiles", len(profiles))
             return profiles
         except Exception:
-            logging.error("Failed to fetch device profiles", exc_info=True)
+            logging.exception("Failed to fetch device profiles")
             print("! Error retrieving gateway device profiles. Check API connectivity.")
             return []
 
@@ -274,7 +274,7 @@ class WanVpnBuilder:
             logging.debug("Fetched %d org VPNs", len(vpns))
             return vpns
         except Exception:
-            logging.error("Failed to fetch org VPNs", exc_info=True)
+            logging.exception("Failed to fetch org VPNs")
             print("! Error retrieving VPN definitions. Check API connectivity.")
             return []
 
@@ -286,7 +286,7 @@ class WanVpnBuilder:
             logging.info("VPN created via API: %s", created.get("id", ""))
             return created
         except Exception:
-            logging.error("Failed to create VPN", exc_info=True)
+            logging.exception("Failed to create VPN")
             print("! Error creating VPN. Check API connectivity and input.")
             return None
 
@@ -515,7 +515,7 @@ class WanVpnBuilder:
             logging.info("Updated profile '%s' with vpn_paths for VPN '%s'", profile_name, vpn_name)
             return True
         except Exception:
-            logging.error("Failed to update profile '%s'", profile_name, exc_info=True)
+            logging.exception("Failed to update profile '%s'", profile_name)
             print(f"  ! Error updating profile '{profile_name}'. Check logs.")
             return False
 

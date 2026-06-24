@@ -566,7 +566,7 @@ class WAN2MigrationManager:
         """Generate and save the site variable report."""
         report_data = self._build_report_data(results)
         output_file = "WAN2_SiteVariable_Report.csv"
-        DataExporter.save_data_to_output(report_data, output_file)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(report_data, output_file)  # type: ignore[no-untyped-call]
 
         self._print_site_variable_summary(results, output_file)
 

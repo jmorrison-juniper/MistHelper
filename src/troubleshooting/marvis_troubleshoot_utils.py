@@ -88,7 +88,8 @@ class MarvisTroubleshootUtils:
             print(" No site selected.")
             return
 
-        device_id = deps.prompt_utils.select_device(site_id)  # Prompt for a device within the chosen site
+        # Issue #431: inlined deps.prompt_utils.select_device -> canonical select_device_id_from_inventory.
+        device_id = deps.prompt_utils.select_device_id_from_inventory(site_id)
         if not device_id:
             print(" No device selected.")
             return
@@ -110,7 +111,7 @@ class MarvisTroubleshootUtils:
             logging.debug("Marvis device response received (has_data=%s)", bool(response.data))  # Post-call summary
             MarvisTroubleshootUtils._handle_device_response(deps, response, device_mac, device_name)  # Dispatch result
         except Exception as error:  # noqa: BLE001 - bare Exception is the SDK contract
-            logging.error("Exception in device_performance: %s", error, exc_info=True)  # Log with traceback
+            logging.exception("Exception in device_performance: %s", error)  # Log with traceback
             print(f"! Failed to troubleshoot device: {error}")
             MarvisTroubleshootUtils._print_error_guidance("device")
 
@@ -139,7 +140,7 @@ class MarvisTroubleshootUtils:
             logging.debug("Marvis network response received (has_data=%s)", bool(response.data))  # Post-call summary
             MarvisTroubleshootUtils._handle_network_response(deps, response, site_id)  # Dispatch into display/save
         except Exception as error:  # noqa: BLE001
-            logging.error("Exception in network_connectivity: %s", error, exc_info=True)
+            logging.exception("Exception in network_connectivity: %s", error)
             print(f"! Failed to troubleshoot network: {error}")
             MarvisTroubleshootUtils._print_error_guidance("network")
 
@@ -166,7 +167,7 @@ class MarvisTroubleshootUtils:
         data = deps.marvis_data_utils.format_for_csv(response.data, "client")  # Flatten for CSV export
         filename = f"MarvisInsights_Client_{client_mac.replace(':', '')}_{client_type}.csv"  # Stable per-client name
         logging.info("Saving Marvis client CSV to %s", filename)  # Pre-write log
-        deps.data_exporter.save_data_to_output(data, filename)  # Persist results
+        deps.data_exporter.write_with_format_selection(data, filename)  # Persist results
         logging.debug("Marvis client CSV saved (rows=%s)", len(data) if data else 0)  # Post-write log
         print(f"! Results saved to {filename}")
 
@@ -190,7 +191,7 @@ class MarvisTroubleshootUtils:
         safe_name = device_name.replace(" ", "_")  # Sanitise device name for filesystem
         filename = f"MarvisInsights_Device_{device_mac.replace(':', '')}_{safe_name}.csv"  # Deterministic filename
         logging.info("Saving Marvis device CSV to %s", filename)
-        deps.data_exporter.save_data_to_output(data, filename)
+        deps.data_exporter.write_with_format_selection(data, filename)
         logging.debug("Marvis device CSV saved (rows=%s)", len(data) if data else 0)
         print(f"! Results saved to {filename}")
 
@@ -210,7 +211,7 @@ class MarvisTroubleshootUtils:
         data = deps.marvis_data_utils.format_for_csv(response.data, "network")  # Flatten for CSV
         filename = f"MarvisInsights_Network_{site_id}.csv"  # Per-site filename
         logging.info("Saving Marvis network CSV to %s", filename)
-        deps.data_exporter.save_data_to_output(data, filename)
+        deps.data_exporter.write_with_format_selection(data, filename)
         logging.debug("Marvis network CSV saved (rows=%s)", len(data) if data else 0)
         print(f"! Results saved to {filename}")
 
@@ -461,7 +462,7 @@ class MarvisTroubleshootUtils:
 
         filename = f"MarvisInsights_{endpoint_name.replace(' ', '_')}.csv"  # Stable per-endpoint filename
         logging.info("Saving insights CSV: %s", filename)
-        deps.data_exporter.save_data_to_output(formatted_insights, filename)
+        deps.data_exporter.write_with_format_selection(formatted_insights, filename)
         logging.debug("Insights CSV saved (rows=%s)", len(formatted_insights) if formatted_insights else 0)
         print(f"  Full insights saved to {filename}")
         return True

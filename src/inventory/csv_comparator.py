@@ -69,17 +69,17 @@ class AddressComparisonCounters:
     def log_summary(self) -> None:
         """Log a comprehensive summary of all counter metrics."""
         logging.info("Address comparison operation completed successfully")
-        logging.info(f"Total devices processed: {self.total_devices}")
-        logging.info(f"Devices enriched: {self.devices_enriched}")
-        logging.info(f"Devices skipped: {self.devices_skipped}")
-        logging.info(f"Perfect matches: {self.perfect_matches}")
-        logging.info(f"Mismatches found: {self.mismatches_found}")
-        logging.info(f"Auto corrections: {self.auto_corrections}")
-        logging.info(f"Comparison failures: {self.comparison_failures}")
-        logging.info(f"Parse failures: {self.parse_failures}")
+        logging.info("Total devices processed: %s", self.total_devices)
+        logging.info("Devices enriched: %s", self.devices_enriched)
+        logging.info("Devices skipped: %s", self.devices_skipped)
+        logging.info("Perfect matches: %s", self.perfect_matches)
+        logging.info("Mismatches found: %s", self.mismatches_found)
+        logging.info("Auto corrections: %s", self.auto_corrections)
+        logging.info("Comparison failures: %s", self.comparison_failures)
+        logging.info("Parse failures: %s", self.parse_failures)
         if self.parse_failure_reasons:
-            logging.info(f"Parse failure breakdown: {self.parse_failure_reasons}")
-        logging.info(f"Processing duration: {self.get_duration():.2f} seconds")
+            logging.info("Parse failure breakdown: %s", self.parse_failure_reasons)
+        logging.info("Processing duration: %.2f seconds", self.get_duration())
 
 
 @dataclass
@@ -234,8 +234,8 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         if self.debug:
             print(" Debug mode enabled: Detailed comparison logging active")
             logging.debug("ENTRY: InventoryCSVComparator.execute()")
-            logging.debug(f"  Parameters: fast={self.fast}," f" address_check={self.address_check}")
-            logging.debug(f"  ADDRESS_MATCH_THRESHOLD={self.address_threshold}")
+            logging.debug("  Parameters: fast=%s, address_check=%s", self.fast, self.address_check)
+            logging.debug("  ADDRESS_MATCH_THRESHOLD=%s", self.address_threshold)
 
     def _determine_validation_mode(self) -> None:
         """Determine if external address validation is enabled."""
@@ -246,7 +246,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             print(f"! External address validation enabled via {source}")
             print("   Address conflicts will be validated using" " Nominatim API")
             if self.debug:
-                logging.debug(f"Address validation enabled via {source}")
+                logging.debug("Address validation enabled via %s", source)
         else:
             print("  External address validation disabled")
             print("   Use --address-check flag or set" " ENABLE_ADDRESS_VALIDATION=true")
@@ -302,11 +302,11 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             selected_index = int(user_input)
             if selected_index < 0 or selected_index >= len(csv_files):
                 print(" Invalid index selected.")
-                logging.error(f"Invalid CSV file index selected:" f" {selected_index}")
+                logging.error("Invalid CSV file index selected: %s", selected_index)
                 return False
             self.comparison_file = csv_files[selected_index]
             print(f"! Selected comparison file:" f" {self.comparison_file}")
-            logging.info(f"User selected comparison file:" f" {self.comparison_file}")
+            logging.info("User selected comparison file: %s", self.comparison_file)
             return True
         except ValueError:
             print(" Invalid input. Please enter a numeric index.")
@@ -328,7 +328,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             return True
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"! Error reading comparison file" f" {self.comparison_file}: {error}")
-            logging.error(f"Error reading comparison file" f" {self.comparison_file}: {error}")
+            logging.error("Error reading comparison file %s: %s", self.comparison_file, error)
             return False
 
     def _load_skip_addresses(self) -> None:
@@ -339,14 +339,14 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
                 self.skip_addresses = list(csv.DictReader(file_handle))
             print(f"! Loaded {len(self.skip_addresses)} skip" " addresses from AddressSkip.csv")
             if self.debug:
-                logging.debug(f"Loaded {len(self.skip_addresses)}" " addresses to skip")
+                logging.debug("Loaded %s addresses to skip", len(self.skip_addresses))
         except FileNotFoundError:
             print("  AddressSkip.csv not found - no addresses" " will be automatically skipped")
             if self.debug:
                 logging.debug("AddressSkip.csv not found - continuing" " without skip list")
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"!  Error loading AddressSkip.csv: {error}")
-            logging.warning(f"Error loading AddressSkip.csv: {error}")
+            logging.warning("Error loading AddressSkip.csv: %s", error)
 
     # =================================================================
     # FIELD DETECTION METHODS
@@ -401,13 +401,13 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             print(" Could not find serial number field" " in comparison CSV.")
             print("   Looked for fields containing:" " 'serial', 'sn', 'system serial'")
             print(f"   Available fields: {list(headers)}")
-            logging.error(f"Serial field not found." f" Available fields: {list(headers)}")
+            logging.error("Serial field not found. Available fields: %s", list(headers))
             return False
         if not self.zip_field:
             print(" Could not find zip code field" " in comparison CSV.")
             print("   Looked for fields containing:" " 'zip', 'postal', 'zip code', 'postal code'")
             print(f"   Available fields: {list(headers)}")
-            logging.error(f"Zip field not found." f" Available fields: {list(headers)}")
+            logging.error("Zip field not found. Available fields: %s", list(headers))
             return False
         return True
 
@@ -583,7 +583,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         print(f"     Found {mist_count} Mist address duplications" f" affecting {mist_sites} sites")
         print(f"     Found {ref_count} reference address" f" duplications affecting {ref_sites} sites")
         if self.debug:
-            logging.info(f"DUPLICATE_CHECK: Found {mist_count} Mist" f" and {ref_count} reference duplicates")
+            logging.info("DUPLICATE_CHECK: Found %s Mist and %s reference duplicates", mist_count, ref_count)
 
     # =================================================================
     # DEVICE PROCESSING METHODS (Step 1)
@@ -625,7 +625,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         if device_serial not in self.comparison_serials:
             self.counters.devices_skipped += 1
             if self.debug:
-                logging.debug(f"DEVICE_SKIP [{device_serial}]:" " Not found in comparison CSV")
+                logging.debug("DEVICE_SKIP [%s]: Not found in comparison CSV", device_serial)
             return first_missing_name_warned
         self.counters.devices_enriched += 1
         self._process_single_device(device, device_serial, device_identifier)
@@ -651,7 +651,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
                 debug=self.debug,
             )
             if self.debug:
-                logging.debug(f"DEVICE_COMPARISON [{device_serial}]:" f" Result: {comparison_result}")
+                logging.debug("DEVICE_COMPARISON [%s]: Result: %s", device_serial, comparison_result)
             self._record_comparison_result(
                 device,
                 device_serial,
@@ -661,7 +661,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
                 comparison_result,
             )
         except Exception as device_error:  # pylint: disable=broad-exception-caught
-            logging.warning(f"! Error processing device" f" {device_serial}: {device_error}")
+            logging.warning("! Error processing device %s: %s", device_serial, device_error)
             self.counters.comparison_failures += 1
             self._record_device_parse_failure(
                 device,
@@ -736,7 +736,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         comparison_data = self.comparison_address_lookup.get(device_serial, {})
         if not comparison_data or not any(comparison_data.values()):
             if self.debug:
-                logging.debug(f"DEVICE_SKIP [{device_serial}]:" " No comparison address data")
+                logging.debug("DEVICE_SKIP [%s]: No comparison address data", device_serial)
             return None
         comparison_address = {
             "address": comparison_data.get("Address", "").strip(),
@@ -746,7 +746,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         }
         if not any(comparison_address.values()):
             if self.debug:
-                logging.debug(f"DEVICE_SKIP [{device_serial}]:" " Empty comparison address")
+                logging.debug("DEVICE_SKIP [%s]: Empty comparison address", device_serial)
             return None
         return comparison_address
 
@@ -817,7 +817,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
                 seen_addresses.add(address_key)
                 unique_conflicts.append(conflict)
             elif self.debug:
-                logging.debug("DUPLICATE_REMOVED" f" [{conflict['device_serial']}]")
+                logging.debug("DUPLICATE_REMOVED [%s]", conflict["device_serial"])
         duplicates_removed = len(self.all_conflicts) - len(unique_conflicts)
         print(
             f"! Step 2 Complete: Removed {duplicates_removed}" f" duplicate pairs," f" {len(unique_conflicts)} remain"
@@ -867,7 +867,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         self.counters.perfect_matches += 1
         self.counters.auto_corrections += 1
         if self.debug:
-            logging.debug(f"ADDRESS_SKIP [{device_serial}]:" f" {skip_reason}")
+            logging.debug("ADDRESS_SKIP [%s]: %s", device_serial, skip_reason)
         print(f"    Auto-corrected: {device_serial}" f" (Skip reason: {skip_reason})")
 
     # =================================================================
@@ -922,14 +922,14 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             if org_response.status_code == 200:
                 org_name: str = org_response.data.get("name", "").strip()
                 if self.debug:
-                    logging.debug(f"Organization name retrieved:" f" '{org_name}'")
+                    logging.debug("Organization name retrieved: '%s'", org_name)
                 return org_name
             if self.debug:
-                logging.warning(f"Failed to retrieve org info:" f" HTTP {org_response.status_code}")
+                logging.warning("Failed to retrieve org info: HTTP %s", org_response.status_code)
             return None
         except Exception as error:  # pylint: disable=broad-exception-caught
             if self.debug:
-                logging.warning("Could not retrieve organization" f" name: {error}")
+                logging.warning("Could not retrieve organization name: %s", error)
             return None
 
     def _validate_single_conflict(
@@ -968,9 +968,9 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             return validation_result  # type: ignore[no-any-return]
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"    Validation failed: {error!s}")
-            logging.warning(f"ADDRESS_VALIDATION [{device_serial}]:" f" Validation failed: {error}")
+            logging.warning("ADDRESS_VALIDATION [%s]: Validation failed: %s", device_serial, error)
             if self.debug:
-                logging.debug(f"ADDRESS_VALIDATION [{device_serial}]:" f" {traceback.format_exc()}")
+                logging.debug("ADDRESS_VALIDATION [%s]: %s", device_serial, traceback.format_exc())
             return None
 
     def _print_validation_header(
@@ -987,9 +987,9 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         print(f"! [{current}/{total}]" f" Validating {device_serial}...")
         print(f"    Mist:       {mist_str}")
         print(f"    Reference:  {comp_str}")
-        logging.info(f"ADDRESS_VALIDATION [{device_serial}]:" " Starting validation")
-        logging.info(f"ADDRESS_VALIDATION [{device_serial}]:" f" Mist: {mist_str}")
-        logging.info(f"ADDRESS_VALIDATION [{device_serial}]:" f" Comparison: {comp_str}")
+        logging.info("ADDRESS_VALIDATION [%s]: Starting validation", device_serial)
+        logging.info("ADDRESS_VALIDATION [%s]: Mist: %s", device_serial, mist_str)
+        logging.info("ADDRESS_VALIDATION [%s]: Comparison: %s", device_serial, comp_str)
 
     def _format_address_string(self, address: dict[str, str]) -> str:
         """Format address dictionary as display string."""
@@ -1027,9 +1027,9 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         print(f"    Recommendation: {recommendation_display}")
         if result["recommendation"] != "uncertain" or "inconclusive" not in recommendation_reason.lower():
             print(f"    Reason: {recommendation_reason}")
-        logging.info(f"ADDRESS_VALIDATION [{device_serial}]:" f" Mist valid={mist_valid}," f" conf={mist_conf}")
-        logging.info(f"ADDRESS_VALIDATION [{device_serial}]:" f" Comp valid={comp_valid}," f" conf={comp_conf}")
-        logging.info(f"ADDRESS_VALIDATION [{device_serial}]:" f" Recommendation: {result['recommendation']}")
+        logging.info("ADDRESS_VALIDATION [%s]: Mist valid=%s, conf=%s", device_serial, mist_valid, mist_conf)
+        logging.info("ADDRESS_VALIDATION [%s]: Comp valid=%s, conf=%s", device_serial, comp_valid, comp_conf)
+        logging.info("ADDRESS_VALIDATION [%s]: Recommendation: %s", device_serial, result["recommendation"])
 
     # =================================================================
     # MISMATCH RECORD GENERATION METHODS
@@ -1077,7 +1077,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             self.diff_report_items.append(diff_item)
         except Exception as error:  # pylint: disable=broad-exception-caught
             logging.warning(
-                "! Error processing mismatch for device" f" {conflict.get('device_serial', 'unknown')}:" f" {error}"
+                "! Error processing mismatch for device %s: %s", conflict.get("device_serial", "unknown"), error
             )
             self.counters.comparison_failures += 1
 
@@ -1348,7 +1348,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         else:
             print("    No external validation performed")
             print("   Run with --address-check for intelligent" " recommendations")
-        logging.info(f"Saved {len(self.diff_report_items)}" f" address conflicts to {output_file}")
+        logging.info("Saved %s address conflicts to %s", len(self.diff_report_items), output_file)
 
     def _print_success_message(self) -> None:
         """Print success message when no conflicts found."""

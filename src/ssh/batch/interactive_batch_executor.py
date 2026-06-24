@@ -84,12 +84,11 @@ class InteractiveBatchExecutor:
             )
             return overall_success
         except Exception as session_error:  # noqa: BLE001 - top-level fallback mirrors original behavior
-            logger.error(
+            logger.exception(
                 "[%s] Unexpected error during interactive session: %s: %s",
                 hostname,
                 type(session_error).__name__,
                 session_error,
-                exc_info=True,
             )
             write_to_host_log(f"[ERROR] Unexpected error: {session_error}")  # Verbatim error log line
             overall_success = False

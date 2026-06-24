@@ -183,7 +183,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             )
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"  Error fetching gateway templates: {error}")
-            logging.error(f"GatewayTemplateConfigManager: Failed to fetch templates: " f"{error}")
+            logging.error("GatewayTemplateConfigManager: Failed to fetch templates: %s", error)
             return None
 
     def _select_template(
@@ -239,13 +239,13 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
 
             if not isinstance(config, dict):
                 print("  Error: Template configuration is not in " "expected format.")
-                logging.error(f"GatewayTemplateConfigManager: Invalid config " f"format for {template_name}")
+                logging.error("GatewayTemplateConfigManager: Invalid config format for %s", template_name)
                 return None
 
             return config
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"  Error fetching template configuration: {error}")
-            logging.error(f"GatewayTemplateConfigManager: Failed to fetch " f"{template_name}: {error}")
+            logging.error("GatewayTemplateConfigManager: Failed to fetch %s: %s", template_name, error)
             return None
 
     @staticmethod
@@ -262,7 +262,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
 
         if dia_pico:
             print("  -> Found 'DIA_Pico' in Traffic Steering")
-            logging.info(f"GatewayTemplateConfigManager: Found DIA_Pico " f"in {template_name}")
+            logging.info("GatewayTemplateConfigManager: Found DIA_Pico in %s", template_name)
         else:
             print("  -> 'DIA_Pico' not found in Traffic Steering")
 
@@ -301,10 +301,10 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             print("\n  Success! Configuration extracted and saved to:")
             print(f"  -> {json_filepath}")
             print("\n  Use Menu Option 106 to apply this configuration " "to other templates.")
-            logging.info(f"GatewayTemplateConfigManager: Saved extraction " f"to {json_filepath}")
+            logging.info("GatewayTemplateConfigManager: Saved extraction to %s", json_filepath)
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"\n  Error saving extraction file: {error}")
-            logging.error(f"GatewayTemplateConfigManager: Failed to save JSON: " f"{error}")
+            logging.error("GatewayTemplateConfigManager: Failed to save JSON: %s", error)
 
     # ------------------------------------------------------------------ #
     # Apply helpers                                                       #
@@ -533,7 +533,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
         print(f"  Failed: {failed}")
         print(f"\n  Audit report saved to: {output_file}")
 
-        logging.warning(f"Menu #106 complete: {success} templates updated, {failed} failed")
+        logging.warning("Menu #106 complete: %s templates updated, %s failed", success, failed)
 
     # ------------------------------------------------------------------ #
     # Clone-by-location helpers                                           #
@@ -679,7 +679,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             templates = mistapi.get_all(response=resp, mist_session=self._api)
             return {t.get("name"): t.get("id") for t in templates if t.get("name")}
         except Exception as error:  # pylint: disable=broad-exception-caught
-            logging.error(f"GatewayTemplateConfigManager: Error fetching templates: " f"{error}")
+            logging.error("GatewayTemplateConfigManager: Error fetching templates: %s", error)
             return {}
 
     def _create_templates(
@@ -697,7 +697,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
 
             if name in existing_names:
                 template_map[name] = existing_names[name]
-                logging.info(f"Template {name} already exists, skipping")
+                logging.info("Template %s already exists, skipping", name)
                 continue
 
             self._create_single_template(mistapi, name, source_config, template_map)
@@ -725,9 +725,9 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             if resp.status_code == 200:
                 new_id = resp.data.get("id") if hasattr(resp, "data") else ""
                 template_map[name] = new_id
-                logging.info(f"Created template {name} (ID: {new_id})")
+                logging.info("Created template %s (ID: %s)", name, new_id)
         except Exception as error:  # pylint: disable=broad-exception-caught
-            logging.error(f"Error creating template {name}: {error}")
+            logging.error("Error creating template %s: %s", name, error)
 
     def _assign_sites(
         self,
@@ -822,7 +822,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
         print(f"\n  AUDIT REPORT: {output}")
         print("=" * 70)
 
-        logging.warning(f"Menu #111 complete: {assigned} sites assigned, {failed} failed")
+        logging.warning("Menu #111 complete: %s sites assigned, %s failed", assigned, failed)
 
 
 # ------------------------------------------------------------------ #
@@ -844,7 +844,7 @@ def _find_picocell_policy(
             if isinstance(policy, dict) and policy.get("name") == "Picocell":
                 picocell = policy
                 print("  -> Found 'Picocell' in Application Policies")
-                logging.info(f"GatewayTemplateConfigManager: Found Picocell " f"in {template_name}")
+                logging.info("GatewayTemplateConfigManager: Found Picocell in %s", template_name)
                 break
 
     if not picocell:

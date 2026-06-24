@@ -61,6 +61,41 @@ with patch.dict(
         parse_time_input,
     )
 
+# Issue #433 Phase B introduced SiteAutoUpgradeCoreDeps / SiteAutoUpgradeMspDeps
+# to keep helper signatures under the 5-Item Rule. Tests build them via the
+# two helpers below so the existing per-kwarg test style stays readable.
+from dataclasses import replace
+
+from src.dataclasses.family_selection_context import FamilySelectionContext  # Phase B refactor.
+from src.dataclasses.site_auto_upgrade_deps import SiteAutoUpgradeCoreDeps, SiteAutoUpgradeMspDeps
+
+
+def _make_core(
+    *,
+    apisession=None,
+    safe_input_fn=None,
+    fetch_sites_fn=None,
+    check_stop_fn=None,
+    dry_run=False,
+    **_ignored,
+):
+    """Build a SiteAutoUpgradeCoreDeps from per-kwarg test inputs."""
+    return SiteAutoUpgradeCoreDeps(
+        apisession=apisession if apisession is not None else MagicMock(),
+        safe_input_fn=safe_input_fn if safe_input_fn is not None else MagicMock(),
+        fetch_sites_fn=fetch_sites_fn if fetch_sites_fn is not None else MagicMock(),
+        check_stop_fn=check_stop_fn if check_stop_fn is not None else MagicMock(),
+        dry_run=dry_run,
+    )
+
+
+def _make_msp(*, select_msps_fn=None, select_orgs_fn=None, **_ignored):
+    """Build a SiteAutoUpgradeMspDeps from per-kwarg test inputs."""
+    return SiteAutoUpgradeMspDeps(
+        select_msps_fn=select_msps_fn,
+        select_orgs_fn=select_orgs_fn,
+    )
+
 
 # ===================================================================
 # Helpers
@@ -113,12 +148,31 @@ def _mist_modules(**overrides):
 
 @pytest.fixture()
 def mock_deps():
-    """Return a dict of common mock dependencies."""
+    """Return a dict whose ``deps`` value is the new SiteAutoUpgradeCoreDeps bundle.
+
+    Tests using ``**mock_deps`` keep working unchanged because the
+    SiteAutoUpgradeConfigurator now expects exactly one DI kwarg: ``deps``.
+    Tests that previously read individual mocks (e.g. ``mock_deps["apisession"]``)
+    keep working because the per-component mocks are also returned alongside
+    for backwards compatibility.
+    """
+    apisession = MagicMock()  # Authenticated mistapi session for API calls.
+    safe_input_fn = MagicMock(return_value="")  # Default prompt response is "" (empty/Enter).
+    fetch_sites_fn = MagicMock(return_value=[])  # Default to an empty site list.
+    check_stop_fn = MagicMock(return_value=False)  # Default to "no stop signal".
+    deps = SiteAutoUpgradeCoreDeps(  # Build the new DI dataclass once per test.
+        apisession=apisession,
+        safe_input_fn=safe_input_fn,
+        fetch_sites_fn=fetch_sites_fn,
+        check_stop_fn=check_stop_fn,
+        dry_run=False,
+    )
     return {
-        "apisession": MagicMock(),
-        "safe_input_fn": MagicMock(return_value=""),
-        "fetch_sites_fn": MagicMock(return_value=[]),
-        "check_stop_fn": MagicMock(return_value=False),
+        "deps": deps,  # Primary key consumed by `**mock_deps` splats in test ctors.
+        "apisession": apisession,  # Kept for tests that still inspect the per-component mock.
+        "safe_input_fn": safe_input_fn,  # Same: backwards-compat for older tests.
+        "fetch_sites_fn": fetch_sites_fn,  # Same: backwards-compat for older tests.
+        "check_stop_fn": check_stop_fn,  # Same: backwards-compat for older tests.
     }
 
 
@@ -127,11 +181,7 @@ def configurator(mock_deps):
     """Create a SiteAutoUpgradeConfigurator with mock deps."""
     return SiteAutoUpgradeConfigurator(
         org_id="org-123",
-        apisession=mock_deps["apisession"],
-        safe_input_fn=mock_deps["safe_input_fn"],
-        fetch_sites_fn=mock_deps["fetch_sites_fn"],
-        check_stop_fn=mock_deps["check_stop_fn"],
-        dry_run=False,
+        deps=mock_deps["deps"],  # Issue #433 Phase B: new single-deps DI signature.
     )
 
 
@@ -623,38 +673,44 @@ class TestApplyFamilySelection:
         version_map = {"AP41": [{"version": "2.0"}, {"version": "1.0"}]}
         custom: dict[str, str] = {}
         _apply_family_selection(
-            "1",
-            "AP41",
-            ["AP41"],
-            ["2.0", "1.0"],
-            None,
-            version_map,
-            custom,
+            "1",  # Operator's choice -> picks index 1 in the sorted_versions list.
+            custom,  # Mutable out dict the function writes the chosen version into.
+            FamilySelectionContext(  # Issue #433 Phase B: 5 fields bundled into one ctx param.
+                family="AP41",
+                models=["AP41"],
+                sorted_versions=["2.0", "1.0"],
+                current_version=None,
+                model_version_map=version_map,
+            ),
         )
         assert custom["AP41"] == "2.0"
 
     def test_empty_keeps_current(self, capsys):
         _apply_family_selection(
-            "",
-            "AP41",
-            ["AP41"],
-            ["2.0"],
-            "1.0",
-            {},
-            {},
+            "",  # Empty choice falls through to the "keep current" path.
+            {},  # No mutation expected when current version is preserved.
+            FamilySelectionContext(  # Issue #433 Phase B: 5 fields bundled into one ctx param.
+                family="AP41",
+                models=["AP41"],
+                sorted_versions=["2.0"],
+                current_version="1.0",  # Current version exists -> "Keeping" message printed.
+                model_version_map={},
+            ),
         )
         captured = capsys.readouterr()
         assert "Keeping" in captured.out
 
     def test_empty_no_current_skips(self, capsys):
         _apply_family_selection(
-            "",
-            "AP41",
-            ["AP41"],
-            ["2.0"],
-            None,
-            {},
-            {},
+            "",  # Empty choice + no current version triggers the "Skipped" path.
+            {},  # No mutation expected on the skip path.
+            FamilySelectionContext(  # Issue #433 Phase B: 5 fields bundled into one ctx param.
+                family="AP41",
+                models=["AP41"],
+                sorted_versions=["2.0"],
+                current_version=None,  # No current version -> "Skipped" message printed.
+                model_version_map={},
+            ),
         )
         captured = capsys.readouterr()
         assert "Skipped" in captured.out
@@ -764,11 +820,7 @@ class TestConfiguratorInit:
         assert configurator.schedule == {}
 
     def test_dry_run_flag(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(
-            org_id="org-456",
-            dry_run=True,
-            **mock_deps,
-        )
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-456", deps=replace(mock_deps["deps"], dry_run=True))
         assert cfg.dry_run is True
 
 
@@ -841,7 +893,7 @@ class TestConfiguratorRun:
         mock_deps["check_stop_fn"].return_value = True
         cfg = SiteAutoUpgradeConfigurator(
             org_id="org-1",
-            **mock_deps,
+            deps=mock_deps["deps"],
         )
         cfg.run()
         assert cfg.all_sites == []
@@ -851,7 +903,7 @@ class TestConfiguratorRun:
         mock_deps["fetch_sites_fn"].return_value = []
         cfg = SiteAutoUpgradeConfigurator(
             org_id="org-1",
-            **mock_deps,
+            deps=mock_deps["deps"],
         )
         cfg.run()
         assert cfg.selected_sites == []
@@ -868,7 +920,7 @@ class TestConfiguratorRun:
         ]
         cfg = SiteAutoUpgradeConfigurator(
             org_id="org-1",
-            **mock_deps,
+            deps=mock_deps["deps"],
         )
         # Mock step3 API call
         mock_response = MagicMock()
@@ -905,7 +957,7 @@ class TestStep1FetchSites:
             {"id": "s1", "name": "Bravo"},
             {"id": "s2", "name": "Alpha"},
         ]
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         assert cfg._step1_fetch_sites() is True
         assert cfg.all_sites[0]["name"] == "Alpha"
         captured = capsys.readouterr()
@@ -913,14 +965,14 @@ class TestStep1FetchSites:
 
     def test_empty_sites(self, mock_deps, capsys):
         mock_deps["fetch_sites_fn"].return_value = []
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         assert cfg._step1_fetch_sites() is False
         captured = capsys.readouterr()
         assert "No sites found" in captured.out
 
     def test_exception(self, mock_deps, capsys):
         mock_deps["fetch_sites_fn"].side_effect = RuntimeError("network")
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         assert cfg._step1_fetch_sites() is False
         captured = capsys.readouterr()
         assert "Error fetching sites" in captured.out
@@ -935,14 +987,14 @@ class TestStep2SelectSites:
     """Tests for _step2_select_sites."""
 
     def test_select_all(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [{"id": "s1", "name": "A"}]
         mock_deps["safe_input_fn"].return_value = "A"
         assert cfg._step2_select_sites() is True
         assert len(cfg.selected_sites) == 1
 
     def test_select_single(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [
             {"id": "s1", "name": "Alpha"},
             {"id": "s2", "name": "Bravo"},
@@ -962,7 +1014,7 @@ class TestStep2SelectSites:
         assert cfg.is_single_site is True
 
     def test_select_list(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [
             {"id": "s1", "name": "A"},
             {"id": "s2", "name": "B"},
@@ -973,7 +1025,7 @@ class TestStep2SelectSites:
         assert len(cfg.selected_sites) == 2
 
     def test_system_exit(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         mock_deps["safe_input_fn"].side_effect = SystemExit
         assert cfg._step2_select_sites() is False
 
@@ -987,7 +1039,7 @@ class TestSelectAllSites:
     """Tests for _select_all_sites."""
 
     def test_copies_all(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [{"id": "s1"}, {"id": "s2"}]
         assert cfg._select_all_sites() is True
         assert len(cfg.selected_sites) == 2
@@ -1004,7 +1056,7 @@ class TestSelectSingleSite:
     """Tests for _select_single_site."""
 
     def test_valid_selection(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [{"id": "s1", "name": "Site1"}]
         mock_deps["safe_input_fn"].return_value = "1"
         with patch.dict(
@@ -1022,25 +1074,25 @@ class TestSelectSingleSite:
         assert len(cfg.selected_sites) == 1
 
     def test_cancel(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [{"id": "s1", "name": "Site1"}]
         mock_deps["safe_input_fn"].return_value = "q"
         assert cfg._select_single_site() is False
 
     def test_invalid_input(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [{"id": "s1", "name": "Site1"}]
         mock_deps["safe_input_fn"].return_value = "abc"
         assert cfg._select_single_site() is False
 
     def test_out_of_range(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [{"id": "s1", "name": "Site1"}]
         mock_deps["safe_input_fn"].return_value = "5"
         assert cfg._select_single_site() is False
 
     def test_system_exit(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [{"id": "s1", "name": "Site1"}]
         mock_deps["safe_input_fn"].side_effect = SystemExit
         assert cfg._select_single_site() is False
@@ -1055,7 +1107,7 @@ class TestFetchCurrentSiteSettings:
     """Tests for _fetch_current_site_settings."""
 
     def test_loads_settings(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         mock_response = MagicMock()
         mock_response.data = {
             "auto_upgrade": {
@@ -1081,7 +1133,7 @@ class TestFetchCurrentSiteSettings:
         assert "1 model(s) configured" in captured.out
 
     def test_no_auto_upgrade(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         mock_response = MagicMock()
         mock_response.data = {}
         with patch.dict(
@@ -1098,7 +1150,7 @@ class TestFetchCurrentSiteSettings:
         assert cfg.current_site_versions == {}
 
     def test_exception_handled(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         with patch.dict(
             sys.modules,
             _mist_modules(
@@ -1122,7 +1174,7 @@ class TestSelectFromList:
     """Tests for _select_from_list."""
 
     def test_valid_selection(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [
             {"id": "s1", "name": "A"},
             {"id": "s2", "name": "B"},
@@ -1132,13 +1184,13 @@ class TestSelectFromList:
         assert len(cfg.selected_sites) == 2
 
     def test_empty_selection(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [{"id": "s1", "name": "A"}]
         mock_deps["safe_input_fn"].return_value = ""
         assert cfg._select_from_list() is False
 
     def test_system_exit(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [{"id": "s1", "name": "A"}]
         mock_deps["safe_input_fn"].side_effect = SystemExit
         assert cfg._select_from_list() is False
@@ -1153,7 +1205,7 @@ class TestApplySiteIndices:
     """Tests for _apply_site_indices."""
 
     def test_valid_indices(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [
             {"id": "s1", "name": "A"},
             {"id": "s2", "name": "B"},
@@ -1165,12 +1217,12 @@ class TestApplySiteIndices:
         assert "Selected 2 site(s)" in captured.out
 
     def test_out_of_range_ignored(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [{"id": "s1", "name": "A"}]
         assert cfg._apply_site_indices([99]) is False
 
     def test_truncates_display(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.all_sites = [{"id": f"s{i}", "name": f"Site{i}"} for i in range(10)]
         assert cfg._apply_site_indices(list(range(1, 11))) is True
         captured = capsys.readouterr()
@@ -1186,7 +1238,7 @@ class TestStep3FetchVersions:
     """Tests for _step3_fetch_available_versions."""
 
     def test_success(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         mock_response = MagicMock()
         mock_response.data = [
             {"model": "AP41", "version": "1.0"},
@@ -1207,12 +1259,12 @@ class TestStep3FetchVersions:
         assert "Found firmware for 1 AP model(s)" in captured.out
 
     def test_no_session(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.apisession = None
         assert cfg._step3_fetch_available_versions() is False
 
     def test_no_data(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         mock_response = MagicMock(spec=[])
         del mock_response.data
         with patch.dict(
@@ -1228,7 +1280,7 @@ class TestStep3FetchVersions:
             assert cfg._step3_fetch_available_versions() is False
 
     def test_exception(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         with patch.dict(
             sys.modules,
             _mist_modules(
@@ -1253,7 +1305,7 @@ class TestBuildModelVersionMap:
     """Tests for _build_model_version_map."""
 
     def test_builds_map(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.available_versions = [
             {"model": "AP41", "version": "1.0"},
             {"model": "AP41", "version": "2.0"},
@@ -1264,7 +1316,7 @@ class TestBuildModelVersionMap:
         assert len(cfg.model_version_map["AP43"]) == 1
 
     def test_skips_invalid(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.available_versions = ["not-a-dict", {"model": "AP41"}]
         cfg._build_model_version_map()
         assert cfg.model_version_map == {}
@@ -1279,7 +1331,7 @@ class TestStep4SelectVersions:
     """Tests for _step4_select_versions."""
 
     def test_select_version(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.model_version_map = {
             "AP41": [{"version": "2.0"}, {"version": "1.0"}],
         }
@@ -1288,7 +1340,7 @@ class TestStep4SelectVersions:
         assert "AP41" in cfg.custom_versions
 
     def test_skip_all(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.model_version_map = {
             "AP41": [{"version": "1.0"}],
         }
@@ -1298,7 +1350,7 @@ class TestStep4SelectVersions:
         assert "No versions selected" in captured.out
 
     def test_system_exit(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.model_version_map = {
             "AP41": [{"version": "1.0"}],
         }
@@ -1316,7 +1368,7 @@ class TestStep5ConfigureSchedule:
 
     def test_defaults(self, mock_deps, capsys):
         mock_deps["safe_input_fn"].side_effect = ["1", "02:00"]
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg._step5_configure_schedule()
         assert cfg.schedule["day_of_week"] == "any"
         assert cfg.schedule["time_of_day"] == "02:00"
@@ -1325,7 +1377,7 @@ class TestStep5ConfigureSchedule:
 
     def test_specific_day(self, mock_deps, capsys):
         mock_deps["safe_input_fn"].side_effect = ["3", "14:00"]
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg._step5_configure_schedule()
         assert cfg.schedule["day_of_week"] == "mon"
 
@@ -1339,7 +1391,7 @@ class TestStep6ConfirmAndApply:
     """Tests for _step6_confirm_and_apply."""
 
     def test_confirm_yes(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.selected_sites = [{"id": "s1", "name": "Site1"}]
         cfg.custom_versions = {"AP41": "1.0"}
         cfg.schedule = {"day_of_week": "any", "time_of_day": "02:00"}
@@ -1359,7 +1411,7 @@ class TestStep6ConfirmAndApply:
         assert "CONFIGURATION COMPLETE" in captured.out
 
     def test_confirm_no(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.selected_sites = [{"id": "s1", "name": "Site1"}]
         cfg.custom_versions = {"AP41": "1.0"}
         cfg.schedule = {}
@@ -1369,11 +1421,7 @@ class TestStep6ConfirmAndApply:
         assert "Cancelled" in captured.out
 
     def test_dry_run_skips_confirm(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(
-            org_id="org-1",
-            dry_run=True,
-            **mock_deps,
-        )
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=replace(mock_deps["deps"], dry_run=True))
         cfg.selected_sites = [{"id": "s1", "name": "Site1"}]
         cfg.custom_versions = {"AP41": "1.0"}
         cfg.schedule = {}
@@ -1382,7 +1430,7 @@ class TestStep6ConfirmAndApply:
         assert "DRY-RUN" in captured.out
 
     def test_system_exit(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.selected_sites = [{"id": "s1", "name": "Site1"}]
         cfg.custom_versions = {"AP41": "1.0"}
         cfg.schedule = {}
@@ -1635,58 +1683,58 @@ class TestHandleMspMode:
     def test_mode_1_calls_single_org(self):
         with patch.object(_sau_mod, "_run_single_org") as mock_single:
             _sau_mod._handle_msp_mode(
-                apisession=MagicMock(),
-                msp_privileges=[{"scope": "msp"}],
-                safe_input_fn=MagicMock(return_value="1"),
-                get_org_id_fn=MagicMock(return_value="org-1"),
-                fetch_sites_fn=MagicMock(),
-                check_stop_fn=MagicMock(),
-                dry_run=False,
-                select_msps_fn=MagicMock(),
-                select_orgs_fn=MagicMock(),
+                _make_core(
+                    apisession=MagicMock(),
+                    safe_input_fn=MagicMock(return_value="1"),
+                    fetch_sites_fn=MagicMock(),
+                    check_stop_fn=MagicMock(),
+                    dry_run=False,
+                ),
+                _make_msp(select_msps_fn=MagicMock(), select_orgs_fn=MagicMock()),
+                MagicMock(return_value="org-1"),
             )
             mock_single.assert_called_once()
 
     def test_mode_2_calls_msp(self):
         with patch.object(_sau_mod, "_execute_msp_mode") as mock_msp:
             _sau_mod._handle_msp_mode(
-                apisession=MagicMock(),
-                msp_privileges=[{"scope": "msp"}],
-                safe_input_fn=MagicMock(return_value="2"),
-                get_org_id_fn=MagicMock(return_value="org-1"),
-                fetch_sites_fn=MagicMock(),
-                check_stop_fn=MagicMock(),
-                dry_run=False,
-                select_msps_fn=MagicMock(),
-                select_orgs_fn=MagicMock(),
+                _make_core(
+                    apisession=MagicMock(),
+                    safe_input_fn=MagicMock(return_value="2"),
+                    fetch_sites_fn=MagicMock(),
+                    check_stop_fn=MagicMock(),
+                    dry_run=False,
+                ),
+                _make_msp(select_msps_fn=MagicMock(), select_orgs_fn=MagicMock()),
+                MagicMock(return_value="org-1"),
             )
             mock_msp.assert_called_once()
 
     def test_system_exit(self):
         _sau_mod._handle_msp_mode(
-            apisession=MagicMock(),
-            msp_privileges=[{"scope": "msp"}],
-            safe_input_fn=MagicMock(side_effect=SystemExit),
-            get_org_id_fn=MagicMock(),
-            fetch_sites_fn=MagicMock(),
-            check_stop_fn=MagicMock(),
-            dry_run=False,
-            select_msps_fn=None,
-            select_orgs_fn=None,
+            _make_core(
+                apisession=MagicMock(),
+                safe_input_fn=MagicMock(side_effect=SystemExit),
+                fetch_sites_fn=MagicMock(),
+                check_stop_fn=MagicMock(),
+                dry_run=False,
+            ),
+            _make_msp(select_msps_fn=None, select_orgs_fn=None),
+            MagicMock(),
         )
 
     def test_dry_run_banner(self, capsys):
         with patch.object(_sau_mod, "_run_single_org"):
             _sau_mod._handle_msp_mode(
-                apisession=MagicMock(),
-                msp_privileges=[{"scope": "msp"}],
-                safe_input_fn=MagicMock(return_value="1"),
-                get_org_id_fn=MagicMock(return_value="org-1"),
-                fetch_sites_fn=MagicMock(),
-                check_stop_fn=MagicMock(),
-                dry_run=True,
-                select_msps_fn=None,
-                select_orgs_fn=None,
+                _make_core(
+                    apisession=MagicMock(),
+                    safe_input_fn=MagicMock(return_value="1"),
+                    fetch_sites_fn=MagicMock(),
+                    check_stop_fn=MagicMock(),
+                    dry_run=True,
+                ),
+                _make_msp(select_msps_fn=None, select_orgs_fn=None),
+                MagicMock(return_value="org-1"),
             )
         captured = capsys.readouterr()
         assert "DRY-RUN MODE" in captured.out
@@ -1702,12 +1750,14 @@ class TestRunSingleOrg:
 
     def test_no_org_id(self, capsys):
         _sau_mod._run_single_org(
-            apisession=MagicMock(),
-            safe_input_fn=MagicMock(),
-            get_org_id_fn=MagicMock(return_value=""),
-            fetch_sites_fn=MagicMock(),
-            check_stop_fn=MagicMock(),
-            dry_run=False,
+            _make_core(
+                apisession=MagicMock(),
+                safe_input_fn=MagicMock(),
+                fetch_sites_fn=MagicMock(),
+                check_stop_fn=MagicMock(),
+                dry_run=False,
+            ),
+            MagicMock(return_value=""),
         )
         captured = capsys.readouterr()
         assert "No organization selected" in captured.out
@@ -1718,12 +1768,14 @@ class TestRunSingleOrg:
             "run",
         ) as mock_run:
             _sau_mod._run_single_org(
-                apisession=MagicMock(),
-                safe_input_fn=MagicMock(),
-                get_org_id_fn=MagicMock(return_value="org-1"),
-                fetch_sites_fn=MagicMock(),
-                check_stop_fn=MagicMock(),
-                dry_run=False,
+                _make_core(
+                    apisession=MagicMock(),
+                    safe_input_fn=MagicMock(),
+                    fetch_sites_fn=MagicMock(),
+                    check_stop_fn=MagicMock(),
+                    dry_run=False,
+                ),
+                MagicMock(return_value="org-1"),
             )
             mock_run.assert_called_once()
 
@@ -1807,14 +1859,16 @@ class TestMspConfirmAndApply:
 
     def test_cancel(self, capsys):
         _sau_mod._msp_confirm_and_apply(
-            selected_orgs=[{"id": "o1", "name": "Org1"}],
-            apisession=MagicMock(),
-            safe_input_fn=MagicMock(return_value="n"),
-            fetch_sites_fn=MagicMock(),
-            check_stop_fn=MagicMock(),
-            dry_run=False,
-            shared_schedule={"day_of_week": "any", "time_of_day": "02:00"},
-            shared_versions=None,
+            _make_core(
+                apisession=MagicMock(),
+                safe_input_fn=MagicMock(return_value="n"),
+                fetch_sites_fn=MagicMock(),
+                check_stop_fn=MagicMock(),
+                dry_run=False,
+            ),
+            [{"id": "o1", "name": "Org1"}],
+            {"day_of_week": "any", "time_of_day": "02:00"},
+            None,
         )
         captured = capsys.readouterr()
         assert "Cancelled" in captured.out
@@ -1826,26 +1880,30 @@ class TestMspConfirmAndApply:
             return_value=[],
         ):
             _sau_mod._msp_confirm_and_apply(
-                selected_orgs=[{"id": "o1", "name": "Org1"}],
-                apisession=MagicMock(),
-                safe_input_fn=MagicMock(return_value="y"),
-                fetch_sites_fn=MagicMock(),
-                check_stop_fn=MagicMock(),
-                dry_run=False,
-                shared_schedule={"day_of_week": "any", "time_of_day": "02:00"},
-                shared_versions={"AP41": "1.0"},
+                _make_core(
+                    apisession=MagicMock(),
+                    safe_input_fn=MagicMock(return_value="y"),
+                    fetch_sites_fn=MagicMock(),
+                    check_stop_fn=MagicMock(),
+                    dry_run=False,
+                ),
+                [{"id": "o1", "name": "Org1"}],
+                {"day_of_week": "any", "time_of_day": "02:00"},
+                {"AP41": "1.0"},
             )
 
     def test_system_exit(self):
         _sau_mod._msp_confirm_and_apply(
-            selected_orgs=[{"id": "o1", "name": "Org1"}],
-            apisession=MagicMock(),
-            safe_input_fn=MagicMock(side_effect=SystemExit),
-            fetch_sites_fn=MagicMock(),
-            check_stop_fn=MagicMock(),
-            dry_run=False,
-            shared_schedule={"day_of_week": "any", "time_of_day": "02:00"},
-            shared_versions=None,
+            _make_core(
+                apisession=MagicMock(),
+                safe_input_fn=MagicMock(side_effect=SystemExit),
+                fetch_sites_fn=MagicMock(),
+                check_stop_fn=MagicMock(),
+                dry_run=False,
+            ),
+            [{"id": "o1", "name": "Org1"}],
+            {"day_of_week": "any", "time_of_day": "02:00"},
+            None,
         )
 
 
@@ -1859,13 +1917,14 @@ class TestExecuteMspMode:
 
     def test_no_msps_fn(self, capsys):
         _sau_mod._execute_msp_mode(
-            apisession=MagicMock(),
-            safe_input_fn=MagicMock(),
-            fetch_sites_fn=MagicMock(),
-            check_stop_fn=MagicMock(),
-            dry_run=False,
-            select_msps_fn=None,
-            select_orgs_fn=None,
+            _make_core(
+                apisession=MagicMock(),
+                safe_input_fn=MagicMock(),
+                fetch_sites_fn=MagicMock(),
+                check_stop_fn=MagicMock(),
+                dry_run=False,
+            ),
+            _make_msp(select_msps_fn=None, select_orgs_fn=None),
         )
         captured = capsys.readouterr()
         assert "MSP functions not available" in captured.out
@@ -1877,13 +1936,14 @@ class TestExecuteMspMode:
             return_value=None,
         ):
             _sau_mod._execute_msp_mode(
-                apisession=MagicMock(),
-                safe_input_fn=MagicMock(),
-                fetch_sites_fn=MagicMock(),
-                check_stop_fn=MagicMock(),
-                dry_run=False,
-                select_msps_fn=MagicMock(),
-                select_orgs_fn=MagicMock(),
+                _make_core(
+                    apisession=MagicMock(),
+                    safe_input_fn=MagicMock(),
+                    fetch_sites_fn=MagicMock(),
+                    check_stop_fn=MagicMock(),
+                    dry_run=False,
+                ),
+                _make_msp(select_msps_fn=MagicMock(), select_orgs_fn=MagicMock()),
             )
 
     def test_firmware_none_cancels(self):
@@ -1900,13 +1960,14 @@ class TestExecuteMspMode:
             ),
         ):
             _sau_mod._execute_msp_mode(
-                apisession=MagicMock(),
-                safe_input_fn=MagicMock(),
-                fetch_sites_fn=MagicMock(),
-                check_stop_fn=MagicMock(),
-                dry_run=False,
-                select_msps_fn=MagicMock(),
-                select_orgs_fn=MagicMock(),
+                _make_core(
+                    apisession=MagicMock(),
+                    safe_input_fn=MagicMock(),
+                    fetch_sites_fn=MagicMock(),
+                    check_stop_fn=MagicMock(),
+                    dry_run=False,
+                ),
+                _make_msp(select_msps_fn=MagicMock(), select_orgs_fn=MagicMock()),
             )
 
     def test_full_flow(self):
@@ -1932,13 +1993,14 @@ class TestExecuteMspMode:
             ) as mock_confirm,
         ):
             _sau_mod._execute_msp_mode(
-                apisession=MagicMock(),
-                safe_input_fn=MagicMock(),
-                fetch_sites_fn=MagicMock(),
-                check_stop_fn=MagicMock(),
-                dry_run=False,
-                select_msps_fn=MagicMock(),
-                select_orgs_fn=MagicMock(),
+                _make_core(
+                    apisession=MagicMock(),
+                    safe_input_fn=MagicMock(),
+                    fetch_sites_fn=MagicMock(),
+                    check_stop_fn=MagicMock(),
+                    dry_run=False,
+                ),
+                _make_msp(select_msps_fn=MagicMock(), select_orgs_fn=MagicMock()),
             )
             mock_confirm.assert_called_once()
 
@@ -1961,13 +2023,14 @@ class TestExecuteMspMode:
             ),
         ):
             _sau_mod._execute_msp_mode(
-                apisession=MagicMock(),
-                safe_input_fn=MagicMock(),
-                fetch_sites_fn=MagicMock(),
-                check_stop_fn=MagicMock(),
-                dry_run=False,
-                select_msps_fn=MagicMock(),
-                select_orgs_fn=MagicMock(),
+                _make_core(
+                    apisession=MagicMock(),
+                    safe_input_fn=MagicMock(),
+                    fetch_sites_fn=MagicMock(),
+                    check_stop_fn=MagicMock(),
+                    dry_run=False,
+                ),
+                _make_msp(select_msps_fn=MagicMock(), select_orgs_fn=MagicMock()),
             )
 
 
@@ -1993,14 +2056,16 @@ class TestApplyToAllOrgs:
             return_value=(True, 1),
         ):
             results = _sau_mod._apply_to_all_orgs(
-                selected_orgs=orgs,
-                apisession=mock_deps["apisession"],
-                safe_input_fn=mock_deps["safe_input_fn"],
-                fetch_sites_fn=mock_deps["fetch_sites_fn"],
-                check_stop_fn=mock_deps["check_stop_fn"],
-                dry_run=False,
-                shared_schedule={"day_of_week": "any", "time_of_day": "02:00"},
-                shared_versions=None,
+                _make_core(
+                    apisession=mock_deps["apisession"],
+                    safe_input_fn=mock_deps["safe_input_fn"],
+                    fetch_sites_fn=mock_deps["fetch_sites_fn"],
+                    check_stop_fn=mock_deps["check_stop_fn"],
+                    dry_run=False,
+                ),
+                orgs,
+                {"day_of_week": "any", "time_of_day": "02:00"},
+                None,
             )
         assert len(results) == 2
         assert results[0]["success"] is True
@@ -2016,7 +2081,7 @@ class TestRunMspMode:
 
     def test_no_sites(self, mock_deps):
         mock_deps["fetch_sites_fn"].return_value = []
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         success, count = cfg.run_msp_mode()
         assert success is False
         assert count == 0
@@ -2025,11 +2090,7 @@ class TestRunMspMode:
         mock_deps["fetch_sites_fn"].return_value = [
             {"id": "s1", "name": "Site1"},
         ]
-        cfg = SiteAutoUpgradeConfigurator(
-            org_id="org-1",
-            dry_run=True,
-            **mock_deps,
-        )
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=replace(mock_deps["deps"], dry_run=True))
         cfg.shared_versions = {"AP41": "1.0"}
         cfg.schedule = {"day_of_week": "any", "time_of_day": "02:00"}
         success, count = cfg.run_msp_mode()
@@ -2042,11 +2103,7 @@ class TestRunMspMode:
         mock_deps["fetch_sites_fn"].return_value = [
             {"id": "s1", "name": "Site1"},
         ]
-        cfg = SiteAutoUpgradeConfigurator(
-            org_id="org-1",
-            dry_run=True,
-            **mock_deps,
-        )
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=replace(mock_deps["deps"], dry_run=True))
         cfg.schedule = {"day_of_week": "any", "time_of_day": "02:00"}
         mock_response = MagicMock()
         mock_response.data = [
@@ -2075,14 +2132,14 @@ class TestAutoSelectVersions:
     """Tests for _auto_select_versions."""
 
     def test_empty_map(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.model_version_map = {}
         assert cfg._auto_select_versions() is False
         captured = capsys.readouterr()
         assert "No firmware versions" in captured.out
 
     def test_selects_versions(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.model_version_map = {
             "AP41": [{"version": "1.0", "tag": "stable"}],
             "AP43": [],
@@ -2100,18 +2157,14 @@ class TestApplyAutoUpgradeConfig:
     """Tests for _apply_auto_upgrade_config."""
 
     def test_no_sites(self, mock_deps):
-        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", **mock_deps)
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])
         cfg.selected_sites = []
         success, count = cfg._apply_auto_upgrade_config()
         assert success is False
         assert count == 0
 
     def test_dry_run(self, mock_deps, capsys):
-        cfg = SiteAutoUpgradeConfigurator(
-            org_id="org-1",
-            dry_run=True,
-            **mock_deps,
-        )
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=replace(mock_deps["deps"], dry_run=True))
         cfg.selected_sites = [{"id": "s1", "name": "Site1"}]
         cfg.custom_versions = {"AP41": "1.0"}
         cfg.schedule = {"day_of_week": "any", "time_of_day": "02:00"}

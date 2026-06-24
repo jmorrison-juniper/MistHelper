@@ -54,8 +54,9 @@ class TestCollectMissingDataEnvelopes:
         monkeypatch.setattr(  # Stub getpass so no stdin read attempted in pytest capture mode
             _getpass_mod, "getpass", lambda prompt="Enter SSH password: ": "stubbed-pw"
         )
+        deps = MistHelper.SSHRunnerManager._build_deps()  # Build deps; facade wrapper removed
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
-            MistHelper.SSHRunnerManager._collect_missing_data([], None, None, [])  # Call with all-missing data
+            MistHelper.ExtractedSSHRunnerManager._collect_missing_data(deps, [], None, None, [])  # All-missing data
         entry_msgs = _entry_messages(caplog.records)  # Collect entry envelope lines
         assert entry_msgs, (  # At least one entry envelope must be present
             "No entry envelope logged by _collect_missing_data; " "expected a message containing 'Entering'"
@@ -66,9 +67,10 @@ class TestCollectMissingDataEnvelopes:
         monkeypatch.setattr(  # Stub safe_input to return pre-filled values
             MistHelper.InputUtils, "safe_input", lambda prompt, context="": "admin"
         )
+        deps = MistHelper.SSHRunnerManager._build_deps()  # Build deps; facade wrapper removed
         with caplog.at_level(logging.DEBUG, logger="root"):  # DEBUG to catch debug-level exit
-            MistHelper.SSHRunnerManager._collect_missing_data(  # Supply hosts so only username/command prompted
-                ["10.0.0.1"], None, "secret", []
+            MistHelper.ExtractedSSHRunnerManager._collect_missing_data(  # Supply hosts; only user/cmd prompted
+                deps, ["10.0.0.1"], None, "secret", []
             )
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
         assert exit_msgs, (  # At least one exit envelope must be present
@@ -81,8 +83,9 @@ class TestCollectMissingDataEnvelopes:
         monkeypatch.setattr(  # Return empty string to simulate user pressing Enter
             MistHelper.InputUtils, "safe_input", lambda prompt, context="": ""
         )
+        deps = MistHelper.SSHRunnerManager._build_deps()  # Build deps; facade wrapper removed
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
-            MistHelper.SSHRunnerManager._collect_missing_data([], None, None, [])
+            MistHelper.ExtractedSSHRunnerManager._collect_missing_data(deps, [], None, None, [])
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
         assert (
             exit_msgs
@@ -99,16 +102,18 @@ class TestConfirmExecutionEnvelopes:
         monkeypatch.setattr(  # Stub safe_input to auto-confirm
             MistHelper.InputUtils, "safe_input", lambda prompt, context="": "y"
         )
+        deps = MistHelper.SSHRunnerManager._build_deps()  # Build deps; facade wrapper removed
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
-            MistHelper.SSHRunnerManager._confirm_execution(5)
+            MistHelper.ExtractedSSHRunnerManager._confirm_execution(deps, 5)
         entry_msgs = _entry_messages(caplog.records)  # Collect entry envelope lines
         assert entry_msgs, "No entry envelope logged by _confirm_execution"
 
     def test_exit_envelope_emitted_on_confirm(self, caplog, monkeypatch):
         """Exit log must appear when user confirms with 'y'."""
         monkeypatch.setattr(MistHelper.InputUtils, "safe_input", lambda prompt, context="": "y")  # Auto-confirm
+        deps = MistHelper.SSHRunnerManager._build_deps()  # Build deps; facade wrapper removed
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
-            result = MistHelper.SSHRunnerManager._confirm_execution(5)
+            result = MistHelper.ExtractedSSHRunnerManager._confirm_execution(deps, 5)
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
         assert result is True  # Confirm returns True for 'y'
         assert exit_msgs, "No exit envelope logged by _confirm_execution on confirm path"
@@ -116,8 +121,9 @@ class TestConfirmExecutionEnvelopes:
     def test_exit_envelope_emitted_on_cancel(self, caplog, monkeypatch):
         """Exit log must appear when user cancels."""
         monkeypatch.setattr(MistHelper.InputUtils, "safe_input", lambda prompt, context="": "n")  # Return 'n' to cancel
+        deps = MistHelper.SSHRunnerManager._build_deps()  # Build deps; facade wrapper removed
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
-            result = MistHelper.SSHRunnerManager._confirm_execution(5)
+            result = MistHelper.ExtractedSSHRunnerManager._confirm_execution(deps, 5)
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
         assert result is False  # Cancel returns False
         assert exit_msgs, "No exit envelope logged by _confirm_execution on cancel path"
@@ -270,8 +276,10 @@ class TestNoSecretExposureInLogs:
         monkeypatch.setattr(  # Stub safe_input for username/command prompts
             MistHelper.InputUtils, "safe_input", lambda prompt, context="": "admin"
         )
+        deps = MistHelper.SSHRunnerManager._build_deps()  # Build deps; facade wrapper removed
         with caplog.at_level(logging.DEBUG, logger="root"):  # Capture all levels
-            MistHelper.SSHRunnerManager._collect_missing_data(
+            MistHelper.ExtractedSSHRunnerManager._collect_missing_data(
+                deps,  # Injected dependency container (facade previously built this)
                 ["10.0.0.1"],  # Hosts pre-supplied so only username/command prompted
                 "admin",  # Username pre-supplied
                 self._CANARY_PASSWORD,  # Password pre-supplied — must not appear in logs
@@ -287,8 +295,9 @@ class TestNoSecretExposureInLogs:
     def test_confirm_execution_does_not_log_sensitive_data(self, caplog, monkeypatch):
         """Confirmation function must not expose count as sensitive but must not log credentials."""
         monkeypatch.setattr(MistHelper.InputUtils, "safe_input", lambda prompt, context="": "y")  # Auto-confirm
+        deps = MistHelper.SSHRunnerManager._build_deps()  # Build deps; facade wrapper removed
         with caplog.at_level(logging.DEBUG, logger="root"):  # Capture all levels
-            MistHelper.SSHRunnerManager._confirm_execution(5)
+            MistHelper.ExtractedSSHRunnerManager._confirm_execution(deps, 5)
         all_log_text = " ".join(r.getMessage() for r in caplog.records)  # Concat all log messages
         # No password flows through _confirm_execution; just ensure no raw secret token patterns
         assert (

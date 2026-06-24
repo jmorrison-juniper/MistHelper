@@ -99,8 +99,8 @@ def test_site_client_stats_export_uses_stats_endpoint(monkeypatch, tmp_path):
     monkeypatch.setattr(MistHelper.mistapi, "get_all", lambda response, mist_session: response.data)
     monkeypatch.setattr(
         MistHelper.DataExporter,
-        "save_data_to_output",
-        lambda data, filename: captured.update({"data": data, "filename": filename}),
+        "write_with_format_selection",
+        lambda data, filename, **_kw: captured.update({"data": data, "filename": filename}),
     )
 
     MistHelper.export_site_clients_to_csv()
@@ -129,8 +129,8 @@ def test_sites_sle_summary_writes_output(monkeypatch, tmp_path):
     captured: dict[str, object] = {}
     monkeypatch.setattr(
         MistHelper.DataExporter,
-        "save_data_to_output",
-        lambda data, filename: captured.update({"data": data, "filename": filename}),
+        "write_with_format_selection",
+        lambda data, filename, **_kw: captured.update({"data": data, "filename": filename}),
     )
 
     MistHelper.export_org_sites_sle_summary_to_csv()
@@ -224,7 +224,7 @@ def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
         "getSiteInsightMetricsForClient",
         get_client_insight_stub,
     )
-    monkeypatch.setattr(MistHelper.DataExporter, "save_data_to_output", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(MistHelper.DataExporter, "write_with_format_selection", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: "0")
 
     MistHelper.export_site_client_insights_to_csv()

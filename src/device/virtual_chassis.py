@@ -22,10 +22,10 @@ SafeInputFn = Callable[..., str]
 SelectSiteFn = Callable[[], str | None]
 GetCsvPathFn = Callable[[str], str]
 CreateCsvTemplateFn = Callable[[str], str]
-CheckAndGenerateCsvFn = Callable[[str, Any], None]
+CheckAndGenerateCsvFn = Callable[[str, Any], bool]  # CSV cache check returns a success bool
 FlattenFieldsFn = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
 EscapeMultilineFn = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
-SaveDataFn = Callable[[list[dict[str, Any]], str], None]
+SaveDataFn = Callable[[list[dict[str, Any]], str], bool]  # Exporter returns a success bool, not None
 
 # Converted prefix for virtual MAC
 _CONVERTED_PREFIX = "020003"

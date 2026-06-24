@@ -2,7 +2,7 @@
 # Requires Python 3.13 or newer
 
 # Core API and networking
-mistapi>=0.62.0
+mistapi>=0.63.1
 requests
 websocket-client>=1.8.0
 urllib3
@@ -26,7 +26,7 @@ python-dotenv
 PyYAML
 
 # AI analysis (Mist Ideas Analyzer)
-openai>=2.41.1
+openai>=2.43.0
 
 # Terminal emulation for SSH operations
 pyte
@@ -60,6 +60,9 @@ Pygments>=2.20.0
 # Testing (dev dependency - not needed at runtime)
 pytest
 hypothesis>=6.151.12
+
+# Codemod tooling for issue #429 logging f-string sweep (dev-only but listed for parity)
+libcst>=1.5
 
 # Note: The following are transitive dependencies installed automatically:
 # bcrypt, certifi, cffi, charset_normalizer, click, contourpy, cryptography,

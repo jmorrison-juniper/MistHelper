@@ -44,13 +44,7 @@ class HostRunner:
                 hostname, username, password, commands, port, timeout, use_shell, logger
             )
         except Exception as host_error:  # noqa: BLE001 - top-level fallback mirrors original
-            logger.error(
-                "[%s] Unexpected error: %s: %s",
-                hostname,
-                type(host_error).__name__,
-                host_error,
-                exc_info=True,
-            )
+            logger.exception("[%s] Unexpected error: %s: %s", hostname, type(host_error).__name__, host_error)
             return (hostname, False, f"Error: {host_error}")
 
     # ------------------------------------------------------------------

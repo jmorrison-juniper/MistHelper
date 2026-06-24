@@ -32,12 +32,33 @@ import sys
 from math import cos, pi, radians, sin
 from typing import Any
 
+from src.dataclasses.map_clone_deps import MapCloneSummary, ZoneCloneResult  # Issue #433 Phase C T3: clone helpers.
+from src.dataclasses.map_marker_deps import DeviceMarkerStyle, MarkerPosition  # Issue #433 Phase C T3: marker helpers.
+from src.dataclasses.map_scaling_deps import (  # Issue #433 Phase C T3: scaling wizard inputs.
+    MapDimensions,
+    MapScalingFactors,
+    OriginalMapMetrics,
+    ScaleChoiceContext,
+)
+from src.dataclasses.map_viewer_deps import (  # Issue #433 Phase C T3: viewer launcher inputs.
+    HeatmapRenderCtx,
+    MapViewerData,
+    MapViewerOptional,
+    MapViewerScope,
+)
+from src.dataclasses.map_wizard_deps import (  # Issue #433 Phase C T3: replacement wizard inputs.
+    MapWizardApplyContext,
+    MapWizardApplyTarget,
+    MapWizardPreviewContext,
+    MapWizardSummaryContext,
+)
 from src.maps.launcher import MapViewerCallbacks, MapViewerState  # Wave-A callback extraction
 from src.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer
 from src.maps.plotly_map_callback_manager import PlotlyMapCallbackManager
 from src.maps.plotly_map_figure_builder import PlotlyMapFigureBuilder
 from src.maps.plotly_map_serializer import PlotlyMapDataSerializer
 from src.maps.plotly_map_templates import DashTemplateManager
+from src.utils.input_utils import InputUtils  # Issue #433 Phase C: EOF-safe input wrapper for interactive prompts.
 
 # Optional visualization imports — use find_spec for availability checks
 PLOTLY_AVAILABLE = importlib.util.find_spec("plotly") is not None
@@ -127,7 +148,7 @@ def _check_env_override() -> bool:
     for explicit_var in ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER"):
         value = os.environ.get(explicit_var, "").strip().lower()
         if value in true_values:
-            logging.debug(f"Container detection: override via {explicit_var}={value}")
+            logging.debug("Container detection: override via %s=%s", explicit_var, value)
             return True
     return False
 
@@ -151,7 +172,7 @@ def _check_container_env_vars() -> bool:
     ]
     for env_var in container_env_vars:
         if os.environ.get(env_var):
-            logging.debug(f"Container detection: environment variable {env_var} present")
+            logging.debug("Container detection: environment variable %s present", env_var)
             return True
     return False
 
@@ -163,7 +184,7 @@ def _check_cgroup_markers() -> bool:
             cgroup_content = cgroup_file.read().lower()
             for indicator in ("docker", "containerd", "podman", "lxc"):
                 if indicator in cgroup_content:
-                    logging.debug(f"Container detection: cgroup indicator '{indicator}' found")
+                    logging.debug("Container detection: cgroup indicator '%s' found", indicator)
                     return True
     except (FileNotFoundError, PermissionError):
         pass
@@ -218,7 +239,7 @@ def is_running_in_container() -> bool:
             if check():
                 return True
     except Exception as container_detection_error:
-        logging.debug(f"Container detection failed with exception: {container_detection_error}")
+        logging.debug("Container detection failed with exception: %s", container_detection_error)
 
     logging.debug("Container detection: no container indicators found - running in direct mode")
     return False
@@ -252,11 +273,11 @@ def write_data_with_format_selection(
             writer.writeheader()
             writer.writerows(data)
 
-        logger.info(f"Data written to {filepath} ({len(data)} rows)")
+        logger.info("Data written to %s (%s rows)", filepath, len(data))
         print(f"   Data saved to: {filepath}")
         return True
     except Exception as e:
-        logger.error(f"Error writing CSV: {e}")
+        logger.error("Error writing CSV: %s", e)
         return False
 
 
@@ -277,7 +298,7 @@ class MapsManager:
         self.org_id = organization_id
         self.current_site_id = None
         self.current_site_name = None
-        logging.info(f"MapsManager initialized for organization: {self.org_id}")
+        logging.info("MapsManager initialized for organization: %s", self.org_id)
 
     def _fetch_sites(self):
         """Fetch all sites using instance API session (not global)."""
@@ -287,7 +308,7 @@ class MapsManager:
             )
             return mistapi.get_all(response=resp, mist_session=self.apisession)  # type: ignore[union-attr]
         except Exception as e:
-            logging.error(f"MapsManager._fetch_sites error: {e}")
+            logging.error("MapsManager._fetch_sites error: %s", e)
             return []
 
     def select_site(self):
@@ -308,7 +329,7 @@ class MapsManager:
         print("-" * 60)
 
         try:
-            selection = input("Enter site index or name: ").strip()
+            selection = InputUtils.safe_input("Enter site index or name: ", context="select_site").strip()
 
             # Try as index first
             try:
@@ -337,7 +358,7 @@ class MapsManager:
             self.current_site_id = site_id
             self.current_site_name = site_name
             print(f"\n   Site selected: {site_name}")
-            logging.info(f"MapsManager site selection: {site_name} ({site_id})")
+            logging.info("MapsManager site selection: %s (%s)", site_name, site_id)
             return True
 
         except EOFError:
@@ -363,7 +384,9 @@ class MapsManager:
             print(f"  {idx}. {map_name} ({map_type}) - {has_image}")
         print(f"{'-' * 80}")
         try:
-            selection = input("\nSelect map number (or 0 to cancel): ").strip()
+            selection = InputUtils.safe_input(
+                "\nSelect map number (or 0 to cancel): ", context="_prompt_map_choice"
+            ).strip()
             map_idx = int(selection) - 1
             if map_idx < 0:
                 return None
@@ -395,7 +418,7 @@ class MapsManager:
             logging.info("EOF detected during map selection")
             return None, []
         except Exception as e:
-            logging.error(f"Error selecting map: {e}", exc_info=True)
+            logging.exception("Error selecting map: %s", e)
             print(f"\n! Error selecting map: {e}")
             return None, []
 
@@ -438,11 +461,11 @@ class MapsManager:
                 with open(image_path, "wb") as img_file:
                     img_file.write(response.content)
                 image_size_kb = len(response.content) / 1024
-                logging.info(f"Map image backed up: {image_filename} ({image_size_kb:.1f} KB)")
+                logging.info("Map image backed up: %s (%.1f KB)", image_filename, image_size_kb)
                 return image_filename, (safe_map_name, timestamp)
-            logging.warning(f"Could not download map image: HTTP {response.status_code}")
+            logging.warning("Could not download map image: HTTP %s", response.status_code)
         except Exception as img_err:
-            logging.warning(f"Image backup failed: {img_err}")
+            logging.warning("Image backup failed: %s", img_err)
         return None, None
 
     def _backup_fetch_items(self, api_session, site_id, map_id, api_call, item_name):
@@ -452,11 +475,11 @@ class MapsManager:
             if response.status_code == 200:
                 all_items = response.data if isinstance(response.data, list) else []
                 map_items = [item for item in all_items if item.get("map_id") == map_id]
-                logging.debug(f"Backup includes {len(map_items)} {item_name} for map {map_id}")
+                logging.debug("Backup includes %s %s for map %s", len(map_items), item_name, map_id)
                 return map_items
-            logging.warning(f"Could not fetch {item_name} for backup: HTTP {response.status_code}")
+            logging.warning("Could not fetch %s for backup: HTTP %s", item_name, response.status_code)
         except Exception as err:
-            logging.debug(f"{item_name} backup skipped: {err}")
+            logging.debug("%s backup skipped: %s", item_name, err)
         return []
 
     def _backup_fetch_device_placements(self, api_session, site_id, map_id):
@@ -482,11 +505,11 @@ class MapsManager:
                                 "height": device.get("height"),
                             }
                         )
-                logging.debug(f"Backup includes {len(placements)} device placements for map {map_id}")
+                logging.debug("Backup includes %s device placements for map %s", len(placements), map_id)
                 return placements
-            logging.warning(f"Could not fetch devices for backup: HTTP {devices_response.status_code}")
+            logging.warning("Could not fetch devices for backup: HTTP %s", devices_response.status_code)
         except Exception as device_err:
-            logging.warning(f"Device placement backup failed: {device_err}")
+            logging.warning("Device placement backup failed: %s", device_err)
         return []
 
     def _backup_write_file(self, geometry_backup, map_name, backup_reason, name_timestamp=None):
@@ -534,7 +557,7 @@ class MapsManager:
             ("VBeacons", self._count_backup_list(geometry_backup, "vbeacons")),
         ]
         summary = ", ".join(f"{k}: {v}" for k, v in counts if v) or "Empty map"
-        logging.info(f"Map backup saved: {backup_filename} ({summary})")
+        logging.info("Map backup saved: %s (%s)", backup_filename, summary)
         print(f"\n   [*] Map backup saved: {backup_filename}")
         if image_filename:
             print(f"       Image: {image_filename}")
@@ -552,11 +575,11 @@ class MapsManager:
         from datetime import datetime
 
         try:
-            logging.info(f"Map geometry backup initiated - map: {map_name} ({map_id}), reason: {backup_reason}")
+            logging.info("Map geometry backup initiated - map: %s (%s), reason: %s", map_name, map_id, backup_reason)
 
             map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
             if map_response.status_code != 200:
-                logging.error(f"Map backup failed: Could not fetch map data - HTTP {map_response.status_code}")
+                logging.error("Map backup failed: Could not fetch map data - HTTP %s", map_response.status_code)
                 return None
 
             map_data = map_response.data
@@ -627,7 +650,7 @@ class MapsManager:
             return backup_path
 
         except Exception as backup_error:
-            logging.error(f"Map geometry backup failed: {backup_error}", exc_info=True)
+            logging.exception("Map geometry backup failed: %s", backup_error)
             print(f"\n   [!] Warning: Could not backup map geometry: {backup_error}")
             return None
 
@@ -706,7 +729,7 @@ class MapsManager:
                 print(f"   [ERROR] {test_name} raised exception: {test_error}")
                 results["failed"] += 1
                 results["errors"].append(f"{test_name}: {type(test_error).__name__}: {test_error}")
-                logging.error(f"Test '{test_name}' failed with exception", exc_info=True)
+                logging.exception("Test '%s' failed with exception", test_name)
 
         # Summary
         elapsed = time.time() - start_time
@@ -769,7 +792,7 @@ class MapsManager:
             print(f"       Found {total_maps} maps across {sites_with_maps} sites (sampled)")
             return True
         except Exception as e:
-            logging.error(f"_test_list_all_org_maps failed: {e}")
+            logging.error("_test_list_all_org_maps failed: %s", e)
             return False
 
     def _test_export_all_site_maps(self) -> bool:
@@ -805,7 +828,7 @@ class MapsManager:
             print(f"       Export data structure validated: {len(export_data)} map records")
             return True
         except Exception as e:
-            logging.error(f"_test_export_all_site_maps failed: {e}")
+            logging.error("_test_export_all_site_maps failed: %s", e)
             return False
 
     def _test_maps_without_images(self) -> bool:
@@ -836,7 +859,7 @@ class MapsManager:
             print(f"       Image analysis: {maps_with_images} with images, {maps_without_images} without (sampled)")
             return True
         except Exception as e:
-            logging.error(f"_test_maps_without_images failed: {e}")
+            logging.error("_test_maps_without_images failed: %s", e)
             return False
 
     def _build_menu_dispatch(self) -> dict:
@@ -925,7 +948,11 @@ class MapsManager:
             self._print_menu()
 
             try:
-                choice = input("\nEnter your selection number now: ").strip().upper()
+                choice = (
+                    InputUtils.safe_input("\nEnter your selection number now: ", context="run_interactive_menu")
+                    .strip()
+                    .upper()
+                )
             except EOFError:
                 logging.info("EOF detected in MapsManager menu - session disconnected")
                 return
@@ -939,7 +966,7 @@ class MapsManager:
                 handler()
             else:
                 print(f"\n! Invalid selection: '{choice}'. Please enter a valid option.")
-                logging.warning(f"Invalid Maps Manager menu selection: {choice}")
+                logging.warning("Invalid Maps Manager menu selection: %s", choice)
 
     def list_site_maps(self):
         """Display list of maps for currently selected site."""
@@ -981,10 +1008,10 @@ class MapsManager:
                 print(f"{map_name:<35} {map_type:<15} {dimensions:<20} {has_image:<8}")
 
             print(f"{'-' * 80}")
-            logging.info(f"Listed {len(maps)} maps for site {site_name}")
+            logging.info("Listed %s maps for site %s", len(maps), site_name)
 
         except Exception as e:
-            logging.error(f"Error listing site maps: {e}", exc_info=True)
+            logging.exception("Error listing site maps: %s", e)
             print(f"\n! Error listing maps: {e}")
 
     def list_all_org_maps(self):
@@ -1023,7 +1050,7 @@ class MapsManager:
                                 }
                             )
                 except Exception as e:
-                    logging.debug(f"Error fetching maps for site {site['id']}: {e}")
+                    logging.debug("Error fetching maps for site %s: %s", site["id"], e)
                     continue
 
             if not all_maps:
@@ -1045,10 +1072,10 @@ class MapsManager:
                 print(f"{site_name:<30} {map_name:<25} {map_type:<15} {has_image:<8}")
 
             print(f"{'-' * 80}")
-            logging.info(f"Listed {len(all_maps)} maps from {len(sites)} sites")
+            logging.info("Listed %s maps from %s sites", len(all_maps), len(sites))
 
         except Exception as e:
-            logging.error(f"Error listing site maps: {e}", exc_info=True)
+            logging.exception("Error listing site maps: %s", e)
             print(f"\n! Error listing maps: {e}")
 
     def export_site_maps(self):
@@ -1091,10 +1118,10 @@ class MapsManager:
             print(f"\n{'-' * 80}")
             print(f"Export completed: {len(maps_data)} maps exported")
             print(f"{'-' * 80}")
-            logging.info(f"Exported {len(maps_data)} maps from site {site_name}")
+            logging.info("Exported %s maps from site %s", len(maps_data), site_name)
 
         except Exception as e:
-            logging.error(f"Error exporting site maps: {e}", exc_info=True)
+            logging.exception("Error exporting site maps: %s", e)
             print(f"\n! Error during export: {e}")
 
     def export_all_site_maps(self):
@@ -1126,7 +1153,7 @@ class MapsManager:
                             flattened["org_id"] = self.org_id
                             all_maps_data.append(flattened)
                 except Exception as e:
-                    logging.debug(f"Error exporting maps for site {site['id']}: {e}")
+                    logging.debug("Error exporting maps for site %s: %s", site["id"], e)
                     continue
 
             if not all_maps_data:
@@ -1140,10 +1167,10 @@ class MapsManager:
             print(f"\n{'-' * 80}")
             print(f"Export completed: {len(all_maps_data)} maps exported")
             print(f"{'-' * 80}")
-            logging.info(f"Exported {len(all_maps_data)} maps from {len(sites)} sites")
+            logging.info("Exported %s maps from %s sites", len(all_maps_data), len(sites))
 
         except Exception as e:
-            logging.error(f"Error exporting site maps: {e}", exc_info=True)
+            logging.exception("Error exporting site maps: %s", e)
             print(f"\n! Error during export: {e}")
 
     def export_maps_with_images(self):
@@ -1175,7 +1202,7 @@ class MapsManager:
                                 flattened["org_id"] = self.org_id
                                 maps_with_images.append(flattened)
                 except Exception as e:
-                    logging.debug(f"Error scanning site {site['id']}: {e}")
+                    logging.debug("Error scanning site %s: %s", site["id"], e)
                     continue
 
             if not maps_with_images:
@@ -1188,10 +1215,10 @@ class MapsManager:
             print(f"\n{'-' * 80}")
             print(f"Export completed: {len(maps_with_images)} maps with images")
             print(f"{'-' * 80}")
-            logging.info(f"Exported {len(maps_with_images)} maps with images")
+            logging.info("Exported %s maps with images", len(maps_with_images))
 
         except Exception as e:
-            logging.error(f"Error exporting maps with images: {e}", exc_info=True)
+            logging.exception("Error exporting maps with images: %s", e)
             print(f"\n! Error during export: {e}")
 
     def _determine_image_extension(self, image_url: str) -> str:
@@ -1223,9 +1250,9 @@ class MapsManager:
                 with open(filepath, "wb") as f:
                     f.write(response.content)
                 return True
-            logging.warning(f"Failed to download {map_name}: HTTP {response.status_code}")
+            logging.warning("Failed to download %s: HTTP %s", map_name, response.status_code)
         except Exception as e:
-            logging.error(f"Error downloading map image {map_item.get('id')}: {e}")
+            logging.error("Error downloading map image %s: %s", map_item.get("id"), e)
         return False
 
     def _resolve_site_maps_for_download(self, site_id: str) -> tuple[str, list] | None:
@@ -1285,9 +1312,9 @@ class MapsManager:
             print(f"Downloaded {downloaded} of {len(maps_with_images)} images")  # User-visible count
             print(f"Location: {download_dir}")  # User-visible target path
             print(f"{'-' * 80}")  # User-visible summary bottom border
-            logging.info(f"Downloaded {downloaded} map images to {download_dir}")  # Log final outcome
+            logging.info("Downloaded %s map images to %s", downloaded, download_dir)  # Log final outcome
         except Exception as e:  # Catch-all for unexpected runtime errors
-            logging.error(f"Error downloading map images: {e}", exc_info=True)  # Log full traceback
+            logging.exception("Error downloading map images: %s", e)  # Log full traceback
             print(f"\n! Error downloading images: {e}")  # User-visible error message
 
     def _print_map_optional_fields(self, map_details: dict) -> None:
@@ -1334,16 +1361,16 @@ class MapsManager:
             print(f"Has Image: {'Yes' if 'url' in map_details else 'No'}")
             self._print_map_optional_fields(map_details)
             print(f"{'-' * 80}")
-            logging.info(f"Viewed details for map {map_id}")
+            logging.info("Viewed details for map %s", map_id)
 
         except Exception as e:
-            logging.error(f"Error viewing map details: {e}", exc_info=True)
+            logging.exception("Error viewing map details: %s", e)
             print(f"\n! Error viewing map details: {e}")
 
     def _prompt_map_name(self) -> str | None:
         """Prompt user for a map name; return None if empty or EOF."""
         try:
-            map_name = input("Enter map name: ").strip()
+            map_name = InputUtils.safe_input("Enter map name: ", context="_prompt_map_name").strip()
         except EOFError:
             logging.info("EOF detected during map name input")
             return None
@@ -1358,15 +1385,21 @@ class MapsManager:
         print("  1. image (standard floor plan)")
         print("  2. google (Google Maps integration)")
         print("  3. baidu (Baidu Maps integration)")
-        type_choice = input("Select type (1-3, default=1): ").strip() or "1"
+        type_choice = InputUtils.safe_input("Select type (1-3, default=1): ", context="_prompt_map_type").strip() or "1"
         type_map = {"1": "image", "2": "google", "3": "baidu"}
         return type_map.get(type_choice, "image")
 
     def _prompt_image_dimensions(self) -> tuple[int, int, float]:
         """Prompt for image map dimensions; return (width, height, ppm) with defaults."""
-        width_input = input("Enter width in pixels (default=1024): ").strip()
-        height_input = input("Enter height in pixels (default=768): ").strip()
-        ppm_input = input("Enter pixels per meter (default=10): ").strip()
+        width_input = InputUtils.safe_input(
+            "Enter width in pixels (default=1024): ", context="_prompt_image_dimensions"
+        ).strip()
+        height_input = InputUtils.safe_input(
+            "Enter height in pixels (default=768): ", context="_prompt_image_dimensions"
+        ).strip()
+        ppm_input = InputUtils.safe_input(
+            "Enter pixels per meter (default=10): ", context="_prompt_image_dimensions"
+        ).strip()
         width = int(width_input) if width_input else 1024
         height = int(height_input) if height_input else 768
         ppm = float(ppm_input) if ppm_input else 10.0
@@ -1389,10 +1422,10 @@ class MapsManager:
                 print(f"Name: {created_map.get('name')}")
                 print(f"Type: {created_map.get('type')}")
                 print(f"{'-' * 80}")
-                logging.info(f"Created map {created_map.get('id')} for site {site_id}")
+                logging.info("Created map %s for site %s", created_map.get("id"), site_id)
             else:
                 print(f"\n! Failed to create map: HTTP {response.status_code}")
-                logging.error(f"Map creation failed: {response.status_code} - {response.data}")
+                logging.error("Map creation failed: %s - %s", response.status_code, response.data)
         except ValueError as ve:
             print(f"\n! Invalid input: {ve}")
 
@@ -1416,16 +1449,16 @@ class MapsManager:
             map_type = self._prompt_map_type()
             self._build_and_create_map(site_id, map_name, map_type)
         except Exception as e:
-            logging.error(f"Error creating site map: {e}", exc_info=True)
+            logging.exception("Error creating site map: %s", e)
             print(f"\n! Error creating map: {e}")
 
     def _fetch_source_map_with_display(self, site_id: str, source_map_id: str) -> dict | None:
         """Fetch source map from API and display its key attributes; return None on failure."""
-        logging.debug(f"Calling getSiteMap API - site_id: {site_id}, map_id: {source_map_id}")
+        logging.debug("Calling getSiteMap API - site_id: %s, map_id: %s", site_id, source_map_id)
         print("\nFetching source map details...")
         response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=source_map_id)
         if response.status_code != 200:
-            logging.error(f"Failed to fetch source map - HTTP {response.status_code}")
+            logging.error("Failed to fetch source map - HTTP %s", response.status_code)
             print(f"\n! Failed to fetch source map: HTTP {response.status_code}")
             return None
         source_map = response.data
@@ -1444,7 +1477,9 @@ class MapsManager:
         """Prompt for a clone name using the source map name as default; return None on EOF."""
         default_name = f"{source_map.get('name', 'Map')} (Copy)"
         try:
-            new_name = input(f"\nEnter name for cloned map [{default_name}]: ").strip()
+            new_name = InputUtils.safe_input(
+                f"\nEnter name for cloned map [{default_name}]: ", context="_prompt_clone_name"
+            ).strip()
         except EOFError:
             logging.info("EOF detected during clone name prompt")
             return None
@@ -1500,7 +1535,9 @@ class MapsManager:
         )
         print(zone_msg)
         print(f"{'-' * 80}")
-        confirm = input("\nProceed with full clone? (yes/no): ").strip().lower()
+        confirm = (
+            InputUtils.safe_input("\nProceed with full clone? (yes/no): ", context="_confirm_clone").strip().lower()
+        )
         if confirm not in ["yes", "y"]:
             print("\n! Clone cancelled")
             return False
@@ -1527,7 +1564,7 @@ class MapsManager:
                 return image_temp_path
             print(f"! Warning: Failed to download image (HTTP {response.status_code})")
         except Exception as download_error:
-            logging.error(f"Error downloading map image: {download_error}")
+            logging.error("Error downloading map image: %s", download_error)
             print(f"! Warning: Could not download image: {download_error}")
         if image_temp_path and os.path.exists(image_temp_path):
             os.remove(image_temp_path)
@@ -1539,7 +1576,7 @@ class MapsManager:
         clone_response = mistapi.api.v1.sites.maps.createSiteMap(self.apisession, site_id=site_id, body=clone_payload)
         if clone_response.status_code not in [200, 201]:
             print(f"\n! Failed to clone map: HTTP {clone_response.status_code}")
-            logging.error(f"Map clone failed: {clone_response.status_code} - {clone_response.data}")
+            logging.error("Map clone failed: %s - %s", clone_response.status_code, clone_response.data)
             if image_temp_path and os.path.exists(image_temp_path):
                 os.remove(image_temp_path)
             return None
@@ -1565,12 +1602,12 @@ class MapsManager:
             )
             if upload_response.status_code in [200, 201]:
                 print("Image uploaded successfully!")
-                logging.info(f"Image uploaded to cloned map {cloned_map_id}")
+                logging.info("Image uploaded to cloned map %s", cloned_map_id)
             else:
                 print(f"! Warning: Failed to upload image: HTTP {upload_response.status_code}")
-                logging.error(f"Image upload to cloned map failed: {upload_response.status_code}")
+                logging.error("Image upload to cloned map failed: %s", upload_response.status_code)
         except Exception as upload_error:
-            logging.error(f"Error uploading image to cloned map: {upload_error}")
+            logging.error("Error uploading image to cloned map: %s", upload_error)
             print(f"! Warning: Could not upload image to cloned map: {upload_error}")
         finally:
             if os.path.exists(image_temp_path):
@@ -1592,11 +1629,11 @@ class MapsManager:
                 self.apisession, site_id=site_id, body=zone_payload
             )
             if zone_response.status_code in [200, 201]:
-                logging.debug(f"Cloned zone '{zone.get('name')}' to new map")
+                logging.debug("Cloned zone '%s' to new map", zone.get("name"))
                 return True
-            logging.warning(f"Failed to clone zone '{zone.get('name')}': HTTP {zone_response.status_code}")
+            logging.warning("Failed to clone zone '%s': HTTP %s", zone.get("name"), zone_response.status_code)
         except Exception as zone_error:
-            logging.error(f"Error cloning zone '{zone.get('name')}': {zone_error}")
+            logging.error("Error cloning zone '%s': %s", zone.get("name"), zone_error)
         return False
 
     def _clone_zones(self, site_id: str, source_map_id: str, cloned_map_id: str) -> tuple[int, int]:
@@ -1617,21 +1654,19 @@ class MapsManager:
             print(f"Zones cloned: {cloned} (failed: {failed})")
             return cloned, failed
         except Exception as zones_error:
-            logging.error(f"Error during zone cloning: {zones_error}", exc_info=True)
+            logging.exception("Error during zone cloning: %s", zones_error)
             print(f"! Warning: Zone cloning failed: {zones_error}")
             return 0, 0
 
-    def _print_clone_summary(
-        self,
-        source_map: dict,
-        new_name: str,
-        cloned_map_id: str,
-        clone_payload: dict,
-        had_image: bool,
-        zones_cloned: int,
-        zones_failed: int,
-    ) -> None:
+    def _print_clone_summary(self, summary: MapCloneSummary, zone_result: ZoneCloneResult) -> None:
         """Print the final clone completion summary."""
+        source_map = summary.source_map  # Unpack original-map record from the bundle.
+        new_name = summary.new_name  # Unpack the user-chosen clone name from the bundle.
+        cloned_map_id = summary.cloned_map_id  # Unpack the new map's UUID from the bundle.
+        clone_payload = summary.clone_payload  # Unpack the body posted to Mist from the bundle.
+        had_image = summary.had_image  # Unpack the image-uploaded flag from the bundle.
+        zones_cloned = zone_result.cloned  # Unpack successful-zone count for the summary line.
+        zones_failed = zone_result.failed  # Unpack failed-zone count for the summary line.
         print(f"\n{'-' * 80}")
         print("CLONE COMPLETE")
         print(f"{'-' * 80}")
@@ -1659,7 +1694,7 @@ class MapsManager:
         if not site_id:
             logging.warning("clone_map aborted: No site selected")
             return
-        logging.debug(f"clone_map - Site: {site_name} (ID: {site_id})")
+        logging.debug("clone_map - Site: %s (ID: %s)", site_name, site_id)
         try:
             print("\nSelect the map to clone:")
             source_map_id = self._select_map_from_site(site_id, site_name)
@@ -1684,16 +1719,26 @@ class MapsManager:
                 self._upload_clone_image(site_id, cloned_map_id, image_temp_path)
             zones_cloned, zones_failed = self._clone_zones(site_id, source_map_id, cloned_map_id)
             self._print_clone_summary(
-                source_map, new_name, cloned_map_id, clone_payload, bool(image_temp_path), zones_cloned, zones_failed
+                MapCloneSummary(
+                    source_map=source_map,
+                    new_name=new_name,
+                    cloned_map_id=cloned_map_id,
+                    clone_payload=clone_payload,
+                    had_image=bool(image_temp_path),
+                ),
+                ZoneCloneResult(cloned=zones_cloned, failed=zones_failed),
             )
             logging.info(
-                f"Successfully cloned map {source_map_id} to {cloned_map_id}"
-                f" at site {site_id} (zones: {zones_cloned})"
+                "Successfully cloned map %s to %s at site %s (zones: %s)",
+                source_map_id,
+                cloned_map_id,
+                site_id,
+                zones_cloned,
             )
         except EOFError:
             logging.info("EOF detected during map clone")
         except Exception as e:
-            logging.error(f"Error cloning map: {e}", exc_info=True)
+            logging.exception("Error cloning map: %s", e)
             print(f"\n! Error cloning map: {e}")
 
     def _wizard_fetch_devices(self, site_id: str, map_id: str) -> list:
@@ -1761,7 +1806,7 @@ class MapsManager:
         print("Supported formats: PNG, JPG, JPEG, GIF")
 
         try:
-            file_path = input("File path: ").strip()
+            file_path = InputUtils.safe_input("File path: ", context="_wizard_get_new_image").strip()
         except EOFError:
             logging.info("EOF detected during file path input")
             return None
@@ -1794,30 +1839,27 @@ class MapsManager:
 
     def _wizard_determine_scaling(
         self,
-        original_width_px: int,
-        original_height_px: int,
-        original_ppm: float,
-        original_width_m: float,
-        new_width_px: int,
-        new_height_px: int,
+        original: OriginalMapMetrics,
+        new_dimensions: tuple[int, int],
     ) -> tuple[str, float, float, float] | None:
         """Prompt user for scaling mode and return (scaling_mode, scale_x, scale_y, new_ppm).
 
         Returns None if the user cancels.
         """
+        new_width_px, new_height_px = new_dimensions  # Unpack new image pixel size for clarity.
         print(f"\n{'-' * 80}")
         print("STEP 3: Configure Scaling")
         print("-" * 80)
 
-        same_dimensions = new_width_px == original_width_px and new_height_px == original_height_px
+        same_dimensions = new_width_px == original.width_px and new_height_px == original.height_px
         if same_dimensions:
             print("\nImage dimensions match exactly - no coordinate translation needed.")
-            return "none", 1.0, 1.0, original_ppm
+            return "none", 1.0, 1.0, original.ppm
 
-        width_ratio = new_width_px / original_width_px if original_width_px > 0 else 1.0
-        height_ratio = new_height_px / original_height_px if original_height_px > 0 else 1.0
+        width_ratio = new_width_px / original.width_px if original.width_px > 0 else 1.0
+        height_ratio = new_height_px / original.height_px if original.height_px > 0 else 1.0
 
-        print(f"\n  Original: {original_width_px} x {original_height_px} px")
+        print(f"\n  Original: {original.width_px} x {original.height_px} px")
         print(f"  New:      {new_width_px} x {new_height_px} px")
         w_sign = "+" if width_ratio > 1 else ""
         h_sign = "+" if height_ratio > 1 else ""
@@ -1835,50 +1877,57 @@ class MapsManager:
         print("  4. No Scaling - Replace image only, keep all coordinates unchanged")
 
         try:
-            scale_choice = input("\nSelect scaling mode [1]: ").strip() or "1"
+            scale_choice = (
+                InputUtils.safe_input("\nSelect scaling mode [1]: ", context="_wizard_determine_scaling").strip() or "1"
+            )
         except EOFError:
             logging.info("EOF detected during scale mode selection")
             return None
 
         return self._apply_scale_choice(
-            scale_choice, width_ratio, height_ratio, original_ppm, original_width_m, new_width_px
+            scale_choice,
+            ScaleChoiceContext(
+                width_ratio=width_ratio,
+                height_ratio=height_ratio,
+                original_ppm=original.ppm,
+                original_width_m=original.width_m,
+                new_width_px=new_width_px,
+            ),
         )
 
     def _apply_scale_choice(
         self,
         scale_choice: str,
-        width_ratio: float,
-        height_ratio: float,
-        original_ppm: float,
-        original_width_m: float,
-        new_width_px: int,
+        ctx: ScaleChoiceContext,
     ) -> tuple[str, float, float, float]:
         """Map a scaling menu choice to (scaling_mode, scale_x, scale_y, new_ppm)."""
         if scale_choice == "2":
-            if original_width_m and original_width_m > 0:
-                new_ppm = new_width_px / original_width_m
+            if ctx.original_width_m and ctx.original_width_m > 0:
+                new_ppm = ctx.new_width_px / ctx.original_width_m
             else:
-                new_ppm = new_width_px / (new_width_px / original_ppm) if original_ppm else 1.0
+                new_ppm = ctx.new_width_px / (ctx.new_width_px / ctx.original_ppm) if ctx.original_ppm else 1.0
             print(f"\nPreserving physical positions. New PPM: {new_ppm:.2f}")
             return "preserve_physical", 1.0, 1.0, new_ppm
 
         if scale_choice == "3":
             try:
-                new_ppm_input = input(f"Enter new PPM (current: {original_ppm:.2f}): ").strip()
-                new_ppm = float(new_ppm_input) if new_ppm_input else original_ppm
+                new_ppm_input = InputUtils.safe_input(
+                    f"Enter new PPM (current: {ctx.original_ppm:.2f}): ", context="_apply_scale_choice"
+                ).strip()
+                new_ppm = float(new_ppm_input) if new_ppm_input else ctx.original_ppm
             except (ValueError, EOFError):
                 print("Invalid PPM value, using original")
-                new_ppm = original_ppm
-            print(f"\nUsing manual PPM: {new_ppm:.2f}, scaling: x={width_ratio:.4f}, y={height_ratio:.4f}")
-            return "manual_ppm", width_ratio, height_ratio, new_ppm
+                new_ppm = ctx.original_ppm
+            print(f"\nUsing manual PPM: {new_ppm:.2f}, scaling: x={ctx.width_ratio:.4f}, y={ctx.height_ratio:.4f}")
+            return "manual_ppm", ctx.width_ratio, ctx.height_ratio, new_ppm
 
         if scale_choice == "4":
             print("\nNo coordinate scaling - image replacement only")
-            return "none", 1.0, 1.0, original_ppm
+            return "none", 1.0, 1.0, ctx.original_ppm
 
         # Default: proportional (choice "1" or anything else)
-        print(f"\nUsing proportional scaling: x={width_ratio:.4f}, y={height_ratio:.4f}")
-        return "proportional", width_ratio, height_ratio, original_ppm
+        print(f"\nUsing proportional scaling: x={ctx.width_ratio:.4f}, y={ctx.height_ratio:.4f}")
+        return "proportional", ctx.width_ratio, ctx.height_ratio, ctx.original_ppm
 
     def _wizard_scale_path_nodes(self, nodes: list, scale_x: float, scale_y: float) -> list:
         """Return a copy of path nodes with x/y coordinates scaled."""
@@ -1892,10 +1941,13 @@ class MapsManager:
             scaled.append(scaled_node)
         return scaled
 
-    def _wizard_scale_geometry(
-        self, current_map: dict, scale_x: float, scale_y: float, new_width_px: int, new_height_px: int, new_ppm: float
-    ) -> dict:
+    def _wizard_scale_geometry(self, current_map: dict, factors: MapScalingFactors, dims: MapDimensions) -> dict:
         """Build the map-update body: dimensions, PPM, and scaled wall/wayfinding paths."""
+        scale_x = factors.x_factor  # Unpack x-axis scale factor for readability.
+        scale_y = factors.y_factor  # Unpack y-axis scale factor for readability.
+        new_width_px = dims.width_px  # Unpack new pixel width for the update body.
+        new_height_px = dims.height_px  # Unpack new pixel height for the update body.
+        new_ppm = dims.ppm  # Unpack new PPM so width_m/height_m can be recomputed.
         map_update: dict = {"width": new_width_px, "height": new_height_px, "ppm": new_ppm}
         if new_ppm and new_ppm > 0:
             map_update["width_m"] = new_width_px / new_ppm
@@ -2034,43 +2086,46 @@ class MapsManager:
         file_path, new_width_px, new_height_px = image_result
 
         scaling_result = self._wizard_determine_scaling(
-            original_width_px=current_map.get("width", 0),
-            original_height_px=current_map.get("height", 0),
-            original_ppm=current_map.get("ppm", 1.0),
-            original_width_m=current_map.get("width_m", 0),
-            new_width_px=new_width_px,
-            new_height_px=new_height_px,
+            OriginalMapMetrics(
+                width_px=current_map.get("width", 0),
+                height_px=current_map.get("height", 0),
+                ppm=current_map.get("ppm", 1.0),
+                width_m=current_map.get("width_m", 0),
+            ),
+            (new_width_px, new_height_px),
         )
         if scaling_result is None:
             return
         scaling_mode, scale_x, scale_y, new_ppm = scaling_result
+        # Issue #433 Phase C T3: pre-build the two shared bundles so all three
+        # wizard helpers (preview/apply/summary) get matching scaling state.
+        new_dims = MapDimensions(width_px=new_width_px, height_px=new_height_px, ppm=new_ppm)
+        new_factors = MapScalingFactors(mode=scaling_mode, x_factor=scale_x, y_factor=scale_y)
 
         backup_file = self._wizard_create_backup(site_id, map_id, map_name)
         if backup_file is None:
             return
 
         self._wizard_preview(
-            current_map, map_name, assets, new_width_px, new_height_px, new_ppm, scaling_mode, scale_x, scale_y
+            MapWizardPreviewContext(current_map=current_map, map_name=map_name, assets=assets),
+            new_dims,
+            new_factors,
         )
         if not self._wizard_confirm():
             return
 
         errors: list = []
         self._wizard_apply(
-            site_id,
-            map_id,
-            file_path,
-            current_map,
-            assets,
-            new_width_px,
-            new_height_px,
-            new_ppm,
-            scaling_mode,
-            scale_x,
-            scale_y,
-            errors,
+            MapWizardApplyTarget(site_id=site_id, map_id=map_id, file_path=file_path),
+            MapWizardApplyContext(current_map=current_map, assets=assets, errors=errors),
+            new_dims,
+            new_factors,
         )
-        self._wizard_print_summary(map_name, new_width_px, new_height_px, new_ppm, scaling_mode, backup_file, errors)
+        self._wizard_print_summary(
+            MapWizardSummaryContext(map_name=map_name, backup_file=backup_file, errors=errors),
+            new_dims,
+            new_factors,
+        )
         logging.info("wizard completed for %s: mode=%s errors=%d", map_id, scaling_mode, len(errors))
 
     def intelligent_map_replacement_wizard(self):
@@ -2106,7 +2161,7 @@ class MapsManager:
             print("Install with: pip install Pillow")
             logging.error("Map replacement wizard import error: %s", import_err)
         except Exception as err:
-            logging.error("Error in map replacement wizard: %s", err, exc_info=True)
+            logging.exception("Error in map replacement wizard: %s", err)
             print(f"\n! Error: {err}")
 
     def _wizard_select_and_display_map(self, site_id: str, site_name: str) -> str | None:
@@ -2158,7 +2213,9 @@ class MapsManager:
 
         print("! Warning: Backup may not have completed fully")
         try:
-            proceed = input("Continue anyway? (yes/no): ").strip().lower()
+            proceed = (
+                InputUtils.safe_input("Continue anyway? (yes/no): ", context="_wizard_create_backup").strip().lower()
+            )
         except EOFError:
             return None
         if proceed not in ("yes", "y"):
@@ -2168,17 +2225,20 @@ class MapsManager:
 
     def _wizard_preview(
         self,
-        current_map: dict,
-        map_name: str,
-        assets: dict,
-        new_width_px: int,
-        new_height_px: int,
-        new_ppm: float,
-        scaling_mode: str,
-        scale_x: float,
-        scale_y: float,
+        context: MapWizardPreviewContext,
+        dims: MapDimensions,
+        factors: MapScalingFactors,
     ) -> None:
         """Print step-5 preview of what will change."""
+        current_map = context.current_map  # Unpack current map record for original-dim lookup.
+        map_name = context.map_name  # Unpack human-readable map name for the heading.
+        assets = context.assets  # Unpack asset bundle for the coord-translation sample.
+        new_width_px = dims.width_px  # Unpack new pixel width for the preview line.
+        new_height_px = dims.height_px  # Unpack new pixel height for the preview line.
+        new_ppm = dims.ppm  # Unpack new PPM for the preview line.
+        scaling_mode = factors.mode  # Unpack scaling mode for the preview line.
+        scale_x = factors.x_factor  # Unpack x-axis factor for the translation sample.
+        scale_y = factors.y_factor  # Unpack y-axis factor for the translation sample.
         print(f"\n{'-' * 80}")
         print("STEP 5: Preview Changes")
         print("-" * 80)
@@ -2211,7 +2271,7 @@ class MapsManager:
         print("-" * 80)
         print("\n! WARNING: This will modify the map and update all device/zone positions.")
         try:
-            confirm = input("\nType 'REPLACE' to proceed: ").strip()
+            confirm = InputUtils.safe_input("\nType 'REPLACE' to proceed: ", context="_wizard_confirm").strip()
         except EOFError:
             logging.info("EOF detected during confirmation")
             return False
@@ -2222,23 +2282,24 @@ class MapsManager:
 
     def _wizard_apply(
         self,
-        site_id: str,
-        map_id: str,
-        file_path: str,
-        current_map: dict,
-        assets: dict,
-        new_width_px: int,
-        new_height_px: int,
-        new_ppm: float,
-        scaling_mode: str,
-        scale_x: float,
-        scale_y: float,
-        errors: list,
+        target: MapWizardApplyTarget,
+        context: MapWizardApplyContext,
+        dims: MapDimensions,
+        factors: MapScalingFactors,
     ) -> None:
         """Apply all wizard changes: map update, image upload, and coordinate scaling."""
+        site_id = target.site_id  # Unpack site UUID for the API calls below.
+        map_id = target.map_id  # Unpack map UUID for the API calls below.
+        file_path = target.file_path  # Unpack path to the new image file being uploaded.
+        current_map = context.current_map  # Unpack pre-change map record for path scaling.
+        assets = context.assets  # Unpack asset bundle so each subtype helper can scale in place.
+        errors = context.errors  # Unpack the out-list helpers append failure descriptions to.
+        scale_x = factors.x_factor  # Unpack x-axis factor so the geometry helper builds the body.
+        scale_y = factors.y_factor  # Unpack y-axis factor so the geometry helper builds the body.
+        scaling_mode = factors.mode  # Unpack scaling mode to gate the asset-scaling block.
         print("\nApplying changes...")
         print("  Updating map properties...")
-        map_update = self._wizard_scale_geometry(current_map, scale_x, scale_y, new_width_px, new_height_px, new_ppm)
+        map_update = self._wizard_scale_geometry(current_map, factors, dims)
         try:
             resp = mistapi.api.v1.sites.maps.updateSiteMap(
                 self.apisession, site_id=site_id, map_id=map_id, body=map_update
@@ -2274,15 +2335,18 @@ class MapsManager:
 
     def _wizard_print_summary(
         self,
-        map_name: str,
-        new_width_px: int,
-        new_height_px: int,
-        new_ppm: float,
-        scaling_mode: str,
-        backup_file: str,
-        errors: list,
+        context: MapWizardSummaryContext,
+        dims: MapDimensions,
+        factors: MapScalingFactors,
     ) -> None:
         """Print the completion summary."""
+        map_name = context.map_name  # Unpack human-readable map name for the heading.
+        backup_file = context.backup_file  # Unpack pre-change backup path for the failure footer.
+        errors = context.errors  # Unpack accumulated apply errors for the optional warning block.
+        new_width_px = dims.width_px  # Unpack new pixel width for the summary line.
+        new_height_px = dims.height_px  # Unpack new pixel height for the summary line.
+        new_ppm = dims.ppm  # Unpack new PPM for the summary line.
+        scaling_mode = factors.mode  # Unpack scaling mode for the summary line.
         print(f"\n{'=' * 80}")
         print("MAP REPLACEMENT COMPLETE")
         print("=" * 80)
@@ -2334,7 +2398,7 @@ class MapsManager:
                                     }
                                 )
                 except Exception as e:
-                    logging.debug(f"Error scanning site {site['id']}: {e}")
+                    logging.debug("Error scanning site %s: %s", site["id"], e)
                     continue
 
             print(f"\nTotal maps scanned: {total_maps_scanned}")
@@ -2364,16 +2428,16 @@ class MapsManager:
             filename = "MapsWithoutImages_Report"
             write_data_with_format_selection(maps_without_images, filename, api_function_name="listSiteMaps")
 
-            logging.info(f"Generated report: {len(maps_without_images)} maps without images")
+            logging.info("Generated report: %s maps without images", len(maps_without_images))
 
         except Exception as e:
-            logging.error(f"Error generating maps report: {e}", exc_info=True)
+            logging.exception("Error generating maps report: %s", e)
             print(f"\n! Error generating report: {e}")
 
     # Placeholder methods for future implementation
     def _collect_property_input(self, prompt, current_value, value_type=str):
         """Collect a single property update from user with type validation."""
-        raw = input(f"{prompt} [{current_value}]: ").strip()
+        raw = InputUtils.safe_input(f"{prompt} [{current_value}]: ", context="_collect_property_input").strip()
         if not raw:
             return None
         if value_type is str:
@@ -2408,7 +2472,11 @@ class MapsManager:
         for key, value in update_payload.items():
             print(f"  {key}: {value}")
         print(f"{'-' * 80}")
-        confirm = input("\nApply these changes? (yes/no): ").strip().lower()
+        confirm = (
+            InputUtils.safe_input("\nApply these changes? (yes/no): ", context="_confirm_and_apply_map_update")
+            .strip()
+            .lower()
+        )
         if confirm not in ["yes", "y"]:
             print("\n! Update cancelled")
             return
@@ -2420,10 +2488,10 @@ class MapsManager:
             print(f"\n{'-' * 80}")
             print("Map updated successfully!")
             print(f"{'-' * 80}")
-            logging.info(f"Updated map {map_id} for site {site_id}")
+            logging.info("Updated map %s for site %s", map_id, site_id)
         else:
             print(f"\n! Failed to update map: HTTP {update_response.status_code}")
-            logging.error(f"Map update failed: {update_response.status_code}")
+            logging.error("Map update failed: %s", update_response.status_code)
 
     def update_map_properties(self):
         """Update existing map properties (name, dimensions, orientation, etc.)."""
@@ -2468,7 +2536,7 @@ class MapsManager:
             logging.info("EOF detected during map update")
             return
         except Exception as e:
-            logging.error(f"Error updating map properties: {e}", exc_info=True)
+            logging.exception("Error updating map properties: %s", e)
             print(f"\n! Error updating map: {e}")
 
     def delete_site_map(self):
@@ -2507,11 +2575,11 @@ class MapsManager:
 
             # Safety confirmation
             print("\nType 'DELETE' in uppercase to confirm deletion:")
-            confirmation = input("Confirmation: ").strip()
+            confirmation = InputUtils.safe_input("Confirmation: ", context="delete_site_map").strip()
 
             if confirmation != "DELETE":
                 print("\n! Deletion cancelled")
-                logging.info(f"Map deletion cancelled by user for map {map_id}")
+                logging.info("Map deletion cancelled by user for map %s", map_id)
                 return
 
             # Perform deletion
@@ -2522,23 +2590,28 @@ class MapsManager:
                 print(f"\n{'-' * 80}")
                 print("Map deleted successfully!")
                 print(f"{'-' * 80}")
-                logging.info(f"Deleted map {map_id} from site {site_id}")
+                logging.info("Deleted map %s from site %s", map_id, site_id)
             else:
                 print(f"\n! Failed to delete map: HTTP {delete_response.status_code}")
-                logging.error(f"Map deletion failed: {delete_response.status_code} - {delete_response.data}")
+                logging.error("Map deletion failed: %s - %s", delete_response.status_code, delete_response.data)
 
         except EOFError:
             logging.info("EOF detected during map deletion")
             return
         except Exception as e:
-            logging.error(f"Error deleting site map: {e}", exc_info=True)
+            logging.exception("Error deleting site map: %s", e)
             print(f"\n! Error deleting map: {e}")
 
     def _prompt_and_validate_image_path(self) -> str | None:
         """Prompt user for image file path and validate it; return path or None if invalid."""
         print("\nEnter the path to the image file:")
         print("Supported formats: PNG, JPG, JPEG, GIF, SVG")
-        file_path = input("File path: ").strip().strip('"').strip("'")
+        file_path = (
+            InputUtils.safe_input("File path: ", context="_prompt_and_validate_image_path")
+            .strip()
+            .strip('"')
+            .strip("'")
+        )
         if not file_path:
             print("\n! No file path provided")
             return None
@@ -2561,12 +2634,16 @@ class MapsManager:
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
         if file_size_mb > 10:
             print(f"\n! Warning: File size is {file_size_mb:.2f}MB")
-            if input("Continue with upload? (yes/no): ").strip().lower() not in ["yes", "y"]:
+            if InputUtils.safe_input(
+                "Continue with upload? (yes/no): ", context="_confirm_image_upload"
+            ).strip().lower() not in ["yes", "y"]:
                 print("\n! Upload cancelled")
                 return
         print(f"\nFile: {os.path.basename(file_path)}")
         print(f"Size: {file_size_mb:.2f}MB")
-        if input("\nUpload this image to the selected map? (yes/no): ").strip().lower() not in ["yes", "y"]:
+        if InputUtils.safe_input(
+            "\nUpload this image to the selected map? (yes/no): ", context="_confirm_image_upload"
+        ).strip().lower() not in ["yes", "y"]:
             print("\n! Upload cancelled")
             return
         print("\nUploading image...")
@@ -2578,10 +2655,10 @@ class MapsManager:
             print(f"\n{'-' * 80}")
             print("Image uploaded successfully!")
             print(f"{'-' * 80}")
-            logging.info(f"Uploaded image to map {map_id} for site {site_id}")
+            logging.info("Uploaded image to map %s for site %s", map_id, site_id)
         else:
             print(f"\n! Failed to upload image: HTTP {upload_response.status_code}")
-            logging.error(f"Image upload failed: {upload_response.status_code} - {upload_response.data}")
+            logging.error("Image upload failed: %s - %s", upload_response.status_code, upload_response.data)
 
     def upload_map_image(self):
         """Upload or replace map image file (multipart upload)."""
@@ -2593,7 +2670,7 @@ class MapsManager:
         if not site_id:
             logging.warning("upload_map_image aborted: No site selected")
             return
-        logging.debug(f"upload_map_image - Site: {site_name} (ID: {site_id})")
+        logging.debug("upload_map_image - Site: %s (ID: %s)", site_name, site_id)
         try:
             map_id = self._select_map_from_site(site_id, site_name)
             if not map_id:
@@ -2606,7 +2683,7 @@ class MapsManager:
             logging.info("EOF detected during image upload")
             return
         except Exception as e:
-            logging.error(f"Error uploading map image: {e}", exc_info=True)
+            logging.exception("Error uploading map image: %s", e)
             print(f"\n! Error uploading image: {e}")
 
     def _get_devices_on_map(self, site_id: str, map_id: str) -> list | None:
@@ -2661,14 +2738,17 @@ class MapsManager:
                 coordinates = f"{device.get('x', 'N/A')},{device.get('y', 'N/A')}"
                 print(f"{device_name:<30} {device_type:<10} {device_model:<20} {coordinates:<20}")
             print(f"{'-' * 80}")
-            if input("\nExport to CSV? (yes/no): ").strip().lower() in ["yes", "y"]:
+            if InputUtils.safe_input("\nExport to CSV? (yes/no): ", context="view_devices_on_map").strip().lower() in [
+                "yes",
+                "y",
+            ]:
                 self._export_map_devices_csv(devices_on_map, site_id, site_name)
-            logging.info(f"Viewed {len(devices_on_map)} devices on map {map_id}")
+            logging.info("Viewed %s devices on map %s", len(devices_on_map), map_id)
         except EOFError:
             logging.info("EOF detected during view devices")
             return
         except Exception as e:
-            logging.error(f"Error viewing devices on map: {e}", exc_info=True)
+            logging.exception("Error viewing devices on map: %s", e)
             print(f"\n! Error viewing devices: {e}")
 
     def auto_place_aps(self):
@@ -2702,7 +2782,7 @@ class MapsManager:
             downloaded = sum(1 for m in maps_with_images if self._download_single_map_image(m, site_dir))
             return downloaded, len(maps_with_images)
         except Exception as error:
-            logging.debug(f"Error processing site {site_id}: {error}")
+            logging.debug("Error processing site %s: %s", site_id, error)
             return 0, 0
 
     def bulk_download_org_images(self):
@@ -2730,9 +2810,9 @@ class MapsManager:
             print(f"Successfully downloaded: {total_downloaded}")
             print(f"Location: {base_dir}")
             print(f"{'-' * 80}")
-            logging.info(f"Bulk downloaded {total_downloaded} of {total_maps} map images to {base_dir}")
+            logging.info("Bulk downloaded %s of %s map images to %s", total_downloaded, total_maps, base_dir)
         except Exception as e:
-            logging.error(f"Error bulk downloading map images: {e}", exc_info=True)
+            logging.exception("Error bulk downloading map images: %s", e)
             print(f"\n! Error during bulk download: {e}")
 
     def backup_all_maps(self):
@@ -2764,20 +2844,20 @@ class MapsManager:
         required = {"plotly": "plotly>=5.14.0", "dash": "dash>=2.9.0"}
         optional = {"kaleido": "kaleido>=0.2.1", "matplotlib": "matplotlib>=3.5.0"}
         for package_name, package_spec in required.items():
-            logging.debug(f"Checking required package: {package_name} ({package_spec})")
+            logging.debug("Checking required package: %s (%s)", package_name, package_spec)
             _import_manager.import_module_safely(
                 package_name, package_spec=package_spec, required=False, skip_deps=False, skip_upgrade=True
             )
-            logging.debug(f"Package {package_name} check completed")
+            logging.debug("Package %s check completed", package_name)
         for package_name, package_spec in optional.items():
             try:
-                logging.debug(f"Checking optional package: {package_name} ({package_spec})")
+                logging.debug("Checking optional package: %s (%s)", package_name, package_spec)
                 _import_manager.import_module_safely(
                     package_name, package_spec=package_spec, required=False, skip_deps=False, skip_upgrade=True
                 )
-                logging.debug(f"Optional package {package_name} installed/verified")
+                logging.debug("Optional package %s installed/verified", package_name)
             except Exception as pkg_error:
-                logging.debug(f"Optional package {package_name} unavailable: {pkg_error}")
+                logging.debug("Optional package %s unavailable: %s", package_name, pkg_error)
 
     def _check_visualization_packages(self) -> "bool | None":
         """Check available visualization packages and prompt user if plotly is unavailable.
@@ -2794,7 +2874,14 @@ class MapsManager:
         logging.error("plotly not available")
         print("\n! Missing required package: plotly")
         print("! Install with: pip install plotly dash")
-        confirm = input("\nWould you like to continue without interactive features? (yes/no): ").strip().lower()
+        confirm = (
+            InputUtils.safe_input(
+                "\nWould you like to continue without interactive features? (yes/no): ",
+                context="_check_visualization_packages",
+            )
+            .strip()
+            .lower()
+        )
         if confirm not in ["yes", "y"]:
             logging.info("User declined matplotlib fallback")
             return None
@@ -2814,32 +2901,38 @@ class MapsManager:
         Returns the map data dict on success, or None on API failure.
         """
         print("\nLoading map data...")
-        logging.info(f"Fetching map details - site_id: {site_id}, map_id: {map_id}")
+        logging.info("Fetching map details - site_id: %s, map_id: %s", site_id, map_id)
         map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map_id)
-        logging.debug(f"getSiteMap API response: HTTP {map_response.status_code}")
+        logging.debug("getSiteMap API response: HTTP %s", map_response.status_code)
         if map_response.status_code != 200:
             logging.error(
-                f"Failed to fetch map details - HTTP {map_response.status_code}, "
-                f"Response: {map_response.data if hasattr(map_response, 'data') else 'No data'}"
+                "Failed to fetch map details - HTTP %s, Response: %s",
+                map_response.status_code,
+                map_response.data if hasattr(map_response, "data") else "No data",
             )
             print(f"\n! Failed to fetch map: HTTP {map_response.status_code}")
             return None
         map_data = map_response.data
         map_name = map_data.get("name", "Unnamed")
         map_ppm = map_data.get("ppm", 0)
-        logging.info(f"Map loaded: {map_name} (ID: {map_id})")
+        logging.info("Map loaded: %s (ID: %s)", map_name, map_id)
         logging.debug(
-            f"Map dimensions: {map_data.get('width', 1000)}x{map_data.get('height', 1000)}px, PPM: {map_ppm}, "
-            f"Orientation: {map_data.get('orientation', 0)}"
+            "Map dimensions: %sx%spx, PPM: %s, Orientation: %s",
+            map_data.get("width", 1000),
+            map_data.get("height", 1000),
+            map_ppm,
+            map_data.get("orientation", 0),
         )
         logging.debug(
-            f"Map has image: {'url' in map_data}, Has walls: {'wall_path' in map_data}, "
-            f"Has wayfinding: {'wayfinding_path' in map_data}"
+            "Map has image: %s, Has walls: %s, Has wayfinding: %s",
+            "url" in map_data,
+            "wall_path" in map_data,
+            "wayfinding_path" in map_data,
         )
         print(f"\nMap: {map_name}")
         print(f"Dimensions: {map_data.get('width', 1000)}x{map_data.get('height', 1000)} pixels")
         if not map_ppm or map_ppm == 0:
-            logging.warning(f"MAP NOT SCALED: Map '{map_name}' has PPM=0 - image has not been scaled in Mist Portal")
+            logging.warning("MAP NOT SCALED: Map '%s' has PPM=0 - image has not been scaled in Mist Portal", map_name)
             print("\n" + "!" * 60)
             print("! WARNING: This map image has NOT been scaled!")
             print("! RF coverage heatmap and location features will not work correctly.")
@@ -2849,39 +2942,39 @@ class MapsManager:
 
     def _fetch_devices_on_map(self, site_id: str, map_id: str) -> list:
         """Fetch device stats for the site and filter to the given map_id."""
-        logging.info(f"Fetching device stats for site {site_id} (type=all)")
+        logging.info("Fetching device stats for site %s (type=all)", site_id)
         devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(self.apisession, site_id=site_id, limit=1000)
-        logging.debug(f"listSiteDevicesStats API response: HTTP {devices_response.status_code}")
+        logging.debug("listSiteDevicesStats API response: HTTP %s", devices_response.status_code)
         if devices_response.status_code != 200:
-            logging.error(f"Failed to fetch devices - HTTP {devices_response.status_code}")
+            logging.error("Failed to fetch devices - HTTP %s", devices_response.status_code)
             print(f"\n! Failed to fetch devices: HTTP {devices_response.status_code}")
             return []
         all_devices = devices_response.data
-        logging.debug(f"Total devices at site: {len(all_devices)}")
+        logging.debug("Total devices at site: %s", len(all_devices))
         devices_on_map = [d for d in all_devices if d.get("map_id") == map_id]
-        logging.info(f"Devices on selected map: {len(devices_on_map)}")
+        logging.info("Devices on selected map: %s", len(devices_on_map))
         device_type_counts: dict[str, int] = {}
         for device in devices_on_map:
             dtype = device.get("type", "unknown")
             device_type_counts[dtype] = device_type_counts.get(dtype, 0) + 1
-        logging.debug(f"Device breakdown on map: {device_type_counts}")
+        logging.debug("Device breakdown on map: %s", device_type_counts)
         return devices_on_map
 
     def _fetch_zones_on_map(self, site_id: str, map_id: str) -> list:
         """Fetch site zones and filter to the given map_id."""
-        logging.info(f"Fetching zones for site {site_id}")
+        logging.info("Fetching zones for site %s", site_id)
         try:
             zones_response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
             if zones_response.status_code == 200:
                 all_zones = zones_response.data
                 zones_on_map = [z for z in all_zones if z.get("map_id") == map_id]
-                logging.info(f"Total zones at site: {len(all_zones)}, Zones on this map: {len(zones_on_map)}")
-                logging.debug(f"Zones on map: {zones_on_map}")
+                logging.info("Total zones at site: %s, Zones on this map: %s", len(all_zones), len(zones_on_map))
+                logging.debug("Zones on map: %s", zones_on_map)
                 return zones_on_map
-            logging.warning(f"Failed to fetch zones - HTTP {zones_response.status_code}")
+            logging.warning("Failed to fetch zones - HTTP %s", zones_response.status_code)
             return []
         except Exception as zone_error:
-            logging.error(f"Error fetching zones: {zone_error}", exc_info=True)
+            logging.exception("Error fetching zones: %s", zone_error)
             return []
 
     def _filter_clients_for_map(self, all_clients: list, map_id: str) -> list:
@@ -2893,27 +2986,27 @@ class MapsManager:
     def _fetch_clients_on_map(self, site_id: str, map_id: str) -> list:
         """Fetch wireless client stats with pagination and filter to map_id with valid x/y coordinates."""
         try:
-            logging.info(f"Fetching connected wireless client stats for site {site_id}")
+            logging.info("Fetching connected wireless client stats for site %s", site_id)
             clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
                 self.apisession, site_id=site_id, limit=1000
             )
             if clients_response.status_code != 200:
-                logging.warning(f"Failed to fetch client stats - HTTP {clients_response.status_code}")
+                logging.warning("Failed to fetch client stats - HTTP %s", clients_response.status_code)
                 return []
             all_clients = mistapi.get_all(response=clients_response, mist_session=self.apisession)
-            logging.info(f"Total wireless clients retrieved: {len(all_clients)}")
+            logging.info("Total wireless clients retrieved: %s", len(all_clients))
             client_map_ids = {c.get("map_id") for c in all_clients if c.get("map_id")}
-            logging.info(f"Client map_ids found: {client_map_ids}")
-            logging.info(f"Looking for map_id: {map_id}")
+            logging.info("Client map_ids found: %s", client_map_ids)
+            logging.info("Looking for map_id: %s", map_id)
             clients_on_map = self._filter_clients_for_map(all_clients, map_id)
-            logging.info(f"Clients on this map (after filtering): {len(clients_on_map)}")
+            logging.info("Clients on this map (after filtering): %s", len(clients_on_map))
             if clients_on_map:
-                logging.info(f"Sample client data: {clients_on_map[0]}")
+                logging.info("Sample client data: %s", clients_on_map[0])
             elif all_clients:
-                logging.warning(f"No clients matched map_id {map_id}. Sample: {all_clients[0]}")
+                logging.warning("No clients matched map_id %s. Sample: %s", map_id, all_clients[0])
             return clients_on_map
         except Exception as client_error:
-            logging.error(f"Error fetching client stats: {client_error}", exc_info=True)
+            logging.exception("Error fetching client stats: %s", client_error)
             return []
 
     def _handle_coverage_exception(self, coverage_data: dict) -> None:
@@ -2921,17 +3014,17 @@ class MapsManager:
         exception_str = str(coverage_data.get("exception", ""))
         if "psycopg2" in exception_str or "database" in exception_str.lower():
             logging.warning("RF Coverage temporarily unavailable: Mist backend database connectivity issue")
-            logging.debug(f"Coverage API backend error: {exception_str}")
+            logging.debug("Coverage API backend error: %s", exception_str)
         else:
-            logging.error(f"Coverage API returned error response (first 500 chars): {exception_str[:500]}")
-            logging.debug(f"Coverage API full error response: {exception_str}")
-            logging.debug(f"Error details - Query: {coverage_data.get('query')}, URI: {coverage_data.get('uri')}")
+            logging.error("Coverage API returned error response (first 500 chars): %s", exception_str[:500])
+            logging.debug("Coverage API full error response: %s", exception_str)
+            logging.debug("Error details - Query: %s, URI: %s", coverage_data.get("query"), coverage_data.get("uri"))
         print("  Note: RF Coverage heatmap unavailable (Mist backend issue) - continuing without it")
 
     def _fetch_map_coverage(self, site_id: str, map_id: str) -> "dict | None":
         """Fetch RF coverage heatmap data for the given map from the Mist location API."""
         try:
-            logging.info(f"Fetching RF coverage data for map {map_id}")
+            logging.info("Fetching RF coverage data for map %s", map_id)
             coverage_url = f"/api/v1/sites/{site_id}/location/coverage"
             coverage_params = {
                 "resolution": "fine",
@@ -2942,17 +3035,17 @@ class MapsManager:
             }
             coverage_response = self.apisession.mist_get(coverage_url, query=coverage_params)
             if coverage_response.status_code != 200:
-                logging.warning(f"Failed to fetch RF coverage data - HTTP {coverage_response.status_code}")
+                logging.warning("Failed to fetch RF coverage data - HTTP %s", coverage_response.status_code)
                 return None
             coverage_data = coverage_response.data
             if isinstance(coverage_data, dict) and "exception" in coverage_data:
                 self._handle_coverage_exception(coverage_data)
                 return None
             result_count = len(coverage_data.get("results", [])) if coverage_data else 0
-            logging.info(f"RF coverage data retrieved: {result_count} grid points")
+            logging.info("RF coverage data retrieved: %s grid points", result_count)
             return coverage_data
         except Exception as coverage_error:
-            logging.error(f"Error fetching RF coverage data: {coverage_error}", exc_info=True)
+            logging.exception("Error fetching RF coverage data: %s", coverage_error)
             return None
 
     def interactive_map_viewer(self) -> None:
@@ -2973,17 +3066,17 @@ class MapsManager:
         if not site_id:
             logging.warning("Interactive map viewer aborted: No site selected")
             return
-        logging.debug(f"Interactive map viewer - Site: {site_name} (ID: {site_id})")
+        logging.debug("Interactive map viewer - Site: %s (ID: %s)", site_name, site_id)
         try:
             use_plotly = self._check_visualization_packages()
             if use_plotly is None:
                 return
-            logging.debug(f"Prompting user to select map from site {site_name}")  # nosec B608 — not SQL, just logging
+            logging.debug("Prompting user to select map from site %s", site_name)  # nosec B608 — not SQL, just logging
             map_id, all_maps = self._select_map_from_site(site_id, site_name, return_all_maps=True)
             if not map_id:
                 logging.info("Map viewer aborted: No map selected")
                 return
-            logging.debug(f"Selected map_id: {map_id}, Total maps available: {len(all_maps)}")
+            logging.debug("Selected map_id: %s, Total maps available: %s", map_id, len(all_maps))
             map_data = self._fetch_map_details(site_id, map_id)
             if map_data is None:
                 return
@@ -2997,30 +3090,32 @@ class MapsManager:
             coverage_data = self._fetch_map_coverage(site_id, map_id)
             print("Loading organization sites...")
             all_sites = self._fetch_sites()
-            logging.info(f"Fetched {len(all_sites)} sites for site selector dropdown")
+            logging.info("Fetched %s sites for site selector dropdown", len(all_sites))
             map_name = map_data.get("name", "Unnamed")
             if use_plotly:
-                logging.info(f"Launching Plotly/Dash viewer for map {map_name}")
+                logging.info("Launching Plotly/Dash viewer for map %s", map_name)
                 self._launch_plotly_viewer(
-                    map_data,
-                    devices_on_map,
-                    zones_on_map,
-                    clients_on_map,
-                    site_id,
-                    site_name,
-                    map_id,
-                    coverage_data,
-                    all_maps,
-                    all_sites,
+                    MapViewerScope(site_id=site_id, site_name=site_name, map_id=map_id),
+                    MapViewerData(
+                        map_data=map_data,
+                        devices=devices_on_map,
+                        zones=zones_on_map,
+                        clients=clients_on_map,
+                    ),
+                    MapViewerOptional(
+                        coverage_data=coverage_data,
+                        all_maps=all_maps,
+                        all_sites=all_sites,
+                    ),
                 )
             else:
-                logging.info(f"Launching matplotlib fallback viewer for map {map_name}")
+                logging.info("Launching matplotlib fallback viewer for map %s", map_name)
                 self._launch_matplotlib_viewer(map_data, devices_on_map)
         except EOFError:
             logging.info("EOF detected during interactive map viewer")
             return
         except Exception as e:
-            logging.error(f"Error in interactive map viewer: {e}", exc_info=True)
+            logging.exception("Error in interactive map viewer: %s", e)
             print(f"\n! Error launching map viewer: {e}")
 
     def _collect_ppm_samples(self, clients: list) -> list[float]:
@@ -3240,13 +3335,15 @@ class MapsManager:
     def _add_device_orientation_markers(
         self,
         fig,
-        x: float,
-        y: float,
-        angle: float,
-        device_color: str,
-        type_cfg: dict,
+        position: MarkerPosition,
+        style: DeviceMarkerStyle,
     ) -> None:
         """Add a Mist-style crosshair and directional dot to show device orientation on the map."""
+        x = position.x  # Unpack device x pixel coord for the marker math below.
+        y = position.y  # Unpack device y pixel coord for the marker math below.
+        angle = style.angle  # Unpack Mist-degree orientation for math-angle conversion.
+        device_color = style.device_color  # Unpack status-driven color for the crosshair arms.
+        type_cfg = style.type_cfg  # Unpack per-type config (legend grouping, etc).
         crosshair_size = 40  # Crosshair arm length in pixels -- increased from 25 for visibility
         fig.add_trace(
             go.Scatter(
@@ -3470,25 +3567,36 @@ class MapsManager:
 
     def _launch_plotly_viewer(
         self,
-        map_data,
-        devices,
-        zones,
-        clients,
-        site_id,
-        site_name,
-        map_id,
-        coverage_data=None,
-        all_maps=None,
-        all_sites=None,
+        scope: MapViewerScope,
+        data: MapViewerData,
+        optional: MapViewerOptional,
     ):
         """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap."""
+        site_id = scope.site_id  # Unpack scope so the inner code paths stay readable.
+        site_name = scope.site_name  # Unpack the human-readable site name for the viewer title.
+        map_id = scope.map_id  # Unpack the map UUID needed by Dash callbacks downstream.
+        map_data = data.map_data  # Unpack the full map record (dimensions, walls, beacons, etc).
+        devices = data.devices  # Unpack the device list used to seed the placement layer.
+        zones = data.zones  # Unpack the zone list used to seed the zone polygon layer.
+        clients = data.clients  # Unpack the client list used to seed the connected-clients overlay.
+        coverage_data = optional.coverage_data  # Unpack the coverage payload (None disables heatmap).
+        all_maps = optional.all_maps  # Unpack the other-maps list (powers map-switcher dropdown).
+        all_sites = optional.all_sites  # Unpack the other-sites list (powers site-switcher dropdown).
         coverage_count = self._resolve_coverage_count(coverage_data)  # Helper extracts the ternary
         all_maps, all_sites = self._normalize_optional_lists(all_maps, all_sites)  # Drops 2 BoolOps from parent CC
-        logging.info(
-            f"_launch_plotly_viewer called - site: {site_name} ({site_id}), "
-            f"map_id: {map_id}, devices: {len(devices)}, zones: {len(zones)}, "
-            f"clients: {len(clients)}, coverage: {coverage_count}, "
-            f"available_maps: {len(all_maps)}, available_sites: {len(all_sites)}"
+        logging.info(  # Issue #433 Phase C: split long log template across two lines for E501 compliance.
+            "_launch_plotly_viewer called - site: %s (%s), map_id: %s, "
+            "devices: %s, zones: %s, clients: %s, coverage: %s, "
+            "available_maps: %s, available_sites: %s",
+            site_name,
+            site_id,
+            map_id,
+            len(devices),
+            len(zones),
+            len(clients),
+            coverage_count,
+            len(all_maps),
+            len(all_sites),
         )
         import os  # Used by getenv for DASH_PORT lookup
 
@@ -3536,7 +3644,7 @@ class MapsManager:
         map_width = map_data.get("width", 1000)
         map_height = map_data.get("height", 1000)
         ppm = map_data.get("ppm", 10)  # pixels per meter, default to 10 if not set
-        logging.debug(f"Map canvas dimensions: {map_width}x{map_height}, PPM from map: {ppm}")
+        logging.debug("Map canvas dimensions: %sx%s, PPM from map: %s", map_width, map_height, ppm)
 
         # Validate PPM using client coordinates to detect calibration mismatches
         ppm = self._validate_ppm(clients, ppm)  # Returns corrected PPM if mismatch > 10%
@@ -3626,12 +3734,8 @@ class MapsManager:
 
         # Wave E2: heatmap conditional moved inside helper to drop parent if-check.
         self._maybe_add_heatmap_trace(
-            fig,
-            heatmap_renderer,
-            coverage_data=coverage_data,
-            ppm=ppm,
-            map_width=map_width,
-            map_height=map_height,
+            HeatmapRenderCtx(fig=fig, heatmap_renderer=heatmap_renderer, coverage_data=coverage_data),
+            MapDimensions(width_px=map_width, height_px=map_height, ppm=ppm),
         )
 
         # Wave E2: origin marker extracted to helper (drops 1 BoolOp + add_trace).
@@ -4800,7 +4904,7 @@ class MapsManager:
             logging.info("Dash version: %s", dash.__version__)  # Mirror original log
             return dash, Dash, Input, Output, State, dcc, html, no_update
         except ImportError as e:  # Fallback path (mirrors original except block)
-            logging.error("Failed to import Dash, falling back to static view: %s", e, exc_info=True)
+            logging.exception("Failed to import Dash, falling back to static view: %s", e)
             print("\n! Dash not available - using static Plotly view only")
             print("! Install with: pip install dash")
             self._create_static_plotly_map(map_data, devices)  # Render static figure instead
@@ -4970,19 +5074,24 @@ class MapsManager:
         for x, y, angle, device_color in zip(
             coords["x_coords"], coords["y_coords"], coords["orientations"], colors, strict=True
         ):
-            self._add_device_orientation_markers(fig, x, y, angle, device_color, type_cfg)
+            self._add_device_orientation_markers(
+                fig,
+                MarkerPosition(x=x, y=y),
+                DeviceMarkerStyle(angle=angle, device_color=device_color, type_cfg=type_cfg),
+            )
 
     @staticmethod
-    def _maybe_add_heatmap_trace(  # noqa: PLR0913 - mirrors original kwarg flow
-        fig: object,
-        heatmap_renderer: object,
-        *,
-        coverage_data: dict | None,
-        ppm: float,
-        map_width: int,
-        map_height: int,
+    def _maybe_add_heatmap_trace(
+        ctx: HeatmapRenderCtx,
+        dims: MapDimensions,
     ) -> None:
         """Build the RF coverage heatmap trace and add it to ``fig`` when non-None."""
+        fig = ctx.fig  # Unpack Plotly figure handle the heatmap trace appends to.
+        heatmap_renderer = ctx.heatmap_renderer  # Unpack renderer that converts coverage data to a trace.
+        coverage_data = ctx.coverage_data  # Unpack coverage payload (None skips the heatmap entirely).
+        ppm = dims.ppm  # Unpack pixels-per-meter ratio so the renderer scales the heatmap correctly.
+        map_width = dims.width_px  # Unpack map pixel width for the renderer bounds.
+        map_height = dims.height_px  # Unpack map pixel height for the renderer bounds.
         heatmap_trace = heatmap_renderer.build_heatmap_trace(
             coverage_data=coverage_data, ppm=ppm, map_width=map_width, map_height=map_height
         )
@@ -5138,7 +5247,7 @@ class MapsManager:
             print("\n\nMap viewer stopped by user")
             logging.info("Interactive map viewer stopped by user (Ctrl+C)")
         except Exception as e:  # Mirror original catch-all
-            logging.error("Error running Dash server: %s", e, exc_info=True)
+            logging.exception("Error running Dash server: %s", e)
             print(f"\n! Error running map viewer: {e}")
 
     def _launch_flask_viewer(
@@ -5162,7 +5271,7 @@ class MapsManager:
 
         from flask import Flask, jsonify, render_template_string
 
-        logging.info(f"_launch_flask_viewer: Starting Flask viewer for site {initial_site_id}, map {initial_map_id}")
+        logging.info("_launch_flask_viewer: Starting Flask viewer for site %s, map %s", initial_site_id, initial_map_id)
 
         flask_app = Flask(__name__)
         flask_app.config["JSON_SORT_KEYS"] = False
@@ -6195,7 +6304,7 @@ class MapsManager:
         @flask_app.route("/api/site/<site_id>/maps")
         def get_site_maps(site_id):
             """API endpoint to get maps for a site."""
-            logging.info(f"[Flask API] Fetching maps for site {site_id}")
+            logging.info("[Flask API] Fetching maps for site %s", site_id)
             try:
                 maps_response = mistapi.api.v1.sites.maps.listSiteMaps(api_session, site_id=site_id)
                 if maps_response.status_code == 200 and maps_response.data:
@@ -6204,13 +6313,13 @@ class MapsManager:
                 else:
                     return jsonify({"maps": []})
             except Exception as e:
-                logging.error(f"Error fetching maps: {e}", exc_info=True)
+                logging.exception("Error fetching maps: %s", e)
                 return jsonify({"error": "Failed to fetch maps. Check server logs for details.", "maps": []}), 500
 
         @flask_app.route("/api/map-image/<site_id>/<map_id>")
         def get_map_image(site_id, map_id):
             """Proxy endpoint to serve map images with authentication."""
-            logging.info(f"[Flask API] Fetching map image for site {site_id}, map {map_id}")
+            logging.info("[Flask API] Fetching map image for site %s, map %s", site_id, map_id)
             try:
                 # Get the map to find the image URL
                 map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
@@ -6238,17 +6347,17 @@ class MapsManager:
 
                     return Response(image_response.content, mimetype=content_type)
                 else:
-                    logging.warning(f"Failed to fetch image: {image_response.status_code}")
+                    logging.warning("Failed to fetch image: %s", image_response.status_code)
                     return f"Image fetch failed: {image_response.status_code}", 404
 
             except Exception as e:
-                logging.error(f"Error fetching map image: {e}", exc_info=True)
+                logging.exception("Error fetching map image: %s", e)
                 return "Failed to fetch map image. Check server logs for details.", 500
 
         @flask_app.route("/api/map/<site_id>/<map_id>")
         def get_map_data(site_id, map_id):
             """API endpoint to get full map data including devices, zones, clients."""
-            logging.info(f"[Flask API] Fetching map data for site {site_id}, map {map_id}")
+            logging.info("[Flask API] Fetching map data for site %s, map %s", site_id, map_id)
             try:
                 # Get site name
                 site_name = "Unknown"
@@ -6276,7 +6385,7 @@ class MapsManager:
                 walls = []
                 wall_data = map_data.get("wall_path", {})
                 if wall_data:
-                    logging.debug(f"[Flask API] Raw wall_path data: {wall_data}")
+                    logging.debug("[Flask API] Raw wall_path data: %s", wall_data)
                     nodes = wall_data.get("nodes", [])
                     if nodes:
                         # Build a lookup of nodes by name
@@ -6302,13 +6411,13 @@ class MapsManager:
                                         walls.append(
                                             {"x1": start_x, "y1": start_y, "x2": end_pos["x"], "y2": end_pos["y"]}
                                         )
-                        logging.info(f"[Flask API] Extracted {len(walls)} wall segments from {len(nodes)} nodes")
+                        logging.info("[Flask API] Extracted %s wall segments from %s nodes", len(walls), len(nodes))
 
                 # Extract wayfinding paths from map data - same structure as walls
                 wayfinding = []
                 wayfinding_data = map_data.get("wayfinding_path", {})
                 if wayfinding_data:
-                    logging.debug(f"[Flask API] Raw wayfinding_path data: {wayfinding_data}")
+                    logging.debug("[Flask API] Raw wayfinding_path data: %s", wayfinding_data)
                     nodes = wayfinding_data.get("nodes", [])
                     if nodes:
                         # Build a lookup of nodes by name
@@ -6334,7 +6443,7 @@ class MapsManager:
                                             {"x1": start_x, "y1": start_y, "x2": end_pos["x"], "y2": end_pos["y"]}
                                         )
                         logging.info(
-                            f"[Flask API] Extracted {len(wayfinding)} wayfinding segments from {len(nodes)} nodes"
+                            "[Flask API] Extracted %s wayfinding segments from %s nodes", len(wayfinding), len(nodes)
                         )
 
                 # Fetch devices (type='all' includes APs, switches, and gateways)
@@ -6344,32 +6453,32 @@ class MapsManager:
                         api_session, site_id=site_id, type="all", limit=1000
                     )
                     if devices_response.status_code == 200 and devices_response.data:
-                        for d in devices_response.data:
-                            if d.get("map_id") == map_id and d.get("x") is not None:
+                        for device in devices_response.data:
+                            if device.get("map_id") == map_id and device.get("x") is not None:
                                 devices.append(
                                     {
-                                        "x": d.get("x"),
-                                        "y": d.get("y"),
-                                        "name": d.get("name", d.get("mac", "Unknown")),
-                                        "type": d.get("type", "ap"),
-                                        "status": d.get("status", "unknown"),
-                                        "mac": d.get("mac", ""),
-                                        "orientation": d.get("orientation", 0),
+                                        "x": device.get("x"),
+                                        "y": device.get("y"),
+                                        "name": device.get("name", device.get("mac", "Unknown")),
+                                        "type": device.get("type", "ap"),
+                                        "status": device.get("status", "unknown"),
+                                        "mac": device.get("mac", ""),
+                                        "orientation": device.get("orientation", 0),
                                     }
                                 )
                 except Exception as e:
-                    logging.warning(f"Error fetching devices: {e}")
+                    logging.warning("Error fetching devices: %s", e)
 
                 # Fetch zones
                 zones = []
                 try:
                     zones_response = mistapi.api.v1.sites.zones.listSiteZones(api_session, site_id=site_id)
                     if zones_response.status_code == 200 and zones_response.data:
-                        for z in zones_response.data:
-                            if z.get("map_id") == map_id:
-                                zones.append({"name": z.get("name", "Zone"), "vertices": z.get("vertices", [])})
+                        for zone in zones_response.data:
+                            if zone.get("map_id") == map_id:
+                                zones.append({"name": zone.get("name", "Zone"), "vertices": zone.get("vertices", [])})
                 except Exception as e:
-                    logging.warning(f"Error fetching zones: {e}")
+                    logging.warning("Error fetching zones: %s", e)
 
                 # Fetch connected WiFi clients (purple)
                 wifi_clients = []
@@ -6378,19 +6487,19 @@ class MapsManager:
                         api_session, site_id=site_id
                     )
                     if clients_response.status_code == 200 and clients_response.data:
-                        for c in clients_response.data:
-                            if c.get("map_id") == map_id and c.get("x") is not None:
+                        for client in clients_response.data:
+                            if client.get("map_id") == map_id and client.get("x") is not None:
                                 wifi_clients.append(
                                     {
-                                        "x": c.get("x"),
-                                        "y": c.get("y"),
-                                        "mac": c.get("mac", "Unknown"),
-                                        "ssid": c.get("ssid", "-"),
-                                        "name": c.get("hostname", "") or c.get("name", ""),
+                                        "x": client.get("x"),
+                                        "y": client.get("y"),
+                                        "mac": client.get("mac", "Unknown"),
+                                        "ssid": client.get("ssid", "-"),
+                                        "name": client.get("hostname", "") or client.get("name", ""),
                                     }
                                 )
                 except Exception as e:
-                    logging.warning(f"Error fetching WiFi clients: {type(e).__name__}: {str(e)}")
+                    logging.warning("Error fetching WiFi clients: %s: %s", type(e).__name__, str(e))
 
                 # Fetch unconnected WiFi clients (grey)
                 unconnected_clients = []
@@ -6400,47 +6509,53 @@ class MapsManager:
                         api_session, site_id=site_id, map_id=map_id
                     )
                     if unconnected_response.status_code == 200 and unconnected_response.data:
-                        for c in unconnected_response.data:
-                            if c.get("x") is not None:
+                        for client in unconnected_response.data:
+                            if client.get("x") is not None:
                                 unconnected_clients.append(
                                     {
-                                        "x": c.get("x"),
-                                        "y": c.get("y"),
-                                        "mac": c.get("mac", "Unknown"),
-                                        "manufacture": c.get("manufacture", "-"),
+                                        "x": client.get("x"),
+                                        "y": client.get("y"),
+                                        "mac": client.get("mac", "Unknown"),
+                                        "manufacture": client.get("manufacture", "-"),
                                     }
                                 )
                 except Exception as e:
-                    logging.warning(f"Error fetching unconnected clients: {type(e).__name__}: {str(e)}")
+                    logging.warning("Error fetching unconnected clients: %s: %s", type(e).__name__, str(e))
 
                 # Fetch BLE/Bluetooth discovered assets (blue)
                 ble_devices = []
                 try:
                     ble_response = mistapi.api.v1.sites.stats.listSiteDiscoveredAssets(api_session, site_id=site_id)
                     if ble_response.status_code == 200 and ble_response.data:
-                        for d in ble_response.data:
-                            if d.get("map_id") == map_id and d.get("x") is not None:
-                                ble_devices.append({"x": d.get("x"), "y": d.get("y"), "mac": d.get("mac", "Unknown")})
+                        for device in ble_response.data:
+                            if device.get("map_id") == map_id and device.get("x") is not None:
+                                ble_devices.append(
+                                    {
+                                        "x": device.get("x"),
+                                        "y": device.get("y"),
+                                        "mac": device.get("mac", "Unknown"),
+                                    }
+                                )
                 except Exception as e:
-                    logging.warning(f"Error fetching BLE devices: {e}")
+                    logging.warning("Error fetching BLE devices: %s", e)
 
                 # Fetch named assets (green)
                 assets = []
                 try:
                     assets_response = mistapi.api.v1.sites.stats.listSiteAssetsStats(api_session, site_id=site_id)
                     if assets_response.status_code == 200 and assets_response.data:
-                        for a in assets_response.data:
-                            if a.get("map_id") == map_id and a.get("x") is not None:
+                        for asset in assets_response.data:
+                            if asset.get("map_id") == map_id and asset.get("x") is not None:
                                 assets.append(
                                     {
-                                        "x": a.get("x"),
-                                        "y": a.get("y"),
-                                        "name": a.get("name", "Asset"),
-                                        "mac": a.get("mac", "-"),
+                                        "x": asset.get("x"),
+                                        "y": asset.get("y"),
+                                        "name": asset.get("name", "Asset"),
+                                        "mac": asset.get("mac", "-"),
                                     }
                                 )
                 except Exception as e:
-                    logging.warning(f"Error fetching assets: {type(e).__name__}: {str(e)}")
+                    logging.warning("Error fetching assets: %s: %s", type(e).__name__, str(e))
 
                 # Fetch SDK/Marvis clients (light blue) - these use the Mist SDK for indoor location
                 sdk_clients = []
@@ -6449,18 +6564,18 @@ class MapsManager:
                         api_session, site_id=site_id, map_id=map_id
                     )
                     if sdk_response.status_code == 200 and sdk_response.data:
-                        for c in sdk_response.data:
-                            if c.get("x") is not None:
+                        for client in sdk_response.data:
+                            if client.get("x") is not None:
                                 sdk_clients.append(
                                     {
-                                        "x": c.get("x"),
-                                        "y": c.get("y"),
-                                        "name": c.get("name", ""),
-                                        "uuid": c.get("uuid", "-"),
+                                        "x": client.get("x"),
+                                        "y": client.get("y"),
+                                        "name": client.get("name", ""),
+                                        "uuid": client.get("uuid", "-"),
                                     }
                                 )
                 except Exception as e:
-                    logging.warning(f"Error fetching SDK clients: {e}")
+                    logging.warning("Error fetching SDK clients: %s", e)
 
                 # Fetch RF coverage data for WiFi, BLE, and App (SDK) clients
                 # Coverage API: /api/v1/sites/{site_id}/location/coverage
@@ -6476,14 +6591,14 @@ class MapsManager:
                             "type": coverage_type,
                             "from_apollo": "true",
                         }
-                        logging.info(f"[Flask API] Fetching {coverage_type} coverage for map {map_id}")
+                        logging.info("[Flask API] Fetching %s coverage for map %s", coverage_type, map_id)
                         coverage_response = api_session.mist_get(coverage_url, query=coverage_params)
 
                         if coverage_response.status_code == 200:
                             coverage_data = coverage_response.data
                             # Check for error response
                             if isinstance(coverage_data, dict) and "exception" in coverage_data:
-                                logging.warning(f"[Flask API] {coverage_type} coverage API error")
+                                logging.warning("[Flask API] %s coverage API error", coverage_type)
                                 return None
 
                             results = coverage_data.get("results", [])
@@ -6517,13 +6632,15 @@ class MapsManager:
                                             grid_points.append({"x": x_px, "y": y_px, "rssi": rssi})
 
                                 logging.info(
-                                    f"[Flask API] {coverage_type} coverage: "
-                                    f"{len(grid_points)} grid points (ppm={ppm_value})"
+                                    "[Flask API] %s coverage: %s grid points (ppm=%s)",
+                                    coverage_type,
+                                    len(grid_points),
+                                    ppm_value,
                                 )
                                 return grid_points
                         return None
                     except Exception as e:
-                        logging.warning(f"Error fetching {coverage_type} coverage: {e}")
+                        logging.warning("Error fetching %s coverage: %s", coverage_type, e)
                         return None
 
                 wifi_coverage = fetch_coverage("client", ppm) if ppm else []
@@ -6578,7 +6695,7 @@ class MapsManager:
                 )
 
             except Exception as e:
-                logging.error(f"Error fetching map data: {e}", exc_info=True)
+                logging.exception("Error fetching map data: %s", e)
                 return jsonify({"error": "Failed to fetch map data. Check server logs for details."}), 500
 
         # Determine host and port
@@ -6614,13 +6731,13 @@ class MapsManager:
 
         # Run Flask server
         try:
-            logging.info(f"Starting Flask server on http://{flask_host}:{flask_port}")
+            logging.info("Starting Flask server on http://%s:%s", flask_host, flask_port)
             flask_app.run(host=flask_host, port=flask_port, debug=False, threaded=True, use_reloader=False)
         except KeyboardInterrupt:
             print("\n\nFlask map viewer stopped by user")
             logging.info("Flask map viewer stopped by user (Ctrl+C)")
         except Exception as e:
-            logging.error(f"Error running Flask server: {e}", exc_info=True)
+            logging.exception("Error running Flask server: %s", e)
             print(f"\n! Error running map viewer: {e}")
 
     def _create_static_plotly_map(self, map_data, devices):
@@ -6679,12 +6796,12 @@ class MapsManager:
 
         # Save to temp HTML file
         temp_html = os.path.join(tempfile.gettempdir(), f"mist_map_{map_data.get('id', 'unknown')[:8]}.html")
-        logging.debug(f"Saving static map to: {temp_html}")
+        logging.debug("Saving static map to: %s", temp_html)
         fig.write_html(temp_html)
 
         print(f"\n! Map saved to: {temp_html}")
         print("! Opening in browser...")
-        logging.info(f"Static HTML map created: {temp_html}")
+        logging.info("Static HTML map created: %s", temp_html)
         webbrowser.open(f"file://{temp_html}")
         logging.debug("Browser launched with static map")
 
@@ -6886,8 +7003,11 @@ def _setup_api_session(env_file: str):
             apisession = mistapi.APISession(env_file=env_file)
         else:
             print("No .env file found. Please provide Mist API credentials.")
-            host = input("Mist API Host [api.mist.com]: ").strip() or "api.mist.com"
-            token = input("API Token: ").strip()
+            host = (
+                InputUtils.safe_input("Mist API Host [api.mist.com]: ", context="_setup_api_session").strip()
+                or "api.mist.com"
+            )
+            token = InputUtils.safe_input("API Token: ", context="_setup_api_session").strip()
             apisession = mistapi.APISession(host=host, token=token)
         apisession.login()
         return apisession
@@ -6902,7 +7022,7 @@ def _prompt_org_selection(orgs: list) -> str:
     for idx, oid in enumerate(orgs, 1):
         print(f"  {idx}. {oid}")
     try:
-        choice = input("Select organization number: ").strip()
+        choice = InputUtils.safe_input("Select organization number: ", context="_prompt_org_selection").strip()
         return orgs[int(choice) - 1]
     except (ValueError, IndexError):
         print("Invalid selection")
@@ -6928,7 +7048,7 @@ def _detect_org_from_session(apisession, test_mode: bool) -> str | None:
             return orgs[0]
         return _prompt_org_selection(orgs) if orgs else None
     except Exception as e:
-        logging.warning(f"Could not auto-detect org_id: {e}")
+        logging.warning("Could not auto-detect org_id: %s", e)
         return None
 
 
@@ -6969,7 +7089,7 @@ Examples:
         if args.test:
             print("ERROR: Organization ID required for test mode. Set org_id in .env or use --org flag")
             sys.exit(1)
-        org_id = input("Organization ID: ").strip()
+        org_id = InputUtils.safe_input("Organization ID: ", context="main").strip()
 
     if not org_id:
         print("ERROR: Organization ID is required")

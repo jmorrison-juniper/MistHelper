@@ -110,22 +110,29 @@ class GatewayStatsExporter:
                 stats["device_id"] = device_id  # Enrich record with device_id.
                 stats["device_name"] = device_name  # Enrich record with device_name.
                 if attempt > 0:
-                    logging.info(f"! Retry {attempt} successful for device {device_name} at site {site_name}")
+                    logging.info("! Retry %s successful for device %s at site %s", attempt, device_name, site_name)
                 else:
-                    logging.debug(f"! Collected device stats for gateway {device_name} at site {site_name}")
+                    logging.debug("! Collected device stats for gateway %s at site %s", device_name, site_name)
                 return stats  # Return enriched stats record.
             except Exception as exception:
                 if attempt < max_retries:
                     backoff_delay = retry_delay * (2**attempt) if not fast else retry_delay  # Compute backoff.
                     logging.warning(
-                        f"! Attempt {attempt + 1} failed for device {device_name} at site {site_name}: {exception}"
+                        "! Attempt %s failed for device %s at site %s: %s",
+                        attempt + 1,
+                        device_name,
+                        site_name,
+                        exception,
                     )
-                    logging.info(f"! Retrying in {backoff_delay} seconds...")
+                    logging.info("! Retrying in %s seconds...", backoff_delay)
                     time.sleep(backoff_delay)  # Sleep before retry.
                 else:
                     logging.error(
-                        f"! Failed to fetch device stats for {device_name} at site {site_name} "
-                        f"after {max_retries + 1} attempts: {exception}"
+                        "! Failed to fetch device stats for %s at site %s after %s attempts: %s",
+                        device_name,
+                        site_name,
+                        max_retries + 1,
+                        exception,
                     )
                     return {
                         "site_id": site_id,
@@ -139,7 +146,7 @@ class GatewayStatsExporter:
     @staticmethod
     def _process_devices_concurrent(gateway_devices):
         """Fetch device stats concurrently with thread pool; return aggregated results."""
-        logging.info(f"! Fast mode: Processing {len(gateway_devices)} gateway devices concurrently...")
+        logging.info("! Fast mode: Processing %s gateway devices concurrently...", len(gateway_devices))
         max_workers = min(10, len(gateway_devices))  # Cap worker count to prevent connection overuse.
         connection_semaphore = threading.Semaphore(max_workers)  # Bound concurrent connections.
         all_stats: list = []  # Accumulate per-device stats records.
@@ -167,18 +174,18 @@ class GatewayStatsExporter:
                 except Exception as exception:
                     site_id, device_id, device_name, site_name = device_info  # Unpack for error log.
                     logging.error(
-                        f"! Concurrent processing failed for device {device_name} at site {site_name}: {exception}"
+                        "! Concurrent processing failed for device %s at site %s: %s", device_name, site_name, exception
                     )
         return all_stats  # Return aggregated stats list.
 
     @staticmethod
     def _process_devices_sequential(gateway_devices, fast):
         """Fetch device stats sequentially; return aggregated results."""
-        logging.info(f"! Processing {len(gateway_devices)} gateway devices sequentially...")
+        logging.info("! Processing %s gateway devices sequentially...", len(gateway_devices))
         all_stats: list = []  # Accumulate per-device stats records.
         for index, device_info in enumerate(tqdm(gateway_devices, desc="Gateway Device Stats", unit="device"), 1):
             _, _, device_name, site_name = device_info  # Unpack for progress log.
-            logging.debug(f"! Processing device {index}/{len(gateway_devices)}: {device_name} at {site_name}")
+            logging.debug("! Processing device %s/%s: %s at %s", index, len(gateway_devices), device_name, site_name)
             result = GatewayStatsExporter._fetch_one_device_stats(device_info, fast)  # Fetch single device.
             if result:
                 all_stats.append(result)  # Append non-empty result.
@@ -196,15 +203,15 @@ class GatewayStatsExporter:
             sanitized.append(flat_record)  # Append flattened record.
         filename = "AllGatewayDeviceStats.csv"  # Output filename preserved verbatim.
         logging.info("Saving sanitized gateway stats to %s", filename)  # Log before save action.
-        DataExporter.save_data_to_output(sanitized, filename)  # Persist data to output backend.
-        logging.info(f"! Gateway device statistics saved to {filename} ({len(all_stats)} records).")
-        logging.info(f"! API Optimization: Collected detailed stats for {len(gateway_devices)} gateways")
+        DataExporter.write_with_format_selection(sanitized, filename)  # Persist data to output backend.
+        logging.info("! Gateway device statistics saved to %s (%s records).", filename, len(all_stats))
+        logging.info("! API Optimization: Collected detailed stats for %s gateways", len(gateway_devices))
         successful_requests = len([stats for stats in all_stats if stats.get("status") != "failed"])
         failed_requests = len(all_stats) - successful_requests  # Compute failure tally.
         if failed_requests > 0:
-            logging.warning(f"! {failed_requests} requests failed out of {len(all_stats)} total")
+            logging.warning("! %s requests failed out of %s total", failed_requests, len(all_stats))
         else:
-            logging.info(f"! All {successful_requests} requests completed successfully")
+            logging.info("! All %s requests completed successfully", successful_requests)
 
     @staticmethod
     def device_stats(fast: bool = False) -> None:
@@ -228,9 +235,9 @@ class GatewayStatsExporter:
         """Export gateway device stats with freshness check."""
         output_file = "AllGatewayDeviceStats.csv"
         if CacheUtils.check_and_generate_csv(output_file, lambda: GatewayStatsExporter.device_stats(fast=fast)):
-            logging.info(f"! {output_file} already exists and is fresh - using cached data")
+            logging.info("! %s already exists and is fresh - using cached data", output_file)
         else:
-            logging.info(f"! {output_file} was generated or refreshed")
+            logging.info("! %s was generated or refreshed", output_file)
 
     @staticmethod
     def wan_port_conflicts() -> None:
@@ -251,10 +258,10 @@ class GatewayStatsExporter:
         try:
             with open(stats_path, encoding="utf-8") as csvfile:
                 gateway_data = list(csv.DictReader(csvfile))
-            logging.info(f"! Loaded {len(gateway_data)} gateway device records for analysis")
+            logging.info("! Loaded %s gateway device records for analysis", len(gateway_data))
             return gateway_data
         except Exception as exception:
-            logging.error(f"! Failed to load {stats_file}: {exception}")
+            logging.error("! Failed to load %s: %s", stats_file, exception)
             print(f"! Failed to load {stats_file}: {exception}")
             return None
 
@@ -296,7 +303,7 @@ class GatewayStatsExporter:
         for ip_address, ports in device_ips.items():
             if len(ports) > 1:
                 conflicts.append({"value": ip_address, "ports": ports})
-                logging.warning(f"! IP conflict in {device_name}: {ip_address} on ports {', '.join(ports)}")
+                logging.warning("! IP conflict in %s: %s on ports %s", device_name, ip_address, ", ".join(ports))
         return conflicts
 
     @staticmethod
@@ -327,10 +334,10 @@ class GatewayStatsExporter:
 
         output_file = "GatewayWANPortConflicts.csv"
         conflicts_found.sort(key=lambda x: (x.get("device_name", ""), x.get("port_name", "")))
-        DataExporter.save_data_to_output(conflicts_found, output_file)
+        DataExporter.write_with_format_selection(conflicts_found, output_file)
 
         unique_gateways = {r.get("device_name", "Unknown") for r in conflicts_found}
-        logging.info(f"! Exported {len(conflicts_found)} conflicts from {len(unique_gateways)} gateways")
+        logging.info("! Exported %s conflicts from %s gateways", len(conflicts_found), len(unique_gateways))
         print(f"! WAN port IP conflicts exported to {output_file} ({len(conflicts_found)} records)")
         print(f"! Summary: {len(unique_gateways)} gateways with IP conflicts")
 

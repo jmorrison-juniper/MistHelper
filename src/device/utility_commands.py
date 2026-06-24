@@ -25,7 +25,7 @@ import mistapi
 SelectSiteFn = Callable[[], str | None]
 SelectDeviceFn = Callable[[str, str], str | None]
 SafeInputFn = Callable[..., str]
-WriteExportFn = Callable[[list[dict[str, Any]], str, str], None]
+WriteExportFn = Callable[[list[dict[str, Any]], str, str], bool]  # Exporter returns a success bool, not None
 WebSocketManagerFactory = Callable[[Any], Any]
 
 
@@ -152,7 +152,7 @@ class DeviceUtilityCommands:
             if hasattr(response, "data") and isinstance(response.data, dict):
                 return response.data
         except Exception as error:
-            logging.error(f"Failed to get device stats: {error}")
+            logging.error("Failed to get device stats: %s", error)
         return None
 
     def _select_port_from_device(self, site_id: str, device_id: str) -> str | None:
@@ -169,7 +169,7 @@ class DeviceUtilityCommands:
                 return self._display_and_select_ifstat(if_stat)
             return self._manual_port_entry()
         except Exception as error:
-            logging.debug(f"Could not fetch port list: {error}")
+            logging.debug("Could not fetch port list: %s", error)
             return self._manual_port_entry()
 
     def _display_and_select_port(self, ports: list[dict[str, Any]]) -> str | None:
@@ -310,7 +310,7 @@ class DeviceUtilityCommands:
             self._print_interface_list(interfaces, if_stat, ip_stat)
             return self._get_interface_selection(interfaces)
         except Exception as error:
-            logging.debug(f"Could not fetch interface list: {error}")
+            logging.debug("Could not fetch interface list: %s", error)
             return self._manual_interface_entry()
 
     @staticmethod
@@ -418,7 +418,7 @@ class DeviceUtilityCommands:
                     network_labels,
                 )
         except Exception as error:
-            logging.debug(f"Could not fetch network config: {error}")
+            logging.debug("Could not fetch network config: %s", error)
         return network_names, network_labels
 
     @staticmethod
@@ -493,7 +493,7 @@ class DeviceUtilityCommands:
                 websocket_manager,
             )
         except Exception as error:
-            logging.error(f"WebSocket command failed: {error}", exc_info=True)
+            logging.exception("WebSocket command failed: %s", error)
             print(f"! Command failed: {error}")
             return None
         finally:
@@ -556,7 +556,7 @@ class DeviceUtilityCommands:
         except KeyboardInterrupt:
             print("\n-> Streaming stopped by user.")
         except Exception as error:
-            logging.error(f"Streaming command failed: {error}", exc_info=True)
+            logging.exception("Streaming command failed: %s", error)
             print(f"! Streaming failed: {error}")
         finally:
             websocket_manager.disconnect()
@@ -1141,7 +1141,7 @@ class DeviceUtilityCommands:
             ):
                 print("-> Use 'Unlocate Device' (menu 139) to stop.")
         except Exception as error:
-            logging.error(f"Locate device failed: {error}", exc_info=True)
+            logging.exception("Locate device failed: %s", error)
             print(f"! Locate failed: {error}")
 
     def unlocate_device(self) -> None:
@@ -1159,7 +1159,7 @@ class DeviceUtilityCommands:
                 "Unlocate failed",
             )
         except Exception as error:
-            logging.error(f"Unlocate device failed: {error}", exc_info=True)
+            logging.exception("Unlocate device failed: %s", error)
             print(f"! Unlocate failed: {error}")
 
     def bounce_port(self) -> None:
@@ -1245,7 +1245,7 @@ class DeviceUtilityCommands:
                 "Reprovision failed",
             )
         except Exception as error:
-            logging.error(f"Reprovision failed: {error}", exc_info=True)
+            logging.exception("Reprovision failed: %s", error)
             print(f"! Reprovision failed: {error}")
 
     def readopt_device(self) -> None:
@@ -1267,7 +1267,7 @@ class DeviceUtilityCommands:
                 print("! Device is not a Virtual Chassis member." " 'readopt' applies only to VC devices. Skipping.")
                 return
         except Exception as error:
-            logging.warning(f"VC preflight check failed: {error}", exc_info=True)
+            logging.warning("VC preflight check failed: %s", error, exc_info=True)
         try:
             response = mistapi.api.v1.sites.devices.readoptSiteOctermDevice(self._apisession, site_id, device_id)
             self._print_api_result(
@@ -1276,7 +1276,7 @@ class DeviceUtilityCommands:
                 "Re-adopt failed",
             )
         except Exception as error:
-            logging.error(f"Re-adopt failed: {error}", exc_info=True)
+            logging.exception("Re-adopt failed: %s", error)
             print(f"! Re-adopt failed: {error}")
 
     def get_ztp_password(self) -> None:
@@ -1299,7 +1299,7 @@ class DeviceUtilityCommands:
                 print("! No password data returned.")
         except Exception as error:
             error_msg = f"{type(error).__name__}: {str(error)}"
-            logging.error(f"ZTP password request failed: {error_msg}")
+            logging.error("ZTP password request failed: %s", error_msg)
             print(f"! ZTP password request failed: {error_msg}")
 
     def get_config_commands(self) -> None:
@@ -1325,10 +1325,7 @@ class DeviceUtilityCommands:
             else:
                 print("! No configuration commands returned.")
         except Exception as error:
-            logging.error(
-                f"Config commands request failed: {error}",
-                exc_info=True,
-            )
+            logging.exception("Config commands request failed: %s", error)
             print(f"! Config commands request failed: {error}")
 
     def upload_support_file(self) -> None:
@@ -1378,7 +1375,7 @@ class DeviceUtilityCommands:
             ):
                 print("-> Files will be available in the Mist dashboard.")
         except Exception as error:
-            logging.error(f"Support file upload failed: {error}", exc_info=True)
+            logging.exception("Support file upload failed: %s", error)
             print(f"! Support file upload failed: {error}")
 
     # ------------------------------------------------------------------
@@ -1418,7 +1415,7 @@ class DeviceUtilityCommands:
                 "Clear ARP cache failed",
             )
         except Exception as error:
-            logging.error(f"Clear ARP cache failed: {error}", exc_info=True)
+            logging.exception("Clear ARP cache failed: %s", error)
             print(f"! Clear ARP cache failed: {error}")
 
     def clear_bgp_routes(self) -> None:
@@ -1467,7 +1464,7 @@ class DeviceUtilityCommands:
                 "Clear BGP routes failed",
             )
         except Exception as error:
-            logging.error(f"Clear BGP routes failed: {error}", exc_info=True)
+            logging.exception("Clear BGP routes failed: %s", error)
             print(f"! Clear BGP routes failed: {error}")
 
     def clear_session(self) -> None:
@@ -1494,7 +1491,7 @@ class DeviceUtilityCommands:
                 "Clear session failed",
             )
         except Exception as error:
-            logging.error(f"Clear session failed: {error}", exc_info=True)
+            logging.exception("Clear session failed: %s", error)
             self._handle_clear_session_error(error)
 
     def _build_clear_session_body(self) -> dict[str, Any] | None:
@@ -1591,7 +1588,7 @@ class DeviceUtilityCommands:
                 "Clear MAC table failed",
             )
         except Exception as error:
-            logging.error(f"Clear MAC table failed: {error}", exc_info=True)
+            logging.exception("Clear MAC table failed: %s", error)
             print(f"! Clear MAC table failed: {error}")
 
     def clear_bpdu_error(self) -> None:
@@ -1620,7 +1617,7 @@ class DeviceUtilityCommands:
                 "Clear BPDU errors failed",
             )
         except Exception as error:
-            logging.error(f"Clear BPDU errors failed: {error}", exc_info=True)
+            logging.exception("Clear BPDU errors failed: %s", error)
             print(f"! Clear BPDU errors failed: {error}")
 
     def clear_learned_macs(self) -> None:
@@ -1652,7 +1649,7 @@ class DeviceUtilityCommands:
                 "Clear learned MACs failed",
             )
         except Exception as error:
-            logging.error(f"Clear learned MACs failed: {error}", exc_info=True)
+            logging.exception("Clear learned MACs failed: %s", error)
             print(f"! Clear learned MACs failed: {error}")
 
     def clear_policy_hit_count(self) -> None:
@@ -1687,10 +1684,7 @@ class DeviceUtilityCommands:
                 "Clear policy hit count failed",
             )
         except Exception as error:
-            logging.error(
-                f"Clear policy hit count failed: {error}",
-                exc_info=True,
-            )
+            logging.exception("Clear policy hit count failed: %s", error)
             print(f"! Clear policy hit count failed: {error}")
 
     def release_dhcp_lease(self) -> None:
@@ -1728,7 +1722,7 @@ class DeviceUtilityCommands:
                 "Release DHCP lease failed",
             )
         except Exception as error:
-            logging.error(f"Release DHCP lease failed: {error}", exc_info=True)
+            logging.exception("Release DHCP lease failed: %s", error)
             print(f"! Release DHCP lease failed: {error}")
 
     def release_dhcp_ssr(self) -> None:
@@ -1764,10 +1758,7 @@ class DeviceUtilityCommands:
                 "Release SSR DHCP lease failed",
             )
         except Exception as error:
-            logging.error(
-                f"Release SSR DHCP lease failed: {error}",
-                exc_info=True,
-            )
+            logging.exception("Release SSR DHCP lease failed: %s", error)
             print(f"! Release SSR DHCP lease failed: {error}")
 
     # ------------------------------------------------------------------
@@ -1790,7 +1781,7 @@ class DeviceUtilityCommands:
             ):
                 print("-> Updated stats will appear in next" " stats export.")
         except Exception as error:
-            logging.error(f"Poll switch stats failed: {error}", exc_info=True)
+            logging.exception("Poll switch stats failed: %s", error)
             print(f"! Poll switch stats failed: {error}")
 
     def create_device_snapshot(self) -> None:
@@ -1808,5 +1799,5 @@ class DeviceUtilityCommands:
                 "Create snapshot failed",
             )
         except Exception as error:
-            logging.error(f"Create snapshot failed: {error}", exc_info=True)
+            logging.exception("Create snapshot failed: %s", error)
             print(f"! Create snapshot failed: {error}")

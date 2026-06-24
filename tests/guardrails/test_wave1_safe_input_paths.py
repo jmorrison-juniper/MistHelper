@@ -10,7 +10,9 @@ def test_ssh_runner_confirm_execution_returns_false_on_eof(monkeypatch):
         raise EOFError
 
     monkeypatch.setattr("builtins.input", raise_eof)
-    assert MistHelper.SSHRunnerManager._confirm_execution(3) is False
+    # Facade wrapper removed; call extracted impl directly with built deps.
+    deps = MistHelper.SSHRunnerManager._build_deps()
+    assert MistHelper.ExtractedSSHRunnerManager._confirm_execution(deps, 3) is False
 
 
 def test_wan2_confirm_operation_handles_eof_as_cancel(monkeypatch):

@@ -1,9 +1,19 @@
 # Research: mistapi v0.59.1-v0.62.0 Upgrade Alignment
 
 **Date**: 2026-03-29  
-**Updated**: 2026-05-07  
+**Updated**: 2026-06-16  
 **Feature**: 017-mistapi-upgrade-alignment  
 **GitHub Issue**: #260
+
+## Addendum (2026-06-16): Post-release floor bump to mistapi 0.63.1
+
+**Problem**: The original alignment work stopped at `mistapi>=0.62.0`, but upstream advanced to `0.63.1` with additive WebSocket/device-utils error reporting and refreshed generated bindings.
+
+**Finding**: Live validation against a real `.env` session succeeded for `initialize_mist_session()`, `getSelf()`, `listOrgSites()`, `getOrgInventory()`, `searchOrgWirelessClients()`, `searchOrgAlarms()`, `searchOrgEvents()`, `listOrgTickets()`, `searchSiteWirelessClients()`, and `searchSiteWiredClients()`. No MistHelper code changes were required beyond restoring dependency floor alignment.
+
+**Decision**: Raise the dependency floor again to `mistapi>=0.63.1` and keep `websocket-client>=1.8.0`. Treat `0.63.1` as a safe additive bump for current MistHelper read paths.
+
+**Risk**: LOW — upstream changes exercised in live smoke were backward-compatible for current MistHelper usage.
 
 ## Decision 1: Insights API Parameter Migration
 

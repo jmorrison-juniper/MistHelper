@@ -115,10 +115,10 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
     def run(self) -> None:
         """Entry point that detects MSP privileges and branches accordingly."""
         logging.debug("Entering OrgLevelAPFirmwareUpgrader.run()")
-        logging.info(f"OrgLevelAPFirmwareUpgrader workflow started, dry_run={self.dry_run}")
+        logging.info("OrgLevelAPFirmwareUpgrader workflow started, dry_run=%s", self.dry_run)
 
         if self._msp_privileges and len(self._msp_privileges) > 0:
-            logging.debug(f"MSP privileges detected: {len(self._msp_privileges)} MSP(s)")
+            logging.debug("MSP privileges detected: %s MSP(s)", len(self._msp_privileges))
             mode = self._prompt_msp_mode()
             if mode is None:
                 return
@@ -134,7 +134,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             logging.warning("No organization selected")
             return
 
-        logging.info(f"Single-org mode: org_id={org_id}")
+        logging.info("Single-org mode: org_id=%s", org_id)
         self.org_id = org_id
         self.execute()
 
@@ -170,7 +170,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
     def _execute_msp_mode(self) -> None:  # noqa: PLR0915
         """Execute MSP multi-organization upgrade mode."""
-        logging.debug(f"Entering _execute_msp_mode(), dry_run={self.dry_run}")
+        logging.debug("Entering _execute_msp_mode(), dry_run=%s", self.dry_run)
         logging.info("Starting MSP Multi-Org AP firmware upgrade workflow")
         self._print_msp_mode_header()
 
@@ -180,7 +180,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             logging.warning("MSP selection cancelled")
             return
 
-        logging.info(f"User selected {len(selected_msps)} MSP(s)")
+        logging.info("User selected %s MSP(s)", len(selected_msps))
 
         selected_orgs = self._collect_orgs_from_msps(selected_msps)
         if not selected_orgs:
@@ -188,13 +188,13 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             logging.warning("Organization selection cancelled")
             return
 
-        logging.info(f"User selected {len(selected_orgs)} organization(s) for upgrade")
+        logging.info("User selected %s organization(s) for upgrade", len(selected_orgs))
 
         if not self._confirm_msp_orgs(selected_orgs):
             return
 
         all_results = self._execute_org_upgrades(selected_orgs)
-        logging.info(f"MSP multi-org upgrade completed: {len(all_results)} organizations processed")
+        logging.info("MSP multi-org upgrade completed: %s organizations processed", len(all_results))
         self._print_msp_summary(all_results, self.dry_run)
 
     def _print_msp_mode_header(self) -> None:
@@ -251,7 +251,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
         print("")
         print(f"  + Confirmed - proceeding with {len(selected_orgs)} organization(s)")
-        logging.info(f"User confirmed MSP multi-org upgrade for {len(selected_orgs)} organization(s)")
+        logging.info("User confirmed MSP multi-org upgrade for %s organization(s)", len(selected_orgs))
         return True
 
     def _execute_org_upgrades(self, selected_orgs: list[Any]) -> list[dict[str, Any]]:
@@ -266,7 +266,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             print(f"  ORGANIZATION {idx}/{len(selected_orgs)}: {org_name}")
             print("=" * 70)
 
-            logging.info(f"Processing organization {idx}/{len(selected_orgs)}: {org_name}")
+            logging.info("Processing organization %s/%s: %s", idx, len(selected_orgs), org_name)
             upgrader = OrgLevelAPFirmwareUpgrader(
                 org_id,
                 self.apisession,
@@ -289,8 +289,11 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
                 }
             )
             logging.debug(
-                f"Organization {org_name}: success={upgrader.successful_api_calls}, "
-                f"failed={upgrader.failed_api_calls}, devices={upgrader.total_devices_upgraded}"
+                "Organization %s: success=%s, failed=%s, devices=%s",
+                org_name,
+                upgrader.successful_api_calls,
+                upgrader.failed_api_calls,
+                upgrader.total_devices_upgraded,
             )
         return all_results
 
@@ -314,7 +317,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             msp_name = self._msp_privileges[0].get("msp_name", "Unknown")
             print(f"  Only one MSP available: {msp_name}")
             print(f"  + Auto-selected: {msp_name}")
-            logging.info(f"Auto-selected single MSP: {msp_name}")
+            logging.info("Auto-selected single MSP: %s", msp_name)
             return list(self._msp_privileges)
 
         default_idx = self._find_selected_msp_index()
@@ -377,7 +380,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         """Return the currently selected MSP as a list."""
         msp = self._selected_msp or {}
         print(f"  + Using current MSP: {msp.get('msp_name', 'Unknown')}")
-        logging.debug(f"Using default MSP: {msp.get('msp_name')}")
+        logging.debug("Using default MSP: %s", msp.get("msp_name"))
         return [self._selected_msp]
 
     def _select_all_msps(self) -> list[Any]:
@@ -386,7 +389,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         print(f"  + Selected ALL {len(self._msp_privileges)} MSP(s):")
         for msp in self._msp_privileges:
             print(f"      - {msp.get('msp_name', 'Unknown')}")
-        logging.info(f"User selected ALL {len(self._msp_privileges)} MSP(s)")
+        logging.info("User selected ALL %s MSP(s)", len(self._msp_privileges))
         return list(self._msp_privileges)
 
     def _select_msps_by_indices(self, selection: str) -> list[Any]:
@@ -394,7 +397,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         indices = self._parse_selection(selection, len(self._msp_privileges))
         if not indices:
             print("  X Invalid selection")
-            logging.warning(f"Invalid MSP selection: {selection}")
+            logging.warning("Invalid MSP selection: %s", selection)
             return []
 
         selected = [self._msp_privileges[i] for i in indices]
@@ -402,12 +405,12 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         print(f"  + Selected {len(selected)} MSP(s):")
         for msp in selected:
             print(f"      - {msp.get('msp_name', 'Unknown')}")
-        logging.info(f"User selected {len(selected)} MSP(s)")
+        logging.info("User selected %s MSP(s)", len(selected))
         return selected
 
     def _select_orgs_from_msp(self, msp: dict[str, Any]) -> list[Any]:  # noqa: C901, PLR0915
         """Select organizations from a specific MSP."""
-        logging.debug(f"Entering _select_orgs_from_msp() for MSP: {msp.get('msp_name')}")
+        logging.debug("Entering _select_orgs_from_msp() for MSP: %s", msp.get("msp_name"))
 
         msp_id = msp["msp_id"]
         msp_name = msp.get("msp_name", "Unknown")
@@ -434,29 +437,29 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
         except Exception as error:
             print(f"  X Error fetching organizations: {error}")
-            logging.error(f"Failed to fetch orgs from MSP {msp_name}: {error}")
+            logging.error("Failed to fetch orgs from MSP %s: %s", msp_name, error)
             return []
 
     def _fetch_msp_orgs(self, msp_id: str, msp_name: str) -> list[Any]:
         """Fetch organizations from an MSP."""
         msp_orgs_api = importlib.import_module("mistapi.api.v1.msps.orgs")
-        logging.debug(f"Calling listMspOrgs for msp_id={msp_id}")
+        logging.debug("Calling listMspOrgs for msp_id=%s", msp_id)
         response = msp_orgs_api.listMspOrgs(self.apisession, msp_id)
 
         if not response or not hasattr(response, "data"):
             print(f"  X Failed to fetch organizations from {msp_name}")
-            logging.warning(f"Failed to fetch organizations from MSP {msp_name}")
+            logging.warning("Failed to fetch organizations from MSP %s", msp_name)
             return []
 
         orgs = response.data if isinstance(response.data, list) else [response.data] if response.data else []
         if not orgs:
             print(f"  X No organizations found under {msp_name}")
-            logging.warning(f"No organizations found under MSP {msp_name}")
+            logging.warning("No organizations found under MSP %s", msp_name)
             return []
 
         orgs = sorted(orgs, key=lambda x: x.get("name", "").lower())
         print(f"  + Found {len(orgs)} organization(s) under {msp_name}")
-        logging.info(f"Found {len(orgs)} organizations under MSP {msp_name}")
+        logging.info("Found %s organizations under MSP %s", len(orgs), msp_name)
         return orgs
 
     def _display_org_list(self, orgs: list[Any], msp_name: str) -> None:
@@ -483,24 +486,24 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             logging.debug("SystemExit during org selection")
             return []
 
-        logging.debug(f"User selection input: '{selection}'")
+        logging.debug("User selection input: '%s'", selection)
 
         if selection in ["q", ""]:
             print(f"  Skipping {msp_name}")
-            logging.info(f"User skipped MSP {msp_name}")
+            logging.info("User skipped MSP %s", msp_name)
             return []
         if selection == "all":
             print("")
             print(f"  + Selected ALL {len(orgs)} organization(s) under {msp_name}:")
             for org in orgs:
                 print(f"      - {org.get('name', 'Unknown')}")
-            logging.info(f"User selected ALL {len(orgs)} organizations from MSP {msp_name}")
+            logging.info("User selected ALL %s organizations from MSP %s", len(orgs), msp_name)
             return orgs
 
         indices = self._parse_selection(selection, len(orgs))
         if not indices:
             print("  X Invalid selection, skipping this MSP")
-            logging.warning(f"Invalid org selection '{selection}' for MSP {msp_name}")
+            logging.warning("Invalid org selection '%s' for MSP %s", selection, msp_name)
             return []
 
         selected = [orgs[i] for i in indices]
@@ -508,7 +511,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         print(f"  + Selected {len(selected)} organization(s) from {msp_name}:")
         for org in selected:
             print(f"      - {org.get('name', 'Unknown')}")
-        logging.info(f"User selected {len(selected)} organization(s) from MSP {msp_name}")
+        logging.info("User selected %s organization(s) from MSP %s", len(selected), msp_name)
         return selected
 
     # =========================================================================
@@ -599,7 +602,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         """Execute the org-level AP firmware upgrade workflow."""
         logging.info("Starting org-level AP firmware upgrade...")
         logging.debug("OrgLevelAPFirmwareUpgrader.execute() initiated")
-        logging.debug(f"Using org_id: {self.org_id}")
+        logging.debug("Using org_id: %s", self.org_id)
 
         self._print_execute_header()
 
@@ -663,7 +666,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             logging.debug("SystemExit during site scope selection")
             return False
 
-        logging.debug(f"Site scope selection: {choice}")
+        logging.debug("Site scope selection: %s", choice)
 
         if choice == "1":
             self.target_all_sites = True
@@ -702,7 +705,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             return sorted(sites_data, key=lambda s: s.get("name", "").lower())
         except Exception as error:
             print(f"  X Error fetching sites: {error}")
-            logging.error(f"Failed to fetch sites for org-level upgrade: {error}")
+            logging.error("Failed to fetch sites for org-level upgrade: %s", error)
             return None
 
     def _display_site_list(self, sites_data: list[Any]) -> None:
@@ -767,7 +770,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             logging.debug("Fetching APs from all sites in organization")
             return self._fetch_org_aps()
         print(f"  Fetching APs from {len(self.selected_site_ids)} selected site(s)...")
-        logging.debug(f"Fetching APs from {len(self.selected_site_ids)} selected sites")
+        logging.debug("Fetching APs from %s selected sites", len(self.selected_site_ids))
         return self._fetch_selected_sites_aps()
 
     def _fetch_org_aps(self) -> bool:
@@ -791,11 +794,11 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
                 logging.warning("No APs found in organization")
                 return False
 
-            logging.info(f"Discovered {len(self.all_aps)} APs in organization")
+            logging.info("Discovered %s APs in organization", len(self.all_aps))
             return self._organize_aps_by_model()
         except Exception as error:
             print(f"  X Error fetching devices: {error}")
-            logging.error(f"Failed to fetch org devices: {error}")
+            logging.error("Failed to fetch org devices: %s", error)
             return False
 
     def _get_org_inventory(self) -> list[Any]:
@@ -834,7 +837,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
         except Exception as error:
             print(f"  X Error fetching devices: {error}")
-            logging.error(f"Failed to fetch site devices: {error}")
+            logging.error("Failed to fetch site devices: %s", error)
             return False
 
     def _collect_aps_from_sites(self) -> list[Any]:
@@ -893,12 +896,12 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
         try:
             self._populate_ap_versions()
-            logging.info(f"Retrieved firmware versions for {len(self.ap_versions)} devices")
+            logging.info("Retrieved firmware versions for %s devices", len(self.ap_versions))
             self._display_version_distribution()
             return True
         except Exception as error:
             print(f"  X Error fetching firmware stats: {error}")
-            logging.error(f"Failed to fetch firmware stats: {error}")
+            logging.error("Failed to fetch firmware stats: %s", error)
             return False
 
     def _print_step3_header(self) -> None:
@@ -983,13 +986,13 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
                 logging.warning("Failed to load available firmware versions")
                 return False
 
-            logging.debug(f"Loaded {len(self.available_versions)} firmware version entries")
+            logging.debug("Loaded %s firmware version entries", len(self.available_versions))
             self._build_model_version_mapping()
             return self._display_version_summary()
 
         except Exception as error:
             print(f"  X Error fetching available firmware: {error}")
-            logging.error(f"Failed to fetch available firmware: {error}")
+            logging.error("Failed to fetch available firmware: %s", error)
             return False
 
     def _print_step4_header(self) -> None:
@@ -1062,7 +1065,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             logging.warning("No firmware versions selected by user")
             return False
 
-        logging.info(f"User selected firmware for {len(model_selections)} model(s)")
+        logging.info("User selected firmware for %s model(s)", len(model_selections))
         self._organize_by_version(model_selections)
         return True
 
@@ -1261,7 +1264,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         if not self._apply_default_settings():
             return False
         self._display_configuration()
-        logging.info(f"Upgrade configuration complete: {self.upgrade_config}")
+        logging.info("Upgrade configuration complete: %s", self.upgrade_config)
         return True
 
     def _print_step6_header(self) -> None:
@@ -1815,7 +1818,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             logging.debug("SystemExit during upgrade confirmation")
             return False
 
-        logging.debug(f"User confirmation input: '{confirm}'")
+        logging.debug("User confirmation input: '%s'", confirm)
 
         if confirm != "UPGRADE":
             print("  X Upgrade cancelled")
@@ -1912,8 +1915,10 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         print(f"    - Failed API Calls: {self.failed_api_calls}")
         print(f"    - Total Devices: {self.total_devices_upgraded}")
         logging.info(
-            f"Org-level upgrade execution complete: successful={self.successful_api_calls}, "
-            f"failed={self.failed_api_calls}, total_devices={self.total_devices_upgraded}"
+            "Org-level upgrade execution complete: successful=%s, failed=%s, total_devices=%s",
+            self.successful_api_calls,
+            self.failed_api_calls,
+            self.total_devices_upgraded,
         )
         return True
 
@@ -1926,11 +1931,11 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         """Execute upgrade for a single version."""
         models_str = ", ".join(data["models"])
         print(f"\n  Upgrading to {version} ({models_str})...")
-        logging.info(f"Processing upgrade to version {version} for models: {models_str}")
+        logging.info("Processing upgrade to version %s for models: %s", version, models_str)
 
         body = self._build_upgrade_body(version, data)
 
-        logging.debug(f"Upgrade API body: {body}")
+        logging.debug("Upgrade API body: %s", body)
         if self._is_debug_fn():
             print(f"    API Body: {body}")
 
@@ -1939,7 +1944,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             self._process_upgrade_response(response, version, data)
         except Exception as exc:
             print(f"    X Error: {exc}")
-            logging.error(f"Org-level upgrade failed for version {version}: {exc}")
+            logging.error("Org-level upgrade failed for version %s: %s", version, exc)
             self.failed_api_calls += 1
 
     def _build_upgrade_body(self, version: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -2015,7 +2020,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             if self._write_results_fn:
                 self._write_results_fn(self.results, filename, api_function_name="orgLevelAPFirmwareUpgrade")
             print(f"\n  Results written to: {filename}")
-            logging.info(f"Upgrade results written to: {filename}")
+            logging.info("Upgrade results written to: %s", filename)
         except Exception as exc:
             print(f"  X Failed to write results: {exc}")
-            logging.error(f"Failed to write upgrade results: {exc}")
+            logging.error("Failed to write upgrade results: %s", exc)

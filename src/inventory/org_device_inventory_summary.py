@@ -60,7 +60,7 @@ class OrgDeviceInventorySummaryCore:
                         limit=1000,
                     )
             except Exception as error:
-                logging.error("searchOrgDevices switch page %d failed: %s", page_num, error, exc_info=True)
+                logging.exception("searchOrgDevices switch page %d failed: %s", page_num, error)
                 break
             page_data = getattr(response, "data", None) if response else None
             if not page_data or not isinstance(page_data, dict):
@@ -112,7 +112,7 @@ class OrgDeviceInventorySummaryCore:
             )
             all_records: list[dict] = mistapi.get_all(response=response, mist_session=apisession)
         except Exception as error:
-            logging.error("getOrgInventory gateway failed: %s", error, exc_info=True)
+            logging.exception("getOrgInventory gateway failed: %s", error)
             all_records = []
         logging.info("Gateway physical inventory complete: %d physical devices org=%s", len(all_records), target_org_id)
         return all_records
@@ -131,7 +131,132 @@ class OrgDeviceInventorySummaryCore:
         return rows
 
     @staticmethod
-    def _fetch_all_counts(target_org_id: str, distinct: str) -> list[dict]:
+    def _fetch_ap_inventory(target_org_id: str) -> list[dict]:
+        """Fetch all claimed APs (assigned + unassigned) from the org inventory."""
+        # getOrgInventory is the same data source as the portal "Claim APs" screen, so it returns
+        # assigned, unassigned, connected and never-connected APs in one consistent list. Counting
+        # APs from here (instead of countOrgDevices) is what keeps claimed-but-never-connected APs
+        # from being dropped, because countOrgDevices only returns version-keyed buckets.
+        logging.info("Fetching all AP inventory via getOrgInventory, org=%s", target_org_id)
+        try:
+            response = mistapi.api.v1.orgs.inventory.getOrgInventory(  # Portal "Claim APs" data source
+                apisession,
+                target_org_id,
+                type="ap",  # APs only; switch and gateway keep their existing counting paths
+                limit=1000,  # Large page size minimizes round trips for big inventories
+            )
+            all_records: list[dict] = mistapi.get_all(response=response, mist_session=apisession)  # Auto-paginate
+        except Exception as error:  # Inventory fetch errors must not abort the larger summary run
+            logging.exception("getOrgInventory AP fetch failed: %s", error)  # Traceback for ops
+            all_records = []  # Degrade gracefully so callers simply see no AP rows
+        logging.debug("AP inventory fetched: %d records org=%s", len(all_records), target_org_id)  # Record size
+        return all_records
+
+    @staticmethod
+    def _ap_inventory_bucket(record: dict, distinct: str) -> str:
+        """Return the model or version bucket label for a single AP inventory record."""
+        # Three-way version rule keeps the three real-world AP states visibly distinct:
+        #   unassigned (no site_id), assigned-with-firmware (real version), and assigned-but-
+        #   never-connected (no version yet -> "unknown").
+        if distinct == "model":  # Model report: count every AP under its real model
+            return record.get("model") or "unknown"  # Fall back only when the model is missing
+        if not record.get("site_id"):  # Version report: claimed but not assigned to any site
+            return "unassigned"  # Dedicated column so operators can see stock at a glance
+        return record.get("version") or "unknown"  # Assigned: real firmware, or "unknown" if never connected
+
+    @staticmethod
+    def _aggregate_ap_counts(ap_records: list[dict], distinct: str) -> list[dict]:
+        """Aggregate AP counts from full inventory so claimed-but-never-connected APs are not lost."""
+        # Replaces the old countOrgDevices(distinct="version") path, which silently dropped APs that
+        # have never connected and therefore report no firmware version.
+        logging.info("Aggregating %d AP inventory records by %s", len(ap_records), distinct)
+        counts: dict[str, int] = {}  # bucket label -> running count
+        for record in ap_records:  # Walk every claimed AP exactly once
+            value = OrgDeviceInventorySummaryCore._ap_inventory_bucket(record, distinct)  # 3-way version / real model
+            counts[value] = counts.get(value, 0) + 1  # One inventory record == one physical AP
+        rows = [{"device_type": "ap", distinct: value, "count": count} for value, count in counts.items()]
+        rows.sort(key=lambda row: -int(row.get("count", 0)))  # Largest buckets first for readability
+        logging.debug("AP %s aggregation produced %d buckets", distinct, len(rows))  # Record outcome
+        return rows
+
+    @staticmethod
+    def _fetch_unassigned_inventory(target_org_id: str) -> list[dict]:
+        """Fetch switch inventory that is claimed but not assigned to any site."""
+        # Unassigned switches are invisible to searchOrgDevices (assigned-only), so pull the full
+        # switch inventory and keep only records that lack a site_id. APs are intentionally excluded
+        # here because they are now counted in full from getOrgInventory via _aggregate_ap_counts;
+        # including them here too would double-count every unassigned AP.
+        logging.info("Fetching unassigned switch inventory via getOrgInventory, org=%s", target_org_id)
+        try:
+            response = mistapi.api.v1.orgs.inventory.getOrgInventory(  # Inventory API returns claimed stock
+                apisession,
+                target_org_id,
+                type="switch",  # Switch only: APs via _aggregate_ap_counts, gateways via getOrgInventory already
+                limit=1000,  # Large page size minimizes round trips for big inventories
+            )
+            all_records: list[dict] = mistapi.get_all(response=response, mist_session=apisession)  # Auto-paginate
+        except Exception as error:  # Inventory fetch errors must not abort the larger summary run
+            logging.exception("getOrgInventory unassigned switch failed: %s", error)  # Traceback for ops
+            all_records = []  # Degrade gracefully so callers simply see no unassigned rows
+        unassigned = [record for record in all_records if not record.get("site_id")]  # site_id empty/None => unassigned
+        logging.debug(
+            "Unassigned switch inventory: %d of %d records have no site_id",  # Show filter selectivity
+            len(unassigned),
+            len(all_records),
+        )
+        return unassigned
+
+    @staticmethod
+    def _aggregate_unassigned_counts(unassigned_records: list[dict], distinct: str) -> list[dict]:
+        """Aggregate unassigned device counts; firmware rows bucket under an 'unassigned' label."""
+        # For the version report we surface unassigned stock as its own bucket (distinct from
+        # "unknown", which means an assigned device that never reported firmware). For the model
+        # report we keep the real model so per-model totals stay accurate.
+        logging.info("Aggregating %d unassigned records by %s", len(unassigned_records), distinct)
+        counts: dict[tuple[str, str], int] = {}  # Key on (device_type, bucket) to keep types separate
+        for record in unassigned_records:  # Walk each unassigned inventory record once
+            device_type = record.get("type") or "unknown"  # Inventory record carries its own ap/switch type
+            if distinct == "version":  # Firmware report: collapse all unassigned stock into one column
+                value = "unassigned"  # New column the operator can see at a glance
+            else:  # Model report: preserve real model so totals merge correctly with assigned counts
+                value = record.get(distinct) or "unknown"  # Fall back to "unknown" only if model missing
+            key = (device_type, value)  # Compose the grouping key
+            counts[key] = counts.get(key, 0) + 1  # Each unassigned record is one physical device (no VC in stock)
+        rows = [  # Materialize accumulator into standard row dicts
+            {"device_type": device_type, distinct: value, "count": count}
+            for (device_type, value), count in counts.items()
+        ]
+        logging.debug("Unassigned %s aggregation produced %d rows", distinct, len(rows))  # Record outcome
+        return rows
+
+    @staticmethod
+    def _merge_counts(base_rows: list[dict], extra_rows: list[dict], distinct: str) -> list[dict]:
+        """Merge supplemental rows into base rows, summing counts by (device_type, value)."""
+        # Used to fold unassigned counts into the assigned-device rows so a model present in both
+        # assigned and unassigned states reports one combined total instead of duplicate rows.
+        logging.info("Merging %d base and %d supplemental %s rows", len(base_rows), len(extra_rows), distinct)
+        combined: dict[tuple[str, str], int] = {}  # Running total per (device_type, value)
+        order: list[tuple[str, str]] = []  # Preserve first-seen order for deterministic output
+        for row in [*base_rows, *extra_rows]:  # Iterate assigned rows first, then unassigned supplements
+            key = (row.get("device_type", ""), row.get(distinct, ""))  # Same grouping key both reports use
+            if key not in combined:  # First time we see this key
+                combined[key] = 0  # Initialize the bucket
+                order.append(key)  # Remember insertion order
+            combined[key] += int(row.get("count", 0) or 0)  # Accumulate this row's count
+        merged = [  # Rebuild rows from the merged totals in first-seen order
+            {"device_type": device_type, distinct: value, "count": combined[(device_type, value)]}
+            for (device_type, value) in order
+        ]
+        logging.debug("Merge produced %d combined %s rows", len(merged), distinct)  # Record outcome
+        return merged
+
+    @staticmethod
+    def _fetch_all_counts(
+        target_org_id: str,
+        distinct: str,
+        unassigned_records: list[dict] | None = None,
+        ap_records: list[dict] | None = None,
+    ) -> list[dict]:
         """Fetch grouped counts for AP/switch/gateway by model or version."""
         logging.info("Fetching device %s counts for all types, org=%s", distinct, target_org_id)
         all_rows: list[dict] = []
@@ -143,7 +268,7 @@ class OrgDeviceInventorySummaryCore:
                     type_rows = OrgDeviceInventorySummaryCore._aggregate_switch_counts(switch_records, distinct)
                     all_rows.extend(type_rows)
                 except Exception as error:
-                    logging.error("Switch %s count (VC-aware) failed: %s", distinct, error, exc_info=True)
+                    logging.exception("Switch %s count (VC-aware) failed: %s", distinct, error)
                 continue
             if device_type == "gateway":
                 logging.info("Fetching gateway %s counts with HA-aware method, org=%s", distinct, target_org_id)
@@ -152,37 +277,37 @@ class OrgDeviceInventorySummaryCore:
                     type_rows = OrgDeviceInventorySummaryCore._aggregate_gateway_counts(gateway_records, distinct)
                     all_rows.extend(type_rows)
                 except Exception as error:
-                    logging.error("Gateway %s count (HA-aware) failed: %s", distinct, error, exc_info=True)
+                    logging.exception("Gateway %s count (HA-aware) failed: %s", distinct, error)
                 continue
+            # APs are counted from the full org inventory (the portal "Claim APs" source) so that
+            # claimed-but-never-connected APs -- which countOrgDevices(distinct="version") drops --
+            # are included. This is the AP branch of the device-type loop.
             try:
-                response = mistapi.api.v1.orgs.devices.countOrgDevices(
-                    apisession,
-                    target_org_id,
-                    distinct=distinct,
-                    type=device_type,
-                    limit=1000,
-                )
-                data = response.data if response and response.data else {}
-                results = data.get("results", [])
-                all_rows.extend(
-                    {
-                        "device_type": device_type,
-                        distinct: item.get(distinct, "unknown"),
-                        "count": item.get("count", 0),
-                    }
-                    for item in results
-                )
-            except Exception as error:
-                logging.error(
-                    "countOrgDevices distinct=%s type=%s failed: %s",
-                    distinct,
-                    device_type,
-                    error,
-                    exc_info=True,
-                )
+                if ap_records is None:  # Direct/test callers may omit the shared fetch; pull it ourselves
+                    ap_records = OrgDeviceInventorySummaryCore._fetch_ap_inventory(target_org_id)
+                all_rows.extend(OrgDeviceInventorySummaryCore._aggregate_ap_counts(ap_records, distinct))
+            except Exception as error:  # AP counting must never abort the combined report
+                logging.exception("AP %s count from inventory failed: %s", distinct, error)
+        all_rows = OrgDeviceInventorySummaryCore._with_unassigned(all_rows, target_org_id, distinct, unassigned_records)
         all_rows.sort(key=lambda row: (row.get("device_type", ""), -int(row.get("count", 0))))
         logging.info("Total %s count rows after fetch and sort: %d", distinct, len(all_rows))
         return all_rows
+
+    @staticmethod
+    def _with_unassigned(
+        all_rows: list[dict], target_org_id: str, distinct: str, unassigned_records: list[dict] | None
+    ) -> list[dict]:
+        """Merge unassigned AP/switch stock into assigned counts so totals are not understated."""
+        # Kept as its own method so the primary counting loop stays within the complexity budget.
+        if unassigned_records is None:  # Direct/test callers may omit the shared fetch; pull it ourselves
+            unassigned_records = OrgDeviceInventorySummaryCore._fetch_unassigned_inventory(target_org_id)
+        try:  # Supplemental counting must never break the primary report
+            unassigned_rows = OrgDeviceInventorySummaryCore._aggregate_unassigned_counts(unassigned_records, distinct)
+            merged = OrgDeviceInventorySummaryCore._merge_counts(all_rows, unassigned_rows, distinct)
+            return merged  # Combined assigned + unassigned rows
+        except Exception as error:  # Fall back to assigned-only rows on any aggregation/merge failure
+            logging.exception("Unassigned %s supplemental count failed: %s", distinct, error)
+            return all_rows  # Degrade gracefully to the assigned-only counts
 
     @staticmethod
     def _display_and_export(rows: list[dict], distinct: str, filename: str, api_func: str) -> None:
@@ -238,7 +363,15 @@ class OrgDeviceInventorySummaryCore:
         start_time = time.time()
         safe_org = OrgDeviceInventorySummaryCore._resolve_safe_org_name(target_org_id)
 
-        model_rows = OrgDeviceInventorySummaryCore._fetch_all_counts(target_org_id, "model")
+        # Fetch shared inventory once and reuse across every report below so the getOrgInventory
+        # calls are not repeated per report. unassigned_records covers unassigned switches; ap_records
+        # covers ALL APs (assigned + unassigned) since APs are counted entirely from inventory.
+        unassigned_records = OrgDeviceInventorySummaryCore._fetch_unassigned_inventory(target_org_id)
+        ap_records = OrgDeviceInventorySummaryCore._fetch_ap_inventory(target_org_id)
+
+        model_rows = OrgDeviceInventorySummaryCore._fetch_all_counts(
+            target_org_id, "model", unassigned_records, ap_records
+        )
         OrgDeviceInventorySummaryCore._display_and_export(
             model_rows,
             "model",
@@ -246,7 +379,9 @@ class OrgDeviceInventorySummaryCore:
             "orgDeviceModelSummary",
         )
 
-        version_rows = OrgDeviceInventorySummaryCore._fetch_all_counts(target_org_id, "version")
+        version_rows = OrgDeviceInventorySummaryCore._fetch_all_counts(
+            target_org_id, "version", unassigned_records, ap_records
+        )
         OrgDeviceInventorySummaryCore._display_and_export(
             version_rows,
             "version",
@@ -255,7 +390,7 @@ class OrgDeviceInventorySummaryCore:
         )
 
         ver_per_model = VersionPerModelFetcher.fetch(
-            target_org_id, model_rows
+            target_org_id, model_rows, unassigned_records, ap_records
         )  # Decomposed: per-type version expansion lives in collaborator
         PivotRenderer.render(
             ver_per_model, f"{safe_org}_OrgDeviceVersionPerModel"

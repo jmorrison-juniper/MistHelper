@@ -43,7 +43,7 @@ class FunctionExecutor:
             self._prepare_parameter_list(func)  # Build tui.param_list / function_params
         except Exception as error:  # Signature probing can fail on builtins
             tui.output_lines = [f"[ERROR] Failed to prepare execution: {error}"]
-            logging.error("TUI: Failed to prepare execution of %s: %s", func_name, error, exc_info=True)
+            logging.exception("TUI: Failed to prepare execution of %s: %s", func_name, error)
             return
         self._begin_collection_or_execute()  # Branch on whether params remain
 
@@ -115,7 +115,7 @@ class FunctionExecutor:
         except Exception as error:  # Surface and log any failure
             tui.last_error = str(error)
             tui.output_lines = ["[ERROR] Execution failed", f"Function: {func_name}", f"Error: {error}"]
-            logging.error("TUI: Execution of %s failed - %s", func_name, error, exc_info=True)
+            logging.exception("TUI: Execution of %s failed - %s", func_name, error)
         finally:
             self._reset_post_execute()  # Always clear ephemeral exec state
 

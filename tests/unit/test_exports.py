@@ -106,9 +106,9 @@ def test_classify_device_platform_by_model_prefix():
 
 
 def test_metric_compatibility_filters_switch_metrics_for_ap():
-    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "ap") is False
-    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "switch") is True
-    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "unknown") is True
+    assert MistHelper.SiteExportUtils._metric_supported_on_platform("switch-metrics", "ap") is False
+    assert MistHelper.SiteExportUtils._metric_supported_on_platform("switch-metrics", "switch") is True
+    assert MistHelper.SiteExportUtils._metric_supported_on_platform("switch-metrics", "unknown") is True
 
 
 def test_normalize_device_mac_or_none_accepts_and_normalizes():
@@ -152,7 +152,7 @@ def test_select_device_id_from_csv_accepts_dotted_index(monkeypatch):
         "listSiteDevices",
         lambda *_args, **_kwargs: _Resp(),
     )
-    monkeypatch.setattr(MistHelper.DataExporter, "save_data_to_output", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(MistHelper.DataExporter, "write_with_format_selection", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: ".2")
 
     selected = MistHelper.PromptUtils.select_device_id_from_inventory("site-1", "all", "DeviceInventory.csv")
@@ -162,7 +162,7 @@ def test_select_device_id_from_csv_accepts_dotted_index(monkeypatch):
 def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(MistHelper.PromptUtils, "select_site", lambda: "site-1")
-    monkeypatch.setattr(MistHelper.InsightMetricsUtils, "export_legacy", lambda: None)
+    monkeypatch.setattr(MistHelper.InsightMetricsUtils, "export_const_insight_metrics", lambda: None)
     monkeypatch.setattr(MistHelper.InsightMetricsUtils, "get_by_scope", lambda scope: ["metric-one"])
     monkeypatch.setattr(MistHelper.EnhancedSSHRunner, "sanitize_filename", lambda value: value.replace(" ", "_"))
 
@@ -200,7 +200,7 @@ def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
         "getSiteInsightMetricsForClient",
         get_client_insight_stub,
     )
-    monkeypatch.setattr(MistHelper.DataExporter, "save_data_to_output", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(MistHelper.DataExporter, "write_with_format_selection", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: "0")
 
     MistHelper.SiteClientExporter.client_insights()

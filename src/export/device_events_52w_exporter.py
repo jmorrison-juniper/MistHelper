@@ -36,7 +36,7 @@ class DeviceEvents52wExporter:
         buffered_rows, next_token = self._preload_rows(limit, duration, preload_pages, search_after)
         if not buffered_rows:
             self.logger.info("No device events found for the 52-week period.")
-            self.data_exporter.save_data_to_output([], "OrgDeviceEvents_52w.csv")
+            self.data_exporter.write_with_format_selection([], "OrgDeviceEvents_52w.csv")
             return
         header_fields = self.data_processing_utils.get_unique_keys(buffered_rows)
         self.logger.info("Using CSV header with %s fields for OrgDeviceEvents_52w.csv", len(header_fields))

@@ -31,7 +31,7 @@ class TuiRunner:
             tui._discover_current_level()  # Populate the root level items
             self._render_loop()  # Drive the main Live() loop
         except Exception as error:  # Surface critical errors loudly
-            logging.error("TUI: Critical error in run() method: %s", error, exc_info=True)
+            logging.exception("TUI: Critical error in run() method: %s", error)
             raise
         finally:
             self._teardown_terminal()  # Restore terminal even on error
@@ -72,4 +72,4 @@ class TuiRunner:
         try:
             tui.termios.tcsetattr(sys.stdin, tui.termios.TCSADRAIN, tui.old_terminal_settings)
         except Exception as term_error:  # Restore failures are non-fatal
-            logging.error("TUI: Error restoring terminal settings: %s", term_error, exc_info=True)
+            logging.exception("TUI: Error restoring terminal settings: %s", term_error)
