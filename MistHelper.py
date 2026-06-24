@@ -55,7 +55,7 @@ from concurrent.futures import (
 )  # Import thread pool executors for parallel API calls with rate limiting
 from dataclasses import dataclass, field  # Import dataclass decorators for configuration objects and entity classes
 from datetime import datetime  # Import datetime for timestamping logs and events
-from typing import TYPE_CHECKING, Any, Literal  # Import type hints for static analysis without runtime overhead
+from typing import TYPE_CHECKING, Any, Literal, cast  # Import type hints for static analysis without runtime overhead
 
 # Type stubs for dynamically imported modules
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
@@ -80,6 +80,9 @@ try:  # Attempt to import polyglot database layer for ArangoDB/Redis export back
 
     DB_LAYER_AVAILABLE = True  # Set flag indicating database backends are available for export operations
 except ImportError:  # If database dependencies (python-arango, redis) not installed, gracefully disable
+    DatabaseConfig = None  # type: ignore[assignment, misc]  # None lets runtime guards detect DB-layer absence
+    configure_db_logging = None  # type: ignore[assignment]  # None lets runtime guards detect DB-layer absence
+    DatabaseRouter = None  # type: ignore[assignment, misc]  # None lets runtime guards detect DB-layer absence
     DB_LAYER_AVAILABLE = False  # Set flag to disable database output formats (CSV/SQLite only)
 
 from src.analytics.site_analytics_configurator import (  # Import site analytics configuration tools
@@ -6412,6 +6415,12 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
         )  # vc=True includes all physical VC member devices
         return mistapi.get_all(response=response, mist_session=apisession)  # type: ignore[no-any-return]
 
+    @staticmethod
+    def get_api_response_data(response: Any) -> Any:
+        """Return a mistapi response's .data payload, or the response itself when .data is absent."""
+        logging.debug("Unwrapping API response payload (type=%s)", type(response).__name__)  # Trace unwrap calls
+        return getattr(response, "data", response)  # mistapi carries parsed JSON on .data; fall back to the raw object
+
 
 # APITenantFetchUtils extracted to src/api/tenant_fetch.py (issue #331).
 # Dependency injection is used so the module has no circular import with MistHelper.
@@ -7348,7 +7357,8 @@ class DataExporter:  # Multi-backend export facade.
         if cls._router_initialized:  # Skip all work when a prior call already attempted initialization.
             return  # Idempotent early-out keeps repeated export calls cheap.
         cls._router_initialized = True  # Latch the guard before fallible work so a failure does not retry endlessly.
-        if not DB_LAYER_AVAILABLE:  # Optional polyglot dependency stack is not installed in this environment.
+        # Treat the layer as unavailable unless the flag is set AND all three names imported (not None).
+        if not DB_LAYER_AVAILABLE or DatabaseConfig is None or configure_db_logging is None or DatabaseRouter is None:
             logging.debug("Polyglot DB layer not installed - CSV/SQLite only")  # Record the CSV/SQLite-only fallback.
             return  # Nothing more to wire up without the polyglot DB layer present.
         try:  # Router construction reads env and opens connections, so guard against any startup failure.
@@ -10916,11 +10926,11 @@ class OfflineDeviceReporter:
         all_devices: list[dict[str, Any]],
         site_lookup: dict[str, str],
         threshold_hours: int,
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         """Filter offline devices beyond threshold, enrich with site names."""
         now = time.time()
         threshold_seconds = threshold_hours * 3600
-        offline_records: list[dict[str, str]] = []
+        offline_records: list[dict[str, Any]] = []  # Values include API Any fields, not strictly str
 
         for device in all_devices:
             if device.get("status") == "connected":
@@ -11096,7 +11106,7 @@ class OrgDeviceInventorySummary:  # Org device inventory summary.
             apisession_dependency=apisession,
             mistapi_dependency=mistapi,
             data_exporter=DataExporter,
-            org_id_value=org_id,
+            org_id_value=cast(str, org_id),  # Global org_id is set before this runs; assert str for the checker
         )
         return OrgDeviceInventorySummaryCore  # Return the core class.
 
@@ -11610,7 +11620,7 @@ class GlobalWiredClientReportGenerator:  # Global wired client report.
         GlobalWiredClientReportGenerator._write_outputs(matched, metadata)  # Write the outputs.
 
     @staticmethod
-    def _prompt_filter_criteria() -> dict[str, str] | None | bool:  # Prompt filter criteria.
+    def _prompt_filter_criteria() -> dict[str, str] | Literal[False] | None:  # False = user cancelled, never True
         """Collect optional MAC and manufacturer filter criteria from user."""
         print("\n--- Global Wired Client Report ---")  # Header.
         print("Optional filters (press Enter to skip):\n")  # Explain skipping.
@@ -11717,8 +11727,7 @@ class GlobalWiredClientReportGenerator:  # Global wired client report.
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """Apply local authoritative filtering with AND logic. Returns matched records and metadata."""
         total_retrieved = len(records)  # How many records the API returned before local filtering
-        has_filters = criteria is not None and bool(criteria)  # Whether any filter criteria were supplied
-        if not has_filters:  # No criteria -- every record passes
+        if not criteria:  # No criteria (None/empty) -- every record passes; narrows criteria to dict[str,str] after
             metadata = GlobalWiredClientReportGenerator._build_metadata(  # Build metadata noting no filtering occurred
                 total_retrieved,
                 total_retrieved,
@@ -12615,7 +12624,7 @@ class OrgExportUtils:  # Generic org export helpers.
             api_call=mistapi.api.v1.orgs.exports.getOrgE911Report,
             data_type="e911 report",
             sort_key="name",
-            limit=None,  # getOrgE911Report only accepts (mist_session, org_id) - no limit param
+            limit=None,  # pyright: ignore[reportArgumentType] - getOrgE911Report takes no limit param
         )
 
     @staticmethod
@@ -13776,7 +13785,8 @@ class GatewayHaExporter:  # Gateway HA exporter.
         logging.info("Starting Gateway HA Cluster Info export (Menu #87)")  # Log entry point
         try:
             org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Retrieve or prompt for org ID
-            site_id = PromptUtils.select_site(org_id)  # Prompt user to pick a site from the list
+            logging.debug("Gateway HA export resolved org %s", org_id)  # Record resolved org; keeps value referenced
+            site_id = PromptUtils.select_site()  # Pick a site; select_site() is org-independent (reads SiteList.csv)
             if not site_id:  # User cancelled or no sites available
                 logging.warning("No site selected -- aborting HA cluster export")  # Log cancellation
                 return  # Exit without exporting
