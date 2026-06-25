@@ -246,9 +246,26 @@ class AddressUtils:
         debug: bool = False,
     ) -> dict[str, Any]:
         """Parse address components with defensive heuristics."""
-        if debug:
+        if debug:  # Trace the raw input when debugging the parser.
             logging.debug("PARSE_ADDRESS: Input: '%s'", address_string)
-        result: dict[str, Any] = {
+        result = AddressUtils._empty_parse_result(address_string)  # Base result skeleton (all fields unset).
+        reason = AddressUtils._unparseable_reason(address_string)  # Detect empty/placeholder input early.
+        if reason:  # Input is empty or a known placeholder -> stop with the reason.
+            result["parse_reason"] = reason
+            return result
+        cleaned_input = str(address_string).strip()  # Normalized input for the heuristic parser.
+        try:  # The heuristic parser can raise on pathological input; degrade gracefully.
+            return _parse_address_parts(cleaned_input, result, debug)
+        except Exception as exception:  # Record the failure reason instead of propagating.
+            result["parse_reason"] = f"exception: {exception!s}"
+            if debug:  # Surface the exception detail when debugging.
+                logging.warning("PARSE_ADDRESS: Exception during parsing: %s", exception)
+            return result
+
+    @staticmethod
+    def _empty_parse_result(address_string: str | None) -> dict[str, Any]:
+        """Return the base (all-unset) parsed-address result skeleton."""
+        return {  # Every field starts unset; the parser fills them in on success.
             "address": None,
             "city": None,
             "state": None,
@@ -258,20 +275,15 @@ class AddressUtils:
             "parse_reason": "unparsed",
             "original": address_string or "",
         }
-        if not address_string or not str(address_string).strip():
-            result["parse_reason"] = "empty_input"
-            return result
-        cleaned_input = str(address_string).strip()
-        if cleaned_input.lower() in ["unknown", "n/a", "na", "none", "null", ""]:
-            result["parse_reason"] = "unknown_address"
-            return result
-        try:
-            return _parse_address_parts(cleaned_input, result, debug)
-        except Exception as exception:
-            result["parse_reason"] = f"exception: {exception!s}"
-            if debug:
-                logging.warning("PARSE_ADDRESS: Exception during parsing: %s", exception)
-            return result
+
+    @staticmethod
+    def _unparseable_reason(address_string: str | None) -> str:
+        """Return a parse_reason when the input is empty/placeholder, else an empty string."""
+        if not address_string or not str(address_string).strip():  # Blank/whitespace input.
+            return "empty_input"
+        if str(address_string).strip().lower() in ["unknown", "n/a", "na", "none", "null", ""]:  # Placeholders.
+            return "unknown_address"
+        return ""  # Input looks parseable.
 
     @staticmethod
     def enhanced_parse(
@@ -364,31 +376,33 @@ class AddressUtils:
         debug: bool = False,
     ) -> dict[str, Any]:
         """Enhanced address comparison with similarity metrics."""
-        field_weights = {"address": 0.4, "city": 0.3, "state": 0.2, "zip": 0.1}
-        parse_status = _check_parse_status(mist_address, comparison_address, field_weights)
-        if not parse_status["mist_parseable"] or not parse_status["comparison_parseable"]:
-            if debug:
+        field_weights = {"address": 0.4, "city": 0.3, "state": 0.2, "zip": 0.1}  # Per-field similarity weights.
+        parse_status = _check_parse_status(mist_address, comparison_address, field_weights)  # Parseability check.
+        if not parse_status["mist_parseable"] or not parse_status["comparison_parseable"]:  # Either side unusable.
+            if debug:  # Trace the unparseable short-circuit when debugging.
                 logging.debug("ENHANCED_COMPARE: Unparseable: %s", parse_status)
-            return {
-                "overall_similarity": 0.0,
-                "is_match": False,
-                "field_similarities": {f: 0.0 for f in field_weights},
-                "failed_fields": list(field_weights),
-                "parse_status": parse_status,
-            }
-        similarities, failed = _compare_fields(
-            mist_address,
-            comparison_address,
-            field_weights,
-            threshold,
-            debug,
-        )
-        overall = sum(similarities[f] * field_weights[f] for f in field_weights)
-        return {
+            return AddressUtils._unparseable_comparison_result(field_weights, parse_status)  # Zero-similarity result.
+        similarities, failed = _compare_fields(mist_address, comparison_address, field_weights, threshold, debug)
+        overall = sum(similarities[f] * field_weights[f] for f in field_weights)  # Weighted overall similarity.
+        return {  # Full comparison result with the weighted score and per-field detail.
             "overall_similarity": overall,
             "is_match": overall >= threshold,
             "field_similarities": similarities,
             "failed_fields": failed,
+            "parse_status": parse_status,
+        }
+
+    @staticmethod
+    def _unparseable_comparison_result(
+        field_weights: dict[str, float],
+        parse_status: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build the zero-similarity result returned when either address is unparseable."""
+        return {  # Mark every field as failed since no meaningful comparison is possible.
+            "overall_similarity": 0.0,
+            "is_match": False,
+            "field_similarities": {f: 0.0 for f in field_weights},
+            "failed_fields": list(field_weights),
             "parse_status": parse_status,
         }
 
