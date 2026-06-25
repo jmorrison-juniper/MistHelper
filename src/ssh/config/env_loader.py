@@ -26,6 +26,7 @@ except ImportError:
 
     def load_dotenv(*_args: Any, **_kwargs: Any) -> None:  # type: ignore[misc]
         """No-op fallback when python-dotenv is not installed."""
+        return None  # Intentional no-op: with dotenv absent, the manual parser path is used instead.
 
 
 logger = logging.getLogger(__name__)  # Module-scoped logger for action logs
