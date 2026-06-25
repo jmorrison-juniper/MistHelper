@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.capture.packet_capture import PacketCaptureManager
+from src.capture.packet_capture_download import PacketCaptureDownloadManager
 
 
 # ---------------------------------------------------------------------------
@@ -694,61 +695,61 @@ class TestCalcLoopSleep:
 
 
 class TestParsesCapturesResponse:
-    """Tests for _parse_captures_response()."""
+    """Tests for PacketCaptureDownloadManager.parse_captures_response()."""
 
     def test_dict_with_results(self):
         """Extract 'results' key from dict."""
         raw = {"results": [{"id": "a"}, {"id": "b"}]}
-        result = PacketCaptureManager._parse_captures_response(raw, 1)
+        result = PacketCaptureDownloadManager.parse_captures_response(raw, 1)
         assert len(result) == 2
 
     def test_raw_list(self):
         """Pass-through list directly."""
         raw = [{"id": "a"}]
-        result = PacketCaptureManager._parse_captures_response(raw, 1)
+        result = PacketCaptureDownloadManager.parse_captures_response(raw, 1)
         assert result == [{"id": "a"}]
 
     def test_unexpected_structure(self):
         """Return empty list for unexpected type."""
-        result = PacketCaptureManager._parse_captures_response("garbage", 1)
+        result = PacketCaptureDownloadManager.parse_captures_response("garbage", 1)
         assert result == []
 
     def test_dict_without_results(self):
         """Return empty list for dict missing 'results'."""
-        result = PacketCaptureManager._parse_captures_response({"other": 1}, 1)
+        result = PacketCaptureDownloadManager.parse_captures_response({"other": 1}, 1)
         assert result == []
 
 
 class TestFindCaptureUrl:
-    """Tests for _find_capture_url()."""
+    """Tests for PacketCaptureDownloadManager.find_capture_url()."""
 
     def test_found_with_url(self):
         """Return URL when capture found with pcap_url."""
         captures = [{"id": "cap-1", "pcap_url": "https://example.com/cap.pcap"}]
-        result = PacketCaptureManager._find_capture_url(captures, "cap-1", 1)
+        result = PacketCaptureDownloadManager.find_capture_url(captures, "cap-1", 1)
         assert result == "https://example.com/cap.pcap"
 
     def test_found_without_url(self):
         """Return None when capture found but no pcap_url yet."""
         captures = [{"id": "cap-1"}]
-        result = PacketCaptureManager._find_capture_url(captures, "cap-1", 1)
+        result = PacketCaptureDownloadManager.find_capture_url(captures, "cap-1", 1)
         assert result is None
 
     def test_not_found(self):
         """Return None when capture ID not in list."""
         captures = [{"id": "cap-other", "pcap_url": "https://example.com/other.pcap"}]
-        result = PacketCaptureManager._find_capture_url(captures, "cap-1", 1)
+        result = PacketCaptureDownloadManager.find_capture_url(captures, "cap-1", 1)
         assert result is None
 
     def test_empty_list(self):
         """Return None for empty captures list."""
-        result = PacketCaptureManager._find_capture_url([], "cap-1", 1)
+        result = PacketCaptureDownloadManager.find_capture_url([], "cap-1", 1)
         assert result is None
 
     def test_non_dict_items_skipped(self):
         """Skip non-dict items in captures list."""
         captures = ["not-a-dict", {"id": "cap-1", "pcap_url": "https://url"}]
-        result = PacketCaptureManager._find_capture_url(captures, "cap-1", 1)
+        result = PacketCaptureDownloadManager.find_capture_url(captures, "cap-1", 1)
         assert result == "https://url"
 
 
@@ -1468,9 +1469,9 @@ class TestFetchCompletedPcaps:
 
 
 class TestDownloadSinglePcap:
-    """Tests for _download_single_pcap()."""
+    """Tests for PacketCaptureDownloadManager.download_single_pcap()."""
 
-    @patch("src.capture.packet_capture.requests")
+    @patch("src.capture.packet_capture_download.requests")
     def test_success(self, mock_requests, manager):
         """Download succeeds with HTTP 200."""
         mock_resp = MagicMock()
@@ -1478,38 +1479,39 @@ class TestDownloadSinglePcap:
         mock_resp.iter_content.return_value = [b"pcap-data"]
         mock_requests.get.return_value = mock_resp
         local_path = os.path.join("data", "test.pcap")
-        result = manager._download_single_pcap("https://url", local_path, "test.pcap", "cap-1")
+        result = manager._download_manager.download_single_pcap(
+            "https://url", local_path, "test.pcap", "cap-1", requests_module=mock_requests
+        )
         assert result == 1
 
-    @patch("src.capture.packet_capture.requests")
+    @patch("src.capture.packet_capture_download.requests")
     def test_http_error(self, mock_requests, manager):
         """Return 0 on non-200 HTTP response."""
         mock_resp = MagicMock()
         mock_resp.status_code = 404
         mock_requests.get.return_value = mock_resp
-        result = manager._download_single_pcap("https://url", "data/test.pcap", "test.pcap", "cap-1")
+        result = manager._download_manager.download_single_pcap(
+            "https://url", "data/test.pcap", "test.pcap", "cap-1", requests_module=mock_requests
+        )
         assert result == 0
 
-    @patch("src.capture.packet_capture.requests")
+    @patch("src.capture.packet_capture_download.requests")
     def test_exception(self, mock_requests, manager):
         """Return 0 on exception."""
         mock_requests.get.side_effect = ConnectionError("fail")
-        result = manager._download_single_pcap("https://url", "data/test.pcap", "test.pcap", "cap-1")
+        result = manager._download_manager.download_single_pcap(
+            "https://url", "data/test.pcap", "test.pcap", "cap-1", requests_module=mock_requests
+        )
         assert result == 0
 
 
 class TestDownloadPendingPcaps:
-    """Tests for _download_pending_pcaps()."""
+    """Tests for PacketCaptureDownloadManager.download_pending_pcaps()."""
 
-    @patch("src.capture.packet_capture.requests")
-    def test_downloads_new(self, mock_requests, manager):
-        """Download PCAPs not already on disk."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.iter_content.return_value = [b"data"]
-        mock_requests.get.return_value = mock_resp
+    def test_downloads_new(self, manager):
+        """Download PCAPs not already on disk via the injected single-download callback."""
         pcaps = [{"id": "cap-new", "pcap_url": "https://url"}]
-        result = manager._download_pending_pcaps(pcaps, "data")
+        result = manager._download_manager.download_pending_pcaps(pcaps, "data", download_single_fn=lambda *_args: 1)
         assert result == 1
 
     def test_skips_existing(self, manager):
@@ -1518,12 +1520,12 @@ class TestDownloadPendingPcaps:
         with open(existing, "wb") as f:
             f.write(b"already here")
         pcaps = [{"id": "cap-existing", "pcap_url": "https://url"}]
-        result = manager._download_pending_pcaps(pcaps, "data")
+        result = manager._download_manager.download_pending_pcaps(pcaps, "data", download_single_fn=lambda *_args: 1)
         assert result == 0
 
     def test_empty_list(self, manager):
         """No downloads when empty list."""
-        result = manager._download_pending_pcaps([], "data")
+        result = manager._download_manager.download_pending_pcaps([], "data")
         assert result == 0
 
 
@@ -1571,37 +1573,39 @@ class TestAttemptLoopCapture:
 
 
 class TestSavePcapFile:
-    """Tests for _save_pcap_file()."""
+    """Tests for PacketCaptureDownloadManager.save_pcap_file()."""
 
-    @patch("src.capture.packet_capture.requests")
+    @patch("src.capture.packet_capture_download.requests")
     def test_success(self, mock_requests, capsys):
         """Download and save PCAP file successfully."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.content = b"pcap-binary-content"
         mock_requests.get.return_value = mock_resp
-        PacketCaptureManager._save_pcap_file("https://url", "cap-1")
+        PacketCaptureDownloadManager.save_pcap_file("https://url", "cap-1", requests_module=mock_requests)
         captured = capsys.readouterr()
         assert "downloaded successfully" in captured.out
         assert os.path.exists(os.path.join("data", "PacketCapture_cap-1.pcap"))
 
-    @patch("src.capture.packet_capture.requests")
+    @patch("src.capture.packet_capture_download.requests")
     def test_with_prefix(self, mock_requests):
         """Save PCAP with org_ prefix."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.content = b"data"
         mock_requests.get.return_value = mock_resp
-        PacketCaptureManager._save_pcap_file("https://url", "cap-1", prefix="org_")
+        PacketCaptureDownloadManager.save_pcap_file(
+            "https://url", "cap-1", prefix="org_", requests_module=mock_requests
+        )
         assert os.path.exists(os.path.join("data", "PacketCapture_org_cap-1.pcap"))
 
-    @patch("src.capture.packet_capture.requests")
+    @patch("src.capture.packet_capture_download.requests")
     def test_http_error(self, mock_requests, capsys):
         """Handle non-200 HTTP response."""
         mock_resp = MagicMock()
         mock_resp.status_code = 403
         mock_requests.get.return_value = mock_resp
-        PacketCaptureManager._save_pcap_file("https://url", "cap-1")
+        PacketCaptureDownloadManager.save_pcap_file("https://url", "cap-1", requests_module=mock_requests)
         captured = capsys.readouterr()
         assert "Failed to download" in captured.out
 
@@ -1787,66 +1791,29 @@ class TestHandleMultiApCaptureResult:
         assert "Failed to start" in captured.out
 
 
-class TestPollForPcapUrl:
-    """Tests for _poll_for_pcap_url()."""
-
-    @patch("src.capture.packet_capture.time")
-    def test_found_quickly(self, mock_time, manager):
-        """Find PCAP URL on first poll."""
-        mock_time.time.side_effect = [0, 0, 5]
-        mock_time.sleep = MagicMock()
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.data = [{"id": "cap-1", "pcap_url": "https://url"}]
-        list_fn = MagicMock(return_value=mock_resp)
-        result = manager._poll_for_pcap_url(list_fn, "cap-1", 60)
-        assert result == "https://url"
-
-    @patch("src.capture.packet_capture.time")
-    def test_timeout(self, mock_time, manager):
-        """Return None on timeout."""
-        # duration=5, max_wait=125, poll_interval=5, max_polls=25
-        call_count = [0]
-
-        def time_side_effect():
-            call_count[0] += 1
-            return call_count[0] * 5.0
-
-        mock_time.time.side_effect = time_side_effect
-        mock_time.sleep = MagicMock()
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.data = [{"id": "cap-1"}]  # No pcap_url
-        list_fn = MagicMock(return_value=mock_resp)
-        result = manager._poll_for_pcap_url(list_fn, "cap-1", 5)
-        assert result is None
-
-
 class TestPollAndDownloadPcap:
     """Tests for _poll_and_download_pcap()."""
 
     def test_success(self, manager):
-        """Download PCAP after polling."""
-        manager._poll_for_pcap_url = MagicMock(return_value="https://url")
-        with patch.object(PacketCaptureManager, "_save_pcap_file") as mock_save:
+        """Download PCAP after polling via the download manager."""
+        manager._download_manager = MagicMock()  # Replace the download manager collaborator
+        manager._download_manager.poll_for_pcap_url.return_value = "https://url"  # URL ready immediately
+        with patch("src.capture.packet_capture.PacketCaptureDownloadManager.save_pcap_file") as mock_save:
             manager._poll_and_download_pcap(MagicMock(), "cap-1", 60)
             mock_save.assert_called_once()
 
     def test_timeout(self, manager):
         """No download when poll returns None."""
-        manager._poll_for_pcap_url = MagicMock(return_value=None)
-        with patch.object(PacketCaptureManager, "_save_pcap_file") as mock_save:
+        manager._download_manager = MagicMock()  # Replace the download manager collaborator
+        manager._download_manager.poll_for_pcap_url.return_value = None  # No URL within timeout
+        with patch("src.capture.packet_capture.PacketCaptureDownloadManager.save_pcap_file") as mock_save:
             manager._poll_and_download_pcap(MagicMock(), "cap-1", 60)
             mock_save.assert_not_called()
 
     def test_keyboard_interrupt(self, manager, capsys):
         """KeyboardInterrupt prints URL and exits cleanly."""
-
-        def raise_keyboard_interrupt(*_args, **_kwargs):
-            """Avoids Mock machinery leaking KeyboardInterrupt to pytest."""
-            raise KeyboardInterrupt()
-
-        manager._poll_for_pcap_url = raise_keyboard_interrupt
+        manager._download_manager = MagicMock()  # Replace the download manager collaborator
+        manager._download_manager.poll_for_pcap_url.side_effect = KeyboardInterrupt()  # Simulate Ctrl+C
         manager._poll_and_download_pcap(MagicMock(), "cap-1", 60)
         captured = capsys.readouterr()
         assert "cancelled" in captured.out.lower() or "cap-1" in captured.out

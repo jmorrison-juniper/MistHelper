@@ -66,10 +66,10 @@ class GlobalAssignmentsBuilderService:
             global_vars[global_name] = getattr(module_obj, source_attr, None)  # Preserve original getattr(None) default
 
     @staticmethod
-    def _apply_module_alias(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:
-        """Expose a module object under its conventional alias when one is configured."""
-        alias = _MODULE_ALIASES.get(module_name)  # None when this module has no alias
-        if alias:  # Only assign when an alias is configured
+    def _expose_module_alternate_name(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:
+        """Expose a module object under its conventional alternate name when one is configured."""
+        alias = _MODULE_ALIASES.get(module_name)  # None when this module has no alternate name
+        if alias:  # Only assign when an alternate name is configured
             global_vars[alias] = module_obj  # Expose module under the alternate name
 
     @staticmethod
@@ -95,7 +95,7 @@ class GlobalAssignmentsBuilderService:
         for module_name, module_obj in imports.items():  # Walk each successfully imported module
             global_vars[module_name] = module_obj  # Always expose the module under its own name first
             cls._apply_attribute_exports(global_vars, module_name, module_obj)  # Submember re-exports (timezone, etc.)
-            cls._apply_module_alias(global_vars, module_name, module_obj)  # Whole-module aliases (np, concurrent)
+            cls._expose_module_alternate_name(global_vars, module_name, module_obj)  # Alt module names (np)
             cls._apply_optional_imports(global_vars, module_name, module_obj)  # Conditional optional-dep imports
             cls._apply_logged_module(global_vars, module_name, module_obj)  # Present-only logged modules
 

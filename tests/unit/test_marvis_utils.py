@@ -175,15 +175,15 @@ class TestFormatForCsvStandardTypes:
 
 
 # ---------------------------------------------------------------------------
-# _legacy_fallback (called when format_for_csv raises internally)
+# _recover_via_flatten_pipeline (called when format_for_csv raises internally)
 # ---------------------------------------------------------------------------
 
 
 class TestLegacyFallback:
-    """Tests for the _legacy_fallback path -- uses injected callables as rescue."""
+    """Tests for the _recover_via_flatten_pipeline path -- uses injected callables as rescue."""
 
     def test_fallback_wraps_single_dict_in_list(self):  # Single dict normalised before flatten
-        """_legacy_fallback wraps a single dict in a list before calling flatten_fn."""
+        """_recover_via_flatten_pipeline wraps a single dict in a list before calling flatten_fn."""
         calls: list[int] = []  # Track flatten_fn call count
 
         def counting_flatten(data: list) -> list:  # Custom flatten that records call count
@@ -194,14 +194,14 @@ class TestLegacyFallback:
             escape_fn=_identity_escape, flatten_fn=counting_flatten
         )
         single_dict = {"mac": "aa:bb:cc:dd:ee:ff"}  # Single dict -- not a list
-        utils._legacy_fallback(single_dict)  # Invoke fallback
+        utils._recover_via_flatten_pipeline(single_dict)  # Invoke fallback
         assert calls[0] == 1  # Single dict should have been wrapped in a list of 1
 
     def test_fallback_returns_flattened_and_escaped_data(self):  # Happy path
-        """_legacy_fallback applies flatten then escape and returns the result."""
+        """_recover_via_flatten_pipeline applies flatten then escape and returns the result."""
         utils = _make_utils()  # Create instance with identity callables
         data = [{"mac": "aa:bb:cc:dd:ee:ff"}]  # Minimal valid input
-        result = utils._legacy_fallback(data)  # Call fallback directly
+        result = utils._recover_via_flatten_pipeline(data)  # Call fallback directly
         assert result == data  # Identity callables return input unchanged
 
 
@@ -211,7 +211,7 @@ class TestLegacyFallback:
 
 
 class TestFormatForCsvExceptionFallback:
-    """Tests that the except block in format_for_csv calls _legacy_fallback."""
+    """Tests that the except block in format_for_csv calls _recover_via_flatten_pipeline."""
 
     def test_internal_error_triggers_except_block(self):  # Cover lines 141-150
         """When format_for_csv raises internally, the except block runs and returns a list."""
@@ -221,15 +221,15 @@ class TestFormatForCsvExceptionFallback:
             call_count[0] += 1  # Increment call counter on each invocation
             if call_count[0] == 1:  # Only raise on the FIRST call (inside the try block)
                 raise RuntimeError("escape error on first call")  # Simulated escape failure
-            return data  # Second call (inside _legacy_fallback) succeeds and returns data unchanged
+            return data  # Second call (inside _recover_via_flatten_pipeline) succeeds and returns data unchanged
 
         utils = MarvisDataUtils(  # Create instance with the raise-once escape_fn
             escape_fn=escape_fn_raise_once,  # First call raises, second call succeeds
             flatten_fn=_identity_flatten,  # Identity flatten for legacy fallback
         )
         data = [{"mac": "aa:bb:cc:dd:ee:ff"}]  # Minimal valid input -- will reach escape_fn
-        result = utils.format_for_csv(data, "generic")  # escape_fn raises -> except block -> _legacy_fallback
-        assert isinstance(result, list)  # _legacy_fallback returns a list via second escape_fn call
+        result = utils.format_for_csv(data, "generic")  # escape_fn raises -> except -> _recover_via_flatten_pipeline
+        assert isinstance(result, list)  # _recover_via_flatten_pipeline returns a list via second escape_fn call
 
 
 # ---------------------------------------------------------------------------

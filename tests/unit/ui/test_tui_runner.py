@@ -41,7 +41,7 @@ def _drive_runner(tui_stub, keys: list[str | None]) -> TuiRunner:
         return queue.pop(0)  # Otherwise emit next key
 
     tui_stub.check_keyboard_input = MagicMock(side_effect=_poll)  # Wire poll
-    tui_stub.handle_input = MagicMock()  # Receives keystrokes
+    tui_stub._keyboard_dispatch.dispatch = MagicMock()  # Receives keystrokes via dispatch table
     tui_stub.create_layout = MagicMock(return_value="<layout>")  # Stable layout
     tui_stub.Live = _FakeLive  # Inject context-manager stand-in
     return TuiRunner(tui_stub)  # Ready-to-run runner
@@ -54,7 +54,7 @@ def test_run_unix_path_drives_discover_and_loop(tui_stub) -> None:
     runner = _drive_runner(tui_stub, keys=["a", "b"])  # Two keys then auto-quit
     runner.run()  # Drive the full lifecycle
     assert tui_stub._discover_current_level.called  # Discovery ran once
-    assert tui_stub.handle_input.call_count == 2  # Both keys dispatched
+    assert tui_stub._keyboard_dispatch.dispatch.call_count == 2  # Both keys dispatched
     assert tui_stub.tty.setcbreak.called  # Raw mode entered
     assert tui_stub.termios.tcsetattr.called  # Restore performed
 
@@ -81,18 +81,18 @@ def test_run_propagates_critical_error(tui_stub) -> None:
 
 
 def test_render_loop_breaks_when_quit_requested(tui_stub) -> None:
-    """When handle_input flips ``running`` False, the loop ends cleanly."""
+    """When dispatch flips ``running`` False, the loop ends cleanly."""
 
     def _flip_off(key: str) -> None:  # pragma: no cover - tiny callback
         tui_stub.running = False  # Quit immediately after first key
 
-    tui_stub.handle_input = MagicMock(side_effect=_flip_off)  # Wire side effect
+    tui_stub._keyboard_dispatch.dispatch = MagicMock(side_effect=_flip_off)  # Wire side effect
     tui_stub.check_keyboard_input = MagicMock(return_value="q")  # Always return 'q'
     tui_stub.create_layout = MagicMock(return_value="<layout>")  # Stable layout
     tui_stub.Live = _FakeLive  # Stub Live
     runner = TuiRunner(tui_stub)  # Construct
     runner._render_loop()  # Run only the inner loop (bypass setup)
-    tui_stub.handle_input.assert_called_once_with("q")  # Single dispatch
+    tui_stub._keyboard_dispatch.dispatch.assert_called_once_with("q")  # Single dispatch
 
 
 def test_teardown_terminal_swallows_restore_failure(tui_stub) -> None:

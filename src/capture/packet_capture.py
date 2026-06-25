@@ -8,8 +8,6 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-import requests
-
 from src.capture.org_capture_workflow import OrgCaptureWorkflow
 from src.capture.packet_capture_download import PacketCaptureDownloadManager
 from src.capture.site_capture_loop import SiteCaptureLoopRunner
@@ -1551,42 +1549,6 @@ class PacketCaptureManager:
 
         return self._download_manager.fetch_completed_pcaps(list_fn, iteration)
 
-    def _download_pending_pcaps(self, completed_pcaps: list[dict[str, Any]], download_folder: str) -> int:
-        """Download PCAPs that are not already saved locally.
-
-        Args:
-            completed_pcaps: List of completed PCAP records from the API
-            download_folder: Local folder path for saving PCAP files
-
-        Returns:
-            Number of newly downloaded files.
-        """
-        return self._download_manager.download_pending_pcaps(
-            completed_pcaps,
-            download_folder,
-            self._download_single_pcap,
-        )
-
-    def _download_single_pcap(self, url: str, local_path: str, filename: str, capture_id: str) -> int:
-        """Download a single PCAP file from a URL.
-
-        Args:
-            url: Download URL for the PCAP
-            local_path: Full local file path to save to
-            filename: Display filename for logging
-            capture_id: Capture ID for logging
-
-        Returns:
-            1 if downloaded successfully, 0 otherwise.
-        """
-        return self._download_manager.download_single_pcap(
-            url,
-            local_path,
-            filename,
-            capture_id,
-            requests_module=requests,
-        )
-
     def _attempt_loop_capture(self, site_id: str, payload: dict[str, Any], iteration: int) -> float | None:
         """Attempt to start a new capture and return the capture start time.
 
@@ -1774,7 +1736,7 @@ class PacketCaptureManager:
                 response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(self.mist_session, site_id)
 
                 if response.status_code == 200:
-                    captures = self._parse_captures_response(response.data, poll_attempt)
+                    captures = PacketCaptureDownloadManager.parse_captures_response(response.data, poll_attempt)
                     status = self._check_capture_status(
                         captures,
                         capture_id,
@@ -2381,13 +2343,13 @@ class PacketCaptureManager:
 
         pcap_url: str | None = None
         try:
-            pcap_url = self._poll_for_pcap_url(list_captures_fn, capture_id, duration)
+            pcap_url = self._download_manager.poll_for_pcap_url(list_captures_fn, capture_id, duration)
             if not pcap_url:
                 logging.debug("Polling finished for %s without a downloadable URL", capture_id)
                 return
 
             logging.info("PCAP URL resolved for %s; starting file save", capture_id)
-            self._save_pcap_file(pcap_url, capture_id, prefix)
+            PacketCaptureDownloadManager.save_pcap_file(pcap_url, capture_id, prefix)
             logging.debug("PCAP save callback completed for %s", capture_id)
         except KeyboardInterrupt:
             print("\n\n! Download cancelled by user")
@@ -2399,72 +2361,6 @@ class PacketCaptureManager:
             logging.exception("Exception in poll_and_download_pcap for %s: %s", capture_id, error)
             if pcap_url:
                 print(f"  Try downloading manually from: {pcap_url}")
-
-    def _poll_for_pcap_url(
-        self,
-        list_captures_fn: Callable[[], Any],
-        capture_id: str,
-        duration: int,
-    ) -> str | None:
-        """Poll the API until the PCAP download URL is available.
-
-        Args:
-            list_captures_fn: Callable returning API response for listing captures
-            capture_id: Capture session ID to look for
-            duration: Expected capture duration (used to calculate timeout)
-
-        Returns:
-            PCAP download URL if found, None if timed out.
-        """
-        return self._download_manager.poll_for_pcap_url(
-            list_captures_fn,
-            capture_id,
-            duration,
-            sleep_fn=time.sleep,
-        )
-
-    @staticmethod
-    def _parse_captures_response(raw_data: Any, poll_attempt: int) -> list[dict[str, Any]]:
-        """Parse API response into a list of capture records.
-
-        Args:
-            raw_data: Raw API response data (dict or list)
-            poll_attempt: Current poll attempt number for logging
-
-        Returns:
-            List of capture records.
-        """
-        return PacketCaptureDownloadManager.parse_captures_response(raw_data, poll_attempt)
-
-    @staticmethod
-    def _find_capture_url(captures: list[dict[str, Any]], capture_id: str, poll_attempt: int) -> str | None:
-        """Find the PCAP URL for a specific capture ID in the captures list.
-
-        Args:
-            captures: List of capture records
-            capture_id: Target capture ID
-            poll_attempt: Current poll attempt for logging
-
-        Returns:
-            PCAP download URL if found and ready, None otherwise.
-        """
-        return PacketCaptureDownloadManager.find_capture_url(captures, capture_id, poll_attempt)
-
-    @staticmethod
-    def _save_pcap_file(pcap_url: str, capture_id: str, prefix: str = "") -> None:
-        """Download and save a PCAP file from a URL.
-
-        Args:
-            pcap_url: URL to download from
-            capture_id: Capture ID for filename
-            prefix: Filename prefix (e.g. 'org_')
-        """
-        PacketCaptureDownloadManager.save_pcap_file(
-            pcap_url,
-            capture_id,
-            prefix,
-            requests_module=requests,
-        )
 
     def _export_capture_info_to_csv(self, capture_data: dict[str, Any], scope: str, scope_id: str) -> None:
         """Export capture session information to CSV.

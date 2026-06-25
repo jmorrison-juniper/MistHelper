@@ -374,7 +374,9 @@ class GatewayExportUtils:
     @staticmethod
     def with_wan_overrides(fast: bool = False) -> None:
         """Run the WAN override compliance report via the WanOverrideWalker orchestrator."""
-        WanOverrideWalker.walk(fast=fast)  # Delegate directly to the orchestrator collaborator
+        logging.info("Starting WAN override compliance report (fast=%s)", fast)  # Before-action log
+        WanOverrideWalker.walk(fast=fast)  # Orchestrate cache/classify/fetch/report end-to-end
+        logging.debug("WAN override compliance report finished (fast=%s)", fast)  # After-action log
 
     @staticmethod
     def _get_devices_with_sites(org_id: str, fast: bool = False) -> list[tuple[str, str, str, str]]:

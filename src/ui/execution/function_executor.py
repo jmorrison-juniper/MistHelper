@@ -123,13 +123,13 @@ class FunctionExecutor:
         """Make the initial call, paginate via ``result.next``, then format output."""
         tui = self._tui  # Local alias
         result = func(**tui.function_params)  # Initial API call
-        parsed_data = tui._parse_api_response(result)  # Strip APIResponse wrapper
+        parsed_data = tui._api_parser.parse(result)  # Strip APIResponse wrapper via the parser collaborator
         result, parsed_data = self._paginate_if_possible(result, parsed_data)  # Follow next URL if applicable
         if tui.debug_mode:  # Save debug artifact when in debug mode
             tui._debug_saver.save(func_name, result, parsed_data)
         tui.last_result = result  # Stash for details panel
         tui.last_parsed_data = parsed_data  # Stash for grid display
-        tui.output_lines = tui._format_result_output(parsed_data, func_name, result)
+        tui.output_lines = tui._hier_formatter.format_result(parsed_data, func_name, result)  # Format via collaborator
         if tui._should_show_results_grid(parsed_data):  # Switch into grid view when tabular
             tui.execution_state = "viewing_results"
             tui.results_scroll_offset = 0
@@ -157,7 +157,7 @@ class FunctionExecutor:
             except Exception as error:  # Tolerate transient pagination errors
                 logging.debug("TUI: pagination error on page %s - %s, stopping", page_count, error)
                 break
-            parsed_data = tui._parse_api_response(result)  # Re-parse the wrapper
+            parsed_data = tui._api_parser.parse(result)  # Re-parse the wrapper via the parser collaborator
             new_results = self._extract_page_results(parsed_data)  # Pull this page's items
             if not new_results:  # Empty page -> done
                 break

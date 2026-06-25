@@ -35,11 +35,6 @@ def configure_db_logging() -> None:
     )
 
 
-def get_logger(name: str) -> structlog.stdlib.BoundLogger:
-    """Return a bound structlog logger for the given module name."""
-    return structlog.get_logger(name)
-
-
 @dataclass
 class DatabaseConfig:
     """Connection settings for polyglot database backends."""
@@ -93,7 +88,7 @@ def _hosts_unreachable(arango_url: str, redis_host: str) -> bool:
     arango_ok = _can_resolve(arango_hostname)
     redis_ok = _can_resolve(redis_host)
     if not arango_ok and not redis_ok:
-        log = get_logger(__name__)
+        log = structlog.get_logger(__name__)
         log.info(
             "standalone_auto_detected",
             msg="Database hosts unreachable, using CSV/SQLite only",
@@ -156,5 +151,4 @@ __all__ = [
     "DualWriteResult",
     "WriteResult",
     "configure_db_logging",
-    "get_logger",
 ]

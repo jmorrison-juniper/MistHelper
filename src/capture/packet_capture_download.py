@@ -64,9 +64,11 @@ class PacketCaptureDownloadManager:
         self,
         completed_pcaps: list[dict[str, Any]],
         download_folder: str,
-        download_single_fn: Callable[[str, str, str, str], int],
+        download_single_fn: Callable[[str, str, str, str], int] | None = None,
     ) -> int:
         """Download PCAPs that are not already present on disk."""
+        if download_single_fn is None:  # Default to this manager's own single-file downloader.
+            download_single_fn = self.download_single_pcap  # Self-contained: no external adapter needed.
         if not completed_pcaps:  # Preserve the early-no-op branch when no completed PCAPs are available.
             print(
                 "\n[Step 2/3] No completed PCAPs available for download"

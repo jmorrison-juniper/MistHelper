@@ -5,7 +5,7 @@ Holds collaborators extracted from
 drive its cyclomatic complexity down toward the project ceiling of
 CC <= 10. Wave A established :class:`MapViewerState` and
 :class:`MapViewerCallbacks` with five trivial UI-toggle callbacks
-(``toggle_layers``, ``display_click_data``, ``toggle_origin_mode``,
+(``apply_layer_toggles``, ``display_click_data``, ``toggle_origin_mode``,
 ``toggle_zone_name_input``, ``toggle_auto_refresh``). Subsequent waves
 will move additional callbacks into the same callback class and grow
 :class:`MapViewerState` to hold the closure variables they need.

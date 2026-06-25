@@ -169,11 +169,11 @@ def test_nav_enter_module_drills_in(tui_stub, make_item) -> None:
 
 
 def test_nav_enter_function_starts_execution(tui_stub, make_item) -> None:
-    """Enter on a function delegates to _start_function_execution."""
+    """Enter on a function starts execution via the function-executor collaborator."""
     tui_stub.current_items = [make_item("function", "list", object=lambda: None)]
     tui_stub.current_selection = 0
     KeyboardDispatchTable(tui_stub).dispatch("\r")
-    tui_stub._start_function_execution.assert_called_once()
+    tui_stub._function_executor.start.assert_called_once()
 
 
 def test_nav_back_pops_path(tui_stub) -> None:

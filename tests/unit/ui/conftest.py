@@ -95,12 +95,15 @@ def tui_stub() -> SimpleNamespace:
     stub.result_row_scroll = 0  # Row offset within current result
     stub.dotenv_values = {}  # Loaded .env values
     stub.apisession = MagicMock()  # Default to a Mock session
-    # Delegate-style methods invoked by some collaborators on the TUI:
-    stub._parse_api_response = MagicMock(side_effect=lambda r: r)  # Default passthrough
-    stub._format_result_output = MagicMock(return_value=["[SUCCESS] formatted"])
+    # Collaborator objects that other collaborators reach through on the TUI:
+    stub._api_parser = MagicMock()  # APIResponse parser collaborator
+    stub._api_parser.parse = MagicMock(side_effect=lambda r: r)  # Default passthrough
+    stub._hier_formatter = MagicMock()  # Hierarchical output formatter collaborator
+    stub._hier_formatter.format_result = MagicMock(return_value=["[SUCCESS] formatted"])
+    stub._keyboard_dispatch = MagicMock()  # Keyboard dispatch table, used by TuiRunner
+    stub._function_executor = MagicMock()  # Function executor, used by keyboard_dispatch enter handler
     stub._should_show_results_grid = MagicMock(return_value=False)
     stub._cancel_execution = MagicMock()  # Used by keyboard_dispatch escape handler
-    stub._start_function_execution = MagicMock()  # Used by keyboard_dispatch enter handler
     stub._submit_parameter = MagicMock()  # Used by keyboard_dispatch enter handler
     stub._discover_current_level = MagicMock()  # Used by nav drill/back
     stub._debug_saver = MagicMock()  # Used by FunctionExecutor when debug_mode
@@ -110,7 +113,6 @@ def tui_stub() -> SimpleNamespace:
     # Lifecycle methods invoked by TuiRunner during render loop:
     stub.create_layout = MagicMock(return_value="<layout>")  # Stand-in layout object
     stub.check_keyboard_input = MagicMock(return_value=None)  # No keystroke by default
-    stub.handle_input = MagicMock()  # Receives keystrokes from runner
     # Rich Live class placeholder; tests override with their own context manager:
     stub.Live = MagicMock()  # Default: not used unless test exercises tui_runner
     return stub

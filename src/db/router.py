@@ -10,11 +10,13 @@ import hashlib
 import json
 from typing import Any
 
-from . import DatabaseConfig, DualWriteResult, WriteResult, get_logger
+import structlog
+
+from . import DatabaseConfig, DualWriteResult, WriteResult
 from .arango_writer import ArangoDBWriter
 from .redis_writer import RedisJSONWriter, RedisTimeSeriesWriter
 
-logger = get_logger(__name__)
+logger = structlog.get_logger(__name__)
 
 ARANGO_ONLY_TYPES = {"natural_pk", "auto_increment_with_unique"}
 DUAL_WRITE_TYPES = {"composite_pk"}

@@ -58,7 +58,7 @@ class TuiRunner:
             while tui.running:  # Main loop until quit
                 key = tui.check_keyboard_input()  # Poll for next key (non-blocking)
                 if key:  # Only handle when a key is ready
-                    tui.handle_input(key)  # Dispatch through KeyboardDispatchTable
+                    tui._keyboard_dispatch.dispatch(key)  # Dispatch keystroke via the dispatch table
                     if not tui.running:  # Quit may have just been requested
                         break
                     live.update(tui.create_layout())  # Repaint with fresh layout

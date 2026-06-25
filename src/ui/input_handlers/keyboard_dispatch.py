@@ -200,7 +200,7 @@ class KeyboardDispatchTable:
         if item_type == "module":
             self._drill_into_module(selected.get("name"))  # Push the module onto the path
         elif item_type == "function":
-            tui._start_function_execution(selected)  # Begin parameter prompting
+            tui._function_executor.start(selected)  # Begin parameter prompting via the executor collaborator
 
     def _drill_into_module(self, module_name: str | None) -> None:
         """Push ``module_name`` onto the current path and re-discover items."""

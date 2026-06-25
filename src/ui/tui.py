@@ -158,10 +158,6 @@ class MistHelperTUI:
         """Poll for the next pressed key (delegate)."""
         return self._key_poller.poll()  # Cross-platform poll
 
-    def handle_input(self, key: str) -> None:
-        """Dispatch ``key`` based on the current execution state (delegate)."""
-        self._keyboard_dispatch.dispatch(key)  # Mode-scoped dispatch table
-
     def create_layout(self) -> Any:
         """Build the Rich layout for the current frame (delegate)."""
         return self._layout_builder.build()  # Full layout composition
@@ -169,10 +165,6 @@ class MistHelperTUI:
     def _create_results_grid(self) -> Any:
         """Build the Rich Panel for the results grid (delegate)."""
         return self._results_grid_builder.build()  # Returns None when no data
-
-    def _start_function_execution(self, selected_item: dict[str, Any]) -> None:
-        """Begin Live-mode function execution (delegate)."""
-        self._function_executor.start(selected_item)  # Param discovery + collection kickoff
 
     def _submit_parameter(self) -> None:
         """Submit the currently-typed parameter value (delegate)."""
@@ -194,10 +186,6 @@ class MistHelperTUI:
         """Execute the currently prepared function (delegate)."""
         self._function_executor.execute()  # Includes pagination + state mgmt
 
-    def _parse_api_response(self, result: Any) -> Any:
-        """Extract ``.data`` from an APIResponse object (delegate)."""
-        return self._api_parser.parse(result)
-
     def _should_show_results_grid(self, parsed_data: Any) -> bool:
         """Return True iff ``parsed_data`` looks like list-of-dicts tabular data."""
         if not isinstance(parsed_data, dict):  # Not a dict -> not tabular
@@ -206,14 +194,6 @@ class MistHelperTUI:
         if not isinstance(results, list) or not results:  # Missing/empty -> not tabular
             return False
         return isinstance(results[0], dict)  # Only show grid for dict rows
-
-    def _save_debug_result(self, func_name: str, raw_result: Any, parsed_data: Any) -> None:
-        """Save the API call artifact when in debug mode (delegate)."""
-        self._debug_saver.save(func_name, raw_result, parsed_data)
-
-    def _format_result_output(self, parsed_data: Any, func_name: str, raw_result: Any = None) -> list[str]:
-        """Format an API result for the output panel (delegate)."""
-        return self._hier_formatter.format_result(parsed_data, func_name, raw_result)
 
     def _format_value_hierarchical(
         self,
