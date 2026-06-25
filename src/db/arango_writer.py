@@ -15,11 +15,12 @@ import uuid
 from typing import Any
 from urllib.parse import urlparse
 
+import structlog
 from arango import ArangoClient  # type: ignore[attr-defined]
 
-from . import DatabaseConfig, WriteResult, get_logger
+from . import DatabaseConfig, WriteResult
 
-logger = get_logger(__name__)
+logger = structlog.get_logger(__name__)
 
 GRAPH_NAME = "mist_network_topology"
 IMPORT_BATCH_SIZE = 5000

@@ -147,7 +147,7 @@ class MarvisDataUtils:
             logging.info(
                 "Falling back to legacy flatten+escape method for Marvis data"
             )  # Inform operators that the fallback path is being used
-            return self._legacy_fallback(api_response_data)  # Use injected callables for safe fallback
+            return self._recover_via_flatten_pipeline(api_response_data)  # Use injected callables for safe fallback
 
     # ------------------------------------------------------------------
     # Private helpers — extract sub-logic to stay within the 25-line rule
@@ -262,7 +262,7 @@ class MarvisDataUtils:
 
         return row  # Return the row with all result columns appended
 
-    def _legacy_fallback(  # Fallback path used when the primary formatter encounters an unexpected exception
+    def _recover_via_flatten_pipeline(  # Fallback path used when the primary formatter raises unexpectedly
         self,
         api_response_data: Any,  # The original raw API response that caused the formatting error
     ) -> list[dict[str, Any]]:

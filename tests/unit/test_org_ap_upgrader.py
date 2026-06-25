@@ -1041,27 +1041,27 @@ class TestMSPSummary:
 
 
 class TestParseSelectionInput:
-    """Tests for _parse_selection_input."""
+    """Tests for _parse_selection (range/list selection parsing)."""
 
     def test_single(self):
         u = _make_upgrader()
-        assert u._parse_selection_input("2", 5) == [1]
+        assert u._parse_selection("2", 5) == [1]
 
     def test_range(self):
         u = _make_upgrader()
-        assert u._parse_selection_input("1-3", 5) == [0, 1, 2]
+        assert u._parse_selection("1-3", 5) == [0, 1, 2]
 
     def test_through(self):
         u = _make_upgrader()
-        assert u._parse_selection_input("2 through 4", 5) == [1, 2, 3]
+        assert u._parse_selection("2 through 4", 5) == [1, 2, 3]
 
     def test_comma_separated(self):
         u = _make_upgrader()
-        assert u._parse_selection_input("1,3,5", 5) == [0, 2, 4]
+        assert u._parse_selection("1,3,5", 5) == [0, 2, 4]
 
     def test_out_of_range(self):
         u = _make_upgrader()
-        assert u._parse_selection_input("99", 5) == []
+        assert u._parse_selection("99", 5) == []
 
 
 # ===================================================================

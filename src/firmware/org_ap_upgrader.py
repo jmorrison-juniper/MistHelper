@@ -745,7 +745,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
     def _apply_site_selection(self, sites_data: list[Any], selection: str) -> bool:
         """Apply parsed site selection."""
-        selected_indices = self._parse_selection_input(selection, len(sites_data))
+        selected_indices = self._parse_selection(selection, len(sites_data))  # Inlined: direct range/list parse
         if not selected_indices:
             print("  X Invalid selection")
             return False
@@ -755,10 +755,6 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         self.selected_site_ids = [site["id"] for site in self.selected_sites]
         print(f"  + Selected {len(self.selected_site_ids)} site(s)")
         return True
-
-    def _parse_selection_input(self, selection: str, max_items: int) -> list[int]:
-        """Parse selection input with support for ranges and multiple selections."""
-        return self._parse_selection(selection, max_items)
 
     # =========================================================================
     # STEP 2: DEVICE DISCOVERY

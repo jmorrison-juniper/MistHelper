@@ -8,6 +8,7 @@ can run them in any combination.
 from __future__ import annotations  # Enable modern annotation syntax on Python 3.13.
 
 import ast  # The standard library AST powers all structural inspection.
+import re  # Word-segment splitting so naming tokens match whole words, not substrings.
 
 from .models import AnalysisContext, Severity, Violation  # Shared record/enum types.
 
@@ -445,14 +446,33 @@ class ArchitecturalAnalyzer:
 
     def _naming_violation(self, function: ast.FunctionDef | ast.AsyncFunctionDef) -> Violation | None:
         """Flag functions whose name signals a prohibited indirection layer."""
-        lowered = function.name.lower()  # Normalize the name for token matching.
+        lowered = function.name.lower()  # Normalize the name for multi-word token matching.
+        segments = self._name_segments(function.name)  # Whole-word segments for single-word tokens.
         for token in self._HIGH_TOKENS:  # Check the strong indirection tokens first.
-            if token in lowered:  # The name embeds a prohibited token.
+            if self._token_matches(token, lowered, segments):  # Whole-word (or multi-word) match.
                 return self._make_naming(function, token, Severity.MEDIUM)  # Medium-severity smell.
         for token in self._LOW_TOKENS:  # Check the softer helper tokens next.
-            if token in lowered:  # The name embeds a helper token.
+            if self._token_matches(token, lowered, segments):  # Whole-word match only.
                 return self._make_naming(function, token, Severity.LOW)  # Low-severity smell.
         return None  # No suspicious naming token found.
+
+    @staticmethod
+    def _name_segments(name: str) -> set[str]:
+        """Split an identifier into lowercased word segments (underscore + camelCase aware)."""
+        return {part.lower() for part in re.findall(r"[A-Za-z][a-z]*|\d+", name)}  # Whole words only.
+
+    @classmethod
+    def _token_matches(cls, token: str, lowered: str, segments: set[str]) -> bool:
+        """Return True when a naming token applies as a whole word (avoids substring false positives).
+
+        Multi-word tokens such as ``pass_through`` are already specific, so they match as a
+        substring of the full lowered name. Single-word tokens (``compat``, ``legacy``,
+        ``helper``) must match a complete word segment so ``compat`` no longer flags
+        ``compatibility`` and ``helper`` no longer flags the product name ``misthelper``.
+        """
+        if "_" in token:  # Multi-word tokens are specific enough to match as a substring.
+            return token in lowered  # e.g., pass_through.
+        return token in segments  # Single-word tokens must equal a whole word segment.
 
     @staticmethod
     def _make_naming(function: ast.FunctionDef | ast.AsyncFunctionDef, token: str, severity: Severity) -> Violation:

@@ -11,9 +11,9 @@ import os
 import threading
 from typing import Any
 
-from . import get_logger
+import structlog
 
-logger = get_logger(__name__)
+logger = structlog.get_logger(__name__)
 
 DEFAULT_MAX_STORAGE_GB = 100
 DEFAULT_CHECK_INTERVAL_HOURS = 6

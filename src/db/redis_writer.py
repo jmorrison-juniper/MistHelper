@@ -18,8 +18,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
 import redis
+import structlog
 
-from . import DatabaseConfig, WriteResult, get_logger
+from . import DatabaseConfig, WriteResult
 
 RAW_RETENTION_MS = int(os.environ.get("REDIS_RAW_RETENTION_DAYS", "7")) * 86_400_000
 HOURLY_RETENTION_MS = 90 * 86_400_000  # 90 days
@@ -50,7 +51,7 @@ class RedisTimeSeriesWriter:
 
     def __init__(self, config: DatabaseConfig) -> None:
         """Initialize Redis TimeSeries connection and verify module."""
-        self._log = get_logger("redis_writer")
+        self._log = structlog.get_logger("redis_writer")
         try:
             socket.getaddrinfo(config.redis_host, None)
         except socket.gaierror as dns_error:
@@ -500,7 +501,7 @@ class RedisJSONWriter:
 
     def __init__(self, config: DatabaseConfig) -> None:
         """Initialize Redis JSON connection and verify module."""
-        self._log = get_logger("redis_json_writer")
+        self._log = structlog.get_logger("redis_json_writer")
         try:
             socket.getaddrinfo(config.redis_host, None)
         except socket.gaierror as dns_error:

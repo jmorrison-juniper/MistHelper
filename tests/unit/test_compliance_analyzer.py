@@ -196,3 +196,33 @@ def test_git_ignored_files_are_skipped(tmp_path: Path, monkeypatch: pytest.Monke
     collected = {Path(r.path).as_posix() for r in reports}  # Normalize collected paths for matching.
     assert any("src/live.py" in p for p in collected)  # The non-ignored source file is analyzed.
     assert not any("dead.py" in p for p in collected)  # The git-ignored file is skipped entirely.
+
+
+# Names whose indirection token is only a SUBSTRING of a legitimate domain word must not be flagged.
+ARCH_NAMING_SOURCE = '''\
+"""Sample module exercising ARCH-NAMING whole-word matching."""
+
+
+class Probe:  # Container for the sampled method names.
+    """Methods whose names mix legitimate domain words and real indirection tokens."""
+
+    def verify_ssr_compatibility(self) -> bool:  # 'compat' is only a substring of 'compatibility'.
+        return True  # Genuine domain method; must NOT be flagged.
+
+    def handle_existing_non_misthelper(self) -> bool:  # 'helper' is part of the product name.
+        return True  # Product-name method; must NOT be flagged.
+
+    def legacy_fallback(self) -> bool:  # 'legacy' is a whole word -> genuine indirection token.
+        return True  # Real legacy indirection; must be flagged.
+'''
+
+
+def test_arch_naming_matches_whole_words_not_substrings(tmp_path: Path) -> None:
+    """ARCH-NAMING flags whole-word tokens (legacy) but not substrings (compat in compatibility) (issue #455)."""
+    target = tmp_path / "probe.py"  # Throwaway sample file.
+    target.write_text(ARCH_NAMING_SOURCE, encoding="utf-8")  # Write the mixed-name sample.
+    report = ComplianceAnalyzer().analyze_file(target)  # Analyze it.
+    flagged = {v.symbol for v in report.violations if v.rule_id == "ARCH-NAMING"}  # Collect flagged names.
+    assert "verify_ssr_compatibility" not in flagged  # 'compat' substring of 'compatibility' is not a smell.
+    assert "handle_existing_non_misthelper" not in flagged  # 'helper' inside 'misthelper' is the product name.
+    assert "legacy_fallback" in flagged  # 'legacy' is a whole word -> genuine indirection token.
