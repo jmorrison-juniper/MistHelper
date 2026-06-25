@@ -191,7 +191,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         print("S. Select specific sites")
         print("C. Cancel operation")
 
-        site_choice = input("\nEnter your choice (A/S/C): ").strip().upper()
+        site_choice = self.safe_input_fn("\nEnter your choice (A/S/C): ", context="bulk_switch_scope").upper()
 
         if site_choice == "C":
             print("-> Operation cancelled by user")
@@ -223,7 +223,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
     def _parse_specific_sites(self, all_sites: list[dict[str, Any]]) -> dict[str, Any] | None:
         """Parse user input for specific site selection."""
         print("\nEnter site numbers (comma-separated) or ranges (e.g., 1-5):")
-        site_input = input("Sites: ").strip()
+        site_input = self.safe_input_fn("Sites: ", context="bulk_switch_site_list")  # EOF-safe site-list entry.
 
         try:
             self.selected_sites = []
@@ -276,7 +276,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         print("3. canary      - Test subset first, then upgrade remaining")
 
         while True:
-            strategy_choice = input("\nSelect upgrade strategy (1-3): ").strip()
+            strategy_choice = self.safe_input_fn("\nSelect upgrade strategy (1-3): ", context="bulk_switch_strategy")
             if strategy_choice == "1":
                 self.upgrade_strategy = "big_bang"
                 break
@@ -297,7 +297,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         print("2. No  - Skip devices already on target version (recommended for production)")
 
         while True:
-            force_choice = input("\nForce upgrade? (1-2): ").strip()
+            force_choice = self.safe_input_fn("\nForce upgrade? (1-2): ", context="bulk_switch_force")  # EOF-safe.
             if force_choice == "1":
                 self.force_upgrade = True
                 break
@@ -316,7 +316,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         print("2. No  - No reboot (not recommended for switches)")
 
         while True:
-            reboot_choice = input("\nReboot after upgrade? (1-2): ").strip()
+            reboot_choice = self.safe_input_fn("\nReboot after upgrade? (1-2): ", context="bulk_switch_reboot")
             if reboot_choice == "1":
                 self.auto_reboot = True
                 break
@@ -336,7 +336,9 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         print("2. No  - Skip recovery snapshot (faster but no post-upgrade backup)")
 
         while True:
-            snapshot_choice = input("\nTake recovery snapshot after reboot? (1-2): ").strip()
+            snapshot_choice = self.safe_input_fn(
+                "\nTake recovery snapshot after reboot? (1-2): ", context="bulk_switch_snap"
+            )
             if snapshot_choice == "1":
                 self.take_snapshot = True
                 break
@@ -639,7 +641,9 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         print("You can still proceed by manually specifying a firmware version.")
         print("!? WARNING: Manual entry bypasses model compatibility checks!")
 
-        fallback_choice = input("\nProceed with manual firmware entry? (y/N): ").strip().lower()
+        fallback_choice = self.safe_input_fn(
+            "\nProceed with manual firmware entry? (y/N): ", context="bulk_switch_manual"
+        ).lower()
         if fallback_choice not in ["y", "yes"]:
             print("-> Operation cancelled")
             return {"error": "No compatible firmware versions and manual entry declined"}
@@ -653,7 +657,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         print("Examples: 23.4R2.21, 22.4R3.25, 21.4R3.15, 20.4R3.8")
 
         while True:
-            manual_version = input("Enter firmware version: ").strip()
+            manual_version = self.safe_input_fn("Enter firmware version: ", context="bulk_switch_manual_ver")
             if manual_version:
                 self.target_version = manual_version
                 print(f"!? Using manually specified firmware version: {self.target_version}")
@@ -698,7 +702,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
             try:
                 count = len(self.available_versions)
                 print(f"\nSelect firmware version by index (1-{count}):")
-                selection = input("Enter index number: ").strip()
+                selection = self.safe_input_fn("Enter index number: ", context="bulk_switch_index")  # EOF-safe.
 
                 if not selection:
                     print("X  Selection required")

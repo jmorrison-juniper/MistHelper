@@ -71,7 +71,7 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         self.org_id = org_id
         self.apisession = apisession
         self.dry_run = dry_run
-        self._input_fn = safe_input_fn or (lambda prompt, _context="": input(prompt))
+        self._input_fn = safe_input_fn or self._default_safe_input  # EOF-safe default when none injected.
         self._check_stop_fn = check_stop_fn
         self._get_org_id_fn = get_org_id_fn
         self._fetch_sites_fn = fetch_sites_fn
@@ -83,6 +83,13 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         self._init_selection_state()
         self._init_device_state()
         self._init_results_state()
+
+    @staticmethod
+    def _default_safe_input(prompt: str, context: str = "org_ap_upgrader") -> str:
+        """EOF-safe default input used when no safe_input_fn is injected (issue #452)."""
+        from src.utils.input_utils import InputUtils  # Local import avoids any import cycle at load time.
+
+        return InputUtils.safe_input(prompt, context=context)  # Delegate to the canonical wrapper.
 
     def _init_selection_state(self) -> None:
         """Initialize site selection state."""

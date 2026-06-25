@@ -6,12 +6,15 @@ with comprehensive coverage of all upgrade workflow steps.
 
 from __future__ import annotations
 
+import builtins
 import os
 import sys
 import tempfile
 import time
 from typing import Any
 from unittest.mock import MagicMock, patch
+
+_ORIGINAL_INPUT = builtins.input  # Real builtin captured before any @patch swaps it.
 
 import pytest
 
@@ -54,8 +57,22 @@ def mock_apisession() -> MagicMock:
 
 @pytest.fixture()
 def mock_safe_input() -> MagicMock:
-    """Create a mock safe_input function."""
-    return MagicMock(return_value="UPGRADE SWITCHES")
+    """Create a mock safe_input seam that honors builtins.input patches.
+
+    Production routes every prompt through the injected safe_input_fn, so
+    interactive-loop tests that drive `@patch("builtins.input", ...)` keep
+    working: the seam forwards to that patched callable. When input is left
+    unpatched the seam returns the confirm phrase (the prior default) so
+    confirmation flows never block on real stdin.
+    """
+
+    def _forward(prompt: str = "", *_args: Any, **_kwargs: Any) -> str:
+        active = builtins.input  # Current builtin; tests swap this via @patch.
+        if active is _ORIGINAL_INPUT:  # Unpatched -> safe default, never blocks.
+            return "UPGRADE SWITCHES"  # Matches the prior MagicMock return value.
+        return str(active(prompt))  # Driven by the test's patched input sequence.
+
+    return MagicMock(side_effect=_forward)  # Records calls while forwarding input.
 
 
 @pytest.fixture()

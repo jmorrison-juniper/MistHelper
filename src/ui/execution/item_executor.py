@@ -13,6 +13,7 @@ import sys
 from typing import Any
 
 from src.ui.execution.function_executor import _redact
+from src.utils.input_utils import InputUtils  # EOF-safe input wrapper (issue #452).
 
 _LARGE_RESULT_HINT_THRESHOLD = 10  # Items above which we hint at exporting
 
@@ -123,7 +124,7 @@ class ItemExecutor:
         default_str = f" (default: {default})" if has_default else ""  # Inline default hint
         required_str = "" if has_default else " [required]"  # Inline required tag
         prompt = f"  {param_name}{default_str}{required_str}: "  # Compose the prompt text
-        return input(prompt).strip()  # Read + strip whitespace
+        return InputUtils.safe_input(prompt, context="tui_param_value")  # EOF-safe read + strip.
 
     def _invoke_and_display(self, func: Any, func_name: str, params: dict[str, Any]) -> None:
         """Invoke ``func`` with ``params``; render a safe preview to stdout."""
