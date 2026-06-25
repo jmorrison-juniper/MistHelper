@@ -142,7 +142,7 @@ def test_execute_paginates_via_next_cursor(tui_stub) -> None:
     tui_stub.function_params = {"mist_session": session}  # Pre-seeded session
     tui_stub.current_function = {"name": "paged", "object": _initial_call}
     # Parser must unwrap .data to mimic real APIResponse contract:
-    tui_stub._parse_api_response = MagicMock(side_effect=lambda r: r.data)
+    tui_stub._api_parser.parse = MagicMock(side_effect=lambda r: r.data)
     FunctionExecutor(tui_stub).execute()  # Trigger
     # Both pages combined in last_parsed_data:
     ids = [row["id"] for row in tui_stub.last_parsed_data["results"]]
