@@ -226,3 +226,32 @@ def test_arch_naming_matches_whole_words_not_substrings(tmp_path: Path) -> None:
     assert "verify_ssr_compatibility" not in flagged  # 'compat' substring of 'compatibility' is not a smell.
     assert "handle_existing_non_misthelper" not in flagged  # 'helper' inside 'misthelper' is the product name.
     assert "legacy_fallback" in flagged  # 'legacy' is a whole word -> genuine indirection token.
+
+
+# A method call on a literal receiver is a computation, not delegation to a collaborator object.
+ARCH_DELEGATE_LITERAL_SOURCE = '''\
+"""Sample exercising ARCH-DELEGATE literal-receiver exemption."""
+
+
+class Probe:  # Container for the sampled methods.
+    """Methods that look like single forwarding calls."""
+
+    def __init__(self, impl: object) -> None:  # Store a collaborator for the genuine delegate below.
+        self._impl = impl  # Collaborator object referenced by the real delegate.
+
+    def icon_for_type(self, item_type: str) -> tuple:  # {literal}.get(x) is a self-contained lookup.
+        return {"module": (">", "cyan")}.get(item_type, ("-", "dim"))  # Computation; must NOT be flagged.
+
+    def fetch(self, site_id: str) -> object:  # Forwards to a collaborator -> genuine delegation.
+        return self._impl.fetch(site_id)  # Pass-through to a collaborator; must be flagged.
+'''
+
+
+def test_arch_delegate_ignores_literal_receiver_calls(tmp_path: Path) -> None:
+    """ARCH-DELEGATE ignores method calls on literals ({...}.get) but flags collaborator delegation (issue #455)."""
+    target = tmp_path / "probe.py"  # Throwaway sample file.
+    target.write_text(ARCH_DELEGATE_LITERAL_SOURCE, encoding="utf-8")  # Write the mixed sample.
+    report = ComplianceAnalyzer().analyze_file(target)  # Analyze it.
+    flagged = {v.symbol for v in report.violations if v.rule_id == "ARCH-DELEGATE"}  # Collect delegation findings.
+    assert "icon_for_type" not in flagged  # Lookup on a dict literal is a computation, not delegation.
+    assert "fetch" in flagged  # Forwarding to a collaborator object remains a flagged pass-through.

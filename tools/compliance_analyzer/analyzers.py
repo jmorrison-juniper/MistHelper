@@ -487,6 +487,21 @@ class ArchitecturalAnalyzer:
             remediation="Fold the behavior into the owning class/method instead of a named indirection layer.",
         )
 
+    # Literal receiver node types: a method call on one of these is a self-contained
+    # computation (e.g., ``{...}.get(x)`` or ``[...].index(x)``), not delegation to a collaborator.
+    _LITERAL_RECEIVERS = (
+        ast.Dict,
+        ast.List,
+        ast.Set,
+        ast.Tuple,
+        ast.Constant,
+        ast.DictComp,
+        ast.ListComp,
+        ast.SetComp,
+        ast.GeneratorExp,
+        ast.JoinedStr,
+    )
+
     def _is_delegation(self, function: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         """Return True when a function only forwards to another call."""
         if function.name.startswith("__") and function.name.endswith("__"):  # Dunder forwarders are not wrappers.
@@ -497,6 +512,8 @@ class ArchitecturalAnalyzer:
         call = self._single_call(body[0])  # Extract a lone call expression if present.
         if call is None or not isinstance(call.func, (ast.Name, ast.Attribute)):  # Must call a named target.
             return False  # Not a delegation to a named callable.
+        if isinstance(call.func, ast.Attribute) and isinstance(call.func.value, self._LITERAL_RECEIVERS):
+            return False  # A method on a literal (e.g., {...}.get(x)) is a computation, not delegation.
         if self._called_name(call)[:1].isupper():  # CapWords target is a constructor/factory, not a wrapper.
             return False  # Building and returning an object is not pass-through delegation.
         return self._forwards_parameters(function, call)  # Confirm it forwards its own parameters.
