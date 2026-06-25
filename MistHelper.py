@@ -20431,6 +20431,32 @@ class BulkRadiusWLANConfigManager:
 
     CANCEL_KEYWORDS = {"q", "quit", "cancel", "back"}
 
+    # Stable column order for the per-scan WLAN snapshot (see _export_scan_snapshot).
+    # The *_present flags reveal whether a value is real (key was in the API record)
+    # or merely the default the compliance check assumes when the key is absent.
+    _SNAPSHOT_FIELDS = [
+        "scan_timestamp",
+        "org_id",
+        "ssid",
+        "wlan_id",
+        "compliance_status",
+        "inheritance_level",
+        "inheritance_source",
+        "auth_type",
+        "num_auth_servers",
+        "radsec_enabled",
+        "auth_servers_timeout",
+        "auth_servers_timeout_present",
+        "auth_servers_retries",
+        "auth_servers_retries_present",
+        "fast_dot1x_timers",
+        "fast_dot1x_timers_present",
+        "target_timeout",
+        "target_retries",
+        "target_fast_dot1x",
+        "enabled",
+    ]
+
     def __init__(self) -> None:
         """Initialize manager and load configuration from .env."""
         self.org_id: str = ""
@@ -20759,6 +20785,55 @@ class BulkRadiusWLANConfigManager:
         }
         self.change_records.append(record)  # Append to the audit trail for later CSV export
 
+    def _export_scan_snapshot(self) -> None:
+        """Persist every pulled RADIUS WLAN's settings to disk so they can be examined after the run."""
+        all_radius = self.radius_wlans + self.compliant_wlans  # Every RADIUS WLAN discovered this scan
+        if not all_radius:  # Nothing was pulled -> nothing to snapshot
+            logging.debug("No RADIUS WLANs to snapshot; skipping scan export")  # Trace the empty case
+            return  # No snapshot to write
+        logging.info("Exporting scan snapshot for %s RADIUS WLAN(s)", len(all_radius))  # Before-action log
+        scan_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Human-readable scan time stamped on each row
+        rows = [self._build_snapshot_row(wlan, scan_timestamp) for wlan in all_radius]  # Flatten each WLAN to a row
+        file_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Compact stamp for a unique, non-overwriting filename
+        filename = f"RadiusWLANScanSnapshot_{file_stamp}.csv"  # Snapshot filename (DataExporter drops .csv for SQLite)
+        ok = DataExporter.write_with_format_selection(  # Multi-backend write: CSV by default, SQLite if configured
+            rows,
+            filename,
+            fieldnames=self._SNAPSHOT_FIELDS,
+        )
+        if ok:  # The export succeeded
+            print(f"[+] Scan snapshot of {len(rows)} RADIUS WLAN(s) saved to data/{filename}")  # Show the location
+            logging.info("Scan snapshot written to data/%s (%s rows)", filename, len(rows))  # After-action log
+        else:  # The export failed (permissions, disk, or backend error)
+            print("[!] Failed to save scan snapshot (see log for details)")  # Inform the operator of the failure
+            logging.error("Failed to write RADIUS WLAN scan snapshot to %s", filename)  # Log the failure
+
+    def _build_snapshot_row(self, wlan: dict[str, Any], scan_timestamp: str) -> dict[str, Any]:
+        """Flatten one RADIUS WLAN into an examinable snapshot row with value-presence flags."""
+        radsec, auth = wlan.get("radsec", {}), wlan.get("auth", {})  # Sub-configs (each may be missing/non-dict)
+        return {  # One flat, examinable row per RADIUS WLAN
+            "scan_timestamp": scan_timestamp,  # When this scan ran (identical for every row in the run)
+            "org_id": self.org_id,  # Organization the WLANs were pulled from
+            "ssid": wlan.get("ssid", ""),  # Human-readable network name
+            "wlan_id": wlan.get("id", ""),  # Stable WLAN UUID
+            "compliance_status": wlan.get("_compliance_status", ""),  # COMPLIANT/NEEDS_UPDATE from the filter step
+            "inheritance_level": wlan.get("_inheritance_level", ""),  # template vs org (from _add_inheritance_metadata)
+            "inheritance_source": wlan.get("_inheritance_source", ""),  # Where the WLAN is defined
+            "auth_type": auth.get("type", "") if isinstance(auth, dict) else "",  # eap/eap192/psk/etc.
+            "num_auth_servers": len(wlan.get("auth_servers", []) or []),  # How many RADIUS servers are configured
+            "radsec_enabled": radsec.get("enabled", False) if isinstance(radsec, dict) else False,  # RadSec on/off
+            "auth_servers_timeout": wlan.get("auth_servers_timeout", 5),  # Actual value (5 = the check's own default)
+            "auth_servers_timeout_present": "auth_servers_timeout" in wlan,  # True => real value; False => defaulted
+            "auth_servers_retries": wlan.get("auth_servers_retries", 2),  # Actual value (2 = the check's own default)
+            "auth_servers_retries_present": "auth_servers_retries" in wlan,  # True => real value; False => defaulted
+            "fast_dot1x_timers": wlan.get("fast_dot1x_timers", False),  # Actual value (False = the check's own default)
+            "fast_dot1x_timers_present": "fast_dot1x_timers" in wlan,  # True => real value; False => defaulted
+            "target_timeout": self.target_timeout,  # Target timeout this run compared against
+            "target_retries": self.target_retries,  # Target retries this run compared against
+            "target_fast_dot1x": self.target_fast_dot1x,  # Target fast-timer flag this run compared against
+            "enabled": wlan.get("enabled", ""),  # Whether the WLAN itself is enabled
+        }
+
     def _export_audit_trail(self) -> None:
         """Export change records to CSV in data/ directory."""
         if not self.change_records:  # No changes were recorded this run
@@ -20815,6 +20890,8 @@ class BulkRadiusWLANConfigManager:
             return  # Cannot proceed without WLAN data
 
         self._filter_radius_wlans()  # Split WLANs into selectable vs already-compliant buckets
+
+        self._export_scan_snapshot()  # Persist the pulled settings so they can be examined after the run
 
         total_radius = len(self.radius_wlans) + len(self.compliant_wlans)  # Total RADIUS WLANs discovered
         if total_radius == 0:  # No RADIUS WLANs exist in the org
