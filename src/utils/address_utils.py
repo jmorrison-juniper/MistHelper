@@ -279,30 +279,40 @@ class AddressUtils:
         debug: bool = False,
     ) -> dict[str, Any]:
         """Enhanced address parsing using usaddress-scourgify with heuristic fallback."""
-        if normalize_address_record is None:
-            if debug:
+        if normalize_address_record is None:  # Optional dependency missing -> heuristic parser.
+            if debug:  # Trace the missing-dependency fallback when debugging.
                 logging.debug("USADDRESS_PARSE: usaddress-scourgify not available")
-            return AddressUtils._parse_components(address_string, debug=debug)
-        try:
-            if debug:
+            return AddressUtils._parse_components(address_string, debug=debug)  # Heuristic fallback path.
+        return AddressUtils._scourgify_parse(address_string, debug)  # Library-backed parse with fallback.
+
+    @staticmethod
+    def _scourgify_parse(address_string: str | None, debug: bool) -> dict[str, Any]:
+        """Parse via usaddress-scourgify, falling back to the heuristic parser on any error."""
+        try:  # Library parsing can raise on malformed input; fall back instead of failing.
+            if debug:  # Trace the parse attempt when debugging.
                 logging.debug("USADDRESS_PARSE: Attempting for: '%s'", address_string)
-            parsed = normalize_address_record(address_string)
-            result: dict[str, Any] = {
-                "address": parsed.get("address_line_1", ""),
-                "city": parsed.get("city", ""),
-                "state": parsed.get("state", ""),
-                "zip": parsed.get("postal_code", ""),
-                "country": "US",
-                "is_parseable": True,
-                "parse_reason": "usaddress_success",
-                "original": address_string or "",
-            }
-            if parsed.get("address_line_2"):
-                parts = [parsed.get("address_line_1", ""), parsed.get("address_line_2", "")]
-                result["address"] = " ".join(p for p in parts if p)
-            return result
-        except Exception:
-            return AddressUtils._parse_components(address_string, debug=debug)
+            parsed = normalize_address_record(address_string)  # Normalize via the optional library.
+            return AddressUtils._build_scourgify_result(parsed, address_string)  # Shape into the result dict.
+        except Exception:  # nosec B110 - any library error degrades to the heuristic parser.
+            return AddressUtils._parse_components(address_string, debug=debug)  # Heuristic fallback path.
+
+    @staticmethod
+    def _build_scourgify_result(parsed: dict[str, Any], address_string: str | None) -> dict[str, Any]:
+        """Shape a usaddress-scourgify record into the standard parsed-address result dict."""
+        result: dict[str, Any] = {  # Standard parsed-address shape consumed by callers.
+            "address": parsed.get("address_line_1", ""),
+            "city": parsed.get("city", ""),
+            "state": parsed.get("state", ""),
+            "zip": parsed.get("postal_code", ""),
+            "country": "US",
+            "is_parseable": True,
+            "parse_reason": "usaddress_success",
+            "original": address_string or "",
+        }
+        if parsed.get("address_line_2"):  # Join the two address lines when a secondary line exists.
+            parts = [parsed.get("address_line_1", ""), parsed.get("address_line_2", "")]
+            result["address"] = " ".join(p for p in parts if p)  # Drop empty parts when joining.
+        return result  # Completed parsed-address record.
 
     @staticmethod
     def _calculate_similarity(str1: Any, str2: Any) -> float:
@@ -841,20 +851,29 @@ class NominatimValidator:
         source: str,
     ) -> float:
         """Calculate match score based on address component matching."""
-        total = len(address_parts)
-        if total == 0:
+        total = len(address_parts)  # Number of address parts to score against the display name.
+        if total == 0:  # Avoid division by zero when there are no parts.
             return 0.0
-        score = 0.0
-        lower_display = display_name.lower()
-        for part in address_parts:
-            clean = part.lower().strip()
-            if len(clean) <= 2:
-                continue
-            if clean in lower_display:
-                score += 1.0
-            elif any(w in lower_display for w in clean.split() if len(w) > 2):
-                score += 0.5
-        return score / total
+        lower_display = display_name.lower()  # Lowercase once for case-insensitive matching.
+        score = sum(self._part_match_score(part, lower_display) for part in address_parts)  # Per-part scores.
+        return score / total  # Average match score across all parts.
+
+    @staticmethod
+    def _part_match_score(part: str, lower_display: str) -> float:
+        """Score one address part against the lowercased geocoder display name."""
+        clean = part.lower().strip()  # Normalize the part for comparison.
+        if len(clean) <= 2:  # Ignore trivially short tokens (e.g., directionals/abbreviations).
+            return 0.0
+        if clean in lower_display:  # Full-token substring match scores highest.
+            return 1.0
+        if NominatimValidator._has_significant_word(clean, lower_display):  # Partial word match scores half.
+            return 0.5
+        return 0.0  # No match for this part.
+
+    @staticmethod
+    def _has_significant_word(clean: str, lower_display: str) -> bool:
+        """Return True when any 3+ character word of ``clean`` appears in the display name."""
+        return any(w in lower_display for w in clean.split() if len(w) > 2)  # Skip short/noise words.
 
     def _calculate_quality_boost(
         self,
@@ -862,23 +881,32 @@ class NominatimValidator:
         source: str,
     ) -> float:
         """Calculate quality boost from place type and address details."""
-        boost = 0.0
-        place_type = result.get("type", "").lower()
-        place_class = result.get("class", "").lower()
-        if place_type in self.HIGH_QUALITY_TYPES:
-            boost += 0.3
-        elif place_type in self.MEDIUM_QUALITY_TYPES:
-            boost += 0.2
-        elif place_class in self.QUALITY_CLASSES:
-            boost += 0.1
-        details = result.get("address", {})
-        if details:
-            count = len([v for v in details.values() if v])
-            if count >= 5:
-                boost += 0.2
-            elif count >= 3:
-                boost += 0.1
-        return boost
+        return self._place_type_boost(result) + self._address_detail_boost(result)  # Sum the two boost sources.
+
+    def _place_type_boost(self, result: dict[str, Any]) -> float:
+        """Return the geocode-quality boost implied by the place type/class tier."""
+        place_type = result.get("type", "").lower()  # Normalized OSM place type.
+        place_class = result.get("class", "").lower()  # Normalized OSM place class.
+        if place_type in self.HIGH_QUALITY_TYPES:  # Building/POI-level types are most precise.
+            return 0.3
+        if place_type in self.MEDIUM_QUALITY_TYPES:  # Street/area types are moderately precise.
+            return 0.2
+        if place_class in self.QUALITY_CLASSES:  # Fall back to a class-tier boost when the type is unranked.
+            return 0.1
+        return 0.0  # Unranked place -> no type boost.
+
+    @staticmethod
+    def _address_detail_boost(result: dict[str, Any]) -> float:
+        """Return the boost implied by how many address detail fields are populated."""
+        details = result.get("address", {})  # Structured address-component dict from the geocoder.
+        if not details:  # No structured details -> no boost.
+            return 0.0
+        count = sum(map(bool, details.values()))  # Count populated (truthy) detail fields without a branch.
+        if count >= 5:  # Rich detail set -> strong boost.
+            return 0.2
+        if count >= 3:  # Moderate detail set -> small boost.
+            return 0.1
+        return 0.0  # Sparse details -> no boost.
 
     def _calculate_confidence(
         self,
