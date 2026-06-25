@@ -1883,82 +1883,153 @@ def _rank_candidates(
     return candidates
 
 
-def _provision_server(base_url: str, label: str) -> dict | None:
-    """Smart auto-provisioning: pick the highest-quality model that fits 100 %
-    in the server's VRAM while meeting our context-window requirements.
+class ServerProvisioner:
+    """Auto-provision the best-fitting Ollama model on one server across five tiers.
 
-    Selection priority (highest to lowest):
+    Decomposes the former ``_provision_server`` (CC=24) into small, single-purpose
+    methods (each CC <= 5) per the repo 5-Item Rule. Selection priority, highest to
+    lowest:
       1. Already loaded + 100 % GPU  (zero cost)
       2. On disk + fits VRAM         (fast load, no download)
       3. Not on disk + fits VRAM     (needs pull -- expensive)
-      4. CPU fallback                (last resort)
+      4. Best on-disk even < 100 % GPU
+      5. CPU fallback                (last resort)
     """
-    available = _get_server_models(base_url)
-    if available is None:
-        logger.error("[%s] Server unreachable at %s", label, base_url)
-        return None
-    logger.info("[%s] Available models on disk: %s", label, available or "(none)")
 
-    # ---- Tier 1: reuse whatever is already loaded and fits well ----
-    ps_data = _ollama_api_call(base_url, "/api/ps")
-    vram_gb = _detect_server_vram_gb(base_url, label)
+    # Minimum GPU placement (percent) a model must reach to win the fast on-disk / pull tiers.
+    STRONG_GPU_PERCENT = 95  # Below this we defer to a later, lower-quality tier.
 
-    if ps_data:
-        for loaded in ps_data.get("models", []):
-            loaded_name = loaded.get("name", "")
-            size = loaded.get("size", 0)
-            size_vram = loaded.get("size_vram", 0)
-            gpu_pct = round(size_vram / size * 100) if size > 0 else 0
-            if gpu_pct >= 100:
-                logger.info(
-                    "[%s] Reusing already-loaded %s (100%% GPU, zero cost)",
-                    label, loaded_name,
-                )
-                return {
-                    "backend": "ollama",
-                    "base_url": base_url,
-                    "model": loaded_name,
-                    "api_key": "ollama",
-                    "gpu_percent": gpu_pct,
-                }
+    def __init__(self, base_url: str, label: str) -> None:
+        """Capture the target server URL and its log label."""
+        self.base_url = base_url  # Ollama v1 API base URL for this server.
+        self.label = label  # Human-readable server label used in every log line.
+        self._available: set[str] = set()  # Models on disk; populated in provision().
+        self._vram_gb: float = 0.0  # Detected GPU VRAM in GB; populated in provision().
+        self._candidates: list[dict] = []  # VRAM-fitting ranked candidates; populated in provision().
 
-    # ---- Build ranked candidate list filtered by VRAM ----
-    candidates = _rank_candidates(available, vram_gb, label)
-    if candidates:
-        logger.info(
-            "[%s] %d candidate models (VRAM=%.1f GB): %s",
-            label, len(candidates), vram_gb,
-            ", ".join(c["name"] for c in candidates),
+    def provision(self) -> dict | None:
+        """Try each provisioning tier in priority order; return the first usable config."""
+        available = _get_server_models(self.base_url)  # Query the on-disk model set (None == unreachable).
+        if available is None:  # The server did not answer the model-list call.
+            logger.error("[%s] Server unreachable at %s", self.label, self.base_url)  # Record the outage.
+            return None  # Cannot provision an unreachable server.
+        logger.info("[%s] Available models on disk: %s", self.label, available or "(none)")  # Log inventory.
+        self._available = available  # Cache for the tier methods to share.
+        self._vram_gb = _detect_server_vram_gb(self.base_url, self.label)  # Detect VRAM once up front.
+        self._candidates = self._ranked_candidates()  # Build the VRAM-filtered candidate list once.
+        for tier in self._tier_methods():  # Walk the five strategies in priority order.
+            config = tier()  # Each tier returns a ready backend config or None.
+            if config:  # First tier that yields a usable model wins.
+                return config  # Stop at the highest-priority success.
+        return None  # No tier could provision a model on this server.
+
+    def _tier_methods(self) -> tuple:
+        """Return the five tier callables in priority order (no args; they share instance state)."""
+        return (  # Ordered highest-quality/cheapest first.
+            self._tier_reuse_loaded,  # Tier 1: reuse a 100% GPU model already in memory.
+            self._tier_on_disk,  # Tier 2: load an on-disk model that lands strongly on GPU.
+            self._tier_pull,  # Tier 3: pull a missing model that lands strongly on GPU.
+            self._tier_best_on_disk,  # Tier 4: accept the best on-disk model at any GPU level.
+            self._tier_cpu_fallback,  # Tier 5: small CPU-only model as a last resort.
         )
 
-    # ---- Tier 2: on-disk candidates (fast load, no download) ----
-    on_disk = [c for c in candidates if c["on_disk"]]
-    for candidate in on_disk:
-        match = _find_matching_model(candidate["name"], available)
-        if match:
-            config = _try_model_on_server(base_url, match, label)
-            if config and config.get("gpu_percent", 0) >= 95:
-                return config
+    def _ranked_candidates(self) -> list[dict]:
+        """Rank VRAM-fitting candidate models and log the shortlist."""
+        candidates = _rank_candidates(self._available, self._vram_gb, self.label)  # Filter+rank by VRAM fit.
+        if candidates:  # Only log when at least one model fits.
+            logger.info(  # Surface the shortlist for operators auditing model selection.
+                "[%s] %d candidate models (VRAM=%.1f GB): %s",
+                self.label,
+                len(candidates),
+                self._vram_gb,
+                ", ".join(c["name"] for c in candidates),
+            )
+        return candidates  # Hand the ranked list back to provision().
 
-    # ---- Tier 3: pull candidates not on disk ----
-    to_pull = [c for c in candidates if not c["on_disk"]]
-    for candidate in to_pull:
-        if not _pull_model_on_server(base_url, candidate["name"], label):
-            continue
-        config = _try_model_on_server(base_url, candidate["name"], label)
-        if config and config.get("gpu_percent", 0) >= 95:
-            return config
+    def _tier_reuse_loaded(self) -> dict | None:
+        """Tier 1: reuse a model already loaded at 100 % GPU (zero cost)."""
+        ps_data = _ollama_api_call(self.base_url, "/api/ps")  # Ask which models are currently loaded.
+        if not ps_data:  # No running-model data returned.
+            return None  # Nothing to reuse.
+        for loaded in ps_data.get("models", []):  # Inspect each currently-loaded model.
+            config = self._config_if_full_gpu(loaded)  # Accept only fully-GPU-resident models.
+            if config:  # First 100% GPU model wins this tier.
+                return config  # Reuse it at zero load cost.
+        return None  # No loaded model sits entirely in GPU.
 
-    # ---- Tier 4: best on-disk model even if GPU < 100 % ----
-    for candidate in on_disk:
-        match = _find_matching_model(candidate["name"], available)
-        if match:
-            config = _try_model_on_server(base_url, match, label)
-            if config:
-                return config
+    def _config_if_full_gpu(self, loaded: dict) -> dict | None:
+        """Return a config for a loaded model only when it sits 100 % in GPU VRAM."""
+        name = loaded.get("name", "")  # Loaded model identifier.
+        size = loaded.get("size", 0)  # Total model size in bytes.
+        size_vram = loaded.get("size_vram", 0)  # Portion resident in GPU VRAM.
+        gpu_pct = round(size_vram / size * 100) if size > 0 else 0  # Percent on GPU (guard divide-by-zero).
+        if gpu_pct < 100:  # Any CPU spill disqualifies it from the zero-cost tier.
+            return None  # Defer to a later tier.
+        logger.info("[%s] Reusing already-loaded %s (100%% GPU, zero cost)", self.label, name)  # Log the reuse.
+        return self._config(name, gpu_pct)  # Build the standard backend config.
 
-    # ---- Tier 5: CPU fallback ----
-    return _try_cpu_fallback(base_url, label, available)
+    def _tier_on_disk(self) -> dict | None:
+        """Tier 2: load an on-disk candidate that lands >= 95 % on GPU (no download)."""
+        for candidate in self._on_disk_candidates():  # Walk only models already on disk.
+            config = self._try_disk_candidate(candidate, self.STRONG_GPU_PERCENT)  # Require strong placement.
+            if config:  # First strongly-placed on-disk model wins.
+                return config  # Use it; no download was needed.
+        return None  # No on-disk model met the strong-GPU bar.
+
+    def _tier_pull(self) -> dict | None:
+        """Tier 3: pull a not-on-disk candidate, then accept it at >= 95 % GPU."""
+        for candidate in self._candidates:  # Consider every ranked candidate.
+            if candidate["on_disk"]:  # On-disk ones were already tried in tier 2.
+                continue  # Skip to the next candidate.
+            config = self._try_pull_candidate(candidate)  # Download, load, and threshold-check it.
+            if config:  # Freshly-pulled model met the strong-GPU bar.
+                return config  # Use it.
+        return None  # No pulled model qualified.
+
+    def _try_pull_candidate(self, candidate: dict) -> dict | None:
+        """Download a candidate and accept it only at >= 95 % GPU placement."""
+        if not _pull_model_on_server(self.base_url, candidate["name"], self.label):  # Attempt the download.
+            return None  # Pull failed; caller moves on.
+        config = _try_model_on_server(self.base_url, candidate["name"], self.label)  # Load+health-check it.
+        if config and config.get("gpu_percent", 0) >= self.STRONG_GPU_PERCENT:  # Require strong placement.
+            return config  # Freshly-pulled model is good enough.
+        return None  # Placement too weak to accept.
+
+    def _tier_best_on_disk(self) -> dict | None:
+        """Tier 4: accept the best on-disk candidate even below 100 % GPU."""
+        for candidate in self._on_disk_candidates():  # Re-walk on-disk models.
+            config = self._try_disk_candidate(candidate, 0)  # Any working placement is acceptable now.
+            if config:  # First model that loads at all wins.
+                return config  # Better a partial-GPU model than none.
+        return None  # No on-disk model could be loaded.
+
+    def _tier_cpu_fallback(self) -> dict | None:
+        """Tier 5: last resort -- a small CPU-friendly model."""
+        return _try_cpu_fallback(self.base_url, self.label, self._available)  # Delegate to the CPU strategy.
+
+    def _on_disk_candidates(self) -> list[dict]:
+        """Return only the ranked candidates that are already present on disk."""
+        return [c for c in self._candidates if c["on_disk"]]  # Filter the shared candidate list.
+
+    def _try_disk_candidate(self, candidate: dict, min_gpu: int) -> dict | None:
+        """Try a matched on-disk model, accepting it when GPU placement meets ``min_gpu``."""
+        match = _find_matching_model(candidate["name"], self._available)  # Resolve to an installed model name.
+        if not match:  # No installed model matches the candidate.
+            return None  # Cannot use this candidate.
+        config = _try_model_on_server(self.base_url, match, self.label)  # Load+health-check the matched model.
+        if config and config.get("gpu_percent", 0) >= min_gpu:  # Placement clears the caller's threshold.
+            return config  # Accept this model.
+        return None  # Placement too weak for the current tier.
+
+    def _config(self, model: str, gpu_percent: int) -> dict:
+        """Build the standard Ollama backend config dict for a chosen model."""
+        return {  # Shape consumed by the rest of the analyzer's backend layer.
+            "backend": "ollama",  # All provisioned servers are Ollama backends.
+            "base_url": self.base_url,  # Where to reach this server.
+            "model": model,  # The selected model identifier.
+            "api_key": "ollama",  # Ollama ignores the key but the client requires one.
+            "gpu_percent": gpu_percent,  # Record placement quality for downstream logging.
+        }
 
 
 def _find_matching_model(preferred: str, available: set[str]) -> str | None:
@@ -2030,7 +2101,7 @@ def _build_server_configs(server_list: str) -> list[dict]:
             entry = f"{entry}:11434"
         base_url = f"http://{entry}/v1"
         logger.info("--- Provisioning server: %s ---", entry)
-        config = _provision_server(base_url, label=entry)
+        config = ServerProvisioner(base_url, label=entry).provision()  # Provision via the tier-based class.
         if config:
             configs.append(config)
         else:
@@ -2226,7 +2297,7 @@ class OllamaFleetManager:
                 if ":" not in host:
                     host = f"{host}:{OLLAMA_PORT}"
                 base_url = f"http://{host}/v1"
-                future = pool.submit(_provision_server, base_url, label=host)
+                future = pool.submit(ServerProvisioner(base_url, label=host).provision)  # Submit bound method.
                 futures[future] = host
 
             for future in as_completed(futures):
