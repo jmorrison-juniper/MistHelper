@@ -23,6 +23,7 @@ from src.ssh.config.validators import (  # Shared input validators
     validate_username,
 )
 from src.ssh.runtime.interactive_mode import InteractiveMode  # Concrete REPL implementation
+from src.utils.input_utils import InputUtils  # EOF-safe input wrapper (issue #452).
 
 
 def _validate_timeout(timeout: int) -> bool:
@@ -195,7 +196,7 @@ class AppRunner:
     def _prompt_for_commands(env_cmds: list[str], csv_cmds: list[str]) -> list[str]:
         """Interactive command-source picker used when no other source supplied commands."""
         logging.info("Prompting user for SSH command(s) at runtime")  # Before-action log
-        command = input("!? Enter command to execute: ").strip()  # Simple prompt (env/csv already empty here)
+        command = InputUtils.safe_input("!? Enter command to execute: ", context="ssh_app_runner_command")  # EOF-safe.
         if not command:  # Hard failure: user provided nothing
             print("X  No commands specified")
             logging.debug("User declined to enter any command at the interactive prompt")

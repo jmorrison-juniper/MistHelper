@@ -563,12 +563,11 @@ class WanVpnBuilder:
 
     @staticmethod
     def _fallback_input(prompt: str, **_kwargs: Any) -> str:
-        """Fallback input when safe_input is not provided."""
-        try:
-            return input(prompt).strip()
-        except EOFError:
-            logging.info("EOF detected in wan_vpn_builder")
-            return ""
-        except KeyboardInterrupt:
-            print("\n  Interrupted.")
-            return ""
+        """Fallback input when safe_input is not provided.
+
+        Delegates to the canonical EOF-safe wrapper instead of a second hand-rolled
+        input() (issue #452: clears CONV-INPUT, identical degrade-to-empty behavior).
+        """
+        from src.utils.input_utils import InputUtils  # Local import avoids any import cycle at module load.
+
+        return InputUtils.safe_input(prompt, context="wan_vpn_builder_fallback")  # EOF-safe; '' on EOF/interrupt.

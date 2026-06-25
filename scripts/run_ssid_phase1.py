@@ -1,6 +1,9 @@
 """Small runner to exercise Phase 1 locally without the full CLI."""
+
 import argparse
+
 from src.ssid_consolidation.manager import SSIDTemplateConsolidationManager
+from src.utils.input_utils import InputUtils  # EOF-safe input wrapper (issue #452).
 
 
 def main():
@@ -14,7 +17,7 @@ def main():
 
         target = os.environ.get("MIST_TARGET_SSID")
     if not target:
-        target = input("Target SSID [none]: ")
+        target = InputUtils.safe_input("Target SSID [none]: ", context="run_ssid_phase1_target")  # EOF-safe read.
         if not target:
             print("A target SSID is required.")
             return

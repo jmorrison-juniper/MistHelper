@@ -22,6 +22,8 @@ from typing import Any
 from dotenv import load_dotenv
 from tqdm import tqdm
 
+from src.utils.input_utils import InputUtils  # EOF-safe input wrapper (issue #452).
+
 
 class AddressComparisonCounters:
     """Track comprehensive metrics for address comparison operations."""
@@ -298,7 +300,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         """Get and validate user's CSV file selection."""
         try:
             prompt = f"\nEnter the index (0-{len(csv_files) - 1})" " of the CSV file to compare against: "
-            user_input = input(prompt).strip()
+            user_input = InputUtils.safe_input(prompt, context="csv_comparator_index")  # EOF-safe read + strip.
             selected_index = int(user_input)
             if selected_index < 0 or selected_index >= len(csv_files):
                 print(" Invalid index selected.")

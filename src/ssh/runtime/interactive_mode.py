@@ -16,6 +16,7 @@ from src.ssh.config.validators import (  # Shared input validators
     validate_username,
 )
 from src.ssh.connection.connector import SshConnector  # Exposes _validate_port classmethod
+from src.utils.input_utils import InputUtils  # EOF-safe input wrapper (issue #452: replace raw input()).
 
 
 class InteractiveMode:
@@ -26,7 +27,9 @@ class InteractiveMode:
         """Loop until the user enters a syntactically valid hostname/IP."""
         logging.info("Prompting user for SSH hostname")  # Before-action log
         while True:  # Validation loop
-            hostname = input("- Enter hostname or IP address: ").strip()  # Read raw input
+            hostname = InputUtils.safe_input(
+                "- Enter hostname or IP address: ", context="ssh_hostname"
+            )  # EOF-safe read.
             if not hostname:  # Empty -> reprompt
                 print("X  Hostname is required")
                 continue
@@ -41,7 +44,7 @@ class InteractiveMode:
         """Loop until the user enters a syntactically valid username."""
         logging.info("Prompting user for SSH username")  # Before-action log
         while True:  # Validation loop
-            username = input("X  Enter username: ").strip()  # Read raw input
+            username = InputUtils.safe_input("X  Enter username: ", context="ssh_username")  # EOF-safe read.
             if not username:  # Empty -> reprompt
                 print("X  Username is required")
                 continue
@@ -65,7 +68,9 @@ class InteractiveMode:
         logging.info("Prompting user for SSH port")  # Before-action log
         while True:  # Validation loop
             try:  # Catch non-numeric input
-                port_input = input(">> Enter SSH port (default 22): ").strip()
+                port_input = InputUtils.safe_input(
+                    ">> Enter SSH port (default 22): ", context="ssh_port"
+                )  # EOF-safe read.
                 if not port_input:  # Default port path
                     logging.debug("Port defaulted to 22")
                     return 22
@@ -84,7 +89,9 @@ class InteractiveMode:
         logging.info("Prompting user for SSH timeout")  # Before-action log
         while True:  # Validation loop
             try:  # Catch non-numeric input
-                timeout_input = input("- Enter timeout in seconds (default 30): ").strip()
+                timeout_input = InputUtils.safe_input(
+                    "- Enter timeout in seconds (default 30): ", context="ssh_timeout"
+                )  # EOF-safe.
                 if not timeout_input:  # Default timeout path
                     logging.debug("Timeout defaulted to 30")
                     return 30
@@ -101,9 +108,10 @@ class InteractiveMode:
     def _prompt_shell_mode() -> bool:
         """Prompt whether to use interactive shell mode (y/N)."""
         logging.info("Prompting user for shell-mode preference")  # Before-action log
-        shell_mode = (
-            input("X  Use interactive shell mode? (y/N - recommended for network devices): ").strip().lower()
-        )  # Read raw input
+        shell_mode = InputUtils.safe_input(
+            "X  Use interactive shell mode? (y/N - recommended for network devices): ",
+            context="ssh_shell_mode",
+        ).lower()  # EOF-safe read, lowercased for affirmative comparison.
         use_shell = shell_mode in ["y", "yes", "true", "1"]  # Treat affirmative answers as true
         logging.debug("Shell mode selected: %s", use_shell)  # After-action log
         return use_shell
@@ -113,7 +121,7 @@ class InteractiveMode:
         """Loop until the user enters a syntactically valid command."""
         logging.info("Prompting user for command to execute")  # Before-action log
         while True:  # Validation loop
-            command = input("!? Enter command to execute: ").strip()  # Read raw input
+            command = InputUtils.safe_input("!? Enter command to execute: ", context="ssh_command")  # EOF-safe read.
             if not command:  # Empty -> reprompt
                 print("X  Command is required")
                 continue

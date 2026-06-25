@@ -418,12 +418,12 @@ class WanHubGroupNumberManager:
 
     @staticmethod
     def _fallback_input(prompt: str, **_kwargs: Any) -> str:
-        """Fallback input when safe_input is not provided."""
-        try:
-            return input(prompt).strip()
-        except EOFError:
-            logging.info("EOF detected in wan_hub_group_manager")
-            return ""
-        except KeyboardInterrupt:
-            print("\n  Interrupted.")
-            return ""
+        """Fallback input when safe_input is not provided.
+
+        Delegates to the canonical EOF-safe wrapper so this path is not a second
+        hand-rolled input() implementation (issue #452: clears CONV-INPUT, keeps
+        identical EOF/interrupt-degrades-to-empty-string behavior).
+        """
+        from src.utils.input_utils import InputUtils  # Local import avoids any import cycle at module load.
+
+        return InputUtils.safe_input(prompt, context="wan_hub_group_fallback")  # EOF-safe; returns '' on EOF.
