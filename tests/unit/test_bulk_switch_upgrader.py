@@ -12,9 +12,7 @@ import sys
 import tempfile
 import time
 from typing import Any
-from unittest.mock import MagicMock, patch
-
-_ORIGINAL_INPUT = builtins.input  # Real builtin captured before any @patch swaps it.
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -67,10 +65,10 @@ def mock_safe_input() -> MagicMock:
     """
 
     def _forward(prompt: str = "", *_args: Any, **_kwargs: Any) -> str:
-        active = builtins.input  # Current builtin; tests swap this via @patch.
-        if active is _ORIGINAL_INPUT:  # Unpatched -> safe default, never blocks.
-            return "UPGRADE SWITCHES"  # Matches the prior MagicMock return value.
-        return str(active(prompt))  # Driven by the test's patched input sequence.
+        active = builtins.input  # Current builtin; a test @patch installs a Mock here.
+        if isinstance(active, Mock):  # Patched -> drive the loop from the test's sequence/value.
+            return str(active(prompt))  # Honor return_value / side_effect provided by the test.
+        return "UPGRADE SWITCHES"  # Unpatched -> safe constant default; never touches real stdin.
 
     return MagicMock(side_effect=_forward)  # Records calls while forwarding input.
 
