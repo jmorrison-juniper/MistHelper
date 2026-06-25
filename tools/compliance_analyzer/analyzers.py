@@ -502,6 +502,10 @@ class ArchitecturalAnalyzer:
         ast.JoinedStr,
     )
 
+    # Output-sink call targets: forwarding a parameter to logging/printing is an output
+    # operation, not delegation to a collaborator object that the guidelines prohibit.
+    _OUTPUT_SINK_RECEIVERS = ("logging", "logger", "log")
+
     def _is_delegation(self, function: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         """Return True when a function only forwards to another call."""
         if function.name.startswith("__") and function.name.endswith("__"):  # Dunder forwarders are not wrappers.
@@ -514,9 +518,20 @@ class ArchitecturalAnalyzer:
             return False  # Not a delegation to a named callable.
         if isinstance(call.func, ast.Attribute) and isinstance(call.func.value, self._LITERAL_RECEIVERS):
             return False  # A method on a literal (e.g., {...}.get(x)) is a computation, not delegation.
+        if self._is_output_sink_call(call):  # logging.info(...) / logger.debug(...) / print(...) are output ops.
+            return False  # Emitting output is not architectural delegation to a collaborator.
         if self._called_name(call)[:1].isupper():  # CapWords target is a constructor/factory, not a wrapper.
             return False  # Building and returning an object is not pass-through delegation.
         return self._forwards_parameters(function, call)  # Confirm it forwards its own parameters.
+
+    @classmethod
+    def _is_output_sink_call(cls, call: ast.Call) -> bool:
+        """Return True when a call writes to a logging/print output sink rather than a collaborator."""
+        if isinstance(call.func, ast.Name):  # Bare-name call such as print(...).
+            return call.func.id == "print"  # Printing is output, not delegation.
+        if isinstance(call.func, ast.Attribute) and isinstance(call.func.value, ast.Name):  # name.attr(...).
+            return call.func.value.id in cls._OUTPUT_SINK_RECEIVERS  # logging./logger./log. emit output.
+        return False  # Any other target may be a genuine collaborator delegation.
 
     @staticmethod
     def _called_name(call: ast.Call) -> str:

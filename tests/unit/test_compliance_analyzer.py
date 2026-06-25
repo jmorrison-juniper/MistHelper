@@ -255,3 +255,38 @@ def test_arch_delegate_ignores_literal_receiver_calls(tmp_path: Path) -> None:
     flagged = {v.symbol for v in report.violations if v.rule_id == "ARCH-DELEGATE"}  # Collect delegation findings.
     assert "icon_for_type" not in flagged  # Lookup on a dict literal is a computation, not delegation.
     assert "fetch" in flagged  # Forwarding to a collaborator object remains a flagged pass-through.
+
+
+# Forwarding a parameter into a logging/print sink is an output operation, not collaborator delegation.
+ARCH_DELEGATE_OUTPUT_SINK_SOURCE = '''\
+"""Sample exercising ARCH-DELEGATE output-sink exemption."""
+
+import logging
+
+
+class Probe:  # Container for the sampled methods.
+    """Methods whose single call writes output or forwards to a collaborator."""
+
+    def __init__(self, impl: object) -> None:  # Store a collaborator for the genuine delegate below.
+        self._impl = impl  # Collaborator object referenced by the real delegate.
+
+    def log_loop_stop(self, iteration: int) -> None:  # logging.info(...) is an output operation.
+        logging.info("Capture loop stopped after %s iterations", iteration)  # Output; must NOT be flagged.
+
+    def announce(self, message: str) -> None:  # print(...) is an output operation.
+        print(message)  # Output; must NOT be flagged.
+
+    def fetch(self, site_id: str) -> object:  # Forwards to a collaborator -> genuine delegation.
+        return self._impl.fetch(site_id)  # Pass-through to a collaborator; must be flagged.
+'''
+
+
+def test_arch_delegate_ignores_output_sink_calls(tmp_path: Path) -> None:
+    """ARCH-DELEGATE ignores logging/print sinks but still flags collaborator delegation (issue #455)."""
+    target = tmp_path / "probe.py"  # Throwaway sample file.
+    target.write_text(ARCH_DELEGATE_OUTPUT_SINK_SOURCE, encoding="utf-8")  # Write the mixed sample.
+    report = ComplianceAnalyzer().analyze_file(target)  # Analyze it.
+    flagged = {v.symbol for v in report.violations if v.rule_id == "ARCH-DELEGATE"}  # Collect delegation findings.
+    assert "log_loop_stop" not in flagged  # logging.info(...) is output, not delegation.
+    assert "announce" not in flagged  # print(...) is output, not delegation.
+    assert "fetch" in flagged  # Forwarding to a collaborator object remains a flagged pass-through.

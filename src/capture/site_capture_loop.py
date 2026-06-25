@@ -27,7 +27,7 @@ class SiteCaptureLoopRunner:
                 loop_start = time.time()
                 print(f"\n{'=' * 60}\nLoop Iteration #{iteration}\n{'=' * 60}")
                 completed = self.manager._fetch_completed_pcaps(site_id, iteration)
-                self.manager._download_pending_pcaps(completed, download_folder)
+                self.manager._download_manager.download_pending_pcaps(completed, download_folder)
                 wait_time = self.manager._check_capture_readiness(last_capture_time, min_interval)
                 if wait_time == 0:
                     capture_time = self.manager._attempt_loop_capture(site_id, payload, iteration)
