@@ -4838,7 +4838,7 @@ class MapsManager:
         # viewer_callbacks.register_with(app)).
         # Wave-A: register the 5 trivial UI-toggle callbacks via the
         # extracted MapViewerCallbacks. This replaces the nested defs
-        # for toggle_layers and display_click_data (and three more below).
+        # for apply_layer_toggles and display_click_data (and three more below).
         # Waves B+C extend MapViewerCallbacks with 8 more callbacks
         # (zone/panel toggles, origin click, delete map, label updates,
         # zone actions). register_with(app) wires all 13 at once.

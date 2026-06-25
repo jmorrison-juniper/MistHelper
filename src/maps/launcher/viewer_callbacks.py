@@ -8,7 +8,7 @@ callback to its ``@app.callback`` decorator with byte-identical
 ``Input`` / ``Output`` / ``State`` signatures, ``prevent_initial_call``
 flags, and user-facing strings.
 
-Wave A scope: five trivial UI toggles (``toggle_layers``,
+Wave A scope: five trivial UI toggles (``apply_layer_toggles``,
 ``display_click_data``, ``toggle_origin_mode``,
 ``toggle_zone_name_input``, ``toggle_auto_refresh``).
 
@@ -55,27 +55,6 @@ class MapViewerCallbacks:
     # ------------------------------------------------------------------
     # Wave A callback bodies
     # ------------------------------------------------------------------
-
-    def toggle_layers(  # noqa: PLR0913 - signature mirrors original Dash callback
-        self,
-        infra_layers: Any,
-        beacon_layers: Any,
-        client_layers: Any,
-        device_layers: Any,
-        filter_layers: Any,
-        current_fig: Any,
-    ) -> Any:
-        """Apply checkbox-driven trace visibility toggles to the current figure."""
-        # Delegate visibility toggling to PlotlyMapCallbackManager which
-        # owns the layer-name -> trace mapping logic (extracted earlier).
-        return self._state.callback_manager.apply_layer_toggles(
-            current_fig=current_fig,  # Plotly figure dict from State input
-            infra_layers=infra_layers,  # Walls/wayfinding toggle values
-            beacon_layers=beacon_layers,  # Beacon overlay toggle values
-            client_layers=client_layers,  # Connected-client toggle values
-            device_layers=device_layers,  # AP/switch/gateway toggle values
-            filter_layers=filter_layers,  # Status filter toggle values
-        )
 
     def display_click_data(self, click_data: Any) -> Any:
         """Render a Dash details panel describing the most recently clicked trace point."""
@@ -2976,7 +2955,7 @@ class MapViewerCallbacks:
         )
 
         # --- Wave A ---------------------------------------------------
-        app.callback(  # toggle_layers
+        app.callback(  # PlotlyMapCallbackManager.apply_layer_toggles (registered directly, no adapter)
             Output("map-display", "figure"),  # Output: replaces the figure
             [
                 Input("layer-toggle", "value"),  # Walls/wayfinding checklist
@@ -2985,8 +2964,8 @@ class MapViewerCallbacks:
                 Input("device-toggle", "value"),  # AP/switch/gateway checklist
                 Input("filter-toggle", "value"),  # Status-filter checklist
             ],
-            State("map-display", "figure"),  # Current figure passed in for mutation
-        )(self.toggle_layers)
+            State("map-display", "figure"),  # Current figure passed in last for mutation
+        )(self._state.callback_manager.apply_layer_toggles)
 
         app.callback(  # display_click_data
             Output("click-data", "children"),  # Output: details-panel children

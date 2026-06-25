@@ -64,7 +64,7 @@ class _FakeCallbackManager:
     """Minimal stand-in for PlotlyMapCallbackManager (records calls)."""
 
     def __init__(self) -> None:
-        self.toggle_calls: list[dict[str, Any]] = []  # Capture toggle_layers args
+        self.toggle_calls: list[dict[str, Any]] = []  # Capture apply_layer_toggles args
         self.click_calls: list[dict[str, Any]] = []  # Capture build_click_details args
 
     def apply_layer_toggles(self, **kwargs: Any) -> dict[str, Any]:
@@ -135,7 +135,7 @@ def test_register_with_wires_five_wave_a_callbacks() -> None:
     # The wave-A method names must all be present in the registered set
     bound_names = {record.bound_func.__name__ for record in app.registered}
     wave_a_names = {
-        "toggle_layers",
+        "apply_layer_toggles",
         "display_click_data",
         "toggle_origin_mode",
         "toggle_zone_name_input",
@@ -164,29 +164,6 @@ def test_register_with_prevents_initial_call_on_three_callbacks() -> None:
 # ---------------------------------------------------------------------------
 # MapViewerCallbacks: individual callback behavior
 # ---------------------------------------------------------------------------
-
-
-def test_toggle_layers_delegates_to_callback_manager() -> None:
-    """toggle_layers forwards all five layer inputs and current figure."""
-    manager = _FakeCallbackManager()  # Records the call
-    callbacks = MapViewerCallbacks(state=MapViewerState(callback_manager=manager))
-    fig = {"data": [], "layout": {}}  # Sentinel figure
-
-    result = callbacks.toggle_layers(
-        infra_layers=["walls"],
-        beacon_layers=[],
-        client_layers=["clients"],
-        device_layers=["aps"],
-        filter_layers=[],
-        current_fig=fig,
-    )
-
-    assert result == {"updated": True}  # Returned the manager's sentinel
-    assert len(manager.toggle_calls) == 1  # Called exactly once
-    captured = manager.toggle_calls[0]  # Inspect captured kwargs
-    assert captured["current_fig"] is fig  # Same figure object forwarded
-    assert captured["infra_layers"] == ["walls"]  # Forwarded by keyword
-    assert captured["device_layers"] == ["aps"]  # Forwarded by keyword
 
 
 def test_display_click_data_delegates_to_callback_manager() -> None:

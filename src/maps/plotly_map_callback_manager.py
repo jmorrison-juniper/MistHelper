@@ -41,14 +41,19 @@ class PlotlyMapCallbackManager:
 
     def apply_layer_toggles(
         self,
-        current_fig: dict[str, Any],
         infra_layers: list[str] | None,
         beacon_layers: list[str] | None,
         client_layers: list[str] | None,
         device_layers: list[str] | None,
         filter_layers: list[str] | None,
+        current_fig: dict[str, Any],
     ) -> dict[str, Any]:
-        """Apply user layer selections to traces and annotations."""
+        """Apply user layer selections to traces and annotations.
+
+        Parameter order matches the Dash callback convention (Input values first,
+        then the State figure last) so this method can be registered directly as a
+        Dash callback without an intermediate adapter.
+        """
         all_layers = (
             (infra_layers or [])
             + (beacon_layers or [])
