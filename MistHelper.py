@@ -15159,7 +15159,7 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
         time_series_records = []  # type: ignore[var-annotated]
 
         rt_field = metric_data.get("rt", "")  # Read the rt field.
-        if not (rt_field and isinstance(rt_field, str) and "," in rt_field):  # Not a CSV series.
+        if not InsightMetricsUtils._is_csv_string(rt_field):  # Not a CSV series.
             return time_series_records  # No time-series.
 
         timestamps = rt_field.split(",")  # Split the timestamps.
@@ -15167,22 +15167,43 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
 
         for field_name in time_series_fields:  # Walk each field.
             field_data = metric_data.get(field_name, "")  # Read the field.
-            if field_data and isinstance(field_data, str) and "," in field_data:  # CSV series present.
-                values = field_data.split(",")  # Split the values.
-                for index, (timestamp, value) in enumerate(zip(timestamps, values, strict=False)):
-                    if value and value != "None":  # Skip empty values.
-                        time_series_records.append(  # Collect the point.
-                            {
-                                "org_id": org_id,
-                                "metric_type": metric_type,
-                                "timestamp": timestamp.strip(),
-                                "value": value.strip(),
-                                "value_type": field_name,
-                                "sequence_order": index,
-                            }
-                        )
+            time_series_records.extend(  # Append this field's time-series points (empty when not a CSV series)
+                InsightMetricsUtils._field_time_series_points(field_name, field_data, timestamps, org_id, metric_type)
+            )
 
         return time_series_records  # Return the series.
+
+    @staticmethod
+    def _is_csv_string(value: Any) -> bool:  # Detect a non-empty comma-separated string
+        """Return True when value is a non-empty string containing at least one comma (a CSV series)."""
+        return bool(value and isinstance(value, str) and "," in value)  # Truthy + str + contains a comma
+
+    @staticmethod
+    def _field_time_series_points(
+        field_name: str,
+        field_data: Any,
+        timestamps: list[str],
+        org_id: str,
+        metric_type: str,
+    ) -> list[dict]:  # type: ignore[type-arg]
+        """Pair one CSV field's values with the timestamps into time-series point records (skipping empties)."""
+        if not InsightMetricsUtils._is_csv_string(field_data):  # Not a CSV series.
+            return []  # No points for this field.
+        values = field_data.split(",")  # Split the values.
+        points = []  # Collect this field's points.
+        for index, (timestamp, value) in enumerate(zip(timestamps, values, strict=False)):  # Pair timestamp+value
+            if value and value != "None":  # Skip empty/placeholder values.
+                points.append(  # Collect the point.
+                    {
+                        "org_id": org_id,
+                        "metric_type": metric_type,
+                        "timestamp": timestamp.strip(),
+                        "value": value.strip(),
+                        "value_type": field_name,
+                        "sequence_order": index,
+                    }
+                )
+        return points  # Time-series points for this field.
 
     @staticmethod
     def _extract_results(metric_data: dict, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
@@ -15217,39 +15238,68 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
     @staticmethod
     def _extract_sites_data(metric_data: dict, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
         """Extract sites data from metric."""
-        sites_records = []  # Collect site rows.
-
         sites_data = metric_data.get("sites_data", [])  # Read sites data.
+        sites_records = InsightMetricsUtils._extract_sites_list(sites_data, org_id, metric_type)  # List-payload rows
+        InsightMetricsUtils._merge_keyed_sites(metric_data, org_id, metric_type, sites_records)  # Merge sites_data_*
+        return sites_records  # Return the sites.
+
+    @staticmethod
+    def _extract_sites_list(sites_data: Any, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
+        """Build site rows from a list-payload sites_data, tagging each dict site with org_id/metric_type."""
+        sites_records = []  # Collect site rows.
         if isinstance(sites_data, list):  # List payload.
             for site_data in sites_data:  # Walk sites.
                 if isinstance(site_data, dict):  # Dict site.
                     site_record = {"org_id": org_id, "metric_type": metric_type}  # Tag the site.
                     site_record.update(site_data)  # Merge the data.
                     sites_records.append(site_record)  # Collect the row.
+        return sites_records  # Site rows from the list payload.
 
+    @staticmethod
+    def _merge_keyed_sites(
+        metric_data: dict,  # type: ignore[type-arg]
+        org_id: str,
+        metric_type: str,
+        sites_records: list[dict],  # type: ignore[type-arg]
+    ) -> None:
+        """Merge flattened sites_data_* keys into sites_records (find-or-create each site by index)."""
         for key, value in metric_data.items():  # Walk metric fields.
-            if not (key.startswith("sites_data_") and "_" in key):  # Only sites_data_* keys.
-                continue
-
-            parts = key.split("_", 2)  # Split the key.
-            if len(parts) < 3:  # Too few parts.
+            parsed = InsightMetricsUtils._parse_keyed_site_field(key)  # (site_index, site_field) or None to skip
+            if parsed is None:  # Not a sites_data_* field.
                 continue  # Skip it.
+            site_index, site_field = parsed  # Unpack the parsed index/field.
+            site = InsightMetricsUtils._find_or_create_site(sites_records, site_index, org_id, metric_type)  # Find row
+            site[site_field] = value  # Set the field.
 
-            site_index = parts[2]  # Site index.
-            site_field = parts[3] if len(parts) > 3 else "value"  # Site field.
+    @staticmethod
+    def _parse_keyed_site_field(key: str) -> tuple[str, str] | None:  # Parse a sites_data_* flattened key
+        """Return (site_index, site_field) for a sites_data_* key, or None when the key is not a valid site field."""
+        if not (key.startswith("sites_data_") and "_" in key):  # Only sites_data_* keys.
+            return None  # Not a site field.
+        parts = key.split("_", 2)  # Split the key.
+        if len(parts) < 3:  # Too few parts.
+            return None  # Skip it.
+        site_index = parts[2]  # Site index.
+        site_field = parts[3] if len(parts) > 3 else "value"  # Site field (defaults to 'value').
+        return site_index, site_field  # Parsed index and field.
 
-            existing_site = next(  # Find existing site.
-                (s for s in sites_records if s.get("site_index") == site_index and s.get("metric_type") == metric_type),
-                None,
-            )
-
-            if existing_site is None:  # None yet.
-                existing_site = {"org_id": org_id, "metric_type": metric_type, "site_index": site_index}
-                sites_records.append(existing_site)  # Collect it.
-
-            existing_site[site_field] = value  # Set the field.
-
-        return sites_records  # Return the sites.
+    @staticmethod
+    def _find_or_create_site(
+        sites_records: list[dict],  # type: ignore[type-arg]
+        site_index: str,
+        org_id: str,
+        metric_type: str,
+    ) -> dict:  # type: ignore[type-arg]
+        """Return the existing site row matching site_index+metric_type, or create, append, and return a new one."""
+        existing_site = next(  # Find existing site.
+            (s for s in sites_records if s.get("site_index") == site_index and s.get("metric_type") == metric_type),
+            None,
+        )
+        if existing_site is not None:  # Found a matching row.
+            return existing_site  # Reuse it.
+        new_site = {"org_id": org_id, "metric_type": metric_type, "site_index": site_index}  # Start a new site.
+        sites_records.append(new_site)  # Collect it.
+        return new_site  # The newly created row.
 
 
 # NOTE: create_test_sites_from_csv moved to SiteConfigManager.create_test_sites_from_csv
