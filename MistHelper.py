@@ -2052,37 +2052,14 @@ class TimeUtils:
 
     @staticmethod
     def get_dynamic_lookback_hours(default_hours: int = 24, test_hours: int = 1) -> int:
-        """Return lookback hours adjusted for test mode.
+        """Return lookback hours adjusted for test mode (shrinks to test_hours under --test).
 
-        In normal operation we retain the full 24 hour (or caller provided) window.
-        When the global --test flag is present, we shrink the lookback to 1 hour to:
-          - Minimize API payload sizes / speed up systematic tests
-          - Still exercise recent-data code paths
-        The value is intentionally conservative (1h) to avoid missing fresh events while
-        keeping runtime low. If a caller passes a different default_hours (e.g., 12),
-        that value will be honored outside test mode.
-
-        Parameters
-        ----------
-        default_hours : int
-            Standard lookback window (typically 24).
-        test_hours : int
-            Reduced lookback for test mode (default 1 hour).
-
-        Returns
-        -------
-        int
-            Hours to use for lookback calculations.
+        Outside test mode the caller's default_hours window is honored. Both values are
+        clamped to a 1-hour minimum so a misconfiguration never yields a sub-hour window.
         """
         try:
-            if IS_TEST_MODE:  # Test runs use a shortened lookback to keep API calls cheap
-                # Boundaries & safety: never return less than 1 hour
-                if test_hours < 1:  # Guard against a misconfigured sub-hour value
-                    return 1  # Clamp to the minimum sensible window
-                return test_hours  # Use the reduced test-mode window
-            if default_hours < 1:  # Guard against a misconfigured production value
-                return 1  # Clamp to the minimum sensible window
-            return default_hours  # Normal path: use the standard production window
+            chosen_hours = test_hours if IS_TEST_MODE else default_hours  # Pick the window for the active mode
+            return max(1, chosen_hours)  # Never return less than 1 hour (clamp misconfigured values)
         except Exception as error:  # Never let lookback math crash a caller
             logging.debug("get_dynamic_lookback_hours fallback due to error: %s", error)  # Log the unexpected failure
             return test_hours if IS_TEST_MODE else default_hours  # Fall back to a sensible default per mode
@@ -2362,6 +2339,15 @@ def detect_msp_privileges(session=None):
         return []  # Treat as no MSP access on error
 
 
+def _extract_msp_name(response: Any) -> str | None:  # Pull the MSP name out of a getMspDetails response
+    """Return the 'name' string from an MSP details response, or None when absent/malformed."""
+    data = getattr(response, "data", None)  # Unwrap the response payload if present
+    if not isinstance(data, dict):  # Need a dict payload to read the name field
+        return None  # Malformed or empty response
+    name = data.get("name")  # Extract the MSP's name field
+    return name if isinstance(name, str) else None  # Return the name only if it's a valid string
+
+
 def _fetch_msp_name(msp_id: str) -> str | None:
     """Helper to fetch MSP name from MSP API when not provided in privileges.
 
@@ -2377,12 +2363,10 @@ def _fetch_msp_name(msp_id: str) -> str | None:
         import mistapi.api.v1.msps.msps as msps_api  # Import the MSP details endpoint lazily
 
         response = msps_api.getMspDetails(apisession, msp_id)  # Fetch the MSP record by ID
-        if response and hasattr(response, "data") and isinstance(response.data, dict):  # Got a well-formed payload
-            name = response.data.get("name")  # Extract the MSP's name field
-            return name if isinstance(name, str) else None  # Return the name only if it's a valid string
+        return _extract_msp_name(response)  # Pull the name from the payload (None when absent/malformed)
     except Exception as e:  # Lookup failed (network, permissions, etc.)
         logging.debug("Could not fetch MSP name for %s...: %s", msp_id[:8], e)  # Note the failure at debug level
-    return None  # Default to None when the name can't be resolved
+        return None  # Default to None when the name can't be resolved
 
 
 def initialize_mist_session_interactive():
@@ -2607,6 +2591,18 @@ def _load_mistapi_module(current_mistapi: Any) -> Any:
         return None  # Signal that mistapi is unavailable -- caller must abort
 
 
+def _split_env_tokens(raw_token_env: str | None) -> list[str]:  # Split a token env value into individual tokens
+    """Split a newline/comma-separated token env value into a list of non-empty stripped tokens."""
+    if not raw_token_env:  # No token env var set
+        return []  # Caller will fall back to env_file or mistapi.Session
+    return [token.strip() for token in re.split(r"[\n,]+", raw_token_env) if token.strip()]  # Split on newlines/commas
+
+
+def _redact_tokens(tokens: list[str]) -> str:  # Build a secrets-safe preview of discovered tokens
+    """Return a redacted, comma-joined preview (first4...last4, or *** when too short) for logging."""
+    return ",".join((token[:4] + "..." + token[-4:]) if len(token) >= 8 else "***" for token in tokens)  # Redact each
+
+
 def _parse_api_tokens() -> tuple[str, list[str]]:
     """Read API host and tokens from environment variables.
 
@@ -2618,15 +2614,11 @@ def _parse_api_tokens() -> tuple[str, list[str]]:
     """
     host = os.getenv("MIST_HOST", "api.mist.com")  # Read host from env or use Mist cloud default
     raw_token_env = os.getenv("MIST_APITOKEN") or os.getenv("MIST_API_TOKEN")  # Accept both env var names
-    if raw_token_env:  # At least one token env var is set -- parse and split
-        tokens = [t.strip() for t in re.split(r"[\n,]+", raw_token_env) if t.strip()]  # Split on newlines and commas
-    else:
-        tokens = []  # No tokens found in environment -- will rely on env_file or Session fallback
-    if tokens:  # Log redacted preview so operators can confirm tokens are present without exposing secrets
-        redacted_preview = ",".join([(t[:4] + "..." + t[-4:]) if len(t) >= 8 else "***" for t in tokens])
-        logging.debug("Token(s) discovered for initialization (redacted): %s", redacted_preview)
-    else:
-        logging.debug("No tokens discovered in environment; will rely on env_file or mistapi.Session fallback")
+    tokens = _split_env_tokens(raw_token_env)  # Parse into individual non-empty tokens (empty list when unset)
+    if tokens:  # Log a redacted preview so operators can confirm presence without exposing secrets
+        logging.debug("Token(s) discovered for initialization (redacted): %s", _redact_tokens(tokens))  # Safe preview
+    else:  # No tokens discovered in environment
+        logging.debug("No tokens discovered in environment; will rely on env_file or mistapi.Session fallback")  # Note
     return host, tokens  # Return host string and parsed token list to caller
 
 
