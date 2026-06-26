@@ -11094,57 +11094,63 @@ class OrgTemplateExporter:  # Org template exporters.
         Export all organization templates (gateway, network, RF, site, AP) to CSV files.
         """
         logging.info("Starting export of organization templates...")  # Log start.
-        try:
-            APIDataFetcher(  # Fetch gateway templates.
-                title="Gateway Templates:",
-                api_call=mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates,
-                filename="OrgGatewayTemplates.csv",
-                sort_key="name",
-                limit=1000,
-            ).execute()
-        except Exception as e:  # Gateway export failed.
-            logging.error("Failed to export gateway templates: %s", e)  # log gateway error.
-        try:
-            APIDataFetcher(  # Fetch network templates.
-                title="Network Templates:",
-                api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
-                filename="OrgNetworkTemplates.csv",
-                sort_key="name",
-                limit=1000,
-            ).execute()
-        except Exception as e:  # Network export failed.
-            logging.error("Failed to export network templates: %s", e)  # log network error.
-        try:
-            APIDataFetcher(  # Fetch RF templates.
-                title="RF Templates:",
-                api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
-                filename="OrgRfTemplates.csv",
-                sort_key="name",
-                limit=1000,
-            ).execute()
-        except Exception as e:  # RF export failed.
-            logging.error("Failed to export RF templates: %s", e)  # log RF error.
-        try:
-            APIDataFetcher(  # Fetch site templates.
-                title="Site Templates:",
-                api_call=mistapi.api.v1.orgs.sitetemplates.listOrgSiteTemplates,
-                filename="OrgSiteTemplates.csv",
-                sort_key="name",
-                limit=1000,
-            ).execute()
-        except Exception as e:  # Site export failed.
-            logging.error("Failed to export site templates: %s", e)  # log site error.
-        try:
-            APIDataFetcher(  # Fetch AP templates.
-                title="AP Templates:",
-                api_call=mistapi.api.v1.orgs.aptemplates.listOrgAptemplates,
-                filename="OrgApTemplates.csv",
-                sort_key="name",
-                limit=1000,
-            ).execute()
-        except Exception as e:  # AP export failed.
-            logging.error("Failed to export AP templates: %s", e)  # log AP error.
+        for title, api_call, filename, error_label in OrgTemplateExporter._template_export_specs():  # Each type
+            OrgTemplateExporter._export_one_template(title, api_call, filename, error_label)  # One non-fatal export
         logging.info(" Organization templates export completed")  # Log completion.
+
+    @staticmethod
+    def _template_export_specs() -> list[tuple[str, Any, str, str]]:  # (title, api_call, filename, error_label) specs
+        """Return the per-template-type export specs, resolving mistapi endpoint refs at call time.
+
+        mistapi is None at class-definition time (populated later by GlobalImportManager), so these
+        endpoint references must be built when the export actually runs, not as a class constant.
+        """
+        return [
+            (
+                "Gateway Templates:",
+                mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates,
+                "OrgGatewayTemplates.csv",
+                "gateway templates",
+            ),
+            (
+                "Network Templates:",
+                mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
+                "OrgNetworkTemplates.csv",
+                "network templates",
+            ),
+            (
+                "RF Templates:",
+                mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
+                "OrgRfTemplates.csv",
+                "RF templates",
+            ),
+            (
+                "Site Templates:",
+                mistapi.api.v1.orgs.sitetemplates.listOrgSiteTemplates,
+                "OrgSiteTemplates.csv",
+                "site templates",
+            ),
+            (
+                "AP Templates:",
+                mistapi.api.v1.orgs.aptemplates.listOrgAptemplates,
+                "OrgApTemplates.csv",
+                "AP templates",
+            ),
+        ]
+
+    @staticmethod
+    def _export_one_template(title: str, api_call: Any, filename: str, error_label: str) -> None:  # Export one type
+        """Fetch one template type to its CSV; log (do not raise) on failure so other types still export."""
+        try:
+            APIDataFetcher(  # Fetch this template type and write it to CSV
+                title=title,
+                api_call=api_call,
+                filename=filename,
+                sort_key="name",
+                limit=1000,
+            ).execute()
+        except Exception as e:  # This template type failed -- keep going with the rest
+            logging.error("Failed to export %s: %s", error_label, e)  # Log the per-type failure
 
     @staticmethod
     def network_templates():  # Export network templates.
@@ -13574,30 +13580,44 @@ class SitesByAPModelExporter:  # Sites-by-AP-model exporter.
         site_map: dict[str, dict],  # type: ignore[type-arg]
     ) -> list[dict]:  # type: ignore[type-arg]
         """Group APs by site and build one CSV row per matching site."""
-        grouped: dict[str, list[dict]] = {}  # type: ignore[type-arg]
+        grouped = SitesByAPModelExporter._group_aps_by_site(aps, model)  # APs of this model, grouped by site_id
+        ordered = sorted(grouped.items(), key=lambda x: site_map.get(x[0], {}).get("name", ""))  # Sort by site name
+        return [
+            SitesByAPModelExporter._build_site_row(site_id, devices, model, site_map)  # One row per matching site
+            for site_id, devices in ordered
+        ]  # CSV rows, one per site
+
+    @staticmethod
+    def _build_site_row(
+        site_id: str,
+        devices: list[dict],  # type: ignore[type-arg]
+        model: str,
+        site_map: dict[str, dict],  # type: ignore[type-arg]
+    ) -> dict:  # type: ignore[type-arg]
+        """Build a single CSV row for one site's APs of a given model (count, address parts, MAC list)."""
+        site = site_map.get(site_id, {})  # Look up the site.
+        street, city, state, zip_code, country = SitesByAPModelExporter._split_address(site.get("address", ""))  # Addr
+        return {
+            "site_id": site_id,
+            "site_name": site.get("name", ""),
+            "ap_model": model,
+            "ap_count": len(devices),
+            "address": street,
+            "city": city,
+            "state": state,
+            "zip": zip_code,
+            "country": country,
+            "ap_macs": ", ".join(d.get("mac", "") for d in devices),
+        }
+
+    @staticmethod
+    def _group_aps_by_site(aps: list[dict], model: str) -> dict[str, list[dict]]:  # type: ignore[type-arg]  # Group APs
+        """Group APs matching the given model by their site_id (APs without a model match or site_id are skipped)."""
+        grouped: dict[str, list[dict]] = {}  # type: ignore[type-arg]  # site_id -> matching AP devices
         for device in aps:  # Walk APs.
             if device.get("model") == model and device.get("site_id"):  # Match model with a site.
                 grouped.setdefault(device["site_id"], []).append(device)  # Group by site.
-        rows = []  # Accumulate rows.
-        for site_id, devices in sorted(grouped.items(), key=lambda x: site_map.get(x[0], {}).get("name", "")):
-            site = site_map.get(site_id, {})  # Look up the site.
-            address = site.get("address", "")  # Read the address.
-            street, city, state, zip_code, country = SitesByAPModelExporter._split_address(address)
-            rows.append(  # Append the row.
-                {
-                    "site_id": site_id,
-                    "site_name": site.get("name", ""),
-                    "ap_model": model,
-                    "ap_count": len(devices),
-                    "address": street,
-                    "city": city,
-                    "state": state,
-                    "zip": zip_code,
-                    "country": country,
-                    "ap_macs": ", ".join(d.get("mac", "") for d in devices),
-                }
-            )
-        return rows  # Return the rows.
+        return grouped  # The site_id -> devices map
 
     @staticmethod
     def export_sites_by_ap_model() -> None:  # Export sites by AP model.
