@@ -12824,59 +12824,51 @@ class SiteDeviceExporter:  # Site device exporters.
 
     @staticmethod
     def device_inventory(site_id, device_type="all", csv_filename="SiteInventory.csv"):  # Export site device inventory.
-        """
-        Fetches and displays the device inventory for a given site.
+        """Fetch, export, and display a site's device inventory (CSV + debug table).
 
-        Args:
-            site_id: The ID of the site to fetch inventory for.
-            device_type: The type of device to filter (default: "all").
-            csv_filename: The filename to write the inventory CSV to.
-
-        SECURITY: Always fetch all device types from API first (type=all), then filter locally
-        to avoid Mist API's default behavior of only returning APs.
+        SECURITY: always fetches type=all then filters locally, avoiding Mist's APs-only default.
         """
         logging.info("Fetching device inventory for site_id=%s, device_type=%s", site_id, device_type)  # Log the fetch.
-
-        # IMPORTANT: Always use type=all to get all device types (APs, switches, gateways)
-        rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data
+        rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data  # All device types
         if not rawdata:  # No devices.
             print("No devices found for the selected site.")  # Tell the user.
             logging.warning("No devices found for site_id=%s", site_id)  # Warn none found.
             return  # Abort.
-
-        # Filter devices locally based on requested device types
         if device_type != "all":  # Type filter requested.
-            requested_types = [dtype.strip() for dtype in device_type.split(",")]  # Parse requested types.
-            rawdata = [d for d in rawdata if d.get("type", "").lower() in requested_types]  # Keep matching devices.
-
-            if not rawdata:  # None after filter.
-                print(f"No devices of type '{device_type}' found at the selected site.")  # Tell the user.
-                logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)
+            rawdata = SiteDeviceExporter._filter_devices_by_type(rawdata, device_type, site_id)  # Keep matching types
+            if rawdata is None:  # No devices remained after filtering (already logged/printed).
                 return  # Abort.
-
-        # Sort inventory by model for easier viewing
-        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))  # Sort by model.
+        inventory = sorted(rawdata, key=lambda x: x.get("model", ""))  # Sort by model for easier viewing.
         inventory = DataProcessingUtils.flatten_nested_fields(inventory)  # Flatten nested fields.
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
         fields = DataProcessingUtils.get_unique_keys(inventory)  # type: ignore[no-untyped-call]
-
         DataExporter.write_with_format_selection(inventory, csv_filename)  # type: ignore[no-untyped-call]
         logging.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))  # Log the write.
+        SiteDeviceExporter._display_inventory_table(inventory, fields)  # Debug-log a PrettyTable of the inventory.
 
-        # Prepare PrettyTable for display
+    @staticmethod
+    def _filter_devices_by_type(rawdata: list, device_type: str, site_id: str) -> list | None:  # type: ignore[type-arg]
+        """Keep only devices whose type is in the comma-separated device_type; return None when none remain."""
+        requested_types = [dtype.strip() for dtype in device_type.split(",")]  # Parse requested types.
+        filtered = [d for d in rawdata if d.get("type", "").lower() in requested_types]  # Keep matching devices.
+        if not filtered:  # None after filter.
+            print(f"No devices of type '{device_type}' found at the selected site.")  # Tell the user.
+            logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)  # Warn none.
+            return None  # Signal the caller to abort.
+        return filtered  # Devices matching the requested type(s).
+
+    @staticmethod
+    def _display_inventory_table(inventory: list, fields: list) -> None:  # type: ignore[type-arg]  # Debug-log a table
+        """Build a PrettyTable of the inventory (sorted by model when present) and debug-log it."""
         table = PrettyTable()  # Build the table.
         table.field_names = fields  # Set columns.
-
         if "model" in fields:  # Model column present.
             try:
                 table.sortby = "model"  # Sort by model.
             except Exception as error:  # Sort failed.
                 logging.warning("! Could not sort table by 'model': %s", error)  # Warn sort failure.
-
         for item in inventory:  # Add each row.
-            row = [item.get(field, "") for field in fields]  # Build the row.
-            table.add_row(row)  # Add the row.
-
+            table.add_row([item.get(field, "") for field in fields])  # Build and add the row.
         logging.debug("\n%s", table.get_string())  # Log the table.
 
     @staticmethod
@@ -12937,34 +12929,49 @@ class SiteDeviceExporter:  # Site device exporters.
         if not device_id:  # No switch.
             logging.error("No switch device selected. Exiting.")  # Log the error.
             return  # Abort.
+        device_name = SiteDeviceExporter._resolve_device_name(site_id, device_id)  # Friendly name (falls back to id).
+        logging.info("Exporting virtual chassis information for device: %s", device_name)  # Log the export.
+        SiteDeviceExporter._export_vc_for_device(site_id, device_id, device_name)  # Fetch + write + summarize VC data.
+
+    @staticmethod
+    def _resolve_device_name(site_id: str, device_id: str) -> str:  # Resolve a device's friendly name
+        """Return the device's name from the site device list, falling back to its id when not found."""
         response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")  # List site devices.
         devices = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
-        device_name = next((dev["name"] for dev in devices if dev["id"] == device_id), device_id)
-        logging.info("Exporting virtual chassis information for device: %s", device_name)  # Log the export.
+        return next((dev["name"] for dev in devices if dev["id"] == device_id), device_id)  # Name, else the id.
+
+    @staticmethod
+    def _export_vc_for_device(site_id: str, device_id: str, device_name: str) -> None:  # Fetch + write VC data
+        """Fetch the device's virtual chassis, write it to a CSV, and print a short summary (non-fatal on error)."""
         try:
-            response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)
-            if response.data:  # Have data.
-                vc_data = [response.data] if isinstance(response.data, dict) else response.data  # Normalize to a list.
-                flattened = DataProcessingUtils.flatten_nested_fields(vc_data)  # Flatten nested fields.
-                sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-                filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"  # Build the CSV name.
-                DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
-                logging.info("! Virtual chassis information exported to %s", filename)  # Log the export.
-                if sanitized:  # Have records.
-                    print(f"\n!! Virtual Chassis Summary for {device_name}:")  # Header.
-                    print(f"   * Records exported: {len(sanitized)}")  # Show the count.
-                    # If the flattened output includes a 'members' field, show a short summary
-                    if "members" in sanitized[0]:  # Members present.
-                        print(f"   * VC members: {sanitized[0].get('members', 'N/A')}")  # Show members.
-                    if "preprovisioned" in sanitized[0]:  # Preprovisioned present.
-                        print(f"   * Preprovisioned: {sanitized[0].get('preprovisioned', 'N/A')}")
-                    print(f"   * Data saved to: {filename}")  # Show the path.
-            else:
+            response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)  # Fetch
+            if not response.data:  # No VC payload.
                 logging.warning("! No virtual chassis data returned for device %s", device_name)  # Warn no VC data.
                 print(f"! No virtual chassis data found for device {device_name}")  # Tell the user.
+                return  # Nothing to export.
+            vc_data = [response.data] if isinstance(response.data, dict) else response.data  # Normalize to a list.
+            flattened = DataProcessingUtils.flatten_nested_fields(vc_data)  # Flatten nested fields.
+            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
+            filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"  # Build the CSV name.
+            DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
+            logging.info("! Virtual chassis information exported to %s", filename)  # Log the export.
+            SiteDeviceExporter._print_vc_summary(sanitized, device_name, filename)  # Print a short operator summary.
         except Exception as e:  # Export failed.
             logging.error("! Failed to export virtual chassis information: %s", e)  # Log the error.
             print(f"! Failed to export virtual chassis information: {e}")  # Tell the user.
+
+    @staticmethod
+    def _print_vc_summary(sanitized: list, device_name: str, filename: str) -> None:  # type: ignore[type-arg]
+        """Print a short VC summary (record count, optional members/preprovisioned fields, output path)."""
+        if not sanitized:  # No records to summarize.
+            return  # Nothing to print.
+        print(f"\n!! Virtual Chassis Summary for {device_name}:")  # Header.
+        print(f"   * Records exported: {len(sanitized)}")  # Show the count.
+        if "members" in sanitized[0]:  # Members present.
+            print(f"   * VC members: {sanitized[0].get('members', 'N/A')}")  # Show members.
+        if "preprovisioned" in sanitized[0]:  # Preprovisioned present.
+            print(f"   * Preprovisioned: {sanitized[0].get('preprovisioned', 'N/A')}")  # Show preprovisioned flag.
+        print(f"   * Data saved to: {filename}")  # Show the path.
 
     @staticmethod
     def devices():  # Export site device list.
@@ -19074,33 +19081,50 @@ class FirmwareUpgradeStatusChecker:
             print(f"! Failed to export upgrade operations: {exception}")
             logging.error("Failed to export upgrade operations: %s", exception)
 
+    # Export count fields: (export_key, upgrade_top_level_key, details_counts_key). Resolution is
+    # `upgrade.get(top_level) or counts.get(counts_key, 0)` -- looped in a helper so the parent stays CC<=5.
+    _UPGRADE_COUNT_FIELDS = [
+        ("total_devices", "total_devices", "total"),
+        ("downloaded", "downloaded", "downloaded"),
+        ("download_requested", "download_requested", "download_requested"),
+        ("rebooted", "rebooted", "rebooted"),
+        ("reboot_in_progress", "reboot_in_progress", "reboot_in_progress"),
+        ("failed", "failed", "failed"),
+        ("skipped", "skipped", "skipped"),
+    ]
+
     def _map_upgrade_for_export(self, upgrade: dict[str, Any]) -> dict[str, Any]:
         """Map upgrade record for CSV export."""
-        details = upgrade.get("details", {})
-        counts = details.get("counts", {}) if details else {}
-
-        start_time = upgrade.get("start_time") or details.get("start_time", 0)
-        if isinstance(start_time, (int, float)) and start_time > 0:
-            start_time = self._format_timestamp(start_time)
-
+        details = upgrade.get("details", {})  # Nested details payload (may be empty).
+        counts = details.get("counts", {}) if details else {}  # Per-status device counts (may be empty).
+        start_time = self._resolve_upgrade_start_time(upgrade, details)  # Formatted start time (or raw/0 fallback).
+        resolved_counts = self._resolve_upgrade_counts(upgrade, counts)  # Per-status count columns (original order).
         return {
-            "site_id": upgrade.get("site_id", "Unknown"),
-            "site_name": upgrade.get("site_name", "Unknown"),
-            "upgrade_id": upgrade.get("upgrade_id", "Unknown"),
-            "status": upgrade.get("status", "Unknown"),
-            "strategy": upgrade.get("strategy", "Unknown"),
-            "target_version": upgrade.get("target_version", "Unknown"),
-            "start_time": start_time or "Unknown",
-            "enable_p2p": upgrade.get("enable_p2p") or details.get("enable_p2p", "Unknown"),
-            "total_devices": upgrade.get("total_devices") or counts.get("total", 0),
-            "downloaded": upgrade.get("downloaded") or counts.get("downloaded", 0),
-            "download_requested": upgrade.get("download_requested") or counts.get("download_requested", 0),
-            "rebooted": upgrade.get("rebooted") or counts.get("rebooted", 0),
-            "reboot_in_progress": upgrade.get("reboot_in_progress") or counts.get("reboot_in_progress", 0),
-            "failed": upgrade.get("failed") or counts.get("failed", 0),
-            "skipped": upgrade.get("skipped") or counts.get("skipped", 0),
-            "source": upgrade.get("source", "unknown"),
-            "timestamp": upgrade.get("timestamp") or datetime.now(UTC).isoformat(),
+            "site_id": upgrade.get("site_id", "Unknown"),  # Owning site id.
+            "site_name": upgrade.get("site_name", "Unknown"),  # Owning site name.
+            "upgrade_id": upgrade.get("upgrade_id", "Unknown"),  # Upgrade operation id.
+            "status": upgrade.get("status", "Unknown"),  # Current upgrade status.
+            "strategy": upgrade.get("strategy", "Unknown"),  # Upgrade rollout strategy.
+            "target_version": upgrade.get("target_version", "Unknown"),  # Target firmware version.
+            "start_time": start_time or "Unknown",  # Formatted start time, or 'Unknown' when absent.
+            "enable_p2p": upgrade.get("enable_p2p") or details.get("enable_p2p", "Unknown"),  # P2P flag (top/details).
+            **resolved_counts,  # 7 count columns inserted here to preserve the original CSV column order.
+            "source": upgrade.get("source", "unknown"),  # Where this record came from.
+            "timestamp": upgrade.get("timestamp") or datetime.now(UTC).isoformat(),  # Record timestamp (or now).
+        }
+
+    def _resolve_upgrade_start_time(self, upgrade: dict[str, Any], details: dict[str, Any]) -> Any:  # Start time
+        """Resolve the upgrade start time from top-level or details and format it when it is a positive epoch."""
+        start_time = upgrade.get("start_time") or details.get("start_time", 0)  # Top-level, else details, else 0.
+        if isinstance(start_time, (int, float)) and start_time > 0:  # Looks like a usable epoch timestamp
+            return self._format_timestamp(start_time)  # Format to a human-readable string.
+        return start_time  # Non-epoch value passes through unchanged (caller defaults to 'Unknown').
+
+    def _resolve_upgrade_counts(self, upgrade: dict[str, Any], counts: dict[str, Any]) -> dict[str, Any]:  # Counts
+        """Resolve each export count column from the upgrade top-level value, falling back to the details counts."""
+        return {
+            export_key: (upgrade.get(top_key) or counts.get(counts_key, 0))  # Top-level value, else counts, else 0
+            for export_key, top_key, counts_key in self._UPGRADE_COUNT_FIELDS  # One column per configured field
         }
 
     def _display_recommendations(self) -> None:
