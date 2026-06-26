@@ -7593,49 +7593,46 @@ class DataExporter:  # Multi-backend export facade.
 
     @staticmethod
     def export_with_processing(data, filename, sort_key=None, api_function_name=None):  # Process then export records.
-        """
-        Export data with standard processing (flatten, escape, sort).
-        Common pattern used throughout the codebase.
+        """Flatten, optionally sort, and export records via the selected backend.
 
-        Args:
-            data (list): Raw data from API
-            filename (str): Output filename
-            sort_key (str, optional): Key to sort by
-            api_function_name (str, optional): API function name for strategy
-
-        Returns:
-            int: Number of records processed
+        Returns the number of records exported (0 when there is no data or the export fails).
         """
         if not data:  # Nothing to export.
             logging.warning("No data to export for %s", filename)  # warn no data.
             return 0  # Zero exported.
 
-        # Filter to dict entries only (defensive)
-        raw_data = [entry for entry in data if isinstance(entry, dict)]  # Keep dict rows only.
+        raw_data = [entry for entry in data if isinstance(entry, dict)]  # Keep dict rows only (defensive).
+        raw_data = DataExporter._sort_records(raw_data, sort_key)  # Optionally sort by the requested key.
 
-        # Sort if requested
-        if sort_key:  # Optional sort.
-            raw_data = sorted(raw_data, key=lambda x: x.get(sort_key, ""))  # Sort by key.
-            logging.debug("Data sorted by key: %s", sort_key)  # Trace the sort.
-
-        # Apply standard processing for CSV/SQLite (flatten + escape)
-        processed_data = DataProcessingUtils.flatten_nested_fields(raw_data)  # Flatten nested fields.
+        processed_data = DataProcessingUtils.flatten_nested_fields(raw_data)  # Flatten nested fields for CSV/SQLite.
         processed_data = DataProcessingUtils.escape_multiline(processed_data)  # type: ignore[no-untyped-call]
 
-        # Save flattened data to CSV/SQLite, pass raw to polyglot
-        success = DataExporter.write_with_format_selection(  # Write via selected backend.
+        success = DataExporter.write_with_format_selection(  # Write flattened to CSV/SQLite, raw to polyglot
             processed_data,
             filename,
             api_function_name=api_function_name,
             raw_data=raw_data,
         )
 
+        return DataExporter._finalize_export(success, len(processed_data), filename)  # Log outcome, return count
+
+    @staticmethod
+    def _sort_records(raw_data: list[dict[str, Any]], sort_key: str | None) -> list[dict[str, Any]]:  # Optional sort
+        """Return raw_data sorted by sort_key (missing values sort as ''), or unchanged when no key given."""
+        if not sort_key:  # No sort requested
+            return raw_data  # Preserve original order
+        sorted_data = sorted(raw_data, key=lambda entry: entry.get(sort_key, ""))  # Sort by key (missing -> '')
+        logging.debug("Data sorted by key: %s", sort_key)  # Trace the sort.
+        return sorted_data  # Sorted rows
+
+    @staticmethod
+    def _finalize_export(success: bool, processed_count: int, filename: str) -> int:  # Log + return export outcome
+        """Log the export result and return the processed-row count on success, 0 on failure."""
         if success:  # Export succeeded.
-            logging.info("Exported %s records to %s", len(processed_data), filename)  # Log export count.
-            return len(processed_data)  # Return rows exported.
-        else:
-            logging.error("Failed to export data to %s", filename)  # log export failure.
-            return 0  # Zero exported.
+            logging.info("Exported %s records to %s", processed_count, filename)  # Log export count.
+            return processed_count  # Return rows exported.
+        logging.error("Failed to export data to %s", filename)  # log export failure.
+        return 0  # Zero exported.
 
 
 class APIDataFetcher:  # Fetch, export, display a result.
@@ -8981,26 +8978,22 @@ class DeviceUtils:  # Device helper utilities.
         port_parts = [part.strip() for part in port_range_string.split(",")]  # Split on comma into parts.
 
         for port_part in port_parts:  # Process each part.
-            # Check if this is a range (e.g., "ge-0/0/0-2")
-            if "-" in port_part:  # Branch: range expression.
-                # Try to match pattern like "ge-0/0/0-2"
-                match = re.match(r"^(.+/)(\d+)-(\d+)$", port_part)  # Match prefix and numeric range.
-                if match:  # Branch: valid range match.
-                    prefix = match.group(1)  # e.g., "ge-0/0/"
-                    start_num = int(match.group(2))  # e.g., 0
-                    end_num = int(match.group(3))  # e.g., 2
-
-                    # Expand the range
-                    for port_num in range(start_num, end_num + 1):  # Iterate the numeric range.
-                        expanded_ports.append(f"{prefix}{port_num}")  # Append each expanded port.
-                else:
-                    # Couldn't parse as range, treat as single port
-                    expanded_ports.append(port_part)  # Keep literal when unmatched.
-            else:
-                # Single port name
-                expanded_ports.append(port_part)  # Keep single non-range port.
+            expanded_ports.extend(DeviceUtils._expand_one_port_part(port_part))  # Expand range or keep literal port
 
         return expanded_ports  # Return expanded port list.
+
+    @staticmethod
+    def _expand_one_port_part(port_part: str) -> list[str]:  # Expand a single port token into concrete port names
+        """Expand one port token: a 'prefix/N-M' range -> [prefix/N..prefix/M]; anything else -> [port_part]."""
+        if "-" not in port_part:  # Not a range expression
+            return [port_part]  # Single literal port name
+        match = re.match(r"^(.+/)(\d+)-(\d+)$", port_part)  # Match prefix plus numeric start-end range
+        if not match:  # Could not parse as a range
+            return [port_part]  # Keep the literal token
+        prefix = match.group(1)  # e.g., "ge-0/0/"
+        start_num = int(match.group(2))  # Range start (e.g., 0)
+        end_num = int(match.group(3))  # Range end (e.g., 2)
+        return [f"{prefix}{port_num}" for port_num in range(start_num, end_num + 1)]  # Concrete ports across the range
 
     @staticmethod
     def get_device_identifier(device: dict[str, Any], warn_on_missing: bool = False) -> str:
