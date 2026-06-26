@@ -16880,18 +16880,22 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _check_name_conflict(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
         """Check if an object with the same name already exists (case-insensitive)."""
-        new_name = (new_obj.get("name") or "").lower()  # Normalize to lowercase for comparison
+        new_name = self._normalized_name(new_obj)  # Lowercase name for case-insensitive comparison
         if not new_name:  # Skip unnamed objects (shouldn't happen but be defensive)
             return None  # No conflict.
         for existing in existing_list:  # Check every existing object in destination
-            existing_name = (existing.get("name") or "").lower()  # Normalize existing name
-            if new_name == existing_name:  # Case-insensitive match found
+            if new_name == self._normalized_name(existing):  # Case-insensitive match found
                 return {
                     "reason": "name_match",  # Conflict type for reporting
                     "detail": f"Object named '{existing.get('name')}' already exists",  # Human-readable
                     "existing_id": existing.get("id"),  # Preserve for ID remapping
                 }
         return None  # No name conflict found
+
+    @staticmethod
+    def _normalized_name(obj: dict) -> str:  # type: ignore[type-arg]  # Lowercase an object's name field
+        """Return an object's lowercase name for comparison, or '' when the name is absent."""
+        return (obj.get("name") or "").lower()  # Normalize missing names to an empty string
 
     def _check_subnet_overlap(self, new_obj: dict, existing_list: list, type_key: str) -> dict | None:  # type: ignore[type-arg]
         """Check for IP/subnet overlaps between new and existing objects."""
@@ -16943,17 +16947,25 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         except ValueError:  # Invalid address format -- skip
             return None  # No conflict.
         for existing in existing_list:  # Compare against each existing service
-            for ex_addr in existing.get("addresses", []):  # Check each address in existing service
-                try:
-                    ex_net = ipaddress.ip_network(ex_addr, strict=False)  # Parse existing address
-                    if new_net.overlaps(ex_net):  # Check if any IP addresses overlap
-                        return {
-                            "reason": "address_overlap",  # Conflict type for reporting
-                            "detail": f"{addr} overlaps with '{existing.get('name')}' ({ex_addr})",
-                        }
-                except ValueError:  # Invalid existing address -- skip and continue
-                    continue  # Skip it.
+            overlap = self._address_overlaps_service(new_net, addr, existing)  # Check this service's addresses
+            if overlap:  # First overlapping service found
+                return overlap  # Return the overlap conflict
         return None  # No address overlap found
+
+    @staticmethod
+    def _address_overlaps_service(new_net: Any, addr: str, existing: dict) -> dict | None:  # type: ignore[type-arg]
+        """Return an overlap conflict dict if new_net overlaps any address of existing, else None."""
+        for ex_addr in existing.get("addresses", []):  # Check each address in the existing service
+            try:
+                ex_net = ipaddress.ip_network(ex_addr, strict=False)  # Parse existing address
+            except ValueError:  # Invalid existing address -- skip and continue
+                continue  # Skip it.
+            if new_net.overlaps(ex_net):  # Check if any IP addresses overlap
+                return {
+                    "reason": "address_overlap",  # Conflict type for reporting
+                    "detail": f"{addr} overlaps with '{existing.get('name')}' ({ex_addr})",  # Human-readable
+                }
+        return None  # No address in this service overlaps
 
     # ------------------------------------------------------------------
     # ID remapping
@@ -19321,21 +19333,24 @@ class MSPInventoryExporter:
 
     def _fetch_org_inventory(self, org_id: str, org_name: str) -> list:  # type: ignore[type-arg]
         """Fetch all devices from org inventory. Returns empty list on failure."""
-        if apisession is None:
-            print(f"      {org_name}: API session not initialized")
-            return []
-        import mistapi.api.v1.orgs.inventory as org_inventory_api
+        if apisession is None:  # No authenticated session available
+            print(f"      {org_name}: API session not initialized")  # Tell the user
+            return []  # Nothing to fetch
+        import mistapi.api.v1.orgs.inventory as org_inventory_api  # Lazy import of the inventory endpoint
 
-        response = org_inventory_api.getOrgInventory(apisession, org_id, limit=1000)
+        response = org_inventory_api.getOrgInventory(apisession, org_id, limit=1000)  # Fetch the org inventory
 
-        if not response or not hasattr(response, "data"):
-            print(f"      {org_name}: No inventory data")
-            return []
+        if not response or not hasattr(response, "data"):  # No usable payload came back
+            print(f"      {org_name}: No inventory data")  # Tell the user
+            return []  # No devices to return
+        return self._normalize_inventory_data(response.data)  # Coerce the payload to a list of device dicts
 
-        devices_data = response.data
-        if not isinstance(devices_data, list):
-            devices_data = [devices_data] if devices_data else []
-        return devices_data
+    @staticmethod
+    def _normalize_inventory_data(devices_data: Any) -> list:  # type: ignore[type-arg]  # Coerce inventory to a list
+        """Normalize an inventory response payload to a list: pass lists through, wrap a single dict, else empty."""
+        if isinstance(devices_data, list):  # Already a list of devices
+            return devices_data  # Use it as-is
+        return [devices_data] if devices_data else []  # Wrap a single record, or empty when falsy
 
     def _enrich_device_context(  # noqa: PLR0913
         self,
