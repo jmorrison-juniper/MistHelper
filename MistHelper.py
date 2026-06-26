@@ -12254,6 +12254,11 @@ class OrgExportUtils:  # Generic org export helpers.
     All methods are static to avoid unnecessary object instantiation.
     """
 
+    # Org-level switch/gateway insight metrics accept only byte-throughput choices. The count-type
+    # choices in the constants ('total_*_count', 'num_used_*') are valid solely at site/switch scope
+    # and return HTTP 400 "Bad Syntax" at org scope, so org expansion is restricted to this set.
+    _ORG_VALID_METRIC_CHOICES = ("bytes", "rx_bytes", "tx_bytes")  # Org-scope-valid parameterized metric choices
+
     @staticmethod
     def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):  # Export an org endpoint.
         """
@@ -12342,6 +12347,106 @@ class OrgExportUtils:  # Generic org export helpers.
             )
 
     @staticmethod
+    def _metric_choice_list(definition: Any) -> list[str]:  # Choices for one metric definition.
+        """Return the 'metric' sub-parameter choices for one insight-metric definition, or []."""
+        if not isinstance(definition, dict):  # Definition payload must be a mapping
+            return []  # No choices to extract
+        params = definition.get("params")  # Parameter specs block (may be absent)
+        if not isinstance(params, dict):  # Params must be a mapping to hold a 'metric' spec
+            return []  # No choices to extract
+        metric_param = params.get("metric")  # The 'metric' sub-parameter spec, if any
+        if not isinstance(metric_param, dict):  # Spec must be a mapping to hold choices
+            return []  # No choices to extract
+        choices = metric_param.get("choices")  # Allowed values the API enumerates for this metric
+        return list(choices) if isinstance(choices, list) else []  # Normalize to a plain list
+
+    @staticmethod
+    def _org_valid_choices(choices: list[str]) -> list[str]:  # Keep org-scope-valid choices only.
+        """Filter metric choices down to the byte-throughput set the org-scope endpoint accepts."""
+        return [choice for choice in choices if choice in OrgExportUtils._ORG_VALID_METRIC_CHOICES]  # Drop count-type
+
+    @staticmethod
+    def _extract_metric_choices(definitions: Any) -> dict[str, list[str]]:  # Build the parameterized map.
+        """Extract {metric_name: [choices]} from a listInsightMetrics definitions mapping."""
+        parameterized: dict[str, list[str]] = {}  # Accumulates metrics that require a 'metric' choice
+        if not isinstance(definitions, dict):  # Guard against unexpected payload shapes
+            return parameterized  # Nothing to extract
+        for metric_name, definition in definitions.items():  # Inspect every metric definition
+            declared = OrgExportUtils._metric_choice_list(definition)  # All choices the metric declares
+            choices = OrgExportUtils._org_valid_choices(declared)  # Restrict to org-scope-valid choices
+            if choices:  # Only metrics with at least one org-valid choice are expandable here
+                parameterized[metric_name] = choices  # Record the org-valid sub-metric choices
+        return parameterized  # Completed metric -> choices mapping
+
+    @staticmethod
+    def _load_parameterized_metric_choices() -> dict[str, list[str]]:  # Discover parameterized metrics.
+        """Return {metric_name: [choices]} for org insight metrics requiring a 'metric' sub-parameter.
+
+        Some org insight metrics (e.g. switch-metrics, gateway-metrics) declare a 'metric'
+        query parameter in their constants definition. getOrgSle cannot supply it, so a bare
+        call returns HTTP 400 "Bad Syntax". Reading the live constants lets callers expand each
+        such metric into one request per valid choice instead of failing.
+        """
+        logging.info("Loading parameterized insight-metric choices from Mist constants...")  # Trace the lookup
+        try:  # The constants call may fail offline -> degrade to no expansion
+            response = mistapi.api.v1.const.insight_metrics.listInsightMetrics(apisession)  # GET /const/insight_metrics
+            definitions = getattr(response, "data", response) or {}  # Unwrap to the metric -> definition map
+        except Exception as exception:  # Any failure simply disables expansion this run
+            logging.error("Failed to load insight-metric constants for parameter expansion: %s", exception)  # Trace
+            return {}  # No parameterized map available
+        parameterized = OrgExportUtils._extract_metric_choices(definitions)  # Pull choices from the definitions
+        logging.debug("Discovered %s parameterized org insight metrics", len(parameterized))  # Trace the count
+        return parameterized  # Map of metric -> required choices
+
+    @staticmethod
+    def _fetch_single_metric_choice(
+        org_id: str, metric: str, choice: str, duration: str
+    ) -> dict[str, Any] | None:  # One (metric, choice) GET.
+        """Issue the org-insight GET for one (metric, choice) pair; return a tagged record or None."""
+        uri = f"/api/v1/orgs/{org_id}/insights/{metric}"  # Org insight endpoint for this parameterized metric
+        query = {"metric": choice, "duration": duration}  # Required 'metric' choice plus the lookback window
+        logging.debug("Fetching parameterized metric %s with metric=%s", metric, choice)  # Trace the attempt
+        session = apisession  # Local handle so the Any | None global can be narrowed below
+        if session is None:  # No authenticated session available (defensive guard)
+            logging.error("No API session available to fetch parameterized metric %s", metric)  # Trace the gap
+            return None  # Cannot fetch without a session
+        try:  # Per-choice failures must not abort the whole export
+            response = session.mist_get(uri=uri, query=query)  # Low-level GET (SDK cannot pass query 'metric')
+            payload = getattr(response, "data", None)  # Unwrap the response data payload
+        except Exception as exception:  # Network/HTTP failure for this specific choice
+            logging.debug("Failed to fetch %s metric=%s: %s", metric, choice, exception)  # Trace the miss
+            return None  # Signal failure to the caller
+        if not payload:  # Empty payload means no data for this choice
+            return None  # Signal empty to the caller
+        record = dict(payload) if isinstance(payload, dict) else {"results": payload}  # Normalize to a dict row
+        record["metric_type"] = f"{metric}:{choice}"  # Tag the composite metric type for the export
+        record["org_id"] = org_id  # Tag the owning org
+        record["metric_param"] = choice  # Tag which sub-metric this row represents
+        return record  # Completed tagged record
+
+    @staticmethod
+    def _fetch_parameterized_org_metric(
+        org_id: str, metric: str, choices: list[str], duration: str
+    ) -> tuple[list[dict[str, Any]], int, int]:  # Expand a metric across its choices.
+        """Fetch one parameterized org insight metric across each required 'metric' choice.
+
+        getOrgSle cannot pass the required 'metric' query parameter, so this issues the GET
+        directly for each choice. Returns (records, retrieved, failed).
+        """
+        records: list[dict[str, Any]] = []  # Collected per-choice time-series records
+        retrieved = 0  # Successful choice fetches
+        failed = 0  # Failed or empty choice fetches
+        for choice in choices:  # Each valid sub-metric value (e.g. bytes, rx_bytes, total_port_count)
+            record = OrgExportUtils._fetch_single_metric_choice(org_id, metric, choice, duration)  # One GET
+            if record:  # Choice returned a usable payload
+                records.append(record)  # Keep the tagged record
+                retrieved += 1  # Count the success
+            else:  # No data or the request failed
+                failed += 1  # Count the miss
+        logging.debug("Parameterized metric %s: %s retrieved, %s failed", metric, retrieved, failed)  # Trace totals
+        return records, retrieved, failed  # Aggregate result for this metric
+
+    @staticmethod
     def insight_metrics():  # noqa: C901, PLR0912, PLR0915
         """Export organization-wide insight metrics to normalized CSV files."""
         print("Export Organization Insight Metrics (Normalized):")  # Header.
@@ -12378,6 +12483,7 @@ class OrgExportUtils:  # Generic org export helpers.
 
         print(f"! Retrieving {len(org_metrics)} different organization insight metrics...")  # Tell the user.
         print("! Processing each metric individually with proper error handling...")  # Tell the user.
+        parameterized_metrics = OrgExportUtils._load_parameterized_metric_choices()  # Metrics needing a 'metric' param
 
         try:
             # Iterate through each org-scoped metric and retrieve it individually
@@ -12386,7 +12492,19 @@ class OrgExportUtils:  # Generic org export helpers.
                     logging.debug("Attempting to retrieve org insight metric: %s", metric)  # Trace the attempt.
 
                     # For metrics that analyze sites, use getOrgSitesSle instead of getOrgSle
-                    if "worst-sites" in metric or metric in ["sites-sle", "sites-sle-filtered"]:
+                    if metric in parameterized_metrics:
+                        # Parameterized metric (e.g. switch-metrics): getOrgSle cannot pass the required
+                        # 'metric' query param, so expand into one direct GET per valid choice instead.
+                        param_records, param_ok, param_fail = OrgExportUtils._fetch_parameterized_org_metric(
+                            org_id, metric, parameterized_metrics[metric], "7d"
+                        )  # One GET per required choice with the 'metric' query param
+                        all_insight_data.extend(param_records)  # Collect every choice's record
+                        metrics_retrieved += param_ok  # Count successful choices
+                        metrics_failed += param_fail  # Count failed or empty choices
+                        logging.debug(
+                            "Expanded parameterized metric %s into %s records", metric, len(param_records)
+                        )  # Trace the expansion
+                    elif "worst-sites" in metric or metric in ["sites-sle", "sites-sle-filtered"]:
                         # These metrics require site-level SLE data analysis
                         sle_categories = ["wifi", "wan", "wired"]  # SLE categories.
 
@@ -23321,6 +23439,13 @@ def main():
 
 if __name__ == "__main__":
     try:
+        # When run as a script the interpreter registers this module as "__main__", so a later
+        # importlib.import_module("MistHelper") (used by the src/refactors/serial_cc/* services to
+        # resolve runtime deps) would load a SECOND, uninitialized copy whose mistapi/apisession
+        # globals are still None -- causing "'NoneType' object has no attribute 'api'" failures.
+        # Alias "MistHelper" to this live __main__ instance before main() runs so those late imports
+        # resolve to the authenticated module. No-op when imported normally (__name__ == "MistHelper").
+        sys.modules["MistHelper"] = sys.modules["__main__"]  # Point both names at the live module
         logging.info("=== MistHelper application starting ===")
         # Single explicit banner for test mode to clarify reduced lookbacks
         try:
