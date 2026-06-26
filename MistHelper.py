@@ -1653,152 +1653,156 @@ class GlobalImportManager:
 
         return GlobalAssignmentsBuilderService.execute(self.imports, self._add_fallbacks_to_globals)
 
-    def _make_modules_global(self):  # noqa: C901, PLR0912
+    # Simple module -> [(global_name, attr_name_or_None)] hoists. attr None binds the module object itself.
+    # Used by _hoist_module_globals so _make_modules_global stays a flat loop instead of a long if/elif chain.
+    _SIMPLE_GLOBAL_HOISTS = {
+        "datetime": [("timezone", "timezone"), ("timedelta", "timedelta")],  # Hoist datetime's tz/delta helpers
+        "concurrent.futures": [  # Hoist the thread-pool primitives plus the package itself
+            ("ThreadPoolExecutor", "ThreadPoolExecutor"),
+            ("as_completed", "as_completed"),
+            ("concurrent", None),
+        ],
+        "prettytable": [("PrettyTable", "PrettyTable")],  # Hoist the PrettyTable class
+        "numpy": [("np", None)],  # Bind numpy under its conventional alias np
+        "tqdm": [("tqdm", None)],  # Bind tqdm by name for progress bars
+        "collections": [("defaultdict", "defaultdict")],  # Bind defaultdict directly
+        "difflib": [("SequenceMatcher", "SequenceMatcher")],  # Bind SequenceMatcher directly
+    }
+
+    def _make_modules_global(self):
         """Make all successfully imported modules available in the global namespace."""
-
-        # Add all imported modules to globals
         for module_name, module_obj in self.imports.items():  # Walk every imported module
-            # Add to global namespace
             globals()[module_name] = module_obj  # Bind the module into the real module globals
-
-            # Handle special cases for commonly used attributes
-            if module_name == "datetime":  # datetime needs its helpers hoisted too
-                globals()["timezone"] = getattr(module_obj, "timezone", None)  # Bind timezone globally
-                globals()["timedelta"] = getattr(module_obj, "timedelta", None)  # Bind timedelta globally
-            elif module_name == "concurrent.futures":  # Hoist the thread-pool primitives
-                globals()["ThreadPoolExecutor"] = getattr(
-                    module_obj, "ThreadPoolExecutor", None
-                )  # Bind the executor class
-                globals()["as_completed"] = getattr(module_obj, "as_completed", None)  # Bind the completion iterator
-                globals()["concurrent"] = module_obj  # For concurrent.futures references  # Bind the package itself
-            elif module_name == "prettytable":  # Table-rendering helper
-                globals()["PrettyTable"] = getattr(module_obj, "PrettyTable", None)  # Bind the PrettyTable class
-            elif module_name == "numpy":  # Numerical library
-                globals()["np"] = module_obj  # Bind numpy under its conventional alias np
-            elif module_name == "tqdm":  # Progress-bar library
-                # tqdm is used directly throughout the script
-                globals()["tqdm"] = module_obj  # Bind tqdm by name for progress bars
-            elif module_name == "collections":  # Standard collections module
-                globals()["defaultdict"] = getattr(module_obj, "defaultdict", None)  # Bind defaultdict directly
-            elif module_name == "difflib":  # Sequence comparison library
-                globals()["SequenceMatcher"] = getattr(
-                    module_obj, "SequenceMatcher", None
-                )  # Bind SequenceMatcher directly
-            elif module_name == "usaddress-scourgify":  # Optional address-normalization package
-                # Handle optional package - need to import the normalize function
-                if module_obj:  # Only proceed if the package loaded
-                    try:
-                        normalize_func = getattr(
-                            module_obj, "normalize_address_record", None
-                        )  # Look for the normalize function
-                        if normalize_func:  # The attribute exists on the module
-                            globals()["normalize_address_record"] = normalize_func  # Bind it globally
-                        else:  # Attribute missing -- import directly
-                            # Try importing directly from scourgify
-                            from scourgify import normalize_address_record  # Direct import fallback
-
-                            globals()[
-                                "normalize_address_record"
-                            ] = normalize_address_record  # Bind the directly-imported function
-                    except (ImportError, AttributeError):  # Package present but function unavailable
-                        logging.debug(
-                            "Could not import normalize_address_record from scourgify, using fallback"
-                        )  # Note the fallback
-            elif module_name == "rapidfuzz":  # Optional fuzzy-matching package
-                # Handle optional package - need to import the fuzz submodule
-                if module_obj:  # Only proceed if rapidfuzz loaded
-                    try:
-                        fuzz_module = getattr(module_obj, "fuzz", None)  # Look for the fuzz submodule attribute
-                        if fuzz_module:  # The submodule is accessible
-                            globals()["fuzz"] = fuzz_module  # Bind fuzz globally
-                        else:  # Attribute missing -- import directly
-                            # Try importing fuzz directly from rapidfuzz
-                            from rapidfuzz import fuzz  # Direct import fallback
-
-                            globals()["fuzz"] = fuzz  # Bind the directly-imported fuzz module
-                    except (ImportError, AttributeError):  # Package present but submodule unavailable
-                        logging.debug("Could not import fuzz from rapidfuzz, using fallback")  # Note the fallback
-            # Note: pynput handling removed for simplicity
-
+            self._hoist_module_globals(module_name, module_obj)  # Hoist any commonly-used attributes for it
         logging.debug("Successfully made imported modules available globally")  # Confirm the global wiring completed
+
+    def _hoist_module_globals(self, module_name, module_obj):  # Hoist known helper attributes into globals
+        """Hoist commonly-used attributes of a known module into globals (data-driven, with optional-pkg cases)."""
+        simple_hoists = self._SIMPLE_GLOBAL_HOISTS.get(module_name)  # Lookup the simple hoist list for this module
+        if simple_hoists:  # This module has a fixed set of attributes to hoist
+            self._apply_simple_hoists(module_obj, simple_hoists)  # Bind each (global_name, attr) pair
+        elif module_name == "usaddress-scourgify":  # Optional address-normalization package needs custom handling
+            self._hoist_scourgify_global(module_obj)  # Bind its normalize function (with direct-import fallback)
+        elif module_name == "rapidfuzz":  # Optional fuzzy-matching package needs custom handling
+            self._hoist_rapidfuzz_global(module_obj)  # Bind its fuzz submodule (with direct-import fallback)
+
+    @staticmethod
+    def _apply_simple_hoists(module_obj, hoists):  # Bind a module's fixed (global_name, attr) pairs into globals
+        """Bind each (global_name, attr_name) pair: attr None binds the module object, else getattr(module, attr)."""
+        for global_name, attr_name in hoists:  # Apply each configured binding for this module
+            value = module_obj if attr_name is None else getattr(module_obj, attr_name, None)  # Module or its attribute
+            globals()[global_name] = value  # Bind the resolved value into the real module globals
+
+    @staticmethod
+    def _hoist_scourgify_global(module_obj):  # Bind scourgify's normalize_address_record into globals
+        """Hoist scourgify.normalize_address_record into globals, importing it directly when not an attribute."""
+        if not module_obj:  # Package did not load
+            return  # Nothing to hoist
+        try:  # The function may be an attribute or require a direct import
+            normalize_func = getattr(module_obj, "normalize_address_record", None)  # Look for the normalize function
+            if not normalize_func:  # Attribute missing -- import directly from scourgify
+                from scourgify import normalize_address_record as normalize_func  # Direct import fallback
+            globals()["normalize_address_record"] = normalize_func  # Bind the resolved function globally
+        except (ImportError, AttributeError):  # Package present but function unavailable
+            logging.debug("Could not import normalize_address_record from scourgify, using fallback")  # Note fallback
+
+    @staticmethod
+    def _hoist_rapidfuzz_global(module_obj):  # Bind rapidfuzz's fuzz submodule into globals
+        """Hoist rapidfuzz.fuzz into globals, importing it directly when not an attribute."""
+        if not module_obj:  # Package did not load
+            return  # Nothing to hoist
+        try:  # The submodule may be an attribute or require a direct import
+            fuzz_module = getattr(module_obj, "fuzz", None)  # Look for the fuzz submodule attribute
+            if not fuzz_module:  # Attribute missing -- import directly from rapidfuzz
+                from rapidfuzz import fuzz as fuzz_module  # Direct import fallback
+            globals()["fuzz"] = fuzz_module  # Bind the resolved fuzz module globally
+        except (ImportError, AttributeError):  # Package present but submodule unavailable
+            logging.debug("Could not import fuzz from rapidfuzz, using fallback")  # Note the fallback
 
     def _add_fallbacks_to_globals(self, global_vars):
         """Add fallbacks for optional modules that failed to import."""
-        # If scourgify not available, provide a fallback
-        if (
-            "normalize_address_record" not in global_vars or global_vars["normalize_address_record"] is None
-        ):  # No real normalizer present
+        self._install_scourgify_fallback(global_vars)  # Address-normalization shim when scourgify is missing
+        self._install_fuzz_fallback(global_vars)  # Fuzzy-match shim (difflib-backed) when rapidfuzz is missing
+        self._install_ssh_fallbacks(global_vars)  # paramiko/redexpect shims that fail loudly with install guidance
 
-            def normalize_address_record_fallback(address_string):
-                """Fallback function when scourgify is not available."""
-                logging.debug(
-                    "Using fallback address normalization (scourgify not available)"
-                )  # Note the degraded path
-                return {
-                    "address_line_1": address_string,
-                    "city": "",
-                    "state": "",
-                    "zip": "",
-                    "country": "",
-                }  # Return the raw string with empty fields
+    @staticmethod
+    def _install_scourgify_fallback(global_vars):  # Install the scourgify normalize fallback when absent
+        """When normalize_address_record is missing, install a shim returning the raw string with empty fields."""
+        if global_vars.get("normalize_address_record") is not None:  # A real normalizer is already present
+            return  # No fallback needed
 
-            global_vars["normalize_address_record"] = (
-                normalize_address_record_fallback  # Install the shim under the expected name
-            )
+        def normalize_address_record_fallback(address_string):
+            """Fallback function when scourgify is not available."""
+            logging.debug("Using fallback address normalization (scourgify not available)")  # Note the degraded path
+            return {
+                "address_line_1": address_string,
+                "city": "",
+                "state": "",
+                "zip": "",
+                "country": "",
+            }  # Return the raw string with empty fields
 
-        # If rapidfuzz not available, provide fallback
-        if "fuzz" not in global_vars or global_vars["fuzz"] is None:  # No real fuzzy matcher present
+        global_vars["normalize_address_record"] = normalize_address_record_fallback  # Install the shim by name
 
-            class FuzzFallback:
-                """Fallback class when rapidfuzz is not available."""
+    @staticmethod
+    def _install_fuzz_fallback(global_vars):  # Install the rapidfuzz fallback when absent
+        """When fuzz is missing, install a difflib-backed shim exposing token_sort_ratio (0-100 score)."""
+        if global_vars.get("fuzz") is not None:  # A real fuzzy matcher is already present
+            return  # No fallback needed
 
-                @staticmethod
-                def token_sort_ratio(str1, str2):
-                    """Fallback using difflib SequenceMatcher."""
-                    if global_vars.get("difflib"):  # Use difflib if it is available as a substitute
-                        return int(
-                            global_vars["difflib"].SequenceMatcher(None, str1, str2).ratio() * 100
-                        )  # Convert 0-1 ratio to a 0-100 score
-                    return 0  # No comparison library at all -- report no similarity
+        class FuzzFallback:
+            """Fallback class when rapidfuzz is not available."""
 
-            global_vars["fuzz"] = FuzzFallback()  # Install the fuzzy-match shim under the expected name
+            @staticmethod
+            def token_sort_ratio(str1, str2):
+                """Fallback using difflib SequenceMatcher."""
+                if global_vars.get("difflib"):  # Use difflib if it is available as a substitute
+                    return int(
+                        global_vars["difflib"].SequenceMatcher(None, str1, str2).ratio() * 100
+                    )  # Convert 0-1 ratio to a 0-100 score
+                return 0  # No comparison library at all -- report no similarity
 
-        # Keyboard listener functionality has been removed for simplicity
-        # No fallback needed since the feature is no longer supported
+        global_vars["fuzz"] = FuzzFallback()  # Install the fuzzy-match shim under the expected name
 
-        # Add SSH connection fallbacks
-        if "paramiko" not in global_vars or global_vars["paramiko"] is None:  # paramiko SSH library is unavailable
+    @classmethod
+    def _install_ssh_fallbacks(cls, global_vars):  # Install paramiko/redexpect shims that fail loudly when used
+        """Install paramiko and redexpect shims that raise ImportError with install guidance when accessed."""
+        cls._install_paramiko_fallback(global_vars)  # SSH client shim when paramiko is absent
+        cls._install_redexpect_fallback(global_vars)  # SSH automation shim when redexpect is absent
 
-            class SSHFallback:
-                """Fallback class when paramiko is not available."""
+    @staticmethod
+    def _install_paramiko_fallback(global_vars):  # Install a paramiko shim that errors on use
+        """When paramiko is missing, install a shim whose SSHClient() raises ImportError with install guidance."""
+        if global_vars.get("paramiko") is not None:  # paramiko (or an existing shim) is already present
+            return  # No fallback needed
 
-                @staticmethod
-                def SSHClient():
-                    raise ImportError(  # Fail loudly with install guidance when SSH is attempted without paramiko
-                        "SSH functionality requires 'paramiko' package. Install with: pip install paramiko"
-                    )
+        class SSHFallback:
+            """Fallback class when paramiko is not available."""
 
-            global_vars["paramiko"] = (
-                SSHFallback()
-            )  # Install the SSH shim so attribute access fails with a clear message
+            @staticmethod
+            def SSHClient():
+                raise ImportError(  # Fail loudly with install guidance when SSH is attempted without paramiko
+                    "SSH functionality requires 'paramiko' package. Install with: pip install paramiko"
+                )
 
-        # pexpect functionality has been removed for simplicity
-        # SSH automation should use paramiko directly
+        global_vars["paramiko"] = SSHFallback()  # Install the SSH shim with a clear error path
 
-        if (
-            "redexpect" not in global_vars or global_vars["redexpect"] is None
-        ):  # Cross-platform SSH automation lib missing
+    @staticmethod
+    def _install_redexpect_fallback(global_vars):  # Install a redexpect shim that errors on use
+        """When redexpect is missing, install a shim whose spawn() raises ImportError with install guidance."""
+        if global_vars.get("redexpect") is not None:  # redexpect (or an existing shim) is already present
+            return  # No fallback needed
 
-            class RedexpectFallback:
-                """Fallback class when redexpect is not available."""
+        class RedexpectFallback:
+            """Fallback class when redexpect is not available."""
 
-                @staticmethod
-                def spawn(*args, **kwargs):
-                    raise ImportError(  # Fail loudly with install guidance when redexpect is used but absent
-                        "Cross-platform SSH automation requires 'redexpect' package. Install with: pip install redexpect"  # noqa: E501
-                    )
+            @staticmethod
+            def spawn(*args, **kwargs):
+                raise ImportError(  # Fail loudly with install guidance when redexpect is used but absent
+                    "Cross-platform SSH automation requires 'redexpect' package. Install with: pip install redexpect"  # noqa: E501
+                )
 
-            global_vars["redexpect"] = RedexpectFallback()  # Install the redexpect shim with a clear error path
+        global_vars["redexpect"] = RedexpectFallback()  # Install the redexpect shim with a clear error path
 
     def _import_special_modules(self):
         """Import special modules with custom handling."""
