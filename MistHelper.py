@@ -9670,6 +9670,22 @@ class OrgInventoryExporter:  # Org inventory exporters.
     Extracted from OrgExportUtils.
     """
 
+    # Stable weekly-export column order for CombinedInventory outputs (downstream consumers depend on it).
+    _COMBINED_INVENTORY_FIELDNAMES = [
+        "Full Site",
+        "System Serial Number",
+        "System MAC Address",
+        "System Model Number",
+        "End Customer Name",
+        "Address Line 1",
+        "Address Line 2",
+        "City",
+        "State",
+        "Country",
+        "Zip Code / Postal Code",
+        "End Customer Account ID",
+    ]
+
     @staticmethod
     def inventory():  # Export org device inventory.
         """
@@ -10047,20 +10063,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         weekly_data, summary_data = OrgInventoryExporter._build_combined_inventory_weekly_data(
             site_configs, end_customer_name, end_customer_account_id
         )  # Group physical devices into per-week export buckets and summary counts.
-        fieldnames = [
-            "Full Site",
-            "System Serial Number",
-            "System MAC Address",
-            "System Model Number",
-            "End Customer Name",
-            "Address Line 1",
-            "Address Line 2",
-            "City",
-            "State",
-            "Country",
-            "Zip Code / Postal Code",
-            "End Customer Account ID",
-        ]  # Keep weekly export column order stable for downstream consumers.
+        fieldnames = OrgInventoryExporter._COMBINED_INVENTORY_FIELDNAMES  # Stable weekly-export column order.
         OrgInventoryExporter._write_combined_inventory_weekly_csvs(
             output_folder, fieldnames, weekly_data
         )  # Emit one detailed CSV per ISO week bucket.
@@ -10070,6 +10073,18 @@ class OrgInventoryExporter:  # Org inventory exporters.
         master_csv_filename, master_row_count = OrgInventoryExporter._write_combined_inventory_master_csv(
             output_folder, safe_org_name, site_configs
         )  # Emit simplified master inventory CSV used by external consumers.
+        OrgInventoryExporter._print_combined_inventory_summary(
+            weekly_data, site_configs, master_csv_filename, master_row_count
+        )  # Tell the operator where the three output artifacts landed.
+
+    @staticmethod
+    def _print_combined_inventory_summary(
+        weekly_data: Any,
+        site_configs: Any,
+        master_csv_filename: str,
+        master_row_count: int,
+    ) -> None:
+        """Print the three CombinedInventory output locations (weekly CSVs, summary, master) for the operator."""
         print(
             f"! {len(weekly_data)} weekly CSV files created in data/CombinedInventory_ByWeek/ folder ({len(site_configs)} total devices processed)"  # noqa: E501
         )  # Summarize weekly export output counts for the operator.
@@ -10261,59 +10276,63 @@ class OrgInventoryExporter:  # Org inventory exporters.
         logging.info("Fetching Gateways with Site Info...")  # Log fetch start.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
 
-        # Fetch site list and build a lookup dictionary for site info
         sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch sites from API.
         site_lookup = {site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites}
         logging.debug("Loaded %s sites for lookup.", len(site_lookup))  # Log loaded site count.
 
-        # Fetch org inventory (all devices)
         inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch inventory from API.
         logging.debug("Loaded %s devices from org inventory.", len(inventory))  # Log loaded device count.
 
-        def split_address(address):  # Parse address into parts.
-            """
-            Splits a full address string into street, city, state, zip, and country.
-            Returns empty strings if parsing fails.
-            """
-            try:
-                parts = address.split(", ")  # Split on comma separators.
-                street = parts[0]  # Extract street.
-                city = parts[1]  # Extract city.
-                state_zip = parts[2].split()  # Split state and zip.
-                state = state_zip[0]  # Extract state.
-                zip_code = state_zip[1]  # Extract zip code.
-                country = parts[3]  # Extract country.
-                return street, city, state, zip_code, country  # Return parsed address parts.
-            except Exception as exception:  # Catch parse errors.
-                logging.debug("Failed to split address '%s': %s", address, exception)  # Log parse failure.
-                return address, "", "", "", ""  # Return raw address fallback.
-
-        # Filter for gateways and enrich with site info
-        gateways = []  # Init gateway list.
-        for device in tqdm(inventory, desc="Processing Gateways", unit="device"):  # type: ignore[no-untyped-call]
-            if device.get("type") == "gateway":  # Branch: device is gateway.
-                site_id = device.get("site_id")  # Read device site id.
-                site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})  # Look up site info.
-                device["site_name"] = site_info["name"]  # Attach site name.
-                device["site_address"] = site_info["address"]  # Attach site address.
-                street, city, state, zip_code, country = split_address(site_info["address"])  # type: ignore[no-untyped-call]
-                device["street"] = street  # Attach street.
-                device["city"] = city  # Attach city.
-                device["state"] = state  # Attach state.
-                device["zip_code"] = zip_code  # Attach zip code.
-                device["country"] = country  # Attach country.
-                gateways.append(device)  # Add gateway to list.
+        gateways = OrgInventoryExporter._enrich_gateways_with_site_info(inventory, site_lookup)  # Filter + enrich
         logging.info("Enriched %s gateway devices with site info.", len(gateways))  # Log enriched gateway count.
+        gateways = OrgInventoryExporter._flatten_sort_export_gateways(gateways)  # Flatten/sort/write CSV; returns rows
+        OrgInventoryExporter._display_gateways_summary_table(gateways)  # Debug-log a PrettyTable of the gateways.
 
-        # Flatten nested fields and escape multiline strings for CSV compatibility
+    @staticmethod
+    def _flatten_sort_export_gateways(gateways: list) -> list:  # type: ignore[type-arg]  # Flatten/sort/write the CSV
+        """Flatten, escape, sort by site name, and write the gateways CSV; return the processed rows for display."""
         gateways = DataProcessingUtils.flatten_nested_fields(gateways)  # Flatten gateway fields.
         gateways = DataProcessingUtils.escape_multiline(gateways)  # type: ignore[no-untyped-call]
         gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))  # Sort by site name.
         DataExporter.write_with_format_selection(gateways, "GatewaysWithSiteInfo.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(gateways)} gateways exported to GatewaysWithSiteInfo.csv")  # Confirm export to operator.
         logging.info("Gateway data written to GatewaysWithSiteInfo.csv")  # Log write success.
+        return gateways  # Processed rows for the summary table
 
-        # Display a summary table in logs
+    @staticmethod
+    def _split_full_address(address: str) -> tuple[str, str, str, str, str]:  # Parse address into parts.
+        """Split a full address into (street, city, state, zip, country); raw street + blanks on parse failure."""
+        try:
+            parts = address.split(", ")  # Split on comma separators.
+            state_zip = parts[2].split()  # Split state and zip.
+            return parts[0], parts[1], state_zip[0], state_zip[1], parts[3]  # street, city, state, zip, country
+        except Exception as exception:  # Catch parse errors.
+            logging.debug("Failed to split address '%s': %s", address, exception)  # Log parse failure.
+            return address, "", "", "", ""  # Return raw address fallback.
+
+    @staticmethod
+    def _enrich_gateways_with_site_info(inventory: list, site_lookup: dict) -> list:  # type: ignore[type-arg]
+        """Filter inventory to gateways and attach site name/address plus split address fields to each."""
+        gateways = []  # Init gateway list.
+        for device in tqdm(inventory, desc="Processing Gateways", unit="device"):  # type: ignore[no-untyped-call]
+            if device.get("type") != "gateway":  # Only gateways are enriched/exported
+                continue  # Skip non-gateway devices
+            site_id = device.get("site_id")  # Read device site id.
+            site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})  # Look up site info.
+            device["site_name"] = site_info["name"]  # Attach site name.
+            device["site_address"] = site_info["address"]  # Attach site address.
+            street, city, state, zip_code, country = OrgInventoryExporter._split_full_address(site_info["address"])
+            device["street"] = street  # Attach street.
+            device["city"] = city  # Attach city.
+            device["state"] = state  # Attach state.
+            device["zip_code"] = zip_code  # Attach zip code.
+            device["country"] = country  # Attach country.
+            gateways.append(device)  # Add gateway to list.
+        return gateways  # Enriched gateway records
+
+    @staticmethod
+    def _display_gateways_summary_table(gateways: list) -> None:  # type: ignore[type-arg]  # Debug-log a table
+        """Build a PrettyTable of the enriched gateways and debug-log it for operator visibility."""
         table = PrettyTable()  # Build display table.
         table.field_names = [  # Define table columns.
             "name",
@@ -10329,18 +10348,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         ]
         for gateway in gateways:  # Iterate gateways for rows.
             table.add_row(  # Add gateway row to table.
-                [
-                    gateway.get("name", ""),
-                    gateway.get("mac", ""),
-                    gateway.get("model", ""),
-                    gateway.get("serial", ""),
-                    gateway.get("site_name", ""),
-                    gateway.get("street", ""),
-                    gateway.get("city", ""),
-                    gateway.get("state", ""),
-                    gateway.get("zip_code", ""),
-                    gateway.get("country", ""),
-                ]
+                [gateway.get(column, "") for column in table.field_names]  # One cell per defined column
             )
         logging.debug("\n%s", table.get_string())  # Debug-log the table.
 
@@ -17515,65 +17523,76 @@ class WANProbeConfigManager:  # WAN probe config manager.
 
     def _update_single_template(self, template: dict[str, Any], dry_run: bool) -> dict[str, Any]:
         """Update a single template's WAN probe configuration."""
-        template_id = template["id"]  # Template id.
-        template_name = template["name"]  # Template name.
-        config = template["config"]  # Template config.
-
-        result = {  # Build the result.
-            "template_name": template_name,
-            "template_id": template_id,
-            "site_count": template["site_count"],
-            "interfaces_updated": [],
-            "status": "",
-            "error": "",
-        }
-
+        template_name = template["name"]  # Template name (used across logging and the result).
+        result = self._blank_template_result(template)  # Pre-populated result skeleton for this template
         try:
+            config = template["config"]  # Template config to mutate and persist.
             port_config = config.get("port_config", {})  # Read port config.
-            interfaces_modified = []  # Track modified ports.
-
-            for wan_if in template["wan_interfaces"]:  # Walk WAN ports.
-                port_name = wan_if["port_name"]  # Port name.
-                if port_name in port_config:  # Port present.
-                    # Set wan_probe_override
-                    port_config[port_name]["wan_probe_override"] = {  # Set the probe override.
-                        "ips": self.probe_ips.copy(),
-                        "probe_profile": self.probe_profile,
-                    }
-                    interfaces_modified.append(port_name)  # Mark it modified.
-                    logging.debug("Template %s: Updated %s probe config", template_name, port_name)  # Trace the update.
-
+            interfaces_modified = self._apply_wan_probe_overrides(template, port_config)  # Set probe overrides
             if interfaces_modified:  # Any modifications.
                 config["port_config"] = port_config  # Store port config.
                 result["interfaces_updated"] = interfaces_modified  # Record updates.
-
-                if dry_run:  # Dry-run.
-                    result["status"] = "DRY-RUN"  # Mark dry-run.
-                    logging.info("DRY-RUN: Would update template %s interfaces: %s", template_name, interfaces_modified)
-                else:
-                    logging.debug("Updating template %s via API", template_name)  # Trace the update.
-                    update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(  # Update the template.
-                        apisession, self.org_id, template_id, body=config
-                    )
-
-                    if update_resp.status_code == 200:  # Success.
-                        result["status"] = "SUCCESS"  # Mark success.
-                        logging.info("Successfully updated template %s", template_name)  # Log success.
-                    else:
-                        result["status"] = "FAILED"  # Failed.
-                        result["error"] = f"API returned status {update_resp.status_code}"  # Record the error.
-                        logging.error("Failed to update template %s: status %s", template_name, update_resp.status_code)
+                status, error = self._persist_template_update(template, config, dry_run, interfaces_modified)  # Commit
+                result["status"] = status  # Record the outcome status.
+                result["error"] = error  # Record any error detail.
             else:
                 result["status"] = "SKIPPED"  # Mark skipped.
                 result["error"] = "No WAN interfaces found in port_config"  # Record the reason.
-
         except Exception as error:  # Update failed.
             result["status"] = "ERROR"  # Mark error.
             result["error"] = str(error)  # Record the error.
             logging.error("Error updating template %s: %s", template_name, error)  # Log the error.
             logging.error(traceback.format_exc())  # Log the traceback.
-
         return result  # Return the result.
+
+    @staticmethod
+    def _blank_template_result(template: dict[str, Any]) -> dict[str, Any]:  # Pre-fill the per-template result
+        """Build the per-template result skeleton (identity fields set; status/error/updates start empty)."""
+        return {
+            "template_name": template["name"],  # Template name for the report.
+            "template_id": template["id"],  # Template id for the report.
+            "site_count": template["site_count"],  # How many sites use this template.
+            "interfaces_updated": [],  # Filled with modified port names when an update happens.
+            "status": "",  # Outcome status (DRY-RUN/SUCCESS/FAILED/SKIPPED/ERROR).
+            "error": "",  # Error detail when the outcome is not success.
+        }
+
+    def _apply_wan_probe_overrides(self, template: dict[str, Any], port_config: dict[str, Any]) -> list[str]:
+        """Set wan_probe_override on each WAN interface present in port_config; return the modified port names."""
+        interfaces_modified = []  # Track modified ports.
+        template_name = template["name"]  # Template name for trace logging.
+        for wan_if in template["wan_interfaces"]:  # Walk WAN ports.
+            port_name = wan_if["port_name"]  # Port name.
+            if port_name in port_config:  # Port present.
+                port_config[port_name]["wan_probe_override"] = {  # Set the probe override.
+                    "ips": self.probe_ips.copy(),
+                    "probe_profile": self.probe_profile,
+                }
+                interfaces_modified.append(port_name)  # Mark it modified.
+                logging.debug("Template %s: Updated %s probe config", template_name, port_name)  # Trace the update.
+        return interfaces_modified  # Ports that received a probe override
+
+    def _persist_template_update(
+        self,
+        template: dict[str, Any],
+        config: dict[str, Any],
+        dry_run: bool,
+        interfaces_modified: list[str],
+    ) -> tuple[str, str]:
+        """Commit the template config (dry-run logs only, else calls the API); return (status, error)."""
+        template_name = template["name"]  # Template name for logging.
+        if dry_run:  # Dry-run.
+            logging.info("DRY-RUN: Would update template %s interfaces: %s", template_name, interfaces_modified)
+            return "DRY-RUN", ""  # No API call performed.
+        logging.debug("Updating template %s via API", template_name)  # Trace the update.
+        update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(  # Update the template.
+            apisession, self.org_id, template["id"], body=config
+        )
+        if update_resp.status_code == 200:  # Success.
+            logging.info("Successfully updated template %s", template_name)  # Log success.
+            return "SUCCESS", ""  # Updated successfully.
+        logging.error("Failed to update template %s: status %s", template_name, update_resp.status_code)  # Log fail
+        return "FAILED", f"API returned status {update_resp.status_code}"  # Report the API failure
 
     def _generate_report(self, results: list[dict[str, Any]], dry_run: bool) -> None:  # Generate the audit report.
         """Generate and display final report."""
