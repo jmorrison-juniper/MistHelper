@@ -7954,6 +7954,50 @@ def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int,
     )  # Return all pool configuration values as a bundle.
 
 
+def _pool_collect_future_result(future: Any, item: Any, config: "BatchWorkerConfig") -> tuple[str, Any]:
+    """Resolve one completed future: return ('success', result) on a truthy result, else ('failed', item)."""
+    try:  # Future.result() can raise if the worker threw an exception.
+        result = future.result()  # Retrieve the worker's return value or propagate its exception.
+        if result:  # Truthy result means the worker succeeded and returned data.
+            return "success", result  # Hand the successful result back to the caller.
+        return "failed", item  # Falsy result (empty/None) -- treat the item as failed for retry.
+    except Exception as exc:  # Worker threw an exception; log and track as failed.
+        logging.error("! Future exception for %s %s: %s", config.batch_description.rstrip("s"), item, exc)  # Log it
+        return "failed", item  # Mark item as failed so retry logic can handle it.
+
+
+def _pool_advance_progress_bar(pbar: Any) -> None:
+    """Advance a tqdm progress bar by one, isolating any tqdm.update error so it cannot mask real results."""
+    try:  # tqdm.update can fail in some environments; isolate that error.
+        pbar.update(1)  # Advance progress bar by one item for each completed future.
+    except Exception as upd_err:  # Progress bar update failure should not mask the real work result.
+        logging.error("! Progress bar update failed: %s", upd_err)  # Log progress bar failure for debugging.
+
+
+def _pool_drain_wait_loop(future_to_item: dict, batch_desc: str, config: "BatchWorkerConfig") -> tuple[list, list]:
+    """Wait on the futures, collecting successful results and failed items until all have resolved."""
+    batch_successful: list[Any] = []  # Accumulate successful worker results for this batch.
+    batch_failed: list[Any] = []  # Accumulate items whose futures raised or returned empty for this batch.
+    first_result_logged = False  # Track whether the first-result debug log has fired to avoid repeated noise.
+    pending = set(future_to_item.keys())  # Track in-flight futures so the wait loop can detect completion.
+    with tqdm(  # Show per-batch progress to the operator (issue #431: batch_description from config).
+        total=len(pending), desc=batch_desc, unit=config.batch_description.rstrip("s")
+    ) as pbar:  # type: ignore[call-arg, no-untyped-call]
+        while pending:  # Keep collecting futures until all have resolved.
+            done, pending = wait(pending, return_when=FIRST_COMPLETED)  # Wake up as soon as any future finishes.
+            for future in done:  # Inspect each completed future before moving on.
+                outcome, payload = _pool_collect_future_result(future, future_to_item[future], config)  # Resolve it
+                if outcome == "success":  # Worker returned usable data.
+                    batch_successful.append(payload)  # Collect successful result for the caller's output list.
+                    if not first_result_logged:  # Log the first result's type once to help debug worker outputs.
+                        logging.debug("! First future result type: %s", type(payload))  # One-shot shape debug log.
+                        first_result_logged = True  # Prevent repeated debug log on subsequent results.
+                else:  # Empty result or worker exception.
+                    batch_failed.append(payload)  # Track the failed item for potential retry.
+                _pool_advance_progress_bar(pbar)  # Advance progress regardless of success or failure.
+    return batch_successful, batch_failed  # Return batch-level results so caller can accumulate them.
+
+
 def _pool_process_batch_wait_loop(  # Submit one batch to a thread pool.
     batch: list[Any],
     batch_number: int,
@@ -7967,9 +8011,6 @@ def _pool_process_batch_wait_loop(  # Submit one batch to a thread pool.
     configuration (worker_function, semaphore, thread count, description) moves
     into ``config`` so the public signature stays at 4 parameters (the 5-Item Rule).
     """
-    batch_successful: list[Any] = []  # Accumulate successful worker results for this batch.
-    batch_failed: list[Any] = []  # Accumulate items whose futures raised or returned empty for this batch.
-    first_result_logged = False  # Track whether the first-result debug log has fired to avoid repeated noise.
     logging.info(
         "! Processing batch %s/%s (%s %s, ~%.0f per thread)",
         batch_number,
@@ -7978,54 +8019,13 @@ def _pool_process_batch_wait_loop(  # Submit one batch to a thread pool.
         config.batch_description,  # Issue #431: pulled from the config dataclass; was a positional param.
         len(batch) / config.max_threads,  # Issue #431: pulled from the config dataclass; was a positional param.
     )  # Log batch progress before dispatching to the thread pool.
-    with ThreadPoolExecutor(
-        max_workers=config.max_threads
-    ) as executor:  # Bound thread count to configured pool size (issue #431: was max_threads positional).
+    with ThreadPoolExecutor(max_workers=config.max_threads) as executor:  # Bound thread count to configured pool size.
         future_to_item = {
-            executor.submit(  # Issue #431: worker_function / semaphore now sourced from config dataclass.
-                config.worker_function, item, config.connection_semaphore
-            ): item
+            executor.submit(config.worker_function, item, config.connection_semaphore): item  # Worker per item
             for item in batch
         }  # Map each future back to its source item for error reporting.
-        batch_desc = (
-            f"Batch {batch_number}/{total_batches}"  # Build tqdm description once so progress bar label is consistent.
-        )
-        pending = set(future_to_item.keys())  # Track in-flight futures so the wait loop can detect completion.
-        with tqdm(  # Show per-batch progress to the operator (issue #431: batch_description from config).
-            total=len(pending), desc=batch_desc, unit=config.batch_description.rstrip("s")
-        ) as pbar:  # type: ignore[call-arg, no-untyped-call]
-            while pending:  # Keep collecting futures until all have resolved.
-                done, pending = wait(pending, return_when=FIRST_COMPLETED)  # Wake up as soon as any future finishes.
-                for future in done:  # Inspect each completed future before moving on.
-                    item = future_to_item[future]  # Recover the original item for error logging.
-                    try:  # Future.result() can raise if the worker threw an exception.
-                        result = future.result()  # Retrieve the worker's return value or propagate its exception.
-                        if result:  # Truthy result means the worker succeeded and returned data.
-                            batch_successful.append(result)  # Collect successful result for the caller's output list.
-                            if (
-                                not first_result_logged
-                            ):  # Log the first result's type once to help debug unexpected worker outputs.
-                                logging.debug(
-                                    "! First future result type: %s", type(result)
-                                )  # One-shot debug log to show actual result shape.
-                                first_result_logged = True  # Prevent repeated debug log on subsequent results.
-                        else:  # Falsy result means the worker returned an empty list or None.
-                            batch_failed.append(item)  # Track empty-result items for potential retry.
-                    except Exception as exc:  # Worker threw an exception; log and track as failed.
-                        logging.error(  # Issue #431: batch_description sourced from config.
-                            "! Future exception for %s %s: %s", config.batch_description.rstrip("s"), item, exc
-                        )  # Log exception with item context for targeted debugging.
-                        batch_failed.append(item)  # Mark item as failed so retry logic can handle it.
-                    finally:  # Advance progress bar regardless of success or failure.
-                        try:  # tqdm.update can fail in some environments; isolate that error.
-                            pbar.update(1)  # Advance progress bar by one item for each completed future.
-                        except (
-                            Exception
-                        ) as upd_err:  # Progress bar update failure should not mask the real work result.
-                            logging.error(
-                                "! Progress bar update failed: %s", upd_err
-                            )  # Log progress bar failure for environment-level debugging.
-    return batch_successful, batch_failed  # Return batch-level results so caller can accumulate them.
+        batch_desc = f"Batch {batch_number}/{total_batches}"  # tqdm description so the progress label is consistent.
+        return _pool_drain_wait_loop(future_to_item, batch_desc, config)  # Collect results as futures resolve.
 
 
 def _pool_log_batch_exception(  # Log a batch-level exception with context.
@@ -8059,7 +8059,45 @@ def _pool_log_batch_exception(  # Log a batch-level exception with context.
     raise batch_exc  # Re-raise so outer handlers and the global excepthook can capture the original failure.
 
 
-def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
+def _pool_run_all_batches(
+    work_items: list[Any], batch_size: int, batch_config: "BatchWorkerConfig", total_batches: int, threading_mode: str
+) -> tuple[list[Any], list[Any]]:
+    """Split work items into batches, run each through the thread pool, and accumulate successes and failures."""
+    successful_results: list[Any] = []  # Accumulate all successful worker results across all batches.
+    failed_items: list[Any] = []  # Accumulate all failed items across all batches for optional retry.
+    for batch_index in range(0, len(work_items), batch_size):  # Split work into equal-sized, bounded-memory batches.
+        try:  # Isolate each batch so a single failure doesn't silently skip remaining batches.
+            batch = work_items[batch_index : batch_index + batch_size]  # Slice the current batch from the full list.
+            batch_number = (batch_index // batch_size) + 1  # Compute 1-based batch number for readable progress logs.
+            batch_successful, batch_failed = _pool_process_batch_wait_loop(  # Execute this batch through the pool.
+                batch, batch_number, total_batches, batch_config
+            )  # Collect per-future results for this batch.
+            successful_results.extend(batch_successful)  # Merge batch successes into the overall result list.
+            failed_items.extend(batch_failed)  # Merge batch failures into the overall failed list for retry handling.
+        except Exception as batch_exc:  # Batch-level exceptions need context logging before re-raise.
+            _pool_log_batch_exception(  # Log full batch context then re-raise (issue #431: max_threads from config).
+                batch_exc, batch_index, batch_size, batch_config.max_threads, threading_mode
+            )  # Logs and re-raises with full context.
+    return successful_results, failed_items  # Return accumulated results so the orchestrator can apply retries.
+
+
+def _pool_apply_retry(
+    failed_items: list[Any],
+    retry_function: Any,
+    connection_semaphore: Any,
+    successful_results: list[Any],
+    batch_description: str,
+) -> list[Any]:
+    """Run the caller-provided retry function on failed items, merging recoveries into successful_results in place."""
+    logging.info("! Retrying %s failed %s...", len(failed_items), batch_description)  # Announce the retry phase.
+    retry_results, still_failed = retry_function(
+        failed_items, connection_semaphore
+    )  # Run caller-provided retry logic with the same semaphore constraint.
+    successful_results.extend(retry_results)  # Merge recovered items into the success list in place.
+    return still_failed  # Return items that still failed after retry so the caller can replace its failed list.
+
+
+def execute_with_connection_pool_management(
     work_items: list[Any], worker_function: Any, batch_description: str = "items", retry_function: Any | None = None
 ) -> tuple[list[Any], list[Any]]:
     """
@@ -8089,8 +8127,6 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
     max_threads, connection_semaphore, batch_size, threading_mode = _pool_configure(
         work_items, batch_description
     )  # Resolve threading strategy and pool parameters from environment config.
-    successful_results: list[Any] = []  # Accumulate all successful worker results across all batches.
-    failed_items: list[Any] = []  # Accumulate all failed items across all batches for optional retry.
     total_batches = (
         len(work_items) + batch_size - 1
     ) // batch_size  # Pre-compute total batch count for progress labels.
@@ -8103,41 +8139,14 @@ def execute_with_connection_pool_management(  # noqa: C901, PLR0912, PLR0915
         batch_description=batch_description,
     )
 
-    for batch_index in range(
-        0, len(work_items), batch_size
-    ):  # Split work items into equal-sized batches for bounded memory and predictable progress.
-        try:  # Isolate each batch so a single failure doesn't silently skip remaining batches.
-            batch = work_items[
-                batch_index : batch_index + batch_size
-            ]  # Slice the current batch from the full work-item list.
-            batch_number = (
-                batch_index // batch_size
-            ) + 1  # Compute 1-based batch number for human-readable progress logs.
-            # Issue #431: per-batch values stay positional; constant config travels through dataclass.
-            batch_successful, batch_failed = _pool_process_batch_wait_loop(
-                batch,
-                batch_number,
-                total_batches,
-                batch_config,
-            )  # Execute this batch through the bounded thread pool and collect per-future results.
-            successful_results.extend(batch_successful)  # Merge batch successes into the overall result list.
-            failed_items.extend(batch_failed)  # Merge batch failures into the overall failed list for retry handling.
-        except Exception as batch_exc:  # Batch-level exceptions need context logging before re-raise.
-            _pool_log_batch_exception(
-                batch_exc, batch_index, batch_size, max_threads, threading_mode
-            )  # Logs and re-raises with full context.
+    successful_results, failed_items = _pool_run_all_batches(  # Run every batch through the bounded thread pool.
+        work_items, batch_size, batch_config, total_batches, threading_mode
+    )  # Accumulate successes and failures across all batches.
 
-    if (
-        failed_items and retry_function
-    ):  # Only invoke the retry path when failures exist and a retry function was provided.
-        logging.info(
-            "! Retrying %s failed %s...", len(failed_items), batch_description
-        )  # Announce retry phase so operators can track it separately.
-        retry_results, still_failed = retry_function(
-            failed_items, connection_semaphore
-        )  # Run caller-provided retry logic with the same semaphore constraint.
-        successful_results.extend(retry_results)  # Merge recovered items into the success list.
-        failed_items = still_failed  # Replace failed list with items that still failed after retry.
+    if failed_items and retry_function:  # Only invoke retry when failures exist and a retry function was provided.
+        failed_items = _pool_apply_retry(  # Retry failed items and merge recoveries into successful_results.
+            failed_items, retry_function, connection_semaphore, successful_results, batch_description
+        )  # Replace failed list with items that still failed after retry.
 
     logging.info(
         "! Processed %s %s successfully, %s failed", len(successful_results), batch_description, len(failed_items)
