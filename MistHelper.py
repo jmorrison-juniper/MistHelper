@@ -5569,15 +5569,10 @@ class CacheUtils:
     @staticmethod
     def clear_cache() -> None:  # Menu 175: delete all generated cache CSVs from data/ directory
         """Delete all MistHelper-generated cache CSV files from the data/ directory."""
-        data_dir = "data"  # Use relative path to data/ directory consistent with FilePathUtils.get_csv_path()
+        data_dir = "data"  # Relative path to data/ consistent with FilePathUtils.get_csv_path()
         logging.info("Scanning data directory for generated cache CSVs: %s", data_dir)  # Log scan target
-        try:
-            candidates = [  # List only safe-to-delete files
-                f for f in os.listdir(data_dir) if CacheUtils._is_generated_file(f)
-            ]
-        except OSError as scan_error:  # Handle permission or missing directory errors gracefully
-            logging.error("Failed to list data directory %s: %s", data_dir, scan_error)  # Log I/O failure with context
-            print(f"! Error scanning data directory: {scan_error}")  # Surface error to operator
+        candidates = CacheUtils._scan_cache_candidates(data_dir)  # List safe-to-delete files (None on scan error)
+        if candidates is None:  # Directory could not be listed (already reported by the scanner)
             return  # Abort -- nothing to delete if we can't list the directory
         if not candidates:  # Nothing to delete -- inform operator and return early
             print("! No generated cache CSV files found to delete.")  # User-friendly empty state message
@@ -5586,21 +5581,40 @@ class CacheUtils:
         print(f"Found {len(candidates)} generated cache CSV file(s) to delete:")  # Show operator what will be removed
         for name in sorted(candidates):  # Sort for readable output
             print(f"  {name}")  # List each file so operator knows exactly what is affected
+        deleted, errors = CacheUtils._delete_cache_files(data_dir, candidates)  # Delete each file, counting outcomes
+        print(f"! Cache cleared: {deleted} file(s) deleted, {errors} error(s).")  # Summary line for operator
+        logging.info("Cache clear complete: %d deleted, %d errors", deleted, errors)  # Log summary for post-run review
+
+    @staticmethod
+    def _scan_cache_candidates(data_dir: str) -> list[str] | None:  # List generated cache files, or None on error
+        """Return the list of generated cache filenames in data_dir, or None if the directory can't be listed."""
+        logging.debug("Listing generated cache candidates in %s", data_dir)  # Trace the scan before listing
+        try:  # Listing can fail on permissions or a missing directory
+            return [
+                name for name in os.listdir(data_dir) if CacheUtils._is_generated_file(name)
+            ]  # Keep only MistHelper-generated cache files (safe to delete)
+        except OSError as scan_error:  # Permission or missing-directory error
+            logging.error("Failed to list data directory %s: %s", data_dir, scan_error)  # Log I/O failure with context
+            print(f"! Error scanning data directory: {scan_error}")  # Surface error to operator
+            return None  # Signal the caller to abort
+
+    @staticmethod
+    def _delete_cache_files(data_dir: str, candidates: list[str]) -> tuple[int, int]:  # Delete files, count outcomes
+        """Delete each candidate cache file; return (deleted_count, error_count)."""
         deleted = 0  # Track successful deletions for summary
         errors = 0  # Track failures for summary
         for name in candidates:  # Delete each identified cache file
-            full_path = os.path.join(data_dir, name)  # Build absolute path for deletion
+            full_path = os.path.join(data_dir, name)  # Build the path for deletion
             logging.info("Deleting cache CSV: %s", full_path)  # Log before deletion for audit trail
-            try:
+            try:  # Individual deletions may fail without aborting the batch
                 os.remove(full_path)  # Delete the file from disk
                 logging.debug("Deleted: %s", full_path)  # Confirm deletion at debug level
                 deleted += 1  # Increment success counter
-            except OSError as delete_error:  # Handle individual file deletion failures without aborting the batch
+            except OSError as delete_error:  # Handle individual file deletion failures
                 logging.error("Failed to delete %s: %s", full_path, delete_error)  # Log failure with path and reason
                 print(f"  ! Could not delete {name}: {delete_error}")  # Surface individual failure to operator
                 errors += 1  # Increment error counter
-        print(f"! Cache cleared: {deleted} file(s) deleted, {errors} error(s).")  # Summary line for operator
-        logging.info("Cache clear complete: %d deleted, %d errors", deleted, errors)  # Log summary for post-run review
+        return deleted, errors  # Report totals to the caller
 
     @staticmethod
     def create_address_parse_failures_csv(
@@ -5737,24 +5751,28 @@ class DisplayUtils:
         Returns:
             str: Formatted progress bar string like "[=========>          ] 45%"
         """
-        if progress_percentage is None or progress_percentage < 0:
-            progress_percentage = 0
-        elif progress_percentage > 100:
-            progress_percentage = 100
+        clamped = DisplayUtils._clamp_progress_percentage(progress_percentage)  # Constrain to the 0..100 range
+        filled_length = int(bar_length * clamped / 100)  # How many characters of the bar are filled
+        bar = DisplayUtils._render_progress_bar(filled_length, bar_length)  # Build the filled/arrow/empty bar string
+        return f"[{bar}] {clamped:3d}%"  # Bar plus right-aligned percentage label
 
-        filled_length = int(bar_length * progress_percentage / 100)
+    @staticmethod
+    def _clamp_progress_percentage(progress_percentage: float | None) -> int:  # Constrain progress into 0..100
+        """Clamp a progress value (or None) into the inclusive 0..100 range."""
+        if progress_percentage is None or progress_percentage < 0:  # Missing or negative progress
+            return 0  # Treat as not started
+        if progress_percentage > 100:  # Above the maximum
+            return 100  # Treat as complete
+        return progress_percentage  # type: ignore[return-value]  # Already within range (preserve caller's numeric type)
 
-        if filled_length == bar_length:
-            # Complete: all filled
-            bar = "=" * bar_length
-        elif filled_length == 0:
-            # Just started: all empty
-            bar = " " * bar_length
-        else:
-            # In progress: filled portion + arrow + empty portion
-            bar = "=" * (filled_length - 1) + ">" + " " * (bar_length - filled_length)
-
-        return f"[{bar}] {progress_percentage:3d}%"
+    @staticmethod
+    def _render_progress_bar(filled_length: int, bar_length: int) -> str:  # Build the bar glyph string
+        """Render the bar glyphs for a given filled length: all-filled, all-empty, or filled+arrow+empty."""
+        if filled_length == bar_length:  # Complete: every cell filled
+            return "=" * bar_length  # Solid bar
+        if filled_length == 0:  # Just started: every cell empty
+            return " " * bar_length  # Empty bar
+        return "=" * (filled_length - 1) + ">" + " " * (bar_length - filled_length)  # Filled portion + arrow + empty
 
 
 class DeviceDataFetcher:
@@ -6273,21 +6291,20 @@ class ValidationUtils:  # Input validators for API identifiers.
 
         target = target.strip()  # Normalize surrounding whitespace.
 
-        # Check if it's a valid IP address
-        try:
+        try:  # A literal IP address is always a valid target.
             ipaddress.ip_address(target)  # Parse as a literal IP.
             return True  # Valid IP target.
-        except ValueError:  # Not an IP; try hostname.
-            pass  # Fall through to hostname check.
+        except ValueError:  # Not an IP; fall through to hostname validation.
+            pass  # Hostname check happens below.
 
-        # Check if it's a valid hostname
-        # Basic hostname validation: alphanumeric, dots, hyphens
-        if re.match(r"^[a-zA-Z0-9.-]+$", target) and len(target) <= 253:  # Allow valid hostname charset/length.
-            # Ensure it doesn't start or end with a dot or hyphen
-            if not target.startswith((".", "-")) and not target.endswith((".", "-")):  # Reject edge dot/dash.
-                return True  # Valid hostname target.
+        return ValidationUtils._is_valid_hostname(target)  # Accept only well-formed hostnames
 
-        return False  # Invalid ping target.
+    @staticmethod
+    def _is_valid_hostname(target: str) -> bool:  # Check a string is a syntactically valid hostname
+        """Return True when target uses the hostname charset, is <= 253 chars, and has no edge dot/hyphen."""
+        if not re.match(r"^[a-zA-Z0-9.-]+$", target) or len(target) > 253:  # Reject bad charset or over-length names
+            return False  # Not a valid hostname
+        return not target.startswith((".", "-")) and not target.endswith((".", "-"))  # Reject leading/trailing dot/dash
 
 
 # ============================================================================
