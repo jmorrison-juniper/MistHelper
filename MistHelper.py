@@ -11486,16 +11486,21 @@ class FilterOperatorEngine:  # Filter operator evaluation engine.
                 return False  # Invalid.
         return True  # Valid.
 
+    # Null/blank operator -> predicate. Dict dispatch keeps _evaluate_null_blank flat (no if-chain/booleans).
+    _NULL_BLANK_OPERATORS = {
+        "is null": lambda field_value: field_value is None,  # True when the field is absent
+        "is not null": lambda field_value: field_value is not None,  # True when the field is present
+        "is blank": lambda field_value: field_value is not None
+        and str(field_value).strip() == "",  # Present but empty/whitespace
+    }
+
     @staticmethod
     def _evaluate_null_blank(field_value: str | None, operator: str) -> bool:  # Evaluate null/blank operators.
-        """Evaluate null/blank operators against a field value."""
-        if operator == "is null":  # is null.
-            return field_value is None  # True when absent.
-        if operator == "is not null":  # is not null.
-            return field_value is not None  # True when present.
-        if operator == "is blank":  # is blank.
-            return field_value is not None and str(field_value).strip() == ""  # True when present and empty.
-        return field_value is not None and str(field_value).strip() != ""  # is not blank result.
+        """Evaluate null/blank operators against a field value (default: 'is not blank')."""
+        predicate = FilterOperatorEngine._NULL_BLANK_OPERATORS.get(operator)  # Look up the operator predicate
+        if predicate:  # A null/null/blank operator matched
+            return predicate(field_value)  # Apply its predicate
+        return field_value is not None and str(field_value).strip() != ""  # Default: 'is not blank'
 
     @staticmethod
     def _normalize_pair(field_value: str, search_value: str, is_mac: bool) -> tuple[str, str]:
@@ -17841,16 +17846,9 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _load_template_mappings() -> dict[str, str] | None:  # Load template name->id.
         """Load template name to ID mapping from OrgGatewayTemplates.csv."""
-        template_name_to_id = {}  # Name-to-id map.
         try:
             gateway_templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")  # Templates path.
-            with open(gateway_templates_path, encoding="utf-8") as file:  # Open the CSV.
-                reader = csv.DictReader(file)  # Parse rows.
-                for row in reader:  # Walk rows.
-                    name = row.get("name", "").strip()  # Read the name.
-                    tid = row.get("id", "").strip()  # Read the id.
-                    if name and tid:  # Have both.
-                        template_name_to_id[name] = tid  # Map name to id.
+            template_name_to_id = DeviceRebootManager._read_template_name_id_csv(gateway_templates_path)  # Parse rows.
             logging.info("Loaded %s gateway templates", len(template_name_to_id))  # Log the count.
         except Exception as error:  # Load failed.
             logging.error("! Failed to load gateway templates: %s", error)  # Log the error.
@@ -17863,6 +17861,19 @@ class DeviceRebootManager:  # Device reboot manager.
             return None  # Abort.
 
         return template_name_to_id  # Return the map.
+
+    @staticmethod
+    def _read_template_name_id_csv(csv_path: str) -> dict[str, str]:  # Read name/id rows into a map
+        """Read a gateway-templates CSV into a {name: id} dict, skipping rows missing either field."""
+        template_name_to_id: dict[str, str] = {}  # Name-to-id map.
+        with open(csv_path, encoding="utf-8") as file:  # Open the CSV.
+            reader = csv.DictReader(file)  # Parse rows.
+            for row in reader:  # Walk rows.
+                name = row.get("name", "").strip()  # Read the name.
+                tid = row.get("id", "").strip()  # Read the id.
+                if name and tid:  # Have both.
+                    template_name_to_id[name] = tid  # Map name to id.
+        return template_name_to_id  # The parsed name->id map
 
     @staticmethod
     def _load_reboot_template_names() -> set[str] | None:  # Load reboot template names.
@@ -18400,16 +18411,23 @@ class FirmwareUpgradeStatusChecker:
 
     def _is_stale_upgrade(self, fw_progress: Any, fw_timestamp: Any) -> bool:
         """Check if upgrade at 100% is stale (older than threshold)."""
-        if fw_progress != 100:
-            return False
-        if not fw_timestamp or not isinstance(fw_timestamp, (int, float)) or fw_timestamp <= 0:
-            return False
+        if fw_progress != 100:  # Only a completed (100%) upgrade can be stale
+            return False  # Not complete -- not stale
+        if not self._is_valid_upgrade_timestamp(fw_timestamp):  # Timestamp must be a usable positive number
+            return False  # Cannot judge staleness without a valid timestamp
 
-        try:
-            upgrade_age_hours = (time.time() - fw_timestamp) / 3600
-            return upgrade_age_hours > self.STALE_UPGRADE_HOURS  # type: ignore[no-any-return]
-        except (ValueError, OSError, TypeError):
-            return False
+        try:  # Clock math can raise on pathological values
+            upgrade_age_hours = (time.time() - fw_timestamp) / 3600  # Age of the completed upgrade in hours
+            return upgrade_age_hours > self.STALE_UPGRADE_HOURS  # type: ignore[no-any-return]  # Stale past threshold
+        except (ValueError, OSError, TypeError):  # Defensive: treat bad arithmetic as 'not stale'
+            return False  # Could not compute age -- treat as not stale
+
+    @staticmethod
+    def _is_valid_upgrade_timestamp(fw_timestamp: Any) -> bool:  # Validate a firmware timestamp value
+        """Return True when fw_timestamp is a positive int/float usable for age math."""
+        if not isinstance(fw_timestamp, (int, float)):  # Must be numeric to do clock math
+            return False  # Non-numeric timestamp is unusable
+        return fw_timestamp > 0  # Reject zero/negative epoch values
 
     def _track_active_upgrade(self, fw_progress: Any, fw_timestamp: Any, device_info: dict[str, Any]) -> None:
         """Track an actively upgrading device."""
