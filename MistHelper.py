@@ -1084,136 +1084,116 @@ class GlobalImportManager:
         """Upgrade UV package manager to latest version (only if needed)."""
         if not self.auto_upgrade_uv:  # UV auto-management disabled by config
             return True  # Nothing to do; treat as success
-
-        # Check if we've recently checked for updates
         now = time.time()  # Current timestamp used for throttling
-        if self._last_uv_update_check:  # A prior update-check time is recorded
-            hours_since_last_check = (now - self._last_uv_update_check) / 3600  # Convert elapsed seconds to hours
-            if hours_since_last_check < self.uv_update_check_hours:  # Still inside the throttle window
-                logging.debug(  # Skip the check to avoid frequent network calls
-                    "UV update check skipped (last check %.1f hours ago, threshold: %s hours)",
-                    hours_since_last_check,
-                    self.uv_update_check_hours,
-                )
-                return True  # No update needed yet
+        if self._uv_update_within_throttle(now):  # Still inside the throttle window
+            return True  # No update needed yet
+        return self._run_uv_self_update(now)  # Perform the (bounded) self-update attempt
 
+    def _uv_update_within_throttle(self, now: float) -> bool:  # Decide if the UV update check is throttled
+        """Return True when a UV update check ran recently enough to skip this one."""
+        if not self._last_uv_update_check:  # No prior update-check time recorded
+            return False  # Nothing to throttle against -- allow the check
+        hours_since_last_check = (now - self._last_uv_update_check) / 3600  # Convert elapsed seconds to hours
+        if hours_since_last_check < self.uv_update_check_hours:  # Still inside the throttle window
+            logging.debug(  # Skip the check to avoid frequent network calls
+                "UV update check skipped (last check %.1f hours ago, threshold: %s hours)",
+                hours_since_last_check,
+                self.uv_update_check_hours,
+            )
+            return True  # Throttled -- skip this update
+        return False  # Throttle window elapsed -- allow the check
+
+    def _run_uv_self_update(self, now: float) -> bool:  # Run 'uv self update', recording the attempt time
+        """Attempt 'uv self update'; on failure, dispatch to the pip-fallback handler. Always non-fatal."""
         try:  # The update may fail; treat most failures as non-critical
             logging.info("Checking for UV package manager updates...")  # Announce the update check
-            # First try UV self-update (for standalone installations)
             result = subprocess.run(  # nosec B603 B607  # Try uv's built-in self-update
                 ["uv", "self", "update"],
                 capture_output=True,
                 text=True,
                 timeout=self.upgrade_check_timeout,  # Bounded self-update call
             )
-
-            # Update the last check time regardless of result
             self._last_uv_update_check = now  # Record this attempt so we honor the throttle next time
-
             if result.returncode == 0:  # Self-update succeeded
                 logging.info("UV package manager updated successfully")  # Confirm the update
                 return True  # Done
-            else:  # Self-update failed; determine why
-                # If self-update fails, try pip upgrade (for pip-installed UV)
-                if (  # UV was installed via pip, so self-update isn't supported
-                    "Self-update is only available for uv binaries installed via the standalone installation scripts"
-                    in result.stderr
-                ):
-                    logging.info(
-                        "UV was installed via pip, attempting pip upgrade..."
-                    )  # Switch to the pip upgrade path
-                    pip_result = subprocess.run(  # nosec B603  # Upgrade uv via pip instead
-                        [sys.executable, "-m", "pip", "install", "--upgrade", "uv"],  # pip upgrade command
-                        capture_output=True,  # Capture output for logging
-                        text=True,  # Decode output as text
-                        timeout=self.upgrade_check_timeout,  # Bound the upgrade
-                    )
-                    if pip_result.returncode == 0:  # pip upgrade succeeded
-                        logging.info("UV package manager updated successfully via pip")  # Confirm the upgrade
-                        return True  # Done
-                    else:  # pip upgrade failed
-                        logging.warning("Failed to upgrade UV via pip: %s", pip_result.stderr)  # Log the error
-                        return True  # Non-critical failure  # Continue anyway; the current UV still works
-                else:  # Self-update failed for some other reason
-                    logging.warning("UV self-update returned non-zero: %s", result.stderr)  # Log the error
-                    return True  # Non-critical failure  # Continue anyway; the current UV still works
+            return self._handle_uv_selfupdate_failure(result)  # Inspect stderr and try the pip fallback
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # Update process hung or failed to launch
-            # Still update the last check time to avoid repeated failures
             self._last_uv_update_check = now  # Record the attempt so we don't retry immediately
             logging.warning("UV self-update failed: %s", e)  # Log the exception
-            return True  # Non-critical failure  # Continue anyway; the current UV still works
+            return True  # Non-critical failure -- the current UV still works
+
+    def _handle_uv_selfupdate_failure(self, result: Any) -> bool:  # Handle a non-zero 'uv self update' result
+        """When self-update fails because UV was pip-installed, upgrade via pip; otherwise just log. Non-fatal."""
+        pip_installed_marker = (  # Marker stderr emits when self-update isn't supported for this install method
+            "Self-update is only available for uv binaries installed via the standalone installation scripts"
+        )
+        if pip_installed_marker not in result.stderr:  # Self-update failed for some other reason
+            logging.warning("UV self-update returned non-zero: %s", result.stderr)  # Log the error
+            return True  # Non-critical -- the current UV still works
+        logging.info("UV was installed via pip, attempting pip upgrade...")  # Switch to the pip upgrade path
+        pip_result = subprocess.run(  # nosec B603  # Upgrade uv via pip instead
+            [sys.executable, "-m", "pip", "install", "--upgrade", "uv"],  # pip upgrade command
+            capture_output=True,  # Capture output for logging
+            text=True,  # Decode output as text
+            timeout=self.upgrade_check_timeout,  # Bound the upgrade
+        )
+        if pip_result.returncode == 0:  # pip upgrade succeeded
+            logging.info("UV package manager updated successfully via pip")  # Confirm the upgrade
+            return True  # Done
+        logging.warning("Failed to upgrade UV via pip: %s", pip_result.stderr)  # Log the error
+        return True  # Non-critical -- the current UV still works
 
     def _install_package_with_uv(self, package_spec: str) -> bool:
         """Install a package using UV package manager with fast resolution and virtual environment awareness."""
         try:
             logging.debug("Installing package with UV: %s", package_spec)  # Log which package is being installed
-
-            # Check if we're in a virtual environment and prefer venv's UV if available
-            uv_cmd = "uv"  # Default to the UV binary found on PATH
-            if hasattr(self, "in_venv") and self.in_venv:  # Running inside a virtual environment
-                # Try to use UV from the virtual environment first
-                venv_uv = os.path.join(os.path.dirname(sys.executable), "uv.exe")  # Build the venv-local UV path
-                if os.path.exists(venv_uv):  # The venv ships its own UV binary
-                    uv_cmd = venv_uv  # Prefer the venv's UV to stay environment-consistent
-                    logging.debug("Using venv UV: %s", venv_uv)  # Record which UV binary was chosen
-
-                # Use UV with the current Python environment
-                cmd = [
-                    uv_cmd,
-                    "pip",
-                    "install",
-                    "--python",
-                    sys.executable,
-                    "--no-build-isolation",
-                    package_spec,
-                ]  # Pin install to this interpreter
-            else:  # Not in a venv -- use UV's default target resolution
-                # Use UV with default behavior
-                cmd = [uv_cmd, "pip", "install", "--no-build-isolation", package_spec]  # Standard UV install command
-
-            result = subprocess.run(  # nosec B603  # Execute the UV install (trusted, fixed argv)
-                cmd,  # The assembled UV command
-                capture_output=True,  # Capture stdout/stderr for logging and fallback detection
-                text=True,  # Decode output as text rather than bytes
-                timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
-            )
-            if result.returncode == 0:  # UV reported a successful install
-                logging.info("Successfully installed %s with UV", package_spec)  # Confirm success
+            uv_cmd = self._resolve_uv_binary()  # Pick venv-local UV when available, else PATH 'uv'
+            first_cmd = self._build_uv_install_cmd(uv_cmd, package_spec, no_build_isolation=True)  # First attempt
+            if self._attempt_uv_install(first_cmd, package_spec, fallback=False):  # First UV attempt succeeded
                 return True  # Installation done
-            else:  # First attempt failed -- retry without build isolation
-                # Try without --no-build-isolation if it failed
-                logging.debug("UV install failed with --no-build-isolation, retrying without it")  # Note the retry
-                if hasattr(self, "in_venv") and self.in_venv:  # Still target this interpreter inside a venv
-                    cmd = [
-                        uv_cmd,
-                        "pip",
-                        "install",
-                        "--python",
-                        sys.executable,
-                        package_spec,
-                    ]  # Retry pinned to interpreter
-                else:  # Outside a venv, use the default target
-                    cmd = [uv_cmd, "pip", "install", package_spec]  # Retry with plain UV install
-
-                result = subprocess.run(  # nosec B603  # Execute the fallback UV install
-                    cmd,  # The retry command (no build-isolation flag)
-                    capture_output=True,  # Capture output for logging
-                    text=True,  # Decode output as text
-                    timeout=self.upgrade_check_timeout,  # Bound the retry attempt
-                )
-                if result.returncode == 0:  # The fallback install succeeded
-                    logging.info(
-                        "Successfully installed %s with UV (fallback)", package_spec
-                    )  # Confirm fallback success
-                    return True  # Installation done
-                else:  # Both UV attempts failed
-                    logging.warning(
-                        "UV install failed for %s: %s", package_spec, result.stderr
-                    )  # Log the UV error output
-                    return False  # Signal failure so the caller can fall back to pip
+            logging.debug("UV install failed with --no-build-isolation, retrying without it")  # Note the retry
+            retry_cmd = self._build_uv_install_cmd(uv_cmd, package_spec, no_build_isolation=False)  # Retry sans flag
+            return self._attempt_uv_install(retry_cmd, package_spec, fallback=True)  # Fallback attempt (logs stderr)
         except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # UV hung or failed to launch
             logging.warning("Failed to install %s with UV: %s", package_spec, e)  # Log the exception detail
             return False  # Signal failure so the caller can fall back to pip
+
+    def _attempt_uv_install(self, cmd: list[str], package_spec: str, *, fallback: bool) -> bool:  # One UV install try
+        """Run one UV install attempt; on success log+return True. On failure return False (logs stderr if fallback)."""
+        result = subprocess.run(  # nosec B603  # Execute the UV install (trusted, fixed argv)
+            cmd,  # The assembled UV command
+            capture_output=True,  # Capture stdout/stderr for logging and fallback detection
+            text=True,  # Decode output as text rather than bytes
+            timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
+        )
+        if result.returncode == 0:  # UV reported a successful install
+            label = "UV (fallback)" if fallback else "UV"  # Distinguish the first attempt from the retry in the log
+            logging.info("Successfully installed %s with %s", package_spec, label)  # Confirm success
+            return True  # Installation done
+        if fallback:  # Only the final (fallback) attempt surfaces the UV error output
+            logging.warning("UV install failed for %s: %s", package_spec, result.stderr)  # Log the UV error output
+        return False  # This attempt did not install the package
+
+    def _resolve_uv_binary(self) -> str:  # Choose which UV binary to invoke
+        """Return the venv-local UV binary when running inside a venv that ships one, else PATH 'uv'."""
+        if not (hasattr(self, "in_venv") and self.in_venv):  # Not running inside a virtual environment
+            return "uv"  # Use the UV binary found on PATH
+        venv_uv = os.path.join(os.path.dirname(sys.executable), "uv.exe")  # Build the venv-local UV path
+        if os.path.exists(venv_uv):  # The venv ships its own UV binary
+            logging.debug("Using venv UV: %s", venv_uv)  # Record which UV binary was chosen
+            return venv_uv  # Prefer the venv's UV to stay environment-consistent
+        return "uv"  # venv has no local UV -- fall back to PATH 'uv'
+
+    def _build_uv_install_cmd(self, uv_cmd: str, package_spec: str, no_build_isolation: bool) -> list[str]:  # UV argv
+        """Assemble the 'uv pip install' argv: pin to this interpreter in a venv; add --no-build-isolation if set."""
+        cmd = [uv_cmd, "pip", "install"]  # Base UV install command
+        if hasattr(self, "in_venv") and self.in_venv:  # Inside a venv -- pin the install to this interpreter
+            cmd += ["--python", sys.executable]  # Target the current Python explicitly
+        if no_build_isolation:  # First attempt requests no build isolation (faster, fewer surprises)
+            cmd.append("--no-build-isolation")  # Disable build isolation for this attempt
+        cmd.append(package_spec)  # The package to install (with any version constraint)
+        return cmd  # Completed UV argv
 
     def _install_package_with_pip(self, package_spec: str) -> bool:
         """Install a package using pip as fallback with virtual environment awareness."""
@@ -1268,63 +1248,54 @@ class GlobalImportManager:
         except (subprocess.TimeoutExpired, subprocess.SubprocessError):  # Version probe hung or failed to launch
             return False  # Assume no update needed when the probe fails
 
-    def _upgrade_all_dependencies(self) -> bool:  # noqa: C901
+    def _upgrade_all_dependencies(self) -> bool:
         """Install missing dependencies and upgrade existing ones."""
-        if not self.auto_upgrade_dependencies:
-            logging.info("Auto-upgrade of dependencies is disabled in configuration")
-            return True
-
-        # Collect package specs, filtering out built-in modules
-        packages_to_process = []
-        for pkg_name, pkg_spec in {**self.required_packages, **self.optional_packages}.items():
-            if pkg_spec is not None:  # Skip built-in modules
-                packages_to_process.append((pkg_name, pkg_spec))
-
+        if not self.auto_upgrade_dependencies:  # Auto-upgrade disabled by configuration
+            logging.info("Auto-upgrade of dependencies is disabled in configuration")  # Note the skip
+            return True  # Nothing to do; treat as success
+        packages_to_process = self._collect_packages_to_process()  # (name, spec) pairs, built-ins excluded
         if not packages_to_process:  # Caller supplied an empty work list
             logging.info("No packages to process")  # Note there is nothing to do
             return True  # Success by default -- no work means no failures
-
-        logging.info(
-            "Processing %s packages...", len(packages_to_process)
-        )  # Announce how many packages will be handled
-
-        # Process packages individually for better error handling
-        uv_available = self._check_uv_installation()  # Detect whether UV can be used as the fast installer
-        if uv_available:  # UV is present on this system
-            logging.info("Using UV package manager for installations")  # Prefer UV for speed
-        else:  # UV not found
-            logging.info("Using pip for package installations (UV not available)")  # Fall back to pip
-
-        success_count = 0  # Track how many packages installed successfully
-
-        for _pkg_name, pkg_spec in packages_to_process:  # Iterate each (name, spec) pair to install
-            # Extract base package name from spec (e.g., "requests>=2.28.0" -> "requests")
-            pkg_spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[
-                0
-            ].strip()  # Strip version operators to bare name
-
-            try:
-                # Try UV first if available
-                if uv_available:  # Attempt the fast UV path when possible
-                    if self._install_package_with_uv(pkg_spec):  # UV install succeeded
-                        success_count += 1  # Count this package as done
-                        continue  # Move to the next package without trying pip
-
-                # Fallback to pip
-                if self._install_package_with_pip(pkg_spec):  # pip install succeeded
-                    success_count += 1  # Count this package as done
-                else:  # pip install failed
-                    logging.warning("Failed to install/upgrade %s", pkg_spec)  # Warn but keep processing others
-
-            except Exception as e:  # Any unexpected error during install of this package
-                logging.warning(
-                    "Error processing package %s: %s", pkg_spec, e
-                )  # Log and continue with remaining packages
-
-        logging.info(
-            "Successfully processed %s/%s packages", success_count, len(packages_to_process)
-        )  # Summarize results
+        logging.info("Processing %s packages...", len(packages_to_process))  # Announce how many will be handled
+        success_count = self._install_dependency_batch(packages_to_process)  # Install each, counting successes
+        logging.info("Successfully processed %s/%s packages", success_count, len(packages_to_process))  # Summarize
         return success_count > 0  # Report success if at least one package installed
+
+    def _install_dependency_batch(self, packages_to_process: list[tuple[str, str]]) -> int:  # Install a batch
+        """Install each (name, spec) package via the best backend; return the count that installed successfully."""
+        uv_available = self._check_uv_installation()  # Detect whether UV can be used as the fast installer
+        logging.info(  # Record which installer backend will be used
+            "Using UV package manager for installations"
+            if uv_available
+            else "Using pip for package installations (UV not available)"
+        )
+        success_count = 0  # Track how many packages installed successfully
+        for _pkg_name, pkg_spec in packages_to_process:  # Install each package, counting successes
+            if self._install_one_dependency(pkg_spec, uv_available):  # UV-then-pip attempt for this package
+                success_count += 1  # Count this package as done
+        return success_count  # Number of packages that installed successfully
+
+    def _collect_packages_to_process(self) -> list[tuple[str, str]]:  # Build the installable (name, spec) list
+        """Return (name, spec) pairs for required+optional packages, excluding built-in modules (spec is None)."""
+        packages_to_process = []  # Accumulate installable (name, spec) pairs
+        for pkg_name, pkg_spec in {**self.required_packages, **self.optional_packages}.items():  # Walk all packages
+            if pkg_spec is not None:  # Skip built-in modules (no version spec)
+                packages_to_process.append((pkg_name, pkg_spec))  # Keep this installable package
+        return packages_to_process  # The filtered work list
+
+    def _install_one_dependency(self, pkg_spec: str, uv_available: bool) -> bool:  # Install one package (UV then pip)
+        """Install one package: try UV first when available, then fall back to pip. Errors are non-fatal."""
+        try:  # Per-package failures must not abort the whole batch
+            if uv_available and self._install_package_with_uv(pkg_spec):  # Fast UV path succeeded
+                return True  # Installed via UV
+            if self._install_package_with_pip(pkg_spec):  # pip fallback (or UV unavailable) succeeded
+                return True  # Installed via pip
+            logging.warning("Failed to install/upgrade %s", pkg_spec)  # Both paths failed -- warn, keep going
+            return False  # This package did not install
+        except Exception as e:  # Any unexpected error during install of this package
+            logging.warning("Error processing package %s: %s", pkg_spec, e)  # Log and continue with remaining packages
+            return False  # Treat as a failed package
 
     def _import_concurrent_futures(self):
         """Special handler for concurrent.futures import."""
@@ -1386,119 +1357,75 @@ class GlobalImportManager:
 
             return tqdm_fallback  # Provide the no-op progress shim to callers
 
-    def _check_and_upgrade_package(self, module_name: str, package_spec: str) -> bool:  # noqa: C901, PLR0912
-        """Check if a package needs upgrading and upgrade it if necessary."""
+    def _check_and_upgrade_package(self, module_name: str, package_spec: str) -> bool:
+        """Check if a package needs upgrading and upgrade it if necessary. Always non-fatal (returns True)."""
         if not package_spec:  # No version spec provided (e.g. a stdlib module)
             return True  # Built-in modules don't need upgrading
-
-        try:
-            # Extract package name from spec
-            package_name = (
-                package_spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[0].strip()
-            )  # Strip version operators to the bare name
-
-            # Check current version
-            result = subprocess.run(  # nosec B603  # Ask pip what version is currently installed
-                [sys.executable, "-m", "pip", "show", package_name],
-                capture_output=True,
-                text=True,
-                timeout=10,  # Run pip show for this interpreter
-            )
-
+        try:  # Upgrade problems must never block startup
+            package_name = self._bare_package_name(package_spec)  # Strip version operators to the bare name
+            result = self._run_pip_show(package_name)  # Ask pip what version is currently installed
             if result.returncode != 0:  # pip could not find the package
-                logging.debug(
-                    "Package %s not found, skipping upgrade check", package_name
-                )  # Nothing installed to upgrade
+                logging.debug("Package %s not found, skipping upgrade check", package_name)  # Nothing to upgrade
                 return True  # Treat as success -- not an error condition
-
-            # Parse current version from pip show output
-            current_version = None  # Will hold the parsed installed version string
-            for line in result.stdout.split("\n"):  # Scan each line of pip show output
-                if line.startswith("Version:"):  # Found the version field
-                    current_version = line.split(":", 1)[1].strip()  # Extract the version value
-                    break  # Stop scanning once found
-
-            if current_version:  # We successfully determined the installed version
-                logging.debug("Current version of %s: %s", package_name, current_version)  # Record the current version
-
-                # Try to upgrade the package
-                logging.info(
-                    "  Checking for updates to %s...", package_name
-                )  # Inform the user an upgrade check is running
-
-                # Use UV if available, otherwise pip
-                if self._check_uv_installation():  # Prefer UV when it is installed
-                    # Check if we're in a virtual environment and prefer venv's UV if available
-                    uv_cmd = "uv"  # Default to UV on PATH
-                    if hasattr(self, "in_venv") and self.in_venv:  # Running inside a virtual environment
-                        # Try to use UV from the virtual environment first
-                        venv_uv = os.path.join(os.path.dirname(sys.executable), "uv.exe")  # Build venv-local UV path
-                        if os.path.exists(venv_uv):  # The venv ships its own UV
-                            uv_cmd = venv_uv  # Prefer the venv's UV binary
-                        upgrade_cmd = [
-                            uv_cmd,
-                            "pip",
-                            "install",
-                            "--python",
-                            sys.executable,
-                            "--upgrade",
-                            package_spec,
-                        ]  # UV upgrade pinned to this interpreter
-                    else:  # Not in a venv
-                        upgrade_cmd = [uv_cmd, "pip", "install", "--upgrade", package_spec]  # Plain UV upgrade command
-                else:  # UV unavailable -- use pip
-                    upgrade_cmd = [
-                        sys.executable,
-                        "-m",
-                        "pip",
-                        "install",
-                        "--upgrade",
-                        package_spec,
-                    ]  # pip upgrade for this interpreter
-
-                upgrade_result = subprocess.run(  # nosec B603  # Execute the chosen upgrade command
-                    upgrade_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=self.upgrade_check_timeout,  # Bound the upgrade so it can't hang
-                )
-
-                if upgrade_result.returncode == 0:  # The upgrade command completed without error
-                    # Check if version actually changed
-                    new_result = subprocess.run(  # nosec B603  # Re-query pip to see the post-upgrade version
-                        [sys.executable, "-m", "pip", "show", package_name],
-                        capture_output=True,
-                        text=True,
-                        timeout=10,  # pip show again
-                    )
-
-                    new_version = None  # Will hold the version after the upgrade attempt
-                    for line in new_result.stdout.split("\n"):  # Scan the new pip show output
-                        if line.startswith("Version:"):  # Found the version field
-                            new_version = line.split(":", 1)[1].strip()  # Extract the new version value
-                            break  # Stop once found
-
-                    if new_version and new_version != current_version:  # The version actually advanced
-                        logging.info(
-                            "  [OK] %s: Upgraded from %s to %s", package_name, current_version, new_version
-                        )  # Report the upgrade
-                        return True  # Upgrade succeeded
-                    else:  # Version did not change
-                        logging.debug(
-                            "  [OK] %s: Already up to date (%s)", package_name, current_version
-                        )  # Already current
-                        return True  # Nothing to do, still success
-                else:  # The upgrade command failed
-                    logging.debug(
-                        "  [WARN] %s: Upgrade check failed: %s", package_name, upgrade_result.stderr
-                    )  # Log the failure detail
-                    return True  # Non-critical failure -- continue without blocking startup
-
-            return True  # Reached when version could not be parsed -- treat as non-fatal
-
+            current_version = self._parse_pip_show_version(result.stdout)  # Parse the installed version
+            if not current_version:  # Could not determine the installed version
+                return True  # Treat as non-fatal -- nothing reliable to upgrade against
+            logging.debug("Current version of %s: %s", package_name, current_version)  # Record the current version
+            logging.info("  Checking for updates to %s...", package_name)  # Inform the user an upgrade check is running
+            return self._upgrade_and_verify(package_name, package_spec, current_version)  # Upgrade + report
         except Exception as e:  # Any unexpected error during the check/upgrade
             logging.debug("Error checking/upgrading %s: %s", module_name, e)  # Log for diagnostics
             return True  # Non-critical failure -- never block startup on upgrade issues
+
+    @staticmethod
+    def _bare_package_name(package_spec: str) -> str:  # Strip version operators from a package spec
+        """Return the bare package name from a spec (e.g. 'requests>=2.28.0' -> 'requests')."""
+        return package_spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[0].strip()  # Drop any constraint
+
+    def _run_pip_show(self, package_name: str) -> Any:  # Query pip for a package's metadata
+        """Run 'pip show <package_name>' for this interpreter with captured text output (10s timeout)."""
+        return subprocess.run(  # nosec B603  # Ask pip about the installed package (trusted, fixed argv)
+            [sys.executable, "-m", "pip", "show", package_name],  # pip show for this interpreter
+            capture_output=True,  # Capture stdout for version parsing
+            text=True,  # Decode output as text
+            timeout=10,  # Bound the metadata query
+        )
+
+    @staticmethod
+    def _parse_pip_show_version(pip_show_stdout: str) -> str | None:  # Extract the Version: field from pip show
+        """Return the value of the 'Version:' line in pip show output, or None when absent."""
+        for line in pip_show_stdout.split("\n"):  # Scan each line of pip show output
+            if line.startswith("Version:"):  # Found the version field
+                return line.split(":", 1)[1].strip()  # Extract and return the version value
+        return None  # No Version: line present
+
+    def _build_upgrade_cmd(self, package_spec: str) -> list[str]:  # Assemble the upgrade argv (UV or pip)
+        """Build the '--upgrade' argv: UV (venv-pinned when applicable) when UV is installed, else pip."""
+        if not self._check_uv_installation():  # UV unavailable -- upgrade via pip
+            return [sys.executable, "-m", "pip", "install", "--upgrade", package_spec]  # pip upgrade for this Python
+        cmd = [self._resolve_uv_binary(), "pip", "install"]  # UV base command (venv-local UV when present)
+        if hasattr(self, "in_venv") and self.in_venv:  # Inside a venv -- pin the upgrade to this interpreter
+            cmd += ["--python", sys.executable]  # Target the current Python explicitly
+        cmd += ["--upgrade", package_spec]  # Upgrade the requested package
+        return cmd  # Completed UV upgrade argv
+
+    def _upgrade_and_verify(self, package_name: str, package_spec: str, current_version: str) -> bool:  # Run + verify
+        """Run the upgrade command and log whether the version advanced. Always non-fatal (returns True)."""
+        upgrade_result = subprocess.run(  # nosec B603  # Execute the chosen upgrade command
+            self._build_upgrade_cmd(package_spec),  # UV or pip upgrade argv
+            capture_output=True,  # Capture output for logging
+            text=True,  # Decode output as text
+            timeout=self.upgrade_check_timeout,  # Bound the upgrade so it can't hang
+        )
+        if upgrade_result.returncode != 0:  # The upgrade command failed
+            logging.debug("  [WARN] %s: Upgrade check failed: %s", package_name, upgrade_result.stderr)  # Log detail
+            return True  # Non-critical failure -- continue without blocking startup
+        new_version = self._parse_pip_show_version(self._run_pip_show(package_name).stdout)  # Re-query post-upgrade
+        if new_version and new_version != current_version:  # The version actually advanced
+            logging.info("  [OK] %s: Upgraded from %s to %s", package_name, current_version, new_version)  # Report it
+        else:  # Version did not change
+            logging.debug("  [OK] %s: Already up to date (%s)", package_name, current_version)  # Already current
+        return True  # Upgrade path is always non-fatal
 
     # _get_actual_import_name removed per issue #431 (ARCH-DELEGATE) -- callers
     # now do `self.import_name_mappings.get(name, name)` inline.
