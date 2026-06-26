@@ -487,71 +487,79 @@ def _get_installed_version(package_name: str) -> str:  # Look up the installed v
         return ""  # Return empty string to signal 'not installed' to callers
 
 
+def _leading_digits(segment: str) -> str:  # Extract the numeric prefix of one version segment
+    """Return the leading digit run of a version segment (e.g., '0a1' -> '0')."""
+    numeric = ""  # Accumulate the leading digit characters of this segment
+    for char in segment:  # Walk characters left to right until a non-digit ends the prefix
+        if not char.isdigit():  # First non-digit (e.g., the 'a' in '0a1') ends the numeric prefix
+            break  # Ignore any pre-release suffix for comparison purposes
+        numeric += char  # Append this digit to the numeric prefix
+    return numeric  # Caller defaults empty results to 0
+
+
 def _parse_version(version_str: str) -> tuple:  # type: ignore[type-arg]  # Convert a version string into a comparable integer tuple
     """Parse version string into comparable tuple (e.g., '0.59.3' -> (0, 59, 3))."""
-    try:  # Attempt to parse each dotted segment into an integer
-        parts = []  # Accumulate the numeric version components (major, minor, patch, ...)
-        for part in version_str.split("."):  # Split on dots and process each segment in order
-            # Handle versions like '1.0.0a1' by extracting numeric prefix
-            numeric = ""  # Build up the leading digits of this segment
-            for char in part:  # Walk characters until a non-digit ends the numeric prefix
-                if char.isdigit():  # Keep characters that are digits
-                    numeric += char  # Append the digit to the numeric prefix
-                else:  # Stop at the first non-digit (e.g., the 'a' in '0a1')
-                    break  # Ignore any pre-release suffix for comparison purposes
-            parts.append(
-                int(numeric) if numeric else 0
-            )  # Convert to int, defaulting to 0 for empty/non-numeric segments
+    try:  # Malformed input is handled by the except below
+        parts = [
+            int(_leading_digits(part) or "0") for part in version_str.split(".")
+        ]  # Numeric prefix of each dotted segment, defaulting empty/non-numeric segments to 0
         return tuple(parts)  # Return as a tuple so versions compare element-by-element
     except Exception:  # Malformed version string that cannot be parsed
         return (0,)  # Return a minimal tuple so comparisons treat it as the lowest possible version
 
 
-def _version_satisfies(installed: str, spec: str) -> bool:  # noqa: C901
-    """Check if installed version satisfies the version specification."""
-    if not installed:  # An empty installed version means the package isn't present
-        return False  # Treat 'not installed' as 'requirement not satisfied'
+def _extract_version_constraint(spec: str) -> tuple[str, str]:  # Split a spec into operator + required version
+    """Return (operator, required_version) parsed from a spec like '>=0.59.0'.
 
-    # Parse operator and required version from spec (e.g., ">=0.59.0" or "==1.0.0")
-    operators = [">=", "<=", "==", "!=", ">", "<"]  # Supported operators, two-char first so '>=' matches before '>'
-    operator = ">="  # Default  # Assume '>=' when the spec carries no explicit operator
-    required_version = ""  # Will hold the version number extracted from the spec
-
+    Defaults to ('>=', '') when the spec carries no recognizable operator/version.
+    """
+    operators = [">=", "<=", "==", "!=", ">", "<"]  # Two-char operators first so '>=' matches before '>'
     for op in operators:  # Find which operator the spec uses
         if op in spec:  # The spec string contains this operator
             parts = spec.split(op, 1)  # Split once into [package-or-empty, version]
             if len(parts) == 2:  # Ensure the split produced both halves
-                operator = op  # Remember the matched operator for the comparison below
-                required_version = parts[1].strip()  # Capture the required version (text right of the operator)
-                break  # Stop at the first matching operator
+                return op, parts[1].strip()  # Operator plus the required version text right of it
+    return ">=", ""  # No operator found: signal 'no constraint' to the caller
 
+
+def _pad_version_tuples(
+    installed_tuple: tuple, required_tuple: tuple  # type: ignore[type-arg]
+) -> tuple[tuple, tuple]:  # type: ignore[type-arg]  # Zero-pad two version tuples to equal length
+    """Right-pad both version tuples with zeros so they compare element-by-element."""
+    max_len = max(len(installed_tuple), len(required_tuple))  # Longest of the two drives the padding width
+    installed_padded = installed_tuple + (0,) * (max_len - len(installed_tuple))  # Pad installed (e.g., 1.2 -> 1.2.0)
+    required_padded = required_tuple + (0,) * (max_len - len(required_tuple))  # Pad required to align lengths
+    return installed_padded, required_padded  # Equal-length tuples ready for comparison
+
+
+# Operator symbol -> comparison predicate; dict dispatch keeps _version_satisfies flat (no if/elif chain).
+_VERSION_COMPARATORS = {
+    ">=": lambda installed, required: installed >= required,  # 'at least' constraint
+    ">": lambda installed, required: installed > required,  # 'strictly newer' constraint
+    "<=": lambda installed, required: installed <= required,  # 'at most' constraint
+    "<": lambda installed, required: installed < required,  # 'strictly older' constraint
+    "==": lambda installed, required: installed == required,  # exact-match constraint
+    "!=": lambda installed, required: installed != required,  # exclusion constraint
+}
+
+
+def _version_satisfies(installed: str, spec: str) -> bool:  # Decide whether installed meets the spec constraint
+    """Check if installed version satisfies the version specification."""
+    if not installed:  # An empty installed version means the package isn't present
+        return False  # Treat 'not installed' as 'requirement not satisfied'
+
+    operator_symbol, required_version = _extract_version_constraint(spec)  # Parse operator + required version
     if not required_version:  # No version constraint was found in the spec
         return True  # No version requirement, any version satisfies
 
-    installed_tuple = _parse_version(installed)  # Convert installed version into a comparable integer tuple
-    required_tuple = _parse_version(required_version)  # Convert required version into a comparable integer tuple
+    installed_tuple, required_tuple = _pad_version_tuples(  # Align both versions to equal length for comparison
+        _parse_version(installed), _parse_version(required_version)  # Convert each to a comparable integer tuple
+    )
 
-    # Pad tuples to same length for comparison
-    max_len = max(len(installed_tuple), len(required_tuple))  # Longest of the two so we can zero-pad the shorter one
-    installed_tuple = installed_tuple + (0,) * (
-        max_len - len(installed_tuple)
-    )  # Pad installed with zeros (e.g., 1.2 -> 1.2.0)
-    required_tuple = required_tuple + (0,) * (max_len - len(required_tuple))  # Pad required with zeros to align lengths
-
-    if operator == ">=":  # 'at least' constraint
-        return installed_tuple >= required_tuple  # True when installed meets or exceeds required
-    elif operator == ">":  # 'strictly newer' constraint
-        return installed_tuple > required_tuple  # True when installed is newer than required
-    elif operator == "<=":  # 'at most' constraint
-        return installed_tuple <= required_tuple  # True when installed is required or older
-    elif operator == "<":  # 'strictly older' constraint
-        return installed_tuple < required_tuple  # True when installed is older than required
-    elif operator == "==":  # exact-match constraint
-        return installed_tuple == required_tuple  # True only when versions are identical
-    elif operator == "!=":  # exclusion constraint
-        return installed_tuple != required_tuple  # True when installed differs from the excluded version
-
-    return True  # Unknown operator: be permissive and treat the requirement as satisfied
+    comparator = _VERSION_COMPARATORS.get(operator_symbol)  # Look up the predicate for this operator
+    if comparator is None:  # Unknown operator (should not happen given the parser)
+        return True  # Be permissive and treat the requirement as satisfied
+    return comparator(installed_tuple, required_tuple)  # Apply the matched comparison predicate
 
 
 def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a package's newest published version
@@ -579,55 +587,42 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
         return ""  # Empty string signals 'latest unknown' so callers skip the upgrade check
 
 
-def _parse_requirements_file(filepath="requirements.txt"):  # Read dependency specs from requirements.txt
+def _parse_requirement_line(line: str) -> tuple[str, str] | None:  # Parse one requirements.txt line
+    """Return (package_name, package_spec) for a dependency line, or None to skip it.
+
+    Skips blank lines, full-line comments (including dev-only entries like '# pytest'),
+    and lines that reduce to nothing after stripping a trailing inline comment.
     """
-    Parse requirements.txt and return list of package specifications.
+    stripped = line.strip()  # Remove surrounding whitespace and the trailing newline
+    if not stripped or stripped.startswith("#"):  # Ignore blank lines and any full-line comment
+        return None  # Nothing to parse on this line
+    if "#" in stripped:  # Line has a trailing inline comment after the spec
+        stripped = stripped.split("#")[0].strip()  # Keep only the spec text before the '#'
+    if not stripped:  # The line was only an inline comment after stripping
+        return None  # Nothing left to parse
+    package_name = re.split(r"[><=!]", stripped)[0].strip()  # Name is everything before the first comparison operator
+    return (package_name, stripped)  # (name, full spec including any version constraint)
 
-    SECURITY: Only reads from requirements.txt - no arbitrary file access.
-    Skips commented lines, empty lines, and development dependencies.
 
-    Returns:
-        List of (package_name, package_spec) tuples
+def _parse_requirements_file(filepath="requirements.txt"):  # Read dependency specs from requirements.txt
+    """Parse requirements.txt into a list of (package_name, package_spec) tuples.
+
+    SECURITY: only reads requirements.txt (no arbitrary file access); skips comments/blanks/dev deps.
     """
     packages = []  # Accumulate (name, spec) tuples to return to the dependency checker
     try:  # The file may be missing or unreadable; handle that gracefully below
         with open(filepath, encoding="utf-8") as requirements_file:  # Open requirements.txt as UTF-8 text
             for line in requirements_file:  # Process one dependency line at a time
-                line = line.strip()  # Remove surrounding whitespace and the trailing newline
-
-                # Skip empty lines and comments
-                if not line or line.startswith("#"):  # Ignore blank lines and full-line comments
-                    continue  # Nothing to parse on this line
-
-                # Skip commented-out dev dependencies
-                if line.startswith("# pytest") or line.startswith(
-                    "# coverage"
-                ):  # Explicitly skip dev-only tooling lines
-                    continue  # These are not runtime dependencies
-
-                # Strip inline comments (e.g., "package>=1.0  # comment" -> "package>=1.0")
-                if "#" in line:  # Line has a trailing inline comment after the spec
-                    line = line.split("#")[0].strip()  # Keep only the spec text before the '#'
-
-                # Extract package name from spec (e.g., "requests>=2.28.0" -> "requests")
-                package_spec = line  # The full spec including any version constraint
-                package_name = re.split(r"[><=!]", package_spec)[
-                    0
-                ].strip()  # Name is everything before the first comparison operator
-
-                packages.append((package_name, package_spec))  # Record this dependency for the caller
-
+                parsed = _parse_requirement_line(line)  # Parse this line into (name, spec) or None to skip
+                if parsed is not None:  # Only keep lines that yielded a real dependency
+                    packages.append(parsed)  # Record this dependency for the caller
         logging.debug("Parsed %s packages from %s", len(packages), filepath)  # Debug aid: how many specs were parsed
         return packages  # Return the collected dependency list
     except FileNotFoundError:  # requirements.txt does not exist at the given path
-        logging.warning(
-            "Requirements file not found: %s", filepath
-        )  # Warn so the operator knows auto-install is skipped
+        logging.warning("Requirements file not found: %s", filepath)  # Warn that auto-install is skipped
         return []  # No packages to check
     except Exception as parse_error:  # Any other read/parse error
-        logging.warning(
-            "Error parsing requirements file: %s", parse_error
-        )  # Log the failure reason for troubleshooting
+        logging.warning("Error parsing requirements file: %s", parse_error)  # Log the failure reason
         return []  # Fail safe with an empty list rather than crashing startup
 
 
@@ -806,20 +801,26 @@ logging.debug(
 )  # Record the effective page size for debugging
 
 
+def _apply_dotenv_line(line: str) -> None:  # Set one KEY=VALUE pair from a .env line into the environment
+    """Parse one .env line and set it into os.environ, skipping blanks/comments/malformed entries."""
+    stripped = line.strip()  # Remove surrounding whitespace and the trailing newline
+    if not stripped or stripped.startswith("#") or "=" not in stripped:  # Skip blanks, comments, malformed entries
+        return  # Nothing assignable on this line
+    key, value = stripped.split("=", 1)  # Split on the first '=' (values may themselves contain '=')
+    os.environ[key.strip()] = value.strip()  # Set the env var (overwrites, unlike setdefault)
+
+
 # Early dotenv import for configuration loading
 def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dotenv isn't installed
     """Fallback .env loader when python-dotenv package is not installed."""
     try:  # The .env file is optional; handle its absence/errors gracefully
-        with open(".env") as f:  # Open .env in the current working directory
-            for line in f:  # Process the file one line at a time
-                line = line.strip()  # Remove surrounding whitespace and the trailing newline
-                if line and not line.startswith("#") and "=" in line:  # Skip blanks, comments, and malformed entries
-                    key, value = line.split("=", 1)  # Split on the first '=' (values may contain '=')
-                    os.environ[key.strip()] = value.strip()  # Set the env var (overwrites, unlike setdefault)
+        with open(".env") as dotenv_file:  # Open .env in the current working directory
+            for line in dotenv_file:  # Process the file one line at a time
+                _apply_dotenv_line(line)  # Set this KEY=VALUE pair (skips blanks/comments internally)
     except FileNotFoundError:  # No .env file present
         logging.debug("No .env file found")  # Not an error; just note it at debug level
-    except Exception as e:  # Any other read/parse problem
-        logging.debug("Error loading .env file: %s", e)  # Log the reason without crashing startup
+    except Exception as parse_error:  # Any other read/parse problem
+        logging.debug("Error loading .env file: %s", parse_error)  # Log the reason without crashing startup
 
 
 try:  # Prefer the full-featured python-dotenv loader when available
@@ -2051,37 +2052,14 @@ class TimeUtils:
 
     @staticmethod
     def get_dynamic_lookback_hours(default_hours: int = 24, test_hours: int = 1) -> int:
-        """Return lookback hours adjusted for test mode.
+        """Return lookback hours adjusted for test mode (shrinks to test_hours under --test).
 
-        In normal operation we retain the full 24 hour (or caller provided) window.
-        When the global --test flag is present, we shrink the lookback to 1 hour to:
-          - Minimize API payload sizes / speed up systematic tests
-          - Still exercise recent-data code paths
-        The value is intentionally conservative (1h) to avoid missing fresh events while
-        keeping runtime low. If a caller passes a different default_hours (e.g., 12),
-        that value will be honored outside test mode.
-
-        Parameters
-        ----------
-        default_hours : int
-            Standard lookback window (typically 24).
-        test_hours : int
-            Reduced lookback for test mode (default 1 hour).
-
-        Returns
-        -------
-        int
-            Hours to use for lookback calculations.
+        Outside test mode the caller's default_hours window is honored. Both values are
+        clamped to a 1-hour minimum so a misconfiguration never yields a sub-hour window.
         """
         try:
-            if IS_TEST_MODE:  # Test runs use a shortened lookback to keep API calls cheap
-                # Boundaries & safety: never return less than 1 hour
-                if test_hours < 1:  # Guard against a misconfigured sub-hour value
-                    return 1  # Clamp to the minimum sensible window
-                return test_hours  # Use the reduced test-mode window
-            if default_hours < 1:  # Guard against a misconfigured production value
-                return 1  # Clamp to the minimum sensible window
-            return default_hours  # Normal path: use the standard production window
+            chosen_hours = test_hours if IS_TEST_MODE else default_hours  # Pick the window for the active mode
+            return max(1, chosen_hours)  # Never return less than 1 hour (clamp misconfigured values)
         except Exception as error:  # Never let lookback math crash a caller
             logging.debug("get_dynamic_lookback_hours fallback due to error: %s", error)  # Log the unexpected failure
             return test_hours if IS_TEST_MODE else default_hours  # Fall back to a sensible default per mode
@@ -2361,6 +2339,15 @@ def detect_msp_privileges(session=None):
         return []  # Treat as no MSP access on error
 
 
+def _extract_msp_name(response: Any) -> str | None:  # Pull the MSP name out of a getMspDetails response
+    """Return the 'name' string from an MSP details response, or None when absent/malformed."""
+    data = getattr(response, "data", None)  # Unwrap the response payload if present
+    if not isinstance(data, dict):  # Need a dict payload to read the name field
+        return None  # Malformed or empty response
+    name = data.get("name")  # Extract the MSP's name field
+    return name if isinstance(name, str) else None  # Return the name only if it's a valid string
+
+
 def _fetch_msp_name(msp_id: str) -> str | None:
     """Helper to fetch MSP name from MSP API when not provided in privileges.
 
@@ -2376,12 +2363,10 @@ def _fetch_msp_name(msp_id: str) -> str | None:
         import mistapi.api.v1.msps.msps as msps_api  # Import the MSP details endpoint lazily
 
         response = msps_api.getMspDetails(apisession, msp_id)  # Fetch the MSP record by ID
-        if response and hasattr(response, "data") and isinstance(response.data, dict):  # Got a well-formed payload
-            name = response.data.get("name")  # Extract the MSP's name field
-            return name if isinstance(name, str) else None  # Return the name only if it's a valid string
+        return _extract_msp_name(response)  # Pull the name from the payload (None when absent/malformed)
     except Exception as e:  # Lookup failed (network, permissions, etc.)
         logging.debug("Could not fetch MSP name for %s...: %s", msp_id[:8], e)  # Note the failure at debug level
-    return None  # Default to None when the name can't be resolved
+        return None  # Default to None when the name can't be resolved
 
 
 def initialize_mist_session_interactive():
@@ -2606,6 +2591,18 @@ def _load_mistapi_module(current_mistapi: Any) -> Any:
         return None  # Signal that mistapi is unavailable -- caller must abort
 
 
+def _split_env_tokens(raw_token_env: str | None) -> list[str]:  # Split a token env value into individual tokens
+    """Split a newline/comma-separated token env value into a list of non-empty stripped tokens."""
+    if not raw_token_env:  # No token env var set
+        return []  # Caller will fall back to env_file or mistapi.Session
+    return [token.strip() for token in re.split(r"[\n,]+", raw_token_env) if token.strip()]  # Split on newlines/commas
+
+
+def _redact_tokens(tokens: list[str]) -> str:  # Build a secrets-safe preview of discovered tokens
+    """Return a redacted, comma-joined preview (first4...last4, or *** when too short) for logging."""
+    return ",".join((token[:4] + "..." + token[-4:]) if len(token) >= 8 else "***" for token in tokens)  # Redact each
+
+
 def _parse_api_tokens() -> tuple[str, list[str]]:
     """Read API host and tokens from environment variables.
 
@@ -2617,15 +2614,11 @@ def _parse_api_tokens() -> tuple[str, list[str]]:
     """
     host = os.getenv("MIST_HOST", "api.mist.com")  # Read host from env or use Mist cloud default
     raw_token_env = os.getenv("MIST_APITOKEN") or os.getenv("MIST_API_TOKEN")  # Accept both env var names
-    if raw_token_env:  # At least one token env var is set -- parse and split
-        tokens = [t.strip() for t in re.split(r"[\n,]+", raw_token_env) if t.strip()]  # Split on newlines and commas
-    else:
-        tokens = []  # No tokens found in environment -- will rely on env_file or Session fallback
-    if tokens:  # Log redacted preview so operators can confirm tokens are present without exposing secrets
-        redacted_preview = ",".join([(t[:4] + "..." + t[-4:]) if len(t) >= 8 else "***" for t in tokens])
-        logging.debug("Token(s) discovered for initialization (redacted): %s", redacted_preview)
-    else:
-        logging.debug("No tokens discovered in environment; will rely on env_file or mistapi.Session fallback")
+    tokens = _split_env_tokens(raw_token_env)  # Parse into individual non-empty tokens (empty list when unset)
+    if tokens:  # Log a redacted preview so operators can confirm presence without exposing secrets
+        logging.debug("Token(s) discovered for initialization (redacted): %s", _redact_tokens(tokens))  # Safe preview
+    else:  # No tokens discovered in environment
+        logging.debug("No tokens discovered in environment; will rely on env_file or mistapi.Session fallback")  # Note
     return host, tokens  # Return host string and parsed token list to caller
 
 
