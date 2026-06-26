@@ -14333,24 +14333,25 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
 
         try:
             module = importlib.import_module(modname)  # Import the module.
-            functions = self._find_api_functions(module, endpoint_name)  # Find API functions.
-
-            if not functions:  # None found.
-                print(f"    ! No API functions found in {endpoint_name}")  # Tell the user.
-                logging.warning("No functions found in %s", endpoint_name)  # Warn none found.
-                return  # Skip it.
-
-            api_function = self._select_best_function(functions)  # Pick the best function.
-            if api_function:  # Function found.
-                self._register_endpoint(endpoint_name, module, api_function, modname)  # Register the endpoint.
-            else:
-                print(f"    ! No suitable API functions found in {endpoint_name}")  # Tell the user none.
-                logging.warning("No API functions with mist_session parameter found in %s", endpoint_name)
-
+            self._inspect_module_functions(module, endpoint_name, modname)  # Find + register the best API function
         except Exception as error:  # Inspection failed.
             module_display_name = modname.split(".")[-1] if modname else "unknown"  # Module display name.
             print(f"    ! Error inspecting {module_display_name}: {error}")  # Tell the user.
             logging.error("Error inspecting const module %s: %s", module_display_name, error)  # Log the error.
+
+    def _inspect_module_functions(self, module, endpoint_name: str, modname: str) -> None:  # Register best API function
+        """Find API functions in a module and register the best one, logging when none qualify."""
+        functions = self._find_api_functions(module, endpoint_name)  # Find candidate API functions.
+        if not functions:  # None found.
+            print(f"    ! No API functions found in {endpoint_name}")  # Tell the user.
+            logging.warning("No functions found in %s", endpoint_name)  # Warn none found.
+            return  # Skip it.
+        api_function = self._select_best_function(functions)  # Pick the best function.
+        if not api_function:  # No suitable function (none accept a session param)
+            print(f"    ! No suitable API functions found in {endpoint_name}")  # Tell the user none.
+            logging.warning("No API functions with mist_session parameter found in %s", endpoint_name)  # Warn
+            return  # Nothing to register
+        self._register_endpoint(endpoint_name, module, api_function, modname)  # Register the endpoint.
 
     def _find_api_functions(self, module, endpoint_name: str) -> list[str]:  # Find candidate API functions.
         """Find all callable API functions in a module."""
@@ -14372,16 +14373,20 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         return functions  # Return the functions.
 
     def _select_best_function(self, functions: list[str]) -> str | None:  # Pick the best function.
-        """Select the best API function from a list (prefer list*, then get*)."""
-        for func_name in functions:  # Prefer list*.
-            if func_name.lower().startswith("list"):  # Name starts with list.
-                return func_name  # Use it.
+        """Select the best API function from a list (prefer list*, then get*, else the first)."""
+        return (
+            self._first_function_with_prefix(functions, "list")  # Prefer a list* function
+            or self._first_function_with_prefix(functions, "get")  # Then a get* function
+            or (functions[0] if functions else None)  # Fall back to the first (or None when empty)
+        )
 
-        for func_name in functions:  # Then prefer get*.
-            if func_name.lower().startswith("get"):  # Name starts with get.
-                return func_name  # Use it.
-
-        return functions[0] if functions else None  # Fall back to the first.
+    @staticmethod
+    def _first_function_with_prefix(functions: list[str], prefix: str) -> str | None:  # First name with a prefix
+        """Return the first function name whose lowercase form starts with prefix, or None."""
+        for func_name in functions:  # Scan in order
+            if func_name.lower().startswith(prefix):  # Case-insensitive prefix match
+                return func_name  # Use the first match
+        return None  # No function matched this prefix
 
     def _register_endpoint(self, endpoint_name: str, module, api_function: str, modname: str) -> None:
         """Register an endpoint after analyzing its parameters."""
@@ -17878,20 +17883,26 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _load_reboot_template_names() -> set[str] | None:  # Load reboot template names.
         """Load template names from reboot list file."""
-        reboot_template_names = set()  # Name set.
         try:
             reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")  # Reboot list path.
-            with open(reboot_list_path, encoding="utf-8") as file:  # Open the CSV.
-                reader = csv.reader(file)  # Parse rows.
-                for row in reader:  # Walk rows.
-                    if row and row[0].strip():  # Non-empty name.
-                        reboot_template_names.add(row[0].strip())  # Collect it.
+            reboot_template_names = DeviceRebootManager._read_reboot_names_csv(reboot_list_path)  # Parse rows.
             logging.info("Loaded %s template names from reboot list", len(reboot_template_names))  # Log the count.
         except Exception as error:  # Load failed.
             logging.error("! Failed to load reboot template list: %s", error)  # Log the error.
             print(f"! Failed to load reboot template list: {error}")  # Tell the user.
             return None  # Abort.
         return reboot_template_names if reboot_template_names else None  # Return names or None.
+
+    @staticmethod
+    def _read_reboot_names_csv(csv_path: str) -> set[str]:  # Read first-column names into a set
+        """Read a reboot-list CSV's first column into a set of names, skipping blank rows/values."""
+        reboot_template_names: set[str] = set()  # Name set.
+        with open(csv_path, encoding="utf-8") as file:  # Open the CSV.
+            reader = csv.reader(file)  # Parse rows.
+            for row in reader:  # Walk rows.
+                if row and row[0].strip():  # Non-empty name.
+                    reboot_template_names.add(row[0].strip())  # Collect it.
+        return reboot_template_names  # The parsed name set
 
     @staticmethod
     def _map_template_names_to_ids(names: set[str], mapping: dict[str, str]) -> set[str] | None:  # Map names to ids.
