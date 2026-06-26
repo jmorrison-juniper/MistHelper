@@ -5394,18 +5394,10 @@ class CacheUtils:
         generate_function: Callable,  # type: ignore[type-arg]
         freshness_minutes: int | None = None,
     ) -> bool:
-        """
-        Checks if a CSV file exists and is fresh (modified within the last `freshness_minutes`).
-        If not, it runs the `generate_function` to regenerate the file.
-        freshness_minutes is now settable via the .env file as CSV_FRESHNESS_MINUTES.
+        """Return True if file_name's CSV exists and is fresh; otherwise run generate_function.
 
-        Args:
-            file_name: Name of the CSV file to check/generate
-            generate_function: Function to call to generate the file
-            freshness_minutes: Optional override for cache freshness threshold
-
-        Returns:
-            bool: True if file exists and is fresh or was generated successfully
+        freshness_minutes defaults to CSV_FRESHNESS_MINUTES (.env). Returns True when the file is
+        fresh or was regenerated successfully, False if regeneration failed.
         """
         logging.debug(
             "ENTRY: CacheUtils.check_and_generate_csv(file_name=%s, generate_function=%s, freshness_minutes=%s)",
@@ -5414,46 +5406,44 @@ class CacheUtils:
             freshness_minutes,
         )
 
-        if freshness_minutes is None:
-            freshness_minutes = CSV_FRESHNESS_MINUTES
+        if freshness_minutes is None:  # No explicit override supplied
+            freshness_minutes = CSV_FRESHNESS_MINUTES  # Fall back to the configured default freshness
 
-        # Get the full path to the CSV file in the data directory
-        full_file_path = FilePathUtils.get_csv_path(file_name)
+        full_file_path = FilePathUtils.get_csv_path(file_name)  # Resolve the CSV path under data/
+        if CacheUtils._is_csv_fresh(full_file_path, file_name, freshness_minutes):  # Existing file still fresh?
+            return True  # Use the cached file -- no regeneration needed
+        return CacheUtils._run_csv_generator(generate_function, file_name)  # Stale/missing -- (re)generate now
 
-        # Check if the file already exists
-        if os.path.exists(full_file_path):
-            try:
-                # Get the last modified time of the file
-                file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path))
-                logging.debug("File I/O: Successfully read modification time for %s: %s", full_file_path, file_mtime)
+    @staticmethod
+    def _is_csv_fresh(full_file_path: str, file_name: str, freshness_minutes: int) -> bool:  # Cache freshness check
+        """Return True only when the file exists and was modified within freshness_minutes (else regenerate)."""
+        if not os.path.exists(full_file_path):  # File missing entirely
+            logging.info("* %s not found. Generating...", file_name)  # Tell operator it will be generated
+            return False  # Not fresh -- caller regenerates
+        try:  # Reading mtime can fail on permission/metadata errors
+            file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path))  # Last-modified timestamp
+            logging.debug("File I/O: read mtime for %s: %s", full_file_path, file_mtime)  # Trace the mtime read
+            if datetime.now() - file_mtime < timedelta(minutes=freshness_minutes):  # Within the freshness window
+                logging.info("! Using cached %s (fresh)", file_name)  # Tell operator the cache is being used
+                return True  # Fresh -- skip regeneration
+            logging.info("* %s is older than %s minutes. Regenerating...", file_name, freshness_minutes)  # Stale notice
+            return False  # Stale -- caller regenerates
+        except OSError as error:  # Could not read the file's metadata
+            logging.error("File I/O: Failed to read modification time for %s: %s", full_file_path, error)  # Log failure
+            logging.info("* %s exists but cannot read metadata. Regenerating...", file_name)  # Tell operator
+            return False  # Treat unreadable metadata as stale
 
-                # Check if the file is still fresh
-                if datetime.now() - file_mtime < timedelta(minutes=freshness_minutes):
-                    # Log that the cached file is being used
-                    logging.info("! Using cached %s (fresh)", file_name)
-                    logging.debug("EXIT: check_and_generate_csv - using cached file")
-                    return True
-                else:
-                    # Log that the file is stale and will be regenerated
-                    logging.info("* %s is older than %s minutes. Regenerating...", file_name, freshness_minutes)
-            except OSError as error:
-                logging.error("File I/O: Failed to read modification time for %s: %s", full_file_path, error)
-                logging.info("* %s exists but cannot read metadata. Regenerating...", file_name)
-        else:
-            # Log that the file does not exist and will be generated
-            logging.info("* %s not found. Generating...", file_name)
-
-        # Call the function to generate the file
-        logging.info("* Running %s to generate %s...", generate_function.__name__, file_name)
-        try:
-            generate_function()
-            logging.info("! %s generated or refreshed.", file_name)
-            logging.debug("EXIT: check_and_generate_csv - file generated successfully")
-            return True
-        except Exception as error:
-            logging.error("Failed to generate %s using %s: %s", file_name, generate_function.__name__, error)
-            logging.debug("EXIT: check_and_generate_csv - generation failed")
-            return False
+    @staticmethod
+    def _run_csv_generator(generate_function: Callable, file_name: str) -> bool:  # type: ignore[type-arg]  # Run generator
+        """Invoke the generate_function to produce the CSV; return True on success, False on failure."""
+        logging.info("* Running %s to generate %s...", generate_function.__name__, file_name)  # Log before generating
+        try:  # The generator may raise; never let that crash the caller
+            generate_function()  # Produce or refresh the CSV file
+            logging.info("! %s generated or refreshed.", file_name)  # Confirm success to operator
+            return True  # Generation succeeded
+        except Exception as error:  # Generation failed for any reason
+            logging.error("Failed to generate %s using %s: %s", file_name, generate_function.__name__, error)  # Log it
+            return False  # Generation failed
 
     @staticmethod
     def load_csv_grouped_by_key(filename: str, key: str) -> dict[str, list[dict[str, Any]]]:
@@ -6447,11 +6437,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
     @staticmethod
     def organization_services() -> list[dict[str, Any]]:  # Fetch and flatten org services.
-        """
-        Fetch all services defined at the organization level using the Mist API.
-
-        Returns:
-            list: List of service dictionaries with service definitions, or empty list if error
+        """Fetch all org-level services via the Mist API; return list of service dicts (empty on error).
 
         SECURITY: Read-only operation fetching configuration data only.
         """
@@ -6465,32 +6451,31 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
             if hasattr(response, "data") and response.data:  # Only proceed with data.
                 services_data = response.data  # Unwrap the payload.
                 logging.info("Successfully retrieved %s organization services", len(services_data))  # Log the count.
-
-                # Extract service names and types for easier display
-                services_list = []  # Accumulate normalized rows.
-                for service in services_data:  # Walk each service.
-                    if isinstance(service, dict):  # Skip non-dict entries.
-                        service_name = service.get("name", "unnamed")  # Default missing names.
-                        service_type = service.get("type", "custom")  # Default missing type.
-                        service_desc = service.get("description", "")  # Default missing description.
-                        services_list.append(
-                            {
-                                "name": service_name,
-                                "type": service_type,
-                                "description": service_desc,
-                                "full_config": service,  # Keep full config for reference
-                            }
-                        )
-
+                services_list = APIFetchUtils._normalize_org_services(services_data)  # Normalize to display rows.
                 return services_list  # Return normalized services.
 
-            else:
-                logging.warning("No organization services found or response data is empty")  # Warn on empty response.
-                return []  # No services to return.
+            logging.warning("No organization services found or response data is empty")  # Warn on empty response.
+            return []  # No services to return.
 
         except Exception as error:  # Never crash on API failure.
             logging.error("Failed to fetch organization services: %s", error)  # Log the fetch failure.
             return []  # Degrade to empty list.
+
+    @staticmethod
+    def _normalize_org_services(services_data: list[Any]) -> list[dict[str, Any]]:  # Flatten raw services to rows
+        """Normalize raw org service records into name/type/description rows (keeping the full config)."""
+        services_list = []  # Accumulate normalized rows.
+        for service in services_data:  # Walk each service.
+            if isinstance(service, dict):  # Skip non-dict entries.
+                services_list.append(
+                    {
+                        "name": service.get("name", "unnamed"),  # Default missing names.
+                        "type": service.get("type", "custom"),  # Default missing type.
+                        "description": service.get("description", ""),  # Default missing description.
+                        "full_config": service,  # Keep full config for reference
+                    }
+                )  # Record the normalized service row
+        return services_list  # Return normalized services.
 
     @staticmethod
     def all_site_settings(apisession, org_id, limit=1000):  # Fetch settings for every site.
@@ -6873,21 +6858,22 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
             logging.debug("Using configured strategy for %s: %s", api_function_name, strategy["type"])  # Trace pick.
             return strategy  # Return configured strategy.
 
-        # If no specific strategy, use intelligent defaults based on data structure
-        strategy: dict[str, Any] = ENDPOINT_PRIMARY_KEY_STRATEGIES["default"].copy()  # type: ignore[no-redef]
+        return DatabaseSchemaUtils._build_default_strategy(api_function_name, data_fields)  # Derive from data shape
 
-        # Enhance default strategy based on available fields
-        if "id" in data_fields:  # Default: key on id.
-            # If data has an 'id' field, use it as unique constraint
+    @staticmethod
+    def _build_default_strategy(api_function_name: str, data_fields: list[str]) -> dict[str, Any]:  # Field-derived PK
+        """Build a default PK strategy enhanced by the data's available fields (id + common index columns)."""
+        strategy: dict[str, Any] = ENDPOINT_PRIMARY_KEY_STRATEGIES["default"].copy()  # Start from the default template
+
+        if "id" in data_fields:  # Data carries an 'id' -- use it as the unique key
             strategy["unique_constraints"] = ["id"]  # Enforce unique id.
             strategy["indexes"] = ["id"]  # Index id for lookups.
-            logging.debug("Enhanced default strategy for %s: adding unique constraint on 'id'", api_function_name)
+            logging.debug("Default strategy for %s: unique constraint on 'id'", api_function_name)  # Trace id keying
 
-        # Add common indexes for frequently queried fields
         common_index_fields = ["org_id", "site_id", "device_id", "timestamp", "mac", "serial"]  # Common index columns.
         for field_name in common_index_fields:  # Add indexes when present.
             if field_name in data_fields and field_name not in strategy["indexes"]:  # Avoid duplicate indexes.
-                strategy["indexes"].append(field_name)  # type: ignore[attr-defined]
+                strategy["indexes"].append(field_name)  # type: ignore[attr-defined]  # Index this present field
 
         logging.debug("Using enhanced default strategy for %s: %s", api_function_name, strategy)  # Trace strategy.
         return strategy  # Return enhanced strategy.
