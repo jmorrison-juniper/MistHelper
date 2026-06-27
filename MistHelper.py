@@ -115,6 +115,9 @@ from src.capture.packet_capture import (
 from src.dataclasses.batch_worker import (
     BatchWorkerConfig,
 )  # Issue #431: groups thread-pool batch config to keep _pool_process_batch_wait_loop within the 5-Item Rule.
+from src.dataclasses.export_backend_options import (
+    ExportBackendOptions,
+)  # Issue #470: groups output-backend overrides to keep write_with_format_selection within the 5-Item Rule.
 from src.dataclasses.msp_org_context import (
     MspOrgContext,
 )  # Issue #470: groups MSP/Org identity to keep _enrich_device_context within the 5-Item Rule.
@@ -7297,10 +7300,9 @@ class DataExporter:  # Multi-backend export facade.
     def write_with_format_selection(  # Public export entry point.
         data: list[dict[str, Any]],
         filename_or_table: str,
-        format_override: str | None = None,
         api_function_name: str | None = None,
-        raw_data: list[dict[str, Any]] | None = None,
         fieldnames: list[str] | None = None,
+        backend_options: "ExportBackendOptions | None" = None,
     ) -> bool:
         """
         Writes data to either CSV or SQLite database based on global OUTPUT_FORMAT or override.
@@ -7308,16 +7310,19 @@ class DataExporter:  # Multi-backend export facade.
         Args:
             data: List of dictionaries containing the data to write
             filename_or_table: CSV filename or database table name
-            format_override: Optional override for output format ("csv" or "sqlite")
             api_function_name: Name of the API function for SQLite strategy selection
-            raw_data: Unflattened API response for polyglot backends (if None, uses data)
             fieldnames: Optional explicit column order for CSV output.  When provided the
                 columns are written in exactly this order instead of being sorted alphabetically.
+            backend_options: Optional output-backend overrides (format_override, raw_data).
+                Issue #470: bundled into one ExportBackendOptions so the signature stays <=5 params.
 
         Returns:
             bool: True if successful, False otherwise
         """
-        output_format = format_override if format_override else OUTPUT_FORMAT  # Override or global format.
+        opts = (
+            backend_options if backend_options is not None else ExportBackendOptions()
+        )  # Resolve to defaults when no overrides were supplied (avoids a mutable default arg).
+        output_format = opts.format_override if opts.format_override else OUTPUT_FORMAT  # Override or global format.
         logging.debug(  # Trace the write request.
             "DataExporter.write_with_format_selection: rows=%s, target=%s, format=%s, api_func=%s",
             len(data) if data else 0,
@@ -7338,7 +7343,9 @@ class DataExporter:  # Multi-backend export facade.
             logging.error("Failed to write data to %s in %s format: %s", filename_or_table, output_format, error)
             return False  # Write failed.
 
-        DataExporter._route_to_polyglot(data, api_function_name, raw_data=raw_data)  # Mirror to polyglot DB.
+        DataExporter._route_to_polyglot(
+            data, api_function_name, raw_data=opts.raw_data
+        )  # Mirror to polyglot DB (issue #470: raw_data from bundled backend options).
         return csv_ok  # Return the primary result.
 
     _standalone_logged = False  # One-shot standalone log guard.
@@ -7535,7 +7542,7 @@ class DataExporter:  # Multi-backend export facade.
             processed_data,
             filename,
             api_function_name=api_function_name,
-            raw_data=raw_data,
+            backend_options=ExportBackendOptions(raw_data=raw_data),  # Issue #470: raw_data bundled.
         )
 
         return DataExporter._finalize_export(success, len(processed_data), filename)  # Log outcome, return count
