@@ -8,6 +8,10 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from src.dataclasses.export_backend_options import (
+    ExportBackendOptions,
+)  # Issue #470: backend overrides for write_with_format_selection.
+
 
 @dataclass
 class DeviceEvents52wExporter:
@@ -160,8 +164,8 @@ class DeviceEvents52wExporter:
             self.data_exporter.write_with_format_selection(
                 rows,
                 "OrgDeviceEvents_52w",
-                format_override="sqlite",
                 api_function_name="searchOrgDeviceEvents",
+                backend_options=ExportBackendOptions(format_override="sqlite"),  # Issue #470: backend override bundled.
             )
             return
         with open(csv_file, "w", newline="", encoding="utf-8") as handle:
@@ -176,8 +180,8 @@ class DeviceEvents52wExporter:
             self.data_exporter.write_with_format_selection(
                 rows,
                 "OrgDeviceEvents_52w",
-                format_override="sqlite",
                 api_function_name="searchOrgDeviceEvents",
+                backend_options=ExportBackendOptions(format_override="sqlite"),  # Issue #470: backend override bundled.
             )
             return
         with open(csv_file, "a", newline="", encoding="utf-8") as handle:
