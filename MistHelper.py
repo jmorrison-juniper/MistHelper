@@ -5719,38 +5719,18 @@ class DeviceDataFetcher:
     SECURITY: Uses authenticated API session for all device queries.
 
     Usage:
-        DeviceDataFetcher(fetch_function, filename, description).fetch()
-        DeviceDataFetcher(fetch_function, filename, description, device_type="gateway").fetch()
+        DeviceDataFetcher(DeviceFetchConfig(fetch_function, filename, description)).fetch()
+        DeviceDataFetcher(DeviceFetchConfig(fetch_function, filename, description, device_type="gateway")).fetch()
     """
 
-    def __init__(  # noqa: PLR0913
-        self,
-        fetch_function: Callable,  # type: ignore[type-arg]
-        filename: str,
-        description: str,
-        device_type: str = "all",
-        site_id: str | None = None,
-        device_id: str | None = None,
-    ):
-        """Initialize fetcher with required parameters."""
-        self.fetch_function = fetch_function
-        self.filename = filename
-        self.description = description
-        self.device_type = device_type
-        self.site_id = site_id
-        self.device_id = device_id
-
-    @classmethod
-    def from_config(cls, config: "DeviceFetchConfig") -> "DeviceDataFetcher":
-        """Create fetcher from DeviceFetchConfig object."""
-        return cls(
-            fetch_function=config.fetch_function,
-            filename=config.filename,
-            description=config.description,
-            device_type=config.device_type,
-            site_id=config.site_id,
-            device_id=config.device_id,
-        )
+    def __init__(self, config: DeviceFetchConfig):
+        """Initialize fetcher from a DeviceFetchConfig (issue #470: 6 params bundled into one per 5-Item Rule)."""
+        self.fetch_function = config.fetch_function  # Callable that performs the actual API fetch.
+        self.filename = config.filename  # Output filename for the exported data.
+        self.description = config.description  # Human-readable description shown during the fetch.
+        self.device_type = config.device_type  # Device type filter (all/ap/switch/gateway).
+        self.site_id = config.site_id  # Optional site scope (None means an org-wide fetch).
+        self.device_id = config.device_id  # Optional single-device scope (None means all matching devices).
 
     def fetch(self) -> None:
         """Main entry point - orchestrates the device data fetch workflow."""
@@ -15549,11 +15529,13 @@ class InteractiveDisplayUtils:  # Interactive display utils.
         """
         logging.info("Prompting user to select a device for detailed statistics view...")  # Log the prompt.
         DeviceDataFetcher(  # Fetch and display.
-            fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
-            filename="DeviceStats.csv",
-            description="Fetching detailed stats",
-            site_id=site_id,
-            device_id=device_id,
+            DeviceFetchConfig(  # Issue #470: bundle fetch params into the config dataclass.
+                fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
+                filename="DeviceStats.csv",
+                description="Fetching detailed stats",
+                site_id=site_id,
+                device_id=device_id,
+            )
         ).fetch()
         logging.info("Completed device_stats execution.")  # Log completion.
 
@@ -15564,10 +15546,12 @@ class InteractiveDisplayUtils:  # Interactive display utils.
         """
         logging.info("Prompting user to select a gateway device for synthetic test stats view...")  # Log the prompt.
         DeviceDataFetcher(  # Fetch and display.
-            fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
-            filename="DeviceTestResults.csv",
-            description="Fetching synthetic test stats",
-            device_type="gateway",
+            DeviceFetchConfig(  # Issue #470: bundle fetch params into the config dataclass.
+                fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
+                filename="DeviceTestResults.csv",
+                description="Fetching synthetic test stats",
+                device_type="gateway",
+            )
         ).fetch()
         logging.info("Completed device_tests execution.")  # Log completion.
 
@@ -15578,9 +15562,11 @@ class InteractiveDisplayUtils:  # Interactive display utils.
         """
         logging.info("Prompting user to select a device for configuration details view...")  # Log the prompt.
         DeviceDataFetcher(  # Fetch and display.
-            fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
-            filename="DeviceConfig.csv",
-            description="Fetching device configuration",
+            DeviceFetchConfig(  # Issue #470: bundle fetch params into the config dataclass.
+                fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
+                filename="DeviceConfig.csv",
+                description="Fetching device configuration",
+            )
         ).fetch()
         logging.info("Completed device_config execution.")  # Log completion.
 
