@@ -7579,7 +7579,6 @@ class APIDataFetcher:  # Fetch, export, display a result.
         api_call: Any,
         filename: str,
         sort_key: str | None = None,
-        display_fields: list[str] | None = None,
         **kwargs,
     ):
         """
@@ -7590,14 +7589,12 @@ class APIDataFetcher:  # Fetch, export, display a result.
             api_call: Mist API function to call
             filename: Output filename (without extension)
             sort_key: Optional field to sort results by
-            display_fields: Optional list of fields for table display
             **kwargs: Additional arguments passed to the API call
         """
         self.title = title  # Human-readable title.
         self.api_call = api_call  # Callable that fetches data.
         self.filename = filename  # Output filename.
         self.sort_key = sort_key  # Optional sort key.
-        self.display_fields = display_fields  # Columns to display.
         self.kwargs = kwargs  # Extra API arguments.
 
         self.org_id = ""  # Resolved org id.
@@ -7901,7 +7898,7 @@ class APIDataFetcher:  # Fetch, export, display a result.
     def _build_pretty_table(self, data: list[dict[str, Any]], fields: list[str]) -> Any:  # Build a PrettyTable.
         """Build PrettyTable from processed data."""
         table = PrettyTable()  # New table.
-        table.field_names = self.display_fields if self.display_fields else fields  # Choose columns.
+        table.field_names = fields  # Use the auto-derived field list as the table columns.
         table.valign = "t"  # Top-align cells.
 
         for item in tqdm(data, desc="Processing", unit="record"):  # type: ignore[no-untyped-call]
