@@ -12390,218 +12390,252 @@ class OrgExportUtils:  # Generic org export helpers.
         return records, retrieved, failed  # Aggregate result for this metric
 
     @staticmethod
-    def insight_metrics():  # noqa: C901, PLR0912, PLR0915
-        """Export organization-wide insight metrics to normalized CSV files."""
-        print("Export Organization Insight Metrics (Normalized):")  # Header.
+    def _insight_is_worst_sites_metric(metric: str) -> bool:
+        """Return True when a metric needs site-level SLE analysis (issue #470: hoisted to keep dispatch CC low)."""
+        return "worst-sites" in metric or metric in (
+            "sites-sle",
+            "sites-sle-filtered",
+        )  # These metrics require getOrgSitesSle rather than the plain getOrgSle endpoint.
+
+    @staticmethod
+    def _insight_build_sites_result(
+        org_id: str, metric: str, sle_category: str, sites_data: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Build one aggregated site-SLE insight result row for a metric+category pair."""
+        return {  # One aggregated record describing this metric/category combination.
+            "metric_type": f"{metric}_{sle_category}",  # Composite metric+category identifier.
+            "org_id": org_id,  # Tag the owning org.
+            "sle_category": sle_category,  # Record which SLE category this row covers.
+            "data_source": "sites_sle_analysis",  # Mark the provenance of this aggregated row.
+            "total_sites": len(sites_data),  # How many sites contributed to this category.
+            "sites_data": sites_data,  # The raw per-site SLE rows for downstream normalization.
+            "original_metric": metric,  # Preserve the requesting metric name.
+        }
+
+    @staticmethod
+    def _insight_fetch_one_sle_category(org_id: str, metric: str, sle_category: str) -> dict[str, Any] | None:
+        """Fetch one SLE category's site data; return an aggregated result row, or None when empty or failed."""
+        try:  # Isolate this category so one failure doesn't abort the others.
+            response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the sites-SLE API for this category.
+                apisession, org_id, sle=sle_category, duration="7d", limit=1000
+            )
+            sites_data = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all site rows.
+            if sites_data:  # The category returned at least one site's SLE data.
+                logging.debug(  # Trace the successful category fetch with its site count.
+                    "Successfully retrieved sites data for insight metric: %s with SLE: %s (%s sites)",
+                    metric,
+                    sle_category,
+                    len(sites_data),
+                )
+                return OrgExportUtils._insight_build_sites_result(
+                    org_id, metric, sle_category, sites_data
+                )  # Result row.
+            logging.debug("No sites data available for insight metric: %s with SLE: %s", metric, sle_category)  # Empty.
+            return None  # No data for this category.
+        except Exception as sites_error:  # Category fetch failed; log and report None without counting a failure.
+            logging.debug(
+                "Failed to get sites data for insight metric '%s' with SLE '%s': %s",
+                metric,
+                sle_category,
+                sites_error,
+            )
+            return None  # Treat the failed category as no data.
+
+    @staticmethod
+    def _insight_fetch_worst_sites_sle(org_id: str, metric: str) -> tuple[list[dict[str, Any]], int, int]:
+        """Fetch one site-SLE metric across wifi/wan/wired categories; return (records, retrieved, failed)."""
+        records: list[dict[str, Any]] = []  # Aggregated per-category insight results for this metric.
+        retrieved = 0  # Count of categories that returned usable site data.
+        for sle_category in ("wifi", "wan", "wired"):  # The three SLE service categories to analyze.
+            result = OrgExportUtils._insight_fetch_one_sle_category(org_id, metric, sle_category)  # One category fetch.
+            if result is not None:  # The category returned usable data.
+                records.append(result)  # Collect the aggregated category result.
+                retrieved += 1  # Count this category as a successful retrieval.
+        return records, retrieved, 0  # Failures are absorbed per-category, so the failed count stays zero here.
+
+    @staticmethod
+    def _insight_fetch_default_metric(org_id: str, metric: str) -> tuple[list[dict[str, Any]], int, int]:
+        """Fetch one ordinary metric via getOrgSle; return (records, retrieved, failed)."""
+        response = mistapi.api.v1.orgs.insights.getOrgSle(apisession, org_id, metric, duration="7d")  # Direct SLE GET.
+        insight_data = getattr(response, "data", response) or {}  # Unwrap the response payload; default to empty.
+        if insight_data:  # The metric returned a usable payload.
+            insight_data["metric_type"] = metric  # Tag the metric name onto the payload.
+            insight_data["org_id"] = org_id  # Tag the owning org onto the payload.
+            logging.debug("Successfully retrieved org insight data for metric: %s", metric)  # Trace the success.
+            return [insight_data], 1, 0  # One retrieved record, no failures.
+        logging.debug("No data available for org metric: %s", metric)  # Trace the empty payload.
+        return [], 0, 1  # No data counts as a single failed metric (matches the original behavior).
+
+    @staticmethod
+    def _insight_fetch_one_metric(
+        org_id: str, metric: str, parameterized_metrics: dict[str, list[str]]
+    ) -> tuple[list[dict[str, Any]], int, int]:
+        """Dispatch one metric to the right fetch strategy; return (records, retrieved, failed)."""
+        try:  # Any metric-level failure is caught here so the overall loop continues.
+            logging.debug("Attempting to retrieve org insight metric: %s", metric)  # Trace the attempt.
+            if metric in parameterized_metrics:  # Parameterized metric -> expand across its required 'metric' choices.
+                records, ok, fail = OrgExportUtils._fetch_parameterized_org_metric(  # One GET per valid choice.
+                    org_id, metric, parameterized_metrics[metric], "7d"
+                )
+                logging.debug("Expanded parameterized metric %s into %s records", metric, len(records))  # Trace expand.
+                return records, ok, fail  # Hand back the per-choice aggregate.
+            if OrgExportUtils._insight_is_worst_sites_metric(metric):  # Site-SLE metric -> per-category analysis.
+                return OrgExportUtils._insight_fetch_worst_sites_sle(org_id, metric)  # Fetch across wifi/wan/wired.
+            return OrgExportUtils._insight_fetch_default_metric(org_id, metric)  # Ordinary metric -> single getOrgSle.
+        except Exception as metric_error:  # The metric failed entirely; count it and keep going.
+            logging.debug("Failed to get org insight data for metric '%s': %s", metric, metric_error)  # Trace failure.
+            return [], 0, 1  # No records, one failed metric.
+
+    @staticmethod
+    def _insight_fetch_sites_sle_summary(org_id: str) -> tuple[list[dict[str, Any]], int, int]:
+        """Fetch the org-wide sites SLE summary; return (records, retrieved, failed)."""
+        try:  # Isolate the summary fetch so its failure doesn't abort the export.
+            logging.debug("Attempting to retrieve org sites SLE summary")  # Trace the attempt.
+            response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, duration="7d", limit=100)  # GET.
+            sites_data = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all summary rows.
+            if sites_data:  # The summary returned site rows.
+                for item in sites_data:  # Tag each row with its metric type and org.
+                    item["metric_type"] = "org_sites_sle_summary"  # Mark these as the sites SLE summary.
+                    item["org_id"] = org_id  # Tag the owning org.
+                logging.debug("Successfully retrieved org sites SLE data for %s sites", len(sites_data))  # Trace count.
+                return list(sites_data), 1, 0  # All rows as records; counts as one successful retrieval.
+            return [], 0, 0  # No summary data; neither retrieved nor failed (matches original).
+        except Exception as sites_error:  # Summary fetch failed.
+            logging.debug("Failed to get org sites SLE summary: %s", sites_error)  # Trace the failure.
+            return [], 0, 1  # Count the summary as a single failure.
+
+    @staticmethod
+    def _insight_collect_all_metrics(
+        org_id: str, org_metrics: list[str], parameterized_metrics: dict[str, list[str]]
+    ) -> tuple[list[dict[str, Any]], int, int]:
+        """Retrieve every org-scope metric plus the sites SLE summary; return (all_records, retrieved, failed)."""
+        all_insight_data: list[dict[str, Any]] = []  # Accumulate every metric's records.
+        metrics_retrieved = 0  # Running count of successful retrievals.
+        metrics_failed = 0  # Running count of failed or empty retrievals.
+        for metric in org_metrics:  # Process each org-scoped metric independently.
+            records, retrieved, failed = OrgExportUtils._insight_fetch_one_metric(  # Dispatch to the right strategy.
+                org_id, metric, parameterized_metrics
+            )
+            all_insight_data.extend(records)  # Collect this metric's records.
+            metrics_retrieved += retrieved  # Fold in its successful count.
+            metrics_failed += failed  # Fold in its failed count.
+        summary_records, summary_ok, summary_fail = OrgExportUtils._insight_fetch_sites_sle_summary(org_id)  # Summary.
+        all_insight_data.extend(summary_records)  # Collect the summary rows.
+        metrics_retrieved += summary_ok  # Fold in the summary success count.
+        metrics_failed += summary_fail  # Fold in the summary failure count.
+        return all_insight_data, metrics_retrieved, metrics_failed  # Hand the aggregate back to the orchestrator.
+
+    @staticmethod
+    def _insight_normalize_records(all_insight_data: list[dict[str, Any]], org_id: str) -> dict[str, list]:  # type: ignore[type-arg]
+        """Normalize raw insight rows into the four output buckets (summary, time_series, results, sites_data)."""
+        buckets: dict[str, list] = {  # type: ignore[type-arg]  # One list per normalized output file.
+            "summary": [],  # Rows destined for OrgMetricsSummary.csv.
+            "time_series": [],  # Rows destined for OrgMetricsTimeSeries.csv.
+            "results": [],  # Rows destined for OrgMetricsResults.csv.
+            "sites_data": [],  # Rows destined for OrgSitesData.csv.
+        }
+        for metric_data in all_insight_data:  # Normalize each raw metric record.
+            normalized = InsightMetricsUtils.parse_to_normalized_data(metric_data, org_id)  # Split into the 4 buckets.
+            for key in buckets:  # Fold each bucket's rows into the accumulator.
+                buckets[key].extend(normalized[key])  # Collect this record's contribution to the bucket.
+        return buckets  # Return the four populated buckets.
+
+    @staticmethod
+    def _insight_export_normalized(all_insight_data: list[dict[str, Any]], org_id: str, metrics_retrieved: int) -> None:
+        """Normalize the insight rows and export them to the four normalized CSVs plus the legacy combined file."""
+        print("! Parsing metrics into normalized data structures...")  # Tell the user normalization is starting.
+        buckets = OrgExportUtils._insight_normalize_records(all_insight_data, org_id)  # Build the 4 output buckets.
+        print("! Exporting to normalized CSV files...")  # Tell the user the writes are starting.
+        outputs = [  # Drive the four normalized writes from one table to avoid repeated blocks.
+            (buckets["summary"], "OrgMetricsSummary.csv", "summary"),  # Summary file + its label.
+            (buckets["time_series"], "OrgMetricsTimeSeries.csv", "time series"),  # Time-series file + label.
+            (buckets["results"], "OrgMetricsResults.csv", "results"),  # Results file + label.
+            (buckets["sites_data"], "OrgSitesData.csv", "sites"),  # Sites file + label.
+        ]
+        for rows, filename, label in outputs:  # Write each normalized bucket to its CSV.
+            processed = DataProcessingUtils.escape_multiline(rows)  # type: ignore[no-untyped-call]  # Escape newlines.
+            DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Write it.
+            print(f"  !? {len(processed)} {label} records -> {filename}")  # Report this file's row count.
+        print(
+            f"\n! Successfully exported {metrics_retrieved} organization insight metrics to 4 normalized CSV files"  # noqa: E501
+        )  # Summarize the export for the user.
+        logging.info(  # Log the export totals for traceability.
+            "Exported %s org insight data points from %s metrics to normalized CSV files",
+            len(all_insight_data),
+            metrics_retrieved,
+        )
+        OrgExportUtils._insight_write_combined(all_insight_data)  # Also write the combined compatibility file.
+
+    @staticmethod
+    def _insight_write_combined(all_insight_data: list[dict[str, Any]]) -> None:
+        """Write the flattened combined insight file (OrgInsightMetrics_Legacy.csv) for backward compatibility."""
+        processed_combined = DataProcessingUtils.flatten_nested_fields(all_insight_data)  # Flatten for combined.
+        processed_combined = DataProcessingUtils.escape_multiline(processed_combined)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(processed_combined, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
+        print("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")  # Confirm the file write.
+
+    @staticmethod
+    def _insight_write_empty_outputs(include_legacy: bool = True) -> None:
+        """Write empty normalized CSVs so downstream consumers always see the expected files."""
+        files = [  # The four normalized output files are always written.
+            "OrgMetricsSummary.csv",
+            "OrgMetricsTimeSeries.csv",
+            "OrgMetricsResults.csv",
+            "OrgSitesData.csv",
+        ]
+        if include_legacy:  # The no-data and error paths also write the legacy combined file.
+            files.append("OrgInsightMetrics_Legacy.csv")  # Include the legacy file when requested.
+        for filename in files:  # Write an empty dataset to each output file.
+            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Empty write.
+
+    @staticmethod
+    def _insight_setup_or_empty() -> list[str] | None:
+        """Refresh and load org-scope metrics; write empty outputs and return None when none exist."""
+        print("Export Organization Insight Metrics (Normalized):")  # Header for the operation.
         logging.info("Starting export of organization insight metrics with normalized structure...")  # Log start.
-
-        # First, refresh the available metrics from the API
-        print("! Refreshing available insight metrics from Mist API...")  # Tell the user.
-        InsightMetricsUtils.export_const_insight_metrics()  # Refresh ConstInsightMetrics.csv before scope filtering
-
-        # Get all metrics that support "org" scope
-        org_metrics = InsightMetricsUtils.get_by_scope("org")  # Load org-scope metrics.
-
-        if not org_metrics:  # No metrics.
+        print("! Refreshing available insight metrics from Mist API...")  # Tell the user about the refresh.
+        InsightMetricsUtils.export_const_insight_metrics()  # Refresh ConstInsightMetrics.csv before scope filtering.
+        org_metrics = InsightMetricsUtils.get_by_scope("org")  # Load the metrics that support org scope.
+        if not org_metrics:  # No org-scope metrics are available.
             print("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")  # Tell the user.
-            logging.error("No org-scope metrics found in const insight metrics")  # Log the error.
-            # Create empty normalized files
-            DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-            return  # Abort.
+            logging.error("No org-scope metrics found in const insight metrics")  # Log the error condition.
+            OrgExportUtils._insight_write_empty_outputs(include_legacy=False)  # Write the 4 empty normalized files.
+            return None  # Signal the orchestrator to abort.
+        return org_metrics  # Hand the org-scope metric list back to the orchestrator.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+    @staticmethod
+    def _insight_report_totals(metrics_retrieved: int, metrics_failed: int) -> None:
+        """Print and log the retrieval totals for the insight-metrics run."""
+        print(f"! Metric retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")  # Tell user.
+        logging.info(
+            "Org insight metrics: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed
+        )  # Log the retrieval totals for traceability.
 
-        # Initialize normalized data collections
-        all_summary_data = []  # Summary rows.
-        all_time_series_data = []  # Time-series rows.
-        all_results_data = []  # Results rows.
-        all_sites_data = []  # Sites rows.
-
-        all_insight_data = []  # Raw insight rows.
-        metrics_retrieved = 0  # Success count.
-        metrics_failed = 0  # Failure count.
-
-        print(f"! Retrieving {len(org_metrics)} different organization insight metrics...")  # Tell the user.
-        print("! Processing each metric individually with proper error handling...")  # Tell the user.
-        parameterized_metrics = OrgExportUtils._load_parameterized_metric_choices()  # Metrics needing a 'metric' param
-
-        try:
-            # Iterate through each org-scoped metric and retrieve it individually
-            for metric in org_metrics:  # Fetch each metric.
-                try:
-                    logging.debug("Attempting to retrieve org insight metric: %s", metric)  # Trace the attempt.
-
-                    # For metrics that analyze sites, use getOrgSitesSle instead of getOrgSle
-                    if metric in parameterized_metrics:
-                        # Parameterized metric (e.g. switch-metrics): getOrgSle cannot pass the required
-                        # 'metric' query param, so expand into one direct GET per valid choice instead.
-                        param_records, param_ok, param_fail = OrgExportUtils._fetch_parameterized_org_metric(
-                            org_id, metric, parameterized_metrics[metric], "7d"
-                        )  # One GET per required choice with the 'metric' query param
-                        all_insight_data.extend(param_records)  # Collect every choice's record
-                        metrics_retrieved += param_ok  # Count successful choices
-                        metrics_failed += param_fail  # Count failed or empty choices
-                        logging.debug(
-                            "Expanded parameterized metric %s into %s records", metric, len(param_records)
-                        )  # Trace the expansion
-                    elif "worst-sites" in metric or metric in ["sites-sle", "sites-sle-filtered"]:
-                        # These metrics require site-level SLE data analysis
-                        sle_categories = ["wifi", "wan", "wired"]  # SLE categories.
-
-                        for sle_category in sle_categories:  # Fetch each category.
-                            try:
-                                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the SLE API.
-                                    apisession, org_id, sle=sle_category, duration="7d", limit=1000
-                                )
-                                sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
-
-                                if sites_data:  # Have data.
-                                    # Create an aggregated insight result from sites data
-                                    insight_result = {  # Build the result.
-                                        "metric_type": f"{metric}_{sle_category}",
-                                        "org_id": org_id,
-                                        "sle_category": sle_category,
-                                        "data_source": "sites_sle_analysis",
-                                        "total_sites": len(sites_data),
-                                        "sites_data": sites_data,
-                                        "original_metric": metric,
-                                    }
-
-                                    all_insight_data.append(insight_result)  # Collect the result.
-                                    metrics_retrieved += 1  # Count success.
-                                    logging.debug(
-                                        "Successfully retrieved sites data for insight metric: %s with SLE: %s (%s sites)",  # noqa: E501
-                                        metric,
-                                        sle_category,
-                                        len(sites_data),
-                                    )
-                                else:
-                                    logging.debug(  # Trace empty.
-                                        "No sites data available for insight metric: %s with SLE: %s",
-                                        metric,
-                                        sle_category,
-                                    )
-                            except Exception as sites_error:  # Category fetch failed.
-                                logging.debug(  # Trace the failure.
-                                    "Failed to get sites data for insight metric '%s' with SLE '%s': %s",
-                                    metric,
-                                    sle_category,
-                                    sites_error,
-                                )
-                                continue  # Next category.
-                    else:
-                        # For other metrics, use getOrgSle directly
-                        response = mistapi.api.v1.orgs.insights.getOrgSle(apisession, org_id, metric, duration="7d")
-                        insight_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
-
-                        if insight_data:  # Have data.
-                            # Add metric type identifier to each data point
-                            insight_data["metric_type"] = metric  # Tag the metric.
-                            insight_data["org_id"] = org_id  # Tag the org.
-                            all_insight_data.append(insight_data)  # Collect the row.
-                            metrics_retrieved += 1  # Count success.
-                            logging.debug("Successfully retrieved org insight data for metric: %s", metric)
-                        else:
-                            logging.debug("No data available for org metric: %s", metric)  # Trace empty.
-                            metrics_failed += 1  # Count failure.
-
-                except Exception as metric_error:  # Metric fetch failed.
-                    metrics_failed += 1  # Count failure.
-                    logging.debug("Failed to get org insight data for metric '%s': %s", metric, metric_error)
-                    # Continue with next metric instead of failing entirely
-                    continue  # Next metric.
-
-            # Also try getOrgSitesSle for sites summary data
-            try:
-                logging.debug("Attempting to retrieve org sites SLE summary")  # Trace the attempt.
-                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, duration="7d", limit=100)
-                sites_data = mistapi.get_all(response=response, mist_session=apisession) or []
-                if sites_data:  # Have data.
-                    for item in sites_data:  # Tag each row.
-                        item["metric_type"] = "org_sites_sle_summary"  # Tag the metric.
-                        item["org_id"] = org_id  # Tag the org.
-                        all_insight_data.append(item)  # Collect the row.
-                    metrics_retrieved += 1  # Count success.
-                    logging.debug("Successfully retrieved org sites SLE data for %s sites", len(sites_data))
-            except Exception as sites_error:  # Summary fetch failed.
-                metrics_failed += 1  # Count failure.
-                logging.debug("Failed to get org sites SLE summary: %s", sites_error)  # Trace the failure.
-
-            # Report results
-            print(f"! Metric retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")
-            logging.info("Org insight metrics: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed)
-
-            if all_insight_data:  # Have data.
-                print("! Parsing metrics into normalized data structures...")  # Tell the user.
-
-                # Parse each metric into normalized structures
-                for metric_data in all_insight_data:  # Normalize each metric.
-                    normalized = InsightMetricsUtils.parse_to_normalized_data(metric_data, org_id)
-                    all_summary_data.extend(normalized["summary"])  # Collect summary.
-                    all_time_series_data.extend(normalized["time_series"])  # Collect time-series.
-                    all_results_data.extend(normalized["results"])  # Collect results.
-                    all_sites_data.extend(normalized["sites_data"])  # Collect sites.
-
-                # Export to separate CSV files
-                print("! Exporting to normalized CSV files...")  # Tell the user.
-
-                # Summary data
-                processed_summary = DataProcessingUtils.escape_multiline(all_summary_data)  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection(processed_summary, "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-                print(f"  !? {len(processed_summary)} summary records -> OrgMetricsSummary.csv")  # Tell the user.
-
-                # Time series data
-                processed_time_series = DataProcessingUtils.escape_multiline(all_time_series_data)  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection(processed_time_series, "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
-                print(f"  !? {len(processed_time_series)} time series records -> OrgMetricsTimeSeries.csv")
-
-                # Results data
-                processed_results = DataProcessingUtils.escape_multiline(all_results_data)  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection(processed_results, "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-                print(f"  !? {len(processed_results)} results records -> OrgMetricsResults.csv")  # Tell the user.
-
-                # Sites data
-                processed_sites = DataProcessingUtils.escape_multiline(all_sites_data)  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection(processed_sites, "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-                print(f"  !? {len(processed_sites)} sites records -> OrgSitesData.csv")  # Tell the user.
-
-                print(
-                    f"\n! Successfully exported {metrics_retrieved} organization insight metrics to 4 normalized CSV files"  # noqa: E501
-                )
-                logging.info(  # Log the export.
-                    "Exported %s org insight data points from %s metrics to normalized CSV files",
-                    len(all_insight_data),
-                    metrics_retrieved,
-                )
-
-                # Also save a legacy combined file for compatibility
-                processed_legacy = DataProcessingUtils.flatten_nested_fields(all_insight_data)  # Flatten nested fields.
-                processed_legacy = DataProcessingUtils.escape_multiline(processed_legacy)  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection(processed_legacy, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
-                print("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")  # Tell the user.
-
-            else:
+    @staticmethod
+    def insight_metrics():
+        """Export organization-wide insight metrics to normalized CSV files."""
+        org_metrics = OrgExportUtils._insight_setup_or_empty()  # Refresh + load org metrics (None means abort early).
+        if org_metrics is None:  # Setup wrote empty outputs and signaled there is nothing to export.
+            return  # Abort the export.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org to query.
+        print(f"! Retrieving {len(org_metrics)} different organization insight metrics...")  # Tell the user the count.
+        print("! Processing each metric individually with proper error handling...")  # Explain the per-metric handling.
+        parameterized_metrics = OrgExportUtils._load_parameterized_metric_choices()  # Metrics needing a 'metric' param.
+        try:  # Guard the whole fetch-and-export so a failure still leaves consistent empty outputs.
+            all_insight_data, metrics_retrieved, metrics_failed = OrgExportUtils._insight_collect_all_metrics(  # Fetch.
+                org_id, org_metrics, parameterized_metrics
+            )
+            OrgExportUtils._insight_report_totals(metrics_retrieved, metrics_failed)  # Report + log the totals.
+            if all_insight_data:  # At least one metric returned data.
+                OrgExportUtils._insight_export_normalized(all_insight_data, org_id, metrics_retrieved)  # Write CSVs.
+            else:  # Every metric failed or returned empty.
                 print("! 0 organization insight metrics exported (no data available)")  # Tell the user zero.
                 logging.warning("No org insight data available - all metrics failed or returned empty")  # Warn no data.
-                # Create empty normalized files
-                DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
-
-        except Exception as exception:  # Export failed.
-            print(f"! Error exporting organization insight metrics: {exception}")  # Tell the user.
-            logging.error("Failed to export org insight metrics: %s", exception)  # Log the error.
-            # Create empty normalized files in case of error
-            DataExporter.write_with_format_selection([], "OrgMetricsSummary.csv")  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection([], "OrgMetricsTimeSeries.csv")  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection([], "OrgMetricsResults.csv")  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection([], "OrgSitesData.csv")  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection([], "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
+                OrgExportUtils._insight_write_empty_outputs(include_legacy=True)  # Write the 5 empty files.
+        except Exception as exception:  # The export failed unexpectedly.
+            print(f"! Error exporting organization insight metrics: {exception}")  # Tell the user about the error.
+            logging.error("Failed to export org insight metrics: %s", exception)  # Log the failure with context.
+            OrgExportUtils._insight_write_empty_outputs(include_legacy=True)  # Write the 5 empty files on error.
 
     @staticmethod
     def _nac_clients():  # Export NAC clients.
