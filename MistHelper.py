@@ -20956,50 +20956,74 @@ class BulkRadiusWLANConfigManager:
         )
         print("")  # Blank spacer line
 
-    def _parse_selection(self, user_input: str) -> list | None:  # type: ignore[type-arg]  # noqa: C901, PLR0912
+    @staticmethod
+    def _is_range_part(part: str) -> bool:
+        """Return True when a selection piece is a range like '3-7' (not a leading-minus negative)."""
+        return "-" in part and not part.startswith("-")  # A dash that isn't a leading minus marks a range.
+
+    @staticmethod
+    def _parse_range_part(part: str) -> tuple[int, int] | None:
+        """Parse a 'start-end' range piece into 0-based (start, end), swapping reversed bounds; None if invalid."""
+        try:  # Non-numeric range pieces are skipped.
+            range_parts = part.split("-")  # Split into start and end.
+            if len(range_parts) != 2:  # Only a well-formed two-ended range is valid.
+                return None  # Malformed range; skip it.
+            start = int(range_parts[0].strip()) - 1  # Convert start to 0-based.
+            end = int(range_parts[1].strip()) - 1  # Convert end to 0-based.
+            if start > end:  # Tolerate reversed ranges like '7-3'.
+                start, end = end, start  # Swap so start <= end.
+            return start, end  # The inclusive 0-based bounds.
+        except ValueError:  # A non-numeric range piece.
+            logging.warning("Invalid range format: %s", part)  # Log and skip it.
+            return None  # Skip the malformed range.
+
+    @staticmethod
+    def _parse_single_index(part: str) -> int | None:
+        """Parse a single index piece into a 0-based index, or None when it is non-numeric."""
+        try:  # Non-numeric single pieces are skipped.
+            return int(part) - 1  # Convert to 0-based.
+        except ValueError:  # A non-numeric single piece.
+            logging.warning("Invalid index: %s", part)  # Log and skip it.
+            return None  # Skip the malformed index.
+
+    @staticmethod
+    def _add_index(idx: int, max_count: int, selected_indices: list) -> None:  # type: ignore[type-arg]
+        """Append idx to selected_indices when valid and not already chosen; warn when it is out of range."""
+        if 0 <= idx < max_count and idx not in selected_indices:  # Valid and not already chosen.
+            selected_indices.append(idx)  # Add this index.
+        elif idx >= max_count:  # Index beyond the list.
+            print(f"    [!] Index {idx + 1} out of range (max: {max_count})")  # Warn the user.
+
+    @staticmethod
+    def _parse_one_part(part: str, max_count: int, selected_indices: list) -> None:  # type: ignore[type-arg]
+        """Interpret one selection piece (range or single index) and add its valid indices to selected_indices."""
+        if BulkRadiusWLANConfigManager._is_range_part(part):  # This piece is a range like '3-7'.
+            rng = BulkRadiusWLANConfigManager._parse_range_part(part)  # Parse the inclusive bounds.
+            if rng is not None:  # The range parsed cleanly.
+                for idx in range(rng[0], rng[1] + 1):  # Expand the inclusive range.
+                    BulkRadiusWLANConfigManager._add_index(idx, max_count, selected_indices)  # Add each valid index.
+        else:  # This piece is a single index.
+            idx = BulkRadiusWLANConfigManager._parse_single_index(part)  # Parse the single index.
+            if idx is not None:  # The index parsed cleanly.
+                BulkRadiusWLANConfigManager._add_index(idx, max_count, selected_indices)  # Add the valid index.
+
+    def _parse_selection(self, user_input: str) -> list | None:  # type: ignore[type-arg]
         """Parse user selection input into list of 0-based indices, or None for cancel."""
-        cleaned = user_input.strip().lower()  # Normalize the input for keyword comparison
-        if cleaned in self.CANCEL_KEYWORDS:  # The user asked to cancel
-            return None  # Signal cancellation to the caller
-
-        if cleaned == "all":  # The user selected every WLAN
-            return list(range(len(self.radius_wlans)))  # Return all 0-based indices
-
-        selected_indices = []  # Accumulate the parsed 0-based indices
-        max_count = len(self.radius_wlans)  # Upper bound for valid indices
+        cleaned = user_input.strip().lower()  # Normalize the input for keyword comparison.
+        if cleaned in self.CANCEL_KEYWORDS:  # The user asked to cancel.
+            return None  # Signal cancellation to the caller.
+        if cleaned == "all":  # The user selected every WLAN.
+            return list(range(len(self.radius_wlans)))  # Return all 0-based indices.
+        selected_indices: list[int] = []  # Accumulate the parsed 0-based indices.
+        max_count = len(self.radius_wlans)  # Upper bound for valid indices.
         normalized = (
             user_input.lower().replace(" through ", "-").replace("through", "-")
-        )  # Treat 'through' like a range dash
-        parts = [part.strip() for part in normalized.split(",")]  # Split comma-separated selections into pieces
-
-        for part in parts:  # Interpret each selection piece
-            if "-" in part and not part.startswith("-"):  # This piece is a range like "3-7"
-                try:
-                    range_parts = part.split("-")  # Split into start and end
-                    if len(range_parts) == 2:  # A well-formed two-ended range
-                        start = int(range_parts[0].strip()) - 1  # Convert start to 0-based
-                        end = int(range_parts[1].strip()) - 1  # Convert end to 0-based
-                        if start > end:  # Tolerate reversed ranges like "7-3"
-                            start, end = end, start  # Swap so start <= end
-                        for idx in range(start, end + 1):  # Expand the inclusive range
-                            if 0 <= idx < max_count and idx not in selected_indices:  # Valid and not already chosen
-                                selected_indices.append(idx)  # Add this index
-                            elif idx >= max_count:  # Index beyond the list
-                                print(f"    [!] Index {idx + 1} out of range (max: {max_count})")  # Warn the user
-                except ValueError:  # A non-numeric range piece
-                    logging.warning("Invalid range format: %s", part)  # Log and skip it
-            else:  # This piece is a single index
-                try:
-                    idx = int(part) - 1  # Convert to 0-based
-                    if 0 <= idx < max_count and idx not in selected_indices:  # Valid and not already chosen
-                        selected_indices.append(idx)  # Add this index
-                    elif idx >= max_count:  # Index beyond the list
-                        print(f"    [!] Index {idx + 1} out of range (max: {max_count})")  # Warn the user
-                except ValueError:  # A non-numeric single piece
-                    logging.warning("Invalid index: %s", part)  # Log and skip it
-
-        selected_indices.sort()  # Present the chosen indices in ascending order
-        return selected_indices  # Hand the parsed indices back to the caller
+        )  # Treat 'through' like a range dash.
+        parts = [part.strip() for part in normalized.split(",")]  # Split comma-separated selections into pieces.
+        for part in parts:  # Interpret each selection piece.
+            BulkRadiusWLANConfigManager._parse_one_part(part, max_count, selected_indices)  # Add its valid indices.
+        selected_indices.sort()  # Present the chosen indices in ascending order.
+        return selected_indices  # Hand the parsed indices back to the caller.
 
     def _display_preview(self) -> None:
         """Display preview of changes that will be applied."""
