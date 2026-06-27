@@ -2190,96 +2190,103 @@ msp_privileges: list[dict[str, Any]] = []  # List of {msp_id, msp_name, role, sc
 selected_msp: dict[str, Any] | None = None  # Currently selected MSP (from menu 115 or elsewhere)
 
 
+def _msp_resolve_name(msp_id: str, priv: dict) -> str:
+    """Resolve a human-readable MSP name from a grant, falling back to the MSP API or a short id label."""
+    msp_name = priv.get("msp_name") or priv.get("name")  # The API uses different keys across versions.
+    if not msp_name or msp_name == "Unknown":  # Name absent or placeholder.
+        return _fetch_msp_name(msp_id) or f"MSP-{msp_id[:8]}"  # Look it up, else derive a short label.
+    return msp_name  # The grant already carried a usable name.
+
+
+def _msp_parse_one_privilege(priv: Any) -> dict | None:  # type: ignore[type-arg]
+    """Parse one privilege grant into a normalized MSP record, or None when it is not a valid MSP grant."""
+    if not (isinstance(priv, dict) and priv.get("msp_id")):  # Only MSP-scoped dict grants qualify.
+        return None  # Not an MSP grant; skip it.
+    logging.debug(
+        "MSP privilege found: scope=%s, role=%s", priv.get("scope"), priv.get("role")
+    )  # Log the grant details.
+    msp_id = priv.get("msp_id")  # Extract the MSP identifier.
+    if not msp_id or not isinstance(msp_id, str):  # Guard against missing/invalid IDs.
+        return None  # Skip malformed grants.
+    msp_name = _msp_resolve_name(msp_id, priv)  # Resolve the human-readable MSP name.
+    msp_info = {  # Build a normalized record for this MSP grant.
+        "msp_id": msp_id,  # The MSP's unique identifier.
+        "msp_name": msp_name,  # Human-readable MSP name.
+        "role": priv.get("role", "unknown"),  # The user's role within this MSP.
+        "scope": priv.get("scope", "unknown"),  # The scope of the grant.
+    }
+    logging.info(
+        "Detected MSP privilege: %s (ID: %s..., role: %s, scope: %s)",
+        msp_info["msp_name"],
+        msp_info["msp_id"][:8],
+        msp_info["role"],
+        msp_info["scope"],
+    )  # Report the detected grant.
+    return msp_info  # Hand back the normalized MSP record.
+
+
+def _msp_extract_from_user_data(user_data: dict) -> list[dict]:  # type: ignore[type-arg]
+    """Extract all MSP-scoped privilege records from a getSelf user-data payload."""
+    privileges = user_data.get("privileges", [])  # Pull the list of privilege grants.
+    logging.debug("MSP detection: parsing %s privilege entries", len(privileges))  # Log how many grants we'll scan.
+    detected_msps = []  # Accumulate any MSP-scoped privileges we find.
+    for priv in privileges:  # Examine each privilege grant.
+        msp_info = _msp_parse_one_privilege(priv)  # Normalize this grant (None when not an MSP grant).
+        if msp_info is not None:  # The grant was a valid MSP grant.
+            detected_msps.append(msp_info)  # Record it.
+    return detected_msps  # Return every MSP grant found in the payload.
+
+
+def _msp_fetch_user_data() -> dict | None:  # type: ignore[type-arg]
+    """Call getSelf and return the validated user-data dict, or None when unavailable or malformed."""
+    import mistapi.api.v1.self.self as self_api  # Import the "self" endpoint module lazily.
+
+    response = self_api.getSelf(apisession)  # Ask the API who the authenticated user is.
+    if not response or not hasattr(response, "data"):  # No usable payload came back.
+        logging.warning("getSelf returned no data - cannot detect MSP privileges")  # Warn we can't determine access.
+        return None  # No privileges could be detected.
+    user_data = response.data  # Extract the decoded JSON body.
+    if not isinstance(user_data, dict):  # The body should be a JSON object.
+        logging.warning("getSelf returned unexpected type: %s", type(user_data))  # Warn about the malformed shape.
+        return None  # Cannot parse privileges from this.
+    return user_data  # Hand back the validated user-data payload.
+
+
+def _msp_cache_and_report(detected_msps: list[dict]) -> None:  # type: ignore[type-arg]
+    """Cache detected MSP grants to the module global and log the outcome."""
+    global msp_privileges  # We publish the detected grants for later menus to reuse.
+    if detected_msps:  # At least one MSP grant was found.
+        msp_privileges = detected_msps  # Cache the grants in the module-level global.
+        logging.info("User has MSP-level access to %s MSP(s)", len(detected_msps))  # Report the count.
+    else:  # No MSP grants present.
+        logging.debug("No MSP privileges detected for current user")  # Note the absence at debug level.
+
+
 def detect_msp_privileges(session=None):
-    """Detect MSP-level privileges from the authenticated user's profile.
+    """Detect MSP-level privileges from the authenticated user's profile via GET /api/v1/self.
 
-    Calls GET /api/v1/self to retrieve user privileges and extracts any MSP-level access.
-    This enables MSP menu options when the user has appropriate permissions.
-    If MSP names are not provided in the privileges, fetches them from the MSP API.
-
-    Args:
-        session: Optional live API session to detect against. The interactive login
-            orchestrator passes its freshly-authenticated session here because the
-            module-global apisession has not been published yet at detection time.
-            When provided it is also promoted to the global so later menus reuse it.
-            Falls back to the module-global apisession when omitted.
-
-    Returns:
-        list: List of MSP privilege dicts with keys: msp_id, msp_name, role, scope
-              Empty list if user has no MSP privileges or detection fails.
+    An explicit ``session`` (passed by the interactive login before the module-global
+    ``apisession`` is published) is promoted to the global. Returns MSP privilege dicts
+    (msp_id, msp_name, role, scope), or [] when there is no MSP access or detection fails.
     """
-    global apisession, msp_privileges
+    global apisession  # Session promotion below may update the module-global session.
+    if session is not None:  # Caller supplied an explicit session (interactive login, before the global is published).
+        apisession = session  # Promote it to the global so getSelf and _fetch_msp_name use the same session.
 
-    if session is not None:  # Caller supplied an explicit session (interactive login, before the global is published)
-        apisession = session  # Promote it to the global now so getSelf and _fetch_msp_name use the same session
+    if not apisession:  # Still no usable session from either the argument or the global.
+        logging.warning("Cannot detect MSP privileges - no active session")  # Warn that detection cannot proceed.
+        return []  # Treat as no MSP access.
 
-    if not apisession:  # Still no usable session from either the argument or the global
-        logging.warning("Cannot detect MSP privileges - no active session")  # Warn that detection cannot proceed
-        return []  # Treat as no MSP access
-
-    try:
-        import mistapi.api.v1.self.self as self_api  # Import the "self" endpoint module lazily
-
-        response = self_api.getSelf(apisession)  # Ask the API who the authenticated user is
-
-        if not response or not hasattr(response, "data"):  # No usable payload came back
-            logging.warning(
-                "getSelf returned no data - cannot detect MSP privileges"
-            )  # Warn we can't determine MSP access
-            return []  # No privileges could be detected
-
-        user_data = response.data  # Extract the decoded JSON body
-        if not isinstance(user_data, dict):  # The body should be a JSON object
-            logging.warning("getSelf returned unexpected type: %s", type(user_data))  # Warn about the malformed shape
-            return []  # Cannot parse privileges from this
-
-        privileges = user_data.get("privileges", [])  # Pull the list of privilege grants
-        detected_msps = []  # Accumulate any MSP-scoped privileges we find
-        logging.debug("MSP detection: parsing %s privilege entries", len(privileges))  # Log how many grants we'll scan
-
-        for priv in privileges:  # Examine each privilege grant
-            if isinstance(priv, dict) and priv.get("msp_id"):  # This grant is MSP-scoped
-                logging.debug(
-                    "MSP privilege found: scope=%s, role=%s", priv.get("scope"), priv.get("role")
-                )  # Log the grant details
-                msp_id = priv.get("msp_id")  # Extract the MSP identifier
-                if not msp_id or not isinstance(msp_id, str):  # Guard against missing/invalid IDs
-                    continue  # Skip malformed grants
-                # Try multiple field names for MSP name (API inconsistency)
-                msp_name = (
-                    priv.get("msp_name") or priv.get("name") or None
-                )  # The API uses different keys across versions
-
-                # If name still not found, try to fetch it from MSP API
-                if not msp_name or msp_name == "Unknown":  # Name absent or placeholder
-                    msp_name = _fetch_msp_name(msp_id) or f"MSP-{msp_id[:8]}"  # Look it up, else derive a short label
-
-                msp_info = {  # Build a normalized record for this MSP grant
-                    "msp_id": msp_id,  # The MSP's unique identifier
-                    "msp_name": msp_name,  # Human-readable MSP name
-                    "role": priv.get("role", "unknown"),  # The user's role within this MSP
-                    "scope": priv.get("scope", "unknown"),  # The scope of the grant
-                }
-                detected_msps.append(msp_info)  # Record this MSP grant
-                logging.info(
-                    "Detected MSP privilege: %s (ID: %s..., role: %s, scope: %s)",
-                    msp_info["msp_name"],
-                    msp_info["msp_id"][:8],
-                    msp_info["role"],
-                    msp_info["scope"],
-                )
-
-        if detected_msps:  # At least one MSP grant was found
-            msp_privileges = detected_msps  # Cache the grants in the module-level global
-            logging.info("User has MSP-level access to %s MSP(s)", len(detected_msps))  # Report the count
-        else:  # No MSP grants present
-            logging.debug("No MSP privileges detected for current user")  # Note the absence at debug level
-
-        return detected_msps  # Hand the parsed MSP list back to the caller
-
-    except Exception as e:  # Any API or parsing failure
-        logging.warning("Failed to detect MSP privileges: %s", e)  # Warn but don't crash the session
-        return []  # Treat as no MSP access on error
+    try:  # API or parsing failures must degrade to "no MSP access" rather than crash the session.
+        user_data = _msp_fetch_user_data()  # Call getSelf and validate the payload (None when unavailable).
+        if user_data is None:  # getSelf failed or returned a malformed payload.
+            return []  # No privileges could be detected.
+        detected_msps = _msp_extract_from_user_data(user_data)  # Parse every MSP-scoped grant.
+        _msp_cache_and_report(detected_msps)  # Cache to the global and log the outcome.
+        return detected_msps  # Hand the parsed MSP list back to the caller.
+    except Exception as e:  # Any API or parsing failure.
+        logging.warning("Failed to detect MSP privileges: %s", e)  # Warn but don't crash the session.
+        return []  # Treat as no MSP access on error.
 
 
 def _extract_msp_name(response: Any) -> str | None:  # Pull the MSP name out of a getMspDetails response
