@@ -866,55 +866,49 @@ class GlobalImportManager:
 
     def __init__(self):  # Read config from env and prepare dependency-tracking state
         """Initialize the import manager with configuration from environment variables."""
-        # Configuration from .env file
-        # For local development: UV enabled, auto-upgrades enabled
-        # For containers: These are overridden by environment variables
-        self.auto_upgrade_uv = (  # Whether to auto-upgrade the UV package manager itself
-            os.getenv("AUTO_UPGRADE_UV", "true").lower() == "true"
-        )  # Default to true for local UV usage
-        self.auto_upgrade_dependencies = (  # Whether to auto-upgrade project dependencies
-            os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true").lower() == "true"
-        )  # Default to true for local development
+        self._load_upgrade_configuration()  # Read env-driven upgrade/UV/CSV freshness settings
+        self._initialize_dependency_tracking()  # Prepare package-tracking lists and import/UV caches
+        self._initialize_import_mappings()  # Build package->import name maps and special import handlers
+        self._setup_logging()  # type: ignore[no-untyped-call]  # Configure handlers/levels before other init runs
+        self._detect_virtual_environment()  # type: ignore[no-untyped-call]  # Log whether we're in a venv (affects installs)
+        self._define_package_requirements()  # type: ignore[no-untyped-call]  # Populate the required/optional package dicts
+
+    def _load_upgrade_configuration(self):  # Read upgrade/UV/CSV settings from the environment
+        """Load upgrade, UV-check, and CSV-freshness settings from environment variables."""
+        logging.debug("Loading import-manager upgrade configuration from environment")  # Trace config load
+        self.auto_upgrade_uv = os.getenv("AUTO_UPGRADE_UV", "true").lower() == "true"  # Auto-upgrade UV manager itself
+        self.auto_upgrade_dependencies = os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true").lower() == "true"  # Auto deps
         self.upgrade_check_timeout = int(
             os.getenv("UPGRADE_CHECK_TIMEOUT", "30")
-        )  # Seconds before giving up on an upgrade check
+        )  # Seconds before giving up on a check
         self.csv_freshness_minutes = int(
             os.getenv("CSV_FRESHNESS_MINUTES", "15")
-        )  # How long cached CSVs count as 'fresh'
-        # Only check for UV updates once per day by default
-        self.uv_update_check_hours = int(
-            os.getenv("UV_UPDATE_CHECK_HOURS", "24")
-        )  # Throttle UV update checks to once per day
-        # Option to completely disable UV checking (useful for containers)
+        )  # How long cached CSVs count as fresh
+        self.uv_update_check_hours = int(os.getenv("UV_UPDATE_CHECK_HOURS", "24"))  # Throttle UV update checks to daily
         self.disable_uv_check = (
             os.getenv("DISABLE_UV_CHECK", "false").lower() == "true"
-        )  # Skip all UV checks when set (container use)
-        # Option to completely disable auto-installation (useful for containers)
-        self.disable_auto_install = (
-            os.getenv("DISABLE_AUTO_INSTALL", "false").lower() == "true"
-        )  # Skip auto-install when set (container use)
+        )  # Skip all UV checks (container)
+        self.disable_auto_install = os.getenv("DISABLE_AUTO_INSTALL", "false").lower() == "true"  # Skip auto-install
 
-        # Dependency tracking
+    def _initialize_dependency_tracking(self):  # Prepare package-tracking and import/UV caches
+        """Initialize dependency-tracking containers and UV/deferred-init state flags."""
+        logging.debug("Initializing dependency tracking containers and caches")  # Trace tracking setup
         self.required_packages = {}  # Will hold name -> spec for required packages
         self.optional_packages = {}  # Will hold name -> spec for optional packages
         self.failed_imports = []  # Names of packages that failed to import
         self.installed_packages = []  # Names of packages installed during this run
-
-        # Import storage for global access
         self.imports = {}  # Cache of imported modules keyed by name for global reuse
-
-        # UV availability cache to avoid repeated checks
         self._uv_available: bool = False  # Cached answer to 'is UV usable?'
         self._uv_checked: bool = False  # Whether the UV availability check has run yet
         self._last_uv_update_check: float | None = None  # Track when we last checked for UV updates
-
-        # Deferred initialization tracking
         self._deferred_init_done: bool = False  # Whether the deferred (lazy) init has run
         self._initialization_complete: bool = False  # Whether full initialization finished
         self._initialization_success: bool = False  # Whether initialization succeeded
         self._cached_global_assignments: dict[str, Any] = {}  # Module globals to publish once imports complete
 
-        # Import name mappings for cases where package name != import name
+    def _initialize_import_mappings(self):  # Build name maps and special import handlers
+        """Build package->import name mappings and the special-case import handler table."""
+        logging.debug("Initializing import name mappings and special handlers")  # Trace mapping setup
         self.import_name_mappings = {  # Map pip package names to import names where they differ
             "websocket-client": "websocket",  # websocket-client package provides websocket module
             "python-dotenv": "dotenv",  # python-dotenv package provides dotenv module
@@ -925,22 +919,11 @@ class GlobalImportManager:
             "python-dateutil": "dateutil",  # python-dateutil package provides dateutil module
             "msgpack-python": "msgpack",  # msgpack-python package provides msgpack module
         }
-
-        # Special import handlers for complex cases
         self.special_import_handlers = {  # Map module names to custom import functions for tricky cases
             "concurrent.futures": self._import_concurrent_futures,  # Custom handler for concurrent.futures
             "datetime": self._import_datetime,  # Custom handler for datetime (avoids class shadowing)
             "tqdm": self._import_tqdm,  # Custom handler that swaps in the real tqdm
         }
-
-        # Initialize logging early
-        self._setup_logging()  # type: ignore[no-untyped-call]  # Configure handlers/levels before other init runs
-
-        # Detect virtual environment for better package management
-        self._detect_virtual_environment()  # type: ignore[no-untyped-call]  # Log whether we're in a venv (affects installs)
-
-        # Define all required and optional packages
-        self._define_package_requirements()  # type: ignore[no-untyped-call]  # Populate the required/optional package dicts
 
     def _detect_virtual_environment(self):  # Determine and log whether a venv is active
         """Detect if we're running in a virtual environment and log info."""
@@ -16537,33 +16520,55 @@ class ARPCommandManager:  # ARP WebSocket command manager.
     def _handle_close(output_lines, debug=False):  # Handle the close.
         """Handle WebSocket close and process output."""
         logging.info(" WebSocket closed.")  # Log the close.
-        if output_lines:  # Have output.
-            compiled_output = "\n".join(output_lines)  # Join the lines.
-            ARPCommandManager._save_output(compiled_output)  # type: ignore[no-untyped-call]
-            ARPCommandManager._export_to_csv("arp_output_raw.txt")  # type: ignore[no-untyped-call]
-
-            print("\n  ARP Output Received:\n")  # Tell the user.
-            rows = compiled_output.split("\n")  # Split into rows.
-            parsed_rows = [row.split("\t") for row in rows if row.strip()]  # Split each row.
-            max_cols = max(len(row) for row in parsed_rows) if parsed_rows else 0  # Max column count.
-            for row in parsed_rows:  # Pad each row.
-                while len(row) < max_cols:  # Pad short rows.
-                    row.append("")  # Append a cell.
-
-            if parsed_rows:  # Have rows.
-                table = PrettyTable()  # Build the table.
-                table.field_names = [f"Col {col_num + 1}" for col_num in range(max_cols)]  # Number the columns.
-                for row in parsed_rows:  # Add each row.
-                    table.add_row(row)  # Add the row.
-
-                if debug:  # Debug mode.
-                    print(table)  # Print the table.
-                    logging.debug("\n%s", table.get_string())  # Log the table.
-                else:
-                    print(f"! ARP output received with {len(parsed_rows)} rows.")  # Tell the user.
-        else:
+        if not output_lines:  # No output captured during this session.
             print(" No ARP output received for this session.")  # Tell the user none.
             logging.warning(" No ARP output received for this session.")  # Warn none.
+            return  # Nothing further to process.
+        compiled_output = "\n".join(output_lines)  # Join the captured lines into one block.
+        ARPCommandManager._save_output(compiled_output)  # type: ignore[no-untyped-call]
+        ARPCommandManager._export_to_csv("arp_output_raw.txt")  # type: ignore[no-untyped-call]
+        print("\n  ARP Output Received:\n")  # Tell the user output arrived.
+        ARPCommandManager._render_arp_table(compiled_output, debug)  # type: ignore[no-untyped-call]
+
+    @staticmethod
+    def _render_arp_table(compiled_output, debug):  # Render the parsed ARP output.
+        """Parse compiled ARP output and display it as a padded table."""
+        logging.debug("Rendering ARP table from compiled output")  # Trace the render step.
+        parsed_rows, max_cols = ARPCommandManager._parse_arp_rows(compiled_output)  # type: ignore[no-untyped-call]
+        if not parsed_rows:  # No rows parsed -- nothing to tabulate.
+            return  # Skip table construction entirely.
+        table = PrettyTable()  # Build the table.
+        table.field_names = [f"Col {col_num + 1}" for col_num in range(max_cols)]  # Number the columns.
+        for row in parsed_rows:  # Add each parsed row.
+            table.add_row(row)  # Add the row to the table.
+        ARPCommandManager._emit_arp_table(table, len(parsed_rows), debug)  # type: ignore[no-untyped-call]
+
+    @staticmethod
+    def _parse_arp_rows(compiled_output):  # Parse compiled output into padded rows.
+        """Split compiled output into tab-delimited rows padded to a uniform width."""
+        logging.debug("Parsing ARP rows from compiled output")  # Trace the parse step.
+        rows = compiled_output.split("\n")  # Split the block into individual rows.
+        parsed_rows = [row.split("\t") for row in rows if row.strip()]  # Split each non-empty row on tabs.
+        max_cols = max((len(row) for row in parsed_rows), default=0)  # Widest row determines column count.
+        ARPCommandManager._pad_rows(parsed_rows, max_cols)  # type: ignore[no-untyped-call]
+        return parsed_rows, max_cols  # Return the padded rows and the column width.
+
+    @staticmethod
+    def _pad_rows(parsed_rows, max_cols):  # Pad rows to a uniform width.
+        """Pad each row with empty cells until it reaches max_cols columns."""
+        logging.debug("Padding %d ARP rows to %d columns", len(parsed_rows), max_cols)  # Trace the pad step.
+        for row in parsed_rows:  # Pad each row in place.
+            while len(row) < max_cols:  # Keep padding until the row is full width.
+                row.append("")  # Append an empty cell.
+
+    @staticmethod
+    def _emit_arp_table(table, row_count, debug):  # Print or log the rendered table.
+        """Print the table in debug mode or report the row count otherwise."""
+        if debug:  # Debug mode shows the full table.
+            print(table)  # Print the table for the user.
+            logging.debug("\n%s", table.get_string())  # Log the table contents.
+        else:  # Non-debug mode reports only the row count.
+            print(f"! ARP output received with {row_count} rows.")  # Tell the user the row count.
 
     @staticmethod
     def _save_output(compiled_output, filename="arp_output_raw.txt"):  # Save raw output.
@@ -23121,34 +23126,53 @@ def _launch_web_portal(args):
         app.run(host=host, port=port, debug=args.debug)
 
 
-def _initialize_deferred_imports() -> None:  # noqa: C901, PLR0912
+def _report_tqdm_status() -> None:
+    """Log whether the real tqdm landed in the global namespace after deferred imports."""
+    logging.debug("_report_tqdm_status: checking tqdm namespace availability")  # Trace tqdm status check
+    if "tqdm" in global_assignments:  # tqdm injection succeeded -- confirm availability for progress bars
+        logging.info(
+            "tqdm is available in global namespace: %s", type(globals().get("tqdm"))
+        )  # Log tqdm availability  # noqa: E501
+    else:  # tqdm missing from resolved assignments -- progress bars will be non-functional
+        logging.warning(
+            "tqdm was not found in global assignments - progress bars will not be functional"
+        )  # Warn if missing  # noqa: E501
+
+
+def _apply_deferred_assignments() -> None:
+    """Inject deferred import symbols into the namespace and report tqdm availability."""
+    logging.debug("_apply_deferred_assignments: publishing deferred symbols")  # Trace publish
+    if not global_assignments:  # No symbols resolved -- nothing to publish to namespace
+        return  # Skip injection entirely when the import cycle produced no assignments
+    for var_name, var_value in global_assignments.items():  # Publish each resolved symbol
+        globals()[var_name] = var_value  # Inject the imported symbol into module scope for global reuse
+        if var_name == "tqdm" and var_value is not None:  # Real tqdm replacing the stub warrants an explicit note
+            logging.info(
+                "Successfully imported real tqdm in deferred mode: %s", type(var_value)
+            )  # Log tqdm override  # noqa: E501
+    logging.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
+    _report_tqdm_status()  # Log whether tqdm is available in the global namespace
+
+
+def _run_deferred_import_cycle() -> None:
+    """Run the deferred import cycle, publish symbols, and warn on partial failure."""
+    global success, global_assignments  # Update module-level import tracking state for downstream readers
+    logging.info("Initializing deferred imports at application start...")  # Log before import process
+    success, global_assignments = import_manager.initialize_all_imports()  # Run full deferred import cycle
+    import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
+    _apply_deferred_assignments()  # Inject resolved symbols and report tqdm availability
+    if not success:  # Non-fatal warning: caller decides whether to abort on partial import failure
+        logging.warning("Some required imports failed - functionality may be limited")  # Warn limited functionality
+
+
+def _initialize_deferred_imports() -> None:
     """Initialize deferred module imports if not already completed at startup."""
-    global success, global_assignments  # Modify module-level import tracking variables
     logging.debug("_initialize_deferred_imports: checking deferred import status")  # Log entry
-    if not success and not global_assignments and not hasattr(import_manager, "_deferred_init_done"):
-        logging.info("Initializing deferred imports at application start...")  # Log before import process
-        success, global_assignments = import_manager.initialize_all_imports()  # Run full deferred import cycle
-        import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
-        if global_assignments:  # Apply symbol assignments to module namespace if any returned
-            for var_name, var_value in global_assignments.items():
-                globals()[var_name] = var_value  # Inject each imported symbol into module scope
-                if var_name == "tqdm" and var_value is not None:  # tqdm requires special override of the stub
-                    logging.info(
-                        "Successfully imported real tqdm in deferred mode: %s", type(var_value)
-                    )  # Log tqdm override  # noqa: E501
-            logging.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
-            if "tqdm" in global_assignments:  # Confirm tqdm landed in namespace
-                logging.info(
-                    "tqdm is available in global namespace: %s", type(globals().get("tqdm"))
-                )  # Log tqdm availability  # noqa: E501
-            else:
-                logging.warning(
-                    "tqdm was not found in global assignments - progress bars will not be functional"
-                )  # Warn if missing  # noqa: E501
-        if not success:  # Non-fatal warning: caller decides whether to abort
-            logging.warning("Some required imports failed - functionality may be limited")
-    elif hasattr(import_manager, "_deferred_init_done"):  # Already initialized -- skip to avoid duplicate work
-        logging.debug("Deferred imports already initialized, skipping duplicate initialization")
+    already_done = hasattr(import_manager, "_deferred_init_done")  # Detect whether deferred init already ran
+    if not success and not global_assignments and not already_done:  # First-time deferred init required
+        _run_deferred_import_cycle()  # Run the import cycle and publish resolved symbols
+    elif already_done:  # Already initialized -- skip to avoid duplicate work
+        logging.debug("Deferred imports already initialized, skipping duplicate initialization")  # Note the skip
     logging.debug("_initialize_deferred_imports: complete")  # Log exit
 
 
@@ -23305,39 +23329,56 @@ def _setup_runtime_flags(args: argparse.Namespace) -> None:
     logging.debug("_setup_runtime_flags: complete")  # Log exit
 
 
-def _initialize_dependencies(args: argparse.Namespace) -> None:  # noqa: C901
+def _apply_dependency_assignments(skip_mode: bool) -> None:
+    """Inject resolved global symbol assignments into the module namespace."""
+    logging.debug("_apply_dependency_assignments: publishing symbols (skip_mode=%s)", skip_mode)  # Trace publish
+    if not global_assignments:  # No symbols resolved -- nothing to publish to namespace
+        return  # Skip injection entirely when the import cycle produced no assignments
+    for var_name, var_value in global_assignments.items():  # Publish each resolved symbol
+        globals()[var_name] = var_value  # Inject the imported symbol into module scope for global reuse
+    if skip_mode:  # Differentiate the log message so operators see the skip-deps code path was taken
+        logging.debug(
+            "Applied %d global variable assignments in skip mode", len(global_assignments)
+        )  # Log skip-mode count  # noqa: E501
+    else:  # Full dependency path -- preserve the original (non-skip) log message wording
+        logging.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
+
+
+def _run_full_dependency_init(args: argparse.Namespace) -> None:
+    """Run the full dependency import cycle and abort on critical, non-test failure."""
+    global success, global_assignments  # Update module-level import tracking state for downstream readers
+    logging.info("Initializing deferred dependencies with full checking...")  # Log before full init
+    success, global_assignments = import_manager.initialize_all_imports(skip_deps=False)  # Run full import cycle
+    import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
+    _apply_dependency_assignments(skip_mode=False)  # Publish resolved symbols into module namespace
+    if not success and not args.test:  # Abort on critical failure unless running in test mode
+        logging.error("Critical dependencies missing. Exiting.")  # Log fatal dependency failure before exit
+        print(
+            "!! Critical dependencies missing. Use --skip-deps to bypass or install missing packages."
+        )  # Inform user  # noqa: E501
+        sys.exit(1)  # Exit with error code -- cannot continue without required modules
+
+
+def _run_skip_dependency_init() -> None:
+    """Run the minimal dependency import cycle used by the --skip-deps path."""
+    global success, global_assignments  # Update module-level import tracking state for downstream readers
+    logging.info("Dependency initialization skipped due to --skip-deps flag")  # Log skip reason
+    success, global_assignments = import_manager.initialize_all_imports(skip_deps=True)  # Minimal import cycle
+    import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
+    _apply_dependency_assignments(skip_mode=True)  # Publish whatever symbols resolved even in skip mode
+
+
+def _initialize_dependencies(args: argparse.Namespace) -> None:
     """Initialize deferred module imports based on --skip-deps flag, aborting on critical failure."""
-    global success, global_assignments  # Modify module-level import tracking state
     logging.debug("_initialize_dependencies: checking if dependency initialization is needed")  # Log entry
-    if not _initialize_imports_now and not hasattr(import_manager, "_deferred_init_done"):
-        if not args.skip_deps:  # Full dependency check when --skip-deps not provided
-            logging.info("Initializing deferred dependencies with full checking...")  # Log before full init
-            success, global_assignments = import_manager.initialize_all_imports(
-                skip_deps=False
-            )  # Run full import cycle  # noqa: E501
-            import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
-            if global_assignments:  # Apply symbol injections to module namespace
-                for var_name, var_value in global_assignments.items():
-                    globals()[var_name] = var_value  # Inject each imported symbol into module scope
-                logging.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
-            if not success and not args.test:  # Abort on critical failure unless in test mode
-                logging.error("Critical dependencies missing. Exiting.")  # Log fatal dependency failure
-                print(
-                    "!! Critical dependencies missing. Use --skip-deps to bypass or install missing packages."
-                )  # Inform user  # noqa: E501
-                sys.exit(1)  # Exit with error code -- cannot continue without required modules
-        else:  # --skip-deps path: minimal initialization for core functionality only
-            logging.info("Dependency initialization skipped due to --skip-deps flag")  # Log skip reason
-            success, global_assignments = import_manager.initialize_all_imports(skip_deps=True)  # Minimal import cycle
-            import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
-            if global_assignments:  # Apply available symbol injections even in skip mode
-                for var_name, var_value in global_assignments.items():
-                    globals()[var_name] = var_value  # Inject each available symbol into module scope
-                logging.debug(
-                    "Applied %d global variable assignments in skip mode", len(global_assignments)
-                )  # Log skip-mode count  # noqa: E501
-    elif hasattr(import_manager, "_deferred_init_done"):  # Already initialized -- skip to avoid duplicate work
-        logging.debug("Dependencies already initialized, skipping duplicate initialization")
+    already_done = hasattr(import_manager, "_deferred_init_done")  # Detect whether deferred init already ran
+    if not _initialize_imports_now and not already_done:  # First-time deferred init required
+        if args.skip_deps:  # Minimal path when the caller passed --skip-deps
+            _run_skip_dependency_init()  # Run the minimal import cycle for core functionality only
+        else:  # Default path performs full dependency checking
+            _run_full_dependency_init(args)  # Run the full import cycle (may sys.exit on critical failure)
+    elif already_done:  # Already initialized -- skip to avoid duplicate work
+        logging.debug("Dependencies already initialized, skipping duplicate initialization")  # Note the skip
     logging.debug("_initialize_dependencies: complete")  # Log exit
 
 
