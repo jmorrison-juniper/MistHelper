@@ -39,6 +39,7 @@ warnings.filterwarnings(
 
 import argparse  # Import argparse for command-line argument parsing (--menu, --test, --fast flags)
 import csv  # Import csv module for writing CSV export files to data/ directory
+import functools  # Import functools for partial-binding apisession to connection-pool worker callables
 import ipaddress  # Import ipaddress for parsing and validating IP addresses in device/client data
 import logging  # Import logging for structured logging to script.log and console
 import os  # Import os for file path operations, environment variables, and data/ directory setup
@@ -6437,130 +6438,145 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         return all_configs  # Return all site settings.
 
     @staticmethod
-    def gateway_device_configs(apisession, org_id, fast=False, max_workers=None):  # noqa: C901, PLR0915
-        """
-        Fetches configuration details for all gateway devices in the org using org inventory.
-        If `fast` is True, fetches each device config concurrently using connection pool management.
-
-        Args:
-            apisession: Authenticated Mist API session.
-            org_id: Organization ID.
-            fast (bool): If True, enables high-concurrency mode with connection pool management.
-            max_workers (int): Optional override for number of concurrent threads.
-
-        Returns:
-            List of device configuration dictionaries.
-        """
-        logging.info("Fetching org inventory to find gateway devices...")  # Log before inventory fetch.
-        try:
+    def _gw_load_inventory(apisession, org_id):
+        """Fetch the org inventory; return the device list, or None when the fetch fails."""
+        logging.info("Fetching org inventory to find gateway devices...")  # Log before the inventory fetch.
+        try:  # The inventory fetch is the one hard dependency; isolate its failure.
             response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)  # Fetch inventory.
-            inventory = mistapi.get_all(response=response, mist_session=apisession)  # Page through all devices.
+            return mistapi.get_all(response=response, mist_session=apisession)  # Page through all devices.
         except Exception as error:  # Inventory fetch failed.
             logging.error("! Failed to fetch org inventory: %s", error)  # Log the failure.
-            return []  # Degrade to empty list.
+            return None  # Signal failure so the caller degrades to an empty result.
 
-        logging.info("Found %s total devices in org inventory.", len(inventory))  # Log device count.
-
-        # Load site names from SiteList.csv for enrichment
-        site_name_lookup = {}  # Map site id to name.
-        try:
+    @staticmethod
+    def _gw_load_site_names():
+        """Load the site id -> name map from SiteList.csv; return an empty map when the file is unavailable."""
+        try:  # The site-name CSV is optional enrichment; missing file is non-fatal.
             site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Locate the site list CSV.
             with open(site_list_path, encoding="utf-8") as file_handle:  # Read site names from CSV.
                 reader = csv.DictReader(file_handle)  # Parse CSV rows.
-                site_name_lookup = {row.get("id"): row.get("name", "Unnamed Site") for row in reader}  # id->name map.
+                return {row.get("id"): row.get("name", "Unnamed Site") for row in reader}  # id->name map.
         except Exception as error:  # CSV missing or unreadable.
             logging.warning("! Failed to load SiteList.csv for site names: %s", error)  # Warn names may be unknown.
+            return {}  # Degrade to an empty lookup.
 
-        # Filter for gateway devices and build work list
-        work_items = []  # Build gateway work list.
-        for device in inventory:  # Scan inventory devices.
-            if device.get("type") == "gateway":  # Only gateways need configs.
-                site_id = device.get("site_id")  # Owning site id.
-                device_id = device.get("id")  # Device id.
-                if site_id and device_id:  # Require both ids.
-                    site_name = site_name_lookup.get(site_id, "Unknown")  # Resolve site name.
-                    work_items.append((site_id, device_id, site_name))  # Queue the fetch.
+    @staticmethod
+    def _gw_build_work_items(inventory, site_name_lookup):
+        """Build (site_id, device_id, site_name) work items for each gateway device in the inventory."""
+        work_items = []  # Accumulate one tuple per gateway needing a config fetch.
+        for device in inventory:  # Scan every inventory device.
+            if device.get("type") != "gateway":  # Only gateways need configs; skip everything else.
+                continue  # Move to the next device.
+            site_id = device.get("site_id")  # Owning site id.
+            device_id = device.get("id")  # Device id.
+            if site_id and device_id:  # Require both ids before queueing a fetch.
+                site_name = site_name_lookup.get(site_id, "Unknown")  # Resolve the site name for enrichment.
+                work_items.append((site_id, device_id, site_name))  # Queue the fetch.
+        return work_items  # Hand the gateway work list back to the caller.
 
+    @staticmethod
+    def _gw_fetch_one_config(apisession, work_item, connection_semaphore):
+        """Fetch one gateway device's config (site-tagged); return the config dict, or None on empty/failure."""
+        work_site_id, work_device_id, work_site_name = work_item  # Unpack the work item.
+        with connection_semaphore:  # Limit concurrent connections via the pool semaphore.
+            try:  # Isolate per-device failures so one bad device doesn't abort the batch.
+                logging.debug("Fetching config for %s (%s)", work_device_id, work_site_name)  # Trace the fetch.
+                config_response = mistapi.api.v1.sites.devices.getSiteDevice(  # Call the device API.
+                    apisession, work_site_id, work_device_id
+                )
+                config = getattr(config_response, "data", {})  # Unwrap data safely.
+                if config:  # Only keep non-empty configs.
+                    config["site_name"] = work_site_name  # Tag with site name for enrichment.
+                    config["site_id"] = work_site_id  # Tag with site id for enrichment.
+                    logging.debug("! Config fetched for %s", work_device_id)  # Trace success.
+                    return config  # Return the enriched config.
+                logging.warning("! Empty config for device %s", work_device_id)  # Warn on empty config.
+                return None  # Treat empty config as a miss.
+            except Exception as inner_error:  # Per-device fetch failed.
+                logging.error("! Failed to fetch config for device %s: %s", work_device_id, inner_error)  # Log error.
+                return None  # Mark this device failed.
+
+    @staticmethod
+    def _gw_retry_one_item(apisession, failed_work_item, connection_semaphore, max_retries):
+        """Retry one failed gateway config fetch up to max_retries with backoff; return the config or None."""
+        _site_id, failed_device_id, _site_name = failed_work_item  # Device id is the only field needed for logging.
+        for attempt in range(max_retries + 1):  # Bounded retry loop (initial try plus retries).
+            result = APIFetchUtils._gw_fetch_one_config(apisession, failed_work_item, connection_semaphore)  # Try.
+            if result is not None:  # Retry succeeded.
+                return result  # Hand back the recovered config.
+            if attempt < max_retries:  # More attempts remain.
+                delay = 0.5 * (1.5**attempt)  # Exponential backoff delay.
+                logging.debug(  # Trace the retry/backoff.
+                    "Retrying device %s in %.2fs (attempt %s/%s)",
+                    failed_device_id,
+                    delay,
+                    attempt + 2,
+                    max_retries + 1,
+                )
+                time.sleep(delay)  # Back off before retrying.
+        logging.warning(  # Warn after exhausting every attempt.
+            "! Failed to fetch config for device %s after %s attempts", failed_device_id, max_retries + 1
+        )
+        return None  # Every attempt failed.
+
+    @staticmethod
+    def _gw_retry_configs(apisession, failed_items, connection_semaphore):
+        """Retry failed gateway config fetches with bounded exponential backoff; return the recovered configs."""
+        max_retries = int(os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1"))  # Configurable retry count.
+        retry_results = []  # Collect configs recovered on retry.
+        for failed_work_item in failed_items:  # Walk every failed item.
+            result = APIFetchUtils._gw_retry_one_item(
+                apisession, failed_work_item, connection_semaphore, max_retries
+            )  # Retry this item with backoff.
+            if result is not None:  # The item recovered on retry.
+                retry_results.append(result)  # Keep the recovered config.
+        return retry_results  # Return the configs recovered during retry.
+
+    @staticmethod
+    def _gw_collect_fast(apisession, work_items):
+        """Fetch gateway configs concurrently through the connection pool with retry; return the successes."""
+        successful_results, _failed_items = execute_with_connection_pool_management(  # Pooled concurrent fetch.
+            work_items=work_items,
+            worker_function=functools.partial(APIFetchUtils._gw_fetch_one_config, apisession),  # Bind apisession.
+            batch_description="gateway device configs",
+            retry_function=functools.partial(APIFetchUtils._gw_retry_configs, apisession),  # Bind apisession.
+        )
+        return successful_results  # The pool already retried failures; return the successes.
+
+    @staticmethod
+    def _gw_collect_sequential(apisession, work_items):
+        """Fetch each gateway config sequentially using a serializing semaphore; return the collected configs."""
+        all_device_configs = []  # Accumulate sequential results.
+        dummy_semaphore = threading.Semaphore(1)  # Serialize sequential fetches with a single permit.
+        for work_item in tqdm(work_items, desc="Fetching Configs", unit="device"):  # type: ignore[no-untyped-call]
+            result = APIFetchUtils._gw_fetch_one_config(apisession, work_item, dummy_semaphore)  # Fetch one config.
+            if result is not None:  # Keep non-empty results.
+                all_device_configs.append(result)  # Collect the config.
+        return all_device_configs  # Return the sequentially fetched configs.
+
+    @staticmethod
+    def gateway_device_configs(apisession, org_id, fast=False, max_workers=None):
+        """Fetch configuration details for all gateway devices in the org inventory.
+
+        When ``fast`` is True the per-device fetches run concurrently through the
+        connection pool (with retry); otherwise they run sequentially. Returns a list
+        of site-tagged device configuration dicts (empty when the inventory fetch fails).
+        ``max_workers`` is accepted for call-site compatibility.
+        """
+        inventory = APIFetchUtils._gw_load_inventory(apisession, org_id)  # Fetch the org inventory (None on failure).
+        if inventory is None:  # The inventory fetch failed outright.
+            return []  # Degrade to an empty list.
+        logging.info("Found %s total devices in org inventory.", len(inventory))  # Log the device count.
+        site_name_lookup = APIFetchUtils._gw_load_site_names()  # Load site id->name enrichment map.
+        work_items = APIFetchUtils._gw_build_work_items(inventory, site_name_lookup)  # Build the gateway work list.
         logging.info("Prepared %s gateway device config API calls.", len(work_items))  # Log planned API calls.
-
-        def fetch_config(work_item, connection_semaphore):  # Fetch one device's config.
-            """Fetch configuration for a single device with retry logic."""
-            work_site_id, work_device_id, work_site_name = work_item  # Unpack the work item.
-
-            with connection_semaphore:  # Limit concurrent connections
-                try:
-                    logging.debug("Fetching config for %s (%s)", work_device_id, work_site_name)  # Trace the fetch.
-                    config_response = mistapi.api.v1.sites.devices.getSiteDevice(  # Call the device API.
-                        apisession, work_site_id, work_device_id
-                    )
-                    config = getattr(config_response, "data", {})  # Unwrap data safely.
-                    if config:  # Only keep non-empty configs.
-                        # Add site metadata for enrichment
-                        config["site_name"] = work_site_name  # Tag with site name.
-                        config["site_id"] = work_site_id  # Tag with site id.
-                        logging.debug("! Config fetched for %s", work_device_id)  # Trace success.
-                        return config  # Return the config.
-                    else:
-                        logging.warning("! Empty config for device %s", work_device_id)  # Warn on empty config.
-                except Exception as inner_error:  # Isolate per-device failures.
-                    logging.error("! Failed to fetch config for device %s: %s", work_device_id, inner_error)  # log err.
-                    return None  # Mark this device failed.
-
-        def retry_fetch_config(failed_items, connection_semaphore):  # Retry failed device fetches.
-            """Retry wrapper for device config fetching."""
-            max_retries = int(os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1"))  # Configurable retry count.
-            retry_results = []  # Collect retried configs.
-
-            for failed_work_item in failed_items:  # Walk failed items.
-                failed_site_id, failed_device_id, failed_site_name = failed_work_item  # Unpack the failed item.
-
-                for attempt in range(max_retries + 1):  # Bounded retry loop.
-                    result = fetch_config(failed_work_item, connection_semaphore)  # type: ignore[no-untyped-call]
-                    if result is not None:  # Retry succeeded.
-                        retry_results.append(result)  # Keep the result.
-                        break  # Stop retrying this item.
-                    if attempt < max_retries:  # More attempts remain.
-                        delay = 0.5 * (1.5**attempt)  # Exponential backoff
-                        logging.debug(  # Trace the retry/backoff.
-                            "Retrying device %s in %.2fs (attempt %s/%s)",
-                            failed_device_id,
-                            delay,
-                            attempt + 2,
-                            max_retries + 1,
-                        )
-                        time.sleep(delay)  # Back off before retrying.
-                else:
-                    logging.warning(  # Warn after exhausting retries.
-                        "! Failed to fetch config for device %s after %s attempts", failed_device_id, max_retries + 1
-                    )
-
-            return retry_results  # Return retried configs.
-
-        # Use connection pool management helper if fast mode is enabled
-        if fast:  # Fast mode uses the pool.
-            successful_results, failed_items = execute_with_connection_pool_management(  # Pooled concurrent fetch.
-                work_items=work_items,
-                worker_function=fetch_config,
-                batch_description="gateway device configs",
-                retry_function=retry_fetch_config,
-            )
-            all_device_configs = successful_results  # Start from successes.
-        else:
-            # Sequential processing for non-fast mode
-            all_device_configs = []  # Sequential fallback path.
-            # Create a dummy semaphore for sequential processing
-            dummy_semaphore = threading.Semaphore(1)  # Serialize sequential fetches.
-
-            for work_item in tqdm(work_items, desc="Fetching Configs", unit="device"):  # type: ignore[no-untyped-call]
-                result = fetch_config(work_item, dummy_semaphore)  # type: ignore[no-untyped-call]
-                if result is not None:  # Keep non-empty results.
-                    all_device_configs.append(result)  # Collect the config.
-
-        # Filter out None results
+        if fast:  # Fast mode uses the connection pool with retry.
+            all_device_configs = APIFetchUtils._gw_collect_fast(apisession, work_items)  # Pooled concurrent path.
+        else:  # Sequential processing for non-fast mode.
+            all_device_configs = APIFetchUtils._gw_collect_sequential(apisession, work_items)  # Serial fetch path.
         all_device_configs = [config for config in all_device_configs if config is not None]  # Drop any failures.
-
         logging.info("! Completed fetching %s gateway device configs.", len(all_device_configs))  # Log completion.
-        return all_device_configs  # Return gateway configs.
+        return all_device_configs  # Return the gateway configs.
 
 
 # ============================================================================
