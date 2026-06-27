@@ -115,6 +115,10 @@ from src.capture.packet_capture import (
 from src.dataclasses.batch_worker import (
     BatchWorkerConfig,
 )  # Issue #431: groups thread-pool batch config to keep _pool_process_batch_wait_loop within the 5-Item Rule.
+from src.dataclasses.progress_event import (
+    ProgressContext,
+    TestSummary,
+)  # Issue #470: groups TelemetryEmitter event fields to keep emit_* signatures within the 5-Item Rule.
 from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # Import 52-week device events export handler
 from src.export.site_export_utils import (
     configure_site_export_utils_dependencies,
@@ -9584,7 +9588,7 @@ class OrgSiteExporter:  # Org site exporters.
         output_desc = "SQLite table" if OUTPUT_FORMAT == "sqlite" else "CSV file"  # Describe output backend.
         logging.info("Completed site list export and wrote results to %s.", output_desc)  # Log site export success.
         if emitter:  # Branch: emitter present.
-            emitter.emit_progress_complete("11", "sites", 1, 1, False, time.time() - op_start)
+            emitter.emit_progress_complete(ProgressContext("11", "sites", 1), 1, False, time.time() - op_start)
 
     @staticmethod
     def sites_list_api():  # Export sites via list API.
@@ -9716,7 +9720,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         ).execute()
         logging.info("Completed organization inventory export and wrote results to OrgInventory.csv.")
         if emitter:  # Branch: emitter present.
-            emitter.emit_progress_complete("12", "inventory", 1, 1, False, time.time() - op_start)
+            emitter.emit_progress_complete(ProgressContext("12", "inventory", 1), 1, False, time.time() - op_start)
 
     @staticmethod
     def devices():  # Export all org devices.
@@ -9737,7 +9741,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         ).execute()
         logging.info("Completed organization devices export and wrote results to OrgDevices.csv.")
         if emitter:  # Branch: emitter present.
-            emitter.emit_progress_complete("17", "devices", 1, 1, False, time.time() - op_start)
+            emitter.emit_progress_complete(ProgressContext("17", "devices", 1), 1, False, time.time() - op_start)
 
     @staticmethod
     def _resolve_combined_inventory_org_name(current_org_id: str | None, fallback_org_name: str | None) -> str:
@@ -10412,7 +10416,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             limit=1000,
         ).execute()
         if emitter:  # Branch: emitter present.
-            emitter.emit_progress_complete("13", "device_stats", 1, 1, False, time.time() - op_start)
+            emitter.emit_progress_complete(ProgressContext("13", "device_stats", 1), 1, False, time.time() - op_start)
 
     @staticmethod
     def _port_stats_cache_hit(output_file: str, fast: bool) -> bool:  # Check port-stats cache hit.
@@ -10775,7 +10779,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             limit=1000,
         ).execute()
         if emitter:
-            emitter.emit_progress_complete("15", "vpn_peer_stats", 1, 1, False, time.time() - op_start)
+            emitter.emit_progress_complete(ProgressContext("15", "vpn_peer_stats", 1), 1, False, time.time() - op_start)
 
     @staticmethod
     def switch_vc_stats():
@@ -12276,7 +12280,10 @@ class OrgExportUtils:  # Generic org export helpers.
                 items_done += 1  # Count this item.
                 if emitter:  # Emitter present.
                     emitter.emit_progress_tick(  # Tick progress.
-                        "67", "sites_sle_summary", len(sle_types), sle_type, items_done, len(sle_types) - items_done
+                        ProgressContext("67", "sites_sle_summary", len(sle_types)),
+                        sle_type,
+                        items_done,
+                        len(sle_types) - items_done,
                     )
 
         if all_sites_sle_data:  # Have data.
@@ -12291,7 +12298,7 @@ class OrgExportUtils:  # Generic org export helpers.
             DataExporter.write_with_format_selection([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
         if emitter:  # Emitter present.
             emitter.emit_progress_complete(  # Signal progress complete.
-                "67", "sites_sle_summary", len(sle_types), items_done, False, time.time() - op_start
+                ProgressContext("67", "sites_sle_summary", len(sle_types)), items_done, False, time.time() - op_start
             )
 
     @staticmethod
@@ -12922,7 +12929,7 @@ class SiteDeviceExporter:  # Site device exporters.
             api_call=mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts, data_type="port stats", sort_key="mac"
         )
         if emitter:  # Emitter present.
-            emitter.emit_progress_complete("29", "port_stats", 1, 1, False, time.time() - op_start)
+            emitter.emit_progress_complete(ProgressContext("29", "port_stats", 1), 1, False, time.time() - op_start)
 
     @staticmethod
     def device_virtual_chassis():  # Export device virtual chassis.
@@ -15774,9 +15781,7 @@ class GatewayTestExporter:  # Gateway synthetic test exporter.
             print("! No synthetic test results found. CSV not created.")  # Tell the user.
         if emitter:  # Emitter present.
             emitter.emit_progress_complete(  # Signal progress complete.
-                "16",
-                "synthetic_tests",
-                len(gateway_devices) if gateway_devices else 0,
+                ProgressContext("16", "synthetic_tests", len(gateway_devices) if gateway_devices else 0),
                 len(all_stats),
                 False,
                 time.time() - op_start,
@@ -22119,23 +22124,21 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_test_summary(
-        self, total: int, passed: int, failed: int, skipped: int, elapsed: float, test_mode: str
-    ) -> None:  # noqa: PLR0913
-        """Emit a test_summary event."""
-        overall = "pass" if failed == 0 else "fail"
+    def emit_test_summary(self, summary: TestSummary) -> None:
+        """Emit a test_summary event from a bundled TestSummary (issue #470: was 6 positional params)."""
+        overall = "pass" if summary.failed == 0 else "fail"  # Overall verdict is pass only when nothing failed.
         self.emit(
             {
                 "event_type": "test_summary",
                 "timestamp": datetime.now(UTC).isoformat(),
                 "menu_option": "0",
                 "status": overall,
-                "total_operations": total,
-                "pass_count": passed,
-                "fail_count": failed,
-                "skip_count": skipped,
-                "total_elapsed_seconds": round(elapsed, 3),
-                "test_mode": test_mode,
+                "total_operations": summary.total,  # Total operations exercised (issue #470: from dataclass).
+                "pass_count": summary.passed,  # Passed count (issue #470: from dataclass).
+                "fail_count": summary.failed,  # Failed count (issue #470: from dataclass).
+                "skip_count": summary.skipped,  # Skipped count (issue #470: from dataclass).
+                "total_elapsed_seconds": round(summary.elapsed, 3),  # Elapsed wall-clock seconds (issue #470).
+                "test_mode": summary.test_mode,  # Test mode label (issue #470: from dataclass).
             }
         )
 
@@ -22153,43 +22156,39 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_progress_tick(
-        self, menu_option: str | int, operation_name: str, total: int, current: object, completed: int, remaining: int
-    ) -> None:  # noqa: PLR0913
-        """Emit a progress_tick event."""
+    def emit_progress_tick(self, ctx: ProgressContext, current: object, completed: int, remaining: int) -> None:
+        """Emit a progress_tick event from a ProgressContext (issue #470: identity bundled into ctx)."""
         self.emit(
             {
                 "event_type": "progress_tick",
                 "timestamp": datetime.now(UTC).isoformat(),
-                "menu_option": str(menu_option),
-                "operation_name": operation_name,
-                "total_items": total,
-                "current_item": str(current),
-                "items_completed": completed,
-                "items_remaining": remaining,
+                "menu_option": str(ctx.menu_option),  # Menu option from the bundled context (issue #470).
+                "operation_name": ctx.operation_name,  # Operation label from the bundled context (issue #470).
+                "total_items": ctx.total,  # Total item count from the bundled context (issue #470).
+                "current_item": str(current),  # The item currently being processed.
+                "items_completed": completed,  # Count of items finished so far.
+                "items_remaining": remaining,  # Count of items still pending.
             }
         )
 
     def emit_progress_complete(
         self,
-        menu_option: str | int,
-        operation_name: str,
-        total: int,
+        ctx: ProgressContext,
         processed: int,
         was_stopped: bool,
         duration: float,
-    ) -> None:  # noqa: PLR0913
-        """Emit a progress_complete event."""
+    ) -> None:
+        """Emit a progress_complete event from a ProgressContext (issue #470: identity bundled into ctx)."""
         self.emit(
             {
                 "event_type": "progress_complete",
                 "timestamp": datetime.now(UTC).isoformat(),
-                "menu_option": str(menu_option),
-                "operation_name": operation_name,
-                "total_items": total,
-                "items_processed": processed,
-                "was_stopped": was_stopped,
-                "duration_seconds": round(duration, 3),
+                "menu_option": str(ctx.menu_option),  # Menu option from the bundled context (issue #470).
+                "operation_name": ctx.operation_name,  # Operation label from the bundled context (issue #470).
+                "total_items": ctx.total,  # Total item count from the bundled context (issue #470).
+                "items_processed": processed,  # Count of items actually processed before completion.
+                "was_stopped": was_stopped,  # True when the operation was interrupted by the user.
+                "duration_seconds": round(duration, 3),  # Wall-clock seconds the operation took.
             }
         )
 
@@ -22887,7 +22886,7 @@ def run_systematic_test():  # noqa: C901, PLR0912, PLR0915
     total_time = time.time() - start_time  # Total elapsed time includes setup, option execution, and delays.
     total_ops = len(all_options)  # Use total option count (including skipped) as denominator for coverage %.
     emitter.emit_test_summary(
-        total_ops, success_count, error_count, skip_count, total_time, "systematic"
+        TestSummary(total_ops, success_count, error_count, skip_count, total_time, "systematic")
     )  # Emit aggregate telemetry summary.
     emitter.close()  # Flush and close telemetry file before printing summary.
     emitter.enforce_retention()  # Clean up old telemetry files per configured retention policy.

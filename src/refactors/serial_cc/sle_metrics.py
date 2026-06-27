@@ -6,6 +6,8 @@ import time
 from types import SimpleNamespace
 from typing import Any
 
+from src.dataclasses.progress_event import ProgressContext  # Issue #470: bundle progress identity for emit_progress_*.
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve MistHelper runtime dependencies without static src imports."""
@@ -40,15 +42,15 @@ class _SleProgressTracker:
         self._done += 1  # One more metric/category finished (success or failure)
         if self._emitter:  # Only emit when progress tracking is active
             self._emitter.emit_progress_tick(
-                "66", "sle_metrics", self._total, label, self._done, self._total - self._done
-            )  # Report current label and remaining count
+                ProgressContext("66", "sle_metrics", self._total), label, self._done, self._total - self._done
+            )  # Report current label and remaining count (issue #470: identity bundled into ProgressContext)
 
     def complete(self) -> None:
         """Emit the progress-complete event with elapsed duration."""
         if self._emitter:  # Only emit when progress tracking is active
             self._emitter.emit_progress_complete(
-                "66", "sle_metrics", self._total, self._done, False, time.time() - self._start
-            )  # Final event with elapsed seconds
+                ProgressContext("66", "sle_metrics", self._total), self._done, False, time.time() - self._start
+            )  # Final event with elapsed seconds (issue #470: identity bundled into ProgressContext)
 
 
 class SLEMetricsService:
