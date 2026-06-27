@@ -10120,144 +10120,131 @@ class OrgInventoryExporter:  # Org inventory exporters.
         )  # Confirm master report path and row count.
 
     @staticmethod
-    def devices_with_site_info(fast: bool = False):  # noqa: PLR0915
-        """
-        Fetches all devices in the organization, enriches them with site and address info,
-        and exports the result to AllDevicesWithSiteInfo.csv. Also logs and displays a summary table.
+    def _build_site_lookup_from_api(org_id: str) -> dict:  # type: ignore[type-arg]
+        """Fetch sites from the API and build an id -> {name, address} lookup map."""
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch sites from API.
+        site_lookup = {  # Build site lookup from API rows.
+            site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
+        }
+        logging.debug("Loaded %s sites for lookup.", len(site_lookup))  # Log loaded site count.
+        return site_lookup  # Site id -> info map.
 
-        Args:
-            fast (bool): If True, enables optimized processing mode with enhanced caching
-                        and concurrent site lookups where applicable.
-        """
-        print("All Devices with Site and Address Info:")  # Inform operator of export.
-        logging.info("Fetching All Devices with Site Info...")  # Log fetch start.
-        if fast:  # Branch: fast mode.
-            logging.info(" Fast mode enabled for devices with site info export")  # Log fast mode enabled.
-
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
-
-        # Ensure required CSV files are available, using caching where possible
-        if fast:  # Branch: fast mode path.
-            # Use cached data when fast mode is enabled
-            CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure site CSV cached.
-            CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgInventoryExporter.inventory)
-
-            # Load from cached CSV files instead of making API calls
-            site_lookup = {}  # Init site lookup map.
-            try:
-                site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve site CSV path.
-                with open(site_list_path, encoding="utf-8") as file:  # Open cached site CSV.
-                    reader = csv.DictReader(file)  # Read site CSV rows.
-                    site_lookup = {  # Build site lookup from CSV.
-                        row["id"]: {"name": row.get("name", ""), "address": row.get("address", "")} for row in reader
-                    }
-                logging.debug("Loaded %s sites from cached SiteList.csv", len(site_lookup))  # Log loaded site count.
-            except Exception as exception:  # Catch CSV load error.
-                logging.warning("Failed to load from cached SiteList.csv, falling back to API: %s", exception)
-                # Fallback to API if cached data fails
-                sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch sites from API.
-                site_lookup = {  # Build site lookup from API.
-                    site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
+    @staticmethod
+    def _load_site_lookup_from_cache(org_id: str) -> dict:  # type: ignore[type-arg]
+        """Load the site lookup from cached SiteList.csv, falling back to the API on any read failure."""
+        try:  # Cached CSV is preferred; fall back to the API if it is missing or unreadable.
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve site CSV path.
+            with open(site_list_path, encoding="utf-8") as file:  # Open cached site CSV.
+                reader = csv.DictReader(file)  # Read site CSV rows.
+                site_lookup = {  # Build site lookup from CSV rows.
+                    row["id"]: {"name": row.get("name", ""), "address": row.get("address", "")} for row in reader
                 }
-                logging.debug("Loaded %s sites from API fallback", len(site_lookup))  # Log API fallback count.
+            logging.debug("Loaded %s sites from cached SiteList.csv", len(site_lookup))  # Log loaded site count.
+            return site_lookup  # Cached site lookup.
+        except Exception as exception:  # Cached read failed.
+            logging.warning("Failed to load from cached SiteList.csv, falling back to API: %s", exception)  # Warn.
+            return OrgInventoryExporter._build_site_lookup_from_api(org_id)  # API fallback.
 
-            # Load inventory from cached CSV
-            inventory = []  # Init inventory list.
-            try:
-                inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")  # Resolve inventory CSV path.
-                with open(inventory_path, encoding="utf-8") as file:  # Open cached inventory CSV.
-                    reader = csv.DictReader(file)  # Read inventory CSV rows.
-                    inventory = list(reader)  # Materialize inventory rows.
-                logging.debug("Loaded %s devices from cached OrgInventory.csv", len(inventory))
-            except Exception as exception:  # Catch CSV load error.
-                logging.warning("Failed to load from cached OrgInventory.csv, falling back to API: %s", exception)
-                # Fallback to API if cached data fails
-                inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch inventory from API.
-                logging.debug("Loaded %s devices from API fallback", len(inventory))  # Log API fallback count.
-        else:
-            # Original behavior: fetch directly from API
-            # Fetch all sites and build a lookup dictionary for site info
-            sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch sites from API.
-            site_lookup = {  # Build site lookup from API.
-                site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
-            }
-            logging.debug("Loaded %s sites for lookup.", len(site_lookup))  # Log loaded site count.
-
-            # Fetch org inventory (all devices)
+    @staticmethod
+    def _load_inventory_from_cache(org_id: str) -> list:  # type: ignore[type-arg]
+        """Load the org inventory from cached OrgInventory.csv, falling back to the API on any read failure."""
+        try:  # Cached CSV is preferred; fall back to the API if it is missing or unreadable.
+            inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")  # Resolve inventory CSV path.
+            with open(inventory_path, encoding="utf-8") as file:  # Open cached inventory CSV.
+                reader = csv.DictReader(file)  # Read inventory CSV rows.
+                inventory = list(reader)  # Materialize inventory rows.
+            logging.debug("Loaded %s devices from cached OrgInventory.csv", len(inventory))  # Log loaded device count.
+            return inventory  # Cached inventory rows.
+        except Exception as exception:  # Cached read failed.
+            logging.warning("Failed to load from cached OrgInventory.csv, falling back to API: %s", exception)  # Warn.
             inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch inventory from API.
-            logging.debug("Loaded %s devices from org inventory.", len(inventory))  # Log loaded device count.
+            logging.debug("Loaded %s devices from API fallback", len(inventory))  # Log API fallback count.
+            return inventory  # API fallback inventory rows.
 
-        def split_address(address):  # Parse address into parts.
-            """
-            Splits a full address string into street, city, state, zip, and country.
-            Returns empty strings if parsing fails.
-            """
-            try:
-                parts = address.split(", ")  # Split on comma separators.
-                street = parts[0]  # Extract street.
-                city = parts[1]  # Extract city.
-                state_zip = parts[2].split()  # Split state and zip.
-                state = state_zip[0]  # Extract state.
-                zip_code = state_zip[1]  # Extract zip code.
-                country = parts[3]  # Extract country.
-                return street, city, state, zip_code, country  # Return parsed address parts.
-            except Exception as exception:  # Catch parse errors.
-                logging.debug("Failed to split address '%s': %s", address, exception)  # Log parse failure.
-                return address, "", "", "", ""  # Return raw address fallback.
+    @staticmethod
+    def _devices_load_data(org_id: str, fast: bool) -> tuple[dict, list]:  # type: ignore[type-arg]
+        """Load (site_lookup, inventory): cached CSVs (with API fallback) in fast mode, else direct API."""
+        if fast:  # Fast mode reuses cached CSVs to avoid redundant API calls.
+            CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure site CSV cached.
+            CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgInventoryExporter.inventory)  # Ensure inv cached.
+            site_lookup = OrgInventoryExporter._load_site_lookup_from_cache(org_id)  # Load sites from cache (or API).
+            inventory = OrgInventoryExporter._load_inventory_from_cache(org_id)  # Load inventory from cache (or API).
+            return site_lookup, inventory  # Cached data (with fallback already applied).
+        site_lookup = OrgInventoryExporter._build_site_lookup_from_api(org_id)  # Non-fast: fetch sites from API.
+        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Non-fast: fetch inventory from API.
+        logging.debug("Loaded %s devices from org inventory.", len(inventory))  # Log loaded device count.
+        return site_lookup, inventory  # Direct-API data.
 
-        # Build mac -> site_id lookup for VC member site inheritance.
-        # Physical VC members have vc_mac but no site_id in the API response.
-        # Their vc_mac may point to either:
-        #   1) A virtual VC entry (020003* MAC) that carries site_id, OR
-        #   2) The primary physical chassis MAC (real MAC) that has site_id.
-        # We index ALL devices with site_id so both cases are covered.
-        mac_to_site_id: dict[str, str] = {}  # Universal mac -> site_id lookup for inheritance
-        for device in inventory:  # Scan all inventory entries
-            mac = device.get("mac", "")  # Get device MAC address
-            if mac and device.get("site_id"):  # Any device with a site assignment
-                mac_to_site_id[mac] = device["site_id"]  # Index for vc_mac lookups
-        logging.info(  # Log enrichment start.
-            "Built mac->site_id lookup with %d entries for VC member site inheritance",
-            len(mac_to_site_id),
+    @staticmethod
+    def _build_mac_to_site_id(inventory: list) -> dict:  # type: ignore[type-arg]
+        """Index every device's mac -> site_id so VC members without a site_id can inherit one from their parent.
+
+        Physical VC members carry vc_mac but no site_id; that vc_mac may point at the virtual VC entry (020003* MAC)
+        or the primary physical chassis MAC. Indexing ALL devices with a site_id covers both cases.
+        """
+        mac_to_site_id: dict[str, str] = {}  # Universal mac -> site_id lookup for inheritance.
+        for device in inventory:  # Scan all inventory entries.
+            mac = device.get("mac", "")  # Get device MAC address.
+            if mac and device.get("site_id"):  # Any device with a site assignment.
+                mac_to_site_id[mac] = device["site_id"]  # Index for vc_mac lookups.
+        logging.info(  # Log the built index size.
+            "Built mac->site_id lookup with %d entries for VC member site inheritance", len(mac_to_site_id)
         )
+        return mac_to_site_id  # mac -> site_id inheritance map.
 
+    @staticmethod
+    def _enrich_one_device(device: dict, site_lookup: dict, mac_to_site_id: dict) -> bool:  # type: ignore[type-arg]
+        """Attach site name/address + split-address fields to one device; return True if its site was VC-inherited."""
+        site_id = device.get("site_id")  # Check if device has its own site_id.
+        inherited = False  # Track whether this device inherited its site from a VC parent.
+        if not site_id and device.get("vc_mac"):  # Device missing a site assignment but part of a VC.
+            inherited_site_id = mac_to_site_id.get(device["vc_mac"])  # Look up site from the VC parent MAC.
+            if inherited_site_id:  # Found the parent's site.
+                site_id = inherited_site_id  # Use the parent's site_id for enrichment.
+                device["site_id"] = inherited_site_id  # Persist inherited site_id on the device record.
+                inherited = True  # Mark this device as having inherited its site.
+        site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})  # Resolve site details.
+        device["site_name"] = site_info["name"]  # Apply site name to device record.
+        device["site_address"] = site_info["address"]  # Apply full site address to device record.
+        street, city, state, zip_code, country = OrgInventoryExporter._split_full_address(
+            site_info["address"]
+        )  # Split.
+        device["street"] = street  # Set street address component.
+        device["city"] = city  # Set city component.
+        device["state"] = state  # Set state/province component.
+        device["zip_code"] = zip_code  # Set postal/zip code component.
+        device["country"] = country  # Set country component.
+        return inherited  # Whether the site was inherited from a VC parent.
+
+    @staticmethod
+    def _enrich_devices_with_site_info(inventory: list, site_lookup: dict, mac_to_site_id: dict) -> list:  # type: ignore[type-arg]
+        """Enrich every device with site info (inheriting VC-member sites) and return the enriched list."""
         enriched_devices = []  # Init enriched device list.
-        vc_inherited_count = 0  # Track how many physical members inherited site info from their VC
+        vc_inherited_count = 0  # Track how many physical members inherited site info from their VC.
         for device in tqdm(inventory, desc="Processing Devices", unit="device"):  # type: ignore[no-untyped-call]
-            site_id = device.get("site_id")  # Check if device has its own site_id
-            # Fallback: if device has no site_id, inherit from VC parent (virtual or primary member)
-            if not site_id and device.get("vc_mac"):  # Device missing site assignment but part of a VC
-                inherited_site_id = mac_to_site_id.get(device["vc_mac"])  # Look up site from VC parent MAC
-                if inherited_site_id:  # Found the parent's site
-                    site_id = inherited_site_id  # Use the parent's site_id for enrichment
-                    device["site_id"] = inherited_site_id  # Persist inherited site_id on the device record
-                    vc_inherited_count += 1  # Count successful inheritance
-            site_info = site_lookup.get(site_id, {"name": "Unknown", "address": "Unknown"})  # Resolve site details
-            device["site_name"] = site_info["name"]  # Apply site name to device record
-            device["site_address"] = site_info["address"]  # Apply full site address to device record
-            street, city, state, zip_code, country = split_address(site_info["address"])  # type: ignore[no-untyped-call]
-            device["street"] = street  # Set street address component
-            device["city"] = city  # Set city component
-            device["state"] = state  # Set state/province component
-            device["zip_code"] = zip_code  # Set postal/zip code component
-            device["country"] = country  # Set country component
-            enriched_devices.append(device)  # Add enriched device to output list
+            inherited = OrgInventoryExporter._enrich_one_device(device, site_lookup, mac_to_site_id)  # Enrich one.
+            if inherited:  # The device inherited its site from a VC parent.
+                vc_inherited_count += 1  # Count successful inheritance.
+            enriched_devices.append(device)  # Add enriched device to output list.
             logging.debug("Enriched device %s (%s) with site info.", device.get("name", ""), device.get("mac", ""))
-        if vc_inherited_count:  # Log inheritance summary if any members were fixed
-            logging.info(  # Log enrichment progress.
-                "%d physical VC members inherited site info from their VC parent",
-                vc_inherited_count,
-            )
+        if vc_inherited_count:  # Log inheritance summary if any members were fixed.
+            logging.info("%d physical VC members inherited site info from their VC parent", vc_inherited_count)
+        return enriched_devices  # Enriched device records.
 
-        # Flatten nested fields and escape multiline strings for CSV compatibility
-        enriched_devices = DataProcessingUtils.flatten_nested_fields(enriched_devices)  # Flatten enriched fields.
-        enriched_devices = DataProcessingUtils.escape_multiline(enriched_devices)  # type: ignore[no-untyped-call]
-        enriched_devices = sorted(enriched_devices, key=lambda x: x.get("site_name", ""))  # Sort by site name.
-        DataExporter.write_with_format_selection(enriched_devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(enriched_devices)} devices exported to AllDevicesWithSiteInfo.csv")
-        logging.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(enriched_devices))
+    @staticmethod
+    def _flatten_sort_export_devices(devices: list) -> list:  # type: ignore[type-arg]
+        """Flatten, escape, sort by site name, and write the all-devices CSV; return the processed rows for display."""
+        devices = DataProcessingUtils.flatten_nested_fields(devices)  # Flatten enriched fields.
+        devices = DataProcessingUtils.escape_multiline(devices)  # type: ignore[no-untyped-call]
+        devices = sorted(devices, key=lambda x: x.get("site_name", ""))  # Sort by site name.
+        DataExporter.write_with_format_selection(devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
+        print(f"! {len(devices)} devices exported to AllDevicesWithSiteInfo.csv")  # Confirm export to operator.
+        logging.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(devices))  # Log write.
+        return devices  # Processed rows for the summary table.
 
-        # Display a summary table in logs
+    @staticmethod
+    def _display_devices_summary_table(devices: list) -> None:  # type: ignore[type-arg]
+        """Build a PrettyTable of the enriched devices and debug-log it for operator visibility."""
         table = PrettyTable()  # Build display table.
         table.field_names = [  # Define table columns.
             "name",
@@ -10272,23 +10259,30 @@ class OrgInventoryExporter:  # Org inventory exporters.
             "zip_code",
             "country",
         ]
-        for dev in enriched_devices:  # Iterate enriched devices.
-            table.add_row(  # Add device row to table.
-                [
-                    dev.get("name", ""),
-                    dev.get("mac", ""),
-                    dev.get("model", ""),
-                    dev.get("serial", ""),
-                    dev.get("type", ""),
-                    dev.get("site_name", ""),
-                    dev.get("street", ""),
-                    dev.get("city", ""),
-                    dev.get("state", ""),
-                    dev.get("zip_code", ""),
-                    dev.get("country", ""),
-                ]
-            )
+        for device in devices:  # Iterate enriched devices for rows.
+            table.add_row([device.get(column, "") for column in table.field_names])  # One cell per defined column.
         logging.debug("\n%s", table.get_string())  # Debug-log the table.
+
+    @staticmethod
+    def devices_with_site_info(fast: bool = False):
+        """Fetch all org devices, enrich them with site/address info, and export AllDevicesWithSiteInfo.csv.
+
+        When ``fast`` is True, cached SiteList.csv / OrgInventory.csv are used (with API fallback); otherwise
+        the data is fetched directly from the API. Physical VC members without a site_id inherit one from
+        their VC parent. Also debug-logs a summary table.
+        """
+        print("All Devices with Site and Address Info:")  # Inform operator of export.
+        logging.info("Fetching All Devices with Site Info...")  # Log fetch start.
+        if fast:  # Fast mode reuses cached CSVs.
+            logging.info(" Fast mode enabled for devices with site info export")  # Log fast mode enabled.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
+        site_lookup, inventory = OrgInventoryExporter._devices_load_data(org_id, fast)  # Load sites + inventory.
+        mac_to_site_id = OrgInventoryExporter._build_mac_to_site_id(inventory)  # Build VC inheritance index.
+        enriched_devices = OrgInventoryExporter._enrich_devices_with_site_info(  # Enrich every device with site info.
+            inventory, site_lookup, mac_to_site_id
+        )
+        processed = OrgInventoryExporter._flatten_sort_export_devices(enriched_devices)  # Flatten/sort/write the CSV.
+        OrgInventoryExporter._display_devices_summary_table(processed)  # Debug-log a summary table of the devices.
 
     @staticmethod
     def gateways_with_site_info():  # Export gateways with site info.
