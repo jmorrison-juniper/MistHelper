@@ -1446,7 +1446,87 @@ class GlobalImportManager:
     # _get_actual_import_name removed per issue #431 (ARCH-DELEGATE) -- callers
     # now do `self.import_name_mappings.get(name, name)` inline.
 
-    def import_module_safely(  # noqa: C901, PLR0912, PLR0915
+    def _resolve_and_import(self, module_name: str) -> Any:
+        """Import a module via its special handler or its real import name (issue #470: shared by attempt + retry)."""
+        if module_name in self.special_import_handlers:  # Some modules need custom construction logic.
+            return self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]  # Invoke special handler.
+        actual_import_name = self.import_name_mappings.get(module_name, module_name)  # Resolve package -> import name.
+        return __import__(actual_import_name)  # Import the module by its real import name.
+
+    def _should_upgrade_package(self, package_spec: str | None, skip_deps: bool, skip_upgrade: bool) -> bool:
+        """Return True only when every opportunistic-upgrade gate passes (issue #470: hoisted to keep CC low)."""
+        return bool(
+            package_spec and self.auto_upgrade_dependencies and not skip_deps and not skip_upgrade
+        )  # All four upgrade gates must pass before an opportunistic upgrade.
+
+    def _auto_install_allowed(self, package_spec: str | None, skip_deps: bool) -> bool:
+        """Return True only when auto-installing a missing dependency is permitted (issue #470: hoisted gate)."""
+        return bool(
+            package_spec and self.auto_upgrade_dependencies and not skip_deps and not self.disable_auto_install
+        )  # All four install gates must pass before attempting an install.
+
+    def _attempt_install(self, package_spec: str) -> bool:
+        """Install a package, preferring UV then falling back to pip; return True if either succeeded."""
+        installed = False  # Track whether any installer succeeded.
+        if self._check_uv_installation():  # UV is the preferred fast installer.
+            logging.debug("Trying UV installation for %s", package_spec)  # Note the UV attempt.
+            installed = self._install_package_with_uv(package_spec)  # Attempt the UV install.
+        if not installed:  # UV either failed or is unavailable.
+            logging.debug("Trying pip installation for %s", package_spec)  # Note the pip attempt.
+            installed = self._install_package_with_pip(package_spec)  # Attempt the pip install.
+        return installed  # Report whether the package is now installed.
+
+    def _clear_failed_import_cache(self, module_name: str) -> None:
+        """Invalidate import caches and purge stale failed entries so a post-install retry imports cleanly."""
+        import importlib  # Imported locally to invalidate caches only when needed.
+
+        importlib.invalidate_caches()  # Force Python to notice the newly installed files.
+        actual_import_name = self.import_name_mappings.get(module_name, module_name)  # Resolve package -> import name.
+        for mod_name in (actual_import_name, module_name):  # Both names may be cached as failed.
+            if mod_name in sys.modules:  # A stale/failed entry exists in the module cache.
+                del sys.modules[mod_name]  # Remove it so the retry re-imports cleanly.
+                logging.debug("Cleared cached module: %s", mod_name)  # Record the cache purge.
+
+    def _retry_import_after_install(self, module_name: str, package_spec: str, required: bool) -> Any | None:
+        """Re-import a module after a successful install; return it, or None if the import still fails."""
+        try:  # The install may still not satisfy the import in this Python session.
+            module = self._resolve_and_import(module_name)  # Re-import now that the package is installed.
+            self.imports[module_name] = module  # Cache the now-successful import.
+            self.installed_packages.append(package_spec)  # Record that we installed this package this run.
+            logging.info("Successfully imported %s after installation", module_name)  # Confirm recovery.
+            return module  # Return the freshly imported module.
+        except ImportError as retry_e:  # Import still fails even after a successful install.
+            logging.error("Import still failed after installation for %s: %s", module_name, retry_e)  # Log failure.
+            if not required:  # Optional dependency -- degrade gracefully.
+                logging.info(
+                    "Optional package %s installation succeeded but import failed - likely needs system restart or different Python session",  # noqa: E501
+                    module_name,
+                )
+            return None  # The retry import did not succeed.
+
+    def _install_and_retry(
+        self, module_name: str, package_spec: str | None, required: bool, skip_deps: bool
+    ) -> Any | None:
+        """Install a missing dependency (when permitted) and retry the import; return the module or None."""
+        if not self._auto_install_allowed(package_spec, skip_deps):  # Auto-install must be permitted.
+            return None  # Installation not allowed -- nothing to retry.
+        logging.info("Attempting to install missing dependency: %s", package_spec)  # Announce the install attempt.
+        if not self._attempt_install(package_spec):  # type: ignore[arg-type]  # No installer succeeded.
+            logging.error("Failed to install %s", package_spec)  # Report the install failure.
+            return None  # Cannot retry without a successful install.
+        self._clear_failed_import_cache(module_name)  # Purge stale caches before the retry.
+        time.sleep(0.5)  # Brief pause to let filesystem writes settle before retrying.
+        return self._retry_import_after_install(module_name, package_spec, required)  # type: ignore[arg-type]  # Retry.
+
+    def _record_import_failure(self, module_name: str, required: bool) -> None:
+        """Record a terminal import failure (hard error for required deps, warning for optional)."""
+        if required:  # This dependency is mandatory for the program to run.
+            self.failed_imports.append(module_name)  # Track it among hard failures.
+            logging.error("Required dependency %s could not be imported or installed", module_name)  # Hard error.
+        else:  # Optional dependency.
+            logging.warning("Optional dependency %s not available", module_name)  # Warn but allow continuation.
+
+    def import_module_safely(
         self,
         module_name: str,
         package_spec: str | None = None,
@@ -1467,105 +1547,20 @@ class GlobalImportManager:
         Returns:
             The imported module or None if import failed
         """
-        try:
-            # Check if we have a special handler for this module
-            if module_name in self.special_import_handlers:  # Some modules need custom construction logic
-                module = self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]  # Invoke the special handler
-            else:  # Ordinary module -- import it directly
-                # Issue #431 inlined _get_actual_import_name; resolve package -> import name.
-                actual_import_name = self.import_name_mappings.get(module_name, module_name)
-                module = __import__(actual_import_name)  # Import the module by its real import name
-
-            self.imports[module_name] = module  # Cache the imported module for later global assignment
-            logging.debug("Successfully imported %s", module_name)  # Record the successful import
-
-            # Check if we should upgrade existing packages (only if auto-upgrade is enabled and not skipping)
-            if (
-                package_spec and self.auto_upgrade_dependencies and not skip_deps and not skip_upgrade
-            ):  # All upgrade gates passed
-                self._check_and_upgrade_package(
-                    module_name, package_spec
-                )  # Opportunistically upgrade to the desired version
-
-            return module  # Hand the imported module back to the caller
-
-        except ImportError as e:  # The module is not installed or failed to load
-            logging.warning("Failed to import %s: %s", module_name, e)  # Note the import failure
-
-            # Attempt to install if package spec is provided and auto-installation is enabled
-            if (
-                package_spec and self.auto_upgrade_dependencies and not skip_deps and not self.disable_auto_install
-            ):  # Auto-install is permitted
-                logging.info(
-                    "Attempting to install missing dependency: %s", package_spec
-                )  # Announce the install attempt
-
-                # Try installing the package
-                installed = False  # Track whether any installer succeeded
-
-                # Try UV first if available (using cached check)
-                if self._check_uv_installation():  # UV is the preferred fast installer
-                    logging.debug("Trying UV installation for %s", package_spec)  # Note the UV attempt
-                    installed = self._install_package_with_uv(package_spec)  # Attempt the UV install
-
-                # Fallback to pip if UV failed or not available
-                if not installed:  # UV either failed or is unavailable
-                    logging.debug("Trying pip installation for %s", package_spec)  # Note the pip attempt
-                    installed = self._install_package_with_pip(package_spec)  # Attempt the pip install
-
-                if installed:  # A package was successfully installed
-                    # Clear import caches to allow fresh import
-                    import importlib  # Imported locally to invalidate caches only when needed
-
-                    importlib.invalidate_caches()  # Force Python to notice the newly installed files
-
-                    # Remove any cached failed imports (issue #431 inlined _get_actual_import_name).
-                    actual_import_name = self.import_name_mappings.get(module_name, module_name)
-                    modules_to_clear = [actual_import_name, module_name]  # Both names may be cached as failed
-                    for mod_name in modules_to_clear:  # Purge each possibly-cached name
-                        if mod_name in sys.modules:  # A stale/failed entry exists in the module cache
-                            del sys.modules[mod_name]  # Remove it so the retry re-imports cleanly
-                            logging.debug("Cleared cached module: %s", mod_name)  # Record the cache purge
-
-                    # Wait a moment for installation to complete
-                    time.sleep(0.5)  # Brief pause to let filesystem writes settle before retrying
-
-                    # Retry import after installation
-                    try:
-                        if module_name in self.special_import_handlers:  # Use the special handler again if present
-                            module = self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]  # Re-run the handler
-                        else:  # Ordinary module retry (issue #431 inlined _get_actual_import_name).
-                            actual_import_name = self.import_name_mappings.get(module_name, module_name)
-                            module = __import__(actual_import_name)  # Re-import now that the package is installed
-
-                        self.imports[module_name] = module  # Cache the now-successful import
-                        self.installed_packages.append(package_spec)  # Record that we installed this package this run
-                        logging.info("Successfully imported %s after installation", module_name)  # Confirm recovery
-                        return module  # Return the freshly imported module
-
-                    except ImportError as retry_e:  # Import still fails even after a successful install
-                        logging.error(
-                            "Import still failed after installation for %s: %s", module_name, retry_e
-                        )  # Log the persistent failure
-                        # For optional packages, this is not critical
-                        if not required:  # Optional dependency -- degrade gracefully
-                            logging.info(
-                                "Optional package %s installation succeeded but import failed - likely needs system restart or different Python session",  # noqa: E501
-                                module_name,
-                            )
-                else:  # No installer succeeded
-                    logging.error("Failed to install %s", package_spec)  # Report the install failure
-
-            # Handle failure
-            if required:  # This dependency is mandatory for the program to run
-                self.failed_imports.append(module_name)  # Track it among hard failures
-                logging.error(
-                    "Required dependency %s could not be imported or installed", module_name
-                )  # Log a hard error
-            else:  # Optional dependency
-                logging.warning("Optional dependency %s not available", module_name)  # Warn but allow continuation
-
-            return None  # Signal to the caller that the import was unavailable
+        try:  # First import attempt before any install fallback.
+            module = self._resolve_and_import(module_name)  # Import via special handler or real import name.
+            self.imports[module_name] = module  # Cache the imported module for later global assignment.
+            logging.debug("Successfully imported %s", module_name)  # Record the successful import.
+            if self._should_upgrade_package(package_spec, skip_deps, skip_upgrade):  # Opportunistic upgrade gate.
+                self._check_and_upgrade_package(module_name, package_spec)  # type: ignore[arg-type]  # Upgrade package.
+            return module  # Hand the imported module back to the caller.
+        except ImportError as e:  # The module is not installed or failed to load.
+            logging.warning("Failed to import %s: %s", module_name, e)  # Note the import failure.
+            module = self._install_and_retry(module_name, package_spec, required, skip_deps)  # Try install + retry.
+            if module is not None:  # The install-and-retry recovered the import.
+                return module  # Return the recovered module.
+            self._record_import_failure(module_name, required)  # Record terminal failure (logs required/optional).
+            return None  # Signal to the caller that the import was unavailable.
 
     def _import_packages_concurrently(self, packages_dict, required=True, skip_deps=False, max_workers=4):
         """
