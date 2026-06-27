@@ -115,10 +115,19 @@ from src.capture.packet_capture import (
 from src.dataclasses.batch_worker import (
     BatchWorkerConfig,
 )  # Issue #431: groups thread-pool batch config to keep _pool_process_batch_wait_loop within the 5-Item Rule.
+from src.dataclasses.msp_org_context import (
+    MspOrgContext,
+)  # Issue #470: groups MSP/Org identity to keep _enrich_device_context within the 5-Item Rule.
 from src.dataclasses.progress_event import (
     ProgressContext,
     TestSummary,
 )  # Issue #470: groups TelemetryEmitter event fields to keep emit_* signatures within the 5-Item Rule.
+from src.dataclasses.systematic_test_option import (
+    SystematicTestOption,
+)  # Issue #470: groups menu-option identity to keep _systematic_test_run_option within the 5-Item Rule.
+from src.dataclasses.websocket_stream_target import (
+    WebSocketStreamTarget,
+)  # Issue #470: groups WS connection identity to keep _listen_for_output within the 5-Item Rule.
 from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # Import 52-week device events export handler
 from src.export.site_export_utils import (
     configure_site_export_utils_dependencies,
@@ -16319,7 +16328,9 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         session_id = ARPCommandManager._trigger_command(mist_host, mist_apitoken, site_id, device_id)  # type: ignore[no-untyped-call]
         if session_id:  # Have a session.
             ARPCommandManager._listen_for_output(  # type: ignore[no-untyped-call]
-                mist_host.replace("api.", "api-ws."), mist_apitoken, site_id, device_id, session_id
+                WebSocketStreamTarget(  # Issue #470: bundle WS connection identity into one target.
+                    mist_host.replace("api.", "api-ws."), mist_apitoken, site_id, device_id, session_id
+                )
             )
 
     @staticmethod
@@ -16339,16 +16350,16 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             return None  # Return None.
 
     @staticmethod
-    def _listen_for_output(  # noqa: PLR0913
-        mist_host, mist_apitoken, site_id, device_id, session_id, timeout=30, idle_timeout=3, debug=False
-    ):
-        """Listen for WebSocket command output from a device."""
+    def _listen_for_output(target: WebSocketStreamTarget, timeout=30, idle_timeout=3, debug=False):
+        """Listen for WebSocket command output from a device (issue #470: connection identity in target)."""
         if debug:  # Debug mode.
             websocket.enableTrace(True)  # Trace the WebSocket.
 
-        ws_url = f"wss://{mist_host}/api-ws/v1/stream"  # Stream URL.
-        headers = [f"Authorization: Token {mist_apitoken}"]  # Auth header.
-        subscribe_msg = {"subscribe": f"/sites/{site_id}/devices/{device_id}/cmd"}  # Subscribe message.
+        ws_url = f"wss://{target.mist_host}/api-ws/v1/stream"  # Stream URL from the bundled target (issue #470).
+        headers = [f"Authorization: Token {target.mist_apitoken}"]  # Auth header from the bundled target (issue #470).
+        subscribe_msg = {
+            "subscribe": f"/sites/{target.site_id}/devices/{target.device_id}/cmd"
+        }  # Subscribe message built from the bundled target identity (issue #470).
 
         output_lines: list[str] = []  # Collect output lines.
         buffer = ""  # Reassembly buffer.
@@ -16357,7 +16368,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         def on_message(ws, message):  # Handle a message.
             nonlocal last_message_time, buffer, output_lines  # Share outer state.
             last_message_time, buffer = ARPCommandManager._handle_message(  # type: ignore[no-untyped-call]
-                message, session_id, buffer, output_lines, debug
+                message, target.session_id, buffer, output_lines, debug
             )
 
         def on_close(ws, *args):  # Handle close.
@@ -19479,20 +19490,17 @@ class MSPInventoryExporter:
             return devices_data  # Use it as-is
         return [devices_data] if devices_data else []  # Wrap a single record, or empty when falsy
 
-    def _enrich_device_context(  # noqa: PLR0913
+    def _enrich_device_context(
         self,
         device: dict,  # type: ignore[type-arg]
-        msp_id: str,
-        msp_name: str,
-        org_id: str,
-        org_name: str,
+        context: MspOrgContext,
         site_lookup: dict,  # type: ignore[type-arg]
     ) -> None:
-        """Add MSP/Org/Site context to a device record."""
-        device["_msp_id"] = msp_id
-        device["_msp_name"] = msp_name
-        device["_org_id"] = org_id
-        device["_org_name"] = org_name
+        """Add MSP/Org/Site context to a device record (issue #470: MSP/Org identity bundled into context)."""
+        device["_msp_id"] = context.msp_id  # Stamp MSP id from the bundled context (issue #470).
+        device["_msp_name"] = context.msp_name  # Stamp MSP name from the bundled context (issue #470).
+        device["_org_id"] = context.org_id  # Stamp org id from the bundled context (issue #470).
+        device["_org_name"] = context.org_name  # Stamp org name from the bundled context (issue #470).
         site_id = device.get("site_id")
         device["_site_name"] = site_lookup.get(site_id, "Unknown Site") if site_id else "Unassigned"
 
@@ -19524,8 +19532,9 @@ class MSPInventoryExporter:
                 return
 
             site_lookup = self._build_site_lookup(org_id)
+            device_context = MspOrgContext(msp_id, msp_name, org_id, org_name)  # Bundle MSP/Org identity (issue #470).
             for device in devices_data:
-                self._enrich_device_context(device, msp_id, msp_name, org_id, org_name, site_lookup)
+                self._enrich_device_context(device, device_context, site_lookup)
                 self.all_devices.append(device)
 
             self.device_count += len(devices_data)
@@ -22727,14 +22736,13 @@ def _systematic_test_emit_skips(emitter: Any, unsafe_list: list[str]) -> int:
 
 def _systematic_test_run_option(
     emitter: Any,
-    option: str,
-    func: Any,
-    description: str,
+    case: SystematicTestOption,
     i: int,
     total_safe: int,
     fast_enabled: bool,
 ) -> tuple[bool, float]:
     """Run one menu option in the systematic test harness and return (success, duration)."""
+    option, func, description = case.option, case.func, case.description  # Unpack the option identity (issue #470).
     print(
         f"   [{i:2}/{total_safe}] Testing option {option:>3}: {description[:60]}..."
     )  # Show current progress position before invoking.
@@ -22874,8 +22882,8 @@ def run_systematic_test():  # noqa: C901, PLR0912, PLR0915
     for i, option in enumerate(safe_options, 1):  # Iterate options in optimized order, 1-indexed for display.
         func, description = menu_actions[option]  # Unpack the callable and display name for this option.
         success, _duration = _systematic_test_run_option(
-            emitter, option, func, description, i, len(safe_options), fast_enabled
-        )  # Execute option with telemetry and return result.
+            emitter, SystematicTestOption(option, func, description), i, len(safe_options), fast_enabled
+        )  # Execute option with telemetry and return result (issue #470: option identity bundled).
         if success:  # Count success and failure separately for the final summary.
             success_count += 1  # Increment on successful option execution.
         else:  # Non-success means the option raised or returned an error.
