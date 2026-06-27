@@ -142,12 +142,12 @@ class TestDeviceStatsProgressEmitter:
         mock_emitter.emit_progress_start.assert_called_once_with("13", "device_stats", 1)
         mock_emitter.emit_progress_complete.assert_called_once()
         call_args = mock_emitter.emit_progress_complete.call_args
-        assert call_args[0][0] == "13"
-        assert call_args[0][1] == "device_stats"
-        assert call_args[0][2] == 1
-        assert call_args[0][3] == 1
-        assert call_args[0][4] is False
-        assert isinstance(call_args[0][5], float)
+        assert call_args[0][0].menu_option == "13"  # Issue #470: identity now bundled in ProgressContext.
+        assert call_args[0][0].operation_name == "device_stats"  # ProgressContext.operation_name.
+        assert call_args[0][0].total == 1  # ProgressContext.total.
+        assert call_args[0][1] == 1  # processed count (now second positional arg).
+        assert call_args[0][2] is False  # was_stopped flag (now third positional arg).
+        assert isinstance(call_args[0][3], float)  # duration seconds (now fourth positional arg).
 
     def test_handles_no_emitter_gracefully(self, monkeypatch):
         """US4 Scenario 3: No exception when PROGRESS_EMITTER is None."""

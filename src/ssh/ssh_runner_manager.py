@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from src.dataclasses.progress_event import ProgressContext  # Issue #470: bundle progress identity for emit_progress_*.
 from src.ssh.batch.multi_host_runner import MultiHostRunner  # T013c: extracted multi-host orchestrator
 from src.ssh.config.csv_loader import CommandCsvLoader  # T013a: extracted CSV loader
 from src.ssh.config.env_loader import EnvSshConfigLoader  # T013a: extracted .env loader
@@ -86,8 +87,8 @@ class SSHRunnerManager:
         if not emitter:  # No emitter → silent no-op
             return
         emitter.emit_progress_complete(  # Fire completion event with derived duration
-            "97", "ssh_runner", 0, 0, cancelled, time.time() - op_start
-        )
+            ProgressContext("97", "ssh_runner", 0), 0, cancelled, time.time() - op_start
+        )  # Issue #470: operation identity bundled into a ProgressContext.
 
     @staticmethod
     def by_gateway_template(deps: SSHRunnerManagerDeps, fast: bool = False) -> None:

@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from src.dataclasses.progress_event import TestSummary  # Issue #470: bundle test-summary stats for emit_test_summary.
+
 
 @dataclass
 class InteractiveTestRunner:
@@ -263,8 +265,8 @@ class InteractiveTestRunner:
         """Emit summary event, close emitter, and enforce retention policy."""
         logging.info("Emitting telemetry summary for interactive test suite")  # Log before summary emission.
         emitter.emit_test_summary(
-            total_ops, success_count, error_count, skip_count, total_time, "interactive"
-        )  # Emit aggregate metrics.
+            TestSummary(total_ops, success_count, error_count, skip_count, total_time, "interactive")
+        )  # Emit aggregate metrics (issue #470: stats bundled into a TestSummary dataclass).
         logging.debug("Telemetry summary event emitted successfully")  # Log summary completion.
         logging.info("Closing telemetry emitter after interactive suite completion")  # Log before close.
         emitter.close()  # Flush pending events.

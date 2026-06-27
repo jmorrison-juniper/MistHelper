@@ -9,6 +9,8 @@ import json
 import os
 from datetime import UTC, datetime
 
+from src.dataclasses.progress_event import ProgressContext, TestSummary  # Issue #470: bundled event-field dataclasses.
+
 
 # ---------------------------------------------------------------------------
 # Duplicated class (R1: avoid MistHelper.py import side effects)
@@ -107,20 +109,20 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_test_summary(self, total, passed, failed, skipped, elapsed, test_mode):
-        overall = "pass" if failed == 0 else "fail"
+    def emit_test_summary(self, summary):
+        overall = "pass" if summary.failed == 0 else "fail"
         self.emit(
             {
                 "event_type": "test_summary",
                 "timestamp": datetime.now(UTC).isoformat(),
                 "menu_option": "0",
                 "status": overall,
-                "total_operations": total,
-                "pass_count": passed,
-                "fail_count": failed,
-                "skip_count": skipped,
-                "total_elapsed_seconds": round(elapsed, 3),
-                "test_mode": test_mode,
+                "total_operations": summary.total,
+                "pass_count": summary.passed,
+                "fail_count": summary.failed,
+                "skip_count": summary.skipped,
+                "total_elapsed_seconds": round(summary.elapsed, 3),
+                "test_mode": summary.test_mode,
             }
         )
 
@@ -135,28 +137,28 @@ class TelemetryEmitter:
             }
         )
 
-    def emit_progress_tick(self, menu_option, operation_name, total, current, completed, remaining):
+    def emit_progress_tick(self, ctx, current, completed, remaining):
         self.emit(
             {
                 "event_type": "progress_tick",
                 "timestamp": datetime.now(UTC).isoformat(),
-                "menu_option": str(menu_option),
-                "operation_name": operation_name,
-                "total_items": total,
+                "menu_option": str(ctx.menu_option),
+                "operation_name": ctx.operation_name,
+                "total_items": ctx.total,
                 "current_item": str(current),
                 "items_completed": completed,
                 "items_remaining": remaining,
             }
         )
 
-    def emit_progress_complete(self, menu_option, operation_name, total, processed, was_stopped, duration):
+    def emit_progress_complete(self, ctx, processed, was_stopped, duration):
         self.emit(
             {
                 "event_type": "progress_complete",
                 "timestamp": datetime.now(UTC).isoformat(),
-                "menu_option": str(menu_option),
-                "operation_name": operation_name,
-                "total_items": total,
+                "menu_option": str(ctx.menu_option),
+                "operation_name": ctx.operation_name,
+                "total_items": ctx.total,
                 "items_processed": processed,
                 "was_stopped": was_stopped,
                 "duration_seconds": round(duration, 3),
@@ -290,7 +292,7 @@ class TestTelemetryEmitterTestEvents:
     def test_emit_test_summary_pass(self, tmp_path):
         path = str(tmp_path / "events.jsonl")
         with TelemetryEmitter(path) as emitter:
-            emitter.emit_test_summary(100, 80, 0, 20, 120.5, "systematic")
+            emitter.emit_test_summary(TestSummary(100, 80, 0, 20, 120.5, "systematic"))
         event = read_events(path)[0]
         assert event["event_type"] == "test_summary"
         assert event["status"] == "pass"
@@ -302,7 +304,7 @@ class TestTelemetryEmitterTestEvents:
     def test_emit_test_summary_fail(self, tmp_path):
         path = str(tmp_path / "events.jsonl")
         with TelemetryEmitter(path) as emitter:
-            emitter.emit_test_summary(100, 70, 10, 20, 120.5, "systematic")
+            emitter.emit_test_summary(TestSummary(100, 70, 10, 20, 120.5, "systematic"))
         event = read_events(path)[0]
         assert event["status"] == "fail"
 
@@ -324,7 +326,7 @@ class TestTelemetryEmitterProgressEvents:
     def test_emit_progress_tick(self, tmp_path):
         path = str(tmp_path / "events.jsonl")
         with TelemetryEmitter(path) as emitter:
-            emitter.emit_progress_tick("11", "List Sites", 50, "site_abc", 10, 40)
+            emitter.emit_progress_tick(ProgressContext("11", "List Sites", 50), "site_abc", 10, 40)
         event = read_events(path)[0]
         assert event["event_type"] == "progress_tick"
         assert event["items_completed"] == 10
@@ -333,7 +335,7 @@ class TestTelemetryEmitterProgressEvents:
     def test_emit_progress_complete(self, tmp_path):
         path = str(tmp_path / "events.jsonl")
         with TelemetryEmitter(path) as emitter:
-            emitter.emit_progress_complete("11", "List Sites", 50, 50, False, 30.5)
+            emitter.emit_progress_complete(ProgressContext("11", "List Sites", 50), 50, False, 30.5)
         event = read_events(path)[0]
         assert event["event_type"] == "progress_complete"
         assert event["items_processed"] == 50
@@ -344,8 +346,8 @@ class TestTelemetryEmitterProgressEvents:
         with TelemetryEmitter(path) as emitter:
             emitter.emit_progress_start("11", "List Sites", 3)
             for i in range(3):
-                emitter.emit_progress_tick("11", "List Sites", 3, f"site_{i}", i + 1, 2 - i)
-            emitter.emit_progress_complete("11", "List Sites", 3, 3, False, 5.0)
+                emitter.emit_progress_tick(ProgressContext("11", "List Sites", 3), f"site_{i}", i + 1, 2 - i)
+            emitter.emit_progress_complete(ProgressContext("11", "List Sites", 3), 3, False, 5.0)
         events = read_events(path)
         assert len(events) == 5
         assert events[0]["event_type"] == "progress_start"

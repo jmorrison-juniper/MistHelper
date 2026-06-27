@@ -9,6 +9,8 @@ from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 
+from src.dataclasses.progress_event import ProgressContext  # Issue #470: bundle progress identity for emit_progress_*.
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve MistHelper runtime dependencies without static src imports."""
@@ -79,7 +81,9 @@ class SecurityEventsService:
         print("Security data export completed (3 files generated)")
         logging.info("Completed security policies, intelligence profiles, and rogue data export aggregate.")
         if emitter:
-            emitter.emit_progress_complete("42", "security_events", 3, 3, False, time.time() - op_start)
+            emitter.emit_progress_complete(  # Issue #470: operation identity bundled into a ProgressContext.
+                ProgressContext("42", "security_events", 3), 3, False, time.time() - op_start
+            )
 
     @staticmethod
     def _all_outputs_fresh(deps: SimpleNamespace, output_files: list[str]) -> bool:
