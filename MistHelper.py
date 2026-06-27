@@ -13461,132 +13461,178 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             for logger_name, original_level in original_levels.items():  # Restore logger levels.
                 logging.getLogger(logger_name).setLevel(original_level)  # Restore each level.
 
+    _CLIENT_ANOMALY_METRICS = (  # Client-specific anomaly metrics (verified working) shared by the count + loop.
+        "successful_connect",  # Note: uses underscore, not hyphen for the client endpoint.
+        "roaming",  # Client roaming issues.
+        "throughput",  # Client throughput anomalies.
+    )
+
     @staticmethod
-    def client_anomaly_events():  # noqa: C901, PLR0912, PLR0915
-        """Export client-specific anomaly events for a selected client
-        to SiteClientAnomalyEvents_[SiteName]_[ClientMAC].csv.
-
-        Uses GET /api/v1/sites/:site_id/anomaly/:metric/client/:client_mac endpoint to retrieve client anomaly events
-        including connection success rates, band-specific roaming performance, and throughput issues.
-        """
-        print("Export Site Client Anomaly Events:")  # Header.
-        logging.info("Starting export of site client anomaly events...")  # Log start.
-
-        # Get site selection
-        site_id = PromptUtils.select_site()  # Select a site.
-        if not site_id:  # No site.
-            print("! No site selected. Exiting.")  # Tell the user.
-            return  # Abort.
-
-        # Get site name for filename
-        try:
+    def _anomaly_resolve_site_name(site_id: str) -> str:
+        """Resolve the human-readable site name for a site_id, falling back to the id on lookup failure."""
+        try:  # The site-name lookup is best-effort; the id is an acceptable fallback for the filename.
             response = mistapi.api.v1.sites.listSites(apisession, site_id)  # List the site.
             sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
+            return next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
         except Exception:  # Lookup failed.
-            site_name = site_id  # Fall back to id.
+            return site_id  # Fall back to the id.
 
-        # Use the guided client selection function with the site_id
-        client_mac, client_type, selected_site_id = PromptClientUtils.select_client(site_id)  # Select a client.
-        if not client_mac:  # No client.
-            print("! No client selected. Exiting.")  # Tell the user.
-            return  # Abort.
-
-        # Get hostname from the client MAC (we'll need to look it up)
-        client_hostname = "Unknown"  # Default hostname.
-        try:
-            # Search for the client to get hostname
+    @staticmethod
+    def _anomaly_lookup_client_hostname(site_id: str, client_mac: str) -> str:
+        """Look up a client's hostname from its wireless stats, falling back to the MAC on failure."""
+        try:  # Hostname enrichment is best-effort; the MAC is an acceptable fallback.
             response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(  # List client stats.
                 apisession, site_id, limit=100, duration="1d"
             )
             clients = getattr(response, "data", response) or []  # Unwrap data; default empty.
-
-            for client in clients:  # Find the client.
+            for client in clients:  # Find the matching client.
                 if client.get("mac") == client_mac:  # MAC matches.
-                    client_hostname = client.get("hostname", client.get("name", "Unknown"))  # Read the hostname.
-                    break  # Stop searching.
-
+                    return client.get("hostname", client.get("name", "Unknown"))  # Read the hostname.
+            return "Unknown"  # No matching client found in the stats.
         except Exception as exception:  # Lookup failed.
             logging.warning("Could not retrieve client hostname for %s: %s", client_mac, exception)  # Warn the failure.
-            client_hostname = client_mac  # Fallback to MAC address
+            return client_mac  # Fall back to the MAC address.
 
-        # Clean names for filename
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
-        filename = f"SiteClientAnomalyEvents_{sanitized_site_name}_{client_mac.replace(':', '')}.csv"
-
-        # Define client-specific anomaly metrics (verified working metrics)
-        client_anomaly_metrics = [
-            "successful_connect",  # Note: uses underscore, not hyphen for client endpoint
-            "roaming",  # Client roaming issues
-            "throughput",  # Client throughput anomalies
-        ]
-
-        all_client_anomaly_data = []  # Accumulate anomaly rows.
-        metrics_retrieved = 0  # Success count.
-
-        print(
-            f"! Retrieving {len(client_anomaly_metrics)} different client anomaly events for {client_mac} ({client_hostname})..."  # noqa: E501
-        )
-
-        # Temporarily suppress mistapi error logging to keep console clean
-        mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apiresponse"]
-        original_levels = {}  # Save original levels.
-        for logger_name in mistapi_loggers:  # Quiet each logger.
+    @staticmethod
+    def _anomaly_suppress_mistapi_loggers() -> dict:  # type: ignore[type-arg]
+        """Raise mistapi logger levels to CRITICAL to keep the console clean; return their original levels."""
+        mistapi_loggers = [
+            "apirequest",
+            "apiresponse",
+            "mistapi",
+            "mistapi.apirequest",
+            "mistapi.apiresponse",
+        ]  # Names.
+        original_levels = {}  # Save original levels for later restoration.
+        for logger_name in mistapi_loggers:  # Quiet each mistapi logger.
             logger_instance = logging.getLogger(logger_name)  # Get the logger.
             original_levels[logger_name] = logger_instance.level  # Remember its level.
-            logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
+            logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily.
+        return original_levels  # Original levels keyed by logger name.
 
-        try:
-            for metric in client_anomaly_metrics:  # Fetch each metric.
-                try:
-                    # Call the site client anomaly API endpoint
-                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(  # Get client anomalies.
-                        apisession, site_id, client_mac, metric
-                    )
-                    client_anomaly_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
+    @staticmethod
+    def _anomaly_restore_loggers(original_levels: dict) -> None:  # type: ignore[type-arg]
+        """Restore mistapi logger levels saved by _anomaly_suppress_mistapi_loggers."""
+        for logger_name, original_level in original_levels.items():  # Restore each logger level.
+            logging.getLogger(logger_name).setLevel(original_level)  # Restore the saved level.
 
-                    if client_anomaly_data:  # Have data.
-                        # Add metadata
-                        client_anomaly_data["metric_type"] = metric  # Tag the metric.
-                        client_anomaly_data["site_id"] = site_id  # Tag the site.
-                        client_anomaly_data["site_name"] = site_name  # Tag the site name.
-                        client_anomaly_data["client_mac"] = client_mac  # Tag the client MAC.
-                        client_anomaly_data["client_hostname"] = client_hostname  # Tag the hostname.
-                        client_anomaly_data["data_type"] = "client_anomaly_events"  # Tag the data type.
-                        all_client_anomaly_data.append(client_anomaly_data)  # Collect the row.
-                        metrics_retrieved += 1  # Count success.
-                        print(f"!? Retrieved {metric} client anomaly data")  # Tell the user.
-                        logging.debug("Successfully retrieved %s client anomaly data for %s", metric, client_mac)
-                    else:
-                        print(f"! No {metric} client anomaly data available")  # Tell the user none.
-                        logging.info("No %s client anomaly data available for %s", metric, client_mac)  # Log none.
-                except Exception as metric_error:  # Metric fetch failed.
-                    print(f"! Error retrieving {metric} client anomaly data: {metric_error}")  # Tell the user.
-                    logging.warning(  # Warn the failure.
-                        "Error retrieving %s client anomaly data for %s: %s", metric, client_mac, metric_error
-                    )
+    @staticmethod
+    def _anomaly_fetch_one_metric(
+        site_id: str, client_mac: str, site_name: str, client_hostname: str, metric: str
+    ) -> dict | None:  # type: ignore[type-arg]
+        """Fetch one client anomaly metric and tag it with site/client metadata; return the record, or None if empty."""
+        response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(  # Get client anomalies for this metric.
+            apisession, site_id, client_mac, metric
+        )
+        client_anomaly_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
+        if not client_anomaly_data:  # The metric returned no data.
+            return None  # Signal an empty metric.
+        client_anomaly_data["metric_type"] = metric  # Tag the metric.
+        client_anomaly_data["site_id"] = site_id  # Tag the site.
+        client_anomaly_data["site_name"] = site_name  # Tag the site name.
+        client_anomaly_data["client_mac"] = client_mac  # Tag the client MAC.
+        client_anomaly_data["client_hostname"] = client_hostname  # Tag the hostname.
+        client_anomaly_data["data_type"] = "client_anomaly_events"  # Tag the data type.
+        return client_anomaly_data  # The tagged anomaly record.
 
-            # Process and save all collected client anomaly data
-            if all_client_anomaly_data:  # Have data.
-                processed = DataProcessingUtils.flatten_nested_fields(all_client_anomaly_data)  # Flatten nested fields.
-                processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")  # Tell the user.
-                logging.info(  # Log the export.
-                    "Exported %s client anomaly event types for %s to %s", metrics_retrieved, client_mac, filename
+    @staticmethod
+    def _anomaly_handle_metric_result(record: dict | None, metric: str, client_mac: str, all_data: list) -> int:  # type: ignore[type-arg]
+        """Record one fetched metric: append + announce on data, announce 'none' otherwise; return 1 if kept else 0."""
+        if record is not None:  # The metric returned data.
+            all_data.append(record)  # Collect the row.
+            print(f"!? Retrieved {metric} client anomaly data")  # Tell the user.
+            logging.debug("Successfully retrieved %s client anomaly data for %s", metric, client_mac)  # Trace.
+            return 1  # One successful metric.
+        print(f"! No {metric} client anomaly data available")  # Tell the user none.
+        logging.info("No %s client anomaly data available for %s", metric, client_mac)  # Log none.
+        return 0  # No data for this metric.
+
+    @staticmethod
+    def _anomaly_collect_metrics(
+        site_id: str, client_mac: str, site_name: str, client_hostname: str
+    ) -> tuple[list, int]:  # type: ignore[type-arg]
+        """Fetch all client anomaly metrics for one client; return (records, retrieved_count)."""
+        print(
+            f"! Retrieving {len(SiteAnomalyExporter._CLIENT_ANOMALY_METRICS)} different client anomaly events for {client_mac} ({client_hostname})..."  # noqa: E501
+        )  # Tell the user how many metrics will be fetched.
+        all_client_anomaly_data = []  # Accumulate anomaly rows.
+        metrics_retrieved = 0  # Success count.
+        for metric in SiteAnomalyExporter._CLIENT_ANOMALY_METRICS:  # Fetch each metric independently.
+            try:  # Isolate per-metric failures so one bad metric doesn't abort the rest.
+                record = SiteAnomalyExporter._anomaly_fetch_one_metric(  # Fetch + tag one metric.
+                    site_id, client_mac, site_name, client_hostname, metric
                 )
-            else:
-                print(f"! 0 client anomaly events exported to {filename} (no data available)")  # Tell the user zero.
-                logging.warning("No client anomaly events available for %s", client_mac)  # Warn none.
-                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
+                metrics_retrieved += SiteAnomalyExporter._anomaly_handle_metric_result(  # Record + announce outcome.
+                    record, metric, client_mac, all_client_anomaly_data
+                )
+            except Exception as metric_error:  # Metric fetch failed.
+                print(f"! Error retrieving {metric} client anomaly data: {metric_error}")  # Tell the user.
+                logging.warning(
+                    "Error retrieving %s client anomaly data for %s: %s", metric, client_mac, metric_error
+                )  # Warn the failure.
+        return all_client_anomaly_data, metrics_retrieved  # Collected rows and the success count.
 
+    @staticmethod
+    def _anomaly_export(all_data: list, metrics_retrieved: int, client_mac: str, filename: str) -> None:  # type: ignore[type-arg]
+        """Flatten and write the collected client anomaly rows to CSV (writes an empty file when there is no data)."""
+        if all_data:  # At least one metric returned data.
+            processed = DataProcessingUtils.flatten_nested_fields(all_data)  # Flatten nested fields.
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
+            print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")  # Tell the user.
+            logging.info(
+                "Exported %s client anomaly event types for %s to %s", metrics_retrieved, client_mac, filename
+            )  # Log the export.
+        else:  # No metric returned data.
+            print(f"! 0 client anomaly events exported to {filename} (no data available)")  # Tell the user zero.
+            logging.warning("No client anomaly events available for %s", client_mac)  # Warn none.
+            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Write empty file.
+
+    @staticmethod
+    def _anomaly_prepare() -> tuple | None:  # type: ignore[type-arg]
+        """Prompt for a site and client, resolve names + hostname, and build the output filename.
+
+        Returns (site_id, site_name, client_mac, client_hostname, filename), or None when the
+        operator cancels at the site or client selection prompt.
+        """
+        site_id = PromptUtils.select_site()  # Select a site.
+        if not site_id:  # No site selected.
+            print("! No site selected. Exiting.")  # Tell the user.
+            return None  # Abort.
+        site_name = SiteAnomalyExporter._anomaly_resolve_site_name(site_id)  # Resolve site name for the filename.
+        client_mac, client_type, selected_site_id = PromptClientUtils.select_client(site_id)  # Select a client.
+        if not client_mac:  # No client selected.
+            print("! No client selected. Exiting.")  # Tell the user.
+            return None  # Abort.
+        client_hostname = SiteAnomalyExporter._anomaly_lookup_client_hostname(site_id, client_mac)  # Hostname lookup.
+        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
+        filename = f"SiteClientAnomalyEvents_{sanitized_site_name}_{client_mac.replace(':', '')}.csv"  # Output name.
+        return site_id, site_name, client_mac, client_hostname, filename  # Resolved context for the export.
+
+    @staticmethod
+    def client_anomaly_events():
+        """Export client-specific anomaly events for a selected client to a per-site/per-client CSV.
+
+        Prompts for a site and client, fetches the successful_connect / roaming / throughput
+        anomaly metrics, and writes SiteClientAnomalyEvents_[SiteName]_[ClientMAC].csv.
+        """
+        print("Export Site Client Anomaly Events:")  # Header.
+        logging.info("Starting export of site client anomaly events...")  # Log start.
+        prepared = SiteAnomalyExporter._anomaly_prepare()  # Prompt + resolve site/client/filename.
+        if prepared is None:  # Operator cancelled at a selection prompt.
+            return  # Abort.
+        site_id, site_name, client_mac, client_hostname, filename = prepared  # Unpack the resolved context.
+        original_levels = SiteAnomalyExporter._anomaly_suppress_mistapi_loggers()  # Quiet mistapi loggers.
+        try:  # Guard the fetch/export so logger levels are always restored in finally.
+            all_data, metrics_retrieved = SiteAnomalyExporter._anomaly_collect_metrics(  # Fetch all metrics.
+                site_id, client_mac, site_name, client_hostname
+            )
+            SiteAnomalyExporter._anomaly_export(all_data, metrics_retrieved, client_mac, filename)  # Write the CSV.
         except Exception as exception:  # Export failed.
             print(f"! Error exporting client anomaly events: {exception}")  # Tell the user.
             logging.error("Failed to export client anomaly events for %s: %s", client_mac, exception)  # Log the error.
-        finally:
-            # Restore original logging levels
-            for logger_name, original_level in original_levels.items():  # Restore logger levels.
-                logging.getLogger(logger_name).setLevel(original_level)  # Restore each level.
+        finally:  # Always restore the mistapi logger levels.
+            SiteAnomalyExporter._anomaly_restore_loggers(original_levels)  # Restore logger levels.
 
 
 class SitesByAPModelExporter:  # Sites-by-AP-model exporter.
