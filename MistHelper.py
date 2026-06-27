@@ -1563,6 +1563,57 @@ class GlobalImportManager:
             self._record_import_failure(module_name, required)  # Record terminal failure (logs required/optional).
             return None  # Signal to the caller that the import was unavailable.
 
+    def _partition_dependencies(self, packages_dict):
+        """Split a package map into (builtin, external) dicts by whether a spec is present."""
+        logging.debug("_partition_dependencies: splitting %d packages", len(packages_dict))  # Log before split
+        builtin_packages = {k: v for k, v in packages_dict.items() if v is None}  # No spec -> stdlib/built-in module
+        external_packages = {k: v for k, v in packages_dict.items() if v is not None}  # Has spec -> needs install
+        return builtin_packages, external_packages  # Return the two cohesive groups for separate processing
+
+    def _import_single_dependency(self, package_info, required, skip_deps, log_lock):
+        """Import one package and log its check and outcome under the shared thread lock."""
+        module_name, package_spec = package_info  # Unpack the (name, spec) tuple for this worker
+        package_type = "required" if required else "optional"  # Label used in user-facing log lines
+        with log_lock:  # Serialize this log line against other worker threads
+            logging.info(
+                "  Checking %s dependency: %s (%s)", package_type, module_name, package_spec or "built-in"
+            )  # Announce the check
+        result = self.import_module_safely(  # Perform the actual import/install for this package
+            module_name, package_spec, required=required, skip_deps=skip_deps, skip_upgrade=True
+        )  # Skip upgrade for speed here
+        with log_lock:  # Serialize the result log line against other worker threads
+            self._log_dependency_result(module_name, result, required)  # Emit OK/FAIL/WARN for this package
+        return module_name, result  # Return the outcome for aggregation by the caller
+
+    def _log_dependency_result(self, module_name, result, required):
+        """Log a single dependency outcome as OK, hard FAIL (required), or soft WARN (optional)."""
+        if result:  # Import succeeded
+            logging.info("  [OK] %s: Available", module_name)  # Report availability
+        elif required:  # Mandatory dependency missing
+            logging.error("  [FAIL] %s: Failed to import", module_name)  # Log a hard failure
+        else:  # Optional dependency missing
+            logging.warning("  [WARN] %s: Not available", module_name)  # Log a soft warning
+
+    def _import_external_dependencies(self, external_packages, required, skip_deps, log_lock, max_workers):
+        """Import external packages concurrently with a bounded thread pool."""
+        logging.debug("_import_external_dependencies: importing %d external packages", len(external_packages))  # Log
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:  # Bounded import worker pool
+            future_to_package = {  # Map each submitted future back to its source package
+                executor.submit(self._import_single_dependency, item, required, skip_deps, log_lock): item
+                for item in external_packages.items()  # Schedule every external import
+            }
+            for future in concurrent.futures.as_completed(future_to_package):  # Process results as imports finish
+                self._collect_import_result(future, future_to_package, log_lock)  # Handle this future's outcome
+
+    def _collect_import_result(self, future, future_to_package, log_lock):
+        """Retrieve one import future's result, logging any worker exception under the lock."""
+        package_info = future_to_package[future]  # Recover which package this future handled
+        try:
+            future.result()  # Retrieve the worker's return value (re-raises worker errors)
+        except Exception as exc:  # A worker raised an unexpected exception
+            with log_lock:  # Serialize the error log line against other worker threads
+                logging.error("Package %s import generated an exception: %s", package_info[0], exc)  # Log the failure
+
     def _import_packages_concurrently(self, packages_dict, required=True, skip_deps=False, max_workers=4):
         """
         Import packages concurrently for faster dependency resolution.
@@ -1575,72 +1626,12 @@ class GlobalImportManager:
         """
         import threading  # Lock primitive to serialize log output across threads
 
-        # Thread-safe logging
         log_lock = threading.Lock()  # Guards logging so concurrent threads don't interleave messages
-
-        def import_single_package(package_info):
-            module_name, package_spec = package_info  # Unpack the (name, spec) tuple for this worker
-            package_type = "required" if required else "optional"  # Label used in user-facing log lines
-
-            with log_lock:  # Serialize this log line against other worker threads
-                logging.info(
-                    "  Checking %s dependency: %s (%s)", package_type, module_name, package_spec or "built-in"
-                )  # Announce the check
-
-            result = self.import_module_safely(  # Perform the actual import/install for this package
-                module_name,
-                package_spec,
-                required=required,
-                skip_deps=skip_deps,
-                skip_upgrade=True,  # Skip upgrade for speed here
-            )
-
-            with log_lock:  # Serialize the result log line
-                if result:  # Import succeeded
-                    logging.info("  [OK] %s: Available", module_name)  # Report availability
-                else:  # Import failed
-                    if required:  # Mandatory dependency missing
-                        logging.error("  [FAIL] %s: Failed to import", module_name)  # Log a hard failure
-                    else:  # Optional dependency missing
-                        logging.warning("  [WARN] %s: Not available", module_name)  # Log a soft warning
-
-            return module_name, result  # Return the outcome for aggregation by the caller
-
-        # Split packages into built-in and external for better processing
-        builtin_packages = {
-            k: v for k, v in packages_dict.items() if v is None
-        }  # No spec means a stdlib/built-in module
-        external_packages = {
-            k: v for k, v in packages_dict.items() if v is not None
-        }  # Has a spec -> needs network install
-
-        # Process built-in packages first (fast, no network needed)
-        for module_name, package_spec in builtin_packages.items():  # Built-ins import instantly
-            import_single_package((module_name, package_spec))  # type: ignore[no-untyped-call]  # Import each sequentially
-
-        # Process external packages concurrently
+        builtin_packages, external_packages = self._partition_dependencies(packages_dict)  # Split by spec presence
+        for item in builtin_packages.items():  # Built-ins import instantly with no network needed
+            self._import_single_dependency(item, required, skip_deps, log_lock)  # Import each sequentially
         if external_packages:  # Only spin up a thread pool if there is network work to do
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=max_workers
-            ) as executor:  # Bounded pool of import workers
-                future_to_package = {  # Map each submitted future back to its source package
-                    executor.submit(import_single_package, item): item
-                    for item in external_packages.items()  # Schedule every external import
-                }
-
-                for future in concurrent.futures.as_completed(
-                    future_to_package
-                ):  # Process results as each import finishes
-                    package_info = future_to_package[future]  # Recover which package this future handled
-                    try:
-                        module_name, result = (
-                            future.result()
-                        )  # Retrieve the worker's return value (re-raises worker errors)
-                    except Exception as exc:  # A worker raised an unexpected exception
-                        with log_lock:  # Serialize the error log line
-                            logging.error(
-                                "Package %s import generated an exception: %s", package_info[0], exc
-                            )  # Log the worker failure
+            self._import_external_dependencies(external_packages, required, skip_deps, log_lock, max_workers)  # Pool
 
     def initialize_all_imports(
         self,
@@ -23161,15 +23152,19 @@ def _initialize_deferred_imports() -> None:  # noqa: C901, PLR0912
     logging.debug("_initialize_deferred_imports: complete")  # Log exit
 
 
-def _build_argument_parser() -> argparse.ArgumentParser:
-    """Build and return the CLI argument parser for MistHelper with all supported flags."""
-    logging.debug("_build_argument_parser: building argument parser")  # Log before parser creation
-    parser = argparse.ArgumentParser(description="MistHelper CLI Interface")  # Create base parser with description
+def _add_target_selection_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the org/menu/site/device/port target-selection flags on the parser."""
+    logging.debug("_add_target_selection_arguments: registering target-selection flags")  # Log before adding
     parser.add_argument("-O", "--org", help="Organization ID")  # Short -O flag maps to --org for quick use
     parser.add_argument("-M", "--menu", help="Menu option number to execute")  # Short -M for non-interactive dispatch
     parser.add_argument("-S", "--site", help="Human-readable site name")  # Site name that gets resolved to site_id
     parser.add_argument("-D", "--device", help="Human-readable device name")  # Device name resolved to device_id
     parser.add_argument("-P", "--port", help="Port ID")  # Port identifier passed directly to menu functions
+
+
+def _add_execution_mode_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the debug/delay/fast/skip-deps execution-mode flags on the parser."""
+    logging.debug("_add_execution_mode_arguments: registering execution-mode flags")  # Log before adding
     parser.add_argument(
         "--debug", action="store_true", help="Enable debug output (includes detailed table data in logs)"
     )  # Debug mode flag  # noqa: E501
@@ -23182,6 +23177,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-deps", action="store_true", help="Skip dependency check on startup for faster script initialization"
     )  # Skip dep check  # noqa: E501
+
+
+def _add_output_format_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the output-format and systematic-test flags on the parser."""
+    logging.debug("_add_output_format_arguments: registering output-format and test flags")  # Log before adding
     parser.add_argument(
         "--output-format",
         choices=["csv", "sqlite"],
@@ -23198,6 +23198,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run systematic test of read-only menu options requiring interactive site/device/client selection (excludes destructive operations)",  # noqa: E501
     )
+
+
+def _add_safety_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the dry-run/address-check/SSL/no-env safety flags on the parser."""
+    logging.debug("_add_safety_arguments: registering safety and validation flags")  # Log before adding
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -23218,6 +23223,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable .env file loading for SSH operations (require explicit command line parameters)",  # SSH env override  # noqa: E501
     )
+
+
+def _add_interface_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register the TUI/login/web-portal/standalone interface flags on the parser."""
+    logging.debug("_add_interface_arguments: registering interface and auth flags")  # Log before adding
     parser.add_argument(
         "--tui",
         action="store_true",
@@ -23238,6 +23248,17 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Force standalone/CSV-only mode, disabling ArangoDB and Redis connections",  # Force CSV-only mode
     )
+
+
+def _build_argument_parser() -> argparse.ArgumentParser:
+    """Build and return the CLI argument parser for MistHelper with all supported flags."""
+    logging.debug("_build_argument_parser: building argument parser")  # Log before parser creation
+    parser = argparse.ArgumentParser(description="MistHelper CLI Interface")  # Create base parser with description
+    _add_target_selection_arguments(parser)  # Register org/menu/site/device/port selection flags
+    _add_execution_mode_arguments(parser)  # Register debug/delay/fast/skip-deps execution-mode flags
+    _add_output_format_arguments(parser)  # Register output-format and systematic-test flags
+    _add_safety_arguments(parser)  # Register dry-run/address-check/SSL/no-env safety flags
+    _add_interface_arguments(parser)  # Register TUI/login/web-portal/standalone interface flags
     logging.debug("_build_argument_parser: parser ready with all arguments configured")  # Log completion
     return parser  # Return parser for caller to call parse_args() on
 

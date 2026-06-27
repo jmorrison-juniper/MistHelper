@@ -7,15 +7,15 @@
 
 ## Problem / Goal
 
-`MistHelper.py` carries **84 High-severity structural violations** against the project
-5-Item Rule (started at 94; 10 already cleared as a side effect of the Low-phase work):
+`MistHelper.py` carries **50 High-severity structural violations** against the project
+5-Item Rule (fresh baseline 2026-06-27; was 94 — prior waves landed):
 
-- `STRUCT-COMPLEXITY` — 41 functions at cyclomatic complexity **11–20** (target <= 5)
-- `STRUCT-LENGTH` — 34 functions far over 25 lines (up to 77)
-- `STRUCT-PARAMS` — 9 functions with **6–8 parameters** (limit 5)
+- `STRUCT-COMPLEXITY` — 28 functions at cyclomatic complexity **11–17** (target <= 5)
+- `STRUCT-LENGTH` — 22 functions far over 60 lines (up to 198)
+- `STRUCT-PARAMS` — **0** (closed out by #431 dataclass-param extraction)
 
-Top hotspots: `import_module_safely`, `insight_metrics`, `gateway_device_configs`,
-`detect_msp_privileges`, `devices_with_site_info` (CC 18–20). Goal: reduce every
+Top hotspots: `synthetic_tests`, `select_client_mac`, `build_create_table_sql`,
+`_run_interactive_mode` (CC 17), `msp`, `anomaly_events` (CC 16). Goal: reduce every
 High-severity STRUCT violation in `MistHelper.py` to **zero** through genuine decomposition
 — extracting cohesive logic into well-named helper methods on the owning class — with
 **no behavior change**.
