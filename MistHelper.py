@@ -16282,96 +16282,120 @@ class CLIShellManager:  # CLI shell over WebSocket.
             print(f"! Failed to create shell session: {exception}")  # Tell the user.
             return None  # Return None.
 
-    @staticmethod
-    def _run_interactive(shell_url: str, debug: bool = False) -> None:  # noqa: C901, PLR0915
-        """
-        Runs an interactive WebSocket shell session.
+    _SHELL_KEYMAP = {  # Key-name -> escape-sequence remap table for the interactive shell.
+        "enter": "\n",
+        "space": " ",
+        "tab": "\t",
+        "up": "\x00\x1b[A",
+        "down": "\x00\x1b[B",
+        "left": "\x00\x1b[D",
+        "right": "\x00\x1b[C",
+        "backspace": "\x08",
+    }
 
-        Args:
-            shell_url: The WebSocket URL for the shell session
-            debug: Enable debug mode for WebSocket tracing
-        """
-        if not _has_pyte or pyte is None:  # pyte missing.
+    @staticmethod
+    def _shell_resize_terminal(ws: Any, debug: bool) -> None:
+        """Send the current local terminal dimensions to the remote PTY."""
+        cols, rows = shutil.get_terminal_size()  # Read terminal size.
+        resize_msg = json.dumps({"resize": {"width": cols, "height": rows}})  # Build the resize msg.
+        if debug:  # Verbose troubleshooting output is enabled.
+            print(f"[DEBUG] Sending resize: {resize_msg}")  # Show the terminal-resize control message being sent.
+        ws.send(resize_msg)  # Tell the remote PTY about the new terminal dimensions.
+
+    @staticmethod
+    def _shell_render_screen(stream: Any, screen: Any, data: str) -> None:
+        """Feed a text frame into the pyte emulator and redraw only the rows it marks changed."""
+        stream.feed(data)  # Feed the bytes into the terminal emulator (pyte).
+        for row_index in sorted(screen.dirty):  # Redraw only the rows the emulator marked changed.
+            sys.stdout.write(f"\x1b[{row_index + 1};1H")  # Move the cursor to the start of that row.
+            sys.stdout.write(screen.display[row_index] + "\x1b[K")  # Write the row text and clear to end of line.
+        sys.stdout.flush()  # Flush so the terminal updates immediately.
+        screen.dirty.clear()  # Reset the dirty set now that the screen is current.
+
+    @staticmethod
+    def _shell_decode_frame(data: Any, debug: bool) -> str | None:
+        """Decode one received WebSocket frame to renderable text, or None when it is empty/non-text."""
+        if isinstance(data, bytes):  # Binary frames need decoding to text.
+            data = data.decode("utf-8", errors="ignore")  # Decode as UTF-8, dropping invalid bytes.
+        if debug:  # Verbose troubleshooting output is enabled.
+            print(f"[DEBUG] Raw recv: {repr(data)}")  # Show the raw received payload.
+        if data and isinstance(data, str):  # We have a non-empty text frame to render.
+            return data  # Renderable text.
+        return None  # Nothing to render for this frame.
+
+    @staticmethod
+    def _shell_receive_loop(ws: Any, stream: Any, screen: Any, debug: bool) -> None:
+        """Read WebSocket frames until the connection drops, rendering each into the terminal emulator."""
+        while ws.connected:  # Keep reading while the WebSocket stays open.
+            try:  # A read error or close ends the receive loop.
+                data = ws.recv()  # Block for the next chunk of terminal output.
+                text = CLIShellManager._shell_decode_frame(data, debug)  # Decode to renderable text (or None).
+                if text is not None:  # We have a non-empty text frame to render.
+                    CLIShellManager._shell_render_screen(stream, screen, text)  # Render it to the screen.
+            except Exception as exception:  # The socket closed or a read error occurred.
+                print(f"\n## Connection lost: {exception} ##")  # Notify the user the session dropped.
+                return  # Exit the receive loop.
+
+    @staticmethod
+    def _shell_handle_exit_key(ws: Any) -> None:
+        """Handle the '~' exit key by closing the WebSocket socket."""
+        print("\n## Exit from shell ##")  # Tell the user.
+        if ws.sock is not None:  # Socket present.
+            ws.sock.shutdown(2)  # Shut down the socket.
+            ws.sock.close()  # Close the socket.
+
+    @staticmethod
+    def _shell_send_key(ws: Any, debug: bool, key: str) -> None:
+        """Map and send one keystroke to the remote PTY; '~' closes the session."""
+        if not ws.connected:  # Socket already closed; nothing to send.
+            return  # Drop the keystroke.
+        if key == "~":  # Exit key.
+            CLIShellManager._shell_handle_exit_key(ws)  # Close the socket (issue #431: no obsolete stop_listening).
+            return  # Done after exit.
+        mapped_key = CLIShellManager._SHELL_KEYMAP.get(key, key)  # Map the key.
+        data = f"\00{mapped_key}"  # Frame the data.
+        data_byte = bytes(map(ord, data))  # Immutable bytes: send_binary(payload: bytes) requires bytes.
+        if debug:  # Debug mode.
+            print(f"[DEBUG] Sending: {repr(data)}")  # Trace the send.
+        try:  # The socket may drop mid-send.
+            ws.send_binary(data_byte)  # Send the bytes.
+        except Exception as exception:  # Send failed.
+            print(f"\n## Send failed: {exception} ##")  # Tell the user.
+            return  # Stop after a failed send.
+
+    @staticmethod
+    @staticmethod
+    def _shell_start_receiver(ws: Any, stream: Any, screen: Any, debug: bool) -> None:
+        """Start the background thread that reads WebSocket output and renders it into the terminal."""
+        threading.Thread(
+            target=functools.partial(CLIShellManager._shell_receive_loop, ws, stream, screen, debug)
+        ).start()  # functools.partial binds the shared session state to the thread target.
+
+    @staticmethod
+    def _run_interactive(shell_url: str, debug: bool = False) -> None:
+        """Run an interactive WebSocket shell session against shell_url (debug enables WebSocket tracing)."""
+        if not _has_pyte or pyte is None:  # pyte (terminal emulation) is required.
             print("! Terminal emulation requires pyte. Install: pip install pyte")  # Tell the user to install.
             return  # Abort.
-
         if debug:  # Debug mode.
             websocket.enableTrace(True)  # Trace the WebSocket.
-
         print(" Connecting to WebSocket shell...")  # Tell the user.
         ws = websocket.create_connection(shell_url)  # Open the WebSocket.
         print(" Connected.")  # Tell the user.
-
         screen = pyte.Screen(80, 40)  # Virtual screen.
         stream = pyte.Stream(screen)  # Terminal stream.
-
-        def resize_terminal():  # Resize the terminal.
-            cols, rows = shutil.get_terminal_size()  # Read terminal size.
-            resize_msg = json.dumps({"resize": {"width": cols, "height": rows}})  # Build the resize msg.
-            if debug:  # Verbose troubleshooting output is enabled
-                print(f"[DEBUG] Sending resize: {resize_msg}")  # Show the terminal-resize control message being sent
-            ws.send(resize_msg)  # Tell the remote PTY about the new terminal dimensions
-
-        def receive_websocket_data():  # Receive WebSocket data.
-            while ws.connected:  # Keep reading while the WebSocket stays open
-                try:
-                    data = ws.recv()  # Block for the next chunk of terminal output
-                    if isinstance(data, bytes):  # Binary frames need decoding to text
-                        data = data.decode("utf-8", errors="ignore")  # Decode as UTF-8, dropping invalid bytes
-                    if debug:  # Verbose troubleshooting output is enabled
-                        print(f"[DEBUG] Raw recv: {repr(data)}")  # Show the raw received payload
-                    if data and isinstance(data, str):  # We have a non-empty text frame to render
-                        stream.feed(data)  # Feed the bytes into the terminal emulator (pyte)
-                        for row_index in sorted(screen.dirty):  # Redraw only the rows the emulator marked changed
-                            sys.stdout.write(f"\x1b[{row_index + 1};1H")  # Move the cursor to the start of that row
-                            sys.stdout.write(
-                                screen.display[row_index] + "\x1b[K"
-                            )  # Write the row text and clear to end of line
-                        sys.stdout.flush()  # Flush so the terminal updates immediately
-                        screen.dirty.clear()  # Reset the dirty set now that the screen is current
-                except Exception as exception:  # The socket closed or a read error occurred
-                    print(f"\n## Connection lost: {exception} ##")  # Notify the user the session dropped
-                    return  # Exit the receive loop
-
-        def send_keyboard_input(key):  # Send keyboard input.
-            if ws.connected:  # Socket connected.
-                keymap = {  # Key remap table.
-                    "enter": "\n",
-                    "space": " ",
-                    "tab": "\t",
-                    "up": "\x00\x1b[A",
-                    "down": "\x00\x1b[B",
-                    "left": "\x00\x1b[D",
-                    "right": "\x00\x1b[C",
-                    "backspace": "\x08",
-                }
-                if key == "~":  # Exit key.
-                    print("\n## Exit from shell ##")  # Tell the user.
-                    if ws.sock is not None:  # Socket present.
-                        ws.sock.shutdown(2)  # Shut down the socket.
-                        ws.sock.close()  # Close the socket.
-                    return  # Issue #431: removed obsolete stop_listening() call (was a no-op stub)
-                mapped_key = keymap.get(key, key)  # Map the key.
-                data = f"\00{mapped_key}"  # Frame the data.
-                data_byte = bytes(map(ord, data))  # Immutable bytes: send_binary(payload: bytes) requires bytes.
-                if debug:  # Debug mode.
-                    print(f"[DEBUG] Sending: {repr(data)}")  # Trace the send.
-                try:
-                    ws.send_binary(data_byte)  # Send the bytes.
-                except Exception as exception:  # Send failed.
-                    print(f"\n## Send failed: {exception} ##")  # Tell the user.
-                    return  # Return.
-
-        resize_terminal()  # type: ignore[no-untyped-call]
-        threading.Thread(target=receive_websocket_data).start()  # Start the receiver thread.
-
-        # Wake up Juniper SSR prompt
-        time.sleep(1)  # Wait for connect.
+        CLIShellManager._shell_resize_terminal(ws, debug)  # Send initial terminal dimensions to the remote PTY.
+        CLIShellManager._shell_start_receiver(ws, stream, screen, debug)  # Start the background receiver thread.
+        time.sleep(1)  # Wait for connect before waking the prompt.
         ws.send_binary(bytes(map(ord, "\00\n\n")))  # Send a wakeup; bytes (not bytearray) matches send_binary.
         if debug:  # Debug mode.
             print("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # Trace the wakeup.
-
-        listen_keyboard(on_release=send_keyboard_input, delay_second_char=0, delay_other_chars=0, lower=False)  # type: ignore[no-untyped-call]
+        listen_keyboard(  # type: ignore[no-untyped-call]  # Block on keyboard input, forwarding each key to the PTY.
+            on_release=functools.partial(CLIShellManager._shell_send_key, ws, debug),
+            delay_second_char=0,
+            delay_other_chars=0,
+            lower=False,
+        )
 
 
 # ============================================================================
