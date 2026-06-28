@@ -864,6 +864,53 @@ class GlobalImportManager:
     - Performance optimization through early imports
     """
 
+    _REQUIRED_PACKAGES: dict[str, str | None] = {  # Class-level required spec map (data, not behavior)
+        # Core API and networking
+        "mistapi": "mistapi>=0.63.1",  # Official Mist API SDK floor aligned with latest validated upstream release
+        "requests": "requests>=2.28.0",  # HTTP client used for API calls
+        "websocket-client": "websocket-client>=1.8.0",  # WebSocket client minimum aligned to modern mistapi needs
+        # CLI and user interface
+        "prettytable": "prettytable>=3.5.0",  # ASCII table rendering for menus/reports
+        "tqdm": "tqdm>=4.64.0",  # Progress bars for long-running operations
+        # Data processing
+        "numpy": "numpy>=1.24.0",  # Numerical arrays for analytics
+        "python-dotenv": "python-dotenv>=1.0.0",  # Loads configuration from .env
+        # SSH and direct device connections
+        "paramiko": "paramiko>=2.9.0",  # More compatible version for SSH
+        # Standard library modules (no installation needed)
+        "argparse": None,  # Built-in
+        "csv": None,  # Built-in
+        "json": None,  # Built-in
+        "sqlite3": None,  # Built-in
+        "time": None,  # Built-in
+        "datetime": None,  # Built-in
+        "threading": None,  # Built-in
+        "concurrent.futures": None,  # Built-in
+        "inspect": None,  # Built-in
+        "http.client": None,  # Built-in
+        "re": None,  # Built-in
+        "difflib": None,  # Built-in
+        "unicodedata": None,  # Built-in
+        "collections": None,  # Built-in
+        "ast": None,  # Built-in
+        "math": None,  # Built-in
+        "shutil": None,  # Built-in
+        "glob": None,  # Built-in
+        "traceback": None,  # Built-in
+    }
+
+    _OPTIONAL_PACKAGES_RAW: dict[str, str | None] = {  # Class-level optional spec map (data, not behavior)
+        "sshkeyboard": "sshkeyboard>=2.3.0",  # Keyboard capture (legacy/optional)
+        "pyte": "pyte>=0.8.0",  # Terminal emulation for parsing device output
+        "usaddress-scourgify": "usaddress-scourgify>=0.6.0",  # US address normalization
+        "rapidfuzz": "rapidfuzz>=3.8.0",  # Fast fuzzy string matching
+        "urllib3": "urllib3>=1.26.0",  # Low-level HTTP (SSL warning control)
+        "plotly": "plotly>=5.14.0",  # Interactive charts for reports
+        "dash": "dash>=2.9.0",  # Web dashboards (maps viewer)
+        "kaleido": "kaleido>=0.2.1",  # Static image export for plotly charts
+        "matplotlib": "matplotlib>=3.5.0",  # Static plotting for analytics
+    }
+
     def __init__(self):  # Read config from env and prepare dependency-tracking state
         """Initialize the import manager with configuration from environment variables."""
         self._load_upgrade_configuration()  # Read env-driven upgrade/UV/CSV freshness settings
@@ -941,119 +988,79 @@ class GlobalImportManager:
 
     def _setup_logging(self):  # Build console+file handlers with env-driven levels
         """Setup basic logging configuration with environment-specific levels."""
-        # Get console and file log levels from environment (default to INFO if not set)
         console_log_level = int(os.environ.get("CONSOLE_LOG_LEVEL", logging.INFO))  # Console verbosity (default INFO)
         file_log_level = int(os.environ.get("LOGGING_LOG_LEVEL", logging.INFO))  # Log-file verbosity (default INFO)
-
-        # Create console handler with environment-specified level
-        console_handler = logging.StreamHandler()  # Handler that writes to stdout/stderr
-        console_handler.setLevel(console_log_level)  # Apply the console verbosity threshold
-        console_formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s"
-        )  # Timestamped log line format
-        console_handler.setFormatter(console_formatter)  # Attach the format to the console handler
-
-        # Create file handler with environment-specified level
-        # Use data directory for log files to ensure write permissions in container
-        log_file_path = os.path.join("data", "script.log")  # Log path under data/ (writable in the container)
-        os.makedirs(
-            "data", exist_ok=True
-        )  # Ensure data directory exists  # Create data/ if missing (no error if present)
-        file_handler = logging.FileHandler(log_file_path)  # Handler that writes to script.log
-        file_handler.setLevel(file_log_level)  # Apply the file verbosity threshold
-        file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")  # Same timestamped format
-        file_handler.setFormatter(file_formatter)  # Attach the format to the file handler
-
-        # Configure root logger to capture all messages, handlers will filter
+        console_handler = self._build_console_log_handler(console_log_level)  # Build the console handler at env level
+        file_handler = self._build_file_log_handler(file_log_level)  # Build the file handler (creates data/ if missing)
         logging.basicConfig(  # Wire up the root logger with both handlers
             level=logging.DEBUG,  # Root captures everything; handlers filter by their own levels
             format="%(asctime)s - %(levelname)s - %(message)s",  # Default format (handlers override with their own)
             handlers=[file_handler, console_handler],  # Register both the file and console handlers
-            force=True,  # Override any existing configuration  # Replace the earlier module-import basicConfig
+            force=True,  # Replace the earlier module-import basicConfig
         )
 
-    def _define_package_requirements(self):  # Populate the required/optional package dictionaries
-        """Define all required and optional package dependencies."""
-        # Required packages (core functionality)
-        self.required_packages = {  # Map of package name -> pip spec (None means stdlib, no install needed)
-            # Core API and networking
-            "mistapi": "mistapi>=0.63.1",  # Official Mist API SDK floor aligned with latest validated upstream release
-            "requests": "requests>=2.28.0",  # HTTP client used for API calls
-            "websocket-client": "websocket-client>=1.8.0",  # WebSocket client minimum aligned to modern mistapi needs
-            # CLI and user interface
-            "prettytable": "prettytable>=3.5.0",  # ASCII table rendering for menus/reports
-            "tqdm": "tqdm>=4.64.0",  # Progress bars for long-running operations
-            # Data processing
-            "numpy": "numpy>=1.24.0",  # Numerical arrays for analytics
-            "python-dotenv": "python-dotenv>=1.0.0",  # Loads configuration from .env
-            # SSH and direct device connections
-            "paramiko": "paramiko>=2.9.0",  # More compatible version for SSH
-            # Standard library modules (no installation needed)
-            "argparse": None,  # Built-in
-            "csv": None,  # Built-in
-            "json": None,  # Built-in
-            "sqlite3": None,  # Built-in
-            "time": None,  # Built-in
-            "datetime": None,  # Built-in
-            "threading": None,  # Built-in
-            "concurrent.futures": None,  # Built-in
-            "inspect": None,  # Built-in
-            "http.client": None,  # Built-in
-            "re": None,  # Built-in
-            "difflib": None,  # Built-in
-            "unicodedata": None,  # Built-in
-            "collections": None,  # Built-in
-            "ast": None,  # Built-in
-            "math": None,  # Built-in
-            "shutil": None,  # Built-in
-            "glob": None,  # Built-in
-            "traceback": None,  # Built-in
-        }
+    def _build_console_log_handler(self, level: int) -> logging.StreamHandler:  # Console handler factory
+        """Build a stdout/stderr console log handler at the requested level."""
+        logging.debug("_build_console_log_handler: creating console handler at level %s", level)  # Log before build
+        console_handler = logging.StreamHandler()  # Handler that writes to stdout/stderr
+        console_handler.setLevel(level)  # Apply the console verbosity threshold
+        console_formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(message)s"
+        )  # Timestamped log line format
+        console_handler.setFormatter(console_formatter)  # Attach the format to the console handler
+        logging.debug("_build_console_log_handler: console handler ready")  # Log after build
+        return console_handler  # Caller wires this into basicConfig
 
-        # Optional packages (enhanced functionality)
-        optional_packages_raw = {  # Map of optional package name -> pip spec (enhances but isn't required)
-            "sshkeyboard": "sshkeyboard>=2.3.0",  # Keyboard capture (legacy/optional)
-            "pyte": "pyte>=0.8.0",  # Terminal emulation for parsing device output
-            "usaddress-scourgify": "usaddress-scourgify>=0.6.0",  # US address normalization
-            "rapidfuzz": "rapidfuzz>=3.8.0",  # Fast fuzzy string matching
-            "urllib3": "urllib3>=1.26.0",  # Low-level HTTP (SSL warning control)
-            "plotly": "plotly>=5.14.0",  # Interactive charts for reports
-            "dash": "dash>=2.9.0",  # Web dashboards (maps viewer)
-            "kaleido": "kaleido>=0.2.1",  # Static image export for plotly charts
-            "matplotlib": "matplotlib>=3.5.0",  # Static plotting for analytics
+    def _build_file_log_handler(self, level: int) -> logging.FileHandler:  # File handler factory (data/script.log)
+        """Build a data/script.log file handler at the requested level."""
+        logging.debug("_build_file_log_handler: creating file handler at level %s", level)  # Log before build
+        log_file_path = os.path.join("data", "script.log")  # Log path under data/ (writable in the container)
+        os.makedirs("data", exist_ok=True)  # Create data/ if missing (no error if present)
+        file_handler = logging.FileHandler(log_file_path)  # Handler that writes to script.log
+        file_handler.setLevel(level)  # Apply the file verbosity threshold
+        file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")  # Same timestamped format
+        file_handler.setFormatter(file_formatter)  # Attach the format to the file handler
+        logging.debug("_build_file_log_handler: file handler ready at %s", log_file_path)  # Log after build
+        return file_handler  # Caller wires this into basicConfig
+
+    def _define_package_requirements(self):  # Populate the required/optional package dictionaries
+        """Define all required and optional package dependencies from class constants."""
+        logging.debug("_define_package_requirements: loading spec maps from class constants")  # Log before copy
+        self.required_packages = dict(self._REQUIRED_PACKAGES)  # Copy class-level required spec map (defensive copy)
+        self.optional_packages = {  # Filter out any None specs defensively (platform-incompatible)
+            k: v for k, v in self._OPTIONAL_PACKAGES_RAW.items() if v is not None
         }
-        # Filter out None values (platform-incompatible packages)
-        self.optional_packages = {
-            k: v for k, v in optional_packages_raw.items() if v is not None
-        }  # Drop any None specs defensively
+        logging.debug(
+            "_define_package_requirements: %d required, %d optional packages loaded",
+            len(self.required_packages),
+            len(self.optional_packages),
+        )  # Log after copy with counts
 
     def _check_uv_installation(self) -> bool:  # Detect whether the UV package manager is usable (result cached)
         """Check if UV package manager is installed and accessible (cached)."""
-        # If UV checking is disabled, return False immediately
         if self.disable_uv_check:  # Operator/container opted out of UV checks
             return False  # Treat UV as unavailable
-
-        # Return cached result if already checked
         if self._uv_checked:  # We already probed UV earlier this run
             return self._uv_available  # Reuse the cached answer (avoids repeated subprocess calls)
+        self._uv_available = self._probe_uv_binary()  # Probe via subprocess and cache the answer
+        self._uv_checked = True  # Mark that we've probed UV so we don't repeat it
+        return self._uv_available  # Return the (now cached) availability
 
+    def _probe_uv_binary(self) -> bool:  # Run 'uv --version' to detect UV availability
+        """Probe the UV binary by running 'uv --version' and log the outcome."""
+        logging.debug("_probe_uv_binary: probing UV binary via subprocess")  # Log before probe
         try:  # Probing UV may fail if it's not installed
             result = subprocess.run(
                 ["uv", "--version"], capture_output=True, text=True, timeout=10
             )  # nosec B603 B607  # Run 'uv --version'
             if result.returncode == 0:  # UV ran successfully
-                logging.info("UV package manager found: %s", result.stdout.strip())  # Log the detected UV version
-                self._uv_available = True  # Cache that UV is usable
-            else:  # UV exists but returned an error
-                logging.warning("UV package manager not found or not working properly")  # Note the problem
-                self._uv_available = False  # Cache that UV is not usable
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:  # UV missing or hung
+                logging.info("UV package manager found: %s", result.stdout.strip())  # Log detected version
+                return True  # UV is usable
+            logging.warning("UV package manager not found or not working properly")  # Note the problem
+            return False  # UV is not usable
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:  # Missing/hung
             logging.warning("UV package manager check failed: %s", e)  # Log why the probe failed
-            self._uv_available = False  # Cache that UV is not usable
-
-        # Cache the result
-        self._uv_checked = True  # Mark that we've probed UV so we don't repeat it
-        return self._uv_available  # Return the (now cached) availability
+            return False  # UV is not usable
 
     def _install_uv(self) -> bool:  # Attempt to install UV via pip when it's missing
         """Install UV package manager if not present."""
@@ -1305,33 +1312,29 @@ class GlobalImportManager:
             "ConcurrentFutures", (), {"ThreadPoolExecutor": ThreadPoolExecutor, "as_completed": as_completed}
         )()  # Bundle them on a tiny namespace object
 
+    class _DateTimeHandler:  # Adapter exposing both class-like and module-like datetime access
+        """Adapter exposing both class-like and module-like datetime access."""
+
+        def __init__(self):
+            from datetime import datetime, timedelta  # Local import keeps handler self-contained
+
+            self._datetime_cls = datetime  # Capture class for __call__ forwarding
+            self.now = datetime.now  # Expose datetime.now() at the top level
+            self.fromtimestamp = datetime.fromtimestamp  # Expose epoch->datetime conversion
+            self.fromisoformat = datetime.fromisoformat  # Expose ISO-8601 string parsing
+            self.strptime = datetime.strptime  # Expose format-string parsing
+            self.utcnow = datetime.utcnow  # Expose UTC now() helper
+            self.datetime = datetime  # Allow handler.datetime to reach the real class
+            self.timezone = timezone  # Provide timezone for tz-aware construction
+            self.timedelta = timedelta  # Provide timedelta for date arithmetic
+
+        def __call__(self, *args, **kwargs):
+            return self._datetime_cls(*args, **kwargs)  # Forward calls to the datetime constructor
+
     def _import_datetime(self):
         """Special handler for datetime import."""
-        # Import the actual datetime module for module-level access
-        from datetime import datetime, timedelta  # Pull in the datetime class and timedelta helper
-
-        # The code expects 'datetime' to refer to the datetime class, not the module
-        # But we also need module-level access. Create a special object that behaves like both.
-        class DateTimeHandler:  # Adapter exposing both class-like and module-like datetime access
-            def __init__(self):
-                # Make this object callable like datetime class
-                self.now = datetime.now  # Expose datetime.now() at the top level
-                self.fromtimestamp = datetime.fromtimestamp  # Expose epoch->datetime conversion
-                self.fromisoformat = datetime.fromisoformat  # Expose ISO-8601 string parsing
-                self.strptime = datetime.strptime  # Expose format-string parsing
-                self.utcnow = datetime.utcnow  # Expose UTC now() helper
-                # Add module attributes
-                self.datetime = datetime  # Allow handler.datetime to reach the real class
-                self.timezone = timezone  # Provide timezone for tz-aware construction
-                self.timedelta = timedelta  # Provide timedelta for date arithmetic
-                # Add module for UTC access
-                self.timezone = timezone  # (Re)bind timezone for clarity/UTC access
-
-            def __call__(self, *args, **kwargs):
-                # Allow calling like datetime()
-                return datetime(*args, **kwargs)  # Forward calls straight to the datetime constructor
-
-        return DateTimeHandler()  # type: ignore[no-untyped-call]  # Hand back the dual-purpose adapter instance
+        logging.debug("_import_datetime: returning _DateTimeHandler adapter")  # Log before construction
+        return self._DateTimeHandler()  # type: ignore[no-untyped-call]  # Hand back the dual-purpose adapter
 
     def _import_tqdm(self):
         """Special handler for tqdm import to ensure proper functionality."""
@@ -1518,25 +1521,10 @@ class GlobalImportManager:
         skip_deps: bool = False,
         skip_upgrade: bool = True,
     ) -> Any | None:
-        """
-        Safely import a module with automatic installation and upgrade checking if needed.
-
-        Args:
-            module_name: Name of the module to import
-            package_spec: Package specification for installation (e.g., 'requests>=2.28.0')
-            required: Whether this is a required dependency
-            skip_deps: Whether to skip dependency checking and installation
-            skip_upgrade: Whether to skip upgrade checking (default True for faster imports)
-
-        Returns:
-            The imported module or None if import failed
-        """
+        """Import a module, install on ImportError, and opportunistically upgrade."""
         try:  # First import attempt before any install fallback.
             module = self._resolve_and_import(module_name)  # Import via special handler or real import name.
-            self.imports[module_name] = module  # Cache the imported module for later global assignment.
-            logging.debug("Successfully imported %s", module_name)  # Record the successful import.
-            if self._should_upgrade_package(package_spec, skip_deps, skip_upgrade):  # Opportunistic upgrade gate.
-                self._check_and_upgrade_package(module_name, package_spec)  # type: ignore[arg-type]  # Upgrade package.
+            self._record_successful_import(module, module_name, package_spec, skip_deps, skip_upgrade)  # Cache+upgrade
             return module  # Hand the imported module back to the caller.
         except ImportError as e:  # The module is not installed or failed to load.
             logging.warning("Failed to import %s: %s", module_name, e)  # Note the import failure.
@@ -1545,6 +1533,21 @@ class GlobalImportManager:
                 return module  # Return the recovered module.
             self._record_import_failure(module_name, required)  # Record terminal failure (logs required/optional).
             return None  # Signal to the caller that the import was unavailable.
+
+    def _record_successful_import(
+        self,
+        module: Any,
+        module_name: str,
+        package_spec: str | None,
+        skip_deps: bool,
+        skip_upgrade: bool,
+    ) -> None:
+        """Cache an imported module and run the opportunistic upgrade check."""
+        logging.debug("_record_successful_import: caching '%s' and checking upgrade", module_name)  # Log before
+        self.imports[module_name] = module  # Cache the imported module for later global assignment.
+        logging.debug("Successfully imported %s", module_name)  # Record the successful import.
+        if self._should_upgrade_package(package_spec, skip_deps, skip_upgrade):  # Opportunistic upgrade gate.
+            self._check_and_upgrade_package(module_name, package_spec)  # type: ignore[arg-type]  # Upgrade package.
 
     def _partition_dependencies(self, packages_dict):
         """Split a package map into (builtin, external) dicts by whether a spec is present."""
@@ -1792,41 +1795,42 @@ class GlobalImportManager:
 
     def _import_special_modules(self):
         """Import special modules with custom handling."""
-        # Import mistapi with its sub-modules only if base mistapi is available
-        if "mistapi" in self.imports:  # Only wire sub-modules if the base SDK imported
-            try:
-                mistapi = self.imports["mistapi"]  # Fetch the cached mistapi module object
-                # Import commonly used mistapi modules without forcing sub-module structure
-                try:
-                    # These imports may not be available in all mistapi versions
-                    # Import them dynamically to avoid hard dependencies on specific structure
-                    globals()["mistapi"] = mistapi  # Expose mistapi at module global scope
-                    # Also ensure it's in the module's global namespace
-                    import sys  # Local import to reach this module's namespace object
+        logging.debug("_import_special_modules: wiring mistapi + websocket-client")  # Log before wiring
+        self._wire_mistapi_module()  # Bind mistapi to module globals if it loaded
+        self._log_websocket_availability()  # Log whether the websocket client is usable
 
-                    sys.modules[__name__].mistapi = mistapi  # type: ignore[attr-defined]  # Bind mistapi as a module attribute
-                    logging.debug("Successfully imported mistapi main module")  # Confirm the SDK is wired up
-                    # Verify the api module is accessible
-                    if hasattr(mistapi, "api") and hasattr(
-                        mistapi.api, "v1"
-                    ):  # Confirm the expected API surface exists
-                        logging.debug("mistapi.api.v1 module structure confirmed")  # Structure looks correct
-                    else:  # The expected nested structure is missing
-                        logging.warning(
-                            "mistapi.api.v1 structure not found - this may cause API call failures"
-                        )  # Warn about likely failures
-                except Exception as sub_e:  # Sub-module wiring hit an unexpected issue
-                    logging.debug(
-                        "Note: mistapi sub-modules handled dynamically: %s", sub_e
-                    )  # Non-fatal; handled at call sites
-            except Exception as e:  # Failed to even access the cached mistapi object
-                logging.warning("Error accessing mistapi: %s", e)  # Warn -- API features may be unavailable
-        else:  # The base SDK never imported
+    def _wire_mistapi_module(self):
+        """Wire mistapi to module globals and confirm its API structure."""
+        if "mistapi" not in self.imports:  # The base SDK never imported
             logging.debug("mistapi not imported, skipping sub-module imports")  # Nothing to wire up
+            return  # No work to do
+        try:  # Failed to even access the cached mistapi object
+            mistapi = self.imports["mistapi"]  # Fetch the cached mistapi module object
+            try:  # Sub-module wiring hit an unexpected issue
+                globals()["mistapi"] = mistapi  # Expose mistapi at module global scope
+                import sys  # Local import to reach this module's namespace object
 
-        # Import websocket if available
+                sys.modules[__name__].mistapi = mistapi  # type: ignore[attr-defined]  # Bind to module attr
+                logging.debug("Successfully imported mistapi main module")  # Confirm SDK wired up
+                self._verify_mistapi_api_structure(mistapi)  # Run the hasattr structural check
+            except Exception as sub_e:  # Sub-module wiring hit an unexpected issue
+                logging.debug("Note: mistapi sub-modules handled dynamically: %s", sub_e)  # Non-fatal
+        except Exception as e:  # Failed to even access the cached mistapi object
+            logging.warning("Error accessing mistapi: %s", e)  # Warn -- API features may be unavailable
+
+    def _verify_mistapi_api_structure(self, mistapi):
+        """Verify mistapi.api.v1 module structure is present and log the result."""
+        if hasattr(mistapi, "api") and hasattr(mistapi.api, "v1"):  # Confirm expected nested API surface
+            logging.debug("mistapi.api.v1 module structure confirmed")  # Structure looks correct
+        else:  # The expected nested structure is missing
+            logging.warning(
+                "mistapi.api.v1 structure not found - this may cause API call failures"
+            )  # Warn about likely failures
+
+    def _log_websocket_availability(self):
+        """Log whether websocket-client successfully loaded."""
         if "websocket-client" in self.imports:  # The websocket client library loaded
-            logging.debug("websocket-client available for WebSocket operations")  # WebSocket features are enabled
+            logging.debug("websocket-client available for WebSocket operations")  # WebSocket features enabled
         else:  # The websocket client library is missing
             logging.debug(
                 "websocket-client not available - WebSocket operations will be disabled"
@@ -2007,21 +2011,22 @@ class InputUtils:
     def ensure_tqdm_available() -> bool:
         """Ensure tqdm is available and properly imported."""
         global tqdm  # Rebind the module-level tqdm if we recover a better implementation
-
-        # Check if tqdm is properly imported (not our fallback)
-        if hasattr(tqdm, "__module__") and tqdm.__module__ == "tqdm":  # The real tqdm package is already active
+        if hasattr(tqdm, "__module__") and tqdm.__module__ == "tqdm":  # Real tqdm already active
             logging.debug("tqdm is properly imported and available")  # Nothing to do
             return True  # Progress bars are functional
+        return InputUtils._try_recover_tqdm()  # Probe import_manager then direct import
 
-        # Try to get tqdm from the import manager
+    @staticmethod
+    def _try_recover_tqdm() -> bool:
+        """Try to recover tqdm from import_manager cache, then by direct import."""
+        global tqdm  # We may rebind the module global with the recovered implementation
+        logging.debug("_try_recover_tqdm: probing import_manager.imports and direct import")  # Log before probe
         tqdm_from_manager = import_manager.imports.get("tqdm")  # Issue #431: inlined get_import.
         if tqdm_from_manager:  # The manager has a usable tqdm
             tqdm = tqdm_from_manager  # Replace the fallback with the real implementation
             logging.info("Retrieved tqdm from import manager")  # Record the recovery
             return True  # Progress bars are now functional
-
-        # Try importing tqdm directly
-        try:
+        try:  # Last-resort direct import path
             from tqdm import tqdm as real_tqdm  # Last-resort direct import
 
             tqdm = real_tqdm  # Adopt the directly-imported progress bar
@@ -2033,44 +2038,17 @@ class InputUtils:
 
     @staticmethod
     def safe_input(prompt: str, default_value: str = "", allow_empty: bool = True, context: str = "unknown") -> str:
-        """
-        Safely handle user input with proper EOF and KeyboardInterrupt handling.
+        """EOF/Interrupt-safe input wrapper that returns default_value on EOF and "" on Ctrl+C.
 
-        Args:
-            prompt: The prompt message to display
-            default_value: Value to return if user provides empty input or EOF
-            allow_empty: Whether to allow empty input (only applies when default_value is not set)
-            context: Context description for logging
-
-        Returns:
-            str: User input, default_value on EOF/empty input, or empty string on interrupt
+        allow_empty: when False, blank input returns "" (the caller decides what to do).
+        context: short label used in the EOF/interrupt messages and logs.
         """
-        try:
+        try:  # Read may raise EOFError on disconnect or KeyboardInterrupt on Ctrl+C
             user_input = input(prompt).strip()  # Read a line and trim surrounding whitespace
-
-            # If user provided empty input and we have a default value, use it
-            if not user_input and default_value:  # Blank entry but a default is configured
-                logging.debug(
-                    "Empty input for %s, using default: '%s'", context, default_value
-                )  # Note the default substitution
-                return default_value  # Return the caller-supplied default
-
-            # If user provided empty input, no default, but empty is allowed
-            if not user_input and allow_empty:  # Blank entry is acceptable here
-                return user_input  # Return the empty string as-is
-
-            # If user provided empty input, no default, and empty not allowed
-            if not user_input and not allow_empty:  # Blank entry is not acceptable and no default exists
-                logging.warning(
-                    "Empty input not allowed for %s, returning empty string", context
-                )  # Warn about the rejected blank
-                return ""  # Signal an invalid/empty response to the caller
-
-            # User provided non-empty input
+            if not user_input:  # Blank input -- delegate the 3-way decision to the helper
+                return InputUtils._resolve_empty_input(default_value, allow_empty, context)  # Default/empty/reject
             return user_input  # Normal path: return the trimmed user response
-
         except EOFError:  # Stream closed (Ctrl+D, broken pipe, SSH disconnect)
-            # Handle EOF condition (Ctrl+D, broken pipe, SSH disconnection)
             print(
                 f"\n[EOF] Input stream closed during {context}. Using default value: '{default_value}'"
             )  # Inform the user
@@ -2079,10 +2057,24 @@ class InputUtils:
             )  # Log the disconnect
             return default_value  # Degrade gracefully to the default instead of crashing
         except KeyboardInterrupt:  # User pressed Ctrl+C
-            # Handle Ctrl+C
             print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")  # Acknowledge the cancellation
             logging.info("KeyboardInterrupt encountered during %s", context)  # Log the interrupt
             return ""  # Return empty to signal the caller should abort this prompt
+
+    @staticmethod
+    def _resolve_empty_input(default_value: str, allow_empty: bool, context: str) -> str:
+        """Decide what to return when safe_input received a blank line."""
+        if default_value:  # A default is configured -- substitute it
+            logging.debug(
+                "Empty input for %s, using default: '%s'", context, default_value
+            )  # Note the default substitution
+            return default_value  # Return the caller-supplied default
+        if allow_empty:  # Blank entry is acceptable here
+            return ""  # Return the empty string as-is
+        logging.warning(
+            "Empty input not allowed for %s, returning empty string", context
+        )  # Warn about the rejected blank
+        return ""  # Signal an invalid/empty response to the caller
 
 
 # ============================================================================
@@ -2293,11 +2285,10 @@ def _fetch_msp_name(msp_id: str) -> str | None:
         return None  # Default to None when the name can't be resolved
 
 
-def initialize_mist_session_interactive():
-    """Initialize Mist API session via extracted interactive session manager."""
-    global apisession, mistapi, msp_privileges, selected_msp, org_id  # These module globals are updated on login
-
-    state = {  # Snapshot current session globals into a mutable state bag for the manager
+def _snapshot_session_globals_to_state() -> dict:
+    """Snapshot the live module-level session globals into a mutable state bag."""
+    logging.debug("_snapshot_session_globals_to_state: capturing 5 module globals")  # Log before snapshot
+    return {  # Map of global name -> current value for the LoginOrchestrator to mutate
         "apisession": apisession,  # Current API session object (may be None)
         "mistapi": mistapi,  # The mistapi SDK module reference
         "msp_privileges": msp_privileges,  # Any previously detected MSP grants
@@ -2305,7 +2296,24 @@ def initialize_mist_session_interactive():
         "org_id": org_id,  # Currently selected org ID, if any
     }
 
-    def _detect_msp_for_login():  # DI adapter binding MSP detection to the freshly-authenticated session
+
+def _restore_session_globals_from_state(state: dict) -> None:
+    """Restore module-level session globals from a state bag mutated by the orchestrator."""
+    global apisession, mistapi, msp_privileges, selected_msp, org_id  # Globals we may rebind
+    logging.debug("_restore_session_globals_from_state: restoring 5 module globals")  # Log before restore
+    apisession = state.get("apisession")  # Copy the (possibly new) session back to the global
+    mistapi = state.get("mistapi")  # Copy the SDK reference back to the global
+    msp_privileges = state.get("msp_privileges", msp_privileges)  # Copy detected MSP grants back
+    selected_msp = state.get("selected_msp", selected_msp)  # Copy the selected MSP back
+    org_id = state.get("org_id", org_id)  # Copy the selected org ID back
+
+
+def initialize_mist_session_interactive():
+    """Initialize Mist API session via extracted interactive session manager."""
+    global apisession, mistapi, msp_privileges, selected_msp, org_id  # These globals are updated on login
+    state = _snapshot_session_globals_to_state()  # Capture current globals into a mutable bag
+
+    def _detect_msp_for_login():  # DI adapter binding MSP detection to freshly-authenticated session
         return detect_msp_privileges(
             state.get("apisession")
         )  # Orchestrator stores the new session in state before this runs
@@ -2316,12 +2324,7 @@ def initialize_mist_session_interactive():
         detect_msp_privileges=_detect_msp_for_login,  # Inject MSP detection bound to the new login session
     )
     login_success = session_manager.execute()  # Run the interactive login workflow
-
-    apisession = state.get("apisession")  # Copy the (possibly new) session back to the global
-    mistapi = state.get("mistapi")  # Copy the SDK reference back to the global
-    msp_privileges = state.get("msp_privileges", msp_privileges)  # Copy detected MSP grants back
-    selected_msp = state.get("selected_msp", selected_msp)  # Copy the selected MSP back
-    org_id = state.get("org_id", org_id)  # Copy the selected org ID back
+    _restore_session_globals_from_state(state)  # Mirror any state mutations back to module globals
     return login_success  # Report whether the interactive login succeeded
 
 
@@ -2398,42 +2401,45 @@ def _handle_interactive_login_success():
         _select_org_from_session()  # type: ignore[no-untyped-call]  # Non-MSP users pick an org directly
 
 
+def _prompt_switch_login_confirmation() -> bool:
+    """Prompt the user to confirm switching to interactive login.
+
+    Returns True if the user typed 'y', False on cancel/EOF/SystemExit.
+    """
+    logging.debug("_prompt_switch_login_confirmation: prompting user for y/N")  # Log before prompt
+    try:  # safe_input may raise SystemExit on EOF in some contexts
+        confirm = (
+            InputUtils.safe_input("  Proceed with re-authentication? (y/N): ", context="switch_login").strip().lower()
+        )
+    except SystemExit:  # EOF during the prompt
+        logging.debug("SystemExit during confirmation prompt")  # Trace the early exit
+        return False  # Treat as cancel
+    logging.debug("User confirmation received: '%s'", confirm)  # Log the captured response
+    if confirm != "y":  # User declined or pressed Enter
+        print("  Cancelled.")  # Acknowledge the cancellation on stdout
+        logging.warning("User cancelled switch to interactive login")  # Log the cancel
+        return False  # Caller should stay on the menu
+    return True  # User explicitly chose to proceed
+
+
 def switch_to_interactive_login():
     """Menu option to switch from API token to interactive login.
 
     Returns:
         bool: True to signal the menu should continue
     """
-    global apisession, org_id
-
-    logging.debug("Entering switch_to_interactive_login()")
-    logging.info("User initiated switch to interactive login")
-
-    _print_switch_login_header()  # type: ignore[no-untyped-call]
-
-    try:
-        confirm = (
-            InputUtils.safe_input("  Proceed with re-authentication? (y/N): ", context="switch_login").strip().lower()
-        )
-    except SystemExit:
-        logging.debug("SystemExit during confirmation prompt")
-        return True
-
-    logging.debug("User confirmation received: '%s'", confirm)
-
-    if confirm != "y":
-        print("  Cancelled.")
-        logging.warning("User cancelled switch to interactive login")
-        return True
-
+    global apisession, org_id  # We may roll back these globals on failure
+    logging.debug("Entering switch_to_interactive_login()")  # Trace entry for debugging
+    logging.info("User initiated switch to interactive login")  # Operator action note
+    _print_switch_login_header()  # type: ignore[no-untyped-call]  # Show the explanatory banner
+    if not _prompt_switch_login_confirmation():  # User cancelled or EOF'd the prompt
+        return True  # Stay on the menu without changing session
     old_session = apisession  # Preserve the current session so we can roll back on failure
     old_org_id = org_id  # Preserve the current org so we can roll back on failure
-
     if not _attempt_interactive_login_with_rollback(
         old_session, old_org_id
     ):  # Try interactive login; restores on failure
         return True  # Login failed but the old session was restored -- stay running
-
     _handle_interactive_login_success()  # type: ignore[no-untyped-call]  # Login succeeded -- show status and pick MSP/org
     return True  # Always return True so the menu loop continues
 
