@@ -5250,6 +5250,567 @@ class MapsManager:
             logging.exception("Error running Dash server: %s", e)
             print(f"\n! Error running map viewer: {e}")
 
+    @staticmethod
+    def _resolve_site_name(all_sites: list[dict], site_id: str) -> str:
+        """Look up a site's display name from the cached site list, or 'Unknown'."""
+        for site in all_sites:
+            if site.get("id") == site_id:
+                return site.get("name", "Unknown")
+        return "Unknown"
+
+    @staticmethod
+    def _extract_graph_segments(graph_data: dict) -> list[dict]:
+        """Convert a Mist graph payload (nodes + edges) into x1/y1/x2/y2 line segments."""
+        if not graph_data:
+            return []
+        nodes = graph_data.get("nodes", [])
+        if not nodes:
+            return []
+        node_lookup = MapsManager._build_node_position_lookup(nodes)
+        return MapsManager._edges_to_segments(nodes, node_lookup)
+
+    @staticmethod
+    def _build_node_position_lookup(nodes: list[dict]) -> dict[str, dict[str, float]]:
+        """Map node name -> {x, y} for any node that has a position."""
+        lookup: dict[str, dict[str, float]] = {}
+        for node in nodes:
+            position = node.get("position", {})
+            if position:
+                lookup[node.get("name", "")] = {
+                    "x": position.get("x", 0),
+                    "y": position.get("y", 0),
+                }
+        return lookup
+
+    @staticmethod
+    def _edges_to_segments(nodes: list[dict], node_lookup: dict[str, dict[str, float]]) -> list[dict]:
+        """Walk every (node, edge) pair and emit a connecting segment when both ends are known."""
+        segments: list[dict] = []
+        for node in nodes:
+            position = node.get("position", {})
+            edges = node.get("edges", {})
+            if not (position and edges):
+                continue
+            start_x = position.get("x", 0)
+            start_y = position.get("y", 0)
+            for edge_name in edges.keys():
+                end = node_lookup.get(edge_name)
+                if end is None:
+                    continue
+                segments.append({"x1": start_x, "y1": start_y, "x2": end["x"], "y2": end["y"]})
+        return segments
+
+    def _extract_walls(self, map_data: dict) -> list[dict]:
+        """Pull wall segments from the map's wall_path graph, log the count, return segments."""
+        wall_data = map_data.get("wall_path", {})
+        if wall_data:
+            logging.debug("[Flask API] Raw wall_path data: %s", wall_data)
+        walls = self._extract_graph_segments(wall_data)
+        if walls:
+            logging.info(
+                "[Flask API] Extracted %s wall segments from %s nodes",
+                len(walls),
+                len(wall_data.get("nodes", [])),
+            )
+        return walls
+
+    def _extract_wayfinding(self, map_data: dict) -> list[dict]:
+        """Pull wayfinding segments from the map's wayfinding_path graph."""
+        wayfinding_data = map_data.get("wayfinding_path", {})
+        if wayfinding_data:
+            logging.debug("[Flask API] Raw wayfinding_path data: %s", wayfinding_data)
+        wayfinding = self._extract_graph_segments(wayfinding_data)
+        if wayfinding:
+            logging.info(
+                "[Flask API] Extracted %s wayfinding segments from %s nodes",
+                len(wayfinding),
+                len(wayfinding_data.get("nodes", [])),
+            )
+        return wayfinding
+
+    @staticmethod
+    def _map_device_record(device: dict) -> dict:
+        """Project a Mist device-stats record down to the viewer's display fields."""
+        return {
+            "x": device.get("x"),
+            "y": device.get("y"),
+            "name": device.get("name", device.get("mac", "Unknown")),
+            "type": device.get("type", "ap"),
+            "status": device.get("status", "unknown"),
+            "mac": device.get("mac", ""),
+            "orientation": device.get("orientation", 0),
+        }
+
+    def _fetch_map_devices(self, api_session, site_id: str, map_id: str) -> list[dict]:
+        """Fetch site devices and return only those located on this map."""
+        try:
+            response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                api_session, site_id=site_id, type="all", limit=1000
+            )
+            if response.status_code != 200 or not response.data:
+                return []
+            return [
+                self._map_device_record(d)
+                for d in response.data
+                if d.get("map_id") == map_id and d.get("x") is not None
+            ]
+        except Exception as e:
+            logging.warning("Error fetching devices: %s", e)
+            return []
+
+    def _fetch_map_zones(self, api_session, site_id: str, map_id: str) -> list[dict]:
+        """Fetch zones for this site and filter to those bound to the requested map."""
+        try:
+            response = mistapi.api.v1.sites.zones.listSiteZones(api_session, site_id=site_id)
+            if response.status_code != 200 or not response.data:
+                return []
+            return [
+                {"name": z.get("name", "Zone"), "vertices": z.get("vertices", [])}
+                for z in response.data
+                if z.get("map_id") == map_id
+            ]
+        except Exception as e:
+            logging.warning("Error fetching zones: %s", e)
+            return []
+
+    @staticmethod
+    def _map_wifi_client_record(client: dict) -> dict:
+        """Project a wireless-client stats record down to the viewer's display fields."""
+        return {
+            "x": client.get("x"),
+            "y": client.get("y"),
+            "mac": client.get("mac", "Unknown"),
+            "ssid": client.get("ssid", "-"),
+            "name": client.get("hostname", "") or client.get("name", ""),
+        }
+
+    def _fetch_map_wifi_clients(self, api_session, site_id: str, map_id: str) -> list[dict]:
+        """Fetch connected WiFi clients on this map."""
+        try:
+            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(api_session, site_id=site_id)
+            if response.status_code != 200 or not response.data:
+                return []
+            return [
+                self._map_wifi_client_record(c)
+                for c in response.data
+                if c.get("map_id") == map_id and c.get("x") is not None
+            ]
+        except Exception as e:
+            logging.warning("Error fetching WiFi clients: %s: %s", type(e).__name__, str(e))
+            return []
+
+    def _fetch_map_unconnected_clients(self, api_session, site_id: str, map_id: str) -> list[dict]:
+        """Fetch unconnected WiFi client stats for this map."""
+        try:
+            response = mistapi.api.v1.sites.stats.listSiteUnconnectedClientStats(
+                api_session, site_id=site_id, map_id=map_id
+            )
+            if response.status_code != 200 or not response.data:
+                return []
+            return [
+                {
+                    "x": c.get("x"),
+                    "y": c.get("y"),
+                    "mac": c.get("mac", "Unknown"),
+                    "manufacture": c.get("manufacture", "-"),
+                }
+                for c in response.data
+                if c.get("x") is not None
+            ]
+        except Exception as e:
+            logging.warning("Error fetching unconnected clients: %s: %s", type(e).__name__, str(e))
+            return []
+
+    def _fetch_map_ble_devices(self, api_session, site_id: str, map_id: str) -> list[dict]:
+        """Fetch BLE-discovered assets bound to this map."""
+        try:
+            response = mistapi.api.v1.sites.stats.listSiteDiscoveredAssets(api_session, site_id=site_id)
+            if response.status_code != 200 or not response.data:
+                return []
+            return [
+                {"x": d.get("x"), "y": d.get("y"), "mac": d.get("mac", "Unknown")}
+                for d in response.data
+                if d.get("map_id") == map_id and d.get("x") is not None
+            ]
+        except Exception as e:
+            logging.warning("Error fetching BLE devices: %s", e)
+            return []
+
+    def _fetch_map_assets(self, api_session, site_id: str, map_id: str) -> list[dict]:
+        """Fetch named assets bound to this map."""
+        try:
+            response = mistapi.api.v1.sites.stats.listSiteAssetsStats(api_session, site_id=site_id)
+            if response.status_code != 200 or not response.data:
+                return []
+            return [
+                {
+                    "x": a.get("x"),
+                    "y": a.get("y"),
+                    "name": a.get("name", "Asset"),
+                    "mac": a.get("mac", "-"),
+                }
+                for a in response.data
+                if a.get("map_id") == map_id and a.get("x") is not None
+            ]
+        except Exception as e:
+            logging.warning("Error fetching assets: %s: %s", type(e).__name__, str(e))
+            return []
+
+    def _fetch_map_sdk_clients(self, api_session, site_id: str, map_id: str) -> list[dict]:
+        """Fetch SDK/Marvis indoor-location clients for this map."""
+        try:
+            response = mistapi.api.v1.sites.stats.getSiteSdkStatsByMap(api_session, site_id=site_id, map_id=map_id)
+            if response.status_code != 200 or not response.data:
+                return []
+            return [
+                {
+                    "x": c.get("x"),
+                    "y": c.get("y"),
+                    "name": c.get("name", ""),
+                    "uuid": c.get("uuid", "-"),
+                }
+                for c in response.data
+                if c.get("x") is not None
+            ]
+        except Exception as e:
+            logging.warning("Error fetching SDK clients: %s", e)
+            return []
+
+    @staticmethod
+    def _resolve_coverage_indices(result_def: list[str]) -> tuple[int, int, int]:
+        """Return (x_idx, y_idx, rssi_idx) into a coverage row, with a -1 RSSI sentinel."""
+        try:
+            x_idx = result_def.index("x")
+            y_idx = result_def.index("y")
+            if "max_rssi" in result_def:
+                rssi_idx = result_def.index("max_rssi")
+            elif "avg_rssi" in result_def:
+                rssi_idx = result_def.index("avg_rssi")
+            else:
+                rssi_idx = -1
+            return x_idx, y_idx, rssi_idx
+        except ValueError:
+            return 0, 1, 4
+
+    @staticmethod
+    def _coverage_row_to_point(item: list, indices: tuple[int, int, int], ppm_value: float) -> dict | None:
+        """Convert a coverage result row to a {x, y, rssi} point in pixel space."""
+        x_idx, y_idx, rssi_idx = indices
+        if len(item) <= max(x_idx, y_idx, rssi_idx):
+            return None
+        x_m = item[x_idx]
+        y_m = item[y_idx]
+        rssi = item[rssi_idx] if rssi_idx >= 0 else -80
+        if x_m is None or y_m is None or rssi is None:
+            return None
+        return {"x": x_m * ppm_value, "y": y_m * ppm_value, "rssi": rssi}
+
+    def _fetch_coverage_layer(
+        self,
+        api_session,
+        site_id: str,
+        map_id: str,
+        coverage_type: str,
+        ppm_value: float,
+    ) -> list[dict] | None:
+        """Fetch one coverage layer (client/asset/sdkclient) and convert meters to pixels."""
+        try:
+            coverage_url = f"/api/v1/sites/{site_id}/location/coverage"
+            params = {
+                "resolution": "fine",
+                "duration": "1d",
+                "map_id": map_id,
+                "type": coverage_type,
+                "from_apollo": "true",
+            }
+            logging.info("[Flask API] Fetching %s coverage for map %s", coverage_type, map_id)
+            response = api_session.mist_get(coverage_url, query=params)
+            if response.status_code != 200:
+                return None
+            return self._coverage_response_to_grid(response.data, ppm_value, coverage_type)
+        except Exception as e:
+            logging.warning("Error fetching %s coverage: %s", coverage_type, e)
+            return None
+
+    def _coverage_response_to_grid(self, coverage_data, ppm_value: float, coverage_type: str) -> list[dict] | None:
+        """Parse a coverage API payload into a list of grid points, or None on error."""
+        if isinstance(coverage_data, dict) and "exception" in coverage_data:
+            logging.warning("[Flask API] %s coverage API error", coverage_type)
+            return None
+        results = coverage_data.get("results", [])
+        result_def = coverage_data.get("result_def", [])
+        if not (results and result_def):
+            return None
+        indices = self._resolve_coverage_indices(result_def)
+        grid_points = [
+            point
+            for point in (self._coverage_row_to_point(r, indices, ppm_value) for r in results)
+            if point is not None
+        ]
+        logging.info(
+            "[Flask API] %s coverage: %s grid points (ppm=%s)",
+            coverage_type,
+            len(grid_points),
+            ppm_value,
+        )
+        return grid_points
+
+    def _fetch_all_coverage(self, api_session, site_id: str, map_id: str, ppm: float) -> tuple[list, list, list]:
+        """Fetch WiFi + BLE + App coverage layers (each one is None-safe)."""
+        if not ppm:
+            return [], [], []
+        wifi = self._fetch_coverage_layer(api_session, site_id, map_id, "client", ppm) or []
+        ble = self._fetch_coverage_layer(api_session, site_id, map_id, "asset", ppm) or []
+        app = self._fetch_coverage_layer(api_session, site_id, map_id, "sdkclient", ppm) or []
+        return wifi, ble, app
+
+    @staticmethod
+    def _count_devices_by_type(devices: list[dict]) -> tuple[int, int, int]:
+        """Return (ap_count, switch_count, gateway_count) by walking the device list once."""
+        ap_count = sum(1 for d in devices if d.get("type") == "ap" or not d.get("type"))
+        switch_count = sum(1 for d in devices if d.get("type") == "switch")
+        gateway_count = sum(1 for d in devices if d.get("type") == "gateway")
+        return ap_count, switch_count, gateway_count
+
+    def _collect_map_payload(
+        self, api_session, all_sites: list[dict], site_id: str, map_id: str
+    ) -> tuple[dict | None, tuple]:
+        """Gather every layer needed to render this map.
+
+        Returns ``(map_data, layers_tuple)`` or ``(None, ())`` on missing map.
+        """
+        site_name = self._resolve_site_name(all_sites, site_id)
+        map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
+        if map_response.status_code != 200:
+            return None, ()
+        map_data = map_response.data
+        ppm = map_data.get("ppm", 1.0)
+        walls = self._extract_walls(map_data)
+        wayfinding = self._extract_wayfinding(map_data)
+        devices = self._fetch_map_devices(api_session, site_id, map_id)
+        zones = self._fetch_map_zones(api_session, site_id, map_id)
+        wifi_clients = self._fetch_map_wifi_clients(api_session, site_id, map_id)
+        unconnected = self._fetch_map_unconnected_clients(api_session, site_id, map_id)
+        ble_devices = self._fetch_map_ble_devices(api_session, site_id, map_id)
+        assets = self._fetch_map_assets(api_session, site_id, map_id)
+        sdk_clients = self._fetch_map_sdk_clients(api_session, site_id, map_id)
+        wifi_cov, ble_cov, app_cov = self._fetch_all_coverage(api_session, site_id, map_id, ppm)
+        layers = (
+            site_name,
+            walls,
+            wayfinding,
+            devices,
+            zones,
+            wifi_clients,
+            unconnected,
+            ble_devices,
+            assets,
+            sdk_clients,
+            wifi_cov,
+            ble_cov,
+            app_cov,
+        )
+        return map_data, layers
+
+    def _build_map_data_response(self, site_id: str, map_id: str, map_data: dict, layers: tuple) -> dict:
+        """Assemble the final JSON dict returned by the /api/map endpoint."""
+        (
+            site_name,
+            walls,
+            wayfinding,
+            devices,
+            zones,
+            wifi_clients,
+            unconnected,
+            ble_devices,
+            assets,
+            sdk_clients,
+            wifi_cov,
+            ble_cov,
+            app_cov,
+        ) = layers
+        ap_count, switch_count, gateway_count = self._count_devices_by_type(devices)
+        original_url = map_data.get("url", "")
+        image_url = f"/api/map-image/{site_id}/{map_id}" if original_url else ""
+        return {
+            "site_id": site_id,
+            "site_name": site_name,
+            "map_id": map_id,
+            "map_name": map_data.get("name", "Unnamed"),
+            "width": map_data.get("width", 1000),
+            "height": map_data.get("height", 1000),
+            "image_url": image_url,
+            "ppm": map_data.get("ppm", 1.0),
+            "devices": devices,
+            "device_count": len(devices),
+            "ap_count": ap_count,
+            "switch_count": switch_count,
+            "gateway_count": gateway_count,
+            "zones": zones,
+            "zone_count": len(zones),
+            "wifi_clients": wifi_clients,
+            "wifi_client_count": len(wifi_clients),
+            "unconnected_clients": unconnected,
+            "unconnected_client_count": len(unconnected),
+            "ble_devices": ble_devices,
+            "ble_device_count": len(ble_devices),
+            "assets": assets,
+            "asset_count": len(assets),
+            "sdk_clients": sdk_clients,
+            "sdk_client_count": len(sdk_clients),
+            "walls": walls,
+            "wall_count": len(walls),
+            "wayfinding": wayfinding,
+            "wayfinding_count": len(wayfinding),
+            "wifi_coverage": wifi_cov,
+            "ble_coverage": ble_cov,
+            "app_coverage": app_cov,
+        }
+
+    def _handle_map_data_request(self, api_session, all_sites: list[dict], site_id: str, map_id: str):
+        """Top-level orchestrator for the Flask /api/map endpoint. Returns a Flask Response."""
+        from flask import jsonify
+
+        logging.info("[Flask API] Fetching map data for site %s, map %s", site_id, map_id)
+        try:
+            map_data, layers = self._collect_map_payload(api_session, all_sites, site_id, map_id)
+            if map_data is None:
+                return jsonify({"error": "Map not found"}), 404
+            payload = self._build_map_data_response(site_id, map_id, map_data, layers)
+            return jsonify(payload)
+        except Exception as e:
+            logging.exception("Error fetching map data: %s", e)
+            return jsonify({"error": "Failed to fetch map data. Check server logs for details."}), 500
+
+    @staticmethod
+    def _render_viewer_page(
+        html_template: str,
+        json_module,
+        render_template_string,
+        initial_site_id: str,
+        initial_map_id: str,
+        all_sites: list[dict],
+        all_maps: list[dict],
+    ):
+        """Render the Flask root page; injects sorted-sites + maps JSON into the HTML template."""
+        sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())
+        sites_json = json_module.dumps([{"id": s.get("id"), "name": s.get("name", "Unnamed")} for s in sites_sorted])
+        maps_json = json_module.dumps([{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in all_maps])
+        return render_template_string(
+            html_template,
+            initial_site_id=initial_site_id,
+            initial_map_id=initial_map_id,
+            all_sites_json=sites_json,
+            all_maps_json=maps_json,
+        )
+
+    @staticmethod
+    def _handle_site_maps_request(api_session, jsonify, site_id: str):
+        """Flask /api/site/<id>/maps handler -- returns the site's maps list as JSON."""
+        logging.info("[Flask API] Fetching maps for site %s", site_id)
+        try:
+            response = mistapi.api.v1.sites.maps.listSiteMaps(api_session, site_id=site_id)
+            if response.status_code != 200 or not response.data:
+                return jsonify({"maps": []})
+            maps = [{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in response.data]
+            return jsonify({"maps": maps})
+        except Exception as e:
+            logging.exception("Error fetching maps: %s", e)
+            return (
+                jsonify({"error": "Failed to fetch maps. Check server logs for details.", "maps": []}),
+                500,
+            )
+
+    @staticmethod
+    def _fetch_map_image_bytes(api_session, site_id: str, map_id: str):
+        """Look up the map record, fetch its image bytes with auth. Returns (response, error_tuple)."""
+        import requests as req_lib
+
+        map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
+        if map_response.status_code != 200:
+            return None, ("Map not found", 404)
+        image_url = map_response.data.get("url", "")
+        if not image_url:
+            return None, ("No image URL", 404)
+        token = getattr(api_session, "_api_token", "")
+        headers = {"Authorization": f"Token {token}"} if token else {}
+        image_response = req_lib.get(image_url, headers=headers, timeout=30)
+        return image_response, None
+
+    @classmethod
+    def _handle_map_image_request(cls, api_session, site_id: str, map_id: str):
+        """Flask /api/map-image/<site>/<map> handler -- proxies the authenticated image fetch."""
+        from flask import Response
+
+        logging.info("[Flask API] Fetching map image for site %s, map %s", site_id, map_id)
+        try:
+            image_response, error = cls._fetch_map_image_bytes(api_session, site_id, map_id)
+            if error is not None:
+                return error
+            if image_response.status_code != 200:
+                logging.warning("Failed to fetch image: %s", image_response.status_code)
+                return f"Image fetch failed: {image_response.status_code}", 404
+            content_type = image_response.headers.get("Content-Type", "image/png")
+            return Response(image_response.content, mimetype=content_type)
+        except Exception as e:
+            logging.exception("Error fetching map image: %s", e)
+            return "Failed to fetch map image. Check server logs for details.", 500
+
+    @staticmethod
+    def _resolve_flask_bind_address() -> tuple[str, int]:
+        """Return ``(host, port)`` for the Flask server, binding all interfaces in a container."""
+        port = 8050
+        if is_running_in_container():
+            logging.debug("Container detected: binding Flask to 0.0.0.0")
+            return "0.0.0.0", port  # nosec B104 - container must bind all interfaces
+        return "127.0.0.1", port
+
+    @staticmethod
+    def _print_flask_viewer_banner(host: str, port: int) -> None:
+        """Print the pre-launch ASCII banner that lists URL + key features."""
+        print("\n" + "-" * 80)
+        print("LAUNCHING FLASK MAP VIEWER")
+        print("-" * 80)
+        print(f"! Server URL: http://{host}:{port}")
+        print("! Features:")
+        print("!   - Site and map switching via dropdowns")
+        print("!   - Device, zone, and client visualization")
+        print("!   - Pan and zoom controls")
+        print("!   - Refresh button for live data")
+        print("! Press Ctrl+C to stop server")
+        print("-" * 80)
+
+    @staticmethod
+    def _maybe_open_browser(port: int) -> None:
+        """Spawn a daemon thread to open the browser after a short delay, unless in a container."""
+        import threading
+        import webbrowser
+
+        if is_running_in_container():
+            return  # Containerized -- caller will open the browser externally
+
+        def open_browser() -> None:
+            """Wait briefly then point the default browser at the local Flask server."""
+            import time
+
+            time.sleep(1.5)
+            webbrowser.open(f"http://127.0.0.1:{port}")
+
+        threading.Thread(target=open_browser, daemon=True).start()
+
+    @staticmethod
+    def _run_flask_server(flask_app, host: str, port: int) -> None:
+        """Run the Flask server until interrupted; mirror the original KeyboardInterrupt path."""
+        try:
+            logging.info("Starting Flask server on http://%s:%s", host, port)
+            flask_app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)
+        except KeyboardInterrupt:
+            print("\n\nFlask map viewer stopped by user")
+            logging.info("Flask map viewer stopped by user (Ctrl+C)")
+        except Exception as e:
+            logging.exception("Error running Flask server: %s", e)
+            print(f"\n! Error running map viewer: {e}")
+
     def _launch_flask_viewer(
         self, initial_site_id: str, initial_map_id: str, all_sites: list[dict], all_maps: list[dict]
     ):
@@ -5266,8 +5827,6 @@ class MapsManager:
             all_maps: List of maps for the initial site
         """
         import json as json_module
-        import threading
-        import webbrowser
 
         from flask import Flask, jsonify, render_template_string
 
@@ -6284,461 +6843,35 @@ class MapsManager:
         @flask_app.route("/")
         def index():
             """Serve the main viewer page."""
-            # Prepare sites JSON (sorted by name)
-            sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())
-            sites_json = json_module.dumps(
-                [{"id": s.get("id"), "name": s.get("name", "Unnamed")} for s in sites_sorted]
-            )
-
-            # Prepare maps JSON
-            maps_json = json_module.dumps([{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in all_maps])
-
-            return render_template_string(
+            return self._render_viewer_page(
                 HTML_TEMPLATE,
-                initial_site_id=initial_site_id,
-                initial_map_id=initial_map_id,
-                all_sites_json=sites_json,
-                all_maps_json=maps_json,
+                json_module,
+                render_template_string,
+                initial_site_id,
+                initial_map_id,
+                all_sites,
+                all_maps,
             )
 
         @flask_app.route("/api/site/<site_id>/maps")
         def get_site_maps(site_id):
-            """API endpoint to get maps for a site."""
-            logging.info("[Flask API] Fetching maps for site %s", site_id)
-            try:
-                maps_response = mistapi.api.v1.sites.maps.listSiteMaps(api_session, site_id=site_id)
-                if maps_response.status_code == 200 and maps_response.data:
-                    maps = [{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in maps_response.data]
-                    return jsonify({"maps": maps})
-                else:
-                    return jsonify({"maps": []})
-            except Exception as e:
-                logging.exception("Error fetching maps: %s", e)
-                return jsonify({"error": "Failed to fetch maps. Check server logs for details.", "maps": []}), 500
+            """API endpoint -- proxies to _handle_site_maps_request."""
+            return self._handle_site_maps_request(api_session, jsonify, site_id)
 
         @flask_app.route("/api/map-image/<site_id>/<map_id>")
         def get_map_image(site_id, map_id):
-            """Proxy endpoint to serve map images with authentication."""
-            logging.info("[Flask API] Fetching map image for site %s, map %s", site_id, map_id)
-            try:
-                # Get the map to find the image URL
-                map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
-
-                if map_response.status_code != 200:
-                    return "Map not found", 404
-
-                image_url = map_response.data.get("url", "")
-                if not image_url:
-                    return "No image URL", 404
-
-                # Fetch the image with authentication
-                import requests as req_lib
-
-                headers = {
-                    "Authorization": f"Token {api_session._api_token}" if hasattr(api_session, "_api_token") else ""
-                }
-
-                # Try to get the image - Mist URLs may be direct or require auth
-                image_response = req_lib.get(image_url, headers=headers, timeout=30)
-
-                if image_response.status_code == 200:
-                    content_type = image_response.headers.get("Content-Type", "image/png")
-                    from flask import Response
-
-                    return Response(image_response.content, mimetype=content_type)
-                else:
-                    logging.warning("Failed to fetch image: %s", image_response.status_code)
-                    return f"Image fetch failed: {image_response.status_code}", 404
-
-            except Exception as e:
-                logging.exception("Error fetching map image: %s", e)
-                return "Failed to fetch map image. Check server logs for details.", 500
+            """Proxy endpoint -- delegates to _handle_map_image_request."""
+            return self._handle_map_image_request(api_session, site_id, map_id)
 
         @flask_app.route("/api/map/<site_id>/<map_id>")
         def get_map_data(site_id, map_id):
-            """API endpoint to get full map data including devices, zones, clients."""
-            logging.info("[Flask API] Fetching map data for site %s, map %s", site_id, map_id)
-            try:
-                # Get site name
-                site_name = "Unknown"
-                for site in all_sites:
-                    if site.get("id") == site_id:
-                        site_name = site.get("name", "Unknown")
-                        break
+            """Delegate to MapsManager._handle_map_data_request -- routes Flask request to the orchestrator."""
+            return self._handle_map_data_request(api_session, all_sites, site_id, map_id)
 
-                # Fetch map details
-                map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
-
-                if map_response.status_code != 200:
-                    return jsonify({"error": "Map not found"}), 404
-
-                map_data = map_response.data
-                map_name = map_data.get("name", "Unnamed")
-                map_width = map_data.get("width", 1000)
-                map_height = map_data.get("height", 1000)
-                ppm = map_data.get("ppm", 1.0)  # Pixels per meter for coverage grid alignment
-                # Use our proxy endpoint for the image (browser can't auth to Mist directly)
-                original_url = map_data.get("url", "")
-                image_url = f"/api/map-image/{site_id}/{map_id}" if original_url else ""
-
-                # Extract walls from map data - it's a graph with nodes and edges
-                walls = []
-                wall_data = map_data.get("wall_path", {})
-                if wall_data:
-                    logging.debug("[Flask API] Raw wall_path data: %s", wall_data)
-                    nodes = wall_data.get("nodes", [])
-                    if nodes:
-                        # Build a lookup of nodes by name
-                        node_lookup = {}
-                        for node in nodes:
-                            node_name = node.get("name", "")
-                            position = node.get("position", {})
-                            if position:
-                                node_lookup[node_name] = {"x": position.get("x", 0), "y": position.get("y", 0)}
-
-                        # Convert edges to line segments
-                        for node in nodes:
-                            node_name = node.get("name", "")
-                            position = node.get("position", {})
-                            edges = node.get("edges", {})
-                            if position and edges:
-                                start_x = position.get("x", 0)
-                                start_y = position.get("y", 0)
-                                for edge_name in edges.keys():
-                                    if edge_name in node_lookup:
-                                        end_pos = node_lookup[edge_name]
-                                        # Add line segment (from current node to connected node)
-                                        walls.append(
-                                            {"x1": start_x, "y1": start_y, "x2": end_pos["x"], "y2": end_pos["y"]}
-                                        )
-                        logging.info("[Flask API] Extracted %s wall segments from %s nodes", len(walls), len(nodes))
-
-                # Extract wayfinding paths from map data - same structure as walls
-                wayfinding = []
-                wayfinding_data = map_data.get("wayfinding_path", {})
-                if wayfinding_data:
-                    logging.debug("[Flask API] Raw wayfinding_path data: %s", wayfinding_data)
-                    nodes = wayfinding_data.get("nodes", [])
-                    if nodes:
-                        # Build a lookup of nodes by name
-                        node_lookup = {}
-                        for node in nodes:
-                            node_name = node.get("name", "")
-                            position = node.get("position", {})
-                            if position:
-                                node_lookup[node_name] = {"x": position.get("x", 0), "y": position.get("y", 0)}
-
-                        # Convert edges to line segments
-                        for node in nodes:
-                            node_name = node.get("name", "")
-                            position = node.get("position", {})
-                            edges = node.get("edges", {})
-                            if position and edges:
-                                start_x = position.get("x", 0)
-                                start_y = position.get("y", 0)
-                                for edge_name in edges.keys():
-                                    if edge_name in node_lookup:
-                                        end_pos = node_lookup[edge_name]
-                                        wayfinding.append(
-                                            {"x1": start_x, "y1": start_y, "x2": end_pos["x"], "y2": end_pos["y"]}
-                                        )
-                        logging.info(
-                            "[Flask API] Extracted %s wayfinding segments from %s nodes", len(wayfinding), len(nodes)
-                        )
-
-                # Fetch devices (type='all' includes APs, switches, and gateways)
-                devices = []
-                try:
-                    devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                        api_session, site_id=site_id, type="all", limit=1000
-                    )
-                    if devices_response.status_code == 200 and devices_response.data:
-                        for device in devices_response.data:
-                            if device.get("map_id") == map_id and device.get("x") is not None:
-                                devices.append(
-                                    {
-                                        "x": device.get("x"),
-                                        "y": device.get("y"),
-                                        "name": device.get("name", device.get("mac", "Unknown")),
-                                        "type": device.get("type", "ap"),
-                                        "status": device.get("status", "unknown"),
-                                        "mac": device.get("mac", ""),
-                                        "orientation": device.get("orientation", 0),
-                                    }
-                                )
-                except Exception as e:
-                    logging.warning("Error fetching devices: %s", e)
-
-                # Fetch zones
-                zones = []
-                try:
-                    zones_response = mistapi.api.v1.sites.zones.listSiteZones(api_session, site_id=site_id)
-                    if zones_response.status_code == 200 and zones_response.data:
-                        for zone in zones_response.data:
-                            if zone.get("map_id") == map_id:
-                                zones.append({"name": zone.get("name", "Zone"), "vertices": zone.get("vertices", [])})
-                except Exception as e:
-                    logging.warning("Error fetching zones: %s", e)
-
-                # Fetch connected WiFi clients (purple)
-                wifi_clients = []
-                try:
-                    clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
-                        api_session, site_id=site_id
-                    )
-                    if clients_response.status_code == 200 and clients_response.data:
-                        for client in clients_response.data:
-                            if client.get("map_id") == map_id and client.get("x") is not None:
-                                wifi_clients.append(
-                                    {
-                                        "x": client.get("x"),
-                                        "y": client.get("y"),
-                                        "mac": client.get("mac", "Unknown"),
-                                        "ssid": client.get("ssid", "-"),
-                                        "name": client.get("hostname", "") or client.get("name", ""),
-                                    }
-                                )
-                except Exception as e:
-                    logging.warning("Error fetching WiFi clients: %s: %s", type(e).__name__, str(e))
-
-                # Fetch unconnected WiFi clients (grey)
-                unconnected_clients = []
-                try:
-                    # Unconnected client stats require map_id in the API call
-                    unconnected_response = mistapi.api.v1.sites.stats.listSiteUnconnectedClientStats(
-                        api_session, site_id=site_id, map_id=map_id
-                    )
-                    if unconnected_response.status_code == 200 and unconnected_response.data:
-                        for client in unconnected_response.data:
-                            if client.get("x") is not None:
-                                unconnected_clients.append(
-                                    {
-                                        "x": client.get("x"),
-                                        "y": client.get("y"),
-                                        "mac": client.get("mac", "Unknown"),
-                                        "manufacture": client.get("manufacture", "-"),
-                                    }
-                                )
-                except Exception as e:
-                    logging.warning("Error fetching unconnected clients: %s: %s", type(e).__name__, str(e))
-
-                # Fetch BLE/Bluetooth discovered assets (blue)
-                ble_devices = []
-                try:
-                    ble_response = mistapi.api.v1.sites.stats.listSiteDiscoveredAssets(api_session, site_id=site_id)
-                    if ble_response.status_code == 200 and ble_response.data:
-                        for device in ble_response.data:
-                            if device.get("map_id") == map_id and device.get("x") is not None:
-                                ble_devices.append(
-                                    {
-                                        "x": device.get("x"),
-                                        "y": device.get("y"),
-                                        "mac": device.get("mac", "Unknown"),
-                                    }
-                                )
-                except Exception as e:
-                    logging.warning("Error fetching BLE devices: %s", e)
-
-                # Fetch named assets (green)
-                assets = []
-                try:
-                    assets_response = mistapi.api.v1.sites.stats.listSiteAssetsStats(api_session, site_id=site_id)
-                    if assets_response.status_code == 200 and assets_response.data:
-                        for asset in assets_response.data:
-                            if asset.get("map_id") == map_id and asset.get("x") is not None:
-                                assets.append(
-                                    {
-                                        "x": asset.get("x"),
-                                        "y": asset.get("y"),
-                                        "name": asset.get("name", "Asset"),
-                                        "mac": asset.get("mac", "-"),
-                                    }
-                                )
-                except Exception as e:
-                    logging.warning("Error fetching assets: %s: %s", type(e).__name__, str(e))
-
-                # Fetch SDK/Marvis clients (light blue) - these use the Mist SDK for indoor location
-                sdk_clients = []
-                try:
-                    sdk_response = mistapi.api.v1.sites.stats.getSiteSdkStatsByMap(
-                        api_session, site_id=site_id, map_id=map_id
-                    )
-                    if sdk_response.status_code == 200 and sdk_response.data:
-                        for client in sdk_response.data:
-                            if client.get("x") is not None:
-                                sdk_clients.append(
-                                    {
-                                        "x": client.get("x"),
-                                        "y": client.get("y"),
-                                        "name": client.get("name", ""),
-                                        "uuid": client.get("uuid", "-"),
-                                    }
-                                )
-                except Exception as e:
-                    logging.warning("Error fetching SDK clients: %s", e)
-
-                # Fetch RF coverage data for WiFi, BLE, and App (SDK) clients
-                # Coverage API: /api/v1/sites/{site_id}/location/coverage
-                # Types: 'client' (WiFi), 'asset' (BLE), 'sdkclient' (App)
-                def fetch_coverage(coverage_type, ppm_value):
-                    """Fetch coverage heatmap data for a specific type and convert to pixels."""
-                    try:
-                        coverage_url = f"/api/v1/sites/{site_id}/location/coverage"
-                        coverage_params = {
-                            "resolution": "fine",
-                            "duration": "1d",
-                            "map_id": map_id,
-                            "type": coverage_type,
-                            "from_apollo": "true",
-                        }
-                        logging.info("[Flask API] Fetching %s coverage for map %s", coverage_type, map_id)
-                        coverage_response = api_session.mist_get(coverage_url, query=coverage_params)
-
-                        if coverage_response.status_code == 200:
-                            coverage_data = coverage_response.data
-                            # Check for error response
-                            if isinstance(coverage_data, dict) and "exception" in coverage_data:
-                                logging.warning("[Flask API] %s coverage API error", coverage_type)
-                                return None
-
-                            results = coverage_data.get("results", [])
-                            result_def = coverage_data.get("result_def", [])
-                            if results and result_def:
-                                # Get field indices
-                                try:
-                                    x_idx = result_def.index("x")
-                                    y_idx = result_def.index("y")
-                                    if "max_rssi" in result_def:
-                                        rssi_idx = result_def.index("max_rssi")
-                                    elif "avg_rssi" in result_def:
-                                        rssi_idx = result_def.index("avg_rssi")
-                                    else:
-                                        rssi_idx = -1
-                                except ValueError:
-                                    x_idx, y_idx, rssi_idx = 0, 1, 4
-
-                                # Build grid data - results is list of lists
-                                # Coverage API returns x, y in meters - convert to pixels using ppm
-                                grid_points = []
-                                for item in results:
-                                    if len(item) > max(x_idx, y_idx, rssi_idx):
-                                        x_m = item[x_idx]
-                                        y_m = item[y_idx]
-                                        rssi = item[rssi_idx] if rssi_idx >= 0 else -80
-                                        if x_m is not None and y_m is not None and rssi is not None:
-                                            # Convert meters to pixels
-                                            x_px = x_m * ppm_value
-                                            y_px = y_m * ppm_value
-                                            grid_points.append({"x": x_px, "y": y_px, "rssi": rssi})
-
-                                logging.info(
-                                    "[Flask API] %s coverage: %s grid points (ppm=%s)",
-                                    coverage_type,
-                                    len(grid_points),
-                                    ppm_value,
-                                )
-                                return grid_points
-                        return None
-                    except Exception as e:
-                        logging.warning("Error fetching %s coverage: %s", coverage_type, e)
-                        return None
-
-                wifi_coverage = fetch_coverage("client", ppm) if ppm else []
-                ble_coverage = fetch_coverage("asset", ppm) if ppm else []
-                app_coverage = fetch_coverage("sdkclient", ppm) if ppm else []
-
-                # Ensure coverage lists are not None
-                wifi_coverage = wifi_coverage or []
-                ble_coverage = ble_coverage or []
-                app_coverage = app_coverage or []
-
-                # Count devices by type
-                ap_count = len([d for d in devices if d.get("type") == "ap" or not d.get("type")])
-                switch_count = len([d for d in devices if d.get("type") == "switch"])
-                gateway_count = len([d for d in devices if d.get("type") == "gateway"])
-
-                return jsonify(
-                    {
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "map_id": map_id,
-                        "map_name": map_name,
-                        "width": map_width,
-                        "height": map_height,
-                        "image_url": image_url,
-                        "ppm": ppm,
-                        "devices": devices,
-                        "device_count": len(devices),
-                        "ap_count": ap_count,
-                        "switch_count": switch_count,
-                        "gateway_count": gateway_count,
-                        "zones": zones,
-                        "zone_count": len(zones),
-                        "wifi_clients": wifi_clients,
-                        "wifi_client_count": len(wifi_clients),
-                        "unconnected_clients": unconnected_clients,
-                        "unconnected_client_count": len(unconnected_clients),
-                        "ble_devices": ble_devices,
-                        "ble_device_count": len(ble_devices),
-                        "assets": assets,
-                        "asset_count": len(assets),
-                        "sdk_clients": sdk_clients,
-                        "sdk_client_count": len(sdk_clients),
-                        "walls": walls,
-                        "wall_count": len(walls),
-                        "wayfinding": wayfinding,
-                        "wayfinding_count": len(wayfinding),
-                        "wifi_coverage": wifi_coverage,
-                        "ble_coverage": ble_coverage,
-                        "app_coverage": app_coverage,
-                    }
-                )
-
-            except Exception as e:
-                logging.exception("Error fetching map data: %s", e)
-                return jsonify({"error": "Failed to fetch map data. Check server logs for details."}), 500
-
-        # Determine host and port
-        flask_host = "127.0.0.1"
-        flask_port = 8050
-
-        if is_running_in_container():
-            flask_host = "0.0.0.0"  # nosec B104 — container must bind all interfaces
-            logging.debug("Container detected: binding Flask to 0.0.0.0")
-
-        print("\n" + "-" * 80)
-        print("LAUNCHING FLASK MAP VIEWER")
-        print("-" * 80)
-        print(f"! Server URL: http://{flask_host}:{flask_port}")
-        print("! Features:")
-        print("!   - Site and map switching via dropdowns")
-        print("!   - Device, zone, and client visualization")
-        print("!   - Pan and zoom controls")
-        print("!   - Refresh button for live data")
-        print("! Press Ctrl+C to stop server")
-        print("-" * 80)
-
-        # Open browser after short delay
-        def open_browser():
-            import time
-
-            time.sleep(1.5)
-            webbrowser.open(f"http://127.0.0.1:{flask_port}")
-
-        if not is_running_in_container():
-            browser_thread = threading.Thread(target=open_browser, daemon=True)
-            browser_thread.start()
-
-        # Run Flask server
-        try:
-            logging.info("Starting Flask server on http://%s:%s", flask_host, flask_port)
-            flask_app.run(host=flask_host, port=flask_port, debug=False, threaded=True, use_reloader=False)
-        except KeyboardInterrupt:
-            print("\n\nFlask map viewer stopped by user")
-            logging.info("Flask map viewer stopped by user (Ctrl+C)")
-        except Exception as e:
-            logging.exception("Error running Flask server: %s", e)
-            print(f"\n! Error running map viewer: {e}")
+        flask_host, flask_port = self._resolve_flask_bind_address()
+        self._print_flask_viewer_banner(flask_host, flask_port)
+        self._maybe_open_browser(flask_port)
+        self._run_flask_server(flask_app, flask_host, flask_port)
 
     def _create_static_plotly_map(self, map_data, devices):
         """Create static Plotly HTML map when Dash is not available."""
