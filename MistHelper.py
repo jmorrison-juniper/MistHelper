@@ -2938,6 +2938,24 @@ def _validate_initialized_session(session: Any, successful_method: Any) -> bool:
     return True  # Session passed all checks -- ready for API calls
 
 
+def _attempt_all_session_strategies(apisession_cls, sig_params, tokens, host, mistapi_mod):
+    """Try APISession kwargs, then filtered-token retry, then legacy Session(). Returns (session, method, tried)."""
+    attempts = _build_session_attempts(apisession_cls, sig_params, tokens, host)  # Ordered kwargs candidates
+    session_obj, method, rate_limited, tried = _execute_session_attempts(apisession_cls, attempts)  # First wave
+    if not session_obj and rate_limited:  # Rate-limit signature — try tokens individually
+        session_obj, method = _retry_with_filtered_tokens(apisession_cls, sig_params, tokens, host)
+    if not session_obj:  # APISession exhausted — try legacy mistapi.Session()
+        session_obj, method = _try_session_fallback(mistapi_mod)
+    return session_obj, method, tried  # Caller validates / logs / patches
+
+
+def _log_failed_session_variants(tried_variants) -> None:
+    """Log every kwargs variant that failed (operator debugging on total init failure)."""
+    logging.error("All Mist API session initialization attempts failed. Variants tried:")
+    for variant in tried_variants:  # One log line per variant for clarity
+        logging.error("  - %s", variant)
+
+
 def initialize_mist_session() -> bool:
     """Initialize the Mist API session (APISession first, filtered retry, Session fallback)."""
     global apisession, mistapi  # Both module-level globals managed exclusively here
@@ -2948,18 +2966,11 @@ def initialize_mist_session() -> bool:
         return False
     host, tokens = _parse_api_tokens()  # Read MIST_HOST and MIST_APITOKEN/MIST_API_TOKEN from environment
     apisession_cls, sig_params = _introspect_apisession_class(mistapi)  # Discover APISession and its params
-    attempts = _build_session_attempts(apisession_cls, sig_params, tokens, host)  # Build ordered kwargs list
-    apisession, successful_method, rate_limit_detected, tried_variants = _execute_session_attempts(  # Try each kwargs
-        apisession_cls, attempts
+    apisession, successful_method, tried_variants = _attempt_all_session_strategies(  # Run all 3 strategies
+        apisession_cls, sig_params, tokens, host, mistapi
     )
-    if not apisession and rate_limit_detected:  # Rate-limit signature detected -- try tokens individually
-        apisession, successful_method = _retry_with_filtered_tokens(apisession_cls, sig_params, tokens, host)
-    if not apisession:  # APISession failed -- try legacy mistapi.Session() as final fallback
-        apisession, successful_method = _try_session_fallback(mistapi)
     if not apisession:  # All strategies exhausted -- log what was tried and return failure
-        logging.error("All Mist API session initialization attempts failed. Variants tried:")
-        for variant in tried_variants:  # Log each attempted kwargs dict for operator debugging
-            logging.error("  - %s", variant)
+        _log_failed_session_variants(tried_variants)
         return False
     _configure_session_timeout(apisession)  # Patch session with read timeout to prevent indefinite hangs
     return _validate_initialized_session(apisession, successful_method)  # Verify mist_get and auth status
@@ -9659,30 +9670,39 @@ class OrgInventoryExporter:  # Org inventory exporters.
             return list(csv.DictReader(file))  # Materialize all rows so weekly grouping can iterate more than once.
 
     @staticmethod
+    @staticmethod
+    def _split_physical_vs_virtual_inventory(
+        all_devices: list[dict[str, str]],
+    ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+        """Split combined inventory into (physical_devices, virtual_vc_placeholders)."""
+        virtual_entries = [
+            d for d in all_devices if d.get("mac", "").startswith("020003")
+        ]  # 020003* = synthetic VC MAC
+        site_configs = [d for d in all_devices if not d.get("mac", "").startswith("020003")]  # Real chassis only
+        return site_configs, virtual_entries  # Caller continues with VC classification
+
+    @staticmethod
+    def _classify_empty_vc_shells(
+        virtual_entries: list[dict[str, str]], site_configs: list[dict[str, str]]
+    ) -> tuple[list[dict[str, str]], int]:
+        """Return (empty_vc_shells, duplicate_vc_entries) for the virtual-entry analysis."""
+        physical_vc_macs = {d.get("vc_mac", "") for d in site_configs if d.get("vc_mac")}  # Set of VC parent MACs
+        empty_shells = [e for e in virtual_entries if e.get("mac") not in physical_vc_macs]  # No physical members
+        duplicates = len(virtual_entries) - len(empty_shells)  # Remainder mirrors real hardware
+        return empty_shells, duplicates  # Caller logs the diagnostics
+
+    @staticmethod
     def _partition_combined_inventory_rows(  # Partition combined inventory rows.
         all_devices: list[dict[str, str]],
     ) -> tuple[list[dict[str, str]], list[dict[str, str]], int]:
         """Separate physical inventory rows from virtual VC placeholders and count duplicates."""
-        virtual_entries = [
-            device for device in all_devices if device.get("mac", "").startswith("020003")
-        ]  # Identify virtual VC identifiers that do not represent physical hardware.
-        site_configs = [
-            device for device in all_devices if not device.get("mac", "").startswith("020003")
-        ]  # Keep only physical chassis rows for reporting outputs.
-        physical_vc_mac_targets = {
-            device.get("vc_mac", "") for device in site_configs if device.get("vc_mac")
-        }  # Collect VC parent MACs referenced by physical members.
-        empty_vc_shells = [
-            entry for entry in virtual_entries if entry.get("mac") not in physical_vc_mac_targets
-        ]  # Find virtual shells that have no physical members mapped to them.
-        duplicate_vc_entries = len(virtual_entries) - len(
-            empty_vc_shells
-        )  # Remaining virtual entries mirror real hardware already counted elsewhere.
-        return (
-            site_configs,
-            empty_vc_shells,
-            duplicate_vc_entries,
-        )  # Return physical rows plus shell diagnostics for logging.
+        site_configs, virtual_entries = OrgInventoryExporter._split_physical_vs_virtual_inventory(
+            all_devices
+        )  # Bucket by MAC prefix
+        empty_vc_shells, duplicate_vc_entries = OrgInventoryExporter._classify_empty_vc_shells(
+            virtual_entries, site_configs
+        )  # Analyze the virtual bucket
+        return site_configs, empty_vc_shells, duplicate_vc_entries  # Physical rows + shell diagnostics
 
     @staticmethod
     def _emit_vc_shell_dashboard_diff(
@@ -14538,29 +14558,40 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         print(f"    ! Using fallback gateway models: {len(self.FALLBACK_GATEWAY_MODELS)} models")
         return self.FALLBACK_GATEWAY_MODELS  # Use the fallback list.
 
+    @staticmethod
+    def _filter_gateway_models_from_dict(device_models_data: dict) -> list[str]:
+        """Filter gateway models from a dict payload (key=model_name, val=details)."""
+        gateway_models = []  # Collect names
+        for model_name, model_details in device_models_data.items():  # Walk dict entries
+            if not isinstance(model_details, dict):  # Skip non-dict values
+                continue
+            if model_details.get("type", "").lower() != "gateway":  # Only keep gateways
+                continue
+            gateway_models.append(model_name)  # Keep this gateway
+        return gateway_models  # Filtered result
+
+    @staticmethod
+    def _filter_gateway_models_from_list(device_models_data: list) -> list[str]:
+        """Filter gateway models from a list payload of model dicts."""
+        gateway_models = []  # Collect names
+        for model_item in device_models_data:  # Walk list items
+            if not isinstance(model_item, dict):  # Skip non-dict items
+                continue
+            model_name = model_item.get("model", model_item.get("name", ""))  # Read the name
+            if not model_name:  # Empty name = unusable
+                continue
+            if model_item.get("type", "").lower() != "gateway":  # Only keep gateways
+                continue
+            gateway_models.append(model_name)  # Keep this gateway
+        return gateway_models  # Filtered result
+
     def _extract_gateway_models(self, device_models_data) -> list[str]:  # Filter to gateway models.
         """Extract gateway model names from device models data."""
-        gateway_models = []  # Collect model names
-
-        if isinstance(device_models_data, dict):  # Dict payload
-            for model_name, model_details in device_models_data.items():  # Walk models
-                if not isinstance(model_details, dict):  # Skip non-dict values for safety
-                    continue
-                if model_details.get("type", "").lower() != "gateway":  # Only keep gateway entries
-                    continue
-                gateway_models.append(model_name)  # Keep the model
-        elif isinstance(device_models_data, list):  # List payload
-            for model_item in device_models_data:  # Walk models
-                if not isinstance(model_item, dict):  # Skip non-dict items
-                    continue
-                model_name = model_item.get("model", model_item.get("name", ""))  # Read the name
-                if not model_name:  # Empty name = unusable entry
-                    continue
-                if model_item.get("type", "").lower() != "gateway":  # Only keep gateway entries
-                    continue
-                gateway_models.append(model_name)  # Keep the model
-
-        return gateway_models  # Return gateway models
+        if isinstance(device_models_data, dict):  # Dict payload branch
+            return self._filter_gateway_models_from_dict(device_models_data)
+        if isinstance(device_models_data, list):  # List payload branch
+            return self._filter_gateway_models_from_list(device_models_data)
+        return []  # Unknown shape — empty result
 
     def _normalize_model_data(self, model: str, model_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize model data into list of records with model identifier."""
@@ -14606,47 +14637,69 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         print(f"    ! Successfully retrieved states for {successful} countries, {failed} failed")  # Tell the user.
         return all_states  # Return all states.
 
-    def _get_country_codes_list(self) -> list[str]:  # List country codes.
-        """Get list of valid country codes from countries endpoint."""
-        import importlib  # Import importlib.
+    def _call_countries_api(self):
+        """Call the Mist country definitions endpoint and return raw countries_data ({} on failure)."""
+        import importlib  # Local import: only needed when fetching country codes
 
         try:
-            countries_module = importlib.import_module("mistapi.api.v1.const.countries")  # Import countries.
-            countries_function = countries_module.listCountryCodes  # Resolve the function.
-            response = countries_function(self.api_session)  # Call the API.
-            countries_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
+            countries_module = importlib.import_module("mistapi.api.v1.const.countries")  # Endpoint module
+            countries_function = countries_module.listCountryCodes  # Resolve API entrypoint
+            response = countries_function(self.api_session)  # Call the Mist API
+            return getattr(response, "data", response) or {}  # Unwrap; default to empty
+        except Exception as error:  # Network/import/auth failure
+            logging.warning("Failed to get countries list: %s", error)  # Warn for diagnostics
+            return {}  # Empty signals caller to use fallback
 
-            country_codes = self._extract_country_codes(countries_data)  # Extract country codes.
+    @staticmethod
+    def _filter_valid_alpha2_codes(country_codes: list[str]) -> list[str]:
+        """Keep only 2-letter alphabetic country codes (logs how many were dropped)."""
+        valid = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]  # Strict alpha-2 filter
+        if len(valid) < len(country_codes):  # Some entries failed validation
+            logging.debug("Filtered out %s invalid country codes", len(country_codes) - len(valid))
+        return valid
 
-            if country_codes:  # Have codes.
-                original_count = len(country_codes)  # Remember the count.
-                country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
-                if len(country_codes) < original_count:  # Some were filtered.
-                    logging.debug("Filtered out %s invalid country codes", original_count - len(country_codes))
-                print(f"    ! Discovered {len(country_codes)} country codes from country definitions")  # Tell the user.
-                return country_codes  # Return them.
+    def _fetch_valid_country_codes_from_api(self) -> list[str]:
+        """Call the countries endpoint and return the validated 2-letter alpha codes (empty on failure)."""
+        countries_data = self._call_countries_api()  # API call with error guard
+        country_codes = self._extract_country_codes(countries_data)  # Extract raw codes
+        if not country_codes:  # API returned nothing usable
+            return []
+        valid = ConstDefinitionsExporter._filter_valid_alpha2_codes(country_codes)  # Drop bad codes
+        print(f"    ! Discovered {len(valid)} country codes from country definitions")  # User-facing count
+        return valid
 
-        except Exception as error:  # Fetch failed.
-            logging.warning("Failed to get countries list: %s", error)  # Warn the failure.
+    def _get_country_codes_list(self) -> list[str]:  # List country codes.
+        """Get list of valid country codes from countries endpoint."""
+        country_codes = self._fetch_valid_country_codes_from_api()  # Attempt API fetch + validation
+        if country_codes:  # API succeeded
+            return country_codes
+        print(f"    ! Using fallback country codes: {len(self.FALLBACK_COUNTRIES)} countries")  # User-facing fallback
+        return self.FALLBACK_COUNTRIES  # Built-in fallback list
 
-        print(f"    ! Using fallback country codes: {len(self.FALLBACK_COUNTRIES)} countries")
-        return self.FALLBACK_COUNTRIES  # Use the fallback list.
+    @staticmethod
+    def _resolve_country_code(item: dict) -> str:  # Pull a 2-letter ISO code from a heterogenous country dict
+        """Resolve a country code from various dict shapes (code | alpha2 | first 2 letters of name)."""
+        if item.get("code"):  # Preferred explicit code
+            return item["code"]
+        if item.get("alpha2"):  # ISO 3166-1 alpha-2 alternate field
+            return item["alpha2"]
+        return item.get("name", "")[:2].upper()  # Last resort: derive from name
 
     def _extract_country_codes(self, countries_data) -> list[str]:  # Extract country codes.
         """Extract country codes from countries data."""
-        if isinstance(countries_data, dict):  # Dict payload
-            return list(countries_data.keys())  # Return the keys
+        if isinstance(countries_data, dict):  # Dict payload — keys are codes
+            return list(countries_data.keys())
         if not isinstance(countries_data, list):  # Unknown shape — return empty
             return []
-        codes = []  # Collect codes
-        for item in countries_data:  # Walk items
+        codes = []  # Accumulate codes from list items
+        for item in countries_data:
             if not isinstance(item, dict):  # Skip non-dict items
                 continue
-            code = item.get("code") or item.get("alpha2") or item.get("name", "")[:2].upper()  # Resolve a code
-            if not code:  # Empty code = skip
+            code = ConstDefinitionsExporter._resolve_country_code(item)  # Resolve via helper
+            if not code:  # Empty resolution — skip
                 continue
-            codes.append(code)  # Keep it
-        return codes  # Return the codes
+            codes.append(code)
+        return codes
 
     def _normalize_states_data(self, country_code: str, country_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize states data into list of records with country identifier."""
@@ -16226,25 +16279,41 @@ class ARPCommandManager:  # ARP WebSocket command manager.
     """
 
     @staticmethod
+    def _resolve_arp_target_ids(site_id, device_id):
+        """Resolve (site_id, device_id), prompting if either is missing. Returns tuple or (None, None) on abort."""
+        if site_id and device_id:  # Already supplied — pass through
+            return site_id, device_id
+        site_id, device_id = PromptClientUtils.select_site_and_device_ids(site_id, device_id)  # type: ignore[no-untyped-call]
+        return site_id, device_id  # Caller validates emptiness
+
+    @staticmethod
+    def _resolve_mist_ws_credentials():
+        """Resolve (host, token) from session or environment. Returns (None, None) when either is missing."""
+        mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")  # Session host > env
+        mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")  # Session token > env
+        if not mist_host or not mist_apitoken:  # Either missing — caller bails
+            return None, None
+        return mist_host, mist_apitoken  # Caller streams using these
+
+    @staticmethod
     def execute(site_id=None, device_id=None):  # Run the ARP command.
         """Execute ARP command on a device and stream output via WebSocket (prompts for IDs when missing)."""
-        if not site_id or not device_id:  # Prompt for ids.
-            site_id, device_id = PromptClientUtils.select_site_and_device_ids(site_id, device_id)  # type: ignore[no-untyped-call]
-        if not site_id or not device_id:  # Need both ids.
-            return  # Abort.
-        mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")  # Resolve the host.
-        mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")  # Resolve the token.
-        if not mist_host or not mist_apitoken:  # Missing credentials.
-            print(" Mist host or API token not found in session or environment.")  # Tell the user.
-            return  # Abort.
-        print(" Subscribing to WebSocket stream...")  # Tell the user.
+        site_id, device_id = ARPCommandManager._resolve_arp_target_ids(site_id, device_id)  # Resolve or prompt
+        if not site_id or not device_id:  # Still missing — abort
+            return
+        mist_host, mist_apitoken = ARPCommandManager._resolve_mist_ws_credentials()  # Resolve creds
+        if not mist_host:  # Missing creds (host falsy implies token also missing per resolver)
+            print(" Mist host or API token not found in session or environment.")  # User-facing notice
+            return
+        print(" Subscribing to WebSocket stream...")  # User progress
         session_id = ARPCommandManager._trigger_command(mist_host, mist_apitoken, site_id, device_id)  # type: ignore[no-untyped-call]
-        if session_id:  # Have a session.
-            ARPCommandManager._listen_for_output(  # type: ignore[no-untyped-call]
-                WebSocketStreamTarget(  # Issue #470: bundle WS connection identity into one target.
-                    mist_host.replace("api.", "api-ws."), mist_apitoken, site_id, device_id, session_id
-                )
+        if not session_id:  # Trigger failed — nothing to listen for
+            return
+        ARPCommandManager._listen_for_output(  # type: ignore[no-untyped-call]
+            WebSocketStreamTarget(  # Issue #470: bundle WS connection identity into one target.
+                mist_host.replace("api.", "api-ws."), mist_apitoken, site_id, device_id, session_id
             )
+        )
 
     @staticmethod
     def _trigger_command(mist_host, mist_apitoken, site_id, device_id):  # Trigger the ARP command.
@@ -16336,30 +16405,41 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         return buffer  # Return the remaining tail.
 
     @staticmethod
+    @staticmethod
+    def _parse_ws_arp_payload(message: str):
+        """Parse a WebSocket frame into the inner ARP data dict (returns None when frame can't be unwrapped)."""
+        msg = json.loads(message)  # Outer envelope
+        data_str = msg.get("data", "{}")  # Outer data string
+        data_obj = json.loads(data_str) if isinstance(data_str, str) else data_str  # Inner JSON or already-parsed
+        inner_data = data_obj.get("data", {})  # Inner payload
+        if isinstance(inner_data, str):  # Stringified inner — decode once more
+            inner_data = json.loads(inner_data)
+        return inner_data  # Caller checks session id
+
+    @staticmethod
     def _handle_message(message, session_id, buffer, output_lines, debug=False):  # Parse one ARP message.
         """Handle incoming WebSocket message."""
-        last_message_time = time.time()  # Record the time.
+        last_message_time = time.time()  # Record arrival timestamp
+        if debug:  # Debug trace of raw frame
+            logging.debug("WebSocket raw message received: %s", message)
         try:
-            if debug:  # Debug mode.
-                logging.debug("WebSocket raw message received: %s", message)  # Trace the raw message.
-            msg = json.loads(message)  # Parse the JSON.
-            data_str = msg.get("data", "{}")  # Read the data string.
-            data_obj = json.loads(data_str) if isinstance(data_str, str) else data_str  # Parse nested JSON.
-            inner_data = data_obj.get("data", {})  # Read the inner data.
-            if isinstance(inner_data, str):  # String payload.
-                inner_data = json.loads(inner_data)  # Parse it.
-            if inner_data.get("session") == session_id:  # Session matches.
-                raw_output = inner_data.get("raw", "")  # Read the raw output.
-                buffer = ARPCommandManager._drain_buffer_to_lines(buffer + raw_output, output_lines)  # Drain.
-                if debug:  # Debug mode.
-                    logging.debug("Processed WebSocket data: %s chars", len(raw_output))  # Trace the size.
-        except json.JSONDecodeError as e:  # JSON decode failed.
-            logging.error("WebSocket message JSON decode error: %s", e)  # Log the error.
-        except KeyError as e:  # Missing key.
-            logging.warning("WebSocket message missing expected key: %s", e)  # Warn the gap.
-        except Exception as e:  # Unexpected failure.
-            logging.error("Unexpected error parsing WebSocket message: %s", e)  # Log the error.
-        return last_message_time, buffer  # Return time and buffer.
+            inner_data = ARPCommandManager._parse_ws_arp_payload(message)  # Unwrap nested JSON
+        except json.JSONDecodeError as e:  # Malformed JSON anywhere in the chain
+            logging.error("WebSocket message JSON decode error: %s", e)
+            return last_message_time, buffer  # Preserve buffer; caller continues
+        except KeyError as e:  # Missing expected key
+            logging.warning("WebSocket message missing expected key: %s", e)
+            return last_message_time, buffer
+        except Exception as e:  # Unexpected failure (defensive)
+            logging.error("Unexpected error parsing WebSocket message: %s", e)
+            return last_message_time, buffer
+        if inner_data.get("session") != session_id:  # Frame is for a different session — ignore
+            return last_message_time, buffer
+        raw_output = inner_data.get("raw", "")  # Append fragment to running buffer
+        buffer = ARPCommandManager._drain_buffer_to_lines(buffer + raw_output, output_lines)  # Flush full lines
+        if debug:  # Debug trace of processed size
+            logging.debug("Processed WebSocket data: %s chars", len(raw_output))
+        return last_message_time, buffer  # Return updated time + remaining buffer
 
     @staticmethod
     def _handle_close(output_lines, debug=False):  # Handle the close.
@@ -17399,25 +17479,30 @@ class WANProbeConfigManager:  # WAN probe config manager.
             print(f"   [{idx}] {template_name} ({site_count} sites)")  # Print the option.
         return template_list  # Return rows for selection.
 
+    @staticmethod
+    def _resolve_template_indices(selection: str, template_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Parse a comma-separated 1-based index string into the matching template rows (raises on bad input)."""
+        indices = [int(idx.strip()) - 1 for idx in selection.split(",")]  # 1-based input → 0-based indices
+        return [template_list[idx] for idx in indices if 0 <= idx < len(template_list)]  # Drop out-of-range
+
     def _parse_template_selection(self, selection: str, template_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Parse a user template-selection string into the matching template rows (empty list on failure)."""
-        if selection == "cancel":  # User cancelled.
-            print(" Operation cancelled.")  # Tell the user.
-            logging.info("Menu #166 cancelled by user at template selection")  # Log the cancel.
-            return []  # Return empty.
-        if selection == "all":  # Select all.
-            return template_list  # Return all templates.
+        if selection == "cancel":  # User cancelled
+            print(" Operation cancelled.")
+            logging.info("Menu #166 cancelled by user at template selection")
+            return []
+        if selection == "all":  # Select all templates as-is
+            return template_list
         try:
-            indices = [int(idx.strip()) - 1 for idx in selection.split(",")]  # Parse the indices.
-            selected = [template_list[idx] for idx in indices if 0 <= idx < len(template_list)]  # Resolve.
-            if not selected:  # None valid.
-                print(" No valid templates selected.")  # Tell the user.
-                return []  # Return empty.
-            return selected  # Return the selection.
-        except (ValueError, IndexError) as error:  # Bad input.
-            print(f" Invalid selection: {error}")  # Tell the user.
-            logging.error("Menu #166: Invalid template selection: %s", error)  # Log the error.
-            return []  # Return empty.
+            selected = type(self)._resolve_template_indices(selection, template_list)  # Parse + filter indices
+        except (ValueError, IndexError) as error:  # Bad numeric input
+            print(f" Invalid selection: {error}")
+            logging.error("Menu #166: Invalid template selection: %s", error)
+            return []
+        if not selected:  # All indices were out-of-range
+            print(" No valid templates selected.")
+            return []
+        return selected
 
     def _select_templates(self) -> list[dict[str, Any]]:  # Select templates.
         """Display templates and get user selection. Returns selected templates."""
@@ -20080,22 +20165,30 @@ class WLANRadiusTimerManager:
             "Found %s WLAN templates assigned to this site", len(self.assigned_template_ids)
         )  # Report the count
 
+    @staticmethod
+    def _template_matches_org_or_site(applies: dict[str, Any], site_id: str) -> bool:
+        """True when the template's `applies` block targets org-wide OR explicitly lists this site."""
+        if applies.get("org_id"):  # Org-wide templates cover every site
+            return True
+        return site_id in applies.get("site_ids", [])  # Direct site list match
+
+    @staticmethod
+    def _template_matches_grouping(applies: dict[str, Any], site_groups: list, site_tags: list) -> bool:
+        """True when the template's `applies` shares any sitegroup_id or wxtag_id with this site."""
+        if any(sg in applies.get("sitegroup_ids", []) for sg in site_groups):  # Group-based assignment
+            return True
+        return any(tag in applies.get("wxtag_ids", []) for tag in site_tags)  # Tag-based assignment
+
     def _is_template_assigned_to_site(self, wlan_template: dict[str, Any]) -> bool:
         """Check if a WLAN template is assigned to the current site."""
         applies = wlan_template.get("applies", {})  # The template's assignment scope rules
-        if not isinstance(applies, dict):  # Malformed/absent scope object
-            return False  # Treat as not applicable
-        if applies.get("org_id"):  # The template applies org-wide
-            return True  # Org-wide templates apply to every site
-        if self.site_id in applies.get("site_ids", []):  # The site is explicitly listed
-            return True  # Direct site assignment
+        if not isinstance(applies, dict):  # Malformed/absent scope object — not applicable
+            return False
+        if type(self)._template_matches_org_or_site(applies, self.site_id):  # Org-wide or explicit site
+            return True
         site_groups = self.site_info.get("sitegroup_ids", [])  # Site groups this site belongs to
-        if any(sg in applies.get("sitegroup_ids", []) for sg in site_groups):  # A shared site group matches
-            return True  # Assigned via site group membership
         site_tags = self.site_info.get("wxtag_ids", [])  # Wx tags applied to this site
-        if any(tag in applies.get("wxtag_ids", []) for tag in site_tags):  # A shared Wx tag matches
-            return True  # Assigned via matching tag
-        return False  # None of the assignment rules matched
+        return type(self)._template_matches_grouping(applies, site_groups, site_tags)  # Group/tag match
 
     def _fetch_and_filter_org_wlans(self) -> None:
         """Fetch org WLANs and filter to those using assigned templates."""
@@ -23780,25 +23873,45 @@ def main():
     _dispatch_main_mode(args)  # Choose and run the right mode (test, TUI, web portal, CLI, interactive).
 
 
+def _run_systematic_test_mode(_args: argparse.Namespace) -> None:
+    """Run all safe menu options once and exit 0 on pass / 1 on fail."""
+    logging.info("SYSTEMATIC_TEST: Starting systematic test mode")  # Trace before dispatch
+    sys.exit(0 if run_systematic_test() else 1)  # type: ignore[no-untyped-call]
+
+
+def _run_interactive_test_mode(_args: argparse.Namespace) -> None:
+    """Run interactive test mode (read-only menus with site/device selection) and exit."""
+    logging.info("INTERACTIVE_TEST: Starting interactive test mode")  # Trace before dispatch
+    sys.exit(0 if run_interactive_test() else 1)  # type: ignore[no-untyped-call]
+
+
+def _run_tui_mode_and_exit(args: argparse.Namespace) -> None:
+    """Launch the Rich Terminal UI and exit cleanly when the user closes it."""
+    _run_tui_mode(args)  # TUI handles its own event loop and exceptions
+    sys.exit(0)
+
+
+def _run_web_portal_mode(args: argparse.Namespace) -> None:
+    """Launch the Gunicorn web portal on port 8055 and exit cleanly on shutdown."""
+    logging.info("WEB_PORTAL: Starting web portal mode")  # Trace before launch
+    _launch_web_portal(args)  # type: ignore[no-untyped-call]  # Blocks until shutdown
+    sys.exit(0)
+
+
 def _dispatch_main_mode(args: argparse.Namespace) -> None:
     """Dispatch to the appropriate mode entry point based on parsed CLI flags."""
-    if args.test:  # Systematic test mode: run all safe menu options and exit with result code.
-        logging.info("SYSTEMATIC_TEST: Starting systematic test mode")  # Log before test dispatch.
-        sys.exit(0 if run_systematic_test() else 1)  # type: ignore[no-untyped-call]  # Run; exit 0 pass, 1 fail.
-    if args.testinteractive:  # Interactive test mode: test read-only menus with site/device selection.
-        logging.info("INTERACTIVE_TEST: Starting interactive test mode")  # Log before interactive test dispatch.
-        sys.exit(0 if run_interactive_test() else 1)  # type: ignore[no-untyped-call]  # Exit 0 pass, 1 fail.
-    if args.tui:  # TUI mode: launch Rich Terminal User Interface (exits when user closes TUI).
-        _run_tui_mode(args)  # Launch TUI event loop (handles its own exception handling).
-        sys.exit(0)  # Exit cleanly after TUI completes.
-    if getattr(args, "web_portal", False):  # Web portal mode: launch Gunicorn server on port 8055.
-        logging.info("WEB_PORTAL: Starting web portal mode")  # Log before web portal launch.
-        _launch_web_portal(args)  # type: ignore[no-untyped-call]  # Start Gunicorn (blocks until shutdown).
-        sys.exit(0)  # Exit cleanly after web portal shuts down.
-    if _has_meaningful_cli_args(args):  # CLI dispatch mode: resolve IDs, call menu function, and exit.
-        _run_cli_mode(args)  # Resolve org/site/device, dispatch to menu function, exit 0 on success.
-        return  # _run_cli_mode always calls sys.exit -- this return is defensive only.
-    _run_interactive_mode(args)  # Interactive mode: present menu loop until user exits or EOF.
+    mode_table = (  # Ordered (predicate, handler) pairs — first match wins
+        (lambda a: bool(a.test), _run_systematic_test_mode),
+        (lambda a: bool(a.testinteractive), _run_interactive_test_mode),
+        (lambda a: bool(a.tui), _run_tui_mode_and_exit),
+        (lambda a: bool(getattr(a, "web_portal", False)), _run_web_portal_mode),
+        (_has_meaningful_cli_args, _run_cli_mode),
+    )
+    for predicate, handler in mode_table:  # Stop on first predicate that matches
+        if predicate(args):
+            handler(args)
+            return  # Most handlers sys.exit; return is defensive for _run_cli_mode
+    _run_interactive_mode(args)  # Fallback: interactive menu loop
 
 
 def _has_meaningful_cli_args(args: argparse.Namespace) -> bool:
