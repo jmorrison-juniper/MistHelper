@@ -10444,141 +10444,121 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         )  # Record successful export count in logs.
 
     @staticmethod
+    def _validate_fast_port_stats_start_time(start_time) -> None:
+        """Defensive guard: fail loudly if start_time is not numeric (catches monkeypatch corruption)."""
+        if isinstance(start_time, (int, float)):  # Normal numeric value -- nothing to do.
+            return
+        logging.error(
+            "! CRITICAL: start_time is not a number! type=%s, value=%s", type(start_time), start_time
+        )  # Surface impossible state.
+        logging.error("! time module type: %s, time.time type: %s", type(time), type(time.time))  # Debugging context.
+        raise TypeError(f"start_time must be a number, got {type(start_time)}")  # Elapsed calc would be invalid.
+
+    @staticmethod
+    def _log_fast_port_stats_summary(sites, failed_sites, all_port_stats, duration) -> None:
+        """Emit operator-facing summary + structured log for fast-mode port stats run."""
+        ok_count = len(sites) - len(failed_sites)  # Successful site count.
+        fail_count = len(failed_sites)  # Failed site count.
+        record_count = len(all_port_stats)  # Total port-stat rows collected.
+        logging.info(
+            " FAST MODE SUMMARY (port stats): sites_ok=%s sites_fail=%s records=%s elapsed=%.2fs",
+            ok_count,
+            fail_count,
+            record_count,
+            duration,
+        )  # Structured run summary.
+        print(
+            f"* Fast mode: Collected {record_count} port stat records from {ok_count}/{len(sites)} sites in {duration:.1f}s"  # noqa: E501
+        )  # Operator timing summary.
+
+    @staticmethod
     def _run_fast_device_port_stats(output_file: str) -> None:  # Run fast device port stats.
         """Execute fast-mode site-parallel port stats collection and output."""
         logging.info(
             "* Fast mode: Parallelizing port stats retrieval across sites"
         )  # Announce fast-mode collection strategy.
-        org_id = (
-            ConfigUtils.get_cached_or_prompted_org_id()
-        )  # Resolve org ID once before site discovery and API collection.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org ID once before site discovery.
         sites = OrgDeviceStatsExporter._load_port_stats_sites(org_id)  # Load normalized site tuples from cache or API.
-        start_time = time.time()  # Capture start time for performance summary logging.
-        if not isinstance(start_time, (int, float)):  # Defensive guard against accidental monkeypatch/type corruption.
-            logging.error(
-                "! CRITICAL: start_time is not a number! type=%s, value=%s", type(start_time), start_time
-            )  # Surface impossible timing state for diagnosis.
-            logging.error(
-                "! time module type: %s, time.time type: %s", type(time), type(time.time)
-            )  # Provide context for debugging patched modules.
-            raise TypeError(
-                f"start_time must be a number, got {type(start_time)}"
-            )  # Fail loudly because elapsed calculation would be invalid.
+        start_time = time.time()  # Capture start time for performance summary.
+        OrgDeviceStatsExporter._validate_fast_port_stats_start_time(start_time)  # Defensive numeric-type guard.
         successful_results, failed_sites = (
-            execute_with_connection_pool_management(  # Run bounded-concurrency site collection with shared retry support.  # noqa: E501
+            execute_with_connection_pool_management(  # Bounded-concurrency site collection with retry.
                 work_items=sites,
                 worker_function=OrgDeviceStatsExporter._fetch_site_port_stats,
                 batch_description="sites",
                 retry_function=OrgDeviceStatsExporter._retry_failed_site_port_stats,
             )
         )
-        logging.debug(  # Log pooled result shape before flattening for easier troubleshooting of worker issues.
-            "execute_with_connection_pool_management returned - successful_results type: %s, length: %s",
-            type(successful_results),
-            len(successful_results) if isinstance(successful_results, list) else "N/A",
-        )
-        logging.debug(  # Log failed-site list shape for retry and summary debugging.
-            "failed_sites type: %s, length: %s",
-            type(failed_sites),
-            len(failed_sites) if isinstance(failed_sites, list) else "N/A",
-        )
         all_port_stats = OrgDeviceStatsExporter._flatten_site_port_results(
             successful_results
-        )  # Collapse per-site worker results into one export list.
-        end_time = time.time()  # Capture end time after all worker and retry processing completes.
-        logging.debug(
-            "End time type: %s, value: %s", type(end_time), end_time
-        )  # Keep timing diagnostics visible during fast-mode tuning.
-        duration = end_time - start_time  # Compute elapsed seconds for operator summary.
-        logging.debug("Duration calculation successful: %s", duration)  # Confirm elapsed calculation succeeded.
-        logging.info(  # Summarize site success/failure counts and total rows for fast-mode observability.
-            " FAST MODE SUMMARY (port stats): sites_ok=%s sites_fail=%s records=%s elapsed=%.2fs",
-            len(sites) - len(failed_sites),
-            len(failed_sites),
-            len(all_port_stats),
-            duration,
-        )
-        print(  # Provide concise operator-facing timing and record-count summary.
-            f"* Fast mode: Collected {len(all_port_stats)} port stat records from {len(sites) - len(failed_sites)}/{len(sites)} sites in {duration:.1f}s"  # noqa: E501
-        )
-        OrgDeviceStatsExporter._save_device_port_stats_output(
-            all_port_stats, output_file
-        )  # Persist collected rows through shared save helper.
+        )  # Collapse per-site results.
+        duration = time.time() - start_time  # Elapsed seconds for operator summary.
+        OrgDeviceStatsExporter._log_fast_port_stats_summary(
+            sites, failed_sites, all_port_stats, duration
+        )  # Emit summary log + print.
+        OrgDeviceStatsExporter._save_device_port_stats_output(all_port_stats, output_file)  # Persist collected rows.
 
     @staticmethod
     def device_port_stats(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
-        """Export port-level statistics for all switches and gateways to `OrgDevicePortStats.csv`.
+        """Export port-level statistics for switches and gateways to OrgDevicePortStats.csv.
 
-        Fast Mode Behavior:
-            - Skips API call if recent CSV exists (freshness based on `CSV_FRESHNESS_MINUTES`).
-            - Parallelizes data retrieval across sites for faster collection.
-            - Uses connection pool management to limit concurrent API calls.
-
-        Performance Optimization:
-            - Non-fast mode: Single org-level API call with serial pagination (slow but simple)
-            - Fast mode: Parallel site-level API calls (faster, scales with site count)
-
-        SECURITY: Read-only aggregation; caching is safe.
+        Fast mode caches recent CSV (CSV_FRESHNESS_MINUTES) and parallelizes site fetches with
+        bounded concurrency. Non-fast mode issues one org-level paginated call. SECURITY: read-only.
         """
-        output_file = "OrgDevicePortStats.csv"  # Keep stable output filename for cache checks and downstream consumers.
-        if OrgDeviceStatsExporter._port_stats_cache_hit(
-            output_file, fast
-        ):  # Honor fast-mode cache reuse before making any API calls.
-            return  # Fresh cache satisfied the request, so no further processing is needed.
-        logging.info(
-            "Starting export of organization device port statistics..."
-        )  # Log export entry point before any dynamic lookback or fetch path selection.
-        hours = TimeUtils.get_dynamic_lookback_hours(
-            24, 1
-        )  # Resolve test-aware lookback for consistency with other stats exports.
-        TimeUtils.log_dynamic_lookback(
-            "org device port statistics export", hours
-        )  # Record chosen lookback window for operators and tests.
-        if fast:  # Fast mode uses site-parallel collection instead of a single org-level API call.
-            OrgDeviceStatsExporter._run_fast_device_port_stats(
-                output_file
-            )  # Execute decomposed fast-mode workflow with retries and bounded concurrency.
-            return  # Fast-mode path handled all export responsibilities already.
-        APIDataFetcher(  # Non-fast mode preserves original single org-level API fetch behavior.
+        output_file = "OrgDevicePortStats.csv"  # Stable filename for cache + downstream consumers.
+        if OrgDeviceStatsExporter._port_stats_cache_hit(output_file, fast):  # Honor fast cache before API.
+            return  # Fresh cache satisfied the request.
+        logging.info("Starting export of organization device port statistics...")  # Log export start.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve test-aware lookback window.
+        TimeUtils.log_dynamic_lookback("org device port statistics export", hours)  # Record chosen window.
+        if fast:  # Fast mode = site-parallel collection.
+            OrgDeviceStatsExporter._run_fast_device_port_stats(output_file)  # Execute decomposed fast-mode workflow.
+            return  # Fast-mode path owns the full export.
+        APIDataFetcher(  # Non-fast mode = single org-level paginated fetch.
             title="Org Device Port Stats:",
             api_call=mistapi.api.v1.orgs.stats.searchOrgSwOrGwPorts,
             filename=output_file,
             sort_key="mac",
             limit=1000,
-        ).execute()  # Execute org-level pagination and export through the shared fetcher.
+        ).execute()  # Execute pagination + export.
+
+    @staticmethod
+    def _vpn_peer_stats_cache_hit(output_file: str, fast: bool) -> bool:
+        """Return True if fast-mode cache for VPN peer stats is fresh; emit cache-hit log + print."""
+        if not (fast and os.path.exists(output_file)):  # Either non-fast or no file yet.
+            return False
+        try:
+            mtime = os.path.getmtime(output_file)  # Disk mtime for freshness math.
+            age_minutes = (time.time() - mtime) / 60.0  # Age in minutes.
+            if age_minutes < CSV_FRESHNESS_MINUTES:  # Fresh enough to reuse.
+                logging.info(
+                    " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
+                    output_file,
+                    age_minutes,
+                    CSV_FRESHNESS_MINUTES,
+                )  # Structured log.
+                print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Operator-facing.
+                return True
+        except Exception as e:  # Freshness check failed -- fall through to fetch.
+            logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)  # Debug-only.
+        return False
 
     @staticmethod
     def vpn_peer_stats(fast: bool = False):  # Export VPN peer stats.
         """Export VPN peer path statistics to OrgVPNPeerStats.csv.
 
-        Fast Mode Behavior:
-            - Skip API call on fresh cache (age < CSV_FRESHNESS_MINUTES).
-            - Normal fetch otherwise.
-        SECURITY: Read-only; safe to cache.
+        Fast mode reuses recent CSV; normal mode does an org-level paginated fetch. SECURITY: read-only.
         """
-        output_file = "OrgVPNPeerStats.csv"  # Define output filename.
-        if fast and os.path.exists(output_file):  # Branch: fast cache check.
-            try:
-                mtime = os.path.getmtime(output_file)
-                age_minutes = (time.time() - mtime) / 60.0
-                if age_minutes < CSV_FRESHNESS_MINUTES:
-                    logging.info(
-                        " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
-                        output_file,
-                        age_minutes,
-                        CSV_FRESHNESS_MINUTES,
-                    )
-                    print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
-                    return
-            except Exception as e:
-                logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)
-        logging.info("Starting export of organization VPN peer path statistics...")
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("15", "vpn_peer_stats", 1)
-        op_start = time.time()
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)
-        TimeUtils.log_dynamic_lookback("org vpn peer path statistics export", hours)
+        output_file = "OrgVPNPeerStats.csv"  # Output filename.
+        if OrgDeviceStatsExporter._vpn_peer_stats_cache_hit(output_file, fast):  # Honor fast cache.
+            return  # Cache satisfied.
+        logging.info("Starting export of organization VPN peer path statistics...")  # Log start.
+        emitter = PROGRESS_EMITTER  # Progress emitter (may be None).
+        if emitter:  # Emitter present.
+            emitter.emit_progress_start("15", "vpn_peer_stats", 1)  # Signal progress start.
+        op_start = time.time()  # Start timer.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Test-aware lookback.
+        TimeUtils.log_dynamic_lookback("org vpn peer path statistics export", hours)  # Record lookback.
         APIDataFetcher(
             title="Org VPN Peer Stats:",
             api_call=mistapi.api.v1.orgs.stats.searchOrgPeerPathStats,
@@ -10586,8 +10566,8 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             sort_key="mac",
             duration=f"{hours}h",
             limit=1000,
-        ).execute()
-        if emitter:
+        ).execute()  # Run paginated org-level fetch + export.
+        if emitter:  # Signal progress complete on the emitter.
             emitter.emit_progress_complete(ProgressContext("15", "vpn_peer_stats", 1), 1, False, time.time() - op_start)
 
     @staticmethod
@@ -10619,34 +10599,39 @@ class OfflineDeviceReporter:
     MAX_INPUT_RETRIES = 3
 
     @staticmethod
+    def _parse_threshold_attempt(raw: str) -> int | None:
+        """Parse one user attempt; return validated hours or None to retry."""
+        try:
+            hours = int(raw)  # Coerce to int.
+            min_h = OfflineDeviceReporter.MIN_THRESHOLD_HOURS  # Local alias for line length.
+            max_h = OfflineDeviceReporter.MAX_THRESHOLD_HOURS  # Local alias for line length.
+            if min_h <= hours <= max_h:
+                return hours  # Valid -- accept.
+            print(f"! Threshold must be between {min_h} and {max_h} hours.")  # Out-of-range.
+        except ValueError:
+            print(f"! Invalid input '{raw}'. Please enter a number.")  # Bad type.
+        return None
+
+    @staticmethod
     def _prompt_threshold() -> int:
         """Prompt user for offline threshold in hours, with validation."""
-        if IS_TEST_MODE:
-            logging.debug("Test mode: using default threshold 48 hours")
-            return OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS
-
-        for attempt in range(OfflineDeviceReporter.MAX_INPUT_RETRIES):
+        if IS_TEST_MODE:  # Test mode skips interactive prompt.
+            logging.debug("Test mode: using default threshold 48 hours")  # Log shortcut.
+            return OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS  # Default value.
+        for attempt in range(OfflineDeviceReporter.MAX_INPUT_RETRIES):  # Bounded retry loop.
             raw = InputUtils.safe_input(
                 f"Enter offline threshold in hours (default {OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS}): ",
                 default_value=str(OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS),
                 context="offline_threshold",
-            )
-            try:
-                hours = int(raw)
-                if OfflineDeviceReporter.MIN_THRESHOLD_HOURS <= hours <= OfflineDeviceReporter.MAX_THRESHOLD_HOURS:
-                    return hours
-                print(
-                    f"! Threshold must be between {OfflineDeviceReporter.MIN_THRESHOLD_HOURS}"
-                    f" and {OfflineDeviceReporter.MAX_THRESHOLD_HOURS} hours."
-                )
-            except ValueError:
-                print(f"! Invalid input '{raw}'. Please enter a number.")
-            remaining = OfflineDeviceReporter.MAX_INPUT_RETRIES - attempt - 1
+            )  # EOF-safe input.
+            parsed = OfflineDeviceReporter._parse_threshold_attempt(raw)  # Validate this attempt.
+            if parsed is not None:  # Valid value.
+                return parsed
+            remaining = OfflineDeviceReporter.MAX_INPUT_RETRIES - attempt - 1  # Attempts left.
             if remaining > 0:
-                print(f"  ({remaining} attempt(s) remaining)")
-
-        logging.warning("Max retries exceeded for threshold input, using default 48 hours")
-        print(f"  Using default threshold: {OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS} hours")
+                print(f"  ({remaining} attempt(s) remaining)")  # Tell user.
+        logging.warning("Max retries exceeded for threshold input, using default 48 hours")  # Log fallback.
+        print(f"  Using default threshold: {OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS} hours")  # Tell user.
         return OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS
 
     @staticmethod
@@ -10672,63 +10657,91 @@ class OfflineDeviceReporter:
         return site_lookup, all_devices
 
     @staticmethod
+    def _format_offline_timing(last_seen_epoch: float, offline_seconds: float) -> tuple[str, str, float]:
+        """Return (last_seen_str, duration_str, sort_key) for one offline device."""
+        if last_seen_epoch == 0.0:  # Device has never connected.
+            return "Never Connected", "Never Connected", float("inf")
+        last_seen_str = datetime.fromtimestamp(last_seen_epoch).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )  # Human-readable timestamp.
+        total_hours = int(offline_seconds // 3600)  # Whole hours offline.
+        days, hours = total_hours // 24, total_hours % 24  # Split into days and hours.
+        duration_str = f"{days} days {hours} hours" if days > 0 else f"{hours} hours"  # Pick format.
+        return last_seen_str, duration_str, offline_seconds
+
+    @staticmethod
+    def _compile_offline_record(
+        device: dict, site_lookup: dict[str, str], last_seen_str: str, duration_str: str, sort_key: float
+    ) -> dict:
+        """Build the display/CSV record for one offline device."""
+        device_type_raw = device.get("type", "unknown")  # Raw device type from API.
+        type_display = {"ap": "AP", "switch": "Switch", "gateway": "Gateway"}.get(
+            device_type_raw, device_type_raw.capitalize()
+        )  # Friendly label.
+        site_name = site_lookup.get(device.get("site_id", ""), "Unknown Site")  # Resolve site name.
+        device_name = device.get("name") or "(unnamed)"  # Name fallback.
+        return {
+            "Device Name": device_name,
+            "Device Type": type_display,
+            "Site Name": site_name,
+            "MAC Address": device.get("mac", ""),
+            "Serial Number": device.get("serial", ""),
+            "Model": device.get("model", ""),
+            "Last Seen": last_seen_str,
+            "Offline Duration": duration_str,
+            "Status": device.get("status", "disconnected"),
+            "_sort_key": str(sort_key),
+        }
+
+    @staticmethod
+    def _maybe_build_offline_record(
+        device: dict, site_lookup: dict[str, str], now: float, threshold_seconds: int
+    ) -> dict | None:
+        """Return offline record for device if it qualifies as offline; None to skip."""
+        if device.get("status") == "connected":  # Skip currently-connected devices.
+            return None
+        last_seen_raw = device.get("last_seen") or 0  # Raw last-seen epoch.
+        last_seen_epoch = float(last_seen_raw) if last_seen_raw else 0.0  # Coerce to float.
+        offline_seconds = now - last_seen_epoch  # Time since last contact.
+        if offline_seconds < threshold_seconds and last_seen_epoch > 0:  # Inside threshold + seen before.
+            return None
+        last_seen_str, duration_str, sort_key = OfflineDeviceReporter._format_offline_timing(
+            last_seen_epoch, offline_seconds
+        )  # Format display values.
+        return OfflineDeviceReporter._compile_offline_record(device, site_lookup, last_seen_str, duration_str, sort_key)
+
+    @staticmethod
     def _process_devices(
         all_devices: list[dict[str, Any]],
         site_lookup: dict[str, str],
         threshold_hours: int,
     ) -> list[dict[str, Any]]:
         """Filter offline devices beyond threshold, enrich with site names."""
-        now = time.time()
-        threshold_seconds = threshold_hours * 3600
-        offline_records: list[dict[str, Any]] = []  # Values include API Any fields, not strictly str
-
-        for device in all_devices:
-            if device.get("status") == "connected":
-                continue
-            last_seen_raw = device.get("last_seen") or 0
-            last_seen_epoch = float(last_seen_raw) if last_seen_raw else 0.0
-            offline_seconds = now - last_seen_epoch
-            if offline_seconds < threshold_seconds and last_seen_epoch > 0:
-                continue
-
-            # Format display values
-            never_connected = last_seen_epoch == 0.0
-            if never_connected:
-                last_seen_str = "Never Connected"
-                duration_str = "Never Connected"
-                sort_key = float("inf")
-            else:
-                last_seen_str = datetime.fromtimestamp(last_seen_epoch).strftime("%Y-%m-%d %H:%M:%S")
-                total_hours = int(offline_seconds // 3600)
-                days = total_hours // 24
-                hours = total_hours % 24
-                duration_str = f"{days} days {hours} hours" if days > 0 else f"{hours} hours"
-                sort_key = offline_seconds
-
-            device_type_raw = device.get("type", "unknown")
-            type_display = {"ap": "AP", "switch": "Switch", "gateway": "Gateway"}.get(
-                device_type_raw, device_type_raw.capitalize()
-            )
-            site_name = site_lookup.get(device.get("site_id", ""), "Unknown Site")
-
-            device_name = device.get("name") or "(unnamed)"
-            offline_records.append(
-                {
-                    "Device Name": device_name,
-                    "Device Type": type_display,
-                    "Site Name": site_name,
-                    "MAC Address": device.get("mac", ""),
-                    "Serial Number": device.get("serial", ""),
-                    "Model": device.get("model", ""),
-                    "Last Seen": last_seen_str,
-                    "Offline Duration": duration_str,
-                    "Status": device.get("status", "disconnected"),
-                    "_sort_key": str(sort_key),
-                }
-            )
-
-        offline_records.sort(key=lambda record: float(record["_sort_key"]), reverse=True)
+        now = time.time()  # Current epoch.
+        threshold_seconds = threshold_hours * 3600  # Convert threshold to seconds.
+        offline_records: list[dict[str, Any]] = []  # Accumulator.
+        for device in all_devices:  # Walk all devices once.
+            record = OfflineDeviceReporter._maybe_build_offline_record(
+                device, site_lookup, now, threshold_seconds
+            )  # Build or skip.
+            if record is not None:  # Device qualifies as offline.
+                offline_records.append(record)
+        offline_records.sort(key=lambda r: float(r["_sort_key"]), reverse=True)  # Sort by offline duration desc.
         return offline_records
+
+    @staticmethod
+    def _render_offline_breakdowns(type_counts: dict[str, int], site_counts: dict[str, int]) -> None:
+        """Print 'By Type' and 'Top 5 Sites' breakdowns from precomputed counts."""
+        print("\nBy Type:")  # Header for type breakdown.
+        for device_type in ["AP", "Switch", "Gateway"]:  # Stable display order.
+            count = type_counts.get(device_type, 0)  # Lookup count.
+            if count > 0:  # Suppress zeros.
+                print(f"  {device_type}s: {count}")
+        sorted_sites = sorted(site_counts.items(), key=lambda item: item[1], reverse=True)[:5]  # Top 5 by count.
+        if sorted_sites:
+            print("\nTop 5 Sites:")  # Header for the leaderboard.
+            for rank, (site_name, count) in enumerate(sorted_sites, 1):  # Rank each top site.
+                print(f"  {rank}. {site_name}: {count} offline")  # Print rank and count.
 
     @staticmethod
     def _display_summary(
@@ -10737,106 +10750,102 @@ class OfflineDeviceReporter:
         threshold_hours: int,
     ) -> None:
         """Display summary statistics before the detail table."""
-        print("\n--- Summary ---")
-        print(f"Total devices in org: {total_device_count:,}")
-        print(f"Devices offline > {threshold_hours} hours: {len(offline_records)}")
+        print("\n--- Summary ---")  # Section header.
+        print(f"Total devices in org: {total_device_count:,}")  # Total count.
+        print(f"Devices offline > {threshold_hours} hours: {len(offline_records)}")  # Offline count.
+        type_counts: dict[str, int] = {}  # Per-type tally.
+        site_counts: dict[str, int] = {}  # Per-site tally.
+        for record in offline_records:  # Walk each offline record once.
+            type_counts[record["Device Type"]] = type_counts.get(record["Device Type"], 0) + 1  # Bump type.
+            site_counts[record["Site Name"]] = site_counts.get(record["Site Name"], 0) + 1  # Bump site.
+        OfflineDeviceReporter._render_offline_breakdowns(type_counts, site_counts)  # Render breakdowns.
 
-        type_counts: dict[str, int] = {}
-        site_counts: dict[str, int] = {}
-        for record in offline_records:
-            device_type = record["Device Type"]
-            type_counts[device_type] = type_counts.get(device_type, 0) + 1
-            site_name = record["Site Name"]
-            site_counts[site_name] = site_counts.get(site_name, 0) + 1
+    _OFFLINE_DISPLAY_FIELDS: tuple[str, ...] = (
+        "Device Name",
+        "Device Type",
+        "Site Name",
+        "MAC Address",
+        "Serial Number",
+        "Model",
+        "Last Seen",
+        "Offline Duration",
+        "Status",
+    )
 
-        print("\nBy Type:")
-        for device_type in ["AP", "Switch", "Gateway"]:
-            count = type_counts.get(device_type, 0)
-            if count > 0:
-                print(f"  {device_type}s: {count}")
-
-        sorted_sites = sorted(site_counts.items(), key=lambda item: item[1], reverse=True)[:5]
-        if sorted_sites:
-            print("\nTop 5 Sites:")  # Header for the leaderboard.
-            for rank, (site_name, count) in enumerate(sorted_sites, 1):  # Rank each top site.
-                print(f"  {rank}. {site_name}: {count} offline")  # Print rank and count.
+    @staticmethod
+    def _save_offline_csv(offline_records: list[dict[str, str]], total_count: int) -> None:
+        """Build CSV rows and persist via shared exporter; log + print result."""
+        fields = OfflineDeviceReporter._OFFLINE_DISPLAY_FIELDS  # Column order.
+        csv_records = [{f: record.get(f, "") for f in fields} for record in offline_records]  # Strip helper keys.
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")  # Timestamp for filename.
+        filename = f"OfflineDeviceReport_{timestamp_str}.csv"  # Output filename.
+        DataExporter.write_with_format_selection(
+            data=csv_records, filename_or_table=filename, api_function_name="listOrgDevicesStats"
+        )  # Persist.
+        logging.info("CSV saved: data/%s (%s devices)", filename, total_count)  # Log save.
+        print(f"\nCSV saved: data/{filename} ({total_count} devices)")  # Operator-facing.
 
     @staticmethod
     def _present_results(offline_records: list[dict[str, str]]) -> None:  # Render and save offline results.
         """Display PrettyTable and save CSV for offline devices."""
-        display_fields = [  # Columns to display.
-            "Device Name",
-            "Device Type",
-            "Site Name",
-            "MAC Address",
-            "Serial Number",
-            "Model",
-            "Last Seen",
-            "Offline Duration",
-            "Status",
-        ]
-        total_count = len(offline_records)  # Total offline rows.
-        show_count = min(total_count, OfflineDeviceReporter.MAX_DISPLAY_ROWS)  # Cap displayed rows.
-
-        print(f"\n--- Offline Devices (showing {show_count} of {total_count}) ---")  # Header with counts.
-        table = PrettyTable()  # Build the table.
-        table.field_names = display_fields  # Set columns.
+        fields = OfflineDeviceReporter._OFFLINE_DISPLAY_FIELDS  # Column order.
+        total_count = len(offline_records)  # Total rows.
+        show_count = min(total_count, OfflineDeviceReporter.MAX_DISPLAY_ROWS)  # Cap display.
+        print(f"\n--- Offline Devices (showing {show_count} of {total_count}) ---")  # Header.
+        table = PrettyTable()  # Build display table.
+        table.field_names = list(fields)  # Set columns.
         for record in offline_records[:show_count]:  # Show capped rows.
-            table.add_row([record.get(field, "") for field in display_fields])  # Add each row.
-        print(table)  # Print the table.
+            table.add_row([record.get(f, "") for f in fields])  # Add each row.
+        print(table)  # Print table.
+        OfflineDeviceReporter._save_offline_csv(offline_records, total_count)  # Persist CSV + log.
 
-        # Save CSV with all records
-        csv_records = [{field: record.get(field, "") for field in display_fields} for record in offline_records]
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")  # Timestamp for the filename.
-        filename = f"OfflineDeviceReport_{timestamp_str}.csv"  # Build the CSV name.
-        DataExporter.write_with_format_selection(  # Write via selected backend.
-            data=csv_records,
-            filename_or_table=filename,
-            api_function_name="listOrgDevicesStats",
-        )
-        logging.info("CSV saved: data/%s (%s devices)", filename, total_count)  # log CSV saved.
-        print(f"\nCSV saved: data/{filename} ({total_count} devices)")  # Tell the user.
+    @staticmethod
+    def _gather_offline_inputs() -> tuple[str | None, int]:
+        """Resolve org_id + threshold prompt; (None, _) signals early-abort."""
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        if not current_org_id:  # No org selected.
+            print("! No organization selected. Exiting.")  # Tell the user.
+            return None, 0  # Caller must abort.
+        threshold_hours = OfflineDeviceReporter._prompt_threshold()  # Prompt threshold.
+        print(f"Threshold: {threshold_hours} hours\n")  # Echo selection.
+        return current_org_id, threshold_hours
+
+    @staticmethod
+    def _finalize_offline_report(
+        total_count: int, offline_records: list[dict], threshold_hours: int, start_time: float
+    ) -> None:
+        """Display summary + present results + log elapsed for offline report."""
+        OfflineDeviceReporter._display_summary(total_count, offline_records, threshold_hours)  # Summary section.
+        OfflineDeviceReporter._present_results(offline_records)  # Detail table + CSV.
+        elapsed = time.time() - start_time  # Elapsed wall time.
+        logging.info("Offline device report completed in %.1f seconds", elapsed)  # Log duration.
+        print(f"\nReport completed in {elapsed:.1f} seconds")  # Tell user.
 
     @staticmethod
     def execute() -> None:  # Run the offline report.
         """Main entry point for offline device report (Menu 158)."""
         print("\n=== Offline Device Report ===")  # Header.
         logging.info("Starting offline device report...")  # Log start.
-        start_time = time.time()  # Start the timer.
-
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        if not current_org_id:  # No org selected.
-            print("! No organization selected. Exiting.")  # Tell the user.
-            return  # Abort.
-
-        threshold_hours = OfflineDeviceReporter._prompt_threshold()  # Prompt offline threshold.
-        print(f"Threshold: {threshold_hours} hours\n")  # Echo the threshold.
-
+        start_time = time.time()  # Start timer.
+        current_org_id, threshold_hours = OfflineDeviceReporter._gather_offline_inputs()  # Org + threshold.
+        if not current_org_id:  # Abort signaled.
+            return
         try:
-            site_lookup, all_devices = OfflineDeviceReporter._fetch_data(current_org_id)  # Fetch sites and devices.
+            site_lookup, all_devices = OfflineDeviceReporter._fetch_data(current_org_id)  # Fetch sites + devices.
         except Exception as error:  # Fetch failed.
-            logging.error("Failed to fetch data from Mist API: %s", error)  # log fetch error.
-            print("! Failed to fetch data. Please check your API credentials and network connection.")  # Tell the user.
-            return  # Abort.
-
-        if not all_devices:  # No devices found.
+            logging.error("Failed to fetch data from Mist API: %s", error)  # Log error.
+            print("! Failed to fetch data. Please check your API credentials and network connection.")  # Tell user.
+            return
+        if not all_devices:  # No devices in org.
             logging.info("No devices found in organization")  # Log it.
-            print("No devices found in this organization.")  # Tell the user.
-            return  # Abort.
-
-        offline_records = OfflineDeviceReporter._process_devices(all_devices, site_lookup, threshold_hours)
-
-        if not offline_records:  # None offline.
-            print(f"No devices found offline for more than {threshold_hours} hours. All clear!")  # All-clear message.
+            print("No devices found in this organization.")  # Tell user.
+            return
+        offline_records = OfflineDeviceReporter._process_devices(all_devices, site_lookup, threshold_hours)  # Filter.
+        if not offline_records:  # Nothing offline.
+            print(f"No devices found offline for more than {threshold_hours} hours. All clear!")  # All-clear.
             logging.info("No devices offline beyond %sh threshold", threshold_hours)  # Log all-clear.
-            return  # Abort.
-
-        OfflineDeviceReporter._display_summary(len(all_devices), offline_records, threshold_hours)  # Print the summary.
-        OfflineDeviceReporter._present_results(offline_records)  # Render and save results.
-
-        elapsed = time.time() - start_time  # Compute elapsed time.
-        logging.info("Offline device report completed in %.1f seconds", elapsed)  # log duration.
-        print(f"\nReport completed in {elapsed:.1f} seconds")  # Tell the user.
+            return
+        OfflineDeviceReporter._finalize_offline_report(len(all_devices), offline_records, threshold_hours, start_time)
 
 
 class OrgDeviceInventorySummary:  # Org device inventory summary.
@@ -10930,42 +10939,27 @@ class OrgTemplateExporter:  # Org template exporters.
 
     @staticmethod
     def _template_export_specs() -> list[tuple[str, Any, str, str]]:  # (title, api_call, filename, error_label) specs
-        """Return the per-template-type export specs, resolving mistapi endpoint refs at call time.
+        """Return per-template-type export specs, resolving mistapi endpoints at call time.
 
-        mistapi is None at class-definition time (populated later by GlobalImportManager), so these
-        endpoint references must be built when the export actually runs, not as a class constant.
+        Endpoints must be resolved when this runs, not at class-def time (mistapi populated later).
         """
+        v1 = mistapi.api.v1.orgs  # Shorten endpoint base for compact spec list.
         return [
             (
                 "Gateway Templates:",
-                mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates,
+                v1.gatewaytemplates.listOrgGatewayTemplates,
                 "OrgGatewayTemplates.csv",
                 "gateway templates",
             ),
             (
                 "Network Templates:",
-                mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
+                v1.networktemplates.listOrgNetworkTemplates,
                 "OrgNetworkTemplates.csv",
                 "network templates",
             ),
-            (
-                "RF Templates:",
-                mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates,
-                "OrgRfTemplates.csv",
-                "RF templates",
-            ),
-            (
-                "Site Templates:",
-                mistapi.api.v1.orgs.sitetemplates.listOrgSiteTemplates,
-                "OrgSiteTemplates.csv",
-                "site templates",
-            ),
-            (
-                "AP Templates:",
-                mistapi.api.v1.orgs.aptemplates.listOrgAptemplates,
-                "OrgApTemplates.csv",
-                "AP templates",
-            ),
+            ("RF Templates:", v1.rftemplates.listOrgRfTemplates, "OrgRfTemplates.csv", "RF templates"),
+            ("Site Templates:", v1.sitetemplates.listOrgSiteTemplates, "OrgSiteTemplates.csv", "site templates"),
+            ("AP Templates:", v1.aptemplates.listOrgAptemplates, "OrgApTemplates.csv", "AP templates"),
         ]
 
     @staticmethod
@@ -10999,40 +10993,38 @@ class OrgTemplateExporter:  # Org template exporters.
         )
 
     @staticmethod
+    def _persist_ap_template_profiles(ap_profiles: list, filename: str) -> None:
+        """Flatten + write AP template profiles to CSV; emit operator + log summary."""
+        if not ap_profiles:  # No AP templates in this org.
+            print("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")  # Inform user.
+            logging.info(
+                "No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv"
+            )  # Log empty.
+            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Write empty file for consistency.
+            return
+        processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON.
+        processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # Escape multiline.
+        DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Persist.
+        print(f"! {len(processed)} AP templates exported to {filename}")  # Tell user.
+        logging.info("Exported %s AP templates to %s.", len(processed), filename)  # Log count.
+
+    @staticmethod
     def ap_templates():  # Export AP templates.
-        """Export AP templates to OrgApTemplates.csv."""
-        print("Export Organization AP Templates:")  # Header line for this export operation
-        logging.info(
-            "Starting export of organization AP templates (canonical deviceprofiles type=ap)..."
-        )  # Log the start
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org to export from
-        filename = "OrgApTemplates.csv"  # Destination CSV filename
+        """Export AP templates (canonical deviceprofiles type=ap) to OrgApTemplates.csv."""
+        print("Export Organization AP Templates:")  # Header.
+        logging.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")  # Log start.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org.
+        filename = "OrgApTemplates.csv"  # Output filename.
         try:
-            response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(  # Request device profiles from the org
-                apisession,
-                org_id,
-                type="ap",
-                limit=1000,  # Filter to AP-type profiles (the canonical AP-template source)
-            )
-            ap_profiles = (
-                mistapi.get_all(response=response, mist_session=apisession) or []
-            )  # Page through all results (empty list on None)
-            if not ap_profiles:  # No AP templates exist in this org
-                print("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")  # Inform the user
-                logging.info(
-                    "No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv"
-                )  # Log the empty result
-                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Write an empty file for consistency
-                return  # Nothing more to do
-            processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON into flat CSV rows
-            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-            print(f"! {len(processed)} AP templates exported to {filename}")  # Tell the user.
-            logging.info("Exported %s AP templates to %s.", len(processed), filename)  # Log export count.
+            response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
+                apisession, org_id, type="ap", limit=1000
+            )  # Filter to AP profiles.
+            ap_profiles = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all (empty on None).
+            OrgTemplateExporter._persist_ap_template_profiles(ap_profiles, filename)  # Persist + log.
         except Exception as e:  # AP export failed.
-            logging.error("Failed to export AP templates: %s", e)  # log AP error.
+            logging.error("Failed to export AP templates: %s", e)  # Log AP error.
             try:
-                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
+                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Best-effort empty file.
             except Exception:  # nosec B110
                 pass  # Best-effort cleanup.
             raise  # Re-raise to caller.
