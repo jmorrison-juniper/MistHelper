@@ -17981,6 +17981,19 @@ class DeviceRebootManager:  # Device reboot manager.
         return reboot_template_ids  # Return the ids.
 
     @staticmethod
+    def _build_gateway_reboot_target(row: dict, resolved: tuple) -> dict:  # type: ignore[type-arg]
+        """Build one reboot-target dict from a CSV row + the (template_id, template_name, site_name) tuple."""
+        template_id, template_name, site_name = resolved  # Unpack the resolved triple.
+        return {
+            "device_id": row.get("id", "").strip(),
+            "device_name": row.get("name", "").strip(),
+            "site_id": row.get("site_id", "").strip(),
+            "site_name": site_name,
+            "template_id": template_id,
+            "template_name": template_name,
+        }
+
+    @staticmethod
     def _scan_csv_for_gateway_targets(  # type: ignore[type-arg]
         site_to_template: dict[str, tuple],
     ) -> list[dict] | None:
@@ -17989,24 +18002,13 @@ class DeviceRebootManager:  # Device reboot manager.
         try:
             gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")  # Configs path.
             with open(gateway_configs_path, encoding="utf-8") as file:  # Open the CSV.
-                reader = csv.DictReader(file)  # Parse rows.
-                for row in reader:  # Walk rows.
+                for row in csv.DictReader(file):  # Walk rows.
                     device_site_id = row.get("site_id", "").strip()  # Read the site id.
                     if device_site_id not in site_to_template or row.get("type", "").strip() != "gateway":
                         continue  # Skip non-matching rows.
-                    template_id, template_name, site_name = site_to_template[device_site_id]  # Resolve.
-                    device_name = row.get("name", "").strip()  # Read the device name.
-                    reboot_targets.append(  # Collect the target.
-                        {
-                            "device_id": row.get("id", "").strip(),
-                            "device_name": device_name,
-                            "site_id": device_site_id,
-                            "site_name": site_name,
-                            "template_id": template_id,
-                            "template_name": template_name,
-                        }
-                    )
-                    logging.info("Found gateway '%s' at site '%s'", device_name, site_name)  # Log the find.
+                    target = DeviceRebootManager._build_gateway_reboot_target(row, site_to_template[device_site_id])
+                    reboot_targets.append(target)  # Collect the target.
+                    logging.info("Found gateway '%s' at site '%s'", target["device_name"], target["site_name"])
         except Exception as error:  # Load failed.
             logging.error("! Failed to load gateway configs: %s", error)  # Log the error.
             print(f"! Failed to load gateway configs: {error}")  # Tell the user.
@@ -19063,43 +19065,41 @@ class FirmwareUpgradeStatusChecker:
             print(f"! Failed to export device status: {exception}")
             logging.error("Failed to export device status: %s", exception)
 
+    _ACTIVE_UPGRADE_FIELDNAMES = [
+        "site_id",
+        "site_name",
+        "upgrade_id",
+        "status",
+        "strategy",
+        "target_version",
+        "start_time",
+        "enable_p2p",
+        "total_devices",
+        "downloaded",
+        "download_requested",
+        "rebooted",
+        "reboot_in_progress",
+        "failed",
+        "skipped",
+        "source",
+        "timestamp",
+    ]
+
     def _export_active_operations(self, timestamp: str) -> None:
         """Export active upgrade operations to CSV."""
-        if not self.active_upgrades:
+        if not self.active_upgrades:  # Nothing to export.
             return
-
-        filename = os.path.join("data", f"ActiveUpgradeOperations_{timestamp}.csv")
-        fieldnames = [
-            "site_id",
-            "site_name",
-            "upgrade_id",
-            "status",
-            "strategy",
-            "target_version",
-            "start_time",
-            "enable_p2p",
-            "total_devices",
-            "downloaded",
-            "download_requested",
-            "rebooted",
-            "reboot_in_progress",
-            "failed",
-            "skipped",
-            "source",
-            "timestamp",
-        ]
-
+        filename = os.path.join("data", f"ActiveUpgradeOperations_{timestamp}.csv")  # Output path.
         try:
-            mapped = [self._map_upgrade_for_export(u) for u in self.active_upgrades]
-            with open(filename, mode="w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(mapped)
-
+            mapped = [self._map_upgrade_for_export(u) for u in self.active_upgrades]  # Project rows.
+            with open(filename, mode="w", newline="", encoding="utf-8") as f:  # Write CSV.
+                writer = csv.DictWriter(f, fieldnames=self._ACTIVE_UPGRADE_FIELDNAMES)  # Header set.
+                writer.writeheader()  # Emit header row.
+                writer.writerows(mapped)  # Emit data rows.
             print(f"! Active upgrade operations exported to: {filename}")
             print(f"   {len(self.active_upgrades)} upgrade operations exported")
             logging.info("Exported %s active upgrade operations", len(self.active_upgrades))
-        except Exception as exception:
+        except Exception as exception:  # Tolerate write errors.
             print(f"! Failed to export upgrade operations: {exception}")
             logging.error("Failed to export upgrade operations: %s", exception)
 
@@ -19387,31 +19387,31 @@ class MSPInventoryExporter:
             orgs_data = [orgs_data] if orgs_data else []
         return orgs_data
 
+    def _process_msp_orgs_inventory(self, msp_id: str, msp_name: str) -> None:
+        """Fetch the MSP's org list, log/print the count, then dispatch each org through _process_org."""
+        orgs_data = self._fetch_msp_orgs(msp_id, msp_name)  # API: list orgs under this MSP.
+        if not orgs_data:
+            print(f"    ! No organizations found under {msp_name}")
+            return
+        print(f"    Found {len(orgs_data)} organization(s)")
+        for org in orgs_data:  # Per-org processing.
+            self._process_org(msp_id, msp_name, org)
+        print("")
+
     def _process_msp(self, msp_info: dict) -> None:  # type: ignore[type-arg]
         """Process a single MSP - fetch all orgs and their devices."""
         msp_id, msp_name = self._validate_msp_info(msp_info)
-        if msp_id is None:
+        if msp_id is None:  # Invalid input.
             return
-
         print(f"  Processing MSP: {msp_name}")
         print("-" * 70)
-        self.msp_count += 1
-
-        if apisession is None:
+        self.msp_count += 1  # Count this MSP toward the run total.
+        if apisession is None:  # API not initialized.
             print("    X API session not initialized")
             return
-
         try:
-            orgs_data = self._fetch_msp_orgs(msp_id, msp_name)
-            if not orgs_data:
-                print(f"    ! No organizations found under {msp_name}")
-                return
-
-            print(f"    Found {len(orgs_data)} organization(s)")
-            for org in orgs_data:
-                self._process_org(msp_id, msp_name, org)
-            print("")
-        except Exception as e:
+            self._process_msp_orgs_inventory(msp_id, msp_name)  # Walk all orgs under this MSP.
+        except Exception as e:  # Tolerate per-MSP failures.
             print(f"    X Error processing MSP {msp_name}: {e}")
             self.errors.append(f"MSP {msp_name}: {e}")
             logging.error("MSP inventory export error for %s: %s", msp_name, e)
@@ -19459,36 +19459,41 @@ class MSPInventoryExporter:
             type_counts[device_type] = type_counts.get(device_type, 0) + 1
         return type_counts
 
+    def _ingest_org_devices(
+        self, devices_data: list, context: MspOrgContext, site_lookup: dict
+    ) -> None:  # type: ignore[type-arg]
+        """Enrich each device with MSP/Org/Site context and append it to the running all_devices roll-up."""
+        for device in devices_data:  # Per-device enrichment.
+            self._enrich_device_context(device, context, site_lookup)  # Stamp identity.
+            self.all_devices.append(device)  # Roll into global list.
+
+    def _print_org_inventory_summary(self, org_name: str, devices_data: list) -> None:  # type: ignore[type-arg]
+        """Print the per-org device-count summary line, broken out by device type."""
+        type_counts = self._count_device_types(devices_data)  # Per-type tally.
+        type_summary = ", ".join(f"{t}:{c}" for t, c in sorted(type_counts.items()))
+        print(f"      {org_name}: {len(devices_data)} devices ({type_summary})")
+
     def _process_org(self, msp_id: str, msp_name: str, org: dict) -> None:  # type: ignore[type-arg]
         """Process a single organization - fetch all devices from inventory."""
         org_id = org.get("id")
         org_name = org.get("name", "Unknown Org")
-
-        if not org_id or not isinstance(org_id, str):
+        if not org_id or not isinstance(org_id, str):  # Bad org row.
             print(f"      {org_name}: Invalid org ID")
             return
-
-        self.org_count += 1
-        if apisession is None:
+        self.org_count += 1  # Count toward run total.
+        if apisession is None:  # API not initialized.
             return
-
         try:
-            devices_data = self._fetch_org_inventory(org_id, org_name)
+            devices_data = self._fetch_org_inventory(org_id, org_name)  # API: list devices.
             if not devices_data:
                 print(f"      {org_name}: 0 devices")
                 return
-
-            site_lookup = self._build_site_lookup(org_id)
-            device_context = MspOrgContext(msp_id, msp_name, org_id, org_name)  # Bundle MSP/Org identity (issue #470).
-            for device in devices_data:
-                self._enrich_device_context(device, device_context, site_lookup)
-                self.all_devices.append(device)
-
-            self.device_count += len(devices_data)
-            type_counts = self._count_device_types(devices_data)
-            type_summary = ", ".join(f"{t}:{c}" for t, c in sorted(type_counts.items()))
-            print(f"      {org_name}: {len(devices_data)} devices ({type_summary})")
-        except Exception as e:
+            site_lookup = self._build_site_lookup(org_id)  # site_id -> site_name.
+            ctx = MspOrgContext(msp_id, msp_name, org_id, org_name)  # Bundle identity (issue #470).
+            self._ingest_org_devices(devices_data, ctx, site_lookup)  # Enrich + append.
+            self.device_count += len(devices_data)  # Roll into run total.
+            self._print_org_inventory_summary(org_name, devices_data)  # Per-type tally + print
+        except Exception as e:  # Tolerate per-org failures.
             print(f"      {org_name}: Error - {e}")
             self.errors.append(f"Org {org_name}: {e}")
             logging.error("MSP inventory export error for org %s: %s", org_name, e)
@@ -19865,21 +19870,27 @@ class WLANRadiusTimerManager:
         assert self.selected_wlan is not None, "No WLAN selected"  # nosec B101
         return self.selected_wlan
 
-    def manage(self) -> None:
-        """Main entry point - orchestrates the WLAN timer management workflow."""
-        logging.info("Starting WLAN RADIUS authentication timer management")  # Announce the workflow start
-        self._enable_debug_if_requested()  # Turn on verbose logging if the user asked for it
+    def _discover_radius_wlans(self) -> bool:
+        """Set up org/site context, fetch all WLANs, filter to RADIUS-only. Return False to abort the workflow."""
         if not self._select_site():  # Prompt for a site; abort if none chosen
-            return  # No site selected -- nothing to manage
+            return False  # No site selected -- nothing to manage
         if not self._get_org_id():  # Resolve the org ID; abort if it can't be determined
-            return  # Without an org ID we cannot fetch templates
+            return False  # Without an org ID we cannot fetch templates
         if not self._fetch_site_info():  # Load site details; abort on failure
-            return  # Site info is required for template resolution
+            return False  # Site info is required for template resolution
         self._fetch_all_wlans()  # Gather WLANs from site, template, and org sources
         self._filter_radius_wlans()  # Reduce to only RADIUS/RadSec WLANs
         if not self.all_radius_wlans:  # No RADIUS WLANs were found
             self._print_no_wlans_message()  # Tell the user there is nothing to modify
-            return  # Exit -- no candidates to change
+            return False  # Exit -- no candidates to change
+        return True  # Discovery complete; ready for interactive edit
+
+    def manage(self) -> None:
+        """Main entry point - orchestrates the WLAN timer management workflow."""
+        logging.info("Starting WLAN RADIUS authentication timer management")  # Announce the workflow start
+        self._enable_debug_if_requested()  # Turn on verbose logging if the user asked for it
+        if not self._discover_radius_wlans():  # Site + org + WLAN discovery; bail on abort.
+            return
         self._display_wlans()  # Show the user the candidate WLANs and their timers
         if not self._prompt_wlan_selection():  # Ask which WLAN to modify; abort if cancelled
             return  # User declined to pick a WLAN
@@ -20134,62 +20145,64 @@ class WLANRadiusTimerManager:
             self._display_single_wlan(index, wlan)  # Render this WLAN's details
         print(f"{'=' * 100}\n")  # Closing border after the full list
 
+    def _extract_wlan_summary_fields(self, wlan: dict[str, Any]) -> dict[str, Any]:
+        """Extract the fields needed to render one WLAN summary row from a WLAN dict (with safe defaults)."""
+        radsec_config = wlan.get("radsec", {})  # The RadSec sub-configuration (may be absent)
+        return {
+            "ssid": wlan.get("ssid", "Unknown SSID"),  # The WLAN's broadcast name
+            "wlan_id": wlan.get("id", "Unknown ID"),  # The WLAN's unique identifier
+            "enabled": wlan.get("enabled", False),  # Whether the WLAN is currently active
+            "inheritance": wlan.get("_inheritance_level", "unknown"),  # Defined-at level
+            "source": wlan.get("_inheritance_source", "Unknown"),  # Source description
+            "timeout": wlan.get("auth_servers_timeout", 5),  # Per-attempt RADIUS timeout
+            "retries": wlan.get("auth_servers_retries", 2),  # RADIUS retry count
+            "selection": wlan.get("auth_server_selection", "ordered"),  # Server-selection mode
+            "fast_timers": wlan.get("fast_dot1x_timers", False),  # Fast 802.1X timers flag
+            "server_count": len(wlan.get("auth_servers") or []),  # RADIUS server count
+            "radsec_enabled": radsec_config.get("enabled", False) if isinstance(radsec_config, dict) else False,
+        }
+
     def _display_single_wlan(self, index: int, wlan: dict[str, Any]) -> None:
         """Display a single WLAN's information."""
-        ssid = wlan.get("ssid", "Unknown SSID")  # The WLAN's broadcast name (fallback if missing)
-        wlan_id = wlan.get("id", "Unknown ID")  # The WLAN's unique identifier
-        enabled = wlan.get("enabled", False)  # Whether the WLAN is currently active
-        inheritance = wlan.get("_inheritance_level", "unknown")  # Where the WLAN is defined (site/template/org)
-        source = wlan.get("_inheritance_source", "Unknown")  # Human-readable description of the source
-        timeout = wlan.get("auth_servers_timeout", 5)  # Current per-attempt RADIUS timeout
-        retries = wlan.get("auth_servers_retries", 2)  # Current RADIUS retry count
-        selection = wlan.get("auth_server_selection", "ordered")  # Current server-selection mode
-        fast_timers = wlan.get("fast_dot1x_timers", False)  # Whether fast 802.1X timers are enabled
-        auth_servers = wlan.get("auth_servers", [])  # The configured RADIUS servers (may be empty)
-        server_count = len(auth_servers) if auth_servers else 0  # How many RADIUS servers are defined
-        radsec_config = wlan.get("radsec", {})  # The RadSec sub-configuration (may be absent)
-        radsec_enabled = radsec_config.get("enabled", False) if isinstance(radsec_config, dict) else False  # RadSec on?
-        print(f"[{index}] SSID: {ssid}")  # Show the menu index and SSID
-        print(f"    ID: {wlan_id}")  # Show the WLAN ID
-        print(f"    Status: {'Enabled' if enabled else 'Disabled'}")  # Show enabled/disabled state
-        print(f"    Inheritance: {inheritance.upper()} - {source}")  # Show where the WLAN comes from
-        print("    ")  # Indented spacer line
-        print("    Authentication Configuration:")  # Sub-header for auth details
-        print(f"      - RADIUS Servers: {server_count}")  # Number of RADIUS servers
-        print(f"      - RadSec: {'Enabled' if radsec_enabled else 'Disabled'}")  # RadSec on/off
-        print("    ")  # Indented spacer line
-        print("    Current Timer Settings:")  # Sub-header for timer values
-        print(f"      - auth_servers_timeout: {timeout} seconds")  # Current timeout value
-        print(f"      - auth_servers_retries: {retries}")  # Current retry value
-        print(f"      - auth_server_selection: {selection}")  # Current selection mode
-        print(f"      - fast_dot1x_timers: {fast_timers}")  # Current fast-timer flag
-        print("")  # Blank spacer line between WLANs
+        f = self._extract_wlan_summary_fields(wlan)  # Pull all summary fields with safe defaults.
+        print(f"[{index}] SSID: {f['ssid']}")  # Show the menu index and SSID
+        print(f"    ID: {f['wlan_id']}")  # Show the WLAN ID
+        print(f"    Status: {'Enabled' if f['enabled'] else 'Disabled'}")  # Show enabled/disabled state
+        print(f"    Inheritance: {f['inheritance'].upper()} - {f['source']}")  # Show where the WLAN comes from
+        print("    \n    Authentication Configuration:")  # Sub-header for auth details
+        print(f"      - RADIUS Servers: {f['server_count']}")  # Number of RADIUS servers
+        print(f"      - RadSec: {'Enabled' if f['radsec_enabled'] else 'Disabled'}")  # RadSec on/off
+        print("    \n    Current Timer Settings:")  # Sub-header for timer values
+        print(f"      - auth_servers_timeout: {f['timeout']} seconds")  # Current timeout value
+        print(f"      - auth_servers_retries: {f['retries']}")  # Current retry value
+        print(f"      - auth_server_selection: {f['selection']}")  # Current selection mode
+        print(f"      - fast_dot1x_timers: {f['fast_timers']}\n")  # Current fast-timer flag + spacer
+
+    def _read_wlan_selection_input(self) -> str:
+        """Read the WLAN-picker input from the user, strip/lower it for normalized comparison."""
+        return (
+            InputUtils.safe_input(
+                f"Select WLAN to modify (1-{len(self.all_radius_wlans)}) or 'q' to quit: ", context="wlan_selection"
+            )
+            .strip()  # Trim surrounding whitespace
+            .lower()  # Normalize to lowercase so 'Q' also works
+        )
 
     def _prompt_wlan_selection(self) -> bool:
         """Prompt user to select a WLAN to modify."""
         try:
-            selection_input = (  # Ask which WLAN to edit, allowing 'q' to quit
-                InputUtils.safe_input(
-                    f"Select WLAN to modify (1-{len(self.all_radius_wlans)}) or 'q' to quit: ", context="wlan_selection"
-                )
-                .strip()  # Trim surrounding whitespace
-                .lower()  # Normalize to lowercase so 'Q' also works
-            )
+            selection_input = self._read_wlan_selection_input()  # Capture the normalized choice.
             if selection_input == "q":  # User chose to quit the picker
                 print("\n[*] Exiting WLAN management.")  # Acknowledge the exit
                 return False  # Signal the caller to abort
             selected_index = int(selection_input) - 1  # Convert the 1-based choice to a 0-based list index
             if selected_index < 0 or selected_index >= len(self.all_radius_wlans):  # Index out of range
-                print(
-                    f"\n[!] Invalid selection. Must be between 1 and {len(self.all_radius_wlans)}."
-                )  # Reject the choice
+                print(f"\n[!] Invalid selection. Must be between 1 and {len(self.all_radius_wlans)}.")
                 return False  # Signal the caller to abort
             self.selected_wlan = self.all_radius_wlans[selected_index]  # Record the chosen WLAN
             return True  # A valid WLAN was selected
         except ValueError:  # The input was not a number
-            print(
-                f"\n[!] Invalid input. Please enter a number between 1 and {len(self.all_radius_wlans)}."
-            )  # Reject non-numeric input
+            print(f"\n[!] Invalid input. Please enter a number between 1 and {len(self.all_radius_wlans)}.")
             return False  # Signal the caller to abort
 
     def _display_current_config(self) -> None:
@@ -20334,6 +20347,36 @@ class WLANRadiusTimerManager:
             print(f"  - Maximum authentication failure time: {single_max} seconds")  # Worst-case failure time
         print("")  # Blank spacer line
 
+    def _print_fast_timers_enabled(
+        self, quiet_period: float, transmit_period: float, supplicant_timeout: int, max_requests: int
+    ) -> None:
+        """Print the ENABLED variant of the fast-802.1X-timer info block."""
+        print("Fast 802.1X Timers (ENABLED):")  # Section header for the enabled case
+        print(f"  - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")
+        print(f"  - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)")
+        print(f"  - retries: {self.new_retries} (from auth_servers_retries)")
+        print(f"  - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")
+        print(f"  - max-requests: {max_requests} (fixed default)\n")
+        print("  Impact: Faster authentication and retry cycles")
+        print("  Best for: Modern clients, stable networks, quick roaming")
+
+    def _print_fast_timers_disabled(
+        self, quiet_period: float, transmit_period: float, supplicant_timeout: int, max_requests: int
+    ) -> None:
+        """Print the DISABLED variant of the fast-802.1X-timer info block (shows current defaults + hypothetical)."""
+        print("Standard 802.1X Timers (DISABLED):")  # Section header for the disabled case
+        print("  - Current mode: Uses standard 802.1X defaults")
+        print("  - quiet-period: ~60 seconds (standard default)")
+        print("  - transmit-period: ~30 seconds (standard default)\n")
+        print("  If fast_dot1x_timers were enabled, would calculate:")
+        print(f"    - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")
+        print(f"    - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)")
+        print(f"    - retries: {self.new_retries} (from auth_servers_retries)")
+        print(f"    - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")
+        print(f"    - max-requests: {max_requests} (fixed default)\n")
+        print("  Impact: Slower but more conservative authentication")
+        print("  Best for: Legacy clients, unstable networks, maximum compatibility")
+
     def _print_fast_timer_info(self) -> None:
         """Print fast 802.1X timer information."""
         quiet_period = self.new_timeout / 2  # Derived quiet-period when fast timers are enabled
@@ -20341,40 +20384,9 @@ class WLANRadiusTimerManager:
         supplicant_timeout = 10  # Fixed default supplicant timeout in seconds
         max_requests = 3  # Fixed default maximum EAP requests
         if self.new_fast:  # Fast 802.1X timers are being enabled
-            print("Fast 802.1X Timers (ENABLED):")  # Section header for the enabled case
-            print(f"  - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)")  # Derived quiet-period
-            print(
-                f"  - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)"
-            )  # Derived transmit-period
-            print(
-                f"  - retries: {self.new_retries} (from auth_servers_retries)"
-            )  # Retries inherited from the timer setting
-            print(f"  - supplicant-timeout: {supplicant_timeout} seconds (fixed default)")  # Fixed supplicant timeout
-            print(f"  - max-requests: {max_requests} (fixed default)")  # Fixed max-requests value
-            print("")  # Blank spacer line
-            print("  Impact: Faster authentication and retry cycles")  # Summarize the benefit
-            print("  Best for: Modern clients, stable networks, quick roaming")  # Recommend ideal conditions
+            self._print_fast_timers_enabled(quiet_period, transmit_period, supplicant_timeout, max_requests)
         else:  # Fast timers remain disabled (standard 802.1X defaults)
-            print("Standard 802.1X Timers (DISABLED):")  # Section header for the disabled case
-            print("  - Current mode: Uses standard 802.1X defaults")  # Explain the current behavior
-            print("  - quiet-period: ~60 seconds (standard default)")  # Standard quiet-period
-            print("  - transmit-period: ~30 seconds (standard default)")  # Standard transmit-period
-            print("")  # Blank spacer line
-            print("  If fast_dot1x_timers were enabled, would calculate:")  # Show what enabling would produce
-            print(
-                f"    - quiet-period: {quiet_period:.1f} seconds (auth_servers_timeout / 2)"
-            )  # Hypothetical quiet-period
-            print(
-                f"    - transmit-period: {transmit_period:.1f} seconds (auth_servers_timeout / 2)"
-            )  # Hypothetical transmit-period
-            print(f"    - retries: {self.new_retries} (from auth_servers_retries)")  # Hypothetical retries
-            print(
-                f"    - supplicant-timeout: {supplicant_timeout} seconds (fixed default)"
-            )  # Hypothetical supplicant timeout
-            print(f"    - max-requests: {max_requests} (fixed default)")  # Hypothetical max-requests
-            print("")  # Blank spacer line
-            print("  Impact: Slower but more conservative authentication")  # Summarize the tradeoff
-            print("  Best for: Legacy clients, unstable networks, maximum compatibility")  # Recommend ideal conditions
+            self._print_fast_timers_disabled(quiet_period, transmit_period, supplicant_timeout, max_requests)
         print("")  # Blank spacer line
 
     def _print_client_experience(self, server_count: int, single_max: int, all_max: int) -> None:
@@ -20485,55 +20497,63 @@ class WLANRadiusTimerManager:
                 "Failed to update site WLAN: HTTP %s, Response: %s", response.status_code, response.data
             )  # Log the detail
 
-    def _update_site_template_wlan(self) -> None:
-        """Update a site template-level WLAN."""
-        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
-        print("\n[*] Updating site template-level WLAN...")  # Inform the user the write is starting
-        template_id = wlan.get("_template_id")  # The template that owns this WLAN
-        wlan_id = wlan.get("id")  # The WLAN's unique ID within the template
-        logging.info(
-            "Updating site template WLAN %s in template %s", wlan_id, template_id
-        )  # Log before the read-modify-write
+    def _fetch_site_template_for_update(self, template_id: str) -> dict | None:
+        """Fetch a site template document and validate its shape. Returns None on failure."""
         template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(
             apisession, self.org_id, template_id
         )  # Fetch current template
         if template_response.status_code != 200:  # Could not load the template to modify
-            print(f"[!] Failed to fetch site template: HTTP {template_response.status_code}")  # Report the error
-            logging.error(
-                "Failed to fetch site template for update: HTTP %s", template_response.status_code
-            )  # Log the failure
-            return  # Abort -- cannot safely update without the current state
+            print(f"[!] Failed to fetch site template: HTTP {template_response.status_code}")
+            logging.error("Failed to fetch site template for update: HTTP %s", template_response.status_code)
+            return None  # Abort -- cannot safely update without the current state
         template_data = template_response.data  # The full template document to mutate
-        if "wlans" not in template_data or not isinstance(template_data["wlans"], dict):  # Template lacks a WLAN map
-            print("[!] Site template does not contain wlans data structure")  # Report the unexpected shape
-            logging.error("Site template missing wlans dictionary")  # Log the structural problem
-            return  # Abort -- nothing to update
-        wlan_found = False  # Track whether the target WLAN exists in the template
+        if "wlans" not in template_data or not isinstance(template_data["wlans"], dict):
+            print("[!] Site template does not contain wlans data structure")
+            logging.error("Site template missing wlans dictionary")
+            return None  # Abort -- nothing to update
+        return template_data  # Caller may now mutate the WLAN map in place
+
+    def _apply_wlan_update_to_template(self, template_data: dict, wlan_id: str) -> bool:
+        """Find target WLAN in template_data['wlans'] and apply update payload in place. Return True if found."""
         for _wlan_key, wlan_data in template_data["wlans"].items():  # Scan every WLAN in the template
             if wlan_data.get("id") == wlan_id:  # Found the WLAN we intend to change
                 wlan_data.update(self._build_update_payload())  # Apply the new timer values in place
-                wlan_found = True  # Mark that we located and updated it
-                break  # Stop scanning once updated
-        if not wlan_found:  # The WLAN was not present in the template
-            print("[!] WLAN not found in site template")  # Report the miss
-            logging.error("WLAN %s not found in site template %s", wlan_id, template_id)  # Log the failure
-            return  # Abort -- nothing was changed
-        update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(  # Write the modified template back
+                return True  # Stop scanning once updated
+        return False  # The WLAN was not present in the template
+
+    def _write_site_template_update(self, template_id: str, template_data: dict, wlan: dict) -> None:
+        """Push the mutated template back to Mist and report success or failure."""
+        wlan_id = wlan.get("id")  # Reused for logging
+        update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate(
             apisession, self.org_id, template_id, template_data  # Send the full mutated document
         )
         if update_response.status_code == 200:  # The template write succeeded
-            print(f"[+] Successfully updated site template WLAN: {wlan.get('ssid')}")  # Confirm success
-            print("[+] All sites using this template will inherit these changes")  # Remind the user of the blast radius
-            logging.info(
-                "Successfully updated site template WLAN %s in template %s", wlan_id, template_id
-            )  # Log the success
+            print(f"[+] Successfully updated site template WLAN: {wlan.get('ssid')}")
+            print("[+] All sites using this template will inherit these changes")
+            logging.info("Successfully updated site template WLAN %s in template %s", wlan_id, template_id)
         else:  # The template write failed
-            print(f"[!] Failed to update site template: HTTP {update_response.status_code}")  # Report the HTTP error
-            logging.error(  # Log the failure detail
+            print(f"[!] Failed to update site template: HTTP {update_response.status_code}")
+            logging.error(
                 "Failed to update site template: HTTP %s, Response: %s",
                 update_response.status_code,
                 update_response.data,
             )
+
+    def _update_site_template_wlan(self) -> None:
+        """Update a site template-level WLAN."""
+        wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
+        print("\n[*] Updating site template-level WLAN...")
+        template_id = wlan.get("_template_id")  # The template that owns this WLAN
+        wlan_id = wlan.get("id")  # The WLAN's unique ID within the template
+        logging.info("Updating site template WLAN %s in template %s", wlan_id, template_id)
+        template_data = self._fetch_site_template_for_update(template_id)  # Load + validate
+        if template_data is None:  # Fetch or shape-check failed (already reported by helper)
+            return
+        if not self._apply_wlan_update_to_template(template_data, wlan_id):  # WLAN missing in template
+            print("[!] WLAN not found in site template")
+            logging.error("WLAN %s not found in site template %s", wlan_id, template_id)
+            return
+        self._write_site_template_update(template_id, template_data, wlan)  # Write back + report
 
     def _update_org_wlan(self) -> None:
         """Update an org-level WLAN."""
@@ -20713,37 +20733,40 @@ class BulkRadiusWLANConfigManager:
             and current_fast == self.target_fast_dot1x
         )
 
+    def _log_radius_wlan_classification(self, status: str, wlan: dict[str, Any]) -> None:
+        """Emit debug log explaining why a WLAN landed in compliant vs needs-update bucket."""
+        if not is_debug_mode():  # type: ignore[no-untyped-call]  # Only emit when verbose mode is on
+            return
+        logging.debug(
+            "%s: %s - timeout=%s, retries=%s, fast=%s",
+            status,
+            wlan.get("ssid"),
+            wlan.get("auth_servers_timeout", 5),
+            wlan.get("auth_servers_retries", 2),
+            wlan.get("fast_dot1x_timers", False),
+        )
+
+    def _classify_radius_wlan(self, wlan: dict[str, Any]) -> None:
+        """Tag a single RADIUS WLAN as COMPLIANT or NEEDS_UPDATE and push it into the matching bucket."""
+        if self._already_configured(wlan):  # Has all three timer fields at target values
+            wlan["_compliance_status"] = "COMPLIANT"  # Tag for downstream display
+            self.compliant_wlans.append(wlan)  # Add to the compliant bucket
+            self._log_radius_wlan_classification("COMPLIANT", wlan)  # Verbose audit trail
+        else:  # Needs at least one timer field adjusted
+            wlan["_compliance_status"] = "NEEDS_UPDATE"  # Tag for downstream display
+            self.radius_wlans.append(wlan)  # Add to the needs-update bucket
+            self._log_radius_wlan_classification("NEEDS_UPDATE", wlan)  # Verbose audit trail
+
     def _filter_radius_wlans(self) -> None:
         """Filter WLANs to RADIUS-enabled, separating compliant from non-compliant."""
-        self.radius_wlans = []
-        self.compliant_wlans = []
-        for wlan in self.all_wlans:
-            if not self._uses_radius_auth(wlan):
+        self.radius_wlans = []  # Bucket for WLANs that need timer changes
+        self.compliant_wlans = []  # Bucket for WLANs already at target timers
+        for wlan in self.all_wlans:  # Walk every WLAN discovered in this run
+            if not self._uses_radius_auth(wlan):  # Skip non-RADIUS WLANs entirely
                 continue
-            self._add_inheritance_metadata(wlan)
-            if self._already_configured(wlan):
-                wlan["_compliance_status"] = "COMPLIANT"
-                self.compliant_wlans.append(wlan)
-                if is_debug_mode():  # type: ignore[no-untyped-call]
-                    logging.debug(
-                        "COMPLIANT: %s - timeout=%s, retries=%s, fast=%s",
-                        wlan.get("ssid"),
-                        wlan.get("auth_servers_timeout", 5),
-                        wlan.get("auth_servers_retries", 2),
-                        wlan.get("fast_dot1x_timers", False),
-                    )
-            else:
-                wlan["_compliance_status"] = "NEEDS_UPDATE"
-                self.radius_wlans.append(wlan)
-                if is_debug_mode():  # type: ignore[no-untyped-call]
-                    logging.debug(
-                        "NEEDS_UPDATE: %s - timeout=%s, retries=%s, fast=%s",
-                        wlan.get("ssid"),
-                        wlan.get("auth_servers_timeout", 5),
-                        wlan.get("auth_servers_retries", 2),
-                        wlan.get("fast_dot1x_timers", False),
-                    )
-        total_radius = len(self.radius_wlans) + len(self.compliant_wlans)
+            self._add_inheritance_metadata(wlan)  # Decorate with template/org inheritance info
+            self._classify_radius_wlan(wlan)  # Sort into compliant vs needs-update bucket
+        total_radius = len(self.radius_wlans) + len(self.compliant_wlans)  # Combined RADIUS WLAN count
         logging.info(
             "Found %s RADIUS WLANs: %s needing config, %s compliant",
             total_radius,
