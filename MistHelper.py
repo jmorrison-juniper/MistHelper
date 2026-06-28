@@ -2606,6 +2606,53 @@ def _introspect_apisession_class(mistapi_module: Any) -> tuple[Any, list[str]]:
         return apisession_cls, []  # Return class but no param info -- attempts list will be minimal
 
 
+def _resolve_token_param_names(sig_params: list[str]) -> list[str]:
+    """Return the supported token constructor parameter names, in priority order.
+
+    Filters the known token kwargs against the introspected signature so callers
+    only attempt parameter names the constructor actually accepts.
+    """
+    logging.debug("Resolving supported token parameter names from signature")  # Trace param resolution
+    return [n for n in ["apitoken", "api_token", "token"] if n in sig_params]  # Keep only accepted token kwargs
+
+
+def _build_token_session_attempts(
+    sig_params: list[str],
+    tokens: list[str],
+    host: str,
+) -> list[dict[str, str]]:
+    """Build token-auth kwargs dicts (highest priority) for each supported token param."""
+    logging.debug("Building token-based APISession attempts")  # Trace token attempt construction
+    attempts: list[dict[str, str]] = []  # Accumulate token attempts in priority order
+    token_param_names = _resolve_token_param_names(sig_params)  # Supported token kwargs from signature
+    if not (tokens and token_param_names):  # Need both env tokens and an accepted token param name
+        return attempts  # No token path possible -- return empty for caller to extend
+    all_tokens_str = ",".join(tokens)  # Join as CSV -- mistapi rotates through them on HTTP 429
+    for pname in token_param_names:  # Try each supported token parameter name in priority order
+        base_kwargs: dict[str, str] = {pname: all_tokens_str}  # Build kwargs with this token param name
+        if "host" in sig_params:  # Include host if constructor accepts it
+            base_kwargs["host"] = host  # Set target API hostname
+        attempts.append(base_kwargs)  # Add to ordered attempt list
+    return attempts  # Ordered token attempts
+
+
+def _build_fallback_session_attempts(
+    sig_params: list[str],
+    tokens: list[str],
+    host: str,
+) -> list[dict[str, str]]:
+    """Build env_file/host fallback attempts, only when no env tokens are present."""
+    logging.debug("Building fallback (env_file/host) APISession attempts")  # Trace fallback construction
+    attempts: list[dict[str, str]] = []  # Accumulate fallback attempts
+    if tokens:  # Env tokens present -- fallbacks are skipped to avoid duplicate token reads
+        return attempts  # No fallback needed -- token attempts already cover auth
+    if "env_file" in sig_params:  # env_file only when no env tokens (avoids double-read)
+        attempts.append({"env_file": ".env"})  # Read credentials from .env file
+    if "host" in sig_params:  # Host-only as last resort (unauthenticated probe)
+        attempts.append({"host": host})  # Minimal connection -- API calls will fail without token
+    return attempts  # Ordered fallback attempts
+
+
 def _build_session_attempts(
     apisession_cls: Any,
     sig_params: list[str],
@@ -2614,36 +2661,14 @@ def _build_session_attempts(
 ) -> list[dict[str, str]]:
     """Build a prioritized list of constructor kwargs dicts to attempt for APISession.
 
-    Priority order:
-      1. Direct token parameter (apitoken / api_token / token) -- preferred fastest path
-      2. env_file='.env' -- only when no env tokens exist to avoid duplicate token reads
-      3. host only (unauthenticated) -- last resort for logging/recording
-
-    Args:
-        apisession_cls: The APISession class (may be None if absent from mistapi).
-        sig_params: List of accepted constructor parameter names from introspection.
-        tokens: API tokens parsed from environment variables.
-        host: Mist API hostname string.
-
-    Returns:
-        Ordered list of kwargs dicts. Empty list if no class is available.
+    Order: direct token param, then env_file (only when no env tokens), then host-only.
+    Returns an empty list when no APISession class is available.
     """
-    attempts: list[dict[str, str]] = []  # Start empty -- add attempts in priority order
     if not apisession_cls:  # Cannot build attempts without an APISession class to call
-        return attempts  # Return empty list -- caller will skip to Session fallback
-    token_param_names = [n for n in ["apitoken", "api_token", "token"] if n in sig_params]  # Find accepted token params
-    if tokens and token_param_names:  # Have environment tokens AND a supported token parameter name
-        all_tokens_str = ",".join(tokens)  # Join as CSV -- mistapi rotates through them on HTTP 429
-        for pname in token_param_names:  # Try each supported token parameter name in priority order
-            base_kwargs: dict[str, str] = {pname: all_tokens_str}  # Build kwargs with this token param name
-            if "host" in sig_params:  # Include host if constructor accepts it
-                base_kwargs["host"] = host  # Set target API hostname
-            attempts.append(base_kwargs)  # Add to ordered attempt list
-    if "env_file" in sig_params and not tokens:  # env_file only when no env tokens (avoids double-read)
-        attempts.append({"env_file": ".env"})  # Read credentials from .env file
-    if "host" in sig_params and not tokens:  # Host-only as last resort (unauthenticated probe)
-        attempts.append({"host": host})  # Minimal connection -- API calls will fail without token
-    return attempts  # Return prioritized list for _execute_session_attempts to iterate
+        return []  # Empty list -- caller will skip to Session fallback
+    attempts = _build_token_session_attempts(sig_params, tokens, host)  # Preferred token-auth kwargs first
+    attempts.extend(_build_fallback_session_attempts(sig_params, tokens, host))  # Append env_file/host fallbacks
+    return attempts  # Prioritized list for _execute_session_attempts to iterate
 
 
 def _log_session_attempt_traceback(exc: Exception) -> None:
@@ -2857,33 +2882,54 @@ def _ensure_mist_get_method(session: Any) -> bool:
     return False  # Session is unusable -- hard failure
 
 
+def _detect_session_token(session: Any) -> bool:
+    """Return True when the session exposes a readable, non-empty token attribute."""
+    logging.debug("Detecting readable token attribute on session")  # Trace token attribute probe
+    token_attr = next((a for a in ("apitoken", "api_token", "token") if hasattr(session, a)), None)  # Find auth attr
+    return bool(token_attr and getattr(session, token_attr))  # True only if attr exists and holds a value
+
+
+def _detect_session_method_flags(successful_method: Any) -> tuple[bool, bool, bool]:
+    """Return (used_env_file, used_direct_token, used_fallback) from the winning kwargs."""
+    logging.debug("Detecting auth method flags from successful constructor kwargs")  # Trace method-flag derivation
+    direct_params = ["apitoken", "api_token", "token"]  # Constructor kwargs that denote direct token auth
+    used_env_file = bool(successful_method and "env_file" in successful_method)  # env_file auth path used
+    used_direct_token = bool(successful_method and any(p in successful_method for p in direct_params))  # Direct token
+    used_fallback = bool(successful_method and "fallback" in successful_method)  # Legacy Session() path used
+    return used_env_file, used_direct_token, used_fallback  # Surface flags for logging decisions
+
+
+def _log_missing_auth_warning() -> None:
+    """Emit operator-facing warnings when no authentication method can be detected."""
+    logging.warning("Session established but no auth method detected; API calls may fail if auth required")  # Warn
+    logging.warning("To fix: 1) Copy documentation/sample.env to .env, 2) Set MIST_APITOKEN to your token")  # Steps
+    logging.warning("Get your API token from: https://manage.mist.com/admin/apitoken")  # Where to obtain a token
+
+
+def _log_detected_auth(used_env_file: bool, used_direct_token: bool, has_readable_token: bool) -> None:
+    """Emit a single debug line describing the detected auth path (env_file > token param > attr)."""
+    if used_env_file:  # Highest-priority detected path -- credentials came from .env
+        logging.debug("Session initialized using env_file - authentication configured via .env file")  # env_file path
+    elif used_direct_token:  # Next priority -- a token was passed directly to the constructor
+        logging.debug(
+            "Session initialized using direct token parameter - authentication configured"
+        )  # token-param path
+    elif has_readable_token:  # Last -- session simply exposes a populated token attribute
+        logging.debug("Session has readable token attribute - authentication appears configured")  # attribute path
+
+
 def _log_session_auth_status(session: Any, successful_method: Any) -> None:
     """Log the authentication status of an initialized session.
 
     Warns if no authentication method is detectable, to help operators diagnose
     API calls that fail due to missing credentials.
-
-    Args:
-        session: The initialized session object to inspect for auth attributes.
-        successful_method: Dict describing which constructor kwargs were used.
     """
-    token_attr = next((a for a in ("apitoken", "api_token", "token") if hasattr(session, a)), None)  # Find auth attr
-    has_readable_token = bool(token_attr and getattr(session, token_attr))  # Check if token attribute has a value
-    used_env_file = bool(successful_method and "env_file" in successful_method)  # env_file auth path used
-    used_direct_token = bool(
-        successful_method and any(param in successful_method for param in ["apitoken", "api_token", "token"])
-    )  # Direct token parameter auth path used
-    used_fallback_session = bool(successful_method and "fallback" in successful_method)  # Legacy Session() path used
-    if not (has_readable_token or used_env_file or used_direct_token or used_fallback_session):  # No auth detected
-        logging.warning("Session established but no auth method detected; API calls may fail if auth required")
-        logging.warning("To fix: 1) Copy documentation/sample.env to .env, 2) Set MIST_APITOKEN to your token")
-        logging.warning("Get your API token from: https://manage.mist.com/admin/apitoken")
-    elif used_env_file:
-        logging.debug("Session initialized using env_file - authentication configured via .env file")
-    elif used_direct_token:
-        logging.debug("Session initialized using direct token parameter - authentication configured")
-    elif has_readable_token:
-        logging.debug("Session has readable token attribute - authentication appears configured")
+    has_readable_token = _detect_session_token(session)  # Token attribute presence/value
+    used_env_file, used_direct_token, used_fallback = _detect_session_method_flags(successful_method)  # Method flags
+    if not any([has_readable_token, used_env_file, used_direct_token, used_fallback]):  # No auth signal at all
+        _log_missing_auth_warning()  # Surface remediation guidance to operators
+        return  # Nothing further to log -- mirrors original early-out behavior
+    _log_detected_auth(used_env_file, used_direct_token, has_readable_token)  # Debug-log the detected path
 
 
 def _validate_initialized_session(session: Any, successful_method: Any) -> bool:
