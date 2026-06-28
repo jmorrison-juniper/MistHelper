@@ -17479,25 +17479,44 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _display_import_report(self, results: list) -> None:  # type: ignore[type-arg]
         """Print a summary report of the import operation."""
-        imported = [r for r in results if r["status"] == "imported"]  # Filter successfully imported
-        skipped = [r for r in results if r["status"] == "skipped"]  # Filter conflict-skipped
-        failed = [r for r in results if r["status"] == "failed"]  # Filter API failures
-        would_import = [r for r in results if r["status"] == "would_import"]  # Filter dry-run previews
-
+        buckets = self._partition_import_results(results)  # Group result rows by status into 4 buckets
         print("\n  " + "=" * 55)  # Report header separator
         print("  IMPORT REPORT")  # Report title
         print("  " + "=" * 55)  # Report header separator
+        self._print_import_report_sections(buckets)  # Render every non-empty bucket as a section
+        self._print_report_totals(
+            buckets["imported"], buckets["skipped"], buckets["failed"], buckets["would_import"]
+        )  # Render the grand totals row
 
-        if would_import:  # Show dry-run preview section if applicable
-            self._print_report_section("WOULD IMPORT (dry-run)", would_import)  # Report would-import.
-        if imported:  # Show successfully imported section
-            self._print_report_section("IMPORTED", imported)  # Report imported.
-        if skipped:  # Show skipped-due-to-conflicts section
-            self._print_report_section("SKIPPED (conflicts)", skipped)  # Report skipped.
-        if failed:  # Show failed-to-import section
-            self._print_report_section("FAILED", failed)  # Report failed.
+    def _partition_import_results(self, results: list) -> dict:  # type: ignore[type-arg]
+        """Group import results by status into a stable four-bucket dict."""
+        logging.debug("Partitioning %s import results into status buckets", len(results))  # Trace start
+        buckets: dict = {"imported": [], "skipped": [], "failed": [], "would_import": []}  # Stable section ordering
+        for result in results:  # Walk every result row
+            bucket = buckets.get(result.get("status"))  # Look up the matching bucket (None for unknown statuses)
+            if bucket is not None:  # Drop any result whose status is not one of the four expected values
+                bucket.append(result)  # Collect into its bucket
+        logging.debug(
+            "Partitioned buckets: imported=%s skipped=%s failed=%s would_import=%s",
+            len(buckets["imported"]),
+            len(buckets["skipped"]),
+            len(buckets["failed"]),
+            len(buckets["would_import"]),
+        )  # Trace bucket sizes for diagnostics
+        return buckets  # Return the populated buckets
 
-        self._print_report_totals(imported, skipped, failed, would_import)  # Show grand totals
+    def _print_import_report_sections(self, buckets: dict) -> None:  # type: ignore[type-arg]
+        """Render every non-empty bucket as a labeled report section in stable display order."""
+        section_order = [
+            ("would_import", "WOULD IMPORT (dry-run)"),  # Dry-run preview comes first
+            ("imported", "IMPORTED"),  # Then successful imports
+            ("skipped", "SKIPPED (conflicts)"),  # Then conflict-skips
+            ("failed", "FAILED"),  # Then failures last
+        ]
+        for bucket_key, section_title in section_order:  # Walk sections in display order
+            items = buckets[bucket_key]  # Read this bucket's items
+            if items:  # Suppress empty sections to keep the report compact
+                self._print_report_section(section_title, items)  # Print the populated section
 
     def _print_report_section(self, title: str, items: list) -> None:  # type: ignore[type-arg]
         """Print a single section of the import report."""
@@ -17706,80 +17725,98 @@ class WANProbeConfigManager:  # WAN probe config manager.
 
     def _analyze_templates(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Fetch and analyze templates for WAN interfaces. Returns templates with changes."""
-        print(f"\n  Analyzing {len(templates_to_modify)} templates for WAN interfaces...")  # Tell the user.
-        templates_with_changes = []  # Collect changed templates.
+        print(f"\n  Analyzing {len(templates_to_modify)} templates for WAN interfaces...")  # Tell the user
+        logging.info("Analyzing %s templates for WAN interfaces", len(templates_to_modify))  # Trace count
+        result = self._run_template_analysis_pool(templates_to_modify)  # Run parallel analysis
+        logging.debug("Template analysis produced %s templates with changes", len(result))  # Trace result count
+        return result  # Return templates with WAN interfaces
 
-        def fetch_and_analyze(template_info: dict[str, Any]) -> dict[str, Any] | None:  # Analyze one template.
-            """Worker function to fetch and analyze a single template."""
-            template_id = template_info["id"]  # Template id.
-            template_name = template_info["name"]  # Template name.
+    def _run_template_analysis_pool(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Run per-template analysis in a thread pool and collect the non-empty results."""
+        max_workers = min(10, len(templates_to_modify))  # Size the worker pool
+        logging.info(
+            "Fetching %s templates in parallel (max %s workers)", len(templates_to_modify), max_workers
+        )  # Trace pool sizing
+        templates_with_changes: list[dict[str, Any]] = []  # Collect changed templates
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:  # Run the pool
+            import concurrent.futures  # Import futures
 
-            try:
-                logging.debug("Fetching template configuration for %s", template_name)  # Trace the fetch.
-                response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(  # Fetch the template.
-                    apisession, self.org_id, template_id
-                )
-                config = response.data if hasattr(response, "data") else {}  # Unwrap the config.
-
-                if not isinstance(config, dict):  # Invalid structure.
-                    logging.warning("Template %s returned invalid structure", template_name)  # Warn it.
-                    return None  # Skip it.
-
-                port_config = config.get("port_config", {})  # Read port config.
-                if not isinstance(port_config, dict):  # Invalid port config.
-                    logging.debug("Template %s has no port_config", template_name)  # Trace none.
-                    return None  # Skip it.
-
-                # Find all WAN interfaces
-                wan_interfaces = []  # Collect WAN ports.
-                for port_name, port_settings in port_config.items():  # Walk ports.
-                    if isinstance(port_settings, dict) and port_settings.get("usage") == "wan":  # WAN-usage port.
-                        current_probe = port_settings.get("wan_probe_override", {})  # Read probe override.
-                        current_ips = current_probe.get("ips", []) if isinstance(current_probe, dict) else []
-                        current_profile = (  # Read current profile.
-                            current_probe.get("probe_profile", "") if isinstance(current_probe, dict) else ""
-                        )
-
-                        wan_interfaces.append(  # Collect the interface.
-                            {"port_name": port_name, "current_ips": current_ips, "current_profile": current_profile}
-                        )
-
-                if wan_interfaces:  # Have WAN ports.
-                    return {  # Return the changes.
-                        "id": template_id,
-                        "name": template_name,
-                        "site_count": template_info["site_count"],
-                        "config": config,
-                        "wan_interfaces": wan_interfaces,
-                    }
-                return None  # No WAN ports.
-
-            except Exception as error:  # Analysis failed.
-                logging.error("Error analyzing template %s: %s", template_name, error)  # Log the error.
-                logging.error(traceback.format_exc())  # Log the traceback.
-                print(f"\n  !? Error analyzing template '{template_name}': {error}")  # Tell the user.
-                return None  # Skip it.
-
-        # Parallel fetch with ThreadPoolExecutor
-        max_workers = min(10, len(templates_to_modify))  # Size the worker pool.
-        logging.info("Fetching %s templates in parallel (max %s workers)", len(templates_to_modify), max_workers)
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:  # Run the pool.
-            import concurrent.futures  # Import futures.
-
-            future_map = {executor.submit(fetch_and_analyze, t): t for t in templates_to_modify}
-
+            future_map = {executor.submit(self._analyze_template, t): t for t in templates_to_modify}
             for future in tqdm(  # type: ignore[no-untyped-call]
                 concurrent.futures.as_completed(future_map),
                 total=len(templates_to_modify),
                 desc="Analyzing templates",
                 unit="template",
             ):
-                result = future.result()  # Read the result.
-                if result:  # Have a result.
-                    templates_with_changes.append(result)  # Collect it.
+                analyzed = future.result()  # Read the result
+                if analyzed:  # Skip None results (template had no WAN interfaces or failed)
+                    templates_with_changes.append(analyzed)  # Collect it
+        return templates_with_changes  # Return collected templates
 
-        return templates_with_changes  # Return changed templates.
+    def _analyze_template(self, template_info: dict[str, Any]) -> dict[str, Any] | None:
+        """Analyze a single template: fetch config and extract WAN interfaces."""
+        logging.debug("Analyzing template %s", template_info.get("name"))  # Trace per-template start
+        config = self._fetch_template_config(template_info)  # Fetch the template config
+        if config is None:  # Fetch failed or returned invalid structure
+            return None  # Skip this template
+        wan_interfaces = self._extract_wan_interfaces(config.get("port_config"))  # Walk port_config for WAN ports
+        if not wan_interfaces:  # Template has no WAN-usage ports
+            logging.debug("Template %s has no WAN interfaces", template_info.get("name"))  # Trace empty result
+            return None  # Skip this template
+        logging.debug(
+            "Template %s has %s WAN interfaces", template_info.get("name"), len(wan_interfaces)
+        )  # Trace per-template result
+        return {  # Return the change record
+            "id": template_info["id"],
+            "name": template_info["name"],
+            "site_count": template_info["site_count"],
+            "config": config,
+            "wan_interfaces": wan_interfaces,
+        }
+
+    def _fetch_template_config(self, template_info: dict[str, Any]) -> dict[str, Any] | None:
+        """Fetch a single gateway template's config dict, or None on error or invalid structure."""
+        template_id = template_info["id"]  # Template id
+        template_name = template_info["name"]  # Template name
+        try:
+            logging.debug("Fetching template configuration for %s", template_name)  # Trace the fetch
+            response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(  # Fetch the template
+                apisession, self.org_id, template_id
+            )
+            config = response.data if hasattr(response, "data") else {}  # Unwrap the config
+            if not isinstance(config, dict):  # Invalid structure
+                logging.warning("Template %s returned invalid structure", template_name)  # Warn it
+                return None  # Skip it
+            return config  # Return the valid config dict
+        except Exception as error:  # Analysis failed
+            logging.error("Error analyzing template %s: %s", template_name, error)  # Log the error
+            logging.error(traceback.format_exc())  # Log the traceback
+            print(f"\n  !? Error analyzing template '{template_name}': {error}")  # Tell the user
+            return None  # Skip it
+
+    def _extract_wan_interfaces(self, port_config: Any) -> list[dict[str, Any]]:
+        """Extract WAN-usage interfaces from a template's port_config, returning empty list when invalid."""
+        if not isinstance(port_config, dict):  # Invalid or missing port_config
+            logging.debug("Skipping template: port_config is not a dict")  # Trace skip
+            return []  # No WAN ports
+        wan_interfaces: list[dict[str, Any]] = []  # Collect WAN ports
+        for port_name, port_settings in port_config.items():  # Walk every port entry
+            if isinstance(port_settings, dict) and port_settings.get("usage") == "wan":  # WAN-usage port
+                wan_interfaces.append(self._build_wan_interface(port_name, port_settings))  # Collect it
+        return wan_interfaces  # Return collected WAN ports
+
+    def _build_wan_interface(self, port_name: str, port_settings: dict[str, Any]) -> dict[str, Any]:
+        """Build the WAN interface change-record dict for one WAN-usage port."""
+        current_probe = port_settings.get("wan_probe_override", {})  # Read probe override
+        current_ips = current_probe.get("ips", []) if isinstance(current_probe, dict) else []  # Probe IPs
+        current_profile = (
+            current_probe.get("probe_profile", "") if isinstance(current_probe, dict) else ""
+        )  # Probe profile
+        return {
+            "port_name": port_name,
+            "current_ips": current_ips,
+            "current_profile": current_profile,
+        }  # Return the interface record
 
     def _show_preview(self, templates_with_changes: list[dict[str, Any]], dry_run: bool) -> None:
         """Display preview of changes to be made."""
@@ -17901,75 +17938,87 @@ class WANProbeConfigManager:  # WAN probe config manager.
         logging.error("Failed to update template %s: status %s", template_name, update_resp.status_code)  # Log fail
         return "FAILED", f"API returned status {update_resp.status_code}"  # Report the API failure
 
-    def _generate_report(self, results: list[dict[str, Any]], dry_run: bool) -> None:  # Generate the audit report.
+    def _generate_report(self, results: list[dict[str, Any]], dry_run: bool) -> None:  # Generate the audit report
         """Generate and display final report."""
-        # Prepare report data
-        report_data = []  # Collect report rows.
-        for result in results:  # Walk results.
-            report_data.append(  # Build a report row.
-                {
-                    "template_name": result["template_name"],
-                    "template_id": result["template_id"],
-                    "site_count": result["site_count"],
-                    "interfaces_updated": (
-                        ", ".join(result["interfaces_updated"]) if result["interfaces_updated"] else ""
-                    ),
-                    "interface_count": len(result["interfaces_updated"]),
-                    "status": result["status"],
-                    "error": result["error"],
-                    "new_probe_ips": ", ".join(self.probe_ips),
-                    "new_probe_profile": self.probe_profile,
-                }
-            )
-
-        output_file = "GatewayTemplate_WAN_Probe_Config_Audit.csv"  # Output filename.
+        logging.info("Generating audit report for %s results (dry_run=%s)", len(results), dry_run)  # Trace start
+        report_data = [self._build_report_row(result) for result in results]  # Build per-result report rows
+        output_file = "GatewayTemplate_WAN_Probe_Config_Audit.csv"  # Output filename
         DataExporter.write_with_format_selection(report_data, output_file)  # type: ignore[no-untyped-call]
+        total_interfaces, total_sites = self._compute_report_totals(results)  # Compute aggregate counts
+        if dry_run:  # Dry-run summary
+            self._emit_dry_run_summary(results, total_interfaces, total_sites)  # Print dry-run section
+        else:  # Live-run summary
+            self._emit_live_run_summary(results, total_interfaces, total_sites)  # Print live-run section
+        print(f"\n  Report saved to: {output_file}")  # Tell the user
+        print("=" * 70)  # Divider
+        self._log_destructive_completion(results)  # Log the warning summary
 
-        # Calculate summary
-        total_interfaces = sum(len(r["interfaces_updated"]) for r in results)  # Total interfaces.
-        total_sites = sum(r["site_count"] for r in results if r["status"] in ["SUCCESS", "DRY-RUN"])
+    def _build_report_row(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Build one audit-report row from a per-template result dict."""
+        interfaces_updated = result["interfaces_updated"]  # Read updated interface names
+        return {
+            "template_name": result["template_name"],
+            "template_id": result["template_id"],
+            "site_count": result["site_count"],
+            "interfaces_updated": ", ".join(interfaces_updated) if interfaces_updated else "",  # Joined names
+            "interface_count": len(interfaces_updated),
+            "status": result["status"],
+            "error": result["error"],
+            "new_probe_ips": ", ".join(self.probe_ips),
+            "new_probe_profile": self.probe_profile,
+        }
 
-        if dry_run:  # Dry-run.
-            dry_run_count = sum(1 for r in results if r["status"] == "DRY-RUN")  # Count dry-runs.
-            print("\n  WAN Probe Configuration DRY-RUN Complete!")  # Tell the user.
-            print("=" * 70)  # Divider.
-            print("  >> DRY-RUN MODE: No actual changes were made")  # Tell the user.
-            print(f"  Templates Analyzed: {len(results)}")  # Show analyzed count.
-            print(f"  Would Update: {dry_run_count} templates")  # Show would-update.
-            print(f"  WAN Interfaces: {total_interfaces}")  # Show interfaces.
-            print(f"  Sites Affected: {total_sites}")  # Show sites.
-            print("\n  >> To apply changes, run without --dry-run flag")  # Tell the user.
-        else:
-            success_count = sum(1 for r in results if r["status"] == "SUCCESS")  # Count successes.
-            failure_count = len(results) - success_count  # Count failures.
+    def _compute_report_totals(self, results: list[dict[str, Any]]) -> tuple[int, int]:
+        """Compute total interfaces and total affected sites from per-template results."""
+        total_interfaces = sum(len(r["interfaces_updated"]) for r in results)  # Total interfaces across all results
+        total_sites = sum(
+            r["site_count"] for r in results if r["status"] in ("SUCCESS", "DRY-RUN")
+        )  # Sites affected by successful or dry-run results
+        logging.debug("Report totals: interfaces=%s sites=%s", total_interfaces, total_sites)  # Trace totals
+        return total_interfaces, total_sites  # Return aggregates
 
-            print("\n  WAN Probe Configuration Complete!")  # Tell the user.
-            print("=" * 70)  # Divider.
-            print(f"  Templates Updated: {success_count}")  # Show updated count.
-            print(f"  Templates Failed: {failure_count}")  # Show failed count.
-            print(f"  WAN Interfaces Configured: {total_interfaces}")  # Show interfaces.
-            print(f"  Sites Affected: {total_sites}")  # Show sites.
+    def _emit_dry_run_summary(self, results: list[dict[str, Any]], total_interfaces: int, total_sites: int) -> None:
+        """Print the dry-run summary block (no changes were applied)."""
+        dry_run_count = sum(1 for r in results if r["status"] == "DRY-RUN")  # Count dry-run rows
+        print("\n  WAN Probe Configuration DRY-RUN Complete!")  # Tell the user
+        print("=" * 70)  # Divider
+        print("  >> DRY-RUN MODE: No actual changes were made")  # Tell the user
+        print(f"  Templates Analyzed: {len(results)}")  # Show analyzed count
+        print(f"  Would Update: {dry_run_count} templates")  # Show would-update count
+        print(f"  WAN Interfaces: {total_interfaces}")  # Show interfaces
+        print(f"  Sites Affected: {total_sites}")  # Show sites
+        print("\n  >> To apply changes, run without --dry-run flag")  # Tell the user
 
-            if success_count > 0:  # Any success.
-                print("\n  Configuration Applied:")  # Tell the user.
-                print(f"    Probe IPs: {self.probe_ips}")  # Show probe IPs.
-                print(f"    Probe Profile: {self.probe_profile}")  # Show probe profile.
+    def _emit_live_run_summary(self, results: list[dict[str, Any]], total_interfaces: int, total_sites: int) -> None:
+        """Print the live-run summary block (changes were actually applied)."""
+        success_count = sum(1 for r in results if r["status"] == "SUCCESS")  # Count successes
+        failure_count = len(results) - success_count  # Count failures
+        print("\n  WAN Probe Configuration Complete!")  # Tell the user
+        print("=" * 70)  # Divider
+        print(f"  Templates Updated: {success_count}")  # Show updated count
+        print(f"  Templates Failed: {failure_count}")  # Show failed count
+        print(f"  WAN Interfaces Configured: {total_interfaces}")  # Show interfaces
+        print(f"  Sites Affected: {total_sites}")  # Show sites
+        if success_count > 0:  # Any success
+            print("\n  Configuration Applied:")  # Tell the user
+            print(f"    Probe IPs: {self.probe_ips}")  # Show probe IPs
+            print(f"    Probe Profile: {self.probe_profile}")  # Show probe profile
+        if failure_count > 0:  # Any failure
+            print(f"\n  !? {failure_count} templates failed - check audit report")  # Warn the failures
 
-            if failure_count > 0:  # Any failure.
-                print(f"\n  !? {failure_count} templates failed - check audit report")  # Warn the failures.
-
-        print(f"\n  Report saved to: {output_file}")  # Tell the user.
-        print("=" * 70)  # Divider.
-
-        logging.warning(  # Log the summary.
-            "Menu #166 DESTRUCTIVE operation complete: %s templates updated",
-            sum(1 for r in results if r["status"] == "SUCCESS"),
+    def _log_destructive_completion(self, results: list[dict[str, Any]]) -> None:
+        """Log a warning-level summary of the destructive operation completion."""
+        success_count = sum(1 for r in results if r["status"] == "SUCCESS")  # Count successes
+        logging.warning(  # Log the summary
+            "Menu #166 DESTRUCTIVE operation complete: %s templates updated", success_count
         )
 
 
 # ============================================================================
 # WAN PROBE DEVICE OVERRIDE MANAGER CLASS (delegated)
 # ============================================================================
+
+
 class WANProbeDeviceOverrideManager:  # WAN probe device override.
     """Delegation wrapper for extracted WAN probe device override manager implementation."""
 
