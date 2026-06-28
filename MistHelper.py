@@ -2470,22 +2470,10 @@ def _select_msp_and_org():
     org_id = state.get("org_id", org_id)  # Copy the chosen org ID back
 
 
-def _select_org_from_session():
-    """Helper to select organization from session privileges (non-MSP path).
-
-    Uses mistapi's built-in org selection when user doesn't have MSP access
-    or chooses to skip MSP selection.
-    """
-    global org_id  # We update the selected org ID global here
-
-    logging.debug("Entering _select_org_from_session()")  # Trace entry for debugging
-
-    print("")  # Blank spacer line
-    print("  Selecting organization from your session privileges...")  # Tell the user what's happening
-    print("")  # Blank spacer line
-
-    try:
-        # Use mistapi's built-in org selection
+def _invoke_mistapi_org_picker_and_apply() -> None:
+    """Run mistapi's org picker and apply the user's choice to the org_id global."""
+    global org_id  # The picker result writes through to the module-level org
+    try:  # mistapi may raise on network errors or invalid sessions
         logging.debug("Invoking mistapi.cli.select_org()")  # Trace the SDK call
         org_id_list = mistapi.cli.select_org(apisession)  # Let mistapi present an org picker and return the choice
         if org_id_list and len(org_id_list) > 0:  # The user selected at least one org
@@ -2498,6 +2486,15 @@ def _select_org_from_session():
     except Exception as e:  # The SDK picker raised an error
         print(f"  X Error selecting organization: {e}")  # Show the error to the user
         logging.error("Failed to select org from session: %s", e)  # nosec B608  # Log the failure detail
+
+
+def _select_org_from_session():
+    """Pick an org via mistapi's built-in selector (non-MSP path)."""
+    logging.debug("Entering _select_org_from_session()")  # Trace entry for debugging
+    print("")  # Blank spacer line
+    print("  Selecting organization from your session privileges...")  # Tell the user what's happening
+    print("")  # Blank spacer line
+    _invoke_mistapi_org_picker_and_apply()  # Run picker; updates the org_id global
 
 
 def _load_mistapi_module(current_mistapi: Any) -> Any:
@@ -2553,19 +2550,7 @@ def _parse_api_tokens() -> tuple[str, list[str]]:
 
 
 def _check_token_rate_limit(token: str, test_host: str) -> bool:
-    """Test whether a single API token is currently rate-limited by the Mist API.
-
-    Sends a lightweight GET /api/v1/self request with the token.
-    HTTP 429 means rate-limited. HTTP 200 means available.
-    Any other status or connection exception is treated as unavailable (conservative).
-
-    Args:
-        token: The API token to probe.
-        test_host: The Mist API hostname (e.g. api.mist.com).
-
-    Returns:
-        True if the token appears rate-limited or unreachable, False if usable.
-    """
+    """Probe a token via GET /self; True if rate-limited/unreachable, False if usable."""
     try:
         import requests  # Import here -- only needed for this edge-case rate-limit probe path
 
@@ -2696,44 +2681,50 @@ def _log_session_attempt_traceback(exc: Exception) -> None:
         logging.warning("Failed to log traceback: %s", trace_err)  # Non-fatal -- continue without trace
 
 
+def _try_single_session_kwargs(
+    apisession_cls: Any,
+    kwargs: dict[str, str],
+    attempt_num: int,
+    total: int,
+) -> tuple[Any, bool]:
+    """Try one APISession kwargs dict; return (session_or_None, rate_limit_seen)."""
+    if apisession_cls is None:  # Guard: class must be present if attempts list was built
+        raise AssertionError("apisession_cls should be set if attempts list is populated")
+    try:  # APISession constructor may raise on auth/validation/rate-limit
+        session = apisession_cls(**kwargs)  # Attempt APISession constructor with these kwargs
+        logging.info("Mist API session initialized with mistapi.APISession using kwargs=%s", list(kwargs.keys()))
+        return session, False  # Success -- no rate-limit signal needed
+    except Exception as e:  # Constructor failed for this kwargs combination
+        error_msg = str(e)  # Convert exception to string for rate-limit signature check
+        logging.warning("APISession attempt %d/%d failed kwargs=%s: %s", attempt_num, total, kwargs, e)
+        rate_limit = (
+            "'NoneType' object is not iterable" in error_msg
+        )  # Heuristic for rate-limit during token validation
+        if rate_limit:  # Operator-visible signal that caller should switch to per-token retry path
+            logging.warning("Detected possible rate limiting during token validation - tokens may be throttled")
+        _log_session_attempt_traceback(e)  # Log full traceback for detailed debugging
+        return None, rate_limit  # Return failure with rate-limit flag for caller to react
+
+
 def _execute_session_attempts(
     apisession_cls: Any,
     attempts: list[dict[str, str]],
 ) -> tuple[Any, Any, bool, list[dict]]:
-    """Try each constructor kwargs dict in order until one creates a valid session.
-
-    Logs full traceback for each failure to aid operator debugging. Detects the
-    NoneType rate-limit signature so the caller can trigger per-token retry logic.
-
-    Args:
-        apisession_cls: The APISession class to instantiate with each kwargs dict.
-        attempts: Ordered list of kwargs dicts built by _build_session_attempts.
-
-    Returns:
-        Tuple of (session, successful_method, rate_limit_detected, tried_variants).
-        session is None if all attempts failed. successful_method records winning kwargs.
-    """
+    """Try each kwargs dict until one constructs a valid APISession; track rate-limit signal."""
     tried_variants: list[dict] = []  # Track all attempted kwargs for error reporting on total failure
     successful_method: Any = None  # Will hold the kwargs dict that succeeded
     rate_limit_detected = False  # Set True if NoneType rate-limit error signature is seen
     session: Any = None  # Will hold the created APISession object on success
     for i, kwargs in enumerate(attempts, start=1):  # Try each kwargs dict in priority order
-        tried_variants.append(kwargs)  # Record attempt for error log before trying (in case of exception)
-        try:
-            if apisession_cls is None:  # Guard: class must be present if attempts list was built
-                raise AssertionError("apisession_cls should be set if attempts list is populated")
-            session = apisession_cls(**kwargs)  # Attempt APISession constructor with these kwargs
-            successful_method = kwargs  # Record which kwargs succeeded for downstream auth validation
-            logging.info("Mist API session initialized with mistapi.APISession using kwargs=%s", list(kwargs.keys()))
-            break  # Success -- stop trying remaining attempts
-        except Exception as e:
-            session = None  # Ensure session is cleared so next iteration starts fresh
-            error_msg = str(e)  # Convert exception to string for rate-limit signature check
-            logging.warning("APISession attempt %d/%d failed kwargs=%s: %s", i, len(attempts), kwargs, e)
-            if "'NoneType' object is not iterable" in error_msg:  # Heuristic for rate-limit during token validation
-                rate_limit_detected = True  # Signal caller to try per-token retry path
-                logging.warning("Detected possible rate limiting during token validation - tokens may be throttled")
-            _log_session_attempt_traceback(e)  # Log full traceback for detailed debugging
+        tried_variants.append(kwargs)  # Record attempt before trying (in case of exception)
+        session, attempt_rate_limit = _try_single_session_kwargs(
+            apisession_cls, kwargs, i, len(attempts)
+        )  # Try one kwargs dict; capture rate-limit signal
+        if attempt_rate_limit:  # Even a failed attempt may surface the rate-limit signature
+            rate_limit_detected = True  # Preserve the signal across iterations
+        if session is not None:  # Successful construction -- record winning kwargs and stop
+            successful_method = kwargs  # Downstream auth validation needs to know which kwargs worked
+            break  # Success -- skip remaining attempts
     return session, successful_method, rate_limit_detected, tried_variants  # Return all state to orchestrator
 
 
@@ -2762,49 +2753,52 @@ def _filter_available_tokens(tokens: list[str], host: str) -> list[str]:
     return available  # Return only the usable tokens
 
 
+def _build_filtered_session_kwargs(sig_params: list[str], tokens_csv: str, host: str) -> dict[str, str]:
+    """Build APISession kwargs containing only fields the constructor accepts."""
+    kwargs: dict[str, str] = {}  # Start with empty dict so we only include accepted params
+    if "apitoken" in sig_params:  # Include token param only if constructor accepts it
+        kwargs["apitoken"] = tokens_csv  # Pass comma-joined available tokens
+    if "host" in sig_params:  # Include host if constructor accepts it
+        kwargs["host"] = host  # Set target API hostname
+    return kwargs  # Caller passes this into apisession_cls(**kwargs)
+
+
+def _create_session_isolated_from_env(apisession_cls: Any, filtered_kwargs: dict[str, str]) -> Any:
+    """Construct APISession after temporarily clearing MIST_APITOKEN to avoid stale-token re-read."""
+    original_mist_token = os.environ.get("MIST_APITOKEN")  # Save original env value for finally cleanup
+    try:  # Wrap so the env var is always restored even on construction failure
+        if "MIST_APITOKEN" in os.environ:  # Clear env var to block mistapi from re-reading stale tokens
+            del os.environ["MIST_APITOKEN"]  # Temporarily remove -- restored in finally block
+            logging.debug("Temporarily cleared MIST_APITOKEN from environment for filtered token initialization")
+        assert apisession_cls is not None, "apisession_cls should be set for retry logic"  # nosec B101
+        session = apisession_cls(**filtered_kwargs)  # Create session with filtered token set
+        logging.info("SUCCESS: API session initialized with filtered token kwargs=%s", list(filtered_kwargs.keys()))
+        return session  # Caller pairs it back with filtered_kwargs for auth validation
+    except Exception as filtered_err:  # Constructor still failed even with filtered tokens
+        logging.error("Failed to initialize with filtered tokens: %s", filtered_err)  # Log failure reason
+        return None  # Signal failure to caller
+    finally:  # Always restore the env var even on success/exception
+        if original_mist_token:  # Restore original env var regardless of success or failure
+            os.environ["MIST_APITOKEN"] = original_mist_token  # Restore to prevent side effects
+            logging.debug("Restored MIST_APITOKEN to environment")
+
+
 def _create_session_with_available_tokens(
     apisession_cls: Any,
     sig_params: list[str],
     available_tokens: list[str],
     host: str,
 ) -> tuple[Any, Any]:
-    """Create an APISession using only the pre-filtered available (non-rate-limited) tokens.
-
-    Temporarily clears MIST_APITOKEN from the environment to prevent mistapi from
-    re-reading rate-limited tokens during its internal _load_env() call.
-
-    Args:
-        apisession_cls: The APISession class to instantiate.
-        sig_params: Accepted constructor parameter names from introspection.
-        available_tokens: Pre-filtered list of usable tokens (not rate-limited).
-        host: Mist API hostname.
-
-    Returns:
-        Tuple of (session, successful_method), both None on failure.
-    """
+    """Create an APISession using only pre-filtered (non-rate-limited) tokens."""
     available_tokens_str = ",".join(available_tokens)  # Join as CSV for mistapi token rotation
-    original_mist_token = os.environ.get("MIST_APITOKEN")  # Save original env value for cleanup in finally
-    try:
-        if "MIST_APITOKEN" in os.environ:  # Clear env var to block mistapi from re-reading stale tokens
-            del os.environ["MIST_APITOKEN"]  # Temporarily remove -- restored in finally block
-            logging.debug("Temporarily cleared MIST_APITOKEN from environment for filtered token initialization")
-        filtered_kwargs: dict[str, str] = {}  # Build kwargs using only available tokens
-        if "apitoken" in sig_params:  # Include token param only if constructor accepts it
-            filtered_kwargs["apitoken"] = available_tokens_str  # Pass comma-joined available tokens
-        if "host" in sig_params:  # Include host if constructor accepts it
-            filtered_kwargs["host"] = host  # Set target API hostname
-        logging.info("Initializing with %d available token(s)", len(available_tokens))
-        assert apisession_cls is not None, "apisession_cls should be set for retry logic"  # nosec B101
-        session = apisession_cls(**filtered_kwargs)  # Create session with filtered token set
-        logging.info("SUCCESS: API session initialized with %d available token(s)", len(available_tokens))
-        return session, filtered_kwargs  # Return session and the kwargs used for auth validation
-    except Exception as filtered_err:
-        logging.error("Failed to initialize with filtered tokens: %s", filtered_err)  # Log failure reason
+    filtered_kwargs = _build_filtered_session_kwargs(
+        sig_params, available_tokens_str, host
+    )  # Build kwargs only with fields the constructor accepts
+    logging.info("Initializing with %d available token(s)", len(available_tokens))  # Operator-visible progress
+    session = _create_session_isolated_from_env(apisession_cls, filtered_kwargs)  # Construct with env-var isolation
+    if session is None:  # Construction failed under env isolation
         return None, None  # Filtered token retry also failed
-    finally:
-        if original_mist_token:  # Restore original env var regardless of success or failure
-            os.environ["MIST_APITOKEN"] = original_mist_token  # Restore to prevent side effects
-            logging.debug("Restored MIST_APITOKEN to environment")
+    return session, filtered_kwargs  # Return both for downstream auth validation
 
 
 def _retry_with_filtered_tokens(
@@ -2813,21 +2807,7 @@ def _retry_with_filtered_tokens(
     tokens: list[str],
     host: str,
 ) -> tuple[Any, Any]:
-    """Retry session creation using only non-rate-limited tokens after a multi-token failure.
-
-    Called when _execute_session_attempts detects the rate-limit error signature.
-    Probes each token individually via _filter_available_tokens, then creates a
-    session using only the available tokens via _create_session_with_available_tokens.
-
-    Args:
-        apisession_cls: The APISession class.
-        sig_params: Accepted constructor parameter names.
-        tokens: Full list of tokens from environment.
-        host: Mist API hostname.
-
-    Returns:
-        Tuple of (session, successful_method), both None on failure or insufficient tokens.
-    """
+    """Retry session creation using only non-rate-limited tokens after a multi-token failure."""
     if not (apisession_cls and tokens and len(tokens) > 1):  # Guard: need class and multiple tokens to retry
         return None, None  # Cannot retry without multiple tokens and a class
     logging.warning("Multi-token init failed due to rate limiting - testing %d tokens individually", len(tokens))
@@ -2959,18 +2939,7 @@ def _validate_initialized_session(session: Any, successful_method: Any) -> bool:
 
 
 def initialize_mist_session() -> bool:
-    """Initialize the Mist API session with authentication.
-
-    Orchestrates the session initialization strategy using focused helper functions.
-    Strategy:
-      1. Try APISession with direct token(s) from environment (preferred).
-      2. Try APISession with env_file if no tokens in environment.
-      3. If rate-limited, filter tokens individually and retry with available tokens.
-      4. Fallback to mistapi.Session() as last resort.
-      5. Return False if all attempts fail.
-
-    SECURITY: Tokens are only logged in redacted preview at DEBUG level.
-    """
+    """Initialize the Mist API session (APISession first, filtered retry, Session fallback)."""
     global apisession, mistapi  # Both module-level globals managed exclusively here
     if apisession:  # Already initialized -- skip all setup and return immediately
         return True
@@ -2996,44 +2965,40 @@ def initialize_mist_session() -> bool:
     return _validate_initialized_session(apisession, successful_method)  # Verify mist_get and auth status
 
 
+def _install_default_request_timeout(inner_session: Any) -> None:
+    """Install API_REQUEST_TIMEOUT as the default timeout on the requests.Session."""
+    from requests.adapters import HTTPAdapter  # Lazy import; requests is large and only needed here
+
+    class TimeoutAdapter(HTTPAdapter):  # Nested so we don't expose a public adapter class
+        """HTTPAdapter that injects a default timeout."""
+
+        def __init__(self, default_timeout: int, **kwargs):  # Capture the project-wide timeout default
+            self.default_timeout = default_timeout  # Reused when send() gets timeout=None
+            super().__init__(**kwargs)  # Real adapter setup (connection pool, retries)
+
+        def send(  # noqa: PLR0913, STRUCT-PARAMS  # external contract: requests.HTTPAdapter.send signature
+            self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None
+        ):
+            if timeout is None:  # Caller did not supply a per-call timeout -- substitute our default
+                timeout = self.default_timeout
+            # Issue #431: forward args verbatim; signature must match parent for adapter contract.
+            return super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
+
+    adapter = TimeoutAdapter(default_timeout=API_REQUEST_TIMEOUT)  # Single instance shared by both schemes
+    inner_session.mount("https://", adapter)  # Apply to HTTPS calls (standard Mist transport)
+    inner_session.mount("http://", adapter)  # Apply to plain HTTP too for completeness
+
+
 def _configure_session_timeout(session_obj: Any) -> None:
-    """Set read timeout on the mistapi session's underlying requests session.
-
-    mistapi does not pass a timeout to requests.Session.get(), so API calls
-    can hang indefinitely when the Mist cloud is slow or the connection drops.
-    This patches the session to use a default timeout via a transport adapter.
-
-    Args:
-        session_obj: The mistapi APISession object.
-    """
-    try:
-        from requests.adapters import HTTPAdapter
-
-        inner = getattr(session_obj, "_session", None)
-        if inner is None:
+    """Patch the mistapi APISession's inner requests.Session with a default read timeout."""
+    try:  # Defensive: any failure here is non-fatal -- log and move on
+        inner = getattr(session_obj, "_session", None)  # Probe for the underlying requests.Session
+        if inner is None:  # mistapi version did not expose a _session attribute
             logging.warning("Cannot configure timeout - session has no _session attribute")
-            return
-
-        class TimeoutAdapter(HTTPAdapter):
-            """HTTPAdapter that injects a default timeout."""
-
-            def __init__(self, default_timeout: int, **kwargs):
-                self.default_timeout = default_timeout
-                super().__init__(**kwargs)
-
-            def send(  # noqa: PLR0913, STRUCT-PARAMS  # external contract: requests.HTTPAdapter.send signature
-                self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None
-            ):
-                if timeout is None:
-                    timeout = self.default_timeout
-                # Issue #431: forward args verbatim; signature must match parent for adapter contract.
-                return super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
-
-        adapter = TimeoutAdapter(default_timeout=API_REQUEST_TIMEOUT)
-        inner.mount("https://", adapter)
-        inner.mount("http://", adapter)
+            return  # Nothing to patch -- caller continues without timeout enforcement
+        _install_default_request_timeout(inner)  # Build and install the timeout-injecting transport
         logging.info("Configured API request timeout: %ss", API_REQUEST_TIMEOUT)
-    except Exception as timeout_err:
+    except Exception as timeout_err:  # Any failure -- log and continue without enforcement
         logging.warning("Failed to configure session timeout: %s", timeout_err)
 
 
@@ -5364,6 +5329,18 @@ class CacheUtils:
     Handles CSV caching, freshness checks, regeneration, etc.
     """
 
+    _ADDRESS_PARSE_FAILURE_FIELDNAMES: list[str] = [  # Stable column order for AddressParseFailures CSV
+        "site_id",
+        "site_name",
+        "device_id",
+        "device_serial",
+        "device_name",
+        "original_address",
+        "parsed_tokens",
+        "failure_reason",
+        "timestamp",
+    ]
+
     @staticmethod
     def check_and_generate_csv(
         file_name: str,
@@ -5423,18 +5400,7 @@ class CacheUtils:
 
     @staticmethod
     def load_csv_grouped_by_key(filename: str, key: str) -> dict[str, list[dict[str, Any]]]:
-        """
-        Loads CSV data into a dictionary keyed by the specified column.
-        Each key maps to a list of rows (as dictionaries) that share the same key value.
-
-        Args:
-            filename: Name of the CSV file to load
-            key: Column name to use as the grouping key
-
-        Returns:
-            dict: Dictionary where keys are unique values from the key column,
-                  and values are lists of row dictionaries
-        """
+        """Load a CSV into a dict keyed by the named column; value is the list of rows sharing it."""
         logging.info(
             "Loading CSV file '%s' into dictionary keyed by '%s'...", filename, key
         )  # Log before reading the file
@@ -5458,40 +5424,38 @@ class CacheUtils:
         return data_dict  # Return the grouped-by-key dictionary
 
     @staticmethod
-    def write_support_data_to_csv(data: dict[str, list[dict[str, Any]]], filename: str) -> None:
-        """
-        Writes the support package data (a dict of lists of dicts) to a CSV file.
-        Each section in 'data' is a list of dictionaries. All unique keys across all sections are used as CSV columns.
-
-        Args:
-            data: Dictionary where keys are section names and values are lists of row dictionaries
-            filename: Name of the output CSV file
-        """
-        logging.debug("Preparing to write support package to %s...", filename)
-
-        fieldnames: set = set()  # type: ignore[type-arg]
-        # Collect all unique field names from all sections
-        for section_name, section in data.items():
+    def _collect_csv_fieldnames(data: dict[str, list[dict[str, Any]]]) -> list[str]:
+        """Return sorted union of keys across every row in every section."""
+        fieldnames: set[str] = set()  # Accumulate every distinct key seen across all sections
+        for section_name, section in data.items():  # Walk each named section once
             logging.debug("Processing section '%s' with %s rows.", section_name, len(section))
-            for row in section:
-                fieldnames.update(row.keys())
-        fieldnames_sorted = sorted(fieldnames)
+            for row in section:  # Each row contributes its keys to the union
+                fieldnames.update(row.keys())  # Set update is O(k) and dedupes for us
+        return sorted(fieldnames)  # Sort so the CSV column order is deterministic
 
-        logging.debug("Final CSV fieldnames: %s", fieldnames_sorted)
+    @staticmethod
+    def _write_data_rows_to_csv(writer: csv.DictWriter, data: dict[str, list[dict[str, Any]]]) -> int:
+        """Write every row from every section through writer; return total row count."""
+        row_count = 0  # Tally rows actually written so the caller can log the total
+        for _section_name, section in data.items():  # Iterate sections in insertion order
+            for row in section:  # Write each row through the DictWriter
+                writer.writerow(row)  # csv handles encoding/escaping for us
+                row_count += 1  # Increment after a successful write
+        return row_count  # Caller logs this for operator visibility
 
-        # SECURITY: Use proper file path handling to ensure files go to data/ directory
-        csv_file_path = FilePathUtils.get_csv_path(filename)
-        with open(csv_file_path, mode="w", newline="", encoding="utf-8") as file:
-            writer = csv.DictWriter(file, fieldnames=fieldnames_sorted)
-            writer.writeheader()
-            row_count = 0
-            for _section_name, section in data.items():
-                for row in section:
-                    writer.writerow(row)
-                    row_count += 1
+    @staticmethod
+    def write_support_data_to_csv(data: dict[str, list[dict[str, Any]]], filename: str) -> None:
+        """Write the support package (dict of section -> rows) to filename under data/."""
+        logging.debug("Preparing to write support package to %s...", filename)  # Log before doing IO
+        fieldnames_sorted = CacheUtils._collect_csv_fieldnames(data)  # Union of keys, deterministic order
+        logging.debug("Final CSV fieldnames: %s", fieldnames_sorted)  # Trace exact header order
+        csv_file_path = FilePathUtils.get_csv_path(filename)  # SECURITY: anchor under data/
+        with open(csv_file_path, mode="w", newline="", encoding="utf-8") as file:  # Open for writing
+            writer = csv.DictWriter(file, fieldnames=fieldnames_sorted)  # Bind writer to fixed header
+            writer.writeheader()  # Emit header before any data rows
+            row_count = CacheUtils._write_data_rows_to_csv(writer, data)  # Stream all rows through
             logging.info("Wrote %s rows to %s for support package.", row_count, csv_file_path)
-
-        logging.info("Support package written to %s", csv_file_path)
+        logging.info("Support package written to %s", csv_file_path)  # Final success message
 
     # Known generated cache CSV filenames -- cleared by Menu 175
     GENERATED_FILES: set[str] = {  # Explicit list of MistHelper-generated cache CSVs to protect non-data files
@@ -5586,42 +5550,19 @@ class CacheUtils:
     def create_address_parse_failures_csv(
         parse_failures: list[dict[str, Any]], filename: str = "AddressParseFailures.csv"
     ) -> None:
-        """
-        Create a CSV file documenting address parsing failures.
-
-        Args:
-            parse_failures: List of parse failure records
-            filename: Output filename
-        """
+        """Write address-parse failures to a CSV in data/; safe no-op when list is empty."""
         if not parse_failures:
             logging.info("No address parsing failures to document.")
             return
-
         try:
-            output_path = FilePathUtils.get_csv_path(filename)
-
+            output_path = FilePathUtils.get_csv_path(filename)  # Resolve target path under data/
             with open(output_path, "w", newline="", encoding="utf-8") as f:
-                fieldnames = [
-                    "site_id",
-                    "site_name",
-                    "device_id",
-                    "device_serial",
-                    "device_name",
-                    "original_address",
-                    "parsed_tokens",
-                    "failure_reason",
-                    "timestamp",
-                ]
-
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-
+                writer = csv.DictWriter(f, fieldnames=CacheUtils._ADDRESS_PARSE_FAILURE_FIELDNAMES)
+                writer.writeheader()  # Header row first
                 for failure in parse_failures:
-                    writer.writerow(failure)
-
+                    writer.writerow(failure)  # One row per failure record
             logging.info("Address parsing failures documented in: %s (%s records)", filename, len(parse_failures))
             print(f"! Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
-
         except Exception as e:
             logging.error("Failed to create address parse failures CSV: %s", e)
             print(f"! Failed to create address parse failures CSV: {e}")
