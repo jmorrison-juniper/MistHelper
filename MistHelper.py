@@ -6907,113 +6907,104 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
         return strategy  # Return enhanced strategy.
 
     @staticmethod
+    def _sanitize_table_name(name: str) -> str:
+        """Sanitize a SQL table name; force a non-digit leading character to keep DDL valid."""
+        safe = re.sub(r"[^a-zA-Z0-9_]", "_", name)  # Replace any non-alphanum/underscore with '_'
+        if not safe or safe[0].isdigit():  # Empty or digit-led identifier is not valid SQL
+            safe = f"table_{safe}"  # Prefix to ensure a valid identifier
+        return safe  # Return the sanitized name
+
+    @staticmethod
+    def _sanitize_column(field_name: Any) -> str:
+        """Sanitize a column identifier for safe inclusion in SQL DDL."""
+        return re.sub(r"[^a-zA-Z0-9_]", "_", str(field_name))  # Replace any non-alphanum/underscore with '_'
+
+    @staticmethod
+    def _pk_aware_column_defs(fields: list[str], pk_fields: list[str]) -> list[str]:
+        """Return TEXT column-def strings; columns named in pk_fields are flagged NOT NULL."""
+        defs: list[str] = []  # Collect column definitions in field order
+        for field_name in fields:  # Walk each input field name
+            safe = DatabaseSchemaUtils._sanitize_column(field_name)  # Sanitize column for SQL safety
+            if field_name in pk_fields:  # Primary-key columns require NOT NULL
+                defs.append(f"{safe} TEXT NOT NULL")  # Required PK column
+            else:
+                defs.append(f"{safe} TEXT")  # Optional column
+        return defs  # Return the column-def list
+
+    @staticmethod
+    def _plain_column_defs(fields: list[str]) -> list[str]:
+        """Return TEXT column-def strings for every field (no PK distinction)."""
+        return [
+            f"{DatabaseSchemaUtils._sanitize_column(field_name)} TEXT" for field_name in fields
+        ]  # Plain TEXT columns
+
+    @staticmethod
+    def _metadata_column_defs() -> list[str]:
+        """Return the standard audit timestamp column definitions appended to every table."""
+        return [
+            "misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP",  # Row-create timestamp
+            "misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP",  # Row-update timestamp
+        ]
+
+    @staticmethod
+    def _assemble_create_sql(safe_table_name: str, field_definitions: list[str], suffix: str) -> str:
+        """Assemble the final CREATE TABLE statement from sanitized name, column defs, and suffix clauses."""
+        sql_parts = [
+            f"CREATE TABLE IF NOT EXISTS {safe_table_name} (",  # Begin the CREATE TABLE
+            ", ".join(field_definitions),  # Join all column defs
+            suffix,  # Strategy-specific suffix (PK or UNIQUE clauses)
+            ")",  # Close the column list
+        ]
+        return "".join(sql_parts)  # Assemble the DDL string
+
+    @staticmethod
+    def _build_natural_pk_sql(safe_table_name: str, fields: list[str], strategy: dict[str, Any]) -> str:
+        """Build CREATE TABLE DDL for a natural-key endpoint (stable UUID column)."""
+        pk_fields = strategy["primary_key"]  # Natural primary key columns
+        field_defs = DatabaseSchemaUtils._pk_aware_column_defs(fields, pk_fields)  # PK-aware column defs
+        field_defs.extend(DatabaseSchemaUtils._metadata_column_defs())  # Append audit columns
+        suffix = f", PRIMARY KEY ({', '.join(pk_fields)})"  # Compose the PK clause
+        return DatabaseSchemaUtils._assemble_create_sql(safe_table_name, field_defs, suffix)  # Final DDL
+
+    @staticmethod
+    def _build_composite_pk_sql(safe_table_name: str, fields: list[str], strategy: dict[str, Any]) -> str:
+        """Build CREATE TABLE DDL for a composite-key endpoint (only present columns become PK)."""
+        pk_fields = strategy["primary_key"]  # Composite key columns
+        field_defs = DatabaseSchemaUtils._pk_aware_column_defs(fields, pk_fields)  # PK-aware column defs
+        field_defs.extend(DatabaseSchemaUtils._metadata_column_defs())  # Append audit columns
+        available = [f for f in pk_fields if f in fields]  # Only key on present columns
+        suffix = f", PRIMARY KEY ({', '.join(available)})" if available else ""  # Empty suffix when no key columns
+        return DatabaseSchemaUtils._assemble_create_sql(safe_table_name, field_defs, suffix)  # Final DDL
+
+    @staticmethod
+    def _build_autoincrement_sql(safe_table_name: str, fields: list[str], strategy: dict[str, Any]) -> str:
+        """Build CREATE TABLE DDL for an auto-increment-with-unique endpoint (surrogate id + UNIQUE cols)."""
+        field_defs = ["misthelper_internal_id INTEGER PRIMARY KEY AUTOINCREMENT"]  # Surrogate key column first
+        field_defs.extend(DatabaseSchemaUtils._plain_column_defs(fields))  # Plain TEXT columns
+        field_defs.extend(DatabaseSchemaUtils._metadata_column_defs())  # Append audit columns
+        unique_fields = [f for f in strategy["unique_constraints"] if f in fields]  # Constrain present columns only
+        unique_suffix = "".join(
+            f", UNIQUE({DatabaseSchemaUtils._sanitize_column(f)})" for f in unique_fields
+        )  # Comma-separated UNIQUE clauses (empty when no unique fields)
+        return DatabaseSchemaUtils._assemble_create_sql(safe_table_name, field_defs, unique_suffix)  # Final DDL
+
+    @staticmethod
     def build_create_table_sql(
         table_name: str,
         fields: list[str],
         strategy: dict[str, Any],
-    ) -> str:  # noqa: C901, PLR0912, PLR0915
-        """
-        Builds the CREATE TABLE SQL statement based on the endpoint strategy.
-
-        Args:
-            table_name (str): Name of the table to create
-            fields (list): List of field names from the data
-            strategy (dict): Strategy configuration for this endpoint
-
-        Returns:
-            str: Complete CREATE TABLE SQL statement
-        """
-        datetime.now(UTC).isoformat()  # Timestamp the schema build.
-
-        # Sanitize table name
-        safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", table_name)  # Sanitize the table name.
-        if not safe_table_name or safe_table_name[0].isdigit():  # Names cannot start with a digit.
-            safe_table_name = f"table_{safe_table_name}"  # Prefix to make it valid.
-
-        # Start building SQL
-        if strategy["type"] == "natural_pk":  # Stable-UUID table path.
-            # Use API id field(s) as primary key
-            pk_fields = strategy["primary_key"]  # Natural primary key columns.
-            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]  # Begin the CREATE TABLE.
-
-            # Add all fields, with primary key fields getting special treatment
-            field_definitions = []  # Column definitions.
-            for field in fields:  # Define each column.
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
-                if field in pk_fields:  # PK columns are NOT NULL.
-                    field_definitions.append(f"{safe_field} TEXT NOT NULL")  # Required PK column.
-                else:
-                    field_definitions.append(f"{safe_field} TEXT")  # Optional column.
-
-            # Add metadata fields
-            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: created time.
-            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: updated time.
-
-            sql_parts.append(", ".join(field_definitions))  # Join column defs.
-
-            # Add primary key constraint
-            pk_constraint = f"PRIMARY KEY ({', '.join(pk_fields)})"  # Compose the PK clause.
-            sql_parts.append(f", {pk_constraint}")  # Append the PK clause.
-
-            sql_parts.append(")")  # Close the column list.
-            create_sql = "".join(sql_parts)  # Assemble the DDL.
-
-        elif strategy["type"] == "composite_pk":  # Time-series table path.
-            # Use composite primary key
-            pk_fields = strategy["primary_key"]  # Composite key columns.
-            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]  # Begin the CREATE TABLE.
-
-            field_definitions = []  # Column definitions.
-            for field in fields:  # Define each column.
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
-                if field in pk_fields:  # PK columns are NOT NULL.
-                    field_definitions.append(f"{safe_field} TEXT NOT NULL")  # Required PK column.
-                else:
-                    field_definitions.append(f"{safe_field} TEXT")  # Optional column.
-
-            # Add metadata fields
-            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: created time.
-            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: updated time.
-
-            sql_parts.append(", ".join(field_definitions))  # Join column defs.
-
-            # Add composite primary key constraint
-            available_pk_fields = [f for f in pk_fields if f in fields]  # Only key on present columns.
-            if available_pk_fields:  # At least one PK column exists.
-                pk_constraint = f"PRIMARY KEY ({', '.join(available_pk_fields)})"  # Compose the PK clause.
-                sql_parts.append(f", {pk_constraint}")  # Append the PK clause.
-
-            sql_parts.append(")")  # Close the column list.
-            create_sql = "".join(sql_parts)  # Assemble the DDL.
-
-        else:  # auto_increment_with_unique
-            # Use auto-increment primary key with unique constraints
-            sql_parts = [f"CREATE TABLE IF NOT EXISTS {safe_table_name} ("]  # Begin the CREATE TABLE.
-
-            field_definitions = ["misthelper_internal_id INTEGER PRIMARY KEY AUTOINCREMENT"]  # Surrogate key column.
-
-            for field in fields:  # Define each column.
-                safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
-                field_definitions.append(f"{safe_field} TEXT")  # Optional column.
-
-            # Add metadata fields
-            field_definitions.append("misthelper_created_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: created time.
-            field_definitions.append("misthelper_updated_time TEXT DEFAULT CURRENT_TIMESTAMP")  # Audit: updated time.
-
-            sql_parts.append(", ".join(field_definitions))  # Join column defs.
-
-            # Add unique constraints if specified
-            unique_fields = [f for f in strategy["unique_constraints"] if f in fields]  # Unique cols present in data.
-            if unique_fields:  # Add unique constraints.
-                for field in unique_fields:  # Each unique column.
-                    safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field))  # Sanitize the column name.
-                    sql_parts.append(f", UNIQUE({safe_field})")  # Append unique constraint.
-
-            sql_parts.append(")")  # Close the column list.
-            create_sql = "".join(sql_parts)  # Assemble the DDL.
-
-        logging.debug("Generated CREATE TABLE SQL for %s: %s...", safe_table_name, create_sql[:100])  # Trace DDL.
-        return create_sql  # Return the CREATE TABLE.
+    ) -> str:
+        """Build the CREATE TABLE SQL for an endpoint, dispatching by strategy['type']."""
+        datetime.now(UTC).isoformat()  # Preserve legacy timestamp-build side effect from prior implementation
+        safe_table_name = DatabaseSchemaUtils._sanitize_table_name(table_name)  # Sanitize the table name
+        builders = {
+            "natural_pk": DatabaseSchemaUtils._build_natural_pk_sql,  # Stable-UUID branch builder
+            "composite_pk": DatabaseSchemaUtils._build_composite_pk_sql,  # Time-series branch builder
+        }
+        builder = builders.get(strategy["type"], DatabaseSchemaUtils._build_autoincrement_sql)  # Auto-incr fallback
+        create_sql = builder(safe_table_name, fields, strategy)  # Dispatch to the strategy-specific builder
+        logging.debug("Generated CREATE TABLE SQL for %s: %s...", safe_table_name, create_sql[:100])  # Trace DDL
+        return create_sql  # Return the CREATE TABLE
 
     @staticmethod
     def build_indexes_sql(table_name: str, fields: list[str], strategy: dict[str, Any]) -> list[str]:  # Build indexes.
@@ -7546,77 +7537,100 @@ class DataExporter:  # Multi-backend export facade.
         return SQLiteDatabaseWriter(data, table_name, api_function_name).write()  # Run the writer.
 
     @staticmethod
-    def write_to_csv(  # Low-level CSV writer.
+    def write_to_csv(
         data: list[dict[str, Any]],
         csv_file: str,
         fieldnames: list[str] | None = None,
     ) -> None:
-        """
-        Writes a list of dictionaries to a CSV file.
-        - Escapes multiline strings for CSV compatibility.
-        - Determines all unique fields for the CSV header.
-        - Writes each row, filling missing fields with empty strings.
-        - Uses data directory for container persistence.
+        """Write rows to a CSV file, escaping multiline values and honoring an optional column order.
 
         Args:
             data: Rows to write.
             csv_file: Destination filename (placed in data/ if no directory is given).
-            fieldnames: Optional explicit column order.  When provided the columns are written
-                in exactly this order instead of being sorted alphabetically by get_unique_keys().
+            fieldnames: Optional explicit column order; defaults to sorted unique keys.
         """
         logging.debug("ENTRY: DataExporter.write_to_csv(data_rows=%s, csv_file=%s)", len(data) if data else 0, csv_file)
-
-        if not data:  # No rows to write.
-            logging.warning("No data provided to write to %s", csv_file)  # warn no data.
-            logging.debug("EXIT: DataExporter.write_to_csv - no data to write")  # Trace early exit.
-            return  # Nothing to write.
-
-        # Ensure data directory exists and construct proper file path
-        data_dir = "data"  # Confine to data/.
-        os.makedirs(data_dir, exist_ok=True)  # Ensure data/ exists.
-
-        # If csv_file doesn't already include a path, place it in the data directory
-        if not os.path.dirname(csv_file):  # Bare filename.
-            csv_file_path = os.path.join(data_dir, csv_file)  # Place under data/.
-        else:
-            csv_file_path = csv_file  # Use given path.
-
-        logging.debug("Preparing to write %s rows to %s...", len(data), csv_file_path)  # Trace write prep.
+        if not data:  # No rows to write -- short-circuit and trace the early exit
+            logging.warning("No data provided to write to %s", csv_file)  # Inform caller of empty payload
+            logging.debug("EXIT: DataExporter.write_to_csv - no data to write")  # Trace early exit
+            return  # Nothing to do
+        csv_file_path = DataExporter._resolve_csv_path(csv_file)  # Place bare filenames under data/
+        logging.debug("Preparing to write %s rows to %s...", len(data), csv_file_path)  # Trace write prep
         escaped_data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
-        if fieldnames is not None:  # Caller supplied an explicit column order — use it as-is
-            fields = fieldnames  # Preserve the requested column sequence without sorting
+        fields = DataExporter._resolve_csv_fields(escaped_data, fieldnames)  # Final column order for the CSV
+        logging.debug("CSV fields determined: %s", fields)  # Trace fields
+        DataExporter._write_csv_with_exception_handling(csv_file_path, escaped_data, fields)  # Open + write rows
+        logging.info("File I/O: Successfully wrote %s rows to %s", len(escaped_data), csv_file_path)  # Log success
+        logging.debug("EXIT: DataExporter.write_to_csv - success")  # Trace exit
+
+    @staticmethod
+    def _resolve_csv_path(csv_file: str) -> str:
+        """Return the on-disk path for csv_file, placing bare filenames under data/."""
+        data_dir = "data"  # Confine bare filenames to data/ for container persistence
+        os.makedirs(data_dir, exist_ok=True)  # Ensure data/ exists before any write
+        if not os.path.dirname(csv_file):  # Caller passed a bare filename (no directory component)
+            resolved = os.path.join(data_dir, csv_file)  # Place under data/
         else:
-            fields = DataProcessingUtils.get_unique_keys(escaped_data)  # type: ignore[no-untyped-call]
-        logging.debug("CSV fields determined: %s", fields)  # Trace fields.
+            resolved = csv_file  # Caller-provided full path is honored verbatim
+        logging.debug("Resolved CSV destination path: %s", resolved)  # Trace path resolution
+        return resolved  # Final destination
 
-        try:
-            logging.debug("File I/O: Attempting to open %s for writing", csv_file_path)  # Trace open.
-            with open(csv_file_path, "w", newline="", encoding="utf-8") as file_handle:  # Open CSV for writing.
-                writer = csv.DictWriter(file_handle, fieldnames=fields)  # Dict-based CSV writer.
-                writer.writeheader()  # Write the header row.
-                logging.debug("File I/O: Successfully wrote CSV header to %s", csv_file_path)  # Trace header.
+    @staticmethod
+    def _resolve_csv_fields(escaped_data: list[dict[str, Any]], fieldnames: list[str] | None) -> list[str]:
+        """Return the CSV column order; honor caller-supplied fieldnames or fall back to sorted unique keys."""
+        if fieldnames is not None:  # Caller supplied an explicit column order -- preserve it verbatim
+            logging.debug("Using caller-supplied fieldnames for CSV column order")  # Trace explicit ordering
+            return fieldnames  # Use as-is
+        derived = DataProcessingUtils.get_unique_keys(escaped_data)  # type: ignore[no-untyped-call]
+        logging.debug("Derived %s unique CSV columns from data", len(derived))  # Trace derived ordering
+        return derived  # Sorted unique keys
 
-                for idx, row in enumerate(escaped_data):  # Write each row.
-                    writer.writerow({field: row.get(field, "") for field in fields})  # Write row by field order.
-                    if idx < 3:  # Log the first few rows for debugging
-                        logging.debug("Row %s written: %s", idx, row)  # Trace a row.
+    @staticmethod
+    def _emit_rows(writer: csv.DictWriter, escaped_data: list[dict[str, Any]], fields: list[str]) -> None:
+        """Write every row in escaped_data through writer; debug-log the first three for diagnostics."""
+        for idx, row in enumerate(escaped_data):  # Walk each row in input order
+            writer.writerow({field_name: row.get(field_name, "") for field_name in fields})  # Emit in col order
+            if idx < 3:  # Trace the first three rows to aid post-mortem debugging
+                logging.debug("Row %s written: %s", idx, row)  # Per-row trace
 
-            logging.info("File I/O: Successfully wrote %s rows to %s", len(escaped_data), csv_file_path)
-            logging.debug("EXIT: DataExporter.write_to_csv - success")  # Trace success.
+    @staticmethod
+    def _write_csv_open_and_emit(
+        csv_file_path: str,
+        escaped_data: list[dict[str, Any]],
+        fields: list[str],
+    ) -> None:
+        """Open the destination CSV and write header + rows; lets I/O errors propagate to the caller."""
+        logging.debug("File I/O: Attempting to open %s for writing", csv_file_path)  # Trace pre-open
+        with open(csv_file_path, "w", newline="", encoding="utf-8") as file_handle:  # Open CSV for writing
+            writer = csv.DictWriter(file_handle, fieldnames=fields)  # Dict-based CSV writer
+            writer.writeheader()  # Write the header row first
+            logging.debug("File I/O: Successfully wrote CSV header to %s", csv_file_path)  # Trace header write
+            DataExporter._emit_rows(writer, escaped_data, fields)  # Stream rows through the writer
 
-        except PermissionError as perm_error:  # File locked/denied.
+    @staticmethod
+    def _write_csv_with_exception_handling(
+        csv_file_path: str,
+        escaped_data: list[dict[str, Any]],
+        fields: list[str],
+    ) -> None:
+        """Run the CSV write under structured error handling -- map I/O failures to user-friendly diagnostics."""
+        try:  # Wrap the write to translate I/O failures into the legacy diagnostic surface
+            DataExporter._write_csv_open_and_emit(csv_file_path, escaped_data, fields)  # Open + emit
+        except PermissionError as perm_error:  # File locked or write denied
             logging.error("File I/O: Permission denied when writing to %s: %s", csv_file_path, perm_error)
-            print(f"! Cannot write to {csv_file_path}. Is it open in another program?")  # user hint.
-            logging.debug("EXIT: DataExporter.write_to_csv - permission error")  # Trace exit.
-            raise  # Propagate the error.
-        except OSError as os_error:  # OS-level write error.
-            logging.error("File I/O: OS error when writing to %s: %s", csv_file_path, os_error)  # os error.
-            logging.debug("EXIT: DataExporter.write_to_csv - OS error")  # Trace exit.
-            raise  # Propagate the error.
-        except Exception as unexpected_error:  # Unexpected write error.
-            logging.error("File I/O: Unexpected error when writing to %s: %s", csv_file, unexpected_error)
-            logging.debug("EXIT: DataExporter.write_to_csv - unexpected error")  # Trace exit.
-            raise  # Propagate the error.
+            print(f"! Cannot write to {csv_file_path}. Is it open in another program?")  # User-facing hint
+            logging.debug("EXIT: DataExporter.write_to_csv - permission error")  # Trace exit on perm denial
+            raise  # Propagate to the caller
+        except OSError as os_error:  # OS-level write failure (disk full, path invalid, etc.)
+            logging.error("File I/O: OS error when writing to %s: %s", csv_file_path, os_error)  # Log OS failure
+            logging.debug("EXIT: DataExporter.write_to_csv - OS error")  # Trace OS error exit
+            raise  # Propagate to the caller
+        except Exception as unexpected_error:  # Any other unexpected failure
+            logging.error(
+                "File I/O: Unexpected error when writing to %s: %s", csv_file_path, unexpected_error
+            )  # Log unexpected
+            logging.debug("EXIT: DataExporter.write_to_csv - unexpected error")  # Trace unexpected exit
+            raise  # Propagate to the caller
 
     # save_data_to_output removed per issue #431 (ARCH-DELEGATE). All call
     # sites now invoke DataExporter.write_with_format_selection(data, filename,
