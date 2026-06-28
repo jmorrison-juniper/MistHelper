@@ -23776,148 +23776,192 @@ def _build_cli_func_kwargs(args: argparse.Namespace, site_id: str | None, device
     }
 
 
-def _run_interactive_mode(args: argparse.Namespace) -> None:  # noqa: C901, PLR0912
+def _run_interactive_mode(args: argparse.Namespace) -> None:
     """Present the interactive menu loop, dispatching to functions until user exits."""
-    global org_id  # Modify module-level org_id for all menu functions
-    logging.info("No CLI arguments detected, running in interactive menu mode.")  # Log before interactive start
-    org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org ID from cache or prompt
-    logging.info("Organization ID initialized for interactive mode: %s", org_id)  # Log org ID
-    container_mode = EnvironmentUtils.is_running_in_container()  # Check if running inside Podman/Docker container
-    if container_mode:  # Container mode: show banner, loop after each operation
-        logging.info("Container mode detected - enabling continuous menu loop")  # Log container detection
+    global org_id  # Modify module-level org_id for all menu functions.
+    logging.info("No CLI arguments detected, running in interactive menu mode.")  # Log before interactive start.
+    org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org ID from cache or prompt.
+    logging.info("Organization ID initialized for interactive mode: %s", org_id)  # Log org ID.
+    container_mode = _setup_interactive_container_mode()  # Detect container runtime and print banner if active.
+    while True:  # Main menu loop -- runs until user selects exit or input stream closes.
+        _print_interactive_menu()  # Print the sorted menu options.
+        iwant = _prompt_interactive_selection()  # Get the user's selection (stripped, with __EXIT__ on EOF).
+        if iwant == "__EXIT__":  # EOF sentinel signals Ctrl+D / SSH disconnect / broken pipe.
+            _handle_interactive_eof(container_mode)  # Print EOF messages and exit the loop.
+            break  # Exit the while loop cleanly.
+        if iwant == "":  # Empty input: redisplay menu without logging an error.
+            _handle_interactive_empty_input(container_mode)  # Print empty-input notice.
+            continue  # Loop back to show menu again.
+        selected = menu_actions.get(iwant)  # Look up user selection in dispatch table.
+        if not selected:  # Invalid (non-empty) selection entered -- redisplay or exit.
+            _handle_interactive_invalid_selection(iwant, container_mode)  # Print + maybe exit on invalid input.
+            continue  # In container mode, loop again; direct mode already exited inside the handler.
+        func, _ = selected  # Extract callable from menu_actions entry.
+        logging.info(
+            "User selected menu option '%s'. Executing associated function.", iwant
+        )  # Log selection before dispatch.
+        _execute_interactive_menu_action(iwant, func, container_mode)  # Run the func with full error handling.
+
+
+def _setup_interactive_container_mode() -> bool:
+    """Detect whether MistHelper is running inside a container; print banner if yes."""
+    container_mode = EnvironmentUtils.is_running_in_container()  # Check Podman/Docker container marker files.
+    if container_mode:  # Container mode: show banner and loop after each operation.
+        logging.info("Container mode detected - enabling continuous menu loop")  # Log container detection.
         print(
             "[CONTAINER MODE] MistHelper will return to menu after each operation"
-        )  # Inform user of container behavior  # noqa: E501
-        print("                 Use option 0 to exit the container")  # Show exit instruction
-    while True:  # Main menu loop -- runs until user selects exit or input stream closes
-        print("\nAvailable Options:")  # Print menu header before listing options
-        sorted_menu_keys = sorted(
-            menu_actions.keys(), key=lambda x: float(x.replace("a", ".1"))
-        )  # Sort numerically (not lexically)  # noqa: E501
-        for key in sorted_menu_keys:
-            func, description = menu_actions[key]  # Unpack function and description from dispatch table
-            print(f"{key}: {description}")  # Print each menu option as key: description
-        iwant = InputUtils.safe_input(
-            "\nEnter your selection number now: ",
-            default_value="__EXIT__",  # EOF returns __EXIT__ sentinel to trigger clean shutdown
-            context="main_menu_selection",  # Context label for EOF logging
-        ).strip()  # Strip whitespace from user input
-        if iwant == "__EXIT__":  # __EXIT__ sentinel signals EOF (Ctrl+D, SSH disconnect, broken pipe)
-            print("\n[EOF] Input stream closed. Exiting gracefully...")  # Inform user of EOF
-            logging.info("EOF encountered on input - user disconnected or input stream closed")  # Log EOF event
-            if container_mode:
-                print("[CONTAINER MODE] SSH session ended. Terminating MistHelper.")  # Container-specific EOF message
-            break  # Exit the while loop cleanly
-        if iwant == "":  # Empty input: redisplay menu without logging an error
-            if container_mode:  # Container mode shows prompt to clarify nothing happened
-                print("[CONTAINER MODE] No selection entered. Redisplaying menu...")  # Container empty input message
-                print("=" * 60)  # Visual separator before menu redisplay
-                continue  # Loop back to show menu again
-            else:
-                print("No selection entered. Please enter a menu number.")  # Direct mode empty input message
-                continue  # Loop back to prompt again
-        selected = menu_actions.get(iwant)  # Look up user selection in dispatch table
-        if selected:  # Valid menu option found
-            func, _ = selected  # Extract callable from menu_actions entry
-            logging.info(
-                "User selected menu option '%s'. Executing associated function.", iwant
-            )  # Log selection before dispatch  # noqa: E501
-            try:
-                if iwant == "0":  # Option 0 is the explicit exit shortcut
-                    logging.info("Exit option selected by user.")  # Log user-requested exit
-                    logging.debug("EXIT: _run_interactive_mode - user requested exit")  # Log exit point
-                    sys.exit(0)  # Exit cleanly on user selection of option 0
-                session_management_options = {"115", "143"}  # ops that re-enter menu
-                func()  # type: ignore[operator, no-untyped-call]  # Execute the selected menu function
-                logging.info("Menu option '%s' execution complete.", iwant)  # Log completion after function returns
-                if not container_mode:  # Direct mode: exit after each operation (unless session management)
-                    if iwant in session_management_options:  # Session management needs menu return to use new context
-                        logging.info(
-                            "Session management option '%s' completed - returning to menu", iwant
-                        )  # Log session update  # noqa: E501
-                        print("\n[SESSION] Context updated. Returning to menu...")  # Inform user of context change
-                        print("=" * 60)  # Visual separator
-                        continue  # Return to menu with updated session context
-                    else:
-                        logging.debug(
-                            "EXIT: _run_interactive_mode - interactive success (direct mode)"
-                        )  # Log exit point  # noqa: E501
-                        sys.exit(0)  # Exit after single operation in direct mode
-                else:  # Container mode: always return to menu after each operation
-                    logging.debug(
-                        "Container mode: option '%s' completed successfully, returning to menu", iwant
-                    )  # Log container loop  # noqa: E501
-                    print(f"\n[CONTAINER MODE] Operation '{iwant}' completed. Returning to menu...")  # Inform user
-                    print("=" * 60)  # Visual separator before menu redisplay
-            except KeyboardInterrupt:  # User pressed Ctrl+C during operation
-                logging.info("Operation interrupted by user (Ctrl+C)")  # Log user interrupt
-                if container_mode:  # Container mode: return to menu after interrupt
-                    logging.debug(
-                        "Container mode: option '%s' interrupted, returning to menu", iwant
-                    )  # Log container interrupt  # noqa: E501
-                    print("\n[CONTAINER MODE] Operation interrupted. Returning to menu...")  # Inform user
-                    print("=" * 60)  # Visual separator
-                    continue  # Return to menu
-                else:  # Direct mode: exit with SIGINT code
-                    logging.debug("EXIT: _run_interactive_mode - user interrupt")  # Log exit point
-                    sys.exit(130)  # Exit 130 is standard exit code for SIGINT (Ctrl+C)
-            except Exception as e:  # Unexpected error during menu function execution
-                logging.error("Error executing menu option '%s': %s", iwant, e)  # Log error with context
-                if container_mode:  # Container mode: show error but return to menu
-                    logging.debug(
-                        "Container mode: option '%s' failed with error, returning to menu", iwant
-                    )  # Log container error  # noqa: E501
-                    print(f"\n[CONTAINER MODE] Error in operation '{iwant}': {e}")  # Show error to user
-                    print("Returning to menu...")  # Inform user we are continuing
-                    print("=" * 60)  # Visual separator
-                    continue  # Return to menu despite error
-                else:  # Direct mode: exit with error code
-                    logging.debug("EXIT: _run_interactive_mode - interactive error (direct mode)")  # Log exit point
-                    sys.exit(1)  # Exit with error code on unexpected exception in direct mode
-        else:  # Invalid (non-empty) selection entered
-            logging.error("Invalid selection '%s' entered by user.", iwant)  # Log invalid selection
-            print("Invalid selection. Please try again.")  # Inform user of invalid input
-            if not container_mode:  # Direct mode: exit on invalid selection
-                logging.debug("EXIT: _run_interactive_mode - invalid selection (direct mode)")  # Log exit point
-                sys.exit(1)  # Exit with error code on invalid selection in direct mode
-            else:
-                logging.debug(
-                    "Container mode: invalid selection '%s', redisplaying menu", iwant
-                )  # Log container invalid  # noqa: E501
-            # In container mode, continue loop for another attempt
+        )  # Inform user of container behavior.
+        print("                 Use option 0 to exit the container")  # Show exit instruction.
+    return container_mode  # Return flag so the loop can branch on container vs. direct mode.
+
+
+def _print_interactive_menu() -> None:
+    """Print the sorted list of available menu options."""
+    print("\nAvailable Options:")  # Print menu header before listing options.
+    sorted_menu_keys = sorted(
+        menu_actions.keys(), key=lambda x: float(x.replace("a", ".1"))
+    )  # Sort numerically (not lexically) so 10 sorts after 9.
+    for key in sorted_menu_keys:  # Iterate every menu key in numeric order.
+        _, description = menu_actions[key]  # Unpack description from dispatch table tuple.
+        print(f"{key}: {description}")  # Print each menu option as key: description.
+
+
+def _prompt_interactive_selection() -> str:
+    """Prompt the user for a menu selection. Returns stripped input, or __EXIT__ on EOF."""
+    return InputUtils.safe_input(
+        "\nEnter your selection number now: ",
+        default_value="__EXIT__",  # EOF returns __EXIT__ sentinel to trigger clean shutdown.
+        context="main_menu_selection",  # Context label for EOF logging.
+    ).strip()  # Strip whitespace from user input.
+
+
+def _handle_interactive_eof(container_mode: bool) -> None:
+    """Print the EOF (Ctrl+D / SSH disconnect / pipe close) messages."""
+    print("\n[EOF] Input stream closed. Exiting gracefully...")  # Inform user of EOF.
+    logging.info("EOF encountered on input - user disconnected or input stream closed")  # Log EOF event.
+    if container_mode:  # Container mode: additional context message for SSH session termination.
+        print("[CONTAINER MODE] SSH session ended. Terminating MistHelper.")  # Container-specific EOF message.
+
+
+def _handle_interactive_empty_input(container_mode: bool) -> None:
+    """Print the empty-input notice (different copy for container vs direct mode)."""
+    if container_mode:  # Container mode shows prompt to clarify nothing happened.
+        print("[CONTAINER MODE] No selection entered. Redisplaying menu...")  # Container empty input message.
+        print("=" * 60)  # Visual separator before menu redisplay.
+    else:  # Direct mode shows simpler reminder.
+        print("No selection entered. Please enter a menu number.")  # Direct mode empty input message.
+
+
+def _handle_interactive_invalid_selection(iwant: str, container_mode: bool) -> None:
+    """Handle an invalid (non-empty, not in dispatch table) menu selection. May call sys.exit."""
+    logging.error("Invalid selection '%s' entered by user.", iwant)  # Log invalid selection.
+    print("Invalid selection. Please try again.")  # Inform user of invalid input.
+    if not container_mode:  # Direct mode: exit on invalid selection.
+        logging.debug("EXIT: _run_interactive_mode - invalid selection (direct mode)")  # Log exit point.
+        sys.exit(1)  # Exit with error code on invalid selection in direct mode.
+    logging.debug("Container mode: invalid selection '%s', redisplaying menu", iwant)  # Log container invalid.
+
+
+def _execute_interactive_menu_action(iwant: str, func, container_mode: bool) -> None:
+    """Run the selected menu function with full error handling (success, Ctrl+C, exception)."""
+    try:
+        if iwant == "0":  # Option 0 is the explicit exit shortcut.
+            logging.info("Exit option selected by user.")  # Log user-requested exit.
+            logging.debug("EXIT: _run_interactive_mode - user requested exit")  # Log exit point.
+            sys.exit(0)  # Exit cleanly on user selection of option 0.
+        func()  # type: ignore[operator, no-untyped-call]  # Execute the selected menu function.
+        logging.info("Menu option '%s' execution complete.", iwant)  # Log completion after function returns.
+        _dispatch_post_menu_success(iwant, container_mode)  # Branch on container vs direct + session-management ops.
+    except KeyboardInterrupt:  # User pressed Ctrl+C during operation.
+        _handle_post_menu_interrupt(iwant, container_mode)  # Container loops; direct exits with SIGINT code.
+    except Exception as error:  # Unexpected error during menu function execution.
+        _handle_post_menu_exception(iwant, error, container_mode)  # Container loops; direct exits with error code.
+
+
+def _dispatch_post_menu_success(iwant: str, container_mode: bool) -> None:
+    """Dispatch follow-up after a successful menu call (continue loop vs sys.exit)."""
+    session_management_options = {"115", "143"}  # Options that re-enter menu to use new context.
+    if container_mode:  # Container mode: always return to menu after each operation.
+        logging.debug(
+            "Container mode: option '%s' completed successfully, returning to menu", iwant
+        )  # Log container loop.
+        print(f"\n[CONTAINER MODE] Operation '{iwant}' completed. Returning to menu...")  # Inform user.
+        print("=" * 60)  # Visual separator before menu redisplay.
+        return  # Return so the outer while loop continues.
+    if iwant in session_management_options:  # Direct mode + session management: keep loop running.
+        logging.info("Session management option '%s' completed - returning to menu", iwant)  # Log session update.
+        print("\n[SESSION] Context updated. Returning to menu...")  # Inform user of context change.
+        print("=" * 60)  # Visual separator.
+        return  # Return so the outer while loop continues with updated session context.
+    logging.debug("EXIT: _run_interactive_mode - interactive success (direct mode)")  # Log exit point.
+    sys.exit(0)  # Exit after single operation in direct mode.
+
+
+def _handle_post_menu_interrupt(iwant: str, container_mode: bool) -> None:
+    """Handle a Ctrl+C interrupt during a menu function call."""
+    logging.info("Operation interrupted by user (Ctrl+C)")  # Log user interrupt.
+    if container_mode:  # Container mode: return to menu after interrupt.
+        logging.debug("Container mode: option '%s' interrupted, returning to menu", iwant)  # Log container interrupt.
+        print("\n[CONTAINER MODE] Operation interrupted. Returning to menu...")  # Inform user.
+        print("=" * 60)  # Visual separator.
+        return  # Return so the outer while loop continues.
+    logging.debug("EXIT: _run_interactive_mode - user interrupt")  # Log exit point.
+    sys.exit(130)  # Exit 130 is the standard exit code for SIGINT (Ctrl+C).
+
+
+def _handle_post_menu_exception(iwant: str, error: Exception, container_mode: bool) -> None:
+    """Handle an unexpected exception raised during a menu function call."""
+    logging.error("Error executing menu option '%s': %s", iwant, error)  # Log error with context.
+    if container_mode:  # Container mode: show error but return to menu.
+        logging.debug("Container mode: option '%s' failed with error, returning to menu", iwant)  # Log container error.
+        print(f"\n[CONTAINER MODE] Error in operation '{iwant}': {error}")  # Show error to user.
+        print("Returning to menu...")  # Inform user we are continuing.
+        print("=" * 60)  # Visual separator.
+        return  # Return so the outer while loop continues despite the error.
+    logging.debug("EXIT: _run_interactive_mode - interactive error (direct mode)")  # Log exit point.
+    sys.exit(1)  # Exit with error code on unexpected exception in direct mode.
 
 
 def main():
     """Main entry point for MistHelper CLI application."""
-    logging.debug("ENTRY: main()")  # Log application entry point
-    _initialize_deferred_imports()  # Initialize deferred module imports if not already completed
-    InputUtils.ensure_tqdm_available()  # Ensure tqdm is accessible via InputUtils wrapper before use
-    parser = _build_argument_parser()  # Build argparse parser with all supported CLI flags
-    args = parser.parse_args()  # Parse command line arguments into typed Namespace object
-    _setup_runtime_flags(args)  # Apply --standalone env, register globals()["args"], set FAST_MODE_ENABLED
-    _initialize_dependencies(args)  # Initialize deferred dependencies (respects --skip-deps flag)
-    _establish_mist_session(args)  # Authenticate with Mist API (--login path or API token path)
-    _configure_runtime_options(args)  # Set OUTPUT_FORMAT, init PROGRESS_EMITTER, apply --debug level
-    if args.test:  # Systematic test mode: run all safe menu options and exit with result code
-        logging.info("SYSTEMATIC_TEST: Starting systematic test mode")  # Log before test dispatch
-        sys.exit(0 if run_systematic_test() else 1)  # type: ignore[no-untyped-call]  # Run test suite; exit 0 on pass, 1 on fail  # noqa: E501
-    if args.testinteractive:  # Interactive test mode: test read-only menus with site/device selection
-        logging.info("INTERACTIVE_TEST: Starting interactive test mode")  # Log before interactive test dispatch
-        sys.exit(0 if run_interactive_test() else 1)  # type: ignore[no-untyped-call]  # Run interactive tests; exit 0 on pass, 1 on fail  # noqa: E501
-    if args.tui:  # TUI mode: launch Rich Terminal User Interface (exits when user closes TUI)
-        _run_tui_mode(args)  # Launch TUI event loop (handles its own exception handling and exit)
-        sys.exit(0)  # Exit cleanly after TUI completes
-    if getattr(args, "web_portal", False):  # Web portal mode: launch Gunicorn server on port 8055
-        logging.info("WEB_PORTAL: Starting web portal mode")  # Log before web portal launch
-        _launch_web_portal(args)  # type: ignore[no-untyped-call]  # Start Gunicorn (blocks until shutdown)
-        sys.exit(0)  # Exit cleanly after web portal shuts down
-    meaningful_cli_args = (
+    logging.debug("ENTRY: main()")  # Log application entry point.
+    _initialize_deferred_imports()  # Initialize deferred module imports if not already completed.
+    InputUtils.ensure_tqdm_available()  # Ensure tqdm is accessible via InputUtils wrapper before use.
+    parser = _build_argument_parser()  # Build argparse parser with all supported CLI flags.
+    args = parser.parse_args()  # Parse command line arguments into typed Namespace object.
+    _setup_runtime_flags(args)  # Apply --standalone env, register globals()["args"], set FAST_MODE_ENABLED.
+    _initialize_dependencies(args)  # Initialize deferred dependencies (respects --skip-deps flag).
+    _establish_mist_session(args)  # Authenticate with Mist API (--login path or API token path).
+    _configure_runtime_options(args)  # Set OUTPUT_FORMAT, init PROGRESS_EMITTER, apply --debug level.
+    _dispatch_main_mode(args)  # Choose and run the right mode (test, TUI, web portal, CLI, interactive).
+
+
+def _dispatch_main_mode(args: argparse.Namespace) -> None:
+    """Dispatch to the appropriate mode entry point based on parsed CLI flags."""
+    if args.test:  # Systematic test mode: run all safe menu options and exit with result code.
+        logging.info("SYSTEMATIC_TEST: Starting systematic test mode")  # Log before test dispatch.
+        sys.exit(0 if run_systematic_test() else 1)  # type: ignore[no-untyped-call]  # Run; exit 0 pass, 1 fail.
+    if args.testinteractive:  # Interactive test mode: test read-only menus with site/device selection.
+        logging.info("INTERACTIVE_TEST: Starting interactive test mode")  # Log before interactive test dispatch.
+        sys.exit(0 if run_interactive_test() else 1)  # type: ignore[no-untyped-call]  # Exit 0 pass, 1 fail.
+    if args.tui:  # TUI mode: launch Rich Terminal User Interface (exits when user closes TUI).
+        _run_tui_mode(args)  # Launch TUI event loop (handles its own exception handling).
+        sys.exit(0)  # Exit cleanly after TUI completes.
+    if getattr(args, "web_portal", False):  # Web portal mode: launch Gunicorn server on port 8055.
+        logging.info("WEB_PORTAL: Starting web portal mode")  # Log before web portal launch.
+        _launch_web_portal(args)  # type: ignore[no-untyped-call]  # Start Gunicorn (blocks until shutdown).
+        sys.exit(0)  # Exit cleanly after web portal shuts down.
+    if _has_meaningful_cli_args(args):  # CLI dispatch mode: resolve IDs, call menu function, and exit.
+        _run_cli_mode(args)  # Resolve org/site/device, dispatch to menu function, exit 0 on success.
+        return  # _run_cli_mode always calls sys.exit -- this return is defensive only.
+    _run_interactive_mode(args)  # Interactive mode: present menu loop until user exits or EOF.
+
+
+def _has_meaningful_cli_args(args: argparse.Namespace) -> bool:
+    """Return True if any non-interactive CLI flag was provided (triggers CLI dispatch mode)."""
+    return bool(
         args.menu or args.org or args.site or args.device or args.port or args.test
-    )  # Detect non-interactive invocation  # noqa: E501
-    if meaningful_cli_args:  # CLI dispatch mode: resolve IDs, call menu function, and exit
-        _run_cli_mode(args)  # Resolve org/site/device, dispatch to menu function, exit 0 on success
-    else:  # Interactive mode: present menu loop until user exits or EOF
-        _run_interactive_mode(args)  # Launch interactive menu (container=continuous, direct=exit-after-one)
+    )  # Any of these flags means the user wanted a one-shot CLI invocation.
 
 
 if __name__ == "__main__":
