@@ -12125,131 +12125,141 @@ class OrgConfigExporter:  # Org config exporters.
         )
 
     @staticmethod
-    def msp():  # noqa: C901, PLR0912, PLR0915
-        """Export MSP data - lists organizations under MSP when MSP privileges are available.
+    def msp() -> None:
+        """Export MSP data -- lists organizations under the selected MSP to MspOrganizations.csv."""
+        global msp_privileges  # Read the module-level cache of detected MSP grants.
+        if not msp_privileges:  # No MSP-level access.
+            OrgConfigExporter._show_no_msp_access_guidance()  # Print the guidance banner.
+            return  # Abort -- nothing to query.
+        selected_msp = OrgConfigExporter._select_msp_to_query()  # Pick or prompt for an MSP.
+        if not selected_msp:  # User cancelled or input invalid.
+            return  # Abort -- nothing selected.
+        OrgConfigExporter._fetch_and_export_msp_orgs(selected_msp)  # Fetch + flatten + CSV write.
 
-        When the user has MSP-level privileges (detected at login), this function
-        lists all organizations under the MSP and exports to MspOrganizations.csv.
+    @staticmethod
+    def _show_no_msp_access_guidance() -> None:
+        """Print the 'MSP access not available' guidance banner with login + token tips."""
+        logging.warning("MSP data requires MSP-level privileges (not detected)")  # Log why we can't query.
+        print("")  # Spacer.
+        print("=" * 60)  # Top border.
+        print("  MSP ACCESS NOT AVAILABLE")  # Title.
+        print("=" * 60)  # Bottom border.
+        print("")  # Spacer.
+        print("  MSP-level API access requires one of the following:")  # Intro.
+        print("")  # Spacer.
+        print("  1. Interactive login with MSP admin credentials:")  # Option 1.
+        print("     python MistHelper.py --login")  # The login command.
+        print("")  # Spacer.
+        print("  2. A personal API token from an MSP Super User")  # Option 2.
+        print("     (The token inherits the user's MSP privileges)")  # Clarify token semantics.
+        print("")  # Spacer.
+        print("  Note: Organization-scoped API tokens CANNOT access MSP APIs.")  # Common pitfall.
+        print("  The token must be from a user who has MSP-level access.")  # Restate.
+        print("")  # Spacer.
+        print("  MSP API Endpoints available with proper access:")  # Endpoint list intro.
+        print("    - GET /api/v1/msps/{msp_id}/orgs (list organizations)")  # Org listing endpoint.
+        print("    - GET /api/v1/msps/{msp_id}/licenses (MSP licenses)")  # License endpoint.
+        print("    - GET /api/v1/msps/{msp_id}/stats/orgs (org statistics)")  # Org stats endpoint.
+        print("    - GET /api/v1/msps/{msp_id}/inventory/{mac} (cross-org device lookup)")  # Inventory.
+        print("")  # Spacer.
 
-        If no MSP privileges are available, provides guidance on requirements.
-        """
-        global msp_privileges  # Read the module-level cache of detected MSP grants
-
-        if not msp_privileges:  # The user has no MSP-level access
-            # No MSP privileges detected - show guidance
-            logging.warning("MSP data requires MSP-level privileges (not detected)")  # Log why the export can't run
-            print("")  # Blank spacer line
-            print("=" * 60)  # Top border of the guidance banner
-            print("  MSP ACCESS NOT AVAILABLE")  # Banner title
-            print("=" * 60)  # Bottom border of the banner title
-            print("")  # Blank spacer line
-            print("  MSP-level API access requires one of the following:")  # Introduce the requirements list
-            print("")  # Blank spacer line
-            print("  1. Interactive login with MSP admin credentials:")  # Option 1 heading
-            print("     python MistHelper.py --login")  # The command to use for interactive MSP login
-            print("")  # Blank spacer line
-            print("  2. A personal API token from an MSP Super User")  # Option 2 heading
-            print("     (The token inherits the user's MSP privileges)")  # Clarify how token privileges work
-            print("")  # Blank spacer line
-            print("  Note: Organization-scoped API tokens CANNOT access MSP APIs.")  # Common pitfall warning
-            print("  The token must be from a user who has MSP-level access.")  # Restate the requirement
-            print("")  # Blank spacer line
-            print("  MSP API Endpoints available with proper access:")  # List the endpoints that would unlock
-            print("    - GET /api/v1/msps/{msp_id}/orgs (list organizations)")  # Org listing endpoint
-            print("    - GET /api/v1/msps/{msp_id}/licenses (MSP licenses)")  # License endpoint
-            print("    - GET /api/v1/msps/{msp_id}/stats/orgs (org statistics)")  # Org stats endpoint
-            print(
-                "    - GET /api/v1/msps/{msp_id}/inventory/{mac} (cross-org device lookup)"
-            )  # Inventory lookup endpoint
-            print("")  # Blank spacer line
-            return  # Abort the export -- no MSP access to query
-
-        # MSP privileges available - let user select which MSP to query
+    @staticmethod
+    def _select_msp_to_query() -> dict | None:
+        """Auto-pick the single MSP or prompt the user when several are available."""
         print("")  # Spacer.
         print("=" * 60)  # Divider.
         print("  MSP ORGANIZATION EXPORT")  # Section title.
         print("=" * 60)  # Divider.
         print("")  # Spacer.
-
-        selected_msp = None  # No MSP selected yet.
         if len(msp_privileges) == 1:  # Exactly one MSP.
-            selected_msp = msp_privileges[0]  # Auto-select it.
-            print(f"  Using MSP: {selected_msp['msp_name']}")  # Tell the user.
-        else:
-            print("  Available MSPs:")  # List MSPs.
-            for idx, msp in enumerate(msp_privileges, start=1):  # Enumerate MSPs.
-                print(f"    {idx}. {msp['msp_name']} (role: {msp['role']})")  # Print each option.
-            print("")  # Spacer.
-            try:
-                choice = InputUtils.safe_input("  Select MSP (number): ", context="msp_export").strip()
-                choice_idx = int(choice) - 1  # Parse the index.
-                if 0 <= choice_idx < len(msp_privileges):  # In range?
-                    selected_msp = msp_privileges[choice_idx]  # Pick the MSP.
-                else:
-                    print("X Invalid selection")  # Tell the user invalid.
-                    return  # Abort.
-            except (ValueError, SystemExit):  # Bad input.
-                print("X Invalid input")  # Tell the user.
-                return  # Abort.
+            selected = msp_privileges[0]  # Auto-select it.
+            print(f"  Using MSP: {selected['msp_name']}")  # Tell the user.
+            return selected  # Return the single MSP.
+        print("  Available MSPs:")  # List MSPs.
+        for idx, msp in enumerate(msp_privileges, start=1):  # Enumerate MSPs.
+            print(f"    {idx}. {msp['msp_name']} (role: {msp['role']})")  # Print each option.
+        print("")  # Spacer.
+        try:
+            choice = InputUtils.safe_input("  Select MSP (number): ", context="msp_export").strip()
+            choice_idx = int(choice) - 1  # Parse the index.
+        except (ValueError, SystemExit):  # Bad input.
+            print("X Invalid input")  # Tell the user.
+            return None  # Abort.
+        if not 0 <= choice_idx < len(msp_privileges):  # Out of range.
+            print("X Invalid selection")  # Tell the user.
+            return None  # Abort.
+        return msp_privileges[choice_idx]  # Return chosen MSP.
 
+    @staticmethod
+    def _fetch_and_export_msp_orgs(selected_msp: dict) -> None:
+        """Fetch orgs under ``selected_msp`` and write MspOrganizations.csv with the MSP tags."""
         msp_id = selected_msp["msp_id"]  # MSP id.
         msp_name = selected_msp["msp_name"]  # MSP name.
         print(f"  Fetching organizations for MSP: {msp_name}...")  # Tell the user.
-        logging.info("Fetching MSP organizations for %s (ID: %s)", msp_name, msp_id)  # Log the fetch.
-
-        # Verify session is valid before API call
+        logging.info("Fetching MSP organizations for %s (ID: %s)", msp_name, msp_id)  # Log fetch.
         if apisession is None:  # No session.
             print("X No active API session")  # Tell the user.
-            logging.error("Cannot fetch MSP orgs - apisession is None")  # Log the error.
+            logging.error("Cannot fetch MSP orgs - apisession is None")  # Log it.
             return  # Abort.
-
         try:
             import mistapi.api.v1.msps.orgs as msp_orgs_api  # Import MSP orgs API.
 
-            response = msp_orgs_api.listMspOrgs(apisession, msp_id)  # List MSP orgs.
-
-            if not response or not hasattr(response, "data"):  # No data.
-                print("X Failed to retrieve MSP organizations")  # Tell the user.
-                logging.error("listMspOrgs returned no data")  # Log the error.
-                return  # Abort.
-
-            orgs_data = response.data  # Read the payload.
-            if not isinstance(orgs_data, list):  # Normalize to a list.
-                orgs_data = [orgs_data] if orgs_data else []  # Wrap single item.
-
-            if not orgs_data:  # No orgs.
-                print("  No organizations found under this MSP")  # Tell the user.
-                logging.info("MSP has no organizations")  # Log it.
-                DataExporter.write_with_format_selection([], "MspOrganizations.csv")  # type: ignore[no-untyped-call]
-                return  # Abort.
-
-            # Process and export
-            processed = DataProcessingUtils.flatten_nested_fields(orgs_data)  # Flatten nested fields.
-            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-
-            # Add MSP context to each record
-            for record in processed:  # Tag each org.
-                record["msp_id"] = msp_id  # Add MSP id.
-                record["msp_name"] = msp_name  # Add MSP name.
-
-            DataExporter.write_with_format_selection(processed, "MspOrganizations.csv")  # type: ignore[no-untyped-call]
-            print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")  # Tell the user.
-            logging.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))  # Log export count.
-
-            # Show summary
-            print("")  # Spacer.
-            print(f"  Organizations under {msp_name}:")  # Header.
-            for org in orgs_data[:10]:  # Show first 10
-                org_name = org.get("name", "Unknown")  # Org name.
-                org_id = org.get("id", "N/A")  # Org id.
-                print(f"    - {org_name} ({org_id[:8]}...)")  # Print the org.
-            if len(orgs_data) > 10:  # More than shown.
-                print(f"    ... and {len(orgs_data) - 10} more")  # Note the remainder.
-            print("")  # Spacer.
-
+            response = msp_orgs_api.listMspOrgs(apisession, msp_id)  # Call API.
+            orgs_data = OrgConfigExporter._extract_msp_orgs_payload(response)  # Validate.
+            if orgs_data is not None:  # API call succeeded.
+                OrgConfigExporter._write_msp_orgs_csv(orgs_data, msp_id, msp_name)  # Persist.
         except Exception as e:  # Fetch failed.
             print(f"X Error fetching MSP organizations: {e}")  # Tell the user.
-            logging.error("Failed to fetch MSP organizations: %s", e)  # Log the error.
+            logging.error("Failed to fetch MSP organizations: %s", e)  # Log it.
+
+    @staticmethod
+    def _write_msp_orgs_csv(orgs_data: list, msp_id: str, msp_name: str) -> None:
+        """Process ``orgs_data``, write MspOrganizations.csv, and print the summary."""
+        if not orgs_data:  # No orgs.
+            print("  No organizations found under this MSP")  # Tell the user.
+            logging.info("MSP has no organizations")  # Log it.
+            DataExporter.write_with_format_selection([], "MspOrganizations.csv")  # type: ignore[no-untyped-call]
+            return  # Done.
+        processed = OrgConfigExporter._process_msp_orgs(orgs_data, msp_id, msp_name)  # Flatten + tag.
+        DataExporter.write_with_format_selection(processed, "MspOrganizations.csv")  # type: ignore[no-untyped-call]
+        print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")  # Tell.
+        logging.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))  # Log.
+        OrgConfigExporter._print_msp_orgs_summary(msp_name, orgs_data)  # Show first 10.
+
+    @staticmethod
+    def _extract_msp_orgs_payload(response: Any) -> list | None:
+        """Validate the MSP-orgs API response and return a normalized list (or None on failure)."""
+        if not response or not hasattr(response, "data"):  # No data.
+            print("X Failed to retrieve MSP organizations")  # Tell the user.
+            logging.error("listMspOrgs returned no data")  # Log it.
+            return None  # Abort.
+        orgs_data = response.data  # Read the payload.
+        if not isinstance(orgs_data, list):  # Normalize to a list.
+            return [orgs_data] if orgs_data else []  # Wrap single item.
+        return orgs_data  # Already a list.
+
+    @staticmethod
+    def _process_msp_orgs(orgs_data: list, msp_id: str, msp_name: str) -> list:
+        """Flatten + escape + tag each org dict with its parent ``msp_id`` and ``msp_name``."""
+        processed = DataProcessingUtils.flatten_nested_fields(orgs_data)  # Flatten nested fields.
+        processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+        for record in processed:  # Tag each org.
+            record["msp_id"] = msp_id  # Add MSP id.
+            record["msp_name"] = msp_name  # Add MSP name.
+        return processed  # Return enriched list.
+
+    @staticmethod
+    def _print_msp_orgs_summary(msp_name: str, orgs_data: list) -> None:
+        """Print the first 10 org names + a trailing 'and N more' note when applicable."""
+        print("")  # Spacer.
+        print(f"  Organizations under {msp_name}:")  # Header.
+        for org in orgs_data[:10]:  # Show first 10.
+            org_name = org.get("name", "Unknown")  # Org name.
+            org_id = org.get("id", "N/A")  # Org id.
+            print(f"    - {org_name} ({org_id[:8]}...)")  # Print the org.
+        if len(orgs_data) > 10:  # More than shown.
+            print(f"    ... and {len(orgs_data) - 10} more")  # Note the remainder.
+        print("")  # Spacer.
 
 
 class OrgExportUtils:  # Generic org export helpers.
@@ -21122,70 +21132,81 @@ class BulkRadiusWLANConfigManager:
 
     def _apply_changes(self) -> None:
         """Apply configuration changes to selected WLANs with rate limiting."""
-        mode_label = "DRY-RUN: Simulating" if self.dry_run else "Applying"  # Verb depends on whether this is a dry run
-        print(f"\n[*] {mode_label} configuration to {len(self.selected_wlans)} WLANs...")  # Announce the apply phase
-        success_count = 0  # Count WLANs updated successfully
-        fail_count = 0  # Count WLANs that failed to update
+        mode_label = "DRY-RUN: Simulating" if self.dry_run else "Applying"  # Verb depends on dry-run.
+        print(f"\n[*] {mode_label} configuration to {len(self.selected_wlans)} WLANs...")  # Announce.
+        success_count = 0  # WLANs updated successfully.
+        fail_count = 0  # WLANs that failed.
+        for idx, wlan in enumerate(self.selected_wlans, 1):  # Process each (1-based for display).
+            if self._update_one_wlan(idx, wlan):  # Dispatch the per-WLAN update.
+                success_count += 1  # Count success.
+            else:
+                fail_count += 1  # Count failure.
+            time.sleep(0.3)  # Brief pause between writes to respect API rate limits.
+        result_label = "DRY-RUN complete" if self.dry_run else "Update complete"  # Final verb.
+        print(f"\n[+] {result_label}: {success_count} successful, {fail_count} failed")  # Show totals.
+        logging.info("%s: %s success, %s failed", result_label, success_count, fail_count)  # Log totals.
 
-        for idx, wlan in enumerate(self.selected_wlans, 1):  # Process each selected WLAN (1-based for display)
-            wlan_id = wlan.get("id")  # The WLAN's unique ID needed for the update call
-            ssid = wlan.get("ssid", "Unknown")  # The WLAN's SSID for user-facing messages
+    def _update_one_wlan(self, idx: int, wlan: dict[str, Any]) -> bool:
+        """Update (or simulate) a single WLAN. Return True on success/simulated success."""
+        wlan_id = wlan.get("id")  # Unique WLAN ID needed for the update call.
+        ssid = wlan.get("ssid", "Unknown")  # SSID for user-facing messages.
+        if not wlan_id:  # Defensive: the WLAN record lacks an ID.
+            logging.error("Missing WLAN ID for %s", ssid)  # Log the missing identifier.
+            self._record_change(wlan, "failed", "Missing WLAN ID")  # Audit the failure.
+            return False  # Treat as failure.
+        payload = self._build_radius_payload()  # Build the timer-only update body.
+        print(f"  [{idx}/{len(self.selected_wlans)}] Updating {ssid}...", end=" ")  # Progress line.
+        logging.info(  # Log before the update, noting dry-run vs real.
+            "%s org WLAN %s (%s) with payload: %s",
+            "DRY-RUN: Would update" if self.dry_run else "Updating",
+            wlan_id,
+            ssid,
+            payload,
+        )
+        if self.dry_run:  # Dry-run path: simulate without an API call.
+            return self._simulate_wlan_update(wlan, payload)  # Simulated success.
+        return self._call_wlan_update_api(wlan, payload)  # Real API path.
 
-            if not wlan_id:  # Defensive: the WLAN record lacks an ID
-                logging.error("Missing WLAN ID for %s", ssid)  # Log the missing identifier
-                self._record_change(wlan, "failed", "Missing WLAN ID")  # Record the failure in the audit trail
-                fail_count += 1  # Count this as a failure
-                continue  # Skip to the next WLAN
+    def _build_radius_payload(self) -> dict[str, Any]:
+        """Build the timer-only update body for the configured RADIUS targets."""
+        return {  # Build the timer-only update body for this WLAN.
+            "auth_servers_timeout": self.target_timeout,  # Target timeout to apply.
+            "auth_servers_retries": self.target_retries,  # Target retry count to apply.
+            "fast_dot1x_timers": self.target_fast_dot1x,  # Target fast-timer flag to apply.
+        }
 
-            payload = {  # Build the timer-only update body for this WLAN
-                "auth_servers_timeout": self.target_timeout,  # Target timeout to apply
-                "auth_servers_retries": self.target_retries,  # Target retry count to apply
-                "fast_dot1x_timers": self.target_fast_dot1x,  # Target fast-timer flag to apply
-            }
+    def _simulate_wlan_update(self, wlan: dict[str, Any], payload: dict[str, Any]) -> bool:
+        """Record a dry-run change and print the simulated outcome. Always returns True."""
+        ssid = wlan.get("ssid", "Unknown")  # SSID for user-facing messages.
+        print("DRY-RUN (would update)")  # Show that no real change was made.
+        self._record_change(wlan, "DRY-RUN", "")  # Record the simulated change.
+        if is_debug_mode():  # type: ignore[no-untyped-call]  # Only dump payload when debugging.
+            logging.debug("DRY-RUN payload for %s: %s", ssid, payload)  # Log the would-be payload.
+        return True  # Count the simulation as a success.
 
-            print(f"  [{idx}/{len(self.selected_wlans)}] Updating {ssid}...", end=" ")  # Progress line (no newline yet)
-            logging.info(  # Log before the update, noting dry-run vs real
-                "%s org WLAN %s (%s) with payload: %s",
-                "DRY-RUN: Would update" if self.dry_run else "Updating",
-                wlan_id,
-                ssid,
-                payload,
-            )
-
-            if self.dry_run:  # In dry-run mode we simulate instead of calling the API
-                print("DRY-RUN (would update)")  # Show that no real change was made
-                self._record_change(wlan, "DRY-RUN", "")  # Record the simulated change
-                success_count += 1  # Count the simulation as a success
-                if is_debug_mode():  # type: ignore[no-untyped-call]  # Only dump payload when debugging
-                    logging.debug("DRY-RUN payload for %s: %s", ssid, payload)  # Log the would-be payload
-                continue  # Skip the real API call
-
-            try:
-                response = mistapi.api.v1.orgs.wlans.updateOrgWlan(
-                    apisession, self.org_id, wlan_id, payload
-                )  # Push the update
-                if response.status_code == 200:  # The update succeeded
-                    print("OK")  # Complete the progress line with success
-                    self._record_change(wlan, "success", "")  # Record the successful change
-                    success_count += 1  # Count the success
-                    if is_debug_mode():  # type: ignore[no-untyped-call]  # Only dump response when debugging
-                        logging.debug("API response for %s: %s", ssid, response.data)  # Log the API response body
-                else:  # The API returned a non-success status
-                    print(f"FAILED (HTTP {response.status_code})")  # Complete the progress line with failure
-                    self._record_change(wlan, "failed", f"HTTP {response.status_code}")  # Record the failure
-                    fail_count += 1  # Count the failure
-                    logging.error("Failed to update %s: HTTP %s", ssid, response.status_code)  # Log the HTTP error
-            except Exception as e:  # The update call raised an exception
-                print(f"ERROR ({e})")  # Complete the progress line with the error
-                self._record_change(wlan, "failed", str(e))  # Record the exception in the audit trail
-                fail_count += 1  # Count the failure
-                logging.error("Exception updating %s: %s", ssid, e)  # Log the exception detail
-
-            time.sleep(0.3)  # Brief pause between writes to respect API rate limits
-
-        result_label = "DRY-RUN complete" if self.dry_run else "Update complete"  # Final summary verb
-        print(f"\n[+] {result_label}: {success_count} successful, {fail_count} failed")  # Show the run totals
-        logging.info("%s: %s success, %s failed", result_label, success_count, fail_count)  # Log the run totals
+    def _call_wlan_update_api(self, wlan: dict[str, Any], payload: dict[str, Any]) -> bool:
+        """Call updateOrgWlan, log + audit the outcome, return True iff HTTP 200."""
+        wlan_id = wlan["id"]  # ID was validated upstream.
+        ssid = wlan.get("ssid", "Unknown")  # SSID for user-facing messages.
+        try:
+            response = mistapi.api.v1.orgs.wlans.updateOrgWlan(
+                apisession, self.org_id, wlan_id, payload
+            )  # Push the update.
+            if response.status_code == 200:  # Update succeeded.
+                print("OK")  # Complete the progress line with success.
+                self._record_change(wlan, "success", "")  # Audit the successful change.
+                if is_debug_mode():  # type: ignore[no-untyped-call]  # Debug-only response dump.
+                    logging.debug("API response for %s: %s", ssid, response.data)  # Log body.
+                return True  # Real success.
+            print(f"FAILED (HTTP {response.status_code})")  # Complete the progress line with failure.
+            self._record_change(wlan, "failed", f"HTTP {response.status_code}")  # Audit failure.
+            logging.error("Failed to update %s: HTTP %s", ssid, response.status_code)  # Log HTTP error.
+            return False  # API failure.
+        except Exception as e:  # Update call raised.
+            print(f"ERROR ({e})")  # Complete the progress line with the error.
+            self._record_change(wlan, "failed", str(e))  # Audit the exception.
+            logging.error("Exception updating %s: %s", ssid, e)  # Log the exception detail.
+            return False  # Exception failure.
 
     def _record_change(self, wlan: dict[str, Any], status: str, error_msg: str) -> None:
         """Record a change for the audit trail."""
@@ -21299,75 +21320,77 @@ class BulkRadiusWLANConfigManager:
 
     def manage(self, dry_run: bool = False) -> None:
         """Main entry point - orchestrates the bulk RADIUS WLAN configuration."""
-        self.dry_run = dry_run  # Remember whether this run only simulates changes
-        logging.info("Starting Bulk RADIUS WLAN Configuration (Menu 122)")  # Announce the workflow start
+        self.dry_run = dry_run  # Remember whether this run only simulates changes.
+        logging.info("Starting Bulk RADIUS WLAN Configuration (Menu 122)")  # Announce workflow start.
+        if not self._scan_and_prepare():  # Display + org + scan + filter + snapshot + empty guard.
+            return  # Abort on any precondition failure.
+        if self._handle_all_compliant():  # Every RADIUS WLAN already at target settings.
+            return  # No-op completion.
+        self._display_wlans()  # Show the selectable WLAN table.
+        selected_indices = self._prompt_and_parse_selection()  # Prompt + parse.
+        if selected_indices is None:  # Cancelled or invalid selection.
+            return  # Abort the workflow.
+        self.selected_wlans = [self.radius_wlans[i] for i in selected_indices]  # Resolve indices.
+        self._confirm_and_apply()  # Preview + APPLY confirm + apply + audit + completion.
 
-        self._display_config()  # Show the target settings the user configured
+    def _scan_and_prepare(self) -> bool:
+        """Display config, fetch + filter WLANs, persist snapshot. Return False on failure."""
+        self._display_config()  # Show the target settings the user configured.
+        if not self._get_org_id():  # Resolve the org ID; abort if unavailable.
+            return False  # Cannot proceed without an org.
+        if not self._scan_org_wlans():  # Fetch all org WLANs; abort on failure.
+            return False  # Cannot proceed without WLAN data.
+        self._filter_radius_wlans()  # Split WLANs into selectable vs already-compliant buckets.
+        self._export_scan_snapshot()  # Persist the pulled settings for post-run examination.
+        total_radius = len(self.radius_wlans) + len(self.compliant_wlans)  # Total RADIUS WLANs.
+        if total_radius == 0:  # No RADIUS WLANs exist in the org.
+            print("\n[*] No RADIUS-enabled WLANs found in the organization.")  # Inform the user.
+            logging.info("No RADIUS WLANs found in organization")  # Log the empty result.
+            return False  # Nothing to do.
+        return True  # Ready to proceed to the apply phase.
 
-        if not self._get_org_id():  # Resolve the org ID; abort if unavailable
-            return  # Cannot proceed without an org
+    def _handle_all_compliant(self) -> bool:
+        """Return True (and short-circuit manage) when every RADIUS WLAN already complies."""
+        if not self.radius_wlans and self.compliant_wlans:  # Every RADIUS WLAN already meets target.
+            self._display_wlans()  # Still show the table for transparency.
+            print("[*] All RADIUS WLANs are already at target settings. No changes needed.")  # Inform.
+            logging.info("All RADIUS WLANs already compliant - no changes needed")  # Log the no-op.
+            return True  # Caller should short-circuit.
+        return False  # Need to proceed to selection.
 
-        if not self._scan_org_wlans():  # Fetch all org WLANs; abort on failure
-            return  # Cannot proceed without WLAN data
-
-        self._filter_radius_wlans()  # Split WLANs into selectable vs already-compliant buckets
-
-        self._export_scan_snapshot()  # Persist the pulled settings so they can be examined after the run
-
-        total_radius = len(self.radius_wlans) + len(self.compliant_wlans)  # Total RADIUS WLANs discovered
-        if total_radius == 0:  # No RADIUS WLANs exist in the org
-            print("\n[*] No RADIUS-enabled WLANs found in the organization.")  # Inform the user
-            logging.info("No RADIUS WLANs found in organization")  # Log the empty result
-            return  # Nothing to do
-
-        if not self.radius_wlans and self.compliant_wlans:  # Every RADIUS WLAN already meets the target
-            self._display_wlans()  # Still show the table for transparency
-            print("[*] All RADIUS WLANs are already at target settings. No changes needed.")  # Inform the user
-            logging.info("All RADIUS WLANs already compliant - no changes needed")  # Log the no-op outcome
-            return  # Nothing to change
-
-        self._display_wlans()  # Show the selectable WLAN table
-
-        print("  Enter selection (e.g., 'all', '1', '1,3,5', '1-5') or 'q' to cancel:")  # Explain the selection syntax
+    def _prompt_and_parse_selection(self) -> list[int] | None:
+        """Prompt for WLAN selection, parse it, return indices or None on cancel/invalid."""
+        print("  Enter selection (e.g., 'all', '1', '1,3,5', '1-5') or 'q' to cancel:")  # Syntax.
         # Issue #431: inlined self._safe_input -> canonical InputUtils.safe_input.
-        selection = InputUtils.safe_input("  > ", context="wlan_selection")
+        selection = InputUtils.safe_input("  > ", context="wlan_selection")  # Prompt.
+        if not selection.strip():  # User entered nothing.
+            print("\n[*] No selection made. Exiting.")  # Inform the user.
+            return None  # Abort.
+        selected_indices = self._parse_selection(selection)  # Parse into 0-based indices.
+        if selected_indices is None:  # User explicitly cancelled (e.g., 'q').
+            print("\n[*] Operation cancelled by user.")  # Acknowledge.
+            logging.info("Menu 122 cancelled by user at selection prompt")  # Log cancellation.
+            return None  # Abort.
+        if not selected_indices:  # Selection parsed to no valid indices.
+            print("\n[!] Invalid selection. Please use valid indices.")  # Reject input.
+            return None  # Abort.
+        return selected_indices  # Return the resolved indices.
 
-        if not selection.strip():  # The user entered nothing
-            print("\n[*] No selection made. Exiting.")  # Inform the user and exit
-            return  # No selection -- abort
-
-        selected_indices = self._parse_selection(selection)  # Parse the selection into 0-based indices
-
-        if selected_indices is None:  # The user explicitly cancelled
-            print("\n[*] Operation cancelled by user.")  # Acknowledge the cancellation
-            logging.info("Menu 122 cancelled by user at selection prompt")  # Log the cancellation
-            return  # Abort the workflow
-
-        if not selected_indices:  # The selection parsed to no valid indices
-            print("\n[!] Invalid selection. Please use valid indices.")  # Reject the input
-            return  # Abort the workflow
-
-        self.selected_wlans = [self.radius_wlans[i] for i in selected_indices]  # Resolve indices to WLAN records
-
-        self._display_preview()  # Show a before/after preview of the pending changes
-
-        print(
-            "\n  WARNING: This will modify WLAN authentication settings."
-        )  # Warn the user before the destructive step
-        print("  Type 'APPLY' to proceed, or anything else to cancel.")  # Explain the required confirmation
+    def _confirm_and_apply(self) -> None:
+        """Show preview, require APPLY confirmation, then apply changes + audit + completion."""
+        self._display_preview()  # Show a before/after preview of the pending changes.
+        print("\n  WARNING: This will modify WLAN authentication settings.")  # Warn before the destructive step.
+        print("  Type 'APPLY' to proceed, or anything else to cancel.")  # Explain the confirmation.
         # Issue #431: inlined self._safe_input -> canonical InputUtils.safe_input.
-        confirm = InputUtils.safe_input("  > ", context="apply_confirm")
-
-        if confirm.strip() != "APPLY":  # The user did not type the exact confirmation word
-            print("\n[*] Operation cancelled by user.")  # Acknowledge the cancellation
-            logging.info("Bulk RADIUS config cancelled by user")  # Log the cancellation
-            return  # Abort without making changes
-
-        self._apply_changes()  # Apply (or simulate) the timer changes to all selected WLANs
-        self._export_audit_trail()  # Write the before/after audit trail to CSV
-
-        print("\n[+] Bulk RADIUS WLAN configuration completed.")  # Tell the user the workflow finished
-        logging.info("Bulk RADIUS WLAN Configuration completed successfully")  # Log the completion
+        confirm = InputUtils.safe_input("  > ", context="apply_confirm")  # Read confirmation.
+        if confirm.strip() != "APPLY":  # Not the exact confirmation word.
+            print("\n[*] Operation cancelled by user.")  # Acknowledge cancellation.
+            logging.info("Bulk RADIUS config cancelled by user")  # Log cancellation.
+            return  # Abort without making changes.
+        self._apply_changes()  # Apply (or simulate) the timer changes.
+        self._export_audit_trail()  # Write the before/after audit trail to CSV.
+        print("\n[+] Bulk RADIUS WLAN configuration completed.")  # Tell the user it finished.
+        logging.info("Bulk RADIUS WLAN Configuration completed successfully")  # Log completion.
 
 
 # NOTE: GatewayTemplateConfigManager class provides Menu 105, 106, 111 operations.
