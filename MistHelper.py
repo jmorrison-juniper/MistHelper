@@ -17851,31 +17851,20 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _load_and_validate_reboot_targets() -> list[dict] | None:  # type: ignore[type-arg]
         """Load reboot list and return validated device targets."""
-        # Check for reboot list file
         reboot_list_path = FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")  # Reboot list path.
         if not os.path.exists(reboot_list_path):  # File missing.
             DeviceRebootManager._handle_missing_reboot_file(reboot_list_path)  # Handle the missing file.
             return None  # Abort.
-
-        # Ensure required CSVs are fresh
         DeviceRebootManager._ensure_fresh_csv_cache()  # Refresh the CSV cache.
-
-        # Load template mappings
         template_name_to_id = DeviceRebootManager._load_template_mappings()  # Load template mappings.
         if not template_name_to_id:  # No mappings.
             return None  # Abort.
-
-        # Load reboot template names
         reboot_template_names = DeviceRebootManager._load_reboot_template_names()  # Load reboot template names.
         if not reboot_template_names:  # No names.
             return None  # Abort.
-
-        # Map names to IDs
         reboot_template_ids = DeviceRebootManager._map_template_names_to_ids(reboot_template_names, template_name_to_id)
         if not reboot_template_ids:  # No ids.
             return None  # Abort.
-
-        # Find target devices
         return DeviceRebootManager._find_reboot_target_devices(reboot_template_ids, template_name_to_id)
 
     @staticmethod
@@ -17992,52 +17981,54 @@ class DeviceRebootManager:  # Device reboot manager.
         return reboot_template_ids  # Return the ids.
 
     @staticmethod
+    def _scan_csv_for_gateway_targets(  # type: ignore[type-arg]
+        site_to_template: dict[str, tuple],
+    ) -> list[dict] | None:
+        """Scan AllSiteGatewayConfigs.csv and collect gateway-row targets whose site uses a tracked template."""
+        reboot_targets: list[dict] = []  # Collect reboot targets.
+        try:
+            gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")  # Configs path.
+            with open(gateway_configs_path, encoding="utf-8") as file:  # Open the CSV.
+                reader = csv.DictReader(file)  # Parse rows.
+                for row in reader:  # Walk rows.
+                    device_site_id = row.get("site_id", "").strip()  # Read the site id.
+                    if device_site_id not in site_to_template or row.get("type", "").strip() != "gateway":
+                        continue  # Skip non-matching rows.
+                    template_id, template_name, site_name = site_to_template[device_site_id]  # Resolve.
+                    device_name = row.get("name", "").strip()  # Read the device name.
+                    reboot_targets.append(  # Collect the target.
+                        {
+                            "device_id": row.get("id", "").strip(),
+                            "device_name": device_name,
+                            "site_id": device_site_id,
+                            "site_name": site_name,
+                            "template_id": template_id,
+                            "template_name": template_name,
+                        }
+                    )
+                    logging.info("Found gateway '%s' at site '%s'", device_name, site_name)  # Log the find.
+        except Exception as error:  # Load failed.
+            logging.error("! Failed to load gateway configs: %s", error)  # Log the error.
+            print(f"! Failed to load gateway configs: {error}")  # Tell the user.
+            return None  # Abort.
+        return reboot_targets  # Return collected targets (possibly empty).
+
+    @staticmethod
     def _find_reboot_target_devices(template_ids: set[str], mapping: dict[str, str]) -> list[dict] | None:  # type: ignore[type-arg]
         """Find gateway devices in sites using the target templates."""
         template_id_to_name = {tid: name for name, tid in mapping.items()}  # Invert the map.
-
-        # Find sites using target templates
         site_to_template = DeviceRebootManager._find_sites_using_templates(template_ids, template_id_to_name)
         if not site_to_template:  # No sites.
             logging.warning(" No sites found using the specified gateway templates")  # Warn none.
             print(" No sites found using the specified gateway templates")  # Tell the user.
             return None  # Abort.
-
-        # Find gateway devices in those sites
-        reboot_targets = []  # Collect reboot targets.
-        try:
-            gateway_configs_path = FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")  # Gateway configs path.
-            with open(gateway_configs_path, encoding="utf-8") as file:  # Open the CSV.
-                reader = csv.DictReader(file)  # Parse rows.
-                for row in reader:  # Walk rows.
-                    device_site_id = row.get("site_id", "").strip()  # Read the site id.
-                    device_type = row.get("type", "").strip()  # Read the type.
-                    device_id = row.get("id", "").strip()  # Read the device id.
-                    device_name = row.get("name", "").strip()  # Read the device name.
-
-                    if device_site_id in site_to_template and device_type == "gateway":  # Matching gateway.
-                        template_id, template_name, site_name = site_to_template[device_site_id]
-                        reboot_targets.append(  # Collect the target.
-                            {
-                                "device_id": device_id,
-                                "device_name": device_name,
-                                "site_id": device_site_id,
-                                "site_name": site_name,
-                                "template_id": template_id,
-                                "template_name": template_name,
-                            }
-                        )
-                        logging.info("Found gateway '%s' at site '%s'", device_name, site_name)  # Log the find.
-        except Exception as error:  # Load failed.
-            logging.error("! Failed to load gateway configs: %s", error)  # Log the error.
-            print(f"! Failed to load gateway configs: {error}")  # Tell the user.
-            return None  # Abort.
-
+        reboot_targets = DeviceRebootManager._scan_csv_for_gateway_targets(site_to_template)  # Collect targets.
+        if reboot_targets is None:  # Hard error in CSV load.
+            return None  # Propagate abort.
         if not reboot_targets:
             logging.warning(" No gateway devices found in sites using the specified templates")
             print(" No gateway devices found in sites using the specified templates")
             return None
-
         logging.info("Found %s gateway devices to reboot", len(reboot_targets))
         return reboot_targets
 
@@ -18065,6 +18056,50 @@ class DeviceRebootManager:  # Device reboot manager.
         return site_to_template  # Return the site-to-template mapping
 
     @staticmethod
+    def _group_targets_by_template(targets: list[dict]) -> dict[str, list[dict[str, Any]]]:  # type: ignore[type-arg]
+        """Group reboot targets by their template_name into one list per template."""
+        devices_by_template: dict[str, list[dict[str, Any]]] = {}
+        for target in targets:  # Walk targets.
+            template_name = target["template_name"]  # Read template name.
+            devices_by_template.setdefault(template_name, []).append(target)  # Group in place.
+        return devices_by_template
+
+    @staticmethod
+    def _print_reboot_target_summary(
+        targets: list[dict], devices_by_template: dict[str, list[dict[str, Any]]]
+    ) -> None:  # type: ignore[type-arg]
+        """Print the per-template device list followed by the totals summary."""
+        for template_name, devices in devices_by_template.items():  # Per template.
+            print(f"\n  Template: {template_name}")
+            print(f"   {len(devices)} devices affected:")
+            for device in devices:  # Per device.
+                print(f"      !? {device['device_name']} (ID: {device['device_id']}) at '{device['site_name']}'")
+        DeviceRebootManager._display_reboot_warnings()  # Inject the critical warnings.
+        print("\n  Summary:")
+        print(f"   !? Total devices to reboot: {len(targets)}")
+        print(f"   !? Templates involved: {len(devices_by_template)}")
+        print(f"   !? Sites affected: {len(set(t['site_name'] for t in targets))}")
+
+    @staticmethod
+    def _prompt_reboot_confirmation(target_count: int) -> bool:
+        """Read the REBOOT confirmation phrase and log the accept/cancel decision."""
+        print("\n  Type 'REBOOT' to confirm, or anything else to cancel:")
+        print("   By typing 'REBOOT', you accept all risks and liability.")
+        try:
+            user_input = InputUtils.safe_input(">>> ", context="gateway_reboot_confirmation").strip()
+            if user_input != "REBOOT":
+                print(" Reboot operation cancelled.")
+                logging.info("Gateway reboot cancelled by user")
+                return False
+            print(" User confirmed reboot operation. Proceeding...")
+            logging.info("LIABILITY WAIVER ACCEPTED: User confirmed reboot for %s devices", target_count)
+            return True
+        except (KeyboardInterrupt, EOFError):
+            print("\n Reboot operation cancelled.")
+            logging.info("Gateway reboot cancelled by user interrupt")
+            return False
+
+    @staticmethod
     def _confirm_reboot_operation(targets: list[dict]) -> bool:  # type: ignore[type-arg]
         """Display targets and get user confirmation for reboot."""
         print("\n" + "=" * 100)
@@ -18072,50 +18107,9 @@ class DeviceRebootManager:  # Device reboot manager.
         print("=" * 100)
         print(f"\n  The following {len(targets)} gateway devices will be REBOOTED:")
         print("-" * 100)
-
-        # Group devices by template
-        devices_by_template: dict[str, list[dict[str, Any]]] = {}
-        for target in targets:
-            template_name = target["template_name"]
-            if template_name not in devices_by_template:
-                devices_by_template[template_name] = []
-            devices_by_template[template_name].append(target)
-
-        for template_name, devices in devices_by_template.items():
-            print(f"\n  Template: {template_name}")
-            print(f"   {len(devices)} devices affected:")
-            for device in devices:
-                print(f"      !? {device['device_name']} (ID: {device['device_id']}) at '{device['site_name']}'")
-
-        # Display warnings
-        DeviceRebootManager._display_reboot_warnings()
-
-        print("\n  Summary:")
-        print(f"   !? Total devices to reboot: {len(targets)}")
-        print(f"   !? Templates involved: {len(devices_by_template)}")
-        print(f"   !? Sites affected: {len(set(t['site_name'] for t in targets))}")
-
-        print("\n  Type 'REBOOT' to confirm, or anything else to cancel:")
-        print("   By typing 'REBOOT', you accept all risks and liability.")
-
-        try:
-            user_input = InputUtils.safe_input(
-                ">>> ",
-                context="gateway_reboot_confirmation",
-            ).strip()
-            if user_input != "REBOOT":
-                print(" Reboot operation cancelled.")
-                logging.info("Gateway reboot cancelled by user")
-                return False
-
-            print(" User confirmed reboot operation. Proceeding...")
-            logging.info("LIABILITY WAIVER ACCEPTED: User confirmed reboot for %s devices", len(targets))
-            return True
-
-        except (KeyboardInterrupt, EOFError):
-            print("\n Reboot operation cancelled.")
-            logging.info("Gateway reboot cancelled by user interrupt")
-            return False
+        devices_by_template = DeviceRebootManager._group_targets_by_template(targets)  # Group.
+        DeviceRebootManager._print_reboot_target_summary(targets, devices_by_template)  # Display.
+        return DeviceRebootManager._prompt_reboot_confirmation(len(targets))  # Read decision.
 
     @staticmethod
     def _display_reboot_warnings() -> None:
@@ -18134,46 +18128,48 @@ class DeviceRebootManager:  # Device reboot manager.
         print("??" * 50)
 
     @staticmethod
+    def _reboot_one_device(device: dict) -> str:  # type: ignore[type-arg]
+        """Send one restartSiteDevice call and return the status string (or 'ERROR: ...')."""
+        try:
+            logging.info("Rebooting device '%s'", device["device_name"])  # Log before the call.
+            print(f"! Rebooting {device['device_name']} at {device['site_name']}...")
+            response = mistapi.api.v1.sites.devices.restartSiteDevice(  # Send the reboot.
+                apisession,
+                device["site_id"],
+                device["device_id"],
+                body={"timestamp": datetime.now(UTC).isoformat()},
+            )
+            status = DeviceRebootManager._parse_reboot_response(response)  # Parse the result.
+            print("   Reboot command sent successfully")
+            logging.info("! Reboot sent for '%s': %s", device["device_name"], status)  # Log after the call.
+            return status  # Return the parsed status.
+        except Exception as error:  # API failure.
+            print(f"   Failed to send reboot: {error}")
+            logging.error("! Failed to reboot '%s': %s", device["device_name"], error)
+            return f"ERROR: {error}"  # Capture the error for the result row.
+
+    @staticmethod
+    def _build_reboot_result_row(device: dict, status: str) -> dict:  # type: ignore[type-arg]
+        """Build a single reboot-result row (template/device/site identity plus status string)."""
+        return {
+            "Template ID": device["template_id"],
+            "Template Name": device["template_name"],
+            "Device ID": device["device_id"],
+            "Device Name": device["device_name"],
+            "Site ID": device["site_id"],
+            "Site Name": device["site_name"],
+            "Status": status,
+        }
+
+    @staticmethod
     def _execute_reboots(targets: list[dict]) -> list[dict]:  # type: ignore[type-arg]
         """Execute reboot commands for all target devices."""
         print("\n  Starting device reboot operations...")
         print("=" * 50)
-
-        results = []
-        for device in targets:
-            status = ""
-            try:
-                logging.info("Rebooting device '%s'", device["device_name"])
-                print(f"! Rebooting {device['device_name']} at {device['site_name']}...")
-
-                response = mistapi.api.v1.sites.devices.restartSiteDevice(
-                    apisession,
-                    device["site_id"],
-                    device["device_id"],
-                    body={"timestamp": datetime.now(UTC).isoformat()},
-                )
-
-                status = DeviceRebootManager._parse_reboot_response(response)
-                print("   Reboot command sent successfully")
-                logging.info("! Reboot sent for '%s': %s", device["device_name"], status)
-
-            except Exception as error:
-                status = f"ERROR: {error}"
-                print(f"   Failed to send reboot: {error}")
-                logging.error("! Failed to reboot '%s': %s", device["device_name"], error)
-
-            results.append(
-                {
-                    "Template ID": device["template_id"],
-                    "Template Name": device["template_name"],
-                    "Device ID": device["device_id"],
-                    "Device Name": device["device_name"],
-                    "Site ID": device["site_id"],
-                    "Site Name": device["site_name"],
-                    "Status": status,
-                }
-            )
-
+        results: list[dict] = []
+        for device in targets:  # Walk targets.
+            status = DeviceRebootManager._reboot_one_device(device)  # Reboot + capture status.
+            results.append(DeviceRebootManager._build_reboot_result_row(device, status))  # Record row.
         return results
 
     @staticmethod
@@ -18552,33 +18548,36 @@ class FirmwareUpgradeStatusChecker:
         self.summary["devices_by_type"][device_type] = self.summary["devices_by_type"].get(device_type, 0) + 1
         self.summary["total_devices"] += 1
 
+    @staticmethod
+    def _build_upgrade_result_row(
+        device_info: dict[str, Any], fw_info: dict[str, Any], progress_display: str
+    ) -> dict[str, Any]:
+        """Build one upgrade-results row from device identity + firmware status + progress text."""
+        return {
+            "Site ID": device_info["site_id"],
+            "Site Name": device_info["site_name"],
+            "Device ID": device_info["device_id"],
+            "Device Name": device_info["device_name"],
+            "Device MAC": device_info["device_mac"],
+            "Device Model": device_info["device_model"],
+            "Device Type": device_info["device_type"],
+            "Current Version": device_info["device_version"],
+            "Last Seen": fw_info["last_seen_str"],
+            "FW Upgrade Status": fw_info["fw_status"],
+            "FW Progress %": fw_info["fw_progress"],
+            "FW Progress Display": progress_display,
+            "FW Status ID": fw_info["fw_status_id"],
+            "FW Will Retry": fw_info["fw_will_retry"],
+            "FW Timestamp": fw_info["fw_time_str"],
+            "Timestamp": datetime.now(UTC).isoformat(),
+        }
+
     def _maybe_add_to_results(self, device_info: dict[str, Any], fw_info: dict[str, Any]) -> None:
         """Add device to results if it matches scope filter."""
-        if not self._should_include_device(fw_info):
+        if not self._should_include_device(fw_info):  # Scope gate.
             return
-
-        progress_display = self._create_progress_display(fw_info)
-
-        self.upgrade_results.append(
-            {
-                "Site ID": device_info["site_id"],
-                "Site Name": device_info["site_name"],
-                "Device ID": device_info["device_id"],
-                "Device Name": device_info["device_name"],
-                "Device MAC": device_info["device_mac"],
-                "Device Model": device_info["device_model"],
-                "Device Type": device_info["device_type"],
-                "Current Version": device_info["device_version"],
-                "Last Seen": fw_info["last_seen_str"],
-                "FW Upgrade Status": fw_info["fw_status"],
-                "FW Progress %": fw_info["fw_progress"],
-                "FW Progress Display": progress_display,
-                "FW Status ID": fw_info["fw_status_id"],
-                "FW Will Retry": fw_info["fw_will_retry"],
-                "FW Timestamp": fw_info["fw_time_str"],
-                "Timestamp": datetime.now(UTC).isoformat(),
-            }
-        )
+        progress_display = self._create_progress_display(fw_info)  # Build display string.
+        self.upgrade_results.append(self._build_upgrade_result_row(device_info, fw_info, progress_display))
 
     def _should_include_device(self, fw_info: dict[str, Any]) -> bool:  # Scope filter for one device row.
         """Check if device matches scope filter."""
@@ -18751,22 +18750,8 @@ class FirmwareUpgradeStatusChecker:
             print(f"   -> Error checking SSR upgrade operations: {exception}")
             logging.warning("Failed to check SSR upgrade operations: %s", exception)
 
-    def _process_ssr_upgrade(self, upgrade: dict[str, Any]) -> None:
-        """Process a single SSR upgrade record."""
-        upgrade_id = upgrade.get("id", "Unknown")
-        status = upgrade.get("status", "Unknown")
-        strategy = upgrade.get("strategy", "Unknown")
-        counts = upgrade.get("counts", {})
-        versions = upgrade.get("versions", {})
-
-        total = sum(counts.values()) if counts else 0
-        status_parts = self._build_ssr_status_parts(counts)
-        version_info = self._build_version_info(versions)
-
-        status_summary = " | ".join(status_parts) if status_parts else f"Status: {status}"
-        print(f"      SSR Upgrade {upgrade_id[:8]}... [{strategy} strategy]: {status_summary}")
-        print(f"         Channel: {upgrade.get('channel', 'Unknown')} | Devices: {total} | {version_info}")
-
+    def _record_ssr_upgrade(self, upgrade_id: str, status: str, strategy: str, total: int, upgrade: dict) -> None:  # type: ignore[type-arg]
+        """Append one SSR upgrade record to active_upgrades with org-level placeholder site fields."""
         self.active_upgrades.append(
             {
                 "upgrade_id": upgrade_id,
@@ -18779,6 +18764,21 @@ class FirmwareUpgradeStatusChecker:
                 "details": upgrade,
             }
         )
+
+    def _process_ssr_upgrade(self, upgrade: dict[str, Any]) -> None:
+        """Process a single SSR upgrade record."""
+        upgrade_id = upgrade.get("id", "Unknown")
+        status = upgrade.get("status", "Unknown")
+        strategy = upgrade.get("strategy", "Unknown")
+        counts = upgrade.get("counts", {})
+        versions = upgrade.get("versions", {})
+        total = sum(counts.values()) if counts else 0  # Total devices across all status buckets.
+        status_parts = self._build_ssr_status_parts(counts)  # Per-status display fragments.
+        version_info = self._build_version_info(versions)  # Target-version display fragment.
+        status_summary = " | ".join(status_parts) if status_parts else f"Status: {status}"
+        print(f"      SSR Upgrade {upgrade_id[:8]}... [{strategy} strategy]: {status_summary}")
+        print(f"         Channel: {upgrade.get('channel', 'Unknown')} | Devices: {total} | {version_info}")
+        self._record_ssr_upgrade(upgrade_id, status, strategy, total, upgrade)  # Persist record.
 
     def _build_ssr_status_parts(self, counts: dict[str, int]) -> list[str]:
         """Build status parts list for SSR upgrade display."""
@@ -18828,66 +18828,67 @@ class FirmwareUpgradeStatusChecker:
             print(f"   -> Failed to read stored upgrade tracking data: {exception}")
             logging.warning("Failed to read stored upgrade tracking: %s", exception)
 
+    def _record_stored_upgrade(
+        self, upgrade_id: str, site_id: str, site_name: str, details: dict
+    ) -> None:  # type: ignore[type-arg]
+        """Append one stored-upgrade record from a getSiteDeviceUpgrade response into active_upgrades."""
+        print(
+            f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': Status = {details.get('status', 'Unknown')}"  # noqa: E501
+        )
+        self.active_upgrades.append(
+            {
+                "upgrade_id": upgrade_id,
+                "site_id": site_id,
+                "site_name": site_name,
+                "status": details.get("status", "Unknown"),
+                "source": "stored_tracking",
+                "details": details,
+            }
+        )
+
     def _check_stored_upgrade(self, record: dict[str, Any]) -> None:
         """Check status of a stored upgrade record."""
         upgrade_id = record.get("upgrade_id")
         site_id = record.get("site_id")
         site_name = record.get("site_name", "Unknown")
-
-        if not upgrade_id or not site_id:
+        if not upgrade_id or not site_id:  # Skip blank tracking rows.
             return
-
         try:
-            resp = mistapi.api.v1.sites.devices.getSiteDeviceUpgrade(apisession, site_id, upgrade_id)
-
-            if resp and hasattr(resp, "data") and resp.data:
-                details = resp.data
-                print(
-                    f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': Status = {details.get('status', 'Unknown')}"  # noqa: E501
-                )
-                self.active_upgrades.append(
-                    {
-                        "upgrade_id": upgrade_id,
-                        "site_id": site_id,
-                        "site_name": site_name,
-                        "status": details.get("status", "Unknown"),
-                        "source": "stored_tracking",
-                        "details": details,
-                    }
-                )
+            resp = mistapi.api.v1.sites.devices.getSiteDeviceUpgrade(apisession, site_id, upgrade_id)  # API.
+            if resp and hasattr(resp, "data") and resp.data:  # Live upgrade with details.
+                self._record_stored_upgrade(upgrade_id, site_id, site_name, resp.data)
             else:
                 print(f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': No longer active")
-
-        except Exception as exception:
+        except Exception as exception:  # Tolerate transient API failures.
             print(f"      Failed to check upgrade {upgrade_id[:8]}...: {exception}")
+
+    def _fetch_audit_logs_24h(self) -> list[dict[str, Any]]:
+        """Fetch the last 24h of org audit logs (paginated to completion) for upgrade triage."""
+        end_time = int(time.time())  # Upper bound = now.
+        start_time = end_time - (24 * 60 * 60)  # Lower bound = 24h ago.
+        logging.info("Fetching org audit logs (last 24h) for upgrade triage")  # Log before API.
+        resp = mistapi.api.v1.orgs.logs.listOrgAuditLogs(
+            apisession, self.org_id, start=start_time, end=end_time, limit=1000
+        )
+        logs = mistapi.get_all(response=resp, mist_session=apisession)  # Paginate to completion.
+        logging.debug("Org audit logs returned %s entries", len(logs) if logs else 0)  # Log after API.
+        return logs or []
 
     def _check_audit_logs(self) -> None:
         """Check organization audit logs for recent upgrade events."""
         try:
             print("   Checking organization audit logs for recent upgrade events...")
-
-            end_time = int(time.time())
-            start_time = end_time - (24 * 60 * 60)
-
-            resp = mistapi.api.v1.orgs.logs.listOrgAuditLogs(
-                apisession, self.org_id, start=start_time, end=end_time, limit=1000
-            )
-            logs = mistapi.get_all(response=resp, mist_session=apisession)
-
+            logs = self._fetch_audit_logs_24h()  # Pull the raw 24h window.
             if not logs:
                 print("   -> No audit logs available for the last 24 hours")
                 return
-
-            upgrade_events = [log for log in logs if self._is_upgrade_event(log)]
-
+            upgrade_events = [log for log in logs if self._is_upgrade_event(log)]  # Filter.
             if not upgrade_events:
                 print("   -> No upgrade-related events found in audit logs")
                 return
-
             print(f"   !? Found {len(upgrade_events)} upgrade-related audit event(s) in last 24 hours")
-            self._display_audit_events(upgrade_events[:5])
-
-        except Exception as exception:
+            self._display_audit_events(upgrade_events[:5])  # Show first 5.
+        except Exception as exception:  # Tolerate API or auth errors.
             print(f"   -> Error checking audit logs: {exception}")
             logging.warning("Failed to search org audit logs: %s", exception)
 
@@ -18905,32 +18906,34 @@ class FirmwareUpgradeStatusChecker:
             site = event.get("site_name", "Organization")
             print(f"      -> {timestamp} | {admin} | {site}: {message[:60]}...")
 
+    def _fetch_device_upgrade_events_24h(self) -> list[dict[str, Any]]:
+        """Fetch the last 24h of org-wide SYSTEM_UPGRADE_* device events for upgrade triage."""
+        end_time = int(time.time())  # Upper bound = now.
+        start_time = end_time - (24 * 60 * 60)  # Lower bound = 24h ago.
+        logging.info("Fetching org device upgrade events (last 24h)")  # Log before API.
+        resp = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+            apisession,
+            self.org_id,
+            type="SYSTEM_UPGRADE_COMPLETED,SYSTEM_UPGRADE_FAILED,SYSTEM_UPGRADE_STARTED",
+            start=start_time,
+            end=end_time,
+            limit=50,
+        )
+        events = mistapi.get_all(response=resp, mist_session=apisession)  # Paginate to completion.
+        logging.debug("Device upgrade events returned %s entries", len(events) if events else 0)  # After API.
+        return events or []
+
     def _check_device_events(self) -> None:
         """Check organization device events for upgrade activity."""
         try:
             print("   Checking organization device events for upgrade activity...")
-
-            end_time = int(time.time())
-            start_time = end_time - (24 * 60 * 60)
-
-            resp = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-                apisession,
-                self.org_id,
-                type="SYSTEM_UPGRADE_COMPLETED,SYSTEM_UPGRADE_FAILED,SYSTEM_UPGRADE_STARTED",
-                start=start_time,
-                end=end_time,
-                limit=50,
-            )
-            events = mistapi.get_all(response=resp, mist_session=apisession)
-
+            events = self._fetch_device_upgrade_events_24h()  # Pull the SYSTEM_UPGRADE_* window.
             if not events:
                 print("   -> No device upgrade events found in last 24 hours")
                 return
-
             print(f"   !? Found {len(events)} device upgrade event(s) in last 24 hours")
-            self._display_device_events(events)
-
-        except Exception as exception:
+            self._display_device_events(events)  # Group + print.
+        except Exception as exception:  # Tolerate transient API failures.
             print(f"   -> Error checking device events: {exception}")
             logging.warning("Failed to search device upgrade events: %s", exception)
 
@@ -18985,6 +18988,23 @@ class FirmwareUpgradeStatusChecker:
             logging.warning("Failed to check upgrades for site %s: %s", site_id, exception)
             return False
 
+    def _record_site_upgrade(self, info: dict[str, Any]) -> None:
+        """Append one site-upgrade record into active_upgrades; info bundles all identity + stage fields."""
+        counts = info["counts"]  # Stage-count sub-dict.
+        self.active_upgrades.append(
+            {
+                "site_id": info["site_id"],
+                "site_name": info["site_name"],
+                "upgrade_id": info["upgrade_id"],
+                "status": info["status"],
+                "strategy": info["strategy"],
+                "target_version": info["target"],
+                "source": "site_lookup",
+                "timestamp": datetime.now(UTC).isoformat(),
+                **{k: counts.get(k, 0) for k in ["total", "downloaded", "rebooted", "failed"]},
+            }
+        )
+
     def _process_site_upgrade(self, upgrade: dict[str, Any], site_id: str, site_name: str) -> None:
         """Process a single site upgrade record."""
         upgrade_id = upgrade.get("id", "Unknown")
@@ -18992,24 +19012,19 @@ class FirmwareUpgradeStatusChecker:
         strategy = upgrade.get("strategy", "Unknown")
         target = upgrade.get("target_version", "Unknown")
         counts = upgrade.get("counts", {})
-
-        progress_parts = self._build_site_upgrade_progress(counts)
+        progress_parts = self._build_site_upgrade_progress(counts)  # Per-stage display fragments.
         progress_info = " | ".join(progress_parts) if progress_parts else f"Status: {status}"
-
         print(f"      Upgrade {upgrade_id[:8]}... [{strategy}]: {progress_info}")
         print(f"         Target: {target} | Started: {self._format_timestamp(upgrade.get('start_time', 0))}")
-
-        self.active_upgrades.append(
+        self._record_site_upgrade(
             {
-                "site_id": site_id,
-                "site_name": site_name,
                 "upgrade_id": upgrade_id,
                 "status": status,
                 "strategy": strategy,
-                "target_version": target,
-                "source": "site_lookup",
-                "timestamp": datetime.now(UTC).isoformat(),
-                **{k: counts.get(k, 0) for k in ["total", "downloaded", "rebooted", "failed"]},
+                "target": target,
+                "counts": counts,
+                "site_id": site_id,
+                "site_name": site_name,
             }
         )
 
