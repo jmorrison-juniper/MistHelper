@@ -13329,215 +13329,169 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     """
 
     @staticmethod
-    def anomaly_events():  # noqa: C901, PLR0912, PLR0915
-        """Export comprehensive anomaly events for a selected site to SiteAnomalyEvents_[SiteName].csv.
-
-        Dynamically discovers potential anomaly metrics from ConstInsightMetrics.csv and uses
-        GET /api/v1/sites/:site_id/anomaly/:metric endpoint to retrieve anomaly events
-        for all site-scoped metrics related to anomaly detection (capacity, coverage, roaming,
-        client connectivity, AP availability, etc.).
-        """
-        print("Export Site Anomaly Events:")  # Header.
-        logging.info("Starting export of site anomaly events...")  # Log start.
-
-        # Get site selection
-        site_id = PromptUtils.select_site()  # Select a site.
-        if not site_id:  # No site.
+    def anomaly_events():
+        """Export comprehensive anomaly events for a selected site to SiteAnomalyEvents_[SiteName].csv."""
+        print("Export Site Anomaly Events:")  # User-visible header.
+        logging.info("Starting export of site anomaly events...")  # Trace start of export.
+        site_id = PromptUtils.select_site()  # Prompt the user for a site.
+        if not site_id:  # No site chosen.
             print("! No site selected. Exiting.")  # Tell the user.
-            return  # Abort.
-
-        # Get site name for filename
+            return  # Abort the export.
+        site_name = SiteAnomalyExporter._anomaly_resolve_site_name(site_id)  # Resolve display name for filename.
+        filename = f"SiteAnomalyEvents_{EnhancedSSHRunner.sanitize_filename(site_name)}.csv"  # Build CSV name.
+        metrics = SiteAnomalyExporter._discover_site_anomaly_metrics()  # Discover anomaly metric names.
+        if not metrics:  # Nothing to fetch.
+            return  # Abort the export.
         try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)  # List the site.
-            sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
-        except Exception:  # Lookup failed.
-            site_name = site_id  # Fall back to id.
-
-        # Clean site name for filename
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
-        filename = f"SiteAnomalyEvents_{sanitized_site_name}.csv"  # Build the CSV name.
-
-        # Dynamically discover potential anomaly metrics from ConstInsightMetrics.csv
-        print("! Discovering potential anomaly metrics from Mist API definitions...")  # Tell the user.
-        potential_metrics = AnomalyMetricsDiscovery.discover()  # Discover anomaly metrics.
-
-        # Extract just the metric names for API calls
-        site_anomaly_metrics = [metric["metric_name"] for metric in potential_metrics]  # Extract metric names.
-
-        # Log discovered metrics
-        print(f"! Found {len(site_anomaly_metrics)} potential anomaly metrics:")  # Tell the user.
-        for metric_info in potential_metrics:  # List each metric.
-            print(f"  - {metric_info['metric_name']}: {metric_info['description'][:60]}...")  # Print the metric.
-
-        if not site_anomaly_metrics:  # No metrics.
-            print("! No potential anomaly metrics found. Please check ConstInsightMetrics.csv availability.")
-            return  # Abort.
-
-        all_anomaly_data = []  # Accumulate anomaly rows.
-        metrics_retrieved = 0  # Success count.
-
-        print(f"! Retrieving {len(site_anomaly_metrics)} different site anomaly events...")  # Tell the user.
-
-        # Temporarily suppress mistapi error logging to keep console clean
-        mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apiresponse"]
-        original_levels = {}  # Save original levels.
-        for logger_name in mistapi_loggers:  # Quiet each logger.
-            logger_instance = logging.getLogger(logger_name)  # Get the logger.
-            original_levels[logger_name] = logger_instance.level  # Remember its level.
-            logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
-
-        try:
-            for metric in site_anomaly_metrics:  # Fetch each metric.
-                try:
-                    # Call the site anomaly API endpoint
-                    response = mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents(apisession, site_id, metric)
-                    anomaly_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
-
-                    if anomaly_data:  # Have data.
-                        # Add metric type identifier to each data point
-                        anomaly_data["metric_type"] = metric  # Tag the metric.
-                        anomaly_data["site_id"] = site_id  # Tag the site.
-                        anomaly_data["site_name"] = site_name  # Tag the site name.
-                        anomaly_data["data_type"] = "site_anomaly_events"  # Tag the data type.
-                        all_anomaly_data.append(anomaly_data)  # Collect the row.
-                        metrics_retrieved += 1  # Count success.
-                        print(f"!? Retrieved {metric} anomaly events")  # Tell the user.
-                        logging.debug("Successfully retrieved %s anomaly events for site %s", metric, site_id)
-                    else:
-                        print(f"! No {metric} anomaly events available")  # Tell the user none.
-                        logging.info("No %s anomaly events available for site %s", metric, site_id)  # Log none.
-                except Exception as metric_error:  # Metric fetch failed.
-                    print(f"! Error retrieving {metric} anomaly events: {metric_error}")  # Tell the user.
-                    logging.warning("Error retrieving %s anomaly events for site %s: %s", metric, site_id, metric_error)
-
-            # Process and save all collected anomaly data
-            if all_anomaly_data:  # Have data.
-                processed = DataProcessingUtils.flatten_nested_fields(all_anomaly_data)  # Flatten nested fields.
-                processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} site anomaly event types exported to {filename}")  # Tell the user.
-                logging.info(  # Log the export.
-                    "Exported %s site anomaly event types for %s to %s", metrics_retrieved, site_name, filename
-                )
-            else:
-                print(f"! 0 anomaly events exported to {filename} (no data available)")  # Tell the user zero.
-                logging.warning("No anomaly events available for site %s", site_name)  # Warn none.
-                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
-
-        except Exception as exception:  # Export failed.
+            data, count = SiteAnomalyExporter._aggregate_site_anomaly_data(site_id, site_name, metrics)  # Fetch.
+            SiteAnomalyExporter._export_anomaly_data(data, filename, "site anomaly event", count, site_name)  # CSV
+        except Exception as exception:  # Broader export failure (flatten/write).
             print(f"! Error exporting site anomaly events: {exception}")  # Tell the user.
-            logging.error("Failed to export site anomaly events for %s: %s", site_name, exception)  # Log the error.
-        finally:
-            # Restore original logging levels
-            for logger_name, original_level in original_levels.items():  # Restore logger levels.
-                logging.getLogger(logger_name).setLevel(original_level)  # Restore each level.
+            logging.error("Failed to export site anomaly events for %s: %s", site_name, exception)  # Log it.
 
     @staticmethod
-    def device_anomaly_events():  # noqa: C901, PLR0912, PLR0915
-        """Export device-specific anomaly events for a selected device
-        to SiteDeviceAnomalyEvents_[SiteName]_[DeviceName].csv.
-
-        Uses GET /api/v1/sites/:site_id/anomaly/:metric/device/:device_id endpoint to retrieve device anomaly events.
-        """
-        print("Export Site Device Anomaly Events:")  # Header.
-        logging.info("Starting export of site device anomaly events...")  # Log start.
-
-        # Get site selection
-        site_id = PromptUtils.select_site()  # Select a site.
-        if not site_id:  # No site.
+    def device_anomaly_events():
+        """Export device anomaly events to SiteDeviceAnomalyEvents_[Site]_[Device].csv."""
+        print("Export Site Device Anomaly Events:")  # User-visible header.
+        logging.info("Starting export of site device anomaly events...")  # Trace start of export.
+        site_id = PromptUtils.select_site()  # Prompt the user for a site.
+        if not site_id:  # No site chosen.
             print("! No site selected. Exiting.")  # Tell the user.
-            return  # Abort.
-
-        # Get site name for filename
-        try:
-            response = mistapi.api.v1.sites.listSites(apisession, site_id)  # List the site.
-            sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
-            site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
-        except Exception:  # Lookup failed.
-            site_name = site_id  # Fall back to id.
-
-        # Get device selection (issue #431: inlined PromptUtils.select_device).
-        device_selection = PromptUtils.select_device_id_from_inventory(site_id)  # Select a device.
-        if not device_selection:  # No device.
+            return  # Abort the export.
+        site_name = SiteAnomalyExporter._anomaly_resolve_site_name(site_id)  # Resolve display name.
+        selection = PromptUtils.select_device_id_from_inventory(site_id)  # Prompt for a device.
+        if not selection:  # No device chosen.
             print("! No device selected. Exiting.")  # Tell the user.
-            return  # Abort.
-
-        device_mac = device_selection[0]  # Device MAC.
-        device_name = device_selection[1]  # Device name.
-
-        # Clean names for filename
-        sanitized_site_name = EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
-        sanitized_device_name = EnhancedSSHRunner.sanitize_filename(device_name)  # Sanitize the device name.
-        filename = f"SiteDeviceAnomalyEvents_{sanitized_site_name}_{sanitized_device_name}.csv"  # Build the CSV name.
-
-        # Define device-specific anomaly metrics
-        device_anomaly_metrics = ["ap_availability", "throughput", "capacity"]  # Device anomaly metrics.
-
-        all_device_anomaly_data = []  # Accumulate anomaly rows.
-        metrics_retrieved = 0  # Success count.
-
-        print(f"! Retrieving {len(device_anomaly_metrics)} different device anomaly events for {device_name}...")
-
-        # Temporarily suppress mistapi error logging to keep console clean
-        mistapi_loggers = ["apirequest", "apiresponse", "mistapi", "mistapi.apirequest", "mistapi.apiresponse"]
-        original_levels = {}  # Save original levels.
-        for logger_name in mistapi_loggers:  # Quiet each logger.
-            logger_instance = logging.getLogger(logger_name)  # Get the logger.
-            original_levels[logger_name] = logger_instance.level  # Remember its level.
-            logger_instance.setLevel(logging.CRITICAL)  # Suppress ERROR logs temporarily
-
+            return  # Abort the export.
+        device_mac, device_name = selection[0], selection[1]  # Unpack the MAC and display name.
+        filename = SiteAnomalyExporter._build_device_filename(site_name, device_name)  # Build the CSV name.
+        metrics = ["ap_availability", "throughput", "capacity"]  # Device anomaly metric names.
         try:
-            for metric in device_anomaly_metrics:  # Fetch each metric.
-                try:
-                    # Call the site device anomaly API endpoint
-                    response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice(  # Get device anomalies.
-                        apisession, site_id, metric, device_mac
-                    )
-                    device_anomaly_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
-
-                    if device_anomaly_data:  # Have data.
-                        # Add metadata
-                        device_anomaly_data["metric_type"] = metric  # Tag the metric.
-                        device_anomaly_data["site_id"] = site_id  # Tag the site.
-                        device_anomaly_data["site_name"] = site_name  # Tag the site name.
-                        device_anomaly_data["device_mac"] = device_mac  # Tag the device MAC.
-                        device_anomaly_data["device_name"] = device_name  # Tag the device name.
-                        device_anomaly_data["data_type"] = "device_anomaly_events"  # Tag the data type.
-                        all_device_anomaly_data.append(device_anomaly_data)  # Collect the row.
-                        metrics_retrieved += 1  # Count success.
-                        print(f"!? Retrieved {metric} device anomaly data")  # Tell the user.
-                        logging.debug("Successfully retrieved %s device anomaly data for %s", metric, device_mac)
-                    else:
-                        print(f"! No {metric} device anomaly data available")  # Tell the user none.
-                        logging.info("No %s device anomaly data available for %s", metric, device_mac)  # Log none.
-                except Exception as metric_error:  # Metric fetch failed.
-                    print(f"! Error retrieving {metric} device anomaly data: {metric_error}")  # Tell the user.
-                    logging.warning(  # Warn the failure.
-                        "Error retrieving %s device anomaly data for %s: %s", metric, device_mac, metric_error
-                    )
-
-            # Process and save all collected device anomaly data
-            if all_device_anomaly_data:  # Have data.
-                processed = DataProcessingUtils.flatten_nested_fields(all_device_anomaly_data)  # Flatten nested fields.
-                processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-                DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-                print(f"! {metrics_retrieved} device anomaly event types exported to {filename}")  # Tell the user.
-                logging.info(  # Log the export.
-                    "Exported %s device anomaly event types for %s to %s", metrics_retrieved, device_name, filename
-                )
-            else:
-                print(f"! 0 device anomaly events exported to {filename} (no data available)")  # Tell the user zero.
-                logging.warning("No device anomaly events available for %s", device_name)  # Warn none.
-                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
-
-        except Exception as exception:  # Export failed.
+            data, count = SiteAnomalyExporter._aggregate_device_anomaly_data(
+                site_id, site_name, device_mac, device_name, metrics
+            )  # Loop + fetch each metric.
+            SiteAnomalyExporter._export_anomaly_data(data, filename, "device anomaly event", count, device_name)  # CSV
+        except Exception as exception:  # Broader export failure (flatten/write).
             print(f"! Error exporting device anomaly events: {exception}")  # Tell the user.
-            logging.error("Failed to export device anomaly events for %s: %s", device_name, exception)  # Log the error.
+            logging.error("Failed to export device anomaly events for %s: %s", device_name, exception)  # Log it.
+
+    @staticmethod
+    def _build_device_filename(site_name: str, device_name: str) -> str:
+        """Build the device anomaly CSV filename from sanitized site + device names."""
+        sanitized_site = EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
+        sanitized_device = EnhancedSSHRunner.sanitize_filename(device_name)  # Sanitize the device name.
+        return f"SiteDeviceAnomalyEvents_{sanitized_site}_{sanitized_device}.csv"  # Compose CSV name.
+
+    @staticmethod
+    def _discover_site_anomaly_metrics() -> list[str]:
+        """Discover potential site anomaly metric names, announce them, return [] when none found."""
+        print("! Discovering potential anomaly metrics from Mist API definitions...")  # Tell the user.
+        potential = AnomalyMetricsDiscovery.discover()  # Pull discovery list from CSV.
+        names = [info["metric_name"] for info in potential]  # Extract just the metric names.
+        print(f"! Found {len(names)} potential anomaly metrics:")  # Tell the user the count.
+        for info in potential:  # Show each metric to the user.
+            print(f"  - {info['metric_name']}: {info['description'][:60]}...")  # Trim long descriptions.
+        if not names:  # No metrics discovered at all.
+            print("! No potential anomaly metrics found. Please check ConstInsightMetrics.csv availability.")
+        return names  # Return the names (possibly empty).
+
+    @staticmethod
+    def _fetch_one_anomaly_metric(
+        fetch_callable: Any, metric: str, tags: dict[str, str], scope: tuple[str, str]
+    ) -> dict[str, Any] | None:
+        """Invoke fetch_callable() for one metric, tag the result, return data dict or None on no-data/error."""
+        display_label, data_type = scope  # Unpack the scope tuple for printing + tagging.
+        try:
+            response = fetch_callable()  # Issue the API call (callable is already bound via functools.partial).
+            data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
+            if data:  # API returned actual data for this metric.
+                data["metric_type"] = metric  # Tag the metric name.
+                data["data_type"] = data_type  # Tag the data type for downstream consumers.
+                for key, value in tags.items():  # Apply caller-supplied tags (site_id, site_name, ...).
+                    data[key] = value  # Set each tag on the result row.
+                print(f"!? Retrieved {metric} {display_label}")  # Tell the user.
+                logging.debug("Successfully retrieved %s %s for %s", metric, display_label, tags)  # Trace success.
+                return data  # Return the tagged row.
+            print(f"! No {metric} {display_label} available")  # Tell the user the metric had no data.
+            logging.info("No %s %s available for %s", metric, display_label, tags)  # Log the absence.
+            return None  # Signal caller to skip.
+        except Exception as metric_error:  # This metric's fetch failed.
+            print(f"! Error retrieving {metric} {display_label}: {metric_error}")  # Tell the user.
+            logging.warning("Error retrieving %s %s for %s: %s", metric, display_label, tags, metric_error)  # Warn.
+            return None  # Signal caller to skip.
+
+    @staticmethod
+    def _aggregate_site_anomaly_data(
+        site_id: str, site_name: str, metrics: list[str]
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Loop site anomaly metrics with mistapi loggers silenced; return (rows, success_count)."""
+        tags = {"site_id": site_id, "site_name": site_name}  # Tags attached to every row.
+        scope = ("anomaly events", "site_anomaly_events")  # Display label + data_type tag.
+        print(f"! Retrieving {len(metrics)} different site anomaly events...")  # Tell the user.
+        original_levels = SiteAnomalyExporter._anomaly_suppress_mistapi_loggers()  # Quiet mistapi internal loggers.
+        rows: list[dict[str, Any]] = []  # Accumulator for successful rows.
+        count = 0  # Number of metrics that returned data.
+        try:
+            for metric in metrics:  # Fetch each metric.
+                fetch = functools.partial(
+                    mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents, apisession, site_id, metric
+                )  # Bind all args so helper just calls fetch().
+                row = SiteAnomalyExporter._fetch_one_anomaly_metric(fetch, metric, tags, scope)  # Fetch + tag.
+                if row is not None:  # Metric returned data.
+                    rows.append(row)  # Collect the row.
+                    count += 1  # Bump the success counter.
         finally:
-            # Restore original logging levels
-            for logger_name, original_level in original_levels.items():  # Restore logger levels.
-                logging.getLogger(logger_name).setLevel(original_level)  # Restore each level.
+            SiteAnomalyExporter._anomaly_restore_loggers(original_levels)  # Always restore loggers.
+        return rows, count  # Hand the aggregate back to the orchestrator.
+
+    @staticmethod
+    def _aggregate_device_anomaly_data(
+        site_id: str, site_name: str, device_mac: str, device_name: str, metrics: list[str]
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Loop device anomaly metrics with mistapi loggers silenced; return (rows, success_count)."""
+        tags = {  # Tags attached to every row.
+            "site_id": site_id,
+            "site_name": site_name,
+            "device_mac": device_mac,
+            "device_name": device_name,
+        }
+        scope = ("device anomaly data", "device_anomaly_events")  # Display label + data_type tag.
+        print(f"! Retrieving {len(metrics)} different device anomaly events for {device_name}...")  # Tell the user.
+        original_levels = SiteAnomalyExporter._anomaly_suppress_mistapi_loggers()  # Quiet mistapi internal loggers.
+        rows: list[dict[str, Any]] = []  # Accumulator for successful rows.
+        count = 0  # Number of metrics that returned data.
+        try:
+            for metric in metrics:  # Fetch each metric.
+                fetch = functools.partial(
+                    mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice,
+                    apisession,
+                    site_id,
+                    metric,
+                    device_mac,
+                )  # Bind all args so helper just calls fetch().
+                row = SiteAnomalyExporter._fetch_one_anomaly_metric(fetch, metric, tags, scope)  # Fetch + tag.
+                if row is not None:  # Metric returned data.
+                    rows.append(row)  # Collect the row.
+                    count += 1  # Bump the success counter.
+        finally:
+            SiteAnomalyExporter._anomaly_restore_loggers(original_levels)  # Always restore loggers.
+        return rows, count  # Hand the aggregate back to the orchestrator.
+
+    @staticmethod
+    def _export_anomaly_data(
+        data_list: list[dict[str, Any]], filename: str, label: str, success_count: int, scope_name: str
+    ) -> None:
+        """Flatten + escape + write the aggregated anomaly rows, or write an empty CSV when there is no data."""
+        if data_list:  # At least one metric returned data.
+            processed = DataProcessingUtils.flatten_nested_fields(data_list)  # Flatten nested fields.
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
+            print(f"! {success_count} {label} types exported to {filename}")  # Tell the user the count.
+            logging.info("Exported %s %s types for %s to %s", success_count, label, scope_name, filename)  # Log.
+        else:  # No data from any metric.
+            print(f"! 0 {label}s exported to {filename} (no data available)")  # Tell the user zero.
+            logging.warning("No %s available for %s", label, scope_name)  # Warn about the empty result.
+            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
     _CLIENT_ANOMALY_METRICS = (  # Client-specific anomaly metrics (verified working) shared by the count + loop.
         "successful_connect",  # Note: uses underscore, not hyphen for the client endpoint.
