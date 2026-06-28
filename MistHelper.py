@@ -15691,206 +15691,228 @@ class GatewayTestExporter:  # Gateway synthetic test exporter.
     """
 
     @staticmethod
-    def synthetic_tests(fast=False):  # noqa: C901, PLR0915
-        """
-        Collects and exports synthetic test stats for all gateways in the organization.
-        Optimized to use cached inventory data and concurrent processing when fast=True.
-
-        Args:
-            fast (bool): If True, enables concurrent processing and uses cached inventory data
-                        to minimize API calls.
-        """
-        # DEBUG: Log invocation context early so harness vs direct calls can be distinguished
-        logging.debug("[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast=%s", fast)  # Trace the entry.
+    def synthetic_tests(fast=False):
+        """Collect + export synthetic test stats for all gateways (optional fast/concurrent path)."""
+        logging.debug("[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast=%s", fast)  # Entry trace.
         logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")  # Log start.
         if fast:  # Fast mode.
             logging.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
-
         emitter = PROGRESS_EMITTER  # Progress emitter.
         if emitter:  # Emitter present.
             emitter.emit_progress_start("16", "synthetic_tests", 1)  # Signal progress start.
         op_start = time.time()  # Start the timer.
-
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        gateway_devices = GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)  # List gateways with sites.
-        all_stats = []  # Accumulate stats.
-
+        gateway_devices = GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)  # List gateways.
         if not gateway_devices:  # No gateways.
-            logging.warning("[WARN] No gateway devices found. Exiting synthetic tests export.")  # Warn none found.
+            logging.warning("[WARN] No gateway devices found. Exiting synthetic tests export.")  # Warn.
             return  # Abort.
-
-        def fetch_synthetic_test_stats_with_retry(  # Fetch one device with retry.
-            device_info, max_retries=None, retry_delay=None, connection_semaphore=None
-        ):
-            """
-            Fetch synthetic test stats for a single gateway device with retry logic and connection pool management.
-
-            Args:
-                device_info: Tuple of (site_id, device_id, device_name, site_name)
-                max_retries: Maximum number of retry attempts (uses env var if None)
-                retry_delay: Base delay between retries (uses env var if None)
-                connection_semaphore: Semaphore to limit concurrent connections (optional)
-            """
-            # Use environment variables as defaults if not provided
-            if max_retries is None:  # Default max retries.
-                max_retries = FAST_MODE_MAX_RETRIES  # Use the fast-mode value.
-            if retry_delay is None:  # Default retry delay.
-                retry_delay = FAST_MODE_RETRY_DELAY  # Use the fast-mode value.
-
-            site_id, device_id, device_name, site_name = device_info  # Unpack the device info.
-
-            for attempt in range(max_retries + 1):  # Bounded retry loop.
-                try:
-                    # Validate inputs before making API calls
-                    ValidationUtils.validate_site_id(site_id, "synthetic_tests")  # Validate the site id.
-                    ValidationUtils.validate_device_id(device_id, "synthetic_tests")  # Validate the device id.
-
-                    # Use semaphore to limit concurrent connections if provided
-                    if connection_semaphore:  # Pool present.
-                        with connection_semaphore:  # Acquire a slot.
-                            stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(  # Fetch synthetic tests.
-                                apisession, site_id, device_id
-                            ).data
-                    else:
-                        stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(  # Fetch synthetic tests.
-                            apisession, site_id, device_id
-                        ).data
-
-                    stats["site_id"] = site_id  # Tag the site.
-                    stats["site_name"] = site_name  # Tag the site name.
-                    stats["device_id"] = device_id  # Tag the device.
-                    stats["device_name"] = device_name  # Tag the device name.
-
-                    if attempt > 0:  # After a retry.
-                        logging.info("! Retry %s successful for device %s at site %s", attempt, device_name, site_name)
-                    else:
-                        logging.info(  # Log success.
-                            "! Collected synthetic test stats for device %s at site %s", device_name, site_name
-                        )
-                    return stats  # Return the stats.
-
-                except Exception as exception:  # Fetch failed.
-                    if attempt < max_retries:  # More attempts left.
-                        # Fast mode: reduced backoff delay for quicker retries
-                        backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)  # Exponential backoff.
-                        logging.warning(  # Warn and back off.
-                            "! Attempt %s failed for device %s at site %s: %s",
-                            attempt + 1,
-                            device_id,
-                            site_id,
-                            exception,
-                        )
-                        logging.info(  # Log the retry.
-                            "! Fast retry in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, max_retries + 1
-                        )
-                        time.sleep(backoff_delay)  # Wait before retry.
-                    else:
-                        logging.error(  # Out of retries.
-                            "! Final attempt failed for device %s at site %s: %s", device_id, site_id, exception
-                        )
-                        return None  # Give up this device.
-
-            return None  # Return None.
-
-        if fast:  # Fast concurrent path.
-            # Concurrent processing mode with connection-aware threading + summary instrumentation
-            start_time = time.time()  # Start the timer.
-
-            # Define worker function for the connection pool helper
-            def fetch_device_stats(device_info, connection_semaphore):  # Fetch one device.
-                """Worker function that fetches synthetic test stats for a single device."""
-                return fetch_synthetic_test_stats_with_retry(device_info, connection_semaphore=connection_semaphore)  # type: ignore[no-untyped-call]
-
-            # Define retry function for failed devices
-            def retry_failed_devices(failed_devices, connection_semaphore):  # Retry failed devices.
-                retry_results = []  # Collect retry results.
-                still_failed = []  # Track still-failed.
-                retry_threads = min(  # Size the retry pool.
-                    FAST_MODE_RETRY_THREADS, len(failed_devices), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
-                )
-                if retry_threads <= 0:  # No threads.
-                    logging.warning(" FAST MODE: No available threads for retry; skipping retries")
-                    return [], failed_devices  # Return failed devices.
-                with ThreadPoolExecutor(max_workers=retry_threads) as executor:  # Run the retry pool.
-                    retry_futures = {  # Map futures to devices.
-                        executor.submit(
-                            fetch_synthetic_test_stats_with_retry,
-                            device_info,
-                            max_retries=FAST_MODE_RETRY_MAX_RETRIES,
-                            connection_semaphore=connection_semaphore,
-                        ): device_info
-                        for device_info in failed_devices
-                    }
-                    for future in tqdm(  # type: ignore[no-untyped-call]
-                        as_completed(retry_futures), total=len(retry_futures), desc="Retrying Failed", unit="device"
-                    ):
-                        device_info = retry_futures[future]  # Resolve the device info.
-                        try:
-                            result = future.result()  # Read the result.
-                            if result:  # Have a result.
-                                retry_results.append(result)  # Collect it.
-                                logging.info(" FAST RETRY OK: %s", device_info[2])  # Log retry success.
-                            else:
-                                still_failed.append(device_info)  # Still failed.
-                                logging.error(" FAST RETRY FAIL: %s", device_info[2])  # Log retry failure.
-                        except Exception as exception:  # Retry raised.
-                            still_failed.append(device_info)  # Still failed.
-                            logging.error(" FAST RETRY EXC: %s -> %s", device_info[2], exception)  # Log the exception.
-                return retry_results, still_failed  # Return results and failures.
-
-            successful_results, failed_devices = execute_with_connection_pool_management(  # Run the pooled fetch.
-                work_items=gateway_devices,
-                worker_function=fetch_device_stats,
-                batch_description="devices",
-                retry_function=retry_failed_devices,
-            )
-
-            duration = time.time() - start_time  # Compute the duration.
-            all_stats.extend(successful_results)  # Collect the results.
-            logging.info(  # Log the totals.
-                " FAST MODE SUMMARY (synthetic tests): ok=%s fail=%s total=%s elapsed=%.2fs",
-                len(successful_results),
-                len(failed_devices),
-                len(gateway_devices),
-                duration,
-            )
+        all_stats: list = []  # Accumulate stats.
+        if fast:  # Concurrent path.
+            GatewayTestExporter._run_synthetic_fast_path(gateway_devices, all_stats)  # Fast pool.
         else:
-            # Sequential processing with rate limiting (original behavior)
-            smoothed = None  # No smoothed delay yet.
-            for device_info in tqdm(gateway_devices, desc="Gateway Devices", unit="device"):  # type: ignore[no-untyped-call]
-                result = fetch_synthetic_test_stats_with_retry(  # type: ignore[no-untyped-call]
-                    device_info, max_retries=FAST_MODE_SEQUENTIAL_MAX_RETRIES
-                )
-                if result:  # Have a result.
-                    all_stats.append(result)  # Collect it.
-
-                # Apply rate limiting only in non-fast mode
-                smoothed, delay = RateLimitingUtils.get_rate_limited_delay(smoothed, apisession, _api_usage_cache)  # type: ignore[no-untyped-call]
-                logging.info("[INFO] Sleeping for %.2fs.", delay)  # Log the sleep.
-                time.sleep(delay)  # Pace the API.
-
-        if all_stats:  # Have stats.
-            filename = "AllGatewaySyntheticTests.csv"  # Build the CSV name.
-            flattened = DataProcessingUtils.flatten_nested_fields(all_stats)  # Flatten nested fields.
-            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
-            print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")  # Tell the user.
-            logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
-            logging.info(  # Log the totals.
-                "! API Optimization: Saved %s listSiteDevices calls by using cached inventory", len(gateway_devices)
-            )
-        else:
-            logging.warning(" No synthetic test results found. CSV not created.")  # Warn none found.
-            print("! No synthetic test results found. CSV not created.")  # Tell the user.
-        if emitter:  # Emitter present.
-            emitter.emit_progress_complete(  # Signal progress complete.
-                ProgressContext("16", "synthetic_tests", len(gateway_devices) if gateway_devices else 0),
-                len(all_stats),
-                False,
-                time.time() - op_start,
-            )
+            GatewayTestExporter._run_synthetic_sequential_path(gateway_devices, all_stats)  # Sequential.
+        GatewayTestExporter._export_synthetic_results(all_stats, gateway_devices)  # Write CSV + log.
+        GatewayTestExporter._emit_synthetic_complete(emitter, op_start, gateway_devices, all_stats)  # Done.
 
     @staticmethod
+    def _emit_synthetic_complete(emitter, op_start, gateway_devices, all_stats):
+        """Emit final progress-complete signal if an emitter is configured."""
+        if not emitter:  # No emitter — nothing to emit.
+            return  # Skip silently.
+        emitter.emit_progress_complete(  # Signal progress complete.
+            ProgressContext("16", "synthetic_tests", len(gateway_devices)),
+            len(all_stats),
+            False,
+            time.time() - op_start,
+        )
+
+    @staticmethod
+    def fetch_synthetic_test_stats_with_retry(
+        device_info, max_retries=None, retry_delay=None, connection_semaphore=None
+    ):
+        """Fetch synthetic test stats for one gateway with retry + optional connection pool gating."""
+        if max_retries is None:  # Default max retries.
+            max_retries = FAST_MODE_MAX_RETRIES  # Fast-mode default.
+        if retry_delay is None:  # Default retry delay.
+            retry_delay = FAST_MODE_RETRY_DELAY  # Fast-mode default.
+        site_id, device_id, _device_name, _site_name = device_info  # Unpack for backoff/error logs only.
+        for attempt in range(max_retries + 1):  # Bounded retry loop.
+            stats = GatewayTestExporter._try_synthetic_fetch_attempt(
+                device_info, attempt, connection_semaphore
+            )  # One attempt.
+            if stats is not None:  # Success.
+                return stats  # Return tagged stats.
+            if attempt >= max_retries:  # Out of retries.
+                logging.error("! Final attempt failed for device %s at site %s", device_id, site_id)  # Final failure.
+                return None  # Give up.
+            backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)  # Exponential backoff.
+            logging.info(  # Log the retry.
+                "! Fast retry in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, max_retries + 1
+            )
+            time.sleep(backoff_delay)  # Wait before retry.
+        return None  # Defensive.
+
+    @staticmethod
+    def _try_synthetic_fetch_attempt(device_info, attempt, connection_semaphore):
+        """Single attempt: validate inputs, call API, tag stats, log success. Return stats or None."""
+        site_id, device_id, device_name, site_name = device_info  # Unpack for the call + logging.
+        try:
+            ValidationUtils.validate_site_id(site_id, "synthetic_tests")  # Validate the site id.
+            ValidationUtils.validate_device_id(device_id, "synthetic_tests")  # Validate the device id.
+            stats = GatewayTestExporter._call_synthetic_endpoint(site_id, device_id, connection_semaphore)  # Call API.
+            GatewayTestExporter._tag_synthetic_stats(stats, device_info, attempt)  # Tag + log success.
+            return stats  # Return tagged stats.
+        except Exception as exception:  # Fetch failed this attempt.
+            logging.warning(  # Warn and let caller handle backoff/retry.
+                "! Attempt %s failed for device %s at site %s: %s",
+                attempt + 1,
+                device_id,
+                site_id,
+                exception,
+            )
+            return None  # Signal failure to caller.
+
+    @staticmethod
+    def _tag_synthetic_stats(stats, device_info, attempt):
+        """Mutate ``stats`` with site/device tags and log first-try vs retry success."""
+        site_id, device_id, device_name, site_name = device_info  # Unpack the fields.
+        stats["site_id"] = site_id  # Tag the site.
+        stats["site_name"] = site_name  # Tag the site name.
+        stats["device_id"] = device_id  # Tag the device.
+        stats["device_name"] = device_name  # Tag the device name.
+        if attempt > 0:  # After a retry.
+            logging.info("! Retry %s successful for device %s at site %s", attempt, device_name, site_name)
+        else:
+            logging.info("! Collected synthetic test stats for device %s at site %s", device_name, site_name)
+
+    @staticmethod
+    def _call_synthetic_endpoint(site_id, device_id, connection_semaphore):
+        """Call ``getSiteDeviceSyntheticTest`` with optional semaphore-gated concurrency."""
+        if connection_semaphore:  # Pool present.
+            with connection_semaphore:  # Acquire a slot.
+                return mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data
+        return mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(
+            apisession, site_id, device_id
+        ).data  # Unsemaphored call.
+
+    @staticmethod
+    def _run_synthetic_fast_path(gateway_devices, all_stats):
+        """Concurrent pool execution with retry on failures + summary instrumentation."""
+        start_time = time.time()  # Start the timer.
+
+        def fetch_device_stats(device_info, connection_semaphore):  # Pool worker.
+            """Worker function that fetches synthetic test stats for a single device."""
+            return GatewayTestExporter.fetch_synthetic_test_stats_with_retry(
+                device_info, connection_semaphore=connection_semaphore
+            )
+
+        successful_results, failed_devices = execute_with_connection_pool_management(  # Pool run.
+            work_items=gateway_devices,
+            worker_function=fetch_device_stats,
+            batch_description="devices",
+            retry_function=GatewayTestExporter._retry_failed_synthetic_devices,
+        )
+        duration = time.time() - start_time  # Compute the duration.
+        all_stats.extend(successful_results)  # Collect the results.
+        logging.info(  # Log the totals.
+            " FAST MODE SUMMARY (synthetic tests): ok=%s fail=%s total=%s elapsed=%.2fs",
+            len(successful_results),
+            len(failed_devices),
+            len(gateway_devices),
+            duration,
+        )
+
+    @staticmethod
+    def _retry_failed_synthetic_devices(failed_devices, connection_semaphore):
+        """Retry failed devices through a small dedicated pool. Return (results, still_failed)."""
+        retry_threads = min(  # Size the retry pool.
+            FAST_MODE_RETRY_THREADS,
+            len(failed_devices),
+            max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2),
+        )
+        if retry_threads <= 0:  # No threads available.
+            logging.warning(" FAST MODE: No available threads for retry; skipping retries")
+            return [], failed_devices  # Return original failures.
+        retry_results: list = []  # Collect retry results.
+        still_failed: list = []  # Track still-failed devices.
+        with ThreadPoolExecutor(max_workers=retry_threads) as executor:  # Run the retry pool.
+            retry_futures = GatewayTestExporter._submit_synthetic_retries(
+                executor, failed_devices, connection_semaphore
+            )  # Build future map.
+            for future in tqdm(  # type: ignore[no-untyped-call]
+                as_completed(retry_futures),
+                total=len(retry_futures),
+                desc="Retrying Failed",
+                unit="device",
+            ):
+                GatewayTestExporter._record_retry_outcome(future, retry_futures, retry_results, still_failed)
+        return retry_results, still_failed  # Return results and failures.
+
+    @staticmethod
+    def _submit_synthetic_retries(executor, failed_devices, connection_semaphore):
+        """Submit retry calls for every failed device and return the future->device map."""
+        return {  # Map futures to devices.
+            executor.submit(
+                GatewayTestExporter.fetch_synthetic_test_stats_with_retry,
+                device_info,
+                max_retries=FAST_MODE_RETRY_MAX_RETRIES,
+                connection_semaphore=connection_semaphore,
+            ): device_info
+            for device_info in failed_devices
+        }
+
+    @staticmethod
+    def _record_retry_outcome(future, retry_futures, retry_results, still_failed):
+        """Inspect one future's result, append to the matching bucket, log the outcome."""
+        device_info = retry_futures[future]  # Resolve the device info.
+        try:
+            result = future.result()  # Read the result.
+            if result:  # Have a result.
+                retry_results.append(result)  # Collect it.
+                logging.info(" FAST RETRY OK: %s", device_info[2])  # Log retry success.
+            else:
+                still_failed.append(device_info)  # Still failed.
+                logging.error(" FAST RETRY FAIL: %s", device_info[2])  # Log retry failure.
+        except Exception as exception:  # Retry raised.
+            still_failed.append(device_info)  # Still failed.
+            logging.error(" FAST RETRY EXC: %s -> %s", device_info[2], exception)  # Log exception.
+
+    @staticmethod
+    def _run_synthetic_sequential_path(gateway_devices, all_stats):
+        """Sequential processing with adaptive rate limiting (original behavior)."""
+        smoothed = None  # No smoothed delay yet.
+        for device_info in tqdm(  # type: ignore[no-untyped-call]
+            gateway_devices, desc="Gateway Devices", unit="device"
+        ):
+            result = GatewayTestExporter.fetch_synthetic_test_stats_with_retry(
+                device_info, max_retries=FAST_MODE_SEQUENTIAL_MAX_RETRIES
+            )
+            if result:  # Have a result.
+                all_stats.append(result)  # Collect it.
+            smoothed, delay = RateLimitingUtils.get_rate_limited_delay(  # type: ignore[no-untyped-call]
+                smoothed, apisession, _api_usage_cache
+            )
+            logging.info("[INFO] Sleeping for %.2fs.", delay)  # Log the sleep.
+            time.sleep(delay)  # Pace the API.
+
+    @staticmethod
+    def _export_synthetic_results(all_stats, gateway_devices):
+        """Write the aggregated stats to CSV + log totals (or warn when empty)."""
+        if not all_stats:  # No results.
+            logging.warning(" No synthetic test results found. CSV not created.")  # Warn.
+            print("! No synthetic test results found. CSV not created.")  # Tell the user.
+            return  # Nothing to write.
+        filename = "AllGatewaySyntheticTests.csv"  # Build the CSV name.
+        flattened = DataProcessingUtils.flatten_nested_fields(all_stats)  # Flatten nested fields.
+        sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
+        print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")  # Tell user.
+        logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
+        logging.info(  # Log the optimization summary.
+            "! API Optimization: Saved %s listSiteDevices calls by using cached inventory",
+            len(gateway_devices),
+        )
+
     def test_results_by_site(fast: bool = False) -> None:  # Export tests by site.
         """Delegator: all logic lives in src/refactors/serial_cc/test_results_by_site.py."""
         from src.refactors.serial_cc.test_results_by_site import GatewayTestResultsService  # noqa: PLC0415
