@@ -13734,6 +13734,12 @@ class GatewayHaExporter:  # Gateway HA exporter.
         "cluster_stat",
     ]
 
+    EMPTY_HA_PAIR = {  # Empty/fallback HA node pair structure.
+        "ha_cluster_node0_mac": None,
+        "ha_cluster_node1_mac": None,
+        "ha_cluster_node_count": 0,
+    }
+
     @staticmethod
     def _persist_ha_export(rows: list) -> None:
         """Flatten + write HA gateway rows to CSV/backend and log the count."""
@@ -13772,7 +13778,7 @@ class GatewayHaExporter:  # Gateway HA exporter.
 
     @staticmethod
     def _fetch_ha_pair_for_gateway(site_id: str, device_id: str) -> dict:
-        """Call /sites/{site_id}/devices/{device_id}/ha and return node0/node1 MAC + count fields (None on error)."""
+        """Call /sites/{site_id}/devices/{device_id}/ha and return node0/node1 MAC + count (empty pair on error)."""
         try:
             ha_resp = mistapi.api.v1.sites.devices.GetSiteDeviceHaClusterNode(  # Get node pair.
                 apisession, site_id, device_id
@@ -13786,18 +13792,10 @@ class GatewayHaExporter:  # Gateway HA exporter.
                     "ha_cluster_node1_mac": nodes[1].get("mac") if len(nodes) > 1 else None,  # Node 1 MAC.
                     "ha_cluster_node_count": len(nodes),  # Number of nodes in cluster.
                 }
-            return {
-                "ha_cluster_node0_mac": None,
-                "ha_cluster_node1_mac": None,
-                "ha_cluster_node_count": 0,
-            }  # Bad shape.
+            return dict(GatewayHaExporter.EMPTY_HA_PAIR)  # Bad shape -- empty pair.
         except Exception as exception:  # HA endpoint may 404 for partial cluster states.
             logging.warning("Could not fetch HA node info for %s: %s", device_id, exception)  # Log soft failure.
-            return {
-                "ha_cluster_node0_mac": None,
-                "ha_cluster_node1_mac": None,
-                "ha_cluster_node_count": 0,
-            }  # Error fallback.
+            return dict(GatewayHaExporter.EMPTY_HA_PAIR)  # Error fallback -- empty pair.
 
     @staticmethod
     def _build_ha_rows(ha_gateways: list, site_id: str) -> list:  # Build HA summary rows.
@@ -14476,30 +14474,34 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         response = api_function(self.api_session)  # Call the API.
         return getattr(response, "data", response) or {}  # Unwrap data; default empty.
 
+    def _fetch_one_gateway_model(self, config: EndpointConfig, model: str) -> list:
+        """Call the per-model API and return normalized records (or [] on empty / error)."""
+        try:
+            api_function = getattr(config.module, config.function_name)  # Resolve the function.
+            response = api_function(self.api_session, model=model)  # Call with the model.
+            model_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
+            if model_data:  # Have data.
+                return self._normalize_model_data(model, model_data)  # Normalize and return.
+            return []  # No data for this model.
+        except Exception as error:  # Model fetch failed.
+            logging.warning("Failed to get gateway config for model %s: %s", model, error)  # Warn the failure.
+            raise  # Re-raise so the caller can tally failure count.
+
     def _fetch_all_gateway_models(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
         """Fetch gateway configs for all available models."""
-
         print(f"  ! Special handling: Calling {config.function_name}() for all available gateway models...")
-
         gateway_models = self._get_gateway_models_list()  # List gateway models.
-        all_configs = []  # Accumulate configs.
+        all_configs: list = []  # Accumulate configs.
         successful = 0  # Success count.
         failed = 0  # Failure count.
-
         for model in gateway_models:  # Fetch each model.
             try:
-                api_function = getattr(config.module, config.function_name)  # Resolve the function.
-                response = api_function(self.api_session, model=model)  # Call with the model.
-                model_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
-
-                if model_data:  # Have data.
-                    records = self._normalize_model_data(model, model_data)  # Normalize model rows.
+                records = self._fetch_one_gateway_model(config, model)  # Per-model fetch + normalize.
+                if records:  # Got rows.
                     all_configs.extend(records)  # Collect them.
                     successful += 1  # Count success.
-            except Exception as error:  # Model fetch failed.
-                logging.warning("Failed to get gateway config for model %s: %s", model, error)  # Warn the failure.
+            except Exception:  # Per-model fetch threw.
                 failed += 1  # Count failure.
-
         print(f"    ! Successfully retrieved configs for {successful} models, {failed} failed")  # Tell the user.
         return all_configs  # Return all configs.
 
@@ -14677,6 +14679,17 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         print(f"    ! Successfully retrieved AP channels for {successful} countries, {failed} failed")  # Tell the user.
         return all_channels  # Return all channels.
 
+    @staticmethod
+    def _filter_to_iso2_country_codes(country_codes: list[str]) -> list[str]:
+        """Keep only 2-letter alphabetic ISO country codes; log when entries were dropped."""
+        original_count = len(country_codes)  # Remember the original count for logging.
+        filtered = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]  # ISO-2 filter.
+        if len(filtered) < original_count:  # Some were filtered.
+            logging.debug(  # Trace the filter.
+                "Filtered out %s invalid country codes for ap_channels", original_count - len(filtered)
+            )
+        return filtered  # Return the cleaned list.
+
     def _get_channel_country_codes(self) -> list[str]:  # List channel countries.
         """Get list of country codes for AP channel lookup."""
         import importlib  # Import importlib.
@@ -14686,22 +14699,13 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             countries_function = countries_module.listCountryCodes  # Resolve the function.
             response = countries_function(self.api_session)  # Call the API.
             countries_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
-
             country_codes = self._extract_channel_country_codes(countries_data)  # Extract country codes.
-
             if country_codes:  # Have codes.
-                original_count = len(country_codes)  # Remember the count.
-                country_codes = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]
-                if len(country_codes) < original_count:  # Some were filtered.
-                    logging.debug(  # Trace the filter.
-                        "Filtered out %s invalid country codes for ap_channels", original_count - len(country_codes)
-                    )
-                print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")  # Tell the user.
+                country_codes = self._filter_to_iso2_country_codes(country_codes)  # ISO-2 filter + logging.
+                print(f"    ! Discovered {len(country_codes)} country codes for AP channel lookup")
                 return country_codes  # Return them.
-
         except Exception as error:  # Fetch failed.
             logging.warning("Failed to get countries list for AP channels: %s", error)  # Warn the failure.
-
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_CHANNEL_COUNTRIES)} countries")
         return self.FALLBACK_CHANNEL_COUNTRIES  # Use the fallback list.
 
@@ -14874,50 +14878,37 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
             print("! Warning: ConstInsightMetrics.csv was not created during dynamic export")
 
     @staticmethod
+    def _collect_metrics_for_scope(reader, normalized_target_scope: str) -> list[str]:
+        """Walk CSV rows and return metric names supporting the given scope."""
+        metrics_for_scope: list[str] = []  # Accumulate matching metric names.
+        for row in reader:  # Walk rows.
+            scopes = row.get("scopes", "")  # Read the scopes.
+            metric_name = row.get("metric_name", "")  # Read the metric name.
+            if not metric_name or not scopes:  # No name or no scopes.
+                continue  # Skip it.
+            if "{" in metric_name or "}" in metric_name:  # Skip placeholder/template metrics.
+                continue  # Skip it.
+            parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)  # Parse the scopes.
+            if normalized_target_scope in parsed_scopes:  # Scope matches.
+                metrics_for_scope.append(metric_name)  # Keep the metric.
+        return metrics_for_scope  # Return the list.
+
+    @staticmethod
     def get_by_scope(target_scope: str) -> list[str]:  # List metrics for a scope.
-        """
-        Read ConstInsightMetrics.csv and return metrics supporting the specified scope.
-
-        Args:
-            target_scope: The scope to filter by (e.g., 'site', 'client', 'device', 'ap')
-
-        Returns:
-            List of metric names that support the target scope
-        """
+        """Read ConstInsightMetrics.csv and return metrics supporting ``target_scope``."""
         csv_path = os.path.join("data", "ConstInsightMetrics.csv")  # CSV path.
-        metrics_for_scope: list[str] = []  # Matching metric names.
         normalized_target_scope = (target_scope or "").strip().lower()  # Normalize the target scope.
-
         try:
             if not os.path.exists(csv_path):  # File missing.
                 logging.warning("ConstInsightMetrics.csv not found at %s", csv_path)  # Warn it is missing.
                 return []  # Return empty.
-
             with open(csv_path, encoding="utf-8") as csvfile:  # Open the CSV.
                 reader = csv.DictReader(csvfile)  # Parse rows.
-                for row in reader:  # Walk rows.
-                    scopes = row.get("scopes", "")  # Read the scopes.
-                    metric_name = row.get("metric_name", "")  # Read the metric name.
-
-                    if not metric_name:  # No name.
-                        continue  # Skip it.
-
-                    if not scopes:  # No scopes.
-                        continue  # Skip it.
-
-                    parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)  # Parse the scopes.
-                    # Skip placeholder/template metrics that require token substitution.
-                    if "{" in metric_name or "}" in metric_name:  # Templated name.
-                        continue  # Skip it.
-
-                    if normalized_target_scope in parsed_scopes:  # Scope matches.
-                        metrics_for_scope.append(metric_name)  # Keep the metric.
-
+                metrics_for_scope = InsightMetricsUtils._collect_metrics_for_scope(reader, normalized_target_scope)
             logging.debug(  # Trace the count.
                 "Found %s metrics for scope '%s': %s", len(metrics_for_scope), target_scope, metrics_for_scope
             )
             return metrics_for_scope  # Return the metrics.
-
         except Exception as exception:  # Read failed.
             logging.error("Error reading ConstInsightMetrics.csv: %s", exception)  # Log the error.
             return []  # Return empty.
@@ -14934,98 +14925,89 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
         return set(tokens)  # Return the token set.
 
     @staticmethod
+    def _log_normalization_summary(metric_type: str, normalized_data: dict[str, list]) -> None:  # type: ignore[type-arg]
+        """Emit debug trace of normalized metric counts per bucket."""
+        logging.debug(  # Trace the parse.
+            "Normalized metric %s: %s summary, %s time series, %s results, %s sites",
+            metric_type,  # Metric type label.
+            len(normalized_data["summary"]),  # Summary row count.
+            len(normalized_data["time_series"]),  # Time series row count.
+            len(normalized_data["results"]),  # Results row count.
+            len(normalized_data["sites_data"]),  # Sites row count.
+        )
+
+    @staticmethod
     def parse_to_normalized_data(metric_data: dict, org_id: str) -> dict[str, list]:  # type: ignore[type-arg]
-        """
-        Parse a single insight metric into normalized data structures.
-
-        Args:
-            metric_data: Raw insight metric data from API
-            org_id: Organization ID
-
-        Returns:
-            Dict containing 'summary', 'time_series', 'results', 'sites_data' lists
-        """
+        """Parse one insight metric into 'summary'/'time_series'/'results'/'sites_data' lists."""
         normalized_data: dict[str, list] = {"summary": [], "time_series": [], "results": [], "sites_data": []}  # type: ignore[type-arg]
-
         try:
             metric_type = metric_data.get("metric_type", "unknown")  # Read the metric type.
-
-            summary_data = InsightMetricsUtils._extract_summary(metric_data, org_id, metric_type)
-            normalized_data["summary"].append(summary_data)  # Collect it.
-
-            time_series = InsightMetricsUtils._extract_time_series(metric_data, org_id, metric_type)
-            normalized_data["time_series"].extend(time_series)  # Collect it.
-
-            results = InsightMetricsUtils._extract_results(metric_data, org_id, metric_type)  # Extract results.
-            normalized_data["results"] = results  # Store them.
-
-            sites = InsightMetricsUtils._extract_sites_data(metric_data, org_id, metric_type)  # Extract sites data.
-            normalized_data["sites_data"] = sites  # Store it.
-
-            logging.debug(  # Trace the parse.
-                "Normalized metric %s: %s summary, %s time series, %s results, %s sites",
-                metric_type,
-                len(normalized_data["summary"]),
-                len(normalized_data["time_series"]),
-                len(normalized_data["results"]),
-                len(normalized_data["sites_data"]),
+            normalized_data["summary"].append(  # Add summary record.
+                InsightMetricsUtils._extract_summary(metric_data, org_id, metric_type)
             )
-
+            normalized_data["time_series"].extend(  # Add time series rows.
+                InsightMetricsUtils._extract_time_series(metric_data, org_id, metric_type)
+            )
+            normalized_data["results"] = InsightMetricsUtils._extract_results(metric_data, org_id, metric_type)
+            normalized_data["sites_data"] = InsightMetricsUtils._extract_sites_data(metric_data, org_id, metric_type)
+            InsightMetricsUtils._log_normalization_summary(metric_type, normalized_data)  # Trace counts.
         except Exception as exception:  # Parse failed.
             logging.error("Error parsing insight metric data: %s", exception)  # Log the error.
             logging.debug("Failed metric data structure: %s", metric_data)  # Trace the structure.
-
         return normalized_data  # Return normalized data.
+
+    SUMMARY_SCALAR_FIELDS = (  # Scalar fields copied verbatim from the raw metric payload.
+        "ap-health",
+        "ap-redundancy",
+        "capacity",
+        "coverage",
+        "num_active_wan_tunnels",
+        "num_aps",
+        "num_auth",
+        "num_auth_failure",
+        "num_auth_total",
+        "num_client",
+        "num_clients",
+        "num_gateways",
+        "num_mdm_client",
+        "num_mxedges",
+        "num_mxtunnels",
+        "num_nac_clients",
+        "num_switches",
+        "num_wan_clients",
+        "num_wired_clients",
+        "successful-connect",
+        "throughput",
+        "time-to-connect",
+    )
+
+    @staticmethod
+    def _build_summary_base(metric_data: dict, org_id: str, metric_type: str) -> dict:  # type: ignore[type-arg]
+        """Build the fixed-key portion of the summary record (org/metric metadata)."""
+        return {  # Header fields common to every metric type.
+            "org_id": org_id,  # Tenant org id.
+            "metric_type": metric_type,  # Logical metric name.
+            "data_source": metric_data.get("data_source", ""),  # API data source.
+            "start_time": metric_data.get("start", ""),  # Window start epoch.
+            "end_time": metric_data.get("end", ""),  # Window end epoch.
+            "interval_seconds": metric_data.get("interval", ""),  # Bucket interval.
+            "limit": metric_data.get("limit", ""),  # Page limit echoed back.
+            "total_sites": metric_data.get("total_sites", ""),  # Total sites count.
+            "page": metric_data.get("page", ""),  # Current page index.
+            "sle_category": metric_data.get("sle_category", ""),  # SLE category, if any.
+            "original_metric": metric_data.get("original_metric", ""),  # Original metric key.
+            "roaming": metric_data.get("roaming", ""),  # Roaming subtotal.
+            "total": metric_data.get("total", ""),  # Total counter.
+            "totalTunnelCount": metric_data.get("totalTunnelCount", ""),  # Tunnel count.
+        }
 
     @staticmethod
     def _extract_summary(metric_data: dict, org_id: str, metric_type: str) -> dict:  # type: ignore[type-arg]
         """Extract summary data from metric."""
-        summary_data = {  # Build the summary.
-            "org_id": org_id,
-            "metric_type": metric_type,
-            "data_source": metric_data.get("data_source", ""),
-            "start_time": metric_data.get("start", ""),
-            "end_time": metric_data.get("end", ""),
-            "interval_seconds": metric_data.get("interval", ""),
-            "limit": metric_data.get("limit", ""),
-            "total_sites": metric_data.get("total_sites", ""),
-            "page": metric_data.get("page", ""),
-            "sle_category": metric_data.get("sle_category", ""),
-            "original_metric": metric_data.get("original_metric", ""),
-            "roaming": metric_data.get("roaming", ""),
-            "total": metric_data.get("total", ""),
-            "totalTunnelCount": metric_data.get("totalTunnelCount", ""),
-        }
-
-        scalar_fields = [  # Scalar fields to copy.
-            "ap-health",
-            "ap-redundancy",
-            "capacity",
-            "coverage",
-            "num_active_wan_tunnels",
-            "num_aps",
-            "num_auth",
-            "num_auth_failure",
-            "num_auth_total",
-            "num_client",
-            "num_clients",
-            "num_gateways",
-            "num_mdm_client",
-            "num_mxedges",
-            "num_mxtunnels",
-            "num_nac_clients",
-            "num_switches",
-            "num_wan_clients",
-            "num_wired_clients",
-            "successful-connect",
-            "throughput",
-            "time-to-connect",
-        ]
-
-        for field_name in scalar_fields:  # Copy each field.
+        summary_data = InsightMetricsUtils._build_summary_base(metric_data, org_id, metric_type)  # Header.
+        for field_name in InsightMetricsUtils.SUMMARY_SCALAR_FIELDS:  # Append present scalars.
             if field_name in metric_data:  # Field present.
                 summary_data[field_name] = metric_data[field_name]  # Copy the value.
-
         return summary_data  # Return the summary.
 
     @staticmethod
@@ -15081,33 +15063,33 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
         return points  # Time-series points for this field.
 
     @staticmethod
+    def _parse_results_key(key: str) -> tuple[str, str] | None:
+        """Split a 'results_<index>_<field>' key into (index, field); return None if pattern fails."""
+        if not (key.startswith("results_") and "_" in key):  # Only results_* keys are valid here.
+            return None  # Reject non-matching keys.
+        parts = key.split("_", 2)  # Split into at most 3 parts: ['results', index, field].
+        if len(parts) < 3:  # Too few parts -- no field component.
+            return None  # Reject malformed keys.
+        return parts[1], parts[2]  # (index, field).
+
+    @staticmethod
     def _extract_results(metric_data: dict, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
         """Extract results array data from metric."""
-        results_data = []  # type: ignore[var-annotated]
-
+        results_data: list[dict] = []  # Accumulate result rows.
         for key, value in metric_data.items():  # Walk metric fields.
-            if not (key.startswith("results_") and "_" in key):  # Only results_* keys.
-                continue
-
-            parts = key.split("_", 2)  # Split the key.
-            if len(parts) < 3:  # Too few parts.
+            parsed = InsightMetricsUtils._parse_results_key(key)  # Parse the key shape.
+            if parsed is None:  # Not a results_* field.
                 continue  # Skip it.
-
-            result_index = parts[1]  # Result index.
-            result_field = parts[2]  # Result field.
-
+            result_index, result_field = parsed  # Unpack index/field.
             existing_result = next((r for r in results_data if r["result_index"] == result_index), None)
-
-            if existing_result is None:  # None yet.
-                existing_result = {  # Start a new result.
-                    "org_id": org_id,
-                    "metric_type": metric_type,
+            if existing_result is None:  # First field for this index.
+                existing_result = {  # Start a new result row.
+                    "org_id": org_id,  # Tenant org id.
+                    "metric_type": metric_type,  # Metric name.
                     "result_index": int(result_index) if result_index.isdigit() else result_index,
                 }
-                results_data.append(existing_result)  # Collect it.
-
-            existing_result[result_field] = value  # Set the field.
-
+                results_data.append(existing_result)  # Collect the new row.
+            existing_result[result_field] = value  # Set the field on the row.
         return results_data  # Return the results.
 
     @staticmethod
@@ -15200,42 +15182,30 @@ class DataCollectionManager:  # Continuous data collector.
     """
 
     @staticmethod
+    def _print_continuous_loop_banner() -> None:  # Print startup banner.
+        """Print the startup banner for menu 76's continuous collection loop."""
+        print(" Starting continuous data collection loop...")  # Banner line 1.
+        print("   This will collect core organizational data every 5 seconds")  # Banner line 2.
+        print("   Press CTRL+C to stop or create 'stop_loop.txt' file")  # Banner line 3.
+
+    @staticmethod
     def continuous_loop():  # Run the collection loop.
-        """
-        Menu 76: Continuously collect core organizational data.
-
-        Runs 5 key API calls in a loop with rate limiting:
-        1. Site list
-        2. Organization inventory
-        3. Organization device stats
-        4. Organization device port stats
-        5. VPN peer path stats
-
-        Stop by pressing CTRL+C or creating 'stop_loop.txt' file.
-        """
+        """Menu 76: continuously collect site/inventory/device-stat/port-stat/VPN-peer data until stop."""
         logging.info("Starting DataCollectionManager.continuous_loop")  # Log start.
-        print(" Starting continuous data collection loop...")  # Tell the user.
-        print("   This will collect core organizational data every 5 seconds")  # Tell the user.
-        print("   Press CTRL+C to stop or create 'stop_loop.txt' file")  # Tell the user how to stop.
-
+        DataCollectionManager._print_continuous_loop_banner()  # Show the user what's happening.
         loop_count = 0  # Iteration counter.
-
         try:
             while True:  # Loop until stopped.
                 loop_count += 1  # Count the iteration.
                 print(f"\n  Loop iteration {loop_count} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
                 if DataCollectionManager._check_stop_signal():  # Stop requested.
                     break  # Exit the loop.
-
                 DataCollectionManager._execute_collection_cycle(loop_count)  # Run one cycle.
-
         except KeyboardInterrupt:  # User pressed Ctrl+C.
             print("\n  Continuous data collection loop stopped by user.")  # Tell the user.
         except Exception as e:  # Unexpected failure.
             logging.error("Fatal error in continuous loop: %s", e)  # Log the error.
             print(f"! Fatal error in continuous loop: {e}")  # Tell the user.
-
         print(" Continuous data collection loop ended.")  # Tell the user ended.
 
     @staticmethod
@@ -15244,31 +15214,25 @@ class DataCollectionManager:  # Continuous data collector.
         return ConfigUtils.check_stop_signal()  # Delegate to config utils.
 
     @staticmethod
+    def _collection_cycle_steps() -> list[tuple[str, Any]]:
+        """Return the ordered (label, callable) pairs invoked each iteration of continuous_loop."""
+        return [  # Each tuple = printed banner + exporter function.
+            ("  Collecting site list...", OrgSiteExporter.sites),
+            ("  Collecting organization inventory...", OrgInventoryExporter.inventory),
+            ("  Collecting organization device stats...", OrgDeviceStatsExporter.device_stats),
+            ("  Collecting organization device port stats...", OrgDeviceStatsExporter.device_port_stats),
+            ("  Collecting VPN peer path stats...", OrgDeviceStatsExporter.vpn_peer_stats),
+        ]
+
+    @staticmethod
     def _execute_collection_cycle(loop_count: int) -> None:  # Run one collection cycle.
         """Execute one cycle of data collection with rate limiting."""
         try:
-            print("  Collecting site list...")  # Tell the user.
-            OrgSiteExporter.sites()  # type: ignore[no-untyped-call]
-            time.sleep(0.75)  # Pace the API.
-
-            print("  Collecting organization inventory...")  # Tell the user.
-            OrgInventoryExporter.inventory()  # type: ignore[no-untyped-call]
-            time.sleep(0.75)  # Pace the API.
-
-            print("  Collecting organization device stats...")  # Tell the user.
-            OrgDeviceStatsExporter.device_stats()  # Export device stats.
-            time.sleep(0.75)  # Pace the API.
-
-            print("  Collecting organization device port stats...")  # Tell the user.
-            OrgDeviceStatsExporter.device_port_stats()  # Export port stats.
-            time.sleep(0.75)  # Pace the API.
-
-            print("  Collecting VPN peer path stats...")  # Tell the user.
-            OrgDeviceStatsExporter.vpn_peer_stats()  # Export VPN peer stats.
-            time.sleep(0.75)  # Pace the API.
-
+            for banner, step_callable in DataCollectionManager._collection_cycle_steps():
+                print(banner)  # Tell the user which exporter is running.
+                step_callable()  # Invoke the per-step exporter.
+                time.sleep(0.75)  # Pace the API between exporters.
             print(f"  Loop {loop_count} completed successfully")  # Tell the user.
-
         except KeyboardInterrupt:  # Propagate Ctrl+C.
             raise  # Re-raise to outer handler
         except Exception as e:  # Cycle failed.
@@ -15716,33 +15680,39 @@ class GatewayExportUtils:  # Gateway export delegators.
     """Delegation wrapper for extracted gateway export utility implementation."""
 
     @staticmethod
+    @staticmethod
+    def _gateway_export_dependency_kwargs() -> dict:
+        """Build the kwargs dict passed to configure_gateway_export_utils_dependencies()."""
+        return dict(  # Single dependency-wiring payload assembled in one place.
+            apisession_dependency=apisession,  # Live mistapi session.
+            mistapi_dependency=mistapi,  # mistapi root module.
+            config_utils=ConfigUtils,  # Shared config helpers.
+            cache_utils=CacheUtils,  # Disk-cache helpers.
+            file_path_utils=FilePathUtils,  # Path helpers.
+            data_exporter=DataExporter,  # Output backend writer.
+            data_processing_utils=DataProcessingUtils,  # Flatten/normalize helpers.
+            api_fetch_utils=APIFetchUtils,  # Paged fetch helpers.
+            api_core_fetch_utils=APICoreFetchUtils,  # Core unwrap helpers.
+            org_inventory_exporter=OrgInventoryExporter,  # For inventory lookups.
+            org_site_exporter=OrgSiteExporter,  # For site lookups.
+            input_utils=InputUtils,  # safe_input + prompts.
+            connection_pool_fn=execute_with_connection_pool_management,  # Pool wrapper.
+            validation_utils=ValidationUtils,  # Input validation.
+            rate_limiting_utils=RateLimitingUtils,  # Adaptive delay.
+            mist_wan_target_ports=MIST_WAN_TARGET_PORTS,  # Port list constant.
+            mist_site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # Site filter prefix.
+            fast_mode_max_retries=FAST_MODE_MAX_RETRIES,  # Retry cap.
+            fast_mode_retry_delay=FAST_MODE_RETRY_DELAY,  # Delay between retries.
+            api_usage_cache=_api_usage_cache,  # Shared API usage cache.
+            tqdm_module=tqdm,  # Progress bar dependency.
+        )
+
+    @staticmethod
     def _configure_module():  # Configure the module.
         """Configure extracted gateway modules and return gateway export module handle."""
         from src.gateway import gateway_export_utils as gateway_export_module  # noqa: PLC0415,I001
 
-        configure_gateway_export_utils_dependencies(  # Wire dependencies.
-            apisession_dependency=apisession,
-            mistapi_dependency=mistapi,
-            config_utils=ConfigUtils,
-            cache_utils=CacheUtils,
-            file_path_utils=FilePathUtils,
-            data_exporter=DataExporter,
-            data_processing_utils=DataProcessingUtils,
-            api_fetch_utils=APIFetchUtils,
-            api_core_fetch_utils=APICoreFetchUtils,
-            org_inventory_exporter=OrgInventoryExporter,
-            org_site_exporter=OrgSiteExporter,
-            input_utils=InputUtils,
-            connection_pool_fn=execute_with_connection_pool_management,
-            validation_utils=ValidationUtils,
-            rate_limiting_utils=RateLimitingUtils,
-            mist_wan_target_ports=MIST_WAN_TARGET_PORTS,
-            mist_site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
-            fast_mode_max_retries=FAST_MODE_MAX_RETRIES,
-            fast_mode_retry_delay=FAST_MODE_RETRY_DELAY,
-            api_usage_cache=_api_usage_cache,
-            tqdm_module=tqdm,
-        )
+        configure_gateway_export_utils_dependencies(**GatewayExportUtils._gateway_export_dependency_kwargs())
         return gateway_export_module  # Return the module.
 
     @staticmethod
