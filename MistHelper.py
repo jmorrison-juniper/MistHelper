@@ -15817,26 +15817,15 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
         ExtractedMarvisTroubleshootUtils.network_connectivity(TroubleshootUtils._build_deps())  # Delegate to the impl.
 
     @staticmethod
-    def launch_interactive() -> None:  # Launch interactive Marvis.
-        """
-        Interactive Marvis (VNA) troubleshooting menu.
-
-        Guides users through troubleshooting options:
-        1. Client connectivity issues (guided selection)
-        2. Device performance problems (guided selection)
-        3. Network connectivity analysis (site-level)
-        4. View Marvis insights and capabilities
-        """
-        logging.info("Entering TroubleshootUtils.launch_interactive")  # Entry envelope for logging compliance
-        logging.debug("MARVIS DEBUG: Entering launch_interactive() method")  # Trace the entry.
+    def _print_marvis_menu() -> None:
+        """Print the interactive Marvis troubleshooting menu header + numbered options."""
         print(" Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting")  # Header.
         print("=" * 65)  # Divider.
         print()  # Spacer.
 
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        logging.debug("MARVIS DEBUG: Using org_id: %s for Marvis troubleshooting", org_id)  # %s not f-string
-        logging.debug("MARVIS DEBUG: Session state - authenticated: %s", apisession is not None)  # %s not f-string
-
+    @staticmethod
+    def _print_marvis_options() -> None:
+        """Print the 5 troubleshooting choices a user can pick."""
         print(" Marvis AI Troubleshooting Options:")  # Menu header.
         print("1. Troubleshoot client connectivity issues (guided client selection)")  # Option 1.
         print("2. Diagnose device performance problems (guided device selection)")  # Option 2.
@@ -15845,9 +15834,9 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
         print("5. Exit")  # Option 5.
         print()  # Spacer.
 
-        choice = InputUtils.safe_input("Select an option (1-5): ", context="marvis_launch_menu").strip()
-        logging.debug("MARVIS DEBUG: User selected option: %s", choice)  # %s not f-string
-
+    @staticmethod
+    def _dispatch_marvis_choice(choice: str) -> None:
+        """Dispatch the user's menu pick to the matching TroubleshootUtils entrypoint."""
         if choice == "1":  # Client connectivity.
             logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.client_connectivity()")  # Trace the call.
             TroubleshootUtils.client_connectivity()  # type: ignore[no-untyped-call]
@@ -15863,12 +15852,24 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
         elif choice == "5":  # Exit option.
             logging.debug("MARVIS DEBUG: User chose to exit")  # Trace the exit.
             print("Exiting Marvis troubleshooting.")  # Tell the user.
-            logging.info("Exiting TroubleshootUtils.launch_interactive via user exit choice")  # Exit envelope
-            return  # Return.
         else:
             print(" Invalid option selected.")  # Tell the user invalid.
             logging.warning("MARVIS DEBUG: Invalid troubleshooting option selected: %s", choice)  # %s not f-string
             logging.debug("MARVIS DEBUG: Exiting launch_interactive() due to invalid choice")  # Trace the exit.
+
+    @staticmethod
+    def launch_interactive() -> None:  # Launch interactive Marvis.
+        """Interactive Marvis (VNA) troubleshooting menu -- prompt + dispatch."""
+        logging.info("Entering TroubleshootUtils.launch_interactive")  # Entry envelope for logging compliance
+        logging.debug("MARVIS DEBUG: Entering launch_interactive() method")  # Trace the entry.
+        TroubleshootUtils._print_marvis_menu()  # Header + divider.
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
+        logging.debug("MARVIS DEBUG: Using org_id: %s for Marvis troubleshooting", org_id)  # %s not f-string
+        logging.debug("MARVIS DEBUG: Session state - authenticated: %s", apisession is not None)  # %s not f-string
+        TroubleshootUtils._print_marvis_options()  # Show numbered choices.
+        choice = InputUtils.safe_input("Select an option (1-5): ", context="marvis_launch_menu").strip()
+        logging.debug("MARVIS DEBUG: User selected option: %s", choice)  # %s not f-string
+        TroubleshootUtils._dispatch_marvis_choice(choice)  # Route to handler.
         logging.info("Exiting TroubleshootUtils.launch_interactive with choice: %s", choice)  # Exit envelope
 
     @staticmethod
@@ -16177,25 +16178,16 @@ class ARPCommandManager:  # ARP WebSocket command manager.
 
     @staticmethod
     def execute(site_id=None, device_id=None):  # Run the ARP command.
-        """
-        Execute ARP command on a device and receive output via WebSocket.
-
-        Args:
-            site_id: Optional site ID (prompts if not provided)
-            device_id: Optional device ID (prompts if not provided)
-        """
+        """Execute ARP command on a device and stream output via WebSocket (prompts for IDs when missing)."""
         if not site_id or not device_id:  # Prompt for ids.
             site_id, device_id = PromptClientUtils.select_site_and_device_ids(site_id, device_id)  # type: ignore[no-untyped-call]
         if not site_id or not device_id:  # Need both ids.
             return  # Abort.
-
         mist_host = getattr(apisession, "host", None) or os.getenv("MIST_HOST")  # Resolve the host.
         mist_apitoken = getattr(apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")  # Resolve the token.
-
         if not mist_host or not mist_apitoken:  # Missing credentials.
             print(" Mist host or API token not found in session or environment.")  # Tell the user.
             return  # Abort.
-
         print(" Subscribing to WebSocket stream...")  # Tell the user.
         session_id = ARPCommandManager._trigger_command(mist_host, mist_apitoken, site_id, device_id)  # type: ignore[no-untyped-call]
         if session_id:  # Have a session.
@@ -16222,58 +16214,77 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             return None  # Return None.
 
     @staticmethod
+    def _build_ws_subscribe(target: WebSocketStreamTarget) -> tuple[str, list[str], dict]:
+        """Return (ws_url, auth headers, subscribe payload) for the bundled stream target."""
+        ws_url = f"wss://{target.mist_host}/api-ws/v1/stream"  # Stream URL.
+        headers = [f"Authorization: Token {target.mist_apitoken}"]  # Auth header.
+        subscribe_msg = {  # Subscribe payload routed by site+device.
+            "subscribe": f"/sites/{target.site_id}/devices/{target.device_id}/cmd"
+        }
+        return ws_url, headers, subscribe_msg  # Bundle for the caller.
+
+    @staticmethod
+    def _make_ws_callbacks(
+        target: WebSocketStreamTarget,
+        state: dict,
+        output_lines: list[str],
+        debug: bool,
+        subscribe_msg: dict,
+    ) -> dict:
+        """Return on_message/on_close/on_error/on_open callbacks closed over a mutable state dict."""
+
+        def on_message(ws, message):  # WebSocket message handler.
+            state["last_message_time"], state["buffer"] = ARPCommandManager._handle_message(  # type: ignore[no-untyped-call]
+                message, target.session_id, state["buffer"], output_lines, debug
+            )
+
+        def on_close(ws, *args):  # WebSocket close handler.
+            ARPCommandManager._handle_close(output_lines, debug)  # type: ignore[no-untyped-call]
+
+        def on_error(ws, error):  # WebSocket error handler.
+            logging.error("! WebSocket error: %s", error)  # Log the error.
+
+        def on_open(ws):  # WebSocket open handler.
+            logging.info(" WebSocket opened. Subscribing...")  # Log the open.
+            ws.send(json.dumps(subscribe_msg))  # Send the subscribe.
+
+        return {"on_message": on_message, "on_close": on_close, "on_error": on_error, "on_open": on_open}
+
+    @staticmethod
+    def _poll_ws_idle(ws, state: dict, output_lines: list[str], timeout: int, idle_timeout: int) -> None:
+        """Poll the running WebSocket until idle-timeout-after-output or hard timeout."""
+        start_time = time.time()  # Start the timer.
+        while time.time() - start_time < timeout:  # Poll until timeout.
+            time.sleep(1)  # Pace the poll.
+            if time.time() - state["last_message_time"] > idle_timeout and output_lines:  # Idle with output.
+                logging.info(" Idle timeout reached. Closing WebSocket.")  # Log the idle close.
+                ws.close()  # Close the socket.
+                break  # Stop polling.
+        if ws.keep_running:  # Still running -- hard timeout fired.
+            logging.warning(" Timeout waiting for ARP output.")  # Warn the timeout.
+            ws.close()  # Close the socket.
+
+    @staticmethod
     def _listen_for_output(target: WebSocketStreamTarget, timeout=30, idle_timeout=3, debug=False):
         """Listen for WebSocket command output from a device (issue #470: connection identity in target)."""
         if debug:  # Debug mode.
             websocket.enableTrace(True)  # Trace the WebSocket.
-
-        ws_url = f"wss://{target.mist_host}/api-ws/v1/stream"  # Stream URL from the bundled target (issue #470).
-        headers = [f"Authorization: Token {target.mist_apitoken}"]  # Auth header from the bundled target (issue #470).
-        subscribe_msg = {
-            "subscribe": f"/sites/{target.site_id}/devices/{target.device_id}/cmd"
-        }  # Subscribe message built from the bundled target identity (issue #470).
-
+        ws_url, headers, subscribe_msg = ARPCommandManager._build_ws_subscribe(target)  # Build endpoint.
+        state: dict = {"last_message_time": time.time(), "buffer": ""}  # Shared callback state.
         output_lines: list[str] = []  # Collect output lines.
-        buffer = ""  # Reassembly buffer.
-        last_message_time = time.time()  # Last-message time.
-
-        def on_message(ws, message):  # Handle a message.
-            nonlocal last_message_time, buffer, output_lines  # Share outer state.
-            last_message_time, buffer = ARPCommandManager._handle_message(  # type: ignore[no-untyped-call]
-                message, target.session_id, buffer, output_lines, debug
-            )
-
-        def on_close(ws, *args):  # Handle close.
-            ARPCommandManager._handle_close(output_lines, debug)  # type: ignore[no-untyped-call]
-
-        def on_error(ws, error):  # Handle error.
-            logging.error("! WebSocket error: %s", error)  # Log the error.
-
-        def on_open(ws):  # Handle open.
-            logging.info(" WebSocket opened. Subscribing...")  # Log the open.
-            ws.send(json.dumps(subscribe_msg))  # Send the subscribe.
-
-        ws = websocket.WebSocketApp(  # Build the WebSocket app.
-            ws_url, header=headers, on_message=on_message, on_error=on_error, on_close=on_close, on_open=on_open
-        )
-
-        def run_ws():  # Run the WebSocket.
-            ws.run_forever()  # Block on the socket.
-
-        ws_thread = threading.Thread(target=run_ws)  # Run it in a thread.
+        callbacks = ARPCommandManager._make_ws_callbacks(target, state, output_lines, debug, subscribe_msg)
+        ws = websocket.WebSocketApp(ws_url, header=headers, **callbacks)  # Build the WebSocket app.
+        ws_thread = threading.Thread(target=ws.run_forever)  # Run it in a thread.
         ws_thread.start()  # Start the thread.
+        ARPCommandManager._poll_ws_idle(ws, state, output_lines, timeout, idle_timeout)  # Wait for completion.
 
-        start_time = time.time()  # Start the timer.
-        while time.time() - start_time < timeout:  # Poll until timeout.
-            time.sleep(1)  # Pace the poll.
-            if time.time() - last_message_time > idle_timeout and output_lines:  # Idle with output.
-                logging.info(" Idle timeout reached. Closing WebSocket.")  # Log the idle close.
-                ws.close()  # Close the socket.
-                break  # Stop polling.
-
-        if ws.keep_running:  # Still running.
-            logging.warning(" Timeout waiting for ARP output.")  # Warn the timeout.
-            ws.close()  # Close the socket.
+    @staticmethod
+    def _drain_buffer_to_lines(buffer: str, output_lines: list[str]) -> str:
+        """Split complete newline-terminated lines out of buffer, append them, and return the remainder."""
+        while "\n" in buffer:  # Split on newlines.
+            line, buffer = buffer.split("\n", 1)  # Pop one line.
+            output_lines.append(line)  # Collect it.
+        return buffer  # Return the remaining tail.
 
     @staticmethod
     def _handle_message(message, session_id, buffer, output_lines, debug=False):  # Parse one ARP message.
@@ -16282,30 +16293,23 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         try:
             if debug:  # Debug mode.
                 logging.debug("WebSocket raw message received: %s", message)  # Trace the raw message.
-
             msg = json.loads(message)  # Parse the JSON.
             data_str = msg.get("data", "{}")  # Read the data string.
             data_obj = json.loads(data_str) if isinstance(data_str, str) else data_str  # Parse nested JSON.
             inner_data = data_obj.get("data", {})  # Read the inner data.
             if isinstance(inner_data, str):  # String payload.
                 inner_data = json.loads(inner_data)  # Parse it.
-
             if inner_data.get("session") == session_id:  # Session matches.
                 raw_output = inner_data.get("raw", "")  # Read the raw output.
-                buffer += raw_output  # Append to buffer.
-                while "\n" in buffer:  # Split on newlines.
-                    line, buffer = buffer.split("\n", 1)  # Pop one line.
-                    output_lines.append(line)  # Collect it.
+                buffer = ARPCommandManager._drain_buffer_to_lines(buffer + raw_output, output_lines)  # Drain.
                 if debug:  # Debug mode.
                     logging.debug("Processed WebSocket data: %s chars", len(raw_output))  # Trace the size.
-
         except json.JSONDecodeError as e:  # JSON decode failed.
             logging.error("WebSocket message JSON decode error: %s", e)  # Log the error.
         except KeyError as e:  # Missing key.
             logging.warning("WebSocket message missing expected key: %s", e)  # Warn the gap.
         except Exception as e:  # Unexpected failure.
             logging.error("Unexpected error parsing WebSocket message: %s", e)  # Log the error.
-
         return last_message_time, buffer  # Return time and buffer.
 
     @staticmethod
@@ -16374,40 +16378,41 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             logging.error("! Failed to save ARP output to file: %s", e)  # Log the error.
 
     @staticmethod
+    def _split_arp_text_into_datasets(raw_text: str) -> tuple[list[list[str]], list[list[str]]]:
+        """Split raw ARP text into two tab-delimited datasets separated by a 'Total' marker line."""
+        lines = raw_text.splitlines()  # Split into lines.
+        dataset1: list[list[str]] = []  # First dataset.
+        dataset2: list[list[str]] = []  # Second dataset.
+        current_dataset = dataset1  # Start with the first.
+        for line in lines:  # Walk lines.
+            if "Total" in line:  # Total marker.
+                current_dataset = dataset2  # Switch datasets.
+                continue  # Marker isn't a row.
+            columns = [col.strip() for col in line.split("\t") if col.strip()]  # Split the columns.
+            if columns:  # Have columns.
+                current_dataset.append(columns)  # Collect the row.
+        return dataset1, dataset2  # Return both datasets.
+
+    @staticmethod
+    def _write_dataset_csv(path: str, rows: list[list[str]]) -> None:
+        """Write a single dataset to a CSV file and announce the row count."""
+        with open(path, "w", newline="", encoding="utf-8") as fout:  # Open the CSV.
+            writer = csv.writer(fout)  # CSV writer.
+            writer.writerows(rows)  # Write the rows.
+        print(f"! Saved {len(rows)} rows to {path}")  # Tell the user.
+
+    @staticmethod
     def _export_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
         """Export ARP output to CSV files."""
         try:
             txt_file_path = FilePathUtils.get_csv_path(txt_filename)  # Source path.
             csv1_path = FilePathUtils.get_csv_path(csv1)  # First CSV path.
             csv2_path = FilePathUtils.get_csv_path(csv2)  # Second CSV path.
-
             with open(txt_file_path, encoding="utf-8") as f:  # Open the source.
                 raw_text = f.read()  # Read the text.
-
-            lines = raw_text.splitlines()  # Split into lines.
-            dataset1: list[list[str]] = []  # First dataset.
-            dataset2: list[list[str]] = []  # Second dataset.
-            current_dataset = dataset1  # Start with the first.
-
-            for line in lines:  # Walk lines.
-                if "Total" in line:  # Total marker.
-                    current_dataset = dataset2  # Switch datasets.
-                else:
-                    columns = [col.strip() for col in line.split("\t") if col.strip()]  # Split the columns.
-                    if columns:  # Have columns.
-                        current_dataset.append(columns)  # Collect the row.
-
-            with open(csv1_path, "w", newline="", encoding="utf-8") as f1:  # Open the first CSV.
-                writer = csv.writer(f1)  # CSV writer.
-                writer.writerows(dataset1)  # Write the rows.
-
-            with open(csv2_path, "w", newline="", encoding="utf-8") as f2:  # Open the second CSV.
-                writer = csv.writer(f2)  # CSV writer.
-                writer.writerows(dataset2)  # Write the rows.
-
-            print(f"! Saved {len(dataset1)} rows to {csv1_path}")  # Tell the user.
-            print(f"! Saved {len(dataset2)} rows to {csv2_path}")  # Tell the user.
-
+            dataset1, dataset2 = ARPCommandManager._split_arp_text_into_datasets(raw_text)  # Split.
+            ARPCommandManager._write_dataset_csv(csv1_path, dataset1)  # Write first CSV.
+            ARPCommandManager._write_dataset_csv(csv2_path, dataset2)  # Write second CSV.
         except Exception as e:  # Export failed.
             print(f"! Failed to export ARP output to CSV: {e}")  # Tell the user.
 
@@ -16470,38 +16475,36 @@ class AddressComparisonCounters:  # Address comparison counters.
 class InventoryCSVComparator:  # Inventory CSV comparator.
     """Compare Mist inventory with CSV. Delegated to src.inventory.csv_comparator."""
 
+    @staticmethod
+    def _build_impl_kwargs(fast: bool, address_check: bool, debug: bool, skip_ssl_verify: bool) -> dict:
+        """Bundle inventory comparator dependencies into the constructor kwargs dict for the impl."""
+        return {  # Single source of truth for the impl's 14 dependencies.
+            "fast": fast,  # Caching/speed flag.
+            "address_check": address_check,  # Address validation flag.
+            "debug": debug,  # Debug logging flag.
+            "skip_ssl_verify": skip_ssl_verify,  # SSL verify flag.
+            "apisession": apisession,  # Shared API session.
+            "get_csv_path_fn": FilePathUtils.get_csv_path,  # CSV path resolver.
+            "check_and_generate_csv_fn": CacheUtils.check_and_generate_csv,  # Cache-aware CSV builder.
+            "create_parse_failures_csv_fn": CacheUtils.create_address_parse_failures_csv,  # Parse-failure exporter.
+            "devices_with_site_info_fn": OrgInventoryExporter.devices_with_site_info,  # Inventory fetcher.
+            "get_org_id_fn": ConfigUtils.get_cached_or_prompted_org_id,  # Org-id resolver.
+            "get_device_identifier_fn": DeviceUtils.get_device_identifier,  # Device-id resolver.
+            "address_utils_cls": AddressUtils,  # Address parsing utility class.
+            "nominatim_validator_cls": NominatimValidator,  # External validator class.
+            "address_validation_config_cls": AddressValidationConfig,  # Validation config class.
+        }
+
     def __init__(  # Capture comparison inputs.
         self, fast: bool = False, address_check: bool = False, debug: bool = False, skip_ssl_verify: bool = True
     ):
-        """
-        Initialize the inventory comparator with configuration options.
-
-        Args:
-            fast: Enable optimized data generation with caching
-            address_check: Enable external address validation via Nominatim
-            debug: Enable detailed debug logging
-            skip_ssl_verify: Skip SSL verification for external APIs
-        """
+        """Initialize the inventory comparator (fast/address_check/debug/skip_ssl_verify flags)."""
         from src.inventory.csv_comparator import (
             InventoryCSVComparator as _Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        self._impl = _Impl(  # Build the impl.
-            fast=fast,
-            address_check=address_check,
-            debug=debug,
-            skip_ssl_verify=skip_ssl_verify,
-            apisession=apisession,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-            create_parse_failures_csv_fn=CacheUtils.create_address_parse_failures_csv,
-            devices_with_site_info_fn=OrgInventoryExporter.devices_with_site_info,
-            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
-            get_device_identifier_fn=DeviceUtils.get_device_identifier,
-            address_utils_cls=AddressUtils,
-            nominatim_validator_cls=NominatimValidator,
-            address_validation_config_cls=AddressValidationConfig,
-        )
+        kwargs = InventoryCSVComparator._build_impl_kwargs(fast, address_check, debug, skip_ssl_verify)  # Bundle deps.
+        self._impl = _Impl(**kwargs)  # Build the impl.
 
     def execute(self) -> None:  # Run the comparison.
         """Execute the complete inventory comparison workflow."""
@@ -17068,32 +17071,27 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         for obj in objects:  # Process each object in the batch
             self._process_import_object(config_type, obj, dry_run, results)  # Delegate per-object logic
 
-    def _process_import_object(  # type: ignore[type-arg]
-        self,
-        config_type: dict,
-        obj: dict,
-        dry_run: bool,
-        results: list,
-    ) -> None:
+    def _clean_and_remap(self, obj: dict, type_key: str) -> dict:  # type: ignore[type-arg]
+        """Strip source-org-specific fields from an import object then remap its cross-references."""
+        cleaned = self._strip_source_fields(obj)  # Remove source-org-specific fields.
+        cleaned = self._remap_object_references(cleaned, type_key)  # Remap cross-references to dest IDs.
+        return cleaned  # Return the cleaned + remapped object.
+
+    def _process_import_object(self, config_type: dict, obj: dict, dry_run: bool, results: list) -> None:  # type: ignore[type-arg]
         """Process a single object: conflict check, remap, create or skip."""
         obj_name = obj.get("name", "unnamed")  # Extract object name for logging and reporting
         source_id = obj.get("id", "")  # Capture source org ID for remapping
         type_key = config_type["key"]  # Bundle key for this config type
         label = "[DRY RUN] " if dry_run else ""  # Prefix for output
-
         conflict = self._detect_conflicts(obj, type_key)  # Check for name/subnet conflicts
         if conflict:  # Conflict found -- skip and record
             self._record_conflict(type_key, obj_name, source_id, conflict, results)  # Record the conflict.
             return  # Skip it.
-
-        cleaned = self._strip_source_fields(obj)  # Remove source-org-specific fields
-        cleaned = self._remap_object_references(cleaned, type_key)  # Remap cross-references to dest IDs
-
+        cleaned = self._clean_and_remap(obj, type_key)  # Strip + remap.
         if dry_run:  # Preview mode -- don't make API calls
             print(f"      {label}Would import: {obj_name}")  # Show what would happen
             results.append({"type": type_key, "name": obj_name, "status": "would_import"})  # Record for report
             return  # Abort.
-
         self._create_and_record(config_type, cleaned, obj_name, source_id, results)  # Create via API
 
     def _record_conflict(  # type: ignore[type-arg]
@@ -17259,33 +17257,30 @@ class WANProbeConfigManager:  # WAN probe config manager.
         manager = cls()  # Build the manager.
         manager._execute(dry_run)  # Run the flow.
 
+    def _announce_no_wan_interfaces(self) -> None:
+        """Print and log the 'no WAN interfaces found' message for the menu #166 dry-run path."""
+        print("\n  No WAN interfaces found in selected templates.")  # Tell the user.
+        print("  No changes needed.")  # Tell the user.
+        logging.info("Menu #166: No WAN interfaces found in selected templates")  # Log it.
+
     def _execute(self, dry_run: bool) -> None:  # Run the probe config flow.
         """Main execution flow for WAN probe configuration."""
         self._display_header(dry_run)  # Show the header.
-
         if not self._initialize():  # Initialize state.
             return  # Abort.
-
         if not self._load_data():  # Load the data.
             return  # Abort.
-
         templates_to_modify = self._select_templates()  # Select templates.
         if not templates_to_modify:  # None selected.
             return  # Abort.
-
         templates_with_changes = self._analyze_templates(templates_to_modify)  # Analyze templates.
         if not templates_with_changes:  # No changes.
-            print("\n  No WAN interfaces found in selected templates.")  # Tell the user.
-            print("  No changes needed.")  # Tell the user.
-            logging.info("Menu #166: No WAN interfaces found in selected templates")  # Log it.
+            self._announce_no_wan_interfaces()  # Announce and log.
             return  # Abort.
-
         self._show_preview(templates_with_changes, dry_run)  # Show the preview.
-
         if not dry_run:  # Real run.
             if not self._confirm_operation(len(templates_with_changes)):  # Need confirmation.
                 return  # Abort.
-
         results = self._apply_changes(templates_with_changes, dry_run)  # Apply the changes.
         self._generate_report(results, dry_run)  # Generate the report.
 
@@ -17315,26 +17310,8 @@ class WANProbeConfigManager:  # WAN probe config manager.
             return False  # Abort.
         return True  # Initialized.
 
-    def _load_data(self) -> bool:  # Load the data.
-        """Load gateway templates and site data. Returns True on success."""
-        print("\n  Loading gateway template data...")  # Tell the user.
-        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Refresh sites CSV.
-
-        templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")  # Templates path.
-        with open(templates_path, encoding="utf-8") as file_handle:  # Open the CSV.
-            self.templates = list(csv.DictReader(file_handle))  # Read the templates.
-
-        if not self.templates:  # No templates.
-            print(" No gateway templates found.")  # Tell the user.
-            logging.warning("Menu #166: No gateway templates available")  # Warn none.
-            return False  # Abort.
-
-        sites_path = FilePathUtils.get_csv_path("SiteList.csv")  # Sites path.
-        with open(sites_path, encoding="utf-8") as file_handle:  # Open the CSV.
-            self.sites = list(csv.DictReader(file_handle))  # Read the sites.
-
-        # Build template site counts (excluding sites matching MIST_SITE_EXCLUDE_PREFIX)
+    def _build_template_site_counts(self) -> None:
+        """Tally how many sites reference each gateway template (skipping MIST_SITE_EXCLUDE_PREFIX names)."""
         for site in self.sites:  # Walk sites.
             if MIST_SITE_EXCLUDE_PREFIX and site.get("name", "").startswith(MIST_SITE_EXCLUDE_PREFIX):
                 continue  # Skip it.
@@ -17342,47 +17319,48 @@ class WANProbeConfigManager:  # WAN probe config manager.
             if template_id:  # Have a template.
                 self.template_site_counts[template_id] = self.template_site_counts.get(template_id, 0) + 1
 
+    def _load_data(self) -> bool:  # Load the data.
+        """Load gateway templates and site data. Returns True on success."""
+        print("\n  Loading gateway template data...")  # Tell the user.
+        CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
+        CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Refresh sites CSV.
+        templates_path = FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")  # Templates path.
+        with open(templates_path, encoding="utf-8") as file_handle:  # Open the CSV.
+            self.templates = list(csv.DictReader(file_handle))  # Read the templates.
+        if not self.templates:  # No templates.
+            print(" No gateway templates found.")  # Tell the user.
+            logging.warning("Menu #166: No gateway templates available")  # Warn none.
+            return False  # Abort.
+        sites_path = FilePathUtils.get_csv_path("SiteList.csv")  # Sites path.
+        with open(sites_path, encoding="utf-8") as file_handle:  # Open the CSV.
+            self.sites = list(csv.DictReader(file_handle))  # Read the sites.
+        self._build_template_site_counts()  # Tally per-template site counts.
         logging.info("Loaded %s gateway templates and %s sites", len(self.templates), len(self.sites))
         return True  # Loaded.
 
-    def _select_templates(self) -> list[dict[str, Any]]:  # Select templates.
-        """Display templates and get user selection. Returns selected templates."""
-        templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())  # Sort by name.
-
+    def _render_template_list(self, templates_sorted: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Print the menu of available gateway templates and return the matching display rows."""
         print(f"\n  Available Gateway Templates ({len(templates_sorted)}):")  # Tell the user.
-        template_list = []  # Display rows.
+        template_list: list[dict[str, Any]] = []  # Display rows.
         for idx, template in enumerate(templates_sorted, start=1):  # Enumerate templates.
             template_id = template.get("id", "")  # Template id.
             template_name = template.get("name", "Unnamed Template")  # Template name.
             site_count = self.template_site_counts.get(template_id, 0)  # Site count.
             template_list.append({"id": template_id, "name": template_name, "site_count": site_count})
             print(f"   [{idx}] {template_name} ({site_count} sites)")  # Print the option.
+        return template_list  # Return rows for selection.
 
-        print("\n  Template Selection:")  # Selection header.
-        print("   Enter template numbers (comma-separated, e.g., 1,3,5)")  # Tell the user.
-        print("   Or 'all' to modify all templates")  # Tell the user.
-        print("   Or 'cancel' to abort")  # Tell the user.
-
-        selection = (  # Read the selection.
-            InputUtils.safe_input(
-                "\n  Selection: ",
-                context="wan_probe_template_selection",
-            )
-            .strip()
-            .lower()
-        )
-
+    def _parse_template_selection(self, selection: str, template_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Parse a user template-selection string into the matching template rows (empty list on failure)."""
         if selection == "cancel":  # User cancelled.
             print(" Operation cancelled.")  # Tell the user.
             logging.info("Menu #166 cancelled by user at template selection")  # Log the cancel.
             return []  # Return empty.
-
         if selection == "all":  # Select all.
             return template_list  # Return all templates.
-
         try:
             indices = [int(idx.strip()) - 1 for idx in selection.split(",")]  # Parse the indices.
-            selected = [template_list[idx] for idx in indices if 0 <= idx < len(template_list)]  # Resolve to templates.
+            selected = [template_list[idx] for idx in indices if 0 <= idx < len(template_list)]  # Resolve.
             if not selected:  # None valid.
                 print(" No valid templates selected.")  # Tell the user.
                 return []  # Return empty.
@@ -17391,6 +17369,17 @@ class WANProbeConfigManager:  # WAN probe config manager.
             print(f" Invalid selection: {error}")  # Tell the user.
             logging.error("Menu #166: Invalid template selection: %s", error)  # Log the error.
             return []  # Return empty.
+
+    def _select_templates(self) -> list[dict[str, Any]]:  # Select templates.
+        """Display templates and get user selection. Returns selected templates."""
+        templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())  # Sort by name.
+        template_list = self._render_template_list(templates_sorted)  # Show menu + collect rows.
+        print("\n  Template Selection:")  # Selection header.
+        print("   Enter template numbers (comma-separated, e.g., 1,3,5)")  # Tell the user.
+        print("   Or 'all' to modify all templates")  # Tell the user.
+        print("   Or 'cancel' to abort")  # Tell the user.
+        selection = InputUtils.safe_input("\n  Selection: ", context="wan_probe_template_selection").strip().lower()
+        return self._parse_template_selection(selection, template_list)  # Parse + resolve.
 
     def _analyze_templates(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Fetch and analyze templates for WAN interfaces. Returns templates with changes."""
