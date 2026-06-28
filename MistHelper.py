@@ -5610,6 +5610,22 @@ class DisplayUtils:
     """
 
     @staticmethod
+    def _apply_sort_if_valid(table: PrettyTable, sortby: str | None, fields: list[str]) -> None:
+        """Set table.sortby only when caller supplied a column name that exists in `fields`."""
+        if not sortby:  # No sort request
+            return
+        if sortby not in fields:  # Column not in this rendering — ignore silently
+            return
+        table.sortby = sortby  # Honor request
+
+    @staticmethod
+    def _populate_table_rows(table: PrettyTable, data: list[dict[str, Any]], fields: list[str]) -> None:
+        """Append one row per input dict, pulling each cell in `fields` column order (default '')."""
+        for item in data:  # Walk every input row
+            row = [item.get(field, "") for field in fields]  # Pull cells in column order, default ""
+            table.add_row(row)
+
+    @staticmethod
     def dict_list_as_pretty_table(
         data: list[dict[str, Any]], fields: list[str] | None = None, sortby: str | None = None
     ) -> None:
@@ -5619,11 +5635,8 @@ class DisplayUtils:
         fields = fields or DataProcessingUtils.get_unique_keys(data)  # type: ignore[no-untyped-call]
         table = PrettyTable()  # Build a fresh table per call
         table.field_names = fields  # Apply column ordering
-        if sortby and sortby in fields:  # Honor caller's sort request when the column exists
-            table.sortby = sortby
-        for item in data:  # Walk every input row
-            row = [item.get(field, "") for field in fields]  # Pull cells in column order, default ""
-            table.add_row(row)
+        DisplayUtils._apply_sort_if_valid(table, sortby, fields)  # Optional sort
+        DisplayUtils._populate_table_rows(table, data, fields)  # Fill cells
         logging.debug("\n%s", table.get_string())  # Emit fully rendered table at debug level
 
     @staticmethod
@@ -7232,27 +7245,42 @@ class DataExporter:  # Multi-backend export facade.
     _router_initialized: bool = False  # One-shot guard so the lazy router init runs exactly once per process.
     _last_snapshot_times: dict[str, float] = {}  # Per-table last-snapshot epoch times used to throttle snapshots.
 
+    @staticmethod
+    def _polyglot_db_layer_available() -> bool:
+        """True when the optional polyglot DB layer was imported and exposes every name we use."""
+        if not DB_LAYER_AVAILABLE:  # Optional dependency not installed
+            return False
+        if DatabaseConfig is None:  # Module loaded but config class missing — treat as unavailable
+            return False
+        if configure_db_logging is None:  # Logger setup missing
+            return False
+        return DatabaseRouter is not None  # Final required symbol
+
+    @classmethod
+    def _build_polyglot_router(cls) -> None:
+        """Construct DatabaseRouter from env (called only when the polyglot layer is available)."""
+        try:  # Router construction reads env and opens connections — guard against any startup failure
+            configure_db_logging()  # Route DB layer's logger into MistHelper logging before first use
+            config = DatabaseConfig.from_env()  # Build connection settings from .env so secrets stay out of code
+            cls._router = DatabaseRouter(  # Cache the shared router on the class for every later export call
+                config,  # Pass env-derived connection/configuration object
+                strategies=ENDPOINT_PRIMARY_KEY_STRATEGIES,  # Per-endpoint primary-key upsert strategies
+            )
+            logging.info("Polyglot DatabaseRouter initialized")  # Confirm successful backend startup
+        except Exception as error:  # Never let optional-backend startup crash a core CSV/SQLite export
+            logging.warning("DatabaseRouter init failed, CSV/SQLite only: %s", error)  # Surface degraded mode
+            cls._router = None  # Force safe CSV/SQLite path when router could not be constructed
+
     @classmethod
     def _init_router(cls) -> None:  # Lazy polyglot router init.
         """Initialize polyglot DatabaseRouter once (lazy, idempotent)."""
-        if cls._router_initialized:  # Skip all work when a prior call already attempted initialization.
-            return  # Idempotent early-out keeps repeated export calls cheap.
-        cls._router_initialized = True  # Latch the guard before fallible work so a failure does not retry endlessly.
-        # Treat the layer as unavailable unless the flag is set AND all three names imported (not None).
-        if not DB_LAYER_AVAILABLE or DatabaseConfig is None or configure_db_logging is None or DatabaseRouter is None:
-            logging.debug("Polyglot DB layer not installed - CSV/SQLite only")  # Record the CSV/SQLite-only fallback.
-            return  # Nothing more to wire up without the polyglot DB layer present.
-        try:  # Router construction reads env and opens connections, so guard against any startup failure.
-            configure_db_logging()  # Route the DB layer's logger into MistHelper logging before first use.
-            config = DatabaseConfig.from_env()  # Build connection settings from .env so secrets stay out of code.
-            cls._router = DatabaseRouter(  # Cache the shared router on the class for every later export call.
-                config,  # Pass the env-derived connection/configuration object.
-                strategies=ENDPOINT_PRIMARY_KEY_STRATEGIES,  # Supply per-endpoint primary-key upsert strategies.
-            )
-            logging.info("Polyglot DatabaseRouter initialized")  # Confirm the polyglot backend came up successfully.
-        except Exception as error:  # Never let optional-backend startup crash a core CSV/SQLite export.
-            logging.warning("DatabaseRouter init failed, CSV/SQLite only: %s", error)  # Surface the degraded mode.
-            cls._router = None  # Force the safe CSV/SQLite path when the router could not be constructed.
+        if cls._router_initialized:  # Skip when a prior call already attempted init
+            return
+        cls._router_initialized = True  # Latch the guard before fallible work
+        if not DataExporter._polyglot_db_layer_available():  # Optional polyglot layer not installed
+            logging.debug("Polyglot DB layer not installed - CSV/SQLite only")
+            return
+        cls._build_polyglot_router()  # Construct router (catches startup failures internally)
 
     @staticmethod
     def _dispatch_format_write(
@@ -7315,30 +7343,40 @@ class DataExporter:  # Multi-backend export facade.
         return False  # Containerized: not standalone.
 
     @staticmethod
+    def _should_skip_polyglot(api_function_name: str | None) -> bool:
+        """Decide whether the polyglot write should be skipped (no API name / layer / standalone / no router)."""
+        if not api_function_name or not DB_LAYER_AVAILABLE:  # Need API name AND DB layer present
+            return True
+        if DataExporter._is_standalone_mode():  # Standalone bypasses polyglot
+            return True
+        DataExporter._init_router()  # Lazy router init
+        return DataExporter._router is None  # Skip if router could not be built
+
+    @staticmethod
+    def _perform_polyglot_write(payload: list[dict[str, Any]], api_function_name: str) -> None:
+        """Issue the actual router write call, logging result; never raises (logs warning on failure)."""
+        try:
+            result = DataExporter._router.write(payload, api_function_name)  # Write to polyglot DB
+            logging.info(  # Log the polyglot result
+                "Polyglot write: backend=%s, written=%s, failed=%s",
+                result.backend,
+                result.records_written,
+                result.records_failed,
+            )
+        except Exception as error:  # Never let polyglot break CSV
+            logging.warning("Polyglot write failed (CSV preserved): %s", error)
+
+    @staticmethod
     def _route_to_polyglot(  # Mirror writes to polyglot DB.
         data: list[dict[str, Any]],
         api_function_name: str | None,
         raw_data: list[dict[str, Any]] | None = None,
     ) -> None:
         """Send data to polyglot backends (ArangoDB/Redis) if available."""
-        if not api_function_name or not DB_LAYER_AVAILABLE:  # Need API name and DB layer.
-            return  # Skip polyglot mirror.
-        if DataExporter._is_standalone_mode():  # Standalone skips polyglot.
-            return  # Skip polyglot mirror.
-        DataExporter._init_router()  # Ensure the router exists.
-        if DataExporter._router is None:  # Router unavailable.
-            return  # Skip polyglot mirror.
-        try:
-            polyglot_data = raw_data or data  # Prefer raw payload.
-            result = DataExporter._router.write(polyglot_data, api_function_name)  # Write to polyglot DB.
-            logging.info(  # Log the polyglot result.
-                "Polyglot write: backend=%s, written=%s, failed=%s",
-                result.backend,
-                result.records_written,
-                result.records_failed,
-            )
-        except Exception as error:  # Never let polyglot break CSV.
-            logging.warning("Polyglot write failed (CSV preserved): %s", error)  # polyglot warn.
+        if DataExporter._should_skip_polyglot(api_function_name):  # Combined eligibility check
+            return
+        polyglot_data = raw_data or data  # Prefer raw payload when caller supplied it
+        DataExporter._perform_polyglot_write(polyglot_data, api_function_name)  # Issue write (catches errors)
 
     @classmethod
     def _check_periodic_snapshot(  # Throttle periodic snapshots.
@@ -8302,22 +8340,27 @@ class PromptUtils:  # General prompt helpers.
         return PromptUtils._resolve_device_selection(user_input, index_to_device, name_to_device)  # Resolve.
 
     @staticmethod
+    def _filter_inventory_by_type(inventory: list, device_type: str) -> list:
+        """Filter inventory rows by comma-separated device types (case-insensitive); 'all' returns input as-is."""
+        if device_type == "all":  # No filter needed
+            return inventory
+        requested_types = [dtype.strip() for dtype in device_type.split(",")]  # Split requested filter
+        return [device for device in inventory if device.get("type", "").lower() in requested_types]
+
+    @staticmethod
     def _fetch_and_filter_devices(site_id: str, device_type: str) -> list | None:
         """Fetch the full site inventory (``type=all``) and filter locally to ``device_type``."""
-        rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data  # Fetch.
-        if not rawdata:  # Empty inventory path.
-            print("No devices found for the selected site.")  # Tell operator.
-            logging.warning("No devices found for site_id: %s", site_id)  # Log empty inventory.
-            return None  # Abort.
-        if device_type == "all":  # No filter needed.
-            return rawdata  # Return full inventory.
-        requested_types = [dtype.strip() for dtype in device_type.split(",")]  # Split requested filter.
-        filtered = [device for device in rawdata if device.get("type", "").lower() in requested_types]  # Filter.
-        if not filtered:  # Filter produced empty set.
-            print(f"No devices of type '{device_type}' found at the selected site.")  # Tell operator.
-            logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)  # Log.
-            return None  # Abort.
-        return filtered  # Return filtered set.
+        rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all").data  # Fetch
+        if not rawdata:  # Empty inventory path
+            print("No devices found for the selected site.")
+            logging.warning("No devices found for site_id: %s", site_id)
+            return None
+        filtered = PromptUtils._filter_inventory_by_type(rawdata, device_type)  # Apply type filter
+        if not filtered:  # Filter produced empty set
+            print(f"No devices of type '{device_type}' found at the selected site.")
+            logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)
+            return None
+        return filtered
 
     @staticmethod
     def _export_and_index_inventory(rawdata: list, csv_filename: str) -> tuple:
@@ -8559,20 +8602,25 @@ class PromptUtils:  # General prompt helpers.
             return {}  # Return empty cache on error.
 
     @staticmethod
+    def _print_client_type_summary(all_clients: list[dict]) -> None:
+        """Print the wireless/wired count line and status legend for the client selection table."""
+        wireless_count = sum(1 for c in all_clients if c.get("client_type") == "wireless")  # Count wireless
+        wired_count = sum(1 for c in all_clients if c.get("client_type") == "wired")  # Count wired
+        print(f"\n  Summary: {wireless_count} wireless, {wired_count} wired clients")
+        print("\n  [+] = Online  [~] = Recently seen  [-] = Offline")
+        print("---" * 20)
+
+    @staticmethod
     def _display_client_table(all_clients: list[dict], sites_cache: dict[str, str]) -> dict[int, dict]:  # type: ignore[type-arg]
         """Render the client selection table and a summary line; return an index-to-client map for selection."""
-        table = PromptUtils._build_client_table_skeleton()  # Build empty table with columns + alignment.
-        for idx, client in enumerate(all_clients):  # Enumerate clients for rows.
-            row = PromptUtils._format_client_row(idx, client, sites_cache)  # Format a client row.
-            table.add_row(row)  # Add row to table.
-        print(f"\n  Found {len(all_clients)} clients:")  # Show client count.
-        print(table)  # Render the table.
-        wireless_count = sum(1 for c in all_clients if c.get("client_type") == "wireless")  # Count wireless clients.
-        wired_count = sum(1 for c in all_clients if c.get("client_type") == "wired")  # Count wired clients.
-        print(f"\n  Summary: {wireless_count} wireless, {wired_count} wired clients")  # Print client summary.
-        print("\n  [+] = Online  [~] = Recently seen  [-] = Offline")  # Explain status legend.
-        print("---" * 20)  # Print separator rule.
-        return {idx: client for idx, client in enumerate(all_clients)}  # Return index-to-client map.
+        table = PromptUtils._build_client_table_skeleton()  # Build empty table with columns + alignment
+        for idx, client in enumerate(all_clients):  # Enumerate clients for rows
+            row = PromptUtils._format_client_row(idx, client, sites_cache)  # Format a client row
+            table.add_row(row)
+        print(f"\n  Found {len(all_clients)} clients:")
+        print(table)
+        PromptUtils._print_client_type_summary(all_clients)  # Type counts + legend
+        return dict(enumerate(all_clients))  # Index-to-client map for caller
 
     @staticmethod
     def _build_client_table_skeleton() -> PrettyTable:  # Build empty client display table.
@@ -13471,24 +13519,34 @@ class SitesByAPModelExporter:  # Sites-by-AP-model exporter.
         return aps, models  # Return APs and models.
 
     @staticmethod
+    def _print_model_options(models: list[str], aps: list[dict]) -> None:  # type: ignore[type-arg]
+        """Print numbered list of AP models with per-model device count."""
+        print("\nAvailable AP models:")  # Header
+        for idx, model in enumerate(models, 1):  # List each model
+            count = sum(1 for d in aps if d.get("model") == model)  # APs of this model
+            print(f"  {idx:3d}. {model} ({count} APs)")
+
+    @staticmethod
+    def _resolve_model_choice(choice: str, models: list[str]) -> str | None:
+        """Parse the user's 1-based model selection string and return the chosen model or None on bad input."""
+        try:
+            selected = int(choice.strip()) - 1  # Convert to 0-based index
+            return models[selected] if 0 <= selected < len(models) else None  # Bounds check
+        except (ValueError, IndexError):
+            print("! Invalid selection.")
+            return None
+
+    @staticmethod
     def _prompt_model_selection(models: list[str], aps: list[dict]) -> str | None:  # type: ignore[type-arg]
         """Prompt user to select an AP model from the numbered list."""
-        print("\nAvailable AP models:")  # Header.
-        for idx, model in enumerate(models, 1):  # List each model.
-            count = sum(1 for d in aps if d.get("model") == model)  # Count APs per model.
-            print(f"  {idx:3d}. {model} ({count} APs)")  # Print the model.
-        choice = InputUtils.safe_input(  # Read the choice.
+        SitesByAPModelExporter._print_model_options(models, aps)  # Render numbered options
+        choice = InputUtils.safe_input(  # Read the choice
             "\nSelect model number (or Enter to cancel): ",
             context="ap_model_selection",
         )
-        if not choice.strip():  # Empty input.
-            return None  # No selection.
-        try:
-            selected = int(choice.strip()) - 1  # Parse the index.
-            return models[selected] if 0 <= selected < len(models) else None  # Return the model or None.
-        except (ValueError, IndexError):  # Bad input.
-            print("! Invalid selection.")  # Tell the user.
-            return None  # No selection.
+        if not choice.strip():  # Empty input cancels
+            return None
+        return SitesByAPModelExporter._resolve_model_choice(choice, models)  # Parse + bounds-check
 
     @staticmethod
     def _split_address(address: str) -> tuple[str, str, str, str, str]:  # Split an address string.
@@ -14294,24 +14352,32 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             return  # Nothing to register
         self._register_endpoint(endpoint_name, module, api_function, modname)  # Register the endpoint.
 
+    @staticmethod
+    def _is_session_api_function(obj) -> bool:
+        """Return True when ``obj`` is a public function whose signature accepts a session arg."""
+        import inspect  # Local import to keep top-level imports unchanged
+
+        if not inspect.isfunction(obj):  # Skip classes, builtins, etc.
+            return False
+        sig = inspect.signature(obj)  # Inspect parameters
+        param_names = list(sig.parameters.keys())  # Materialize names for membership test
+        if not param_names:  # No params -> cannot be an API call
+            return False
+        return "mist_session" in param_names or "apisession" in param_names  # Session arg required
+
     def _find_api_functions(self, module, endpoint_name: str) -> list[str]:  # Find candidate API functions.
         """Find all callable API functions in a module."""
-        import inspect  # Import inspect.
+        import inspect  # Used for getmembers + signature trace
 
-        functions = []  # Collect function names.
-        for name, obj in inspect.getmembers(module):  # Walk module members.
-            if not inspect.isfunction(obj) or name.startswith("_"):  # Skip non-functions/private.
+        functions = []  # Collect function names
+        for name, obj in inspect.getmembers(module):  # Walk module members
+            if name.startswith("_"):  # Skip private/dunder
                 continue
-
-            sig = inspect.signature(obj)  # Read the signature.
-            param_names = list(sig.parameters.keys())  # List parameter names.
-            has_session_param = "mist_session" in param_names or "apisession" in param_names  # Detect a session param.
-
-            if has_session_param and len(param_names) >= 1:  # Looks like an API call.
-                functions.append(name)  # Keep the function.
-                logging.debug("Found potential API function in %s: %s%s", endpoint_name, name, sig)  # Trace the find.
-
-        return functions  # Return the functions.
+            if not type(self)._is_session_api_function(obj):  # Combined function/session predicate
+                continue
+            functions.append(name)  # Keep the function
+            logging.debug("Found potential API function in %s: %s%s", endpoint_name, name, inspect.signature(obj))
+        return functions  # Return the discovered names
 
     def _select_best_function(self, functions: list[str]) -> str | None:  # Pick the best function.
         """Select the best API function from a list (prefer list*, then get*, else the first)."""
@@ -14701,27 +14767,34 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             codes.append(code)
         return codes
 
+    @staticmethod
+    def _normalize_states_dict(country_code: str, country_data: dict) -> list[dict]:  # type: ignore[type-arg]
+        """Convert a {state_code: state_data} dict into a list of tagged state records."""
+        records = []  # Accumulator
+        for state_code, state_data in country_data.items():  # Walk each state
+            if isinstance(state_data, dict):  # Structured payload
+                record = {"country_code": country_code, "state_code": state_code}
+                record.update(state_data)  # Inline nested fields
+                records.append(record)
+            else:  # Scalar fallback -> use as the state name
+                records.append({"country_code": country_code, "state_code": state_code, "state_name": str(state_data)})
+        return records
+
+    @staticmethod
+    def _normalize_states_list(country_code: str, country_data: list) -> list:  # type: ignore[type-arg]
+        """Tag each dict in the list with ``country_code`` and return the original list (in-place mutation)."""
+        for item in country_data:  # Walk items
+            if isinstance(item, dict):  # Only dicts get tagged
+                item["country_code"] = country_code
+        return country_data
+
     def _normalize_states_data(self, country_code: str, country_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize states data into list of records with country identifier."""
-        records = []  # Collect rows.
-
-        if isinstance(country_data, dict):  # Dict payload.
-            for state_code, state_data in country_data.items():  # Walk states.
-                if isinstance(state_data, dict):  # Dict state.
-                    record = {"country_code": country_code, "state_code": state_code}  # Build the row.
-                    record.update(state_data)  # Merge the data.
-                    records.append(record)  # Collect the row.
-                else:
-                    records.append(  # Scalar state value.
-                        {"country_code": country_code, "state_code": state_code, "state_name": str(state_data)}
-                    )
-        elif isinstance(country_data, list):  # List payload.
-            for item in country_data:  # Walk items.
-                if isinstance(item, dict):  # Dict item.
-                    item["country_code"] = country_code  # Tag the country.
-            records.extend(country_data)  # Collect the items.
-
-        return records  # Return the rows.
+        if isinstance(country_data, dict):  # {state: data} payload
+            return type(self)._normalize_states_dict(country_code, country_data)
+        if isinstance(country_data, list):  # Already a list of records
+            return type(self)._normalize_states_list(country_code, country_data)
+        return []  # Unknown shape -> empty
 
     def _fetch_all_country_channels(self, config: EndpointConfig) -> list:  # type: ignore[type-arg]
         """Fetch AP channels for all available countries."""
@@ -14779,21 +14852,28 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         print(f"    ! Using fallback country codes: {len(self.FALLBACK_CHANNEL_COUNTRIES)} countries")
         return self.FALLBACK_CHANNEL_COUNTRIES  # Use the fallback list.
 
+    @staticmethod
+    def _extract_country_code_from_item(item) -> str | None:  # type: ignore[no-untyped-def]
+        """Return the ``alpha2``/``code`` field from a dict item, or None when item is not a dict or has neither."""
+        if not isinstance(item, dict):  # Skip non-dict shapes
+            return None
+        return item.get("alpha2") or item.get("code") or None  # Prefer alpha2, then code
+
+    @staticmethod
+    def _country_codes_from_list(countries_list: list) -> list[str]:  # type: ignore[type-arg]
+        """Walk a list-of-dicts payload and collect non-empty country codes."""
+        candidates = (
+            ConstDefinitionsExporter._extract_country_code_from_item(item) for item in countries_list
+        )  # Per-item lookup
+        return [code for code in candidates if code]  # Filter blanks/Nones
+
     def _extract_channel_country_codes(self, countries_data) -> list[str]:  # Extract channel countries.
         """Extract country codes from countries data for channel lookup."""
-        if isinstance(countries_data, dict):  # Dict payload
-            return list(countries_data.keys())  # Return the keys
-        if not isinstance(countries_data, list):  # Unknown shape — return empty
-            return []
-        codes = []  # Collect codes
-        for item in countries_data:  # Walk items
-            if not isinstance(item, dict):  # Skip non-dict items
-                continue
-            code = item.get("alpha2") or item.get("code")  # Resolve a code
-            if not code:  # Empty code = skip
-                continue
-            codes.append(code)  # Keep it
-        return codes  # Return the codes
+        if isinstance(countries_data, dict):  # Dict payload -> keys are codes
+            return list(countries_data.keys())
+        if isinstance(countries_data, list):  # List of dicts -> per-item lookup
+            return type(self)._country_codes_from_list(countries_data)
+        return []  # Unknown shape -> empty
 
     def _normalize_channels_data(self, country_code: str, country_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize channels data into list of records with country identifier."""
@@ -14950,20 +15030,22 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
             print("! Warning: ConstInsightMetrics.csv was not created during dynamic export")
 
     @staticmethod
+    def _row_matches_scope(row, normalized_target_scope: str) -> str | None:  # type: ignore[no-untyped-def]
+        """Return ``metric_name`` when the row supports the target scope, else None to signal skip."""
+        scopes = row.get("scopes", "")  # Scope string for this metric
+        metric_name = row.get("metric_name", "")  # Display name
+        if not metric_name or not scopes:  # Skip incomplete rows
+            return None
+        if "{" in metric_name or "}" in metric_name:  # Skip template placeholder rows
+            return None
+        parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)  # Tokenize scopes
+        return metric_name if normalized_target_scope in parsed_scopes else None  # Match check
+
+    @staticmethod
     def _collect_metrics_for_scope(reader, normalized_target_scope: str) -> list[str]:
         """Walk CSV rows and return metric names supporting the given scope."""
-        metrics_for_scope: list[str] = []  # Accumulate matching metric names.
-        for row in reader:  # Walk rows.
-            scopes = row.get("scopes", "")  # Read the scopes.
-            metric_name = row.get("metric_name", "")  # Read the metric name.
-            if not metric_name or not scopes:  # No name or no scopes.
-                continue  # Skip it.
-            if "{" in metric_name or "}" in metric_name:  # Skip placeholder/template metrics.
-                continue  # Skip it.
-            parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)  # Parse the scopes.
-            if normalized_target_scope in parsed_scopes:  # Scope matches.
-                metrics_for_scope.append(metric_name)  # Keep the metric.
-        return metrics_for_scope  # Return the list.
+        matches = (InsightMetricsUtils._row_matches_scope(row, normalized_target_scope) for row in reader)  # Per-row
+        return [name for name in matches if name]  # Drop None skips
 
     @staticmethod
     def get_by_scope(target_scope: str) -> list[str]:  # List metrics for a scope.
