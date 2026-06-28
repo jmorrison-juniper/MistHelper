@@ -5826,7 +5826,150 @@ class SFPTransceiverDataProcessor:
     OUTPUT_FILENAME = "MergedTransceiverData.csv"
 
     @staticmethod
-    def merge_transceiver_data():  # noqa: C901, PLR0915
+    def _ensure_prerequisite_csvs(org_port_stats_path, devices_with_site_info_path):
+        """Generate prerequisite CSVs (port stats and devices-with-site-info) if missing."""
+        logging.debug(
+            "ENTRY: _ensure_prerequisite_csvs(%s, %s)",
+            org_port_stats_path,
+            devices_with_site_info_path,
+        )  # Trace entry with both target paths
+        if not os.path.exists(org_port_stats_path):  # Port-stats CSV missing -> regenerate it
+            print("* OrgDevicePortStats.csv not found. Generating it now...")  # User-facing notice
+            logging.info(
+                "OrgDevicePortStats.csv missing; invoking OrgDeviceStatsExporter.device_port_stats()"
+            )  # Action log before generating port-stats CSV
+            OrgDeviceStatsExporter.device_port_stats()  # Generate the port-stats CSV
+        if not os.path.exists(devices_with_site_info_path):  # Devices+site CSV missing -> regenerate it
+            print("* AllDevicesWithSiteInfo.csv not found. Generating it now...")  # User-facing notice
+            logging.info(
+                "AllDevicesWithSiteInfo.csv missing; invoking OrgInventoryExporter.devices_with_site_info()"
+            )  # Action log before generating devices+site CSV
+            OrgInventoryExporter.devices_with_site_info()  # Generate the devices+site CSV
+        logging.debug("EXIT: _ensure_prerequisite_csvs")  # Trace exit
+
+    @staticmethod
+    def _load_device_site_context(devices_with_site_info_path):
+        """Load device->site mapping keyed by MAC from the devices-with-site-info CSV."""
+        logging.debug("ENTRY: _load_device_site_context(%s)", devices_with_site_info_path)  # Trace entry
+        logging.debug("File I/O: Reading %s", devices_with_site_info_path)  # Trace the read for I/O auditing
+        with open(devices_with_site_info_path, encoding="utf-8") as file:  # Open device+site CSV
+            reader = csv.DictReader(file)  # Header-keyed reader for stable field access
+            site_info = {
+                row["mac"]: {
+                    "site_name": row.get("site_name", ""),
+                    "site_address": row.get("site_address", ""),
+                    "device_name": row.get("name", ""),
+                }
+                for row in reader  # Build a MAC-keyed lookup of site context for every row
+            }
+        logging.info("Loaded %s device entries from %s", len(site_info), devices_with_site_info_path)  # Summary
+        return site_info  # Return the MAC->site context map
+
+    @staticmethod
+    def _extract_transceiver_row(row, site_info):
+        """Return (merged_row|None, has_transceiver, mac_with_transceiver|None) for one port-stats row."""
+        mac = row.get("mac")  # Pull MAC for site-info lookup
+        transceiver_model = row.get("xcvr_model", "").strip()  # Normalize transceiver model string
+        if not transceiver_model:  # No optic populated -> not a candidate
+            return (None, False, None)  # Skip this row entirely
+        if mac not in site_info:  # Optic present but device MAC absent from inventory
+            return (None, True, None)  # Counted as candidate but no merge row produced
+        merged_row = {
+            "site_name": site_info[mac]["site_name"],
+            "site_address": site_info[mac]["site_address"],
+            "device_name": site_info[mac]["device_name"],
+            "port_id": row.get("port_id", ""),
+            "transceiver_part_number": row.get("xcvr_part_number", ""),
+            "transceiver_model": transceiver_model,
+            "transceiver_serial_number": row.get("xcvr_serial", ""),
+        }  # Compose merged row preserving exact field semantics of the original loop body
+        return (merged_row, True, mac)  # Candidate with merged row and matched MAC
+
+    @staticmethod
+    def _scan_port_stats(org_port_stats_path, site_info):
+        """Read port-stats CSV and merge rows whose MAC is in site_info and have a non-empty optic."""
+        logging.debug("ENTRY: _scan_port_stats(%s)", org_port_stats_path)  # Trace entry
+        merged_data: list[dict[str, str]] = []  # Output rows collected here
+        total_rows = candidate_rows = matched_rows = 0  # Init all three row counters at once
+        unique_devices_with_transceivers: set[str] = set()  # Track distinct MACs that contributed an output row
+        logging.debug("File I/O: Reading %s", org_port_stats_path)  # Trace the read for I/O auditing
+        with open(org_port_stats_path, encoding="utf-8") as file:  # Open port-stats CSV
+            reader = csv.DictReader(file)  # Header-keyed reader
+            for row in reader:  # Iterate every port-stats row
+                total_rows += 1  # Always increment total row counter
+                merged_row, has_transceiver, mac_match = SFPTransceiverDataProcessor._extract_transceiver_row(
+                    row, site_info
+                )  # Per-row extraction handles transceiver + MAC logic
+                if has_transceiver:  # Rows with a non-empty optic count as candidates
+                    candidate_rows += 1  # Increment candidate counter
+                if merged_row is None:  # No merge contribution from this row
+                    continue  # Skip to next row to keep nesting shallow
+                matched_rows += 1  # Row produced an output entry
+                merged_data.append(merged_row)  # Append the merged row to output
+                if mac_match is not None:  # Track unique MACs that contributed an output row
+                    unique_devices_with_transceivers.add(mac_match)  # Record this MAC
+        logging.debug("EXIT: _scan_port_stats matched=%d", matched_rows)  # Trace exit with match count
+        return merged_data, total_rows, candidate_rows, matched_rows, unique_devices_with_transceivers
+
+    @staticmethod
+    def _log_merge_summary(matched_rows, total_rows, candidate_rows, site_info_count, unique_devices_count):
+        """Emit the exact INFO log message corresponding to the matched-rows outcome."""
+        if matched_rows == 0:  # No matching transceivers found path
+            logging.info(
+                "Processed port stats; no matching transceivers found. total_rows=%d candidate_rows=%d known_devices=%d. "  # noqa: E501
+                "This can be normal if the inventory currently has no optics populated.",
+                total_rows,
+                candidate_rows,
+                site_info_count,
+            )  # Preserve the original DataExporter-zero-rows informational message verbatim
+            return  # Early return keeps the success-path log on a flat branch
+        logging.info(
+            "Processed port stats; %d ports with transceivers found (total_rows=%d candidate_rows=%d unique_devices=%d)",  # noqa: E501
+            matched_rows,
+            total_rows,
+            candidate_rows,
+            unique_devices_count,
+        )  # Preserve the original success-path informational message verbatim
+
+    @staticmethod
+    def _finalize_merge_output(merged_data):
+        """Write merged rows to disk and emit the success-path INFO and user-facing messages."""
+        DataExporter.write_with_format_selection(merged_data, SFPTransceiverDataProcessor.OUTPUT_FILENAME)  # type: ignore[no-untyped-call]  # Write merged rows to backend
+        logging.info(
+            "Wrote %s rows to %s", len(merged_data), SFPTransceiverDataProcessor.OUTPUT_FILENAME
+        )  # Log the row count written
+        print(
+            f"! Merged data written to {SFPTransceiverDataProcessor.OUTPUT_FILENAME}"
+        )  # Tell the user where the file landed
+        logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - success")  # Trace successful exit
+
+    @staticmethod
+    def _run_merge_pipeline(org_port_stats_path, devices_with_site_info_path):
+        """Run load->scan->summary->write inside a unified try/except for CSV/IO failures."""
+        try:
+            site_info = SFPTransceiverDataProcessor._load_device_site_context(devices_with_site_info_path)
+            merged_data, total_rows, candidate_rows, matched_rows, unique_devices = (
+                SFPTransceiverDataProcessor._scan_port_stats(org_port_stats_path, site_info)
+            )  # Scan port stats and produce merged rows + counters
+            SFPTransceiverDataProcessor._log_merge_summary(
+                matched_rows, total_rows, candidate_rows, len(site_info), len(unique_devices)
+            )  # Emit the matched-rows-aware summary log
+            SFPTransceiverDataProcessor._finalize_merge_output(merged_data)  # Persist + notify user
+        except FileNotFoundError as e:  # Missing input CSV
+            logging.error("File I/O: Required CSV file not found: %s", e)  # Log absent file
+            logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - file not found")  # Trace
+            raise  # Re-raise to caller
+        except csv.Error as e:  # Malformed CSV
+            logging.error("File I/O: CSV processing error: %s", e)  # Log parse error
+            logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - CSV error")  # Trace
+            raise  # Re-raise to caller
+        except Exception as e:  # Any other unexpected failure during the merge
+            logging.error("File I/O: Unexpected error during transceiver merge: %s", e)  # Log unexpected
+            logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - unexpected error")  # Trace
+            raise  # Re-raise to caller
+
+    @staticmethod
+    def merge_transceiver_data():
         """Generate a merged transceiver CSV linking port optics to site + device context.
 
         Steps:
@@ -5837,114 +5980,15 @@ class SFPTransceiverDataProcessor:
             3. Filter port stats to rows containing a non-empty transceiver model.
             4. Write merged result to `MergedTransceiverData.csv` via DataExporter.
         """
-        logging.debug("ENTRY: SFPTransceiverDataProcessor.merge_transceiver_data()")
-
-        org_port_stats_path = FilePathUtils.get_csv_path("OrgDevicePortStats.csv")
-        devices_with_site_info_path = FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")
-
-        # Generate prerequisites if absent (idempotent behavior matches prior function)
-        if not os.path.exists(org_port_stats_path):
-            print("* OrgDevicePortStats.csv not found. Generating it now...")
-            logging.info("OrgDevicePortStats.csv missing; invoking OrgDeviceStatsExporter.device_port_stats()")
-            OrgDeviceStatsExporter.device_port_stats()
-
-        if not os.path.exists(devices_with_site_info_path):
-            print("* AllDevicesWithSiteInfo.csv not found. Generating it now...")
-            logging.info("AllDevicesWithSiteInfo.csv missing; invoking OrgInventoryExporter.devices_with_site_info()")
-            OrgInventoryExporter.devices_with_site_info()
-
-        try:
-            # Load context keyed by MAC
-            logging.debug("File I/O: Reading %s", devices_with_site_info_path)
-            with open(devices_with_site_info_path, encoding="utf-8") as file:
-                reader = csv.DictReader(file)
-                site_info = {
-                    row["mac"]: {
-                        "site_name": row.get("site_name", ""),
-                        "site_address": row.get("site_address", ""),
-                        "device_name": row.get("name", ""),
-                    }
-                    for row in reader
-                }
-            logging.info("Loaded %s device entries from %s", len(site_info), devices_with_site_info_path)
-
-            merged_data = []
-            total_rows = 0
-            candidate_rows = 0  # rows having a non-empty transceiver model (may or may not map to a known device MAC)
-            matched_rows = 0  # rows contributing to merged output
-            unique_devices_with_transceivers: set[str] = set()
-
-            logging.debug("File I/O: Reading %s", org_port_stats_path)
-            with open(org_port_stats_path, encoding="utf-8") as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    total_rows += 1
-                    mac = row.get("mac")
-                    transceiver_model = row.get("xcvr_model", "").strip()
-
-                    if transceiver_model:
-                        candidate_rows += 1
-
-                    if mac in site_info and transceiver_model:
-                        matched_rows += 1
-                        if mac is not None:  # Ensure mac is not None before adding to set
-                            unique_devices_with_transceivers.add(mac)
-                        merged_data.append(
-                            {
-                                "site_name": site_info[mac]["site_name"],
-                                "site_address": site_info[mac]["site_address"],
-                                "device_name": site_info[mac]["device_name"],
-                                "port_id": row.get("port_id", ""),
-                                "transceiver_part_number": row.get("xcvr_part_number", ""),
-                                "transceiver_model": transceiver_model,
-                                "transceiver_serial_number": row.get("xcvr_serial", ""),
-                            }
-                        )
-
-            if matched_rows == 0:
-                # Downgraded severity explanation lives here; DataExporter currently emits a WARNING when given 0 rows.
-                logging.info(
-                    "Processed port stats; no matching transceivers found. total_rows=%d candidate_rows=%d known_devices=%d. "  # noqa: E501
-                    "This can be normal if the inventory currently has no optics populated.",
-                    total_rows,
-                    candidate_rows,
-                    len(site_info),
-                )
-            else:
-                logging.info(
-                    "Processed port stats; %d ports with transceivers found (total_rows=%d candidate_rows=%d unique_devices=%d)",  # noqa: E501
-                    matched_rows,
-                    total_rows,
-                    candidate_rows,
-                    len(unique_devices_with_transceivers),
-                )
-
-            DataExporter.write_with_format_selection(merged_data, SFPTransceiverDataProcessor.OUTPUT_FILENAME)  # type: ignore[no-untyped-call]  # Write the merged rows to the output backend
-            logging.info(
-                "Wrote %s rows to %s", len(merged_data), SFPTransceiverDataProcessor.OUTPUT_FILENAME
-            )  # Log the row count written
-            print(
-                f"! Merged data written to {SFPTransceiverDataProcessor.OUTPUT_FILENAME}"
-            )  # Tell the user where the file landed
-            logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - success")  # Trace successful exit
-        except FileNotFoundError as e:  # A required input CSV was missing
-            logging.error("File I/O: Required CSV file not found: %s", e)  # Log which file was absent
-            logging.debug(
-                "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - file not found"
-            )  # Trace the failure exit
-            raise  # Re-raise so the caller knows the merge could not run
-        except csv.Error as e:  # The CSV parser hit malformed data
-            logging.error("File I/O: CSV processing error: %s", e)  # Log the parsing error
-            logging.debug(
-                "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - CSV error"
-            )  # Trace the failure exit
-            raise  # Re-raise so the caller can handle the bad input
-        except Exception as e:  # Any other unexpected failure during the merge
-            logging.error("File I/O: Unexpected error during transceiver merge: %s", e)  # Log the unexpected error
-            logging.debug(
-                "EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - unexpected error"
-            )  # Trace the failure exit
-            raise  # Re-raise to surface the problem to the caller
+        logging.debug("ENTRY: SFPTransceiverDataProcessor.merge_transceiver_data()")  # Trace entry
+        org_port_stats_path = FilePathUtils.get_csv_path("OrgDevicePortStats.csv")  # Source: per-port stats CSV
+        devices_with_site_info_path = FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")  # Source: device+site
+        SFPTransceiverDataProcessor._ensure_prerequisite_csvs(
+            org_port_stats_path, devices_with_site_info_path
+        )  # Generate either prerequisite CSV if missing
+        SFPTransceiverDataProcessor._run_merge_pipeline(
+            org_port_stats_path, devices_with_site_info_path
+        )  # Load->scan->summary->write inside one try/except
 
 
 class FilePathUtils:
@@ -6654,7 +6698,7 @@ class DataProcessingUtils:  # JSON flattening/normalization.
         return dict(items)  # Return the flat dict.
 
     @staticmethod
-    def flatten_nested_fields(data: list[dict[str, Any]]) -> list[dict[str, Any]]:  # noqa: C901
+    def flatten_nested_fields(data: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Flatten nested fields in a list of dictionaries.
         Attempts to parse stringified dicts/lists.
@@ -6672,33 +6716,52 @@ class DataProcessingUtils:  # JSON flattening/normalization.
             if not isinstance(entry, dict):  # Skip non-dict records.
                 logging.debug("Skipping non-dictionary entry: %s", type(entry).__name__)  # Trace skipped entry.
                 continue  # Move to next record.
-
-            new_entry = {}  # Build the flattened row.
-            for key, value in entry.items():  # Walk each field.
-                # Try to parse stringified dicts/lists
-                if isinstance(value, str) and (value.startswith("{") or value.startswith("[")):  # Maybe embedded JSON.
-                    try:
-                        value = ast.literal_eval(value)  # Parse Python-literal JSON.
-                    except Exception:  # Literal parse failed.
-                        try:
-                            value = json.loads(value)  # Fall back to JSON parse.
-                        except Exception:  # nosec B110
-                            pass  # Leave as string if parsing fails
-
-                if isinstance(value, dict):  # Nested dict needs flattening.
-                    flat = DataProcessingUtils.flatten_dict(value, parent_key=key)  # Flatten the nested dict.
-                    new_entry.update(flat)  # Merge flattened keys.
-                elif isinstance(value, list):  # Lists need expansion.
-                    if all(isinstance(i, dict) for i in value):  # List of dicts: index each.
-                        for idx, item in enumerate(value):  # Walk list items.
-                            flat = DataProcessingUtils.flatten_dict(item, parent_key=f"{key}_{idx}")  # Flatten item.
-                            new_entry.update(flat)  # Merge item keys.
-                    else:
-                        new_entry[key] = ",".join(map(str, value))  # Join scalar list as CSV.
-                else:
-                    new_entry[key] = value  # Keep scalar value.
-            flattened.append(new_entry)  # Add the flattened row.
+            flattened.append(DataProcessingUtils._flatten_entry(entry))  # Delegate per-entry flattening.
         return flattened  # Return all flattened rows.
+
+    @staticmethod
+    def _flatten_entry(entry):
+        """Flatten a single dict entry, returning a new dict with nested values expanded."""
+        new_entry = {}  # Accumulator for the flattened output of this entry
+        for key, value in entry.items():  # Walk every field of the entry
+            parsed = DataProcessingUtils._parse_stringified_value(value)  # Maybe parse stringified JSON
+            DataProcessingUtils._flatten_value_into(new_entry, key, parsed)  # Expand nested into new_entry
+        return new_entry  # Return the flattened entry
+
+    @staticmethod
+    def _parse_stringified_value(value):
+        """Try to parse a string starting with { or [ as Python literal or JSON; return original on failure."""
+        if not isinstance(value, str):  # Non-string values pass through unchanged
+            return value  # Nothing to parse
+        if not value.startswith(("{", "[")):  # Not embedded JSON-ish - skip parsing
+            return value  # Return as-is
+        try:
+            return ast.literal_eval(value)  # Try Python-literal parse first
+        except Exception:  # ast.literal_eval failed
+            try:
+                return json.loads(value)  # Fall back to JSON parse
+            except Exception:  # nosec B110 - both parses failed, leave as string
+                return value  # Final fallback: original string
+
+    @staticmethod
+    def _flatten_value_into(new_entry, key, value):
+        """Merge a single (key, value) into new_entry, expanding nested dicts/lists per legacy rules."""
+        if isinstance(value, dict):  # Nested dict needs flattening
+            new_entry.update(DataProcessingUtils.flatten_dict(value, parent_key=key))  # Merge flattened keys
+            return  # Done for dict path
+        if not isinstance(value, list):  # Scalar (non-dict, non-list)
+            new_entry[key] = value  # Keep scalar value as-is
+            return  # Done for scalar path
+        if DataProcessingUtils._is_list_of_dicts(value):  # List of dicts: index each element
+            for idx, item in enumerate(value):  # Walk list items
+                new_entry.update(DataProcessingUtils.flatten_dict(item, parent_key=f"{key}_{idx}"))  # Merge item keys
+            return  # Done for list-of-dicts path
+        new_entry[key] = ",".join(map(str, value))  # Scalar list - join as CSV
+
+    @staticmethod
+    def _is_list_of_dicts(value):
+        """Return True when every element of value is a dict (used by _flatten_value_into)."""
+        return all(isinstance(i, dict) for i in value)  # Check every element is dict-typed
 
     @staticmethod
     def convert_list_values_to_strings(data):  # Stringify list-valued fields.
