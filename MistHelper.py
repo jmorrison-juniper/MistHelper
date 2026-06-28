@@ -23593,59 +23593,87 @@ def _run_tui_mode(args: argparse.Namespace) -> None:
     """Launch MistHelper Terminal User Interface (TUI) mode using the Rich library."""
     logging.info("TUI_MODE: Starting Terminal User Interface mode")  # Log before TUI launch
     print(">> Terminal User Interface mode activated")  # Inform user TUI is starting
-    if not apisession:  # TUI requires an active API session to execute library calls
-        print(">> Initializing Mist API session...")  # Inform user session is being set up
-        if not initialize_mist_session():  # type: ignore[no-untyped-call]  # Attempt session init for TUI
-            print("[ERROR] Failed to initialize Mist API session")  # Inform user of auth failure
-            logging.error("TUI_MODE: Could not initialize API session")  # Log auth failure
-            sys.exit(1)  # Exit -- TUI cannot function without a session
-        print(">> API session initialized successfully")  # Confirm session ready
-    root_logger = logging.getLogger()  # Access root logger to modify handlers
-    console_handlers = [  # Identify console handlers to suppress during TUI (Rich manages output)
+    _ensure_tui_api_session()  # Initialize the Mist API session if not already established.
+    _silence_console_handlers_for_tui()  # Remove console log handlers so Rich owns the screen.
+    _run_tui_event_loop(args)  # Run the TUI event loop (handles Ctrl+C + fatal errors internally).
+    if args.debug:  # Debug: log a final timestamped marker after the loop exits cleanly.
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format ms timestamp.
+        logging.debug(
+            "TUI_DEBUG: [%s] TUI mode completed successfully - about to exit", timestamp
+        )  # Log clean completion.
+    logging.info("TUI_MODE: TUI mode completed successfully")  # Log clean exit.
+
+
+def _ensure_tui_api_session() -> None:
+    """Initialize the Mist API session if not already established. Exits 1 on auth failure."""
+    if apisession:  # Already authenticated -- nothing to do.
+        return  # Reuse the existing session.
+    print(">> Initializing Mist API session...")  # Inform user session is being set up.
+    if not initialize_mist_session():  # type: ignore[no-untyped-call]  # Attempt session init for TUI
+        print("[ERROR] Failed to initialize Mist API session")  # Inform user of auth failure.
+        logging.error("TUI_MODE: Could not initialize API session")  # Log auth failure.
+        sys.exit(1)  # Exit -- TUI cannot function without a session.
+    print(">> API session initialized successfully")  # Confirm session ready.
+
+
+def _silence_console_handlers_for_tui() -> None:
+    """Remove non-file console handlers from the root logger so they don't disrupt the Rich UI."""
+    root_logger = logging.getLogger()  # Access root logger to modify handlers.
+    console_handlers = [  # Identify console handlers to suppress during TUI.
         h
         for h in root_logger.handlers
         if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
     ]
-    for handler in console_handlers:
-        root_logger.removeHandler(handler)  # Remove console handler so log messages don't disrupt Rich display
-        logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")  # Log handler removal
-    try:
-        from src.ui.tui import MistHelperTUI  # PLC0415: lazy import avoids loading Rich at startup
+    for handler in console_handlers:  # Iterate handlers to remove each.
+        root_logger.removeHandler(handler)  # Remove console handler so logs don't disrupt Rich display.
+        logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")  # Log removal.
 
-        tui = MistHelperTUI(debug_mode=args.debug)  # type: ignore[no-untyped-call]  # Create TUI instance with debug flag  # noqa: E501
-        tui.apisession = apisession  # Pass global API session so TUI can execute live API calls
-        if args.debug:
-            logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Log debug state
-        tui.run()  # type: ignore[no-untyped-call]  # Launch TUI event loop (blocks until user exits)
-    except KeyboardInterrupt:
-        if args.debug:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp for debug log
+
+def _run_tui_event_loop(args: argparse.Namespace) -> None:
+    """Instantiate and run the TUI event loop. Handles Ctrl+C cleanly and Exceptions with traceback."""
+    try:
+        from src.ui.tui import MistHelperTUI  # PLC0415: lazy import avoids loading Rich at startup.
+
+        tui = MistHelperTUI(debug_mode=args.debug)  # type: ignore[no-untyped-call]  # Create TUI with debug flag.
+        tui.apisession = apisession  # Pass global API session so TUI can execute live API calls.
+        if args.debug:  # Debug: record that TUI was launched with debug enabled.
+            logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Log debug state.
+        tui.run()  # type: ignore[no-untyped-call]  # Launch TUI event loop (blocks until user exits).
+    except KeyboardInterrupt:  # User pressed Ctrl+C inside the TUI.
+        if args.debug:  # Debug: log timestamped interrupt event.
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp.
             logging.debug(
                 "TUI_DEBUG: [%s] KeyboardInterrupt caught - user pressed Ctrl+C", timestamp
-            )  # Log interrupt with time  # noqa: E501
-        logging.info("TUI_MODE: User interrupted with Ctrl+C")  # Log clean user exit
-        print("\n[EXIT] TUI mode stopped by user")  # Inform user TUI was stopped
-    except Exception as error:
-        if args.debug:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp for debug log
+            )  # Log interrupt with time.
+        logging.info("TUI_MODE: User interrupted with Ctrl+C")  # Log clean user exit.
+        print("\n[EXIT] TUI mode stopped by user")  # Inform user TUI was stopped.
+    except Exception as error:  # Unexpected error inside the TUI event loop.
+        if args.debug:  # Debug: log timestamped exception detail.
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp.
             logging.debug(
-                "TUI_DEBUG: [%s] Exception caught in TUI mode: %s: %s", timestamp, type(error).__name__, error
-            )  # Log error  # noqa: E501
-        logging.exception("TUI_MODE: Fatal error - %s", error)  # Log full traceback to file
-        print(f"\n[ERROR] TUI mode crashed: {error}")  # Inform user of crash
-        sys.exit(1)  # Exit with error code after TUI crash
-    if args.debug:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp for debug log
-        logging.debug(
-            "TUI_DEBUG: [%s] TUI mode completed successfully - about to exit", timestamp
-        )  # Log successful completion  # noqa: E501
-    logging.info("TUI_MODE: TUI mode completed successfully")  # Log clean exit
+                "TUI_DEBUG: [%s] Exception caught in TUI mode: %s: %s",
+                timestamp,
+                type(error).__name__,
+                error,
+            )  # Log error.
+        logging.exception("TUI_MODE: Fatal error - %s", error)  # Log full traceback to file.
+        print(f"\n[ERROR] TUI mode crashed: {error}")  # Inform user of crash.
+        sys.exit(1)  # Exit with error code after TUI crash.
 
 
-def _run_cli_mode(args: argparse.Namespace) -> None:  # noqa: C901
+def _run_cli_mode(args: argparse.Namespace) -> None:
     """Resolve org/site/device IDs from CLI args, dispatch to the target menu function, and exit."""
-    global org_id  # Modify module-level org_id used by all menu functions
-    logging.info("CLI arguments detected, running in non-interactive mode.")  # Log before CLI dispatch
+    global org_id  # Modify module-level org_id used by all menu functions.
+    logging.info("CLI arguments detected, running in non-interactive mode.")  # Log before CLI dispatch.
+    _log_cli_invocation(args)  # Verbose log of every parsed CLI flag for diagnostics.
+    org_id = _resolve_cli_org_id(args)  # Use --org if given, otherwise prompt/cache.
+    site_id = _resolve_cli_site_id(args, org_id)  # Resolve --site name -> site_id (or None).
+    device_id = _resolve_cli_device_id(args, site_id)  # Resolve --device name -> device_id (or None).
+    _dispatch_cli_menu_action(args, site_id, device_id)  # Dispatch + exit. Never returns on success.
+
+
+def _log_cli_invocation(args: argparse.Namespace) -> None:
+    """Log every parsed CLI argument at DEBUG level for diagnostics."""
     logging.debug(
         "Parsed CLI arguments: org=%s, menu=%s, site=%s, device=%s, port=%s, debug=%s, delay=%s, fast=%s, skip_deps=%s, output_format=%s, test=%s, address_check=%s, tui=%s",  # noqa: E501
         args.org,
@@ -23662,77 +23690,90 @@ def _run_cli_mode(args: argparse.Namespace) -> None:  # noqa: C901
         args.address_check,
         args.tui,
     )
-    if args.org:  # Use org ID directly if provided on CLI
-        org_id = args.org  # Set module-level org_id from --org flag
-        logging.info("Using org_id from CLI argument: %s", org_id)  # Log CLI org ID
-    else:
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org ID from cache or interactive prompt
-    site_id = None  # Default to no site filter unless --site provided
-    if args.site:  # Resolve site name to site_id via API lookup
-        logging.info(
-            "Resolving site name '%s' to site_id using unified pagination limit %d...",
-            args.site,
-            DEFAULT_API_PAGE_LIMIT,
-        )  # Log before site resolution
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all org sites from Mist API
-        site_lookup = {
-            site.get("name"): site.get("id") for site in sites if site.get("name") and site.get("id")
-        }  # Build name->id map  # noqa: E501
-        site_id = site_lookup.get(args.site)  # Look up site ID by human-readable name
-        if not site_id:  # Site name not found in org -- abort with error
-            logging.error("! Site name '%s' not found.", args.site)  # Log resolution failure
-            print(f"! Site name '{args.site}' not found.")  # Inform user of bad site name
-            sys.exit(1)  # Exit -- cannot proceed with unknown site
-        else:
-            logging.info("Resolved site name '%s' to site_id '%s'.", args.site, site_id)  # Log resolution success
-    device_id = None  # Default to no device filter unless --device provided
-    if args.device and site_id:  # Resolve device name to device_id (requires site context)
-        logging.info(
-            "Resolving device name '%s' at site_id '%s'...", args.device, site_id
-        )  # Log before device resolution  # noqa: E501
-        response = mistapi.api.v1.sites.devices.listSiteDevices(
-            apisession, site_id, type="all"
-        )  # Fetch all devices at site  # noqa: E501
-        devices = mistapi.get_all(response=response, mist_session=apisession)  # Page through all results
-        device_lookup = {dev["name"]: dev["id"] for dev in devices}  # Build name->id map from device list
-        device_id = device_lookup.get(args.device)  # Look up device ID by human-readable name
-        if not device_id:  # Device name not found at site -- abort with error
-            logging.error(
-                "! Device name '%s' not found at site '%s'.", args.device, args.site
-            )  # Log resolution failure  # noqa: E501
-            print(f"! Device name '{args.device}' not found at site '{args.site}'.")  # Inform user of bad device name
-            sys.exit(1)  # Exit -- cannot proceed with unknown device
-        else:
-            logging.info(
-                "Resolved device name '%s' to device_id '%s'.", args.device, device_id
-            )  # Log resolution success  # noqa: E501
-    if args.menu in menu_actions:  # Dispatch to the requested menu function if it exists
-        func, _ = menu_actions[args.menu]  # Extract callable from menu_actions dispatch table
-        logging.info("Executing menu action '%s'.", args.menu)  # Log before function dispatch
-        func_args = {
-            "site_id": site_id,  # Pass resolved site ID (or None if not provided)
-            "device_id": device_id,  # Pass resolved device ID (or None if not provided)
-            "port": args.port,  # Pass port ID directly from CLI
-            "org_id": org_id,  # Pass resolved organization ID
-            "debug": args.debug,  # Pass debug mode flag to enable verbose logging
-            "delay": args.delay,  # Pass custom delay override (or None for dynamic)
-            "fast": args.fast,  # Pass fast mode flag to enable concurrency
-            "dry_run": args.dry_run,  # Pass dry-run flag to skip destructive actions
-            "address_check": args.address_check,  # Pass address validation toggle
-            "skip_ssl_verify": args.skip_ssl_verify,  # Pass SSL verification bypass flag
-        }
-        sig = inspect.signature(func)  # type: ignore[arg-type]  # Introspect function signature to accept only valid params  # noqa: E501
-        accepted_args = {
-            k: v for k, v in func_args.items() if k in sig.parameters and v is not None
-        }  # Filter to accepted params  # noqa: E501
-        func(**accepted_args)  # type: ignore[operator, no-untyped-call]  # Call menu function with resolved and filtered args  # noqa: E501
-    else:
-        logging.error("! Invalid menu option: %s", args.menu)  # Log invalid menu selection
-        print(f"! Invalid menu option: {args.menu}")  # Inform user of bad menu number
-        sys.exit(1)  # Exit with error code on invalid menu option
-    logging.info("CLI execution complete. Exiting.")  # Log successful CLI completion
-    logging.debug("EXIT: _run_cli_mode - CLI success")  # Log exit point
-    sys.exit(0)  # Clean exit after successful CLI execution
+
+
+def _resolve_cli_org_id(args: argparse.Namespace) -> str:
+    """Return --org if given, otherwise resolve from cache / interactive prompt."""
+    if args.org:  # CLI explicitly provided the org ID.
+        logging.info("Using org_id from CLI argument: %s", args.org)  # Log CLI org ID.
+        return args.org  # Return the CLI org ID.
+    return ConfigUtils.get_cached_or_prompted_org_id()  # Fall back to cache or prompt.
+
+
+def _resolve_cli_site_id(args: argparse.Namespace, org_id: str) -> str | None:
+    """Resolve --site name to a site_id via API lookup. Exit 1 if name not found. Return None if no --site."""
+    if not args.site:  # No --site supplied; nothing to resolve.
+        return None  # Caller treats None as "no site filter".
+    logging.info(
+        "Resolving site name '%s' to site_id using unified pagination limit %d...",
+        args.site,
+        DEFAULT_API_PAGE_LIMIT,
+    )  # Log before site resolution.
+    sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all org sites from Mist API.
+    site_lookup = {
+        site.get("name"): site.get("id") for site in sites if site.get("name") and site.get("id")
+    }  # Build name->id map.
+    site_id = site_lookup.get(args.site)  # Look up site ID by human-readable name.
+    if not site_id:  # Site name not found in org -- abort with error.
+        logging.error("! Site name '%s' not found.", args.site)  # Log resolution failure.
+        print(f"! Site name '{args.site}' not found.")  # Inform user of bad site name.
+        sys.exit(1)  # Exit -- cannot proceed with unknown site.
+    logging.info("Resolved site name '%s' to site_id '%s'.", args.site, site_id)  # Log resolution success.
+    return site_id  # Return the resolved site_id.
+
+
+def _resolve_cli_device_id(args: argparse.Namespace, site_id: str | None) -> str | None:
+    """Resolve --device name to a device_id via site-scoped API lookup. Requires site context."""
+    if not (args.device and site_id):  # Either no --device or no site context; nothing to resolve.
+        return None  # Caller treats None as "no device filter".
+    logging.info("Resolving device name '%s' at site_id '%s'...", args.device, site_id)  # Log before device resolution.
+    response = mistapi.api.v1.sites.devices.listSiteDevices(
+        apisession, site_id, type="all"
+    )  # Fetch all devices at site.
+    devices = mistapi.get_all(response=response, mist_session=apisession)  # Page through all results.
+    device_lookup = {dev["name"]: dev["id"] for dev in devices}  # Build name->id map from device list.
+    device_id = device_lookup.get(args.device)  # Look up device ID by human-readable name.
+    if not device_id:  # Device name not found at site -- abort with error.
+        logging.error("! Device name '%s' not found at site '%s'.", args.device, args.site)  # Log resolution failure.
+        print(f"! Device name '{args.device}' not found at site '{args.site}'.")  # Inform user.
+        sys.exit(1)  # Exit -- cannot proceed with unknown device.
+    logging.info("Resolved device name '%s' to device_id '%s'.", args.device, device_id)  # Log resolution success.
+    return device_id  # Return the resolved device_id.
+
+
+def _dispatch_cli_menu_action(args: argparse.Namespace, site_id: str | None, device_id: str | None) -> None:
+    """Look up args.menu in menu_actions, build kwargs, call the target. Exits 0/1 -- never returns on success."""
+    if args.menu not in menu_actions:  # Invalid menu number -- abort with error.
+        logging.error("! Invalid menu option: %s", args.menu)  # Log invalid menu selection.
+        print(f"! Invalid menu option: {args.menu}")  # Inform user of bad menu number.
+        sys.exit(1)  # Exit with error code on invalid menu option.
+    func, _ = menu_actions[args.menu]  # Extract callable from menu_actions dispatch table.
+    logging.info("Executing menu action '%s'.", args.menu)  # Log before function dispatch.
+    func_args = _build_cli_func_kwargs(args, site_id, device_id)  # Build the full candidate kwargs dict.
+    sig = inspect.signature(func)  # type: ignore[arg-type]  # Introspect signature to keep only valid kwargs.
+    accepted_args = {
+        k: v for k, v in func_args.items() if k in sig.parameters and v is not None
+    }  # Filter to accepted params.
+    func(**accepted_args)  # type: ignore[operator, no-untyped-call]  # Call menu function with filtered args.
+    logging.info("CLI execution complete. Exiting.")  # Log successful CLI completion.
+    logging.debug("EXIT: _run_cli_mode - CLI success")  # Log exit point.
+    sys.exit(0)  # Clean exit after successful CLI execution.
+
+
+def _build_cli_func_kwargs(args: argparse.Namespace, site_id: str | None, device_id: str | None) -> dict:
+    """Build the candidate kwargs dict used to call a menu function in CLI mode."""
+    return {
+        "site_id": site_id,  # Pass resolved site ID (or None if not provided).
+        "device_id": device_id,  # Pass resolved device ID (or None if not provided).
+        "port": args.port,  # Pass port ID directly from CLI.
+        "org_id": org_id,  # Pass resolved organization ID.
+        "debug": args.debug,  # Pass debug mode flag to enable verbose logging.
+        "delay": args.delay,  # Pass custom delay override (or None for dynamic).
+        "fast": args.fast,  # Pass fast mode flag to enable concurrency.
+        "dry_run": args.dry_run,  # Pass dry-run flag to skip destructive actions.
+        "address_check": args.address_check,  # Pass address validation toggle.
+        "skip_ssl_verify": args.skip_ssl_verify,  # Pass SSL verification bypass flag.
+    }
 
 
 def _run_interactive_mode(args: argparse.Namespace) -> None:  # noqa: C901, PLR0912
