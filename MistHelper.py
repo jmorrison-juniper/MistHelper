@@ -8841,18 +8841,25 @@ class DeviceUtils:  # Device helper utilities.
         return [f"{prefix}{port_num}" for port_num in range(start_num, end_num + 1)]  # Concrete ports across the range
 
     @staticmethod
+    def _warn_degraded_identifier(value: str, prior_fields: str, key: str) -> None:
+        """Log a warning when ``key`` is used as identifier because ``prior_fields`` were blank."""
+        if not prior_fields:  # First-choice field was non-empty; nothing degraded
+            return
+        logging.warning(  # Warn that earlier identifier fields are missing
+            "Device %s missing %s field, using %s as identifier",  # Format string
+            value,
+            prior_fields,
+            key,  # Substitute the actual value and missing fields
+        )
+
+    @staticmethod
     def get_device_identifier(device: dict[str, Any], warn_on_missing: bool = False) -> str:
         """Best available identifier for a device: name -> serial -> id -> 'UNKNOWN'."""
         for key, prior_fields in (("name", ""), ("serial", "name"), ("id", "name and serial")):
             value = device.get(key, "").strip()  # Read candidate identifier from device record
             if value:  # Found a non-empty identifier
-                if warn_on_missing and prior_fields:  # Log degraded-identifier fallback
-                    logging.warning(  # Warn that earlier identifier fields are missing
-                        "Device %s missing %s field, using %s as identifier",  # Format string
-                        value,
-                        prior_fields,
-                        key,  # Substitute the actual value and missing fields
-                    )
+                if warn_on_missing:  # Operator wants visibility into fallback chain
+                    DeviceUtils._warn_degraded_identifier(value, prior_fields, key)  # Emit only when truly degraded
                 return value  # type: ignore[no-any-return]
         if warn_on_missing:  # All identifier fields blank -- last-resort fallback
             logging.warning("Device found with no name, serial, or id - using 'UNKNOWN'")  # Final warning
@@ -10358,8 +10365,19 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         return sites  # Normalized site tuples for fast-mode worker pool
 
     @staticmethod
-    def _load_port_stats_sites(org_id: str) -> list[tuple[str | None, str]]:  # Load sites for port stats.
-        """Load site identifiers and names for fast-mode per-site port stats collection."""
+    def _log_first_site_sample(sites: list) -> None:
+        """Emit a debug sample (first row + type) for cached-site lists, with empty-list fallback."""
+        if sites:  # Non-empty: log the first row and its concrete type
+            sample = sites[0]
+            sample_type = type(sites[0])
+        else:  # Empty: still emit placeholders so log lines stay parseable
+            sample = "No sites"
+            sample_type = "N/A"
+        logging.debug("First site sample: %s, type: %s", sample, sample_type)  # Sample for malformed-row debug
+
+    @staticmethod
+    def _load_sites_from_cached_csv() -> list[tuple[str | None, str]] | None:
+        """Read SiteList cache and return tuples, or ``None`` when the cache cannot be used."""
         try:  # Prefer cached site CSV to avoid extra API call
             CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure CSV exists
             site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve path
@@ -10368,15 +10386,19 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                 sites = [
                     (row.get("id"), row.get("name", "Unknown")) for row in reader if row.get("id")
                 ]  # Build tuple list used by pool workers
-            logging.info("* Loaded %s sites from cached data", len(sites))  # Confirm cached count
-            logging.debug(
-                "First site sample: %s, type: %s",
-                sites[0] if sites else "No sites",
-                type(sites[0]) if sites else "N/A",
-            )  # Sample for malformed-row debugging
-            return sites  # Cached site tuples
-        except Exception as exception:  # Cache read failure -> API fallback
+        except Exception as exception:  # Cache read failure -> signal API fallback
             logging.warning("* Could not use cached sites, fetching from API: %s", exception)  # Explain fallback
+            return None
+        logging.info("* Loaded %s sites from cached data", len(sites))  # Confirm cached count
+        OrgDeviceStatsExporter._log_first_site_sample(sites)  # Debug sample for malformed rows
+        return sites
+
+    @staticmethod
+    def _load_port_stats_sites(org_id: str) -> list[tuple[str | None, str]]:  # Load sites for port stats.
+        """Load site identifiers and names for fast-mode per-site port stats collection."""
+        sites = OrgDeviceStatsExporter._load_sites_from_cached_csv()  # Cache-first path
+        if sites is not None:  # Cache hit (possibly empty list)
+            return sites
         return OrgDeviceStatsExporter._load_port_stats_sites_from_api(org_id)  # API fallback
 
     @staticmethod
@@ -10781,20 +10803,27 @@ class OfflineDeviceReporter:
         }
 
     @staticmethod
+    def _parse_last_seen_epoch(device: dict) -> float:
+        """Coerce a device's ``last_seen`` field to a float epoch (returns 0.0 when missing/blank)."""
+        last_seen_raw = device.get("last_seen") or 0  # Treat None/blank/0 uniformly as 0
+        if not last_seen_raw:  # Explicit guard so the float() cast can never see empty
+            return 0.0
+        return float(last_seen_raw)  # Numeric epoch ready for arithmetic
+
+    @staticmethod
     def _maybe_build_offline_record(
         device: dict, site_lookup: dict[str, str], now: float, threshold_seconds: int
     ) -> dict | None:
         """Return offline record for device if it qualifies as offline; None to skip."""
-        if device.get("status") == "connected":  # Skip currently-connected devices.
+        if device.get("status") == "connected":  # Skip currently-connected devices
             return None
-        last_seen_raw = device.get("last_seen") or 0  # Raw last-seen epoch.
-        last_seen_epoch = float(last_seen_raw) if last_seen_raw else 0.0  # Coerce to float.
-        offline_seconds = now - last_seen_epoch  # Time since last contact.
-        if offline_seconds < threshold_seconds and last_seen_epoch > 0:  # Inside threshold + seen before.
+        last_seen_epoch = OfflineDeviceReporter._parse_last_seen_epoch(device)  # Float epoch (0.0 = never seen)
+        offline_seconds = now - last_seen_epoch  # Time since last contact
+        if offline_seconds < threshold_seconds and last_seen_epoch > 0:  # Inside threshold + seen before
             return None
         last_seen_str, duration_str, sort_key = OfflineDeviceReporter._format_offline_timing(
             last_seen_epoch, offline_seconds
-        )  # Format display values.
+        )  # Format display values
         return OfflineDeviceReporter._compile_offline_record(device, site_lookup, last_seen_str, duration_str, sort_key)
 
     @staticmethod
@@ -11475,29 +11504,34 @@ class GlobalWiredClientReportGenerator:  # Global wired client report.
         return True  # Done.
 
     @staticmethod
+    def _resolve_operator_choice(choice: str, field_name: str) -> str | None:
+        """Map a 1-based operator choice (or '0'/empty) to an operator string, or ``None`` on skip/invalid."""
+        if choice == "0" or not choice:  # Operator explicitly skipped
+            return None
+        try:
+            index = int(choice) - 1  # Convert to 0-based catalog index
+            if 0 <= index < len(FilterOperatorEngine.OPERATOR_CATALOG):  # Bounds-check parsed index
+                selected = FilterOperatorEngine.OPERATOR_CATALOG[index]  # Resolve catalog entry
+                logging.info("Selected %s operator: %s", field_name, selected)  # Trace operator choice
+                return selected
+        except ValueError:  # Non-numeric input -> treat as invalid
+            pass
+        print(f"  Invalid selection. No {field_name} filter will be applied.")  # Operator notice on invalid
+        return None
+
+    @staticmethod
     def _prompt_operator(field_name: str) -> str | None:  # Prompt an operator choice.
         """Display operator selection menu and return chosen operator or None."""
-        print(f"  {field_name} filter operator:")  # Label the field.
-        print("    0. No filter (skip)")  # No-filter option.
-        for index, operator in enumerate(FilterOperatorEngine.OPERATOR_CATALOG, 1):  # List operators.
-            print(f"    {index}. {operator}")  # Print each option.
-        choice = InputUtils.safe_input(  # Read the choice.
+        print(f"  {field_name} filter operator:")  # Label the field
+        print("    0. No filter (skip)")  # No-filter option
+        for index, operator in enumerate(FilterOperatorEngine.OPERATOR_CATALOG, 1):  # List operators
+            print(f"    {index}. {operator}")  # Print each option
+        choice = InputUtils.safe_input(  # Read the choice
             f"  Select {field_name} operator (0-12, default 0): ",
             default_value="0",
             context=f"wired_report_{field_name.lower().replace(' ', '_')}_operator",
         )
-        if choice == "0" or not choice:  # Skip when zero/empty.
-            return None  # No operator.
-        try:
-            index = int(choice) - 1  # Parse the index.
-            if 0 <= index < len(FilterOperatorEngine.OPERATOR_CATALOG):  # In range?
-                selected = FilterOperatorEngine.OPERATOR_CATALOG[index]  # Pick the operator.
-                logging.info("Selected %s operator: %s", field_name, selected)  # Log the choice.
-                return selected  # Return it.
-        except ValueError:  # Non-numeric input.
-            pass  # Ignore and fall through.
-        print(f"  Invalid selection. No {field_name} filter will be applied.")  # Tell the user invalid.
-        return None  # No operator.
+        return GlobalWiredClientReportGenerator._resolve_operator_choice(choice, field_name)  # Parse + bounds-check
 
     @staticmethod
     def _fetch_clients(org_id: str, criteria: dict[str, str] | None) -> tuple[list[dict[str, Any]], bool]:
@@ -11842,23 +11876,27 @@ class OrgAdminExporter:  # Org admin/token exporters.
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.ssos.listOrgSsos, data_type="sso", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
+    def _fetch_license_payload(current_org_id: str) -> list:
+        """Fetch license rows via the wrapper, or fall back to a raw GET when the wrapper is absent."""
+        list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)  # Locate the wrapper if shipped
+        if list_func is None:  # Wrapper missing -> fall back to raw GET
+            logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
+            raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Compose raw API path
+            if apisession is None:  # Direct GET requires an initialized session
+                raise ValueError("API session not initialized")
+            response = apisession.mist_get(raw_url)  # Raw GET fallback
+            return getattr(response, "data", response) or []  # Unwrap .data or response, default empty
+        response = list_func(apisession, current_org_id, limit=1000)  # Use wrapper path
+        return mistapi.get_all(response=response, mist_session=apisession) or []  # Page-all wrapper result
+
+    @staticmethod
     def _fetch_license_records(current_org_id: str) -> list:
         """Fetch license rows via wrapper or raw GET fallback, normalized to a list."""
-        list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)  # Find the list function.
-        if list_func is None:  # Wrapper missing in installed mistapi.
-            logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
-            raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Build the raw URL.
-            if apisession is None:  # No session.
-                raise ValueError("API session not initialized")  # No session: fail loudly.
-            response = apisession.mist_get(raw_url)  # Direct GET fallback.
-            raw_items = getattr(response, "data", response) or []  # Unwrap data; default empty.
-        else:
-            response = list_func(apisession, current_org_id, limit=1000)  # Call the wrapper.
-            raw_items = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all.
-        if not isinstance(raw_items, list):  # Normalize to a list.
-            logging.debug("License endpoint returned non-list payload; normalizing to list")  # Trace normalization.
-            raw_items = [raw_items]  # Wrap single item.
-        return raw_items  # Caller decides empty/persist.
+        raw_items = OrgAdminExporter._fetch_license_payload(current_org_id)  # Resolve via wrapper/raw dispatch
+        if not isinstance(raw_items, list):  # Normalize unexpected shapes to a list
+            logging.debug("License endpoint returned non-list payload; normalizing to list")  # Trace normalization
+            raw_items = [raw_items]  # Wrap single item
+        return raw_items  # Caller decides empty/persist
 
     @staticmethod
     def licenses():  # Export licenses.
@@ -12840,28 +12878,39 @@ class SiteDeviceExporter:  # Site device exporters.
         print(f"! {len(rawdata)} device stats exported to {filename}")  # User notice with count.
 
     @staticmethod
+    def _resolve_site_for_stats(export_label: str = "data") -> tuple[str, str] | None:
+        """Prompt for a site + org, then return the chosen ``(site_id, site_name)`` or ``None`` to abort."""
+        site_id = PromptUtils.select_site()  # Prompt the operator to choose a site
+        if not site_id:  # Operator skipped or no sites available
+            logging.error("No site selected. Exiting.")
+            return None
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org context
+        if not current_org_id:  # Org not resolvable -> cannot list sites
+            logging.error("No org_id available. Exiting.")
+            return None
+        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)  # Look up sites for friendly-name resolution
+        site_name = next(
+            (site["name"] for site in sites if site["id"] == site_id), site_id
+        )  # Friendly name or id fallback
+        logging.info("Exporting %s for site: %s", export_label, site_name)  # Trace which site is being exported
+        return site_id, site_name
+
+    @staticmethod
     def device_stats():  # Export site device stats.
         """Export device statistics for a site to SiteDeviceStats.csv."""
-        print("Site Device Statistics:")  # Header.
-        logging.info("Starting export of site device statistics...")  # Log start.
-        site_id = PromptUtils.select_site()  # Select a site.
-        if not site_id:  # No site.
-            logging.error("No site selected. Exiting.")  # Log the error.
-            return  # Abort.
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        if not current_org_id:  # No org.
-            logging.error("No org_id available. Exiting.")  # Log the error.
-            return  # Abort.
-        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)  # List all sites.
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
-        logging.info("Exporting device statistics for site: %s", site_name)  # Log the export.
+        print("Site Device Statistics:")  # Header
+        logging.info("Starting export of site device statistics...")  # Trace start
+        resolved = SiteDeviceExporter._resolve_site_for_stats("device statistics")  # Prompt + org/site resolution
+        if resolved is None:  # Abort signaled by resolver
+            return
+        site_id, site_name = resolved  # Unpack resolved identifiers
         try:
             response = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="all", limit=1000)
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
-            SiteExportUtils._persist_site_device_stats(rawdata, site_name)  # Persist or tell user empty.
-        except Exception as e:  # Fetch failed.
-            logging.error("Error fetching device stats for site %s: %s", site_name, e)  # Log the error.
-            print(f"! Error fetching device statistics: {e}")  # Tell the user.
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows
+            SiteExportUtils._persist_site_device_stats(rawdata, site_name)  # Persist or tell user empty
+        except Exception as e:  # Fetch failed
+            logging.error("Error fetching device stats for site %s: %s", site_name, e)  # Log the error
+            print(f"! Error fetching device statistics: {e}")  # Tell the user
 
     @staticmethod
     def port_stats():  # Export site port stats.
@@ -12949,26 +12998,19 @@ class SiteDeviceExporter:  # Site device exporters.
     @staticmethod
     def devices():  # Export site device list.
         """Export device data for a site to SiteDevices.csv."""
-        print("Site Device List:")  # Header.
-        logging.info("Starting export of site device list...")  # Log start.
-        site_id = PromptUtils.select_site()  # Select a site.
-        if not site_id:  # No site.
-            logging.error("No site selected. Exiting.")  # Log the error.
-            return  # Abort.
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        if not current_org_id:  # No org.
-            logging.error("No org_id available. Exiting.")  # Log the error.
-            return  # Abort.
-        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)  # List all sites.
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
-        logging.info("Exporting device list for site: %s", site_name)  # Log the export.
+        print("Site Device List:")  # Header
+        logging.info("Starting export of site device list...")  # Trace start
+        resolved = SiteDeviceExporter._resolve_site_for_stats("device list")  # Prompt + org/site resolution
+        if resolved is None:  # Abort signaled by resolver
+            return
+        site_id, site_name = resolved  # Unpack resolved identifiers
         try:
             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
-            rawdata = getattr(response, "data", [])  # Unwrap data; default empty.
-            SiteExportUtils._persist_site_devices(rawdata, site_name)  # Persist or tell user empty.
-        except Exception as e:  # Fetch failed.
-            logging.error("Error fetching devices for site %s: %s", site_name, e)  # Log the error.
-            print(f"! Error fetching device data: {e}")  # Tell the user.
+            rawdata = getattr(response, "data", [])  # Unwrap data; default empty
+            SiteExportUtils._persist_site_devices(rawdata, site_name)  # Persist or tell user empty
+        except Exception as e:  # Fetch failed
+            logging.error("Error fetching devices for site %s: %s", site_name, e)  # Log the error
+            print(f"! Error fetching device data: {e}")  # Tell the user
 
 
 class SiteClientExporter:  # Site client exporters.
@@ -12994,26 +13036,21 @@ class SiteClientExporter:  # Site client exporters.
     @staticmethod
     def clients():  # Export site client stats.
         """Export client data for a site to SiteClients.csv."""
-        print("Site Client Statistics:")  # Header.
-        logging.info("Starting export of site client statistics...")  # Log start.
-        site_id = PromptUtils.select_site()  # Select a site.
-        if not site_id:  # No site.
-            logging.error("No site selected. Exiting.")  # Log the error.
-            return  # Abort.
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        if not current_org_id:  # No org.
-            logging.error("No org_id available. Exiting.")  # Log the error.
-            return  # Abort.
-        sites = APICoreFetchUtils.all_sites_with_limit(current_org_id)  # List all sites.
-        site_name = next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
-        logging.info("Exporting client statistics for site: %s", site_name)  # Log the export.
+        print("Site Client Statistics:")  # Header
+        logging.info("Starting export of site client statistics...")  # Trace start
+        resolved = SiteDeviceExporter._resolve_site_for_stats(
+            "client statistics"
+        )  # Prompt + org/site resolution (shared)
+        if resolved is None:  # Abort signaled by resolver
+            return
+        site_id, site_name = resolved  # Unpack resolved identifiers
         try:
             response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=1000)
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
-            SiteClientExporter._persist_site_clients(rawdata, site_name)  # Persist or tell user empty.
-        except Exception as e:  # Fetch failed.
-            logging.error("Error fetching client stats for site %s: %s", site_name, e)  # Log the error.
-            print(f"! Error fetching client data: {e}")  # Tell the user.
+            rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows
+            SiteClientExporter._persist_site_clients(rawdata, site_name)  # Persist or tell user empty
+        except Exception as e:  # Fetch failed
+            logging.error("Error fetching client stats for site %s: %s", site_name, e)  # Log the error
+            print(f"! Error fetching client data: {e}")  # Tell the user
 
     @staticmethod
     def client_insights():  # noqa: C901, PLR0912, PLR0915
@@ -13628,27 +13665,32 @@ class SitesByAPModelExporter:  # Sites-by-AP-model exporter.
         logging.info("Exported %s sites with AP model %s", len(rows), model)  # Log the export.
 
     @staticmethod
+    def _build_site_map(all_sites: list) -> dict[str, Any]:
+        """Return a ``{site_id: site}`` map from a sites listing, skipping entries without an ``id``."""
+        return {site["id"]: site for site in all_sites if site.get("id")}  # Index sites for O(1) lookup by id
+
+    @staticmethod
     def export_sites_by_ap_model() -> None:  # Export sites by AP model.
         """Export CSV of sites containing APs of a selected model with site address info."""
-        print("Export Sites by AP Model:")  # Header.
-        logging.info("Starting export of sites by AP model...")  # Log start.
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        print("! Fetching AP inventory from organization...")  # Tell the user.
-        aps, models = SitesByAPModelExporter._get_ap_models(org_id)  # Fetch APs and models.
-        if not models:  # No models.
-            print("! No APs found in organization inventory.")  # Tell the user.
-            return  # Abort.
-        model = SitesByAPModelExporter._prompt_model_selection(models, aps)  # Prompt a model.
-        if not model:  # No model.
-            return  # Abort.
-        print(f"! Fetching site details for sites with {model} APs...")  # Tell the user.
-        all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites.
-        site_map = {site["id"]: site for site in all_sites if site.get("id")}  # Map site id to site.
-        rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)  # Build export rows.
-        if not rows:  # No rows.
-            print(f"! No sites found with {model} APs.")  # Tell the user.
-            return  # Abort.
-        SitesByAPModelExporter._finalize_ap_model_export(rows, model)  # Slug + filename + write + log.
+        print("Export Sites by AP Model:")  # Header
+        logging.info("Starting export of sites by AP model...")  # Trace start
+        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org
+        print("! Fetching AP inventory from organization...")  # Tell the user
+        aps, models = SitesByAPModelExporter._get_ap_models(org_id)  # Fetch APs and models
+        if not models:  # No models in inventory
+            print("! No APs found in organization inventory.")
+            return
+        model = SitesByAPModelExporter._prompt_model_selection(models, aps)  # Prompt operator for a model
+        if not model:  # Operator skipped
+            return
+        print(f"! Fetching site details for sites with {model} APs...")  # Tell the user
+        all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites
+        site_map = SitesByAPModelExporter._build_site_map(all_sites)  # Index sites by id for row lookup
+        rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)  # Build export rows
+        if not rows:  # No rows match the chosen model
+            print(f"! No sites found with {model} APs.")
+            return
+        SitesByAPModelExporter._finalize_ap_model_export(rows, model)  # Slug + filename + write + log
 
 
 # ============================================================================
@@ -13848,30 +13890,38 @@ class GatewayHaExporter:  # Gateway HA exporter.
         logging.info("Exported %d HA gateway records to %s", len(flat_rows), filename)  # Log export success.
 
     @staticmethod
+    def _collect_ha_gateways(site_id: str) -> list | None:
+        """Fetch site gateway stats and return HA-enabled gateways; ``None`` when none exist (operator notified)."""
+        logging.info("Fetching gateway device stats for site %s", site_id)  # Trace before API call
+        stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="gateway")  # API call
+        all_gateways = APICoreFetchUtils.get_api_response_data(stats_resp)  # Unwrap list from response
+        logging.debug("Received %d gateway stat records for site %s", len(all_gateways), site_id)  # Trace count
+        ha_gateways = [gw for gw in all_gateways if gw.get("is_ha") is True]  # Filter to HA-enabled gateways
+        logging.info("Found %d HA gateways in site %s", len(ha_gateways), site_id)  # Trace HA gateway count
+        if not ha_gateways:  # No HA gateways -> tell user and signal abort
+            print("No HA gateways found for the selected site.")
+            return None
+        return ha_gateways  # Caller proceeds with cluster export
+
+    @staticmethod
     def ha_cluster_info() -> None:  # Export HA cluster info.
         """Export HA gateway cluster info for a selected site (Menu #87)."""
-        logging.info("Starting Gateway HA Cluster Info export (Menu #87)")  # Log entry point.
+        logging.info("Starting Gateway HA Cluster Info export (Menu #87)")  # Trace entry point
         try:
-            org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve or prompt for org ID.
-            logging.debug("Gateway HA export resolved org %s", org_id)  # Record resolved org.
-            site_id = PromptUtils.select_site()  # Pick a site (uses SiteList.csv).
-            if not site_id:  # User cancelled or no sites.
-                logging.warning("No site selected -- aborting HA cluster export")  # Log cancellation.
-                return  # Exit without exporting.
-            logging.info("Fetching gateway device stats for site %s", site_id)  # Log before API call.
-            stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="gateway")
-            all_gateways = APICoreFetchUtils.get_api_response_data(stats_resp)  # Unwrap list from response.
-            logging.debug("Received %d gateway stat records for site %s", len(all_gateways), site_id)  # Log count.
-            ha_gateways = [gw for gw in all_gateways if gw.get("is_ha") is True]  # Filter to HA-enabled gateways.
-            logging.info("Found %d HA gateways in site %s", len(ha_gateways), site_id)  # Log HA gateway count.
-            if not ha_gateways:  # No HA gateways.
-                print("No HA gateways found for the selected site.")  # Inform user.
-                return  # Nothing to export.
-            rows = GatewayHaExporter._build_ha_rows(ha_gateways, site_id)  # Merge stats + cluster node info.
-            GatewayHaExporter._print_ha_summary(rows)  # Print tabular summary to the terminal.
-            GatewayHaExporter._persist_ha_export(rows)  # Flatten + write + log.
-        except Exception as exception:  # Catch any API or processing error.
-            logging.exception("Failed to export HA gateway cluster info: %s", exception)  # Log full traceback.
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve or prompt for org ID
+            logging.debug("Gateway HA export resolved org %s", org_id)  # Record resolved org
+            site_id = PromptUtils.select_site()  # Pick a site (uses SiteList.csv)
+            if not site_id:  # User cancelled or no sites
+                logging.warning("No site selected -- aborting HA cluster export")
+                return
+            ha_gateways = GatewayHaExporter._collect_ha_gateways(site_id)  # Fetch + filter + early-exit on none
+            if ha_gateways is None:  # Helper already notified user
+                return
+            rows = GatewayHaExporter._build_ha_rows(ha_gateways, site_id)  # Merge stats + cluster node info
+            GatewayHaExporter._print_ha_summary(rows)  # Print tabular summary to the terminal
+            GatewayHaExporter._persist_ha_export(rows)  # Flatten + write + log
+        except Exception as exception:  # Catch any API or processing error
+            logging.exception("Failed to export HA gateway cluster info: %s", exception)  # Log full traceback
 
     @staticmethod
     def _fetch_ha_pair_for_gateway(site_id: str, device_id: str) -> dict:
