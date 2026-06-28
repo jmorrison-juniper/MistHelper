@@ -12848,6 +12848,18 @@ class SiteDeviceExporter:  # Site device exporters.
         print(f"   * Data saved to: {filename}")  # Show the path.
 
     @staticmethod
+    def _persist_site_devices(rawdata: list, site_name: str) -> None:
+        """Flatten + persist site-devices rows to a per-site CSV (or tell the user when empty)."""
+        if not rawdata:  # No devices — tell the user and return.
+            print("! No devices found for this site")  # User notice.
+            return  # Done.
+        flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
+        sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]  # CSV-safe.
+        filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"  # Per-site CSV name.
+        DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]  # Persist.
+        print(f"! {len(rawdata)} devices exported to {filename}")  # User notice with count.
+
+    @staticmethod
     def devices():  # Export site device list.
         """Export device data for a site to SiteDevices.csv."""
         print("Site Device List:")  # Header.
@@ -12866,14 +12878,7 @@ class SiteDeviceExporter:  # Site device exporters.
         try:
             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
             rawdata = getattr(response, "data", [])  # Unwrap data; default empty.
-            if rawdata:  # Have data.
-                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
-                sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
-                filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"  # Build the CSV name.
-                DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
-                print(f"! {len(rawdata)} devices exported to {filename}")  # Tell the user.
-            else:
-                print("! No devices found for this site")  # Tell the user none.
+            SiteExportUtils._persist_site_devices(rawdata, site_name)  # Persist or tell user empty.
         except Exception as e:  # Fetch failed.
             logging.error("Error fetching devices for site %s: %s", site_name, e)  # Log the error.
             print(f"! Error fetching device data: {e}")  # Tell the user.
@@ -12886,6 +12891,18 @@ class SiteClientExporter:  # Site client exporters.
     Handles site-level client data, WiFi clients, and beacon exports.
     Extracted from SiteExportUtils.
     """
+
+    @staticmethod
+    def _persist_site_clients(rawdata: list, site_name: str) -> None:
+        """Flatten + persist site-clients rows to a per-site CSV (or tell the user when empty)."""
+        if not rawdata:  # No clients — tell the user and return.
+            print("! No client data found for this site")  # User notice.
+            return  # Done.
+        flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
+        sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]  # CSV-safe.
+        filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"  # Per-site CSV name.
+        DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]  # Persist.
+        print(f"! {len(rawdata)} client records exported to {filename}")  # User notice with count.
 
     @staticmethod
     def clients():  # Export site client stats.
@@ -12906,14 +12923,7 @@ class SiteClientExporter:  # Site client exporters.
         try:
             response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=1000)
             rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
-            if rawdata:  # Have data.
-                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
-                sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
-                filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"  # Build the CSV name.
-                DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
-                print(f"! {len(rawdata)} client records exported to {filename}")  # Tell the user.
-            else:
-                print("! No client data found for this site")  # Tell the user none.
+            SiteClientExporter._persist_site_clients(rawdata, site_name)  # Persist or tell user empty.
         except Exception as e:  # Fetch failed.
             logging.error("Error fetching client stats for site %s: %s", site_name, e)  # Log the error.
             print(f"! Error fetching client data: {e}")  # Tell the user.
@@ -12975,59 +12985,66 @@ class SiteConfigExporter:  # Site config exporters.
     """
 
     @staticmethod
-    def wlans(site_id=None):  # Export site WLANs.
-        """Export effective WLANs for a site to SiteWlans.csv."""
-        logging.info("Starting export of site WLANs...")  # Log start.
-
-        if not site_id:  # No site given.
-            site_id = PromptUtils.select_site()  # Select a site.
-            if not site_id:  # No site.
-                logging.error("No site selected. Exiting.")  # Log the error.
-                return  # Abort.
-
+    def _resolve_wlan_site_name(site_id: str) -> str:
+        """Look up site name from org's site list, falling back to site_id on failure."""
         try:
             response = mistapi.api.v1.orgs.sites.listOrgSites(  # List org sites.
                 apisession,
                 ConfigUtils.get_cached_or_prompted_org_id(),
             )
             sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
-            site_name = next(  # Resolve site name.
-                (site["name"] for site in sites if site["id"] == site_id),
-                site_id,
-            )
+            return next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Match → name.
         except Exception as exception:  # Name lookup failed.
             logging.error("Error getting site name for WLAN export: %s", exception)  # Log the error.
-            site_name = site_id  # Fall back to id.
+            return site_id  # Fall back to id.
 
-        filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"  # Build the CSV name.
-
+    @staticmethod
+    def _fetch_wlans_with_fallback(site_id: str) -> list:
+        """Prefer derived WLANs (includes inherited/template); fall back to site-local on failure."""
         try:
-            # Prefer derived WLANs so inherited/template WLANs are included.
             derived_response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(  # List derived WLANs.
                 apisession,
                 site_id,
                 resolve=True,
             )
-            rawdata = mistapi.get_all(response=derived_response, mist_session=apisession)  # Page all rows.
-        except Exception as exception:  # Derived fetch failed.
-            logging.warning(  # Warn the fallback.
-                "Failed to fetch derived WLANs for site %s, falling back to site-local WLANs: %s", site_id, exception
+            return mistapi.get_all(response=derived_response, mist_session=apisession)  # Page all rows.
+        except Exception as exception:  # Derived fetch failed → site-local fallback.
+            logging.warning(
+                "Failed to fetch derived WLANs for site %s, falling back to site-local WLANs: %s",
+                site_id,
+                exception,
             )
             local_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=1000)
-            rawdata = mistapi.get_all(response=local_response, mist_session=apisession)  # Page all rows.
+            return mistapi.get_all(response=local_response, mist_session=apisession)  # Page all rows.
 
+    @staticmethod
+    def _persist_site_wlans_csv(rawdata: list, filename: str, site_name: str) -> None:
+        """Flatten + sort by SSID + write WLAN rows (or write empty CSV when none)."""
         if not rawdata:  # No rows.
             logging.warning("No data provided for output to %s", filename)  # Warn none.
-            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Empty CSV.
             print(f"! 0 records exported to data\\{filename}")  # Tell the user zero.
-            return  # Abort.
-
+            return  # Done.
         processed = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
-        processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+        processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe.
         processed = sorted(processed, key=lambda row: row.get("ssid", ""))  # Sort by SSID.
-        DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Persist.
         print(f"! {len(processed)} records exported to data\\{filename}")  # Tell the user.
         logging.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
+
+    @staticmethod
+    def wlans(site_id=None):  # Export site WLANs.
+        """Export effective WLANs for a site to SiteWlans.csv."""
+        logging.info("Starting export of site WLANs...")  # Log start.
+        if not site_id:  # No site given.
+            site_id = PromptUtils.select_site()  # Select a site.
+            if not site_id:  # No site.
+                logging.error("No site selected. Exiting.")  # Log the error.
+                return  # Abort.
+        site_name = SiteConfigExporter._resolve_wlan_site_name(site_id)  # Resolve site name.
+        filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"  # Build CSV name.
+        rawdata = SiteConfigExporter._fetch_wlans_with_fallback(site_id)  # Derived → local fallback.
+        SiteConfigExporter._persist_site_wlans_csv(rawdata, filename, site_name)  # Persist (or empty).
 
     @staticmethod
     def maps():  # Export site maps.
@@ -13162,21 +13179,19 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             return None  # Signal caller to skip.
 
     @staticmethod
-    def _aggregate_site_anomaly_data(
-        site_id: str, site_name: str, metrics: list[str]
+    def _run_anomaly_metric_loop(
+        metrics: list[str],
+        fetch_builder: Callable[[str], Callable],
+        tags: dict[str, Any],
+        scope: tuple[str, str],
     ) -> tuple[list[dict[str, Any]], int]:
-        """Loop site anomaly metrics with mistapi loggers silenced; return (rows, success_count)."""
-        tags = {"site_id": site_id, "site_name": site_name}  # Tags attached to every row.
-        scope = ("anomaly events", "site_anomaly_events")  # Display label + data_type tag.
-        print(f"! Retrieving {len(metrics)} different site anomaly events...")  # Tell the user.
+        """Loop metrics with mistapi loggers silenced; build fetch with fetch_builder(metric); collect tagged rows."""
         original_levels = SiteAnomalyExporter._anomaly_suppress_mistapi_loggers()  # Quiet mistapi internal loggers.
         rows: list[dict[str, Any]] = []  # Accumulator for successful rows.
         count = 0  # Number of metrics that returned data.
         try:
             for metric in metrics:  # Fetch each metric.
-                fetch = functools.partial(
-                    mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents, apisession, site_id, metric
-                )  # Bind all args so helper just calls fetch().
+                fetch = fetch_builder(metric)  # Build per-metric fetch callable.
                 row = SiteAnomalyExporter._fetch_one_anomaly_metric(fetch, metric, tags, scope)  # Fetch + tag.
                 if row is not None:  # Metric returned data.
                     rows.append(row)  # Collect the row.
@@ -13184,6 +13199,19 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         finally:
             SiteAnomalyExporter._anomaly_restore_loggers(original_levels)  # Always restore loggers.
         return rows, count  # Hand the aggregate back to the orchestrator.
+
+    @staticmethod
+    def _aggregate_site_anomaly_data(
+        site_id: str, site_name: str, metrics: list[str]
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Loop site anomaly metrics with mistapi loggers silenced; return (rows, success_count)."""
+        tags = {"site_id": site_id, "site_name": site_name}  # Tags attached to every row.
+        scope = ("anomaly events", "site_anomaly_events")  # Display label + data_type tag.
+        print(f"! Retrieving {len(metrics)} different site anomaly events...")  # Tell the user.
+        builder = lambda metric: functools.partial(  # noqa: E731 — bind site-anomaly fetch per metric.
+            mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents, apisession, site_id, metric
+        )
+        return SiteAnomalyExporter._run_anomaly_metric_loop(metrics, builder, tags, scope)  # Shared loop.
 
     @staticmethod
     def _aggregate_device_anomaly_data(
@@ -13198,25 +13226,10 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         }
         scope = ("device anomaly data", "device_anomaly_events")  # Display label + data_type tag.
         print(f"! Retrieving {len(metrics)} different device anomaly events for {device_name}...")  # Tell the user.
-        original_levels = SiteAnomalyExporter._anomaly_suppress_mistapi_loggers()  # Quiet mistapi internal loggers.
-        rows: list[dict[str, Any]] = []  # Accumulator for successful rows.
-        count = 0  # Number of metrics that returned data.
-        try:
-            for metric in metrics:  # Fetch each metric.
-                fetch = functools.partial(
-                    mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice,
-                    apisession,
-                    site_id,
-                    metric,
-                    device_mac,
-                )  # Bind all args so helper just calls fetch().
-                row = SiteAnomalyExporter._fetch_one_anomaly_metric(fetch, metric, tags, scope)  # Fetch + tag.
-                if row is not None:  # Metric returned data.
-                    rows.append(row)  # Collect the row.
-                    count += 1  # Bump the success counter.
-        finally:
-            SiteAnomalyExporter._anomaly_restore_loggers(original_levels)  # Always restore loggers.
-        return rows, count  # Hand the aggregate back to the orchestrator.
+        builder = lambda metric: functools.partial(  # noqa: E731 — bind device-anomaly fetch per metric.
+            mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice, apisession, site_id, metric, device_mac
+        )
+        return SiteAnomalyExporter._run_anomaly_metric_loop(metrics, builder, tags, scope)  # Shared loop.
 
     @staticmethod
     def _export_anomaly_data(
@@ -13509,36 +13522,36 @@ class SitesByAPModelExporter:  # Sites-by-AP-model exporter.
         return grouped  # The site_id -> devices map
 
     @staticmethod
+    def _finalize_ap_model_export(rows: list, model: str) -> None:
+        """Slugify model, build per-model filename, write CSV, and log + print summary."""
+        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)  # Slugify the model.
+        filename = f"SitesByAPModel_{safe_model}.csv"  # Build the CSV name.
+        DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")  # Persist.
+        print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")  # Tell the user.
+        logging.info("Exported %s sites with AP model %s", len(rows), model)  # Log the export.
+
+    @staticmethod
     def export_sites_by_ap_model() -> None:  # Export sites by AP model.
         """Export CSV of sites containing APs of a selected model with site address info."""
         print("Export Sites by AP Model:")  # Header.
         logging.info("Starting export of sites by AP model...")  # Log start.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-
         print("! Fetching AP inventory from organization...")  # Tell the user.
         aps, models = SitesByAPModelExporter._get_ap_models(org_id)  # Fetch APs and models.
         if not models:  # No models.
             print("! No APs found in organization inventory.")  # Tell the user.
             return  # Abort.
-
         model = SitesByAPModelExporter._prompt_model_selection(models, aps)  # Prompt a model.
         if not model:  # No model.
             return  # Abort.
-
         print(f"! Fetching site details for sites with {model} APs...")  # Tell the user.
         all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites.
         site_map = {site["id"]: site for site in all_sites if site.get("id")}  # Map site id to site.
-
         rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)  # Build export rows.
         if not rows:  # No rows.
             print(f"! No sites found with {model} APs.")  # Tell the user.
             return  # Abort.
-
-        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)  # Slugify the model.
-        filename = f"SitesByAPModel_{safe_model}.csv"  # Build the CSV name.
-        DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")
-        print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")  # Tell the user.
-        logging.info("Exported %s sites with AP model %s", len(rows), model)  # Log the export.
+        SitesByAPModelExporter._finalize_ap_model_export(rows, model)  # Slug + filename + write + log.
 
 
 # ============================================================================
@@ -13722,95 +13735,85 @@ class GatewayHaExporter:  # Gateway HA exporter.
     ]
 
     @staticmethod
-    def ha_cluster_info() -> None:  # Export HA cluster info.
-        """Export HA gateway cluster info for a selected site (Menu #87).
+    def _persist_ha_export(rows: list) -> None:
+        """Flatten + write HA gateway rows to CSV/backend and log the count."""
+        flat_rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV/DB.
+        filename = "GatewayHaClusterInfo.csv"  # Output filename for the export.
+        DataExporter.write_with_format_selection(
+            flat_rows, filename, api_function_name="listSiteGatewayHaStats"
+        )  # Persist to configured backend.
+        logging.info("Exported %d HA gateway records to %s", len(flat_rows), filename)  # Log export success.
 
-        Flow:
-          1. Prompt for site selection.
-          2. Pull all gateway device stats for that site.
-          3. Filter to gateways that have is_ha == True.
-          4. For each HA gateway, call GetSiteDeviceHaClusterNode to get the pair membership.
-          5. Merge the node-pair info into each row.
-          6. Print a summary table to the screen.
-          7. Export the combined records to the configured output backend.
-        """
-        logging.info("Starting Gateway HA Cluster Info export (Menu #87)")  # Log entry point
+    @staticmethod
+    def ha_cluster_info() -> None:  # Export HA cluster info.
+        """Export HA gateway cluster info for a selected site (Menu #87)."""
+        logging.info("Starting Gateway HA Cluster Info export (Menu #87)")  # Log entry point.
         try:
-            org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Retrieve or prompt for org ID
-            logging.debug("Gateway HA export resolved org %s", org_id)  # Record resolved org; keeps value referenced
-            site_id = PromptUtils.select_site()  # Pick a site; select_site() is org-independent (reads SiteList.csv)
-            if not site_id:  # User cancelled or no sites available
-                logging.warning("No site selected -- aborting HA cluster export")  # Log cancellation
-                return  # Exit without exporting
-            logging.info("Fetching gateway device stats for site %s", site_id)  # Log before API call
-            stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                apisession, site_id, type="gateway"
-            )  # Pull all gateway stats from the Mist API for this site
-            all_gateways = APICoreFetchUtils.get_api_response_data(stats_resp)  # Unwrap list from response
-            logging.debug("Received %d gateway stat records for site %s", len(all_gateways), site_id)  # Log count
-            ha_gateways = [gw for gw in all_gateways if gw.get("is_ha") is True]  # Filter to HA-enabled gateways only
-            logging.info("Found %d HA gateways in site %s", len(ha_gateways), site_id)  # Log HA gateway count
-            if not ha_gateways:  # No HA gateways at this site
-                print("No HA gateways found for the selected site.")  # Inform user of empty result
-                return  # Nothing to export
-            rows = GatewayHaExporter._build_ha_rows(ha_gateways, site_id)  # Merge stats + cluster node info
-            GatewayHaExporter._print_ha_summary(rows)  # Print tabular summary to the terminal
-            flat_rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV/DB
-            filename = "GatewayHaClusterInfo.csv"  # Output filename for the export
-            DataExporter.write_with_format_selection(
-                flat_rows, filename, api_function_name="listSiteGatewayHaStats"
-            )  # Write to configured backend (CSV, SQLite, ArangoDB, etc.)
-            logging.info("Exported %d HA gateway records to %s", len(flat_rows), filename)  # Log export success
-        except Exception as exception:  # Catch any API or processing error
-            logging.exception("Failed to export HA gateway cluster info: %s", exception)  # Log full traceback
+            org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve or prompt for org ID.
+            logging.debug("Gateway HA export resolved org %s", org_id)  # Record resolved org.
+            site_id = PromptUtils.select_site()  # Pick a site (uses SiteList.csv).
+            if not site_id:  # User cancelled or no sites.
+                logging.warning("No site selected -- aborting HA cluster export")  # Log cancellation.
+                return  # Exit without exporting.
+            logging.info("Fetching gateway device stats for site %s", site_id)  # Log before API call.
+            stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="gateway")
+            all_gateways = APICoreFetchUtils.get_api_response_data(stats_resp)  # Unwrap list from response.
+            logging.debug("Received %d gateway stat records for site %s", len(all_gateways), site_id)  # Log count.
+            ha_gateways = [gw for gw in all_gateways if gw.get("is_ha") is True]  # Filter to HA-enabled gateways.
+            logging.info("Found %d HA gateways in site %s", len(ha_gateways), site_id)  # Log HA gateway count.
+            if not ha_gateways:  # No HA gateways.
+                print("No HA gateways found for the selected site.")  # Inform user.
+                return  # Nothing to export.
+            rows = GatewayHaExporter._build_ha_rows(ha_gateways, site_id)  # Merge stats + cluster node info.
+            GatewayHaExporter._print_ha_summary(rows)  # Print tabular summary to the terminal.
+            GatewayHaExporter._persist_ha_export(rows)  # Flatten + write + log.
+        except Exception as exception:  # Catch any API or processing error.
+            logging.exception("Failed to export HA gateway cluster info: %s", exception)  # Log full traceback.
+
+    @staticmethod
+    def _fetch_ha_pair_for_gateway(site_id: str, device_id: str) -> dict:
+        """Call /sites/{site_id}/devices/{device_id}/ha and return node0/node1 MAC + count fields (None on error)."""
+        try:
+            ha_resp = mistapi.api.v1.sites.devices.GetSiteDeviceHaClusterNode(  # Get node pair.
+                apisession, site_id, device_id
+            )
+            ha_data = APICoreFetchUtils.get_api_response_data(ha_resp)  # Unwrap the response body.
+            logging.debug("HA cluster node response for %s: %s", device_id, ha_data)  # Log raw response.
+            if isinstance(ha_data, dict):  # Expect a gateway_cluster object with a "nodes" list.
+                nodes = ha_data.get("nodes", [])  # Extract the nodes array.
+                return {
+                    "ha_cluster_node0_mac": nodes[0].get("mac") if len(nodes) > 0 else None,  # Node 0 MAC.
+                    "ha_cluster_node1_mac": nodes[1].get("mac") if len(nodes) > 1 else None,  # Node 1 MAC.
+                    "ha_cluster_node_count": len(nodes),  # Number of nodes in cluster.
+                }
+            return {
+                "ha_cluster_node0_mac": None,
+                "ha_cluster_node1_mac": None,
+                "ha_cluster_node_count": 0,
+            }  # Bad shape.
+        except Exception as exception:  # HA endpoint may 404 for partial cluster states.
+            logging.warning("Could not fetch HA node info for %s: %s", device_id, exception)  # Log soft failure.
+            return {
+                "ha_cluster_node0_mac": None,
+                "ha_cluster_node1_mac": None,
+                "ha_cluster_node_count": 0,
+            }  # Error fallback.
 
     @staticmethod
     def _build_ha_rows(ha_gateways: list, site_id: str) -> list:  # Build HA summary rows.
-        """Build merged rows combining gateway stats with cluster node pair membership.
-
-        For each HA gateway, fetches the /ha endpoint to get the peer node MAC addresses,
-        then merges that info into the stats row.
-
-        Args:
-            ha_gateways: List of stats_gateway dicts where is_ha is True.
-            site_id: The site ID used for the per-device HA query.
-
-        Returns:
-            List of merged dicts ready for flattening and export.
-        """
-        rows = []  # Accumulate merged rows here
-        for gateway in ha_gateways:  # Iterate over each HA-enabled gateway device
-            device_id = gateway.get("id", "")  # Get device ID (UUID) from stats record
-            row = {
-                field: gateway.get(field) for field in GatewayHaExporter.HA_STAT_FIELDS
-            }  # Copy HA-relevant stat fields
-            row["site_id"] = site_id  # Ensure site_id is always present in the row
+        """For each HA gateway, merge stats fields with the cluster node-pair info from /ha endpoint."""
+        rows = []  # Accumulate merged rows here.
+        for gateway in ha_gateways:  # Iterate over each HA-enabled gateway device.
+            device_id = gateway.get("id", "")  # Get device ID (UUID) from stats record.
+            row = {field: gateway.get(field) for field in GatewayHaExporter.HA_STAT_FIELDS}  # Copy HA stat fields.
+            row["site_id"] = site_id  # Ensure site_id is always present in the row.
             logging.info(
                 "Fetching HA cluster node info for gateway %s (%s)", gateway.get("name"), device_id
-            )  # Log per-device call
-            try:
-                ha_resp = mistapi.api.v1.sites.devices.GetSiteDeviceHaClusterNode(
-                    apisession, site_id, device_id
-                )  # Call /sites/{site_id}/devices/{device_id}/ha to get node pair membership
-                ha_data = APICoreFetchUtils.get_api_response_data(ha_resp)  # Unwrap the response body
-                logging.debug("HA cluster node response for %s: %s", device_id, ha_data)  # Log raw response
-                if isinstance(ha_data, dict):  # Expect a gateway_cluster object with a "nodes" list
-                    nodes = ha_data.get("nodes", [])  # Extract the nodes array (each node has a "mac" field)
-                    row["ha_cluster_node0_mac"] = nodes[0].get("mac") if len(nodes) > 0 else None  # Node 0 MAC
-                    row["ha_cluster_node1_mac"] = nodes[1].get("mac") if len(nodes) > 1 else None  # Node 1 MAC
-                    row["ha_cluster_node_count"] = len(nodes)  # How many nodes are in this cluster
-                else:  # API returned unexpected shape
-                    row["ha_cluster_node0_mac"] = None  # Mark as unknown if response malformed
-                    row["ha_cluster_node1_mac"] = None  # Mark as unknown
-                    row["ha_cluster_node_count"] = 0  # Zero nodes if response malformed
-            except Exception as exception:  # HA endpoint may return 404 for partial cluster states
-                logging.warning("Could not fetch HA node info for %s: %s", device_id, exception)  # Log soft failure
-                row["ha_cluster_node0_mac"] = None  # Fill with None so row still exports cleanly
-                row["ha_cluster_node1_mac"] = None  # Fill with None
-                row["ha_cluster_node_count"] = 0  # Zero nodes on error
-            rows.append(row)  # Add merged row to results list
-        logging.debug("Built %d merged HA gateway rows", len(rows))  # Log total built
-        return rows  # Return the complete merged dataset
+            )  # Log per-device call.
+            row.update(GatewayHaExporter._fetch_ha_pair_for_gateway(site_id, device_id))  # Merge node-pair fields.
+            rows.append(row)  # Add merged row to results list.
+        logging.debug("Built %d merged HA gateway rows", len(rows))  # Log total built.
+        return rows  # Return the complete merged dataset.
 
     @staticmethod
     def _print_ha_summary(rows: list) -> None:  # Print the HA summary.
@@ -14297,25 +14300,24 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
                 return func_name  # Use the first match
         return None  # No function matched this prefix
 
-    def _register_endpoint(self, endpoint_name: str, module, api_function: str, modname: str) -> None:
-        """Register an endpoint after analyzing its parameters."""
+    def _analyze_api_signature(self, module, api_function: str) -> tuple[list, list[str]]:
+        """Inspect the API function's signature and return (required_params, optional_param_names)."""
         import inspect  # Import inspect.
 
+        sig = inspect.signature(getattr(module, api_function))  # Read the signature.
+        return self._get_required_params(sig), self._get_optional_params(sig)  # (required, optional).
+
+    def _register_endpoint(self, endpoint_name: str, module, api_function: str, modname: str) -> None:
+        """Register an endpoint after analyzing its parameters."""
         filename = self._build_filename(endpoint_name)  # Build the filename.
         description = f"{endpoint_name.replace('_', ' ').title()} Definitions"  # Build the description.
-
-        sig = inspect.signature(getattr(module, api_function))  # Read the signature.
-        required_params = self._get_required_params(sig)  # Required params.
-        optional_params = self._get_optional_params(sig)  # Optional params.
-
+        required_params, optional_params = self._analyze_api_signature(module, api_function)  # Read params.
         special_handling = self._determine_special_handling(  # Decide special handling.
             endpoint_name, api_function, required_params, optional_params, filename
         )
-
         if special_handling == "skip":  # Endpoint to skip.
             return  # Skip it.
-
-        config = EndpointConfig(  # Build the config.
+        self.discovered_endpoints[endpoint_name] = EndpointConfig(  # Build + register config.
             endpoint_name=endpoint_name,
             module=module,
             function_name=api_function,
@@ -14324,8 +14326,6 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             modname=modname,
             special_handling=special_handling,
         )
-        self.discovered_endpoints[endpoint_name] = config  # Register the endpoint.
-
         print(f"    ! Found API function: {api_function}() -> {filename}")  # Tell the user.
         logging.debug("Discovered %s: %s() -> %s", endpoint_name, api_function, filename)  # Trace the find.
 
@@ -14355,6 +14355,22 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             if p.default != inspect.Parameter.empty and p.name not in ["mist_session", "apisession"]
         ]
 
+    def _classify_required_param(
+        self, endpoint_name: str, api_function: str, param_names: list[str], filename: str
+    ) -> str:
+        """Classify endpoints that need a special required-param fan-out (all_models / all_countries / skip)."""
+        if endpoint_name == "default_gateway_config" and "model" in param_names:  # Gateway config special case.
+            print(f"    ! Found special endpoint {api_function}() requiring 'model' parameter")  # Tell the user.
+            print(f"    ! Will call for all available gateway models -> {filename}")  # Tell the user.
+            return "all_models"  # All-models handling.
+        if endpoint_name == "states" and "country_code" in param_names:  # States special case.
+            print(f"    ! Found special endpoint {api_function}() requiring 'country_code' parameter")  # Tell user.
+            print(f"    ! Will call for all available countries -> {filename}")  # Tell the user.
+            return "all_countries"  # All-countries handling.
+        print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")  # Tell user skip.
+        logging.info("Skipping %s.%s() - requires parameters: %s", endpoint_name, api_function, param_names)
+        return "skip"  # Skip it.
+
     def _determine_special_handling(
         self,
         endpoint_name: str,
@@ -14368,25 +14384,10 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             print(f"    ! Found special endpoint {api_function}() with optional 'country_code' parameter")
             print(f"    ! Will call for all available countries -> {filename}")  # Tell the user.
             return "all_countries_channels"  # All-countries channels.
-
         if not required_params:  # No required params.
             return None  # Standard handling.
-
         param_names = [p.name for p in required_params]  # Required param names.
-
-        if endpoint_name == "default_gateway_config" and "model" in param_names:  # Gateway config special case.
-            print(f"    ! Found special endpoint {api_function}() requiring 'model' parameter")  # Tell the user.
-            print(f"    ! Will call for all available gateway models -> {filename}")  # Tell the user.
-            return "all_models"  # All-models handling.
-
-        if endpoint_name == "states" and "country_code" in param_names:  # States special case.
-            print(f"    ! Found special endpoint {api_function}() requiring 'country_code' parameter")  # Tell the user.
-            print(f"    ! Will call for all available countries -> {filename}")  # Tell the user.
-            return "all_countries"  # All-countries handling.
-
-        print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")  # Tell the user skip.
-        logging.info("Skipping %s.%s() - requires parameters: %s", endpoint_name, api_function, param_names)
-        return "skip"  # Skip it.
+        return self._classify_required_param(endpoint_name, api_function, param_names, filename)  # Special / skip.
 
     def _process_all_endpoints(self) -> None:  # Process all endpoints.
         """Process each discovered endpoint."""
@@ -14412,6 +14413,18 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             self.endpoints_failed += 1  # Count failed.
             self.endpoints_processed += 1  # Count processed.
 
+    def _evaluate_cache_window(self, config: EndpointConfig, file_age_hours: float, file_timestamp: str) -> bool:
+        """Decide whether the file is within the cache window; emit fresh/stale user messages either way."""
+        if file_age_hours < self.CACHE_MAX_AGE_HOURS:  # Within the window.
+            print(f"  ! Found fresh {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
+            print(f"  ! Skipping API call - using cached data (cache valid for {self.CACHE_MAX_AGE_HOURS}h)")
+            logging.info("Using cached %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
+            return True  # Fresh.
+        print(f"  ! Found stale {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
+        print(f"  ! File is older than {self.CACHE_MAX_AGE_HOURS}h threshold - fetching fresh data from API...")
+        logging.info("Refreshing stale %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
+        return False  # Stale.
+
     def _is_file_fresh(self, config: EndpointConfig) -> bool:  # Check cache freshness.
         """Check if cached file exists and is fresh enough to use."""
         import os  # Import os.
@@ -14423,23 +14436,11 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             print(f"  ! {config.filename} not found - fetching fresh data from API...")  # Tell the user.
             logging.info("%s not found, fetching from API", config.filename)  # Log the fetch.
             return False  # Not fresh.
-
         try:
             file_mtime = os.path.getmtime(file_path)  # Read the mtime.
             file_age_hours = (time.time() - file_mtime) / 3600  # Compute age in hours.
             file_timestamp = datetime.fromtimestamp(file_mtime).strftime("%Y-%m-%d %H:%M:%S")  # Format the timestamp.
-
-            if file_age_hours < self.CACHE_MAX_AGE_HOURS:  # Within the window.
-                print(f"  ! Found fresh {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
-                print(f"  ! Skipping API call - using cached data (cache valid for {self.CACHE_MAX_AGE_HOURS}h)")
-                logging.info("Using cached %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
-                return True  # Fresh.
-            else:
-                print(f"  ! Found stale {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
-                print(f"  ! File is older than {self.CACHE_MAX_AGE_HOURS}h threshold - fetching fresh data from API...")
-                logging.info("Refreshing stale %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
-                return False  # Stale.
-
+            return self._evaluate_cache_window(config, file_age_hours, file_timestamp)  # Compare window + emit message.
         except Exception as error:  # Timestamp check failed.
             print(f"  ! Error checking file timestamp: {error}")  # Tell the user.
             logging.warning("Could not check %s file timestamp, will fetch fresh data: %s", config.endpoint_name, error)
