@@ -9597,53 +9597,44 @@ class OrgInventoryExporter:  # Org inventory exporters.
         )
 
     @staticmethod
+    @staticmethod
+    def _fetch_and_persist_raw_inventory_variant(
+        filename: str, request_kwargs: dict, current_org_id: str, output_folder: str
+    ) -> int:
+        """Fetch one inventory variant and persist as raw JSON; return row count."""
+        logging.info("Fetching raw inventory variant for %s...", filename)  # Log before API call
+        response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, current_org_id, **request_kwargs)
+        raw_inventory = mistapi.get_all(response=response, mist_session=apisession)  # Paginate all results
+        output_path = os.path.join(output_folder, filename)  # Build deterministic file path
+        with open(output_path, "w", encoding="utf-8") as json_file:  # UTF-8 for portable JSON encoding
+            json.dump(raw_inventory, json_file, indent=2, default=str)  # Pretty-print so humans can diff variants
+        logging.info("Saved %d entries to %s", len(raw_inventory), output_path)  # Log per-file count
+        return len(raw_inventory)  # Return for summary aggregation
+
+    @staticmethod
     def _export_combined_inventory_raw_json(output_folder: str, current_org_id: str) -> None:
         """Export raw inventory JSON variants used for VC delta analysis."""
-        logging.info(
-            "Saving raw inventory JSON for delta comparison..."
-        )  # Log start so operators know diagnostic exports are running.
-        try:  # Raw JSON export is diagnostic only and must never block the main report.
-            os.makedirs(
-                output_folder, exist_ok=True
-            )  # Ensure the shared output folder exists before writing JSON files.
-            request_specs = [  # Define each inventory query variant once to keep export loop consistent.
+        logging.info("Saving raw inventory JSON for delta comparison...")  # Log start of diagnostic exports
+        try:  # Raw JSON export is diagnostic only and must never block the main report
+            os.makedirs(output_folder, exist_ok=True)  # Ensure shared output folder exists
+            request_specs = [  # One spec per inventory query variant for consistent export loop
                 ("raw_inventory_vc_true.json", {"vc": True, "type": "switch", "limit": DEFAULT_API_PAGE_LIMIT}),
                 ("raw_inventory_vc_false.json", {"vc": False, "type": "switch", "limit": DEFAULT_API_PAGE_LIMIT}),
                 ("raw_inventory_no_vc_param.json", {"type": "switch", "limit": DEFAULT_API_PAGE_LIMIT}),
             ]
-            counts_by_filename: dict[str, int] = {}  # Track row counts so user-facing summary can report all variants.
-            for filename, request_kwargs in request_specs:  # Fetch and persist each API view for later diff analysis.
-                logging.info(
-                    "Fetching raw inventory variant for %s...", filename
-                )  # Log before each API call for observability.
-                response = mistapi.api.v1.orgs.inventory.getOrgInventory(
-                    apisession, current_org_id, **request_kwargs
-                )  # Pull the requested inventory view.
-                raw_inventory = mistapi.get_all(
-                    response=response, mist_session=apisession
-                )  # Paginate all results so JSON captures complete data.
-                output_path = os.path.join(
-                    output_folder, filename
-                )  # Build deterministic file path for this diagnostic variant.
-                with open(
-                    output_path, "w", encoding="utf-8"
-                ) as json_file:  # Open output file in UTF-8 for portable JSON encoding.
-                    json.dump(
-                        raw_inventory, json_file, indent=2, default=str
-                    )  # Pretty-print JSON so humans can diff variants easily.
-                counts_by_filename[filename] = len(raw_inventory)  # Store count for end-of-step status reporting.
-                logging.info(
-                    "Saved %d entries to %s", len(raw_inventory), output_path
-                )  # Log successful export count per file.
-            print(  # Show concise operator summary once all diagnostic files are written.
+            counts_by_filename: dict[str, int] = {
+                filename: OrgInventoryExporter._fetch_and_persist_raw_inventory_variant(
+                    filename, kwargs, current_org_id, output_folder
+                )
+                for filename, kwargs in request_specs
+            }
+            print(  # Show concise operator summary once all diagnostic files are written
                 f"  Raw JSON saved: vc=True ({counts_by_filename.get('raw_inventory_vc_true.json', 0)}), "
                 f"vc=False ({counts_by_filename.get('raw_inventory_vc_false.json', 0)}), "
                 f"no-vc ({counts_by_filename.get('raw_inventory_no_vc_param.json', 0)}) entries"
             )
-        except Exception as json_save_error:  # Diagnostic failure is non-fatal by design.
-            logging.warning(
-                "Failed to save raw inventory JSON: %s", json_save_error
-            )  # Preserve root-cause detail without aborting menu 25.
+        except Exception as json_save_error:  # Diagnostic failure is non-fatal by design
+            logging.warning("Failed to save raw inventory JSON: %s", json_save_error)  # Preserve root cause
 
     @staticmethod
     def _load_combined_inventory_rows() -> list[dict[str, str]]:  # Load combined inventory rows.
@@ -9683,6 +9674,22 @@ class OrgInventoryExporter:  # Org inventory exporters.
         )  # Return physical rows plus shell diagnostics for logging.
 
     @staticmethod
+    def _emit_vc_shell_dashboard_diff(
+        site_configs: list[dict[str, str]], empty_vc_shells: list[dict[str, str]]
+    ) -> None:
+        """Print the dashboard-vs-report parity note when empty VC shells exist."""
+        print(
+            f"  NOTE: {len(empty_vc_shells)} provisioned VC shells exist with no physical members."
+        )  # Explain why dashboard counts may exceed report counts
+        print(  # Provide explicit comparison so operators trust the physical-only report totals
+            f"        Dashboard shows {len(site_configs) + len(empty_vc_shells)} 'Physical Devices' "
+            f"but {len(empty_vc_shells)} are empty VC placeholders (020003* MAC, no serial/SKU)."
+        )
+        print(
+            f"        Report correctly includes only {len(site_configs)} devices with real hardware."
+        )  # Confirm report logic remains intentional
+
+    @staticmethod
     def _log_combined_inventory_vc_summary(  # Log virtual-chassis summary.
         all_devices: list[dict[str, str]],
         site_configs: list[dict[str, str]],
@@ -9690,28 +9697,19 @@ class OrgInventoryExporter:  # Org inventory exporters.
         duplicate_vc_entries: int,
     ) -> None:
         """Log and print the virtual chassis filtering summary for operators."""
-        logging.info(  # Explain how many rows were filtered to reach physical-hardware-only reporting.
+        logging.info(  # Explain how many rows were filtered to reach physical-hardware-only reporting
             "Loaded %d total devices, filtered to %d physical devices (excluded %d virtual VC identifiers)",
             len(all_devices),
             len(site_configs),
             len(all_devices) - len(site_configs),
         )
-        logging.info(  # Break down virtual rows into duplicates versus empty VC shells for troubleshooting parity gaps.
+        logging.info(  # Break down virtual rows into duplicates versus empty VC shells
             "Virtual VC breakdown: %d duplicate entries (real hardware counted elsewhere) + %d empty VC shells (provisioned but no physical members assigned)",  # noqa: E501
             duplicate_vc_entries,
             len(empty_vc_shells),
         )
-        if empty_vc_shells:  # Surface dashboard/report parity nuance only when empty shells actually exist.
-            print(
-                f"  NOTE: {len(empty_vc_shells)} provisioned VC shells exist with no physical members."
-            )  # Explain why dashboard counts may exceed report counts.
-            print(  # Provide explicit comparison so operators trust the physical-only report totals.
-                f"        Dashboard shows {len(site_configs) + len(empty_vc_shells)} 'Physical Devices' "
-                f"but {len(empty_vc_shells)} are empty VC placeholders (020003* MAC, no serial/SKU)."
-            )
-            print(
-                f"        Report correctly includes only {len(site_configs)} devices with real hardware."
-            )  # Confirm report logic remains intentional.
+        if empty_vc_shells:  # Surface dashboard/report parity nuance only when empty shells actually exist
+            OrgInventoryExporter._emit_vc_shell_dashboard_diff(site_configs, empty_vc_shells)  # Print parity note
 
     @staticmethod
     def _build_combined_inventory_weekly_row(  # Build one weekly inventory row.
@@ -9736,41 +9734,46 @@ class OrgInventoryExporter:  # Org inventory exporters.
         }
 
     @staticmethod
+    def _bucket_device_into_week(
+        device: dict[str, str],
+        weekly_data: defaultdict,
+        summary_data: defaultdict,
+        end_customer_name: str | None,
+        end_customer_account_id: str | None,
+    ) -> None:
+        """Bucket one device into the correct ISO-week weekly_data + summary_data."""
+        try:  # One bad device row must not derail the full export
+            created_time = int(device.get("created_time", 0))  # Convert API timestamp to epoch seconds
+            created_date = datetime.fromtimestamp(created_time, tz=UTC)  # UTC for deterministic bucketing
+            year, week, _ = created_date.isocalendar()  # Derive ISO calendar week for CSV naming
+            week_key = f"{year}_Week_{week:02d}"  # Stable filename segment
+            weekly_data[week_key].append(  # Append detailed export row to the correct weekly bucket
+                OrgInventoryExporter._build_combined_inventory_weekly_row(
+                    device, end_customer_name, end_customer_account_id
+                )
+            )
+            summary_data[(year, week)] += 1  # Increment summary counter for the same ISO week
+        except Exception as exception:  # Row-level failure logged for cleanup
+            logging.warning("! Skipping device due to error: %s", exception)  # Log row-level failure
+
+    @staticmethod
     def _build_combined_inventory_weekly_data(  # Build weekly inventory dataset.
         site_configs: list[dict[str, str]],
         end_customer_name: str | None,
         end_customer_account_id: str | None,
     ) -> tuple[defaultdict[str, list[dict[str, str | None]]], defaultdict[tuple[int, int], int]]:
         """Group physical devices into ISO calendar-week buckets and summary counts."""
-        weekly_data: defaultdict[str, list[dict[str, str | None]]] = defaultdict(
-            list
-        )  # Group export rows by ISO year/week key for one-file-per-week outputs.
-        summary_data: defaultdict[tuple[int, int], int] = defaultdict(
-            int
-        )  # Count devices per ISO year/week for summary reporting.
-        for (
-            device
-        ) in site_configs:  # Process each physical device row exactly once for both detailed and summary outputs.
-            try:  # Skip malformed timestamps without aborting the full report generation.
-                created_time = int(
-                    device.get("created_time", 0)
-                )  # Convert API timestamp to integer epoch seconds for calendar bucketing.
-                created_date = datetime.fromtimestamp(
-                    created_time, tz=UTC
-                )  # Use UTC so weekly grouping is deterministic across hosts.
-                year, week, _ = created_date.isocalendar()  # Derive ISO calendar week used by downstream CSV naming.
-                week_key = f"{year}_Week_{week:02d}"  # Build stable filename segment for this ISO week.
-                weekly_data[week_key].append(  # Append detailed export row to the correct weekly bucket.
-                    OrgInventoryExporter._build_combined_inventory_weekly_row(
-                        device, end_customer_name, end_customer_account_id
-                    )
-                )
-                summary_data[(year, week)] += 1  # Increment summary counter for the same ISO week.
-            except Exception as exception:  # One bad device row must not derail the full export.
-                logging.warning(
-                    "! Skipping device due to error: %s", exception
-                )  # Log row-level failure for later cleanup.
-        return weekly_data, summary_data  # Return both detailed buckets and summary counts for file writers.
+        weekly_data: defaultdict[str, list[dict[str, str | None]]] = defaultdict(list)  # Per-week export rows
+        summary_data: defaultdict[tuple[int, int], int] = defaultdict(int)  # Per-week device counts
+        for device in site_configs:  # Process each physical device row exactly once
+            OrgInventoryExporter._bucket_device_into_week(
+                device,
+                weekly_data,
+                summary_data,
+                end_customer_name,
+                end_customer_account_id,
+            )
+        return weekly_data, summary_data  # Return both detailed buckets and summary counts
 
     @staticmethod
     def _write_combined_inventory_weekly_csvs(  # Write weekly inventory CSVs.
@@ -9813,107 +9816,98 @@ class OrgInventoryExporter:  # Org inventory exporters.
                 summary_writer.writerow([year, week, count])  # Persist per-week device totals.
 
     @staticmethod
+    def _build_master_csv_row(device: dict[str, str]) -> dict[str, str]:
+        """Build one flattened master-CSV row from a physical device record."""
+        return {  # Simplified headers expected by downstream consumers
+            "serial": device.get("serial", ""),
+            "mac": device.get("mac", ""),
+            "model": device.get("model", ""),
+            "Street Address": device.get("street", ""),
+            "City": device.get("city", ""),
+            "State": device.get("state", ""),
+            "Zip": device.get("zip_code", ""),
+        }
+
+    @staticmethod
+    def _persist_master_csv(master_csv_file: str, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
+        """Write master inventory rows to CSV with explicit field order."""
+        with open(master_csv_file, mode="w", newline="", encoding="utf-8") as file:  # Rewrite each run
+            writer = csv.DictWriter(file, fieldnames=fieldnames)  # Explicit header ordering
+            writer.writeheader()  # Column names for spreadsheet/ETL workflows
+            writer.writerows(rows)  # Persist all physical-device rows
+
+    @staticmethod
     def _write_combined_inventory_master_csv(  # Write combined inventory master CSV.
         output_folder: str,
         safe_org_name: str,
         site_configs: list[dict[str, str]],
     ) -> tuple[str, int]:
         """Write simplified master combined-inventory CSV and return filename plus row count."""
-        master_csv_data = [  # Build flattened master rows with simplified headers expected by downstream consumers.
-            {
-                "serial": device.get("serial", ""),
-                "mac": device.get("mac", ""),
-                "model": device.get("model", ""),
-                "Street Address": device.get("street", ""),
-                "City": device.get("city", ""),
-                "State": device.get("state", ""),
-                "Zip": device.get("zip_code", ""),
-            }
-            for device in site_configs
-        ]
-        master_csv_filename = f"{safe_org_name}_CombinedInventory_Master.csv"  # Include org name so multi-org runs remain distinguishable.  # noqa: E501
-        master_csv_file = os.path.join(
-            output_folder, master_csv_filename
-        )  # Build final path in the same weekly output folder.
-        master_csv_fieldnames = [
-            "serial",
-            "mac",
-            "model",
-            "Street Address",
-            "City",
-            "State",
-            "Zip",
-        ]  # Lock column order for stable exports.
-        with open(
-            master_csv_file, mode="w", newline="", encoding="utf-8"
-        ) as file:  # Rewrite master CSV on every run to reflect current inventory.
-            writer = csv.DictWriter(
-                file, fieldnames=master_csv_fieldnames
-            )  # Use explicit header ordering for consumers.
-            writer.writeheader()  # Emit column names expected by spreadsheet and ETL workflows.
-            writer.writerows(master_csv_data)  # Persist all physical-device rows in simplified layout.
-        return master_csv_filename, len(master_csv_data)  # Return metadata for final user-facing summary message.
+        master_csv_data = [
+            OrgInventoryExporter._build_master_csv_row(device) for device in site_configs
+        ]  # Build all master rows up front
+        master_csv_filename = (
+            f"{safe_org_name}_CombinedInventory_Master.csv"  # Include org for multi-org runs  # noqa: E501
+        )
+        master_csv_file = os.path.join(output_folder, master_csv_filename)  # Final path
+        master_csv_fieldnames = ["serial", "mac", "model", "Street Address", "City", "State", "Zip"]  # Stable order
+        OrgInventoryExporter._persist_master_csv(master_csv_file, master_csv_fieldnames, master_csv_data)
+        return master_csv_filename, len(master_csv_data)  # Metadata for final summary message
+
+    @staticmethod
+    def _prepare_combined_inventory_context() -> tuple[str, str | None, str | None, str, str]:
+        """Resolve org, customer, safe org name, and output folder for combined inventory export."""
+        load_dotenv()  # Load customer metadata from .env
+        end_customer_name = os.getenv("END_CUSTOMER_NAME")  # Used in weekly export columns
+        end_customer_account_id = os.getenv("END_CUSTOMER_ACCOUNT_ID")  # Used in weekly export columns
+        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org context first
+        org_name_for_filename = OrgInventoryExporter._resolve_combined_inventory_org_name(
+            current_org_id, end_customer_name
+        )  # Authoritative org name with safe fallbacks
+        safe_org_name = OrgInventoryExporter._build_safe_org_name(org_name_for_filename)  # Portable filenames
+        output_folder = os.path.join("data", "CombinedInventory_ByWeek")  # Predictable subfolder
+        return current_org_id, end_customer_name, end_customer_account_id, safe_org_name, output_folder
+
+    @staticmethod
+    def _emit_combined_inventory_outputs(
+        output_folder: str,
+        safe_org_name: str,
+        site_configs: list[dict[str, str]],
+        weekly_data: defaultdict,
+        summary_data: defaultdict,
+    ) -> tuple[str, int]:
+        """Emit weekly CSVs + summary + master CSV; return master filename + row count."""
+        fieldnames = OrgInventoryExporter._COMBINED_INVENTORY_FIELDNAMES  # Stable weekly-export column order
+        OrgInventoryExporter._write_combined_inventory_weekly_csvs(output_folder, fieldnames, weekly_data)
+        OrgInventoryExporter._write_combined_inventory_summary(output_folder, summary_data)  # Year/week summary
+        return OrgInventoryExporter._write_combined_inventory_master_csv(
+            output_folder, safe_org_name, site_configs
+        )  # Simplified master CSV used by external consumers
 
     @staticmethod
     def combined_inventory_with_site_info():  # Export devices with site info.
-        """
-        Combines fresh AllDevicesWithSiteInfo data into multiple CSV files
-        grouped by calendar week based on 'created_time' field.
-        Also generates a summary report with device counts per week.
-
-        Outputs:
-            - Weekly CSV files: data/CombinedInventory_ByWeek/YYYY_Week_##.csv
-            - Summary report: data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv
-            - Master CSV: data/CombinedInventory_ByWeek/<OrgName>_CombinedInventory_Master.csv
-              (with simplified headers: serial, model, Street Address, City, State, Zip)
-        """
-        print("Combined Inventory with Site Info by Calendar Week:")  # Announce menu 25 export scope to the operator.
-        load_dotenv()  # Load customer metadata from .env before generating weekly and master report fields.
-        end_customer_name = os.getenv("END_CUSTOMER_NAME")  # Capture customer name used in weekly export columns.
-        end_customer_account_id = os.getenv(
-            "END_CUSTOMER_ACCOUNT_ID"
-        )  # Capture account identifier used in weekly export columns.
-        current_org_id = (
-            ConfigUtils.get_cached_or_prompted_org_id()
-        )  # Resolve org context before naming and API fetches.
-        org_name_for_filename = OrgInventoryExporter._resolve_combined_inventory_org_name(
-            current_org_id, end_customer_name
-        )  # Resolve authoritative org name with safe fallbacks.
-        safe_org_name = OrgInventoryExporter._build_safe_org_name(
-            org_name_for_filename
-        )  # Sanitize org name so output filenames stay portable.
-        OrgInventoryExporter.devices_with_site_info()  # Regenerate enriched inventory CSV so weekly export always uses fresh site-enriched data.  # noqa: E501
-        output_folder = os.path.join(
-            "data", "CombinedInventory_ByWeek"
-        )  # Keep all derived files together in a predictable subfolder.
-        OrgInventoryExporter._export_combined_inventory_raw_json(
-            output_folder, current_org_id
-        )  # Persist raw API variants for VC delta investigation without changing report logic.
-        all_devices = (
-            OrgInventoryExporter._load_combined_inventory_rows()
-        )  # Load the enriched CSV rows that weekly and master outputs share.
+        """Combine fresh AllDevicesWithSiteInfo data into weekly CSV files + summary + master CSV."""
+        print("Combined Inventory with Site Info by Calendar Week:")  # Announce menu 25 export scope
+        ctx = OrgInventoryExporter._prepare_combined_inventory_context()  # Resolve org + customer + paths
+        current_org_id, end_customer_name, end_customer_account_id, safe_org_name, output_folder = ctx
+        OrgInventoryExporter.devices_with_site_info()  # Regenerate enriched inventory CSV first
+        OrgInventoryExporter._export_combined_inventory_raw_json(output_folder, current_org_id)  # Diagnostic JSON
+        all_devices = OrgInventoryExporter._load_combined_inventory_rows()  # Load enriched CSV rows
         site_configs, empty_vc_shells, duplicate_vc_entries = OrgInventoryExporter._partition_combined_inventory_rows(
             all_devices
-        )  # Separate physical devices from virtual VC placeholders.
+        )  # Separate physical devices from virtual VC placeholders
         OrgInventoryExporter._log_combined_inventory_vc_summary(
             all_devices, site_configs, empty_vc_shells, duplicate_vc_entries
-        )  # Surface physical-versus-virtual filtering details for operators.
+        )  # Surface physical-vs-virtual filtering details
         weekly_data, summary_data = OrgInventoryExporter._build_combined_inventory_weekly_data(
             site_configs, end_customer_name, end_customer_account_id
-        )  # Group physical devices into per-week export buckets and summary counts.
-        fieldnames = OrgInventoryExporter._COMBINED_INVENTORY_FIELDNAMES  # Stable weekly-export column order.
-        OrgInventoryExporter._write_combined_inventory_weekly_csvs(
-            output_folder, fieldnames, weekly_data
-        )  # Emit one detailed CSV per ISO week bucket.
-        OrgInventoryExporter._write_combined_inventory_summary(
-            output_folder, summary_data
-        )  # Emit compact year/week summary for planning and auditing.
-        master_csv_filename, master_row_count = OrgInventoryExporter._write_combined_inventory_master_csv(
-            output_folder, safe_org_name, site_configs
-        )  # Emit simplified master inventory CSV used by external consumers.
+        )  # Group into per-week export buckets
+        master_csv_filename, master_row_count = OrgInventoryExporter._emit_combined_inventory_outputs(
+            output_folder, safe_org_name, site_configs, weekly_data, summary_data
+        )
         OrgInventoryExporter._print_combined_inventory_summary(
             weekly_data, site_configs, master_csv_filename, master_row_count
-        )  # Tell the operator where the three output artifacts landed.
+        )  # Tell operator where the three output artifacts landed
 
     @staticmethod
     def _print_combined_inventory_summary(
@@ -10194,38 +10188,40 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     """
 
     @staticmethod
-    def device_stats(fast: bool = False):  # Export org device stats.
-        """Export statistics for all devices in the organization to OrgDeviceStats.csv.
+    def _device_stats_cache_hit(output_file: str, fast: bool) -> bool:
+        """Return True if fast-mode cache for OrgDeviceStats can be reused."""
+        if not (fast and os.path.exists(output_file)):  # Cache reuse needs both flag + file
+            return False  # No cache path available
+        try:
+            mtime = os.path.getmtime(output_file)  # Read file modified time
+            age_minutes = (time.time() - mtime) / 60.0  # Compute file age in minutes
+            if age_minutes < CSV_FRESHNESS_MINUTES:  # Cache still fresh
+                logging.info(  # Log cache reuse
+                    " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
+                    output_file,
+                    age_minutes,
+                    CSV_FRESHNESS_MINUTES,
+                )
+                print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # User notice
+                return True  # Caller skips re-fetch
+        except Exception as e:  # Freshness-check error
+            logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)  # Log
+        return False  # Cache stale or unreadable
 
-        Fast Mode Behavior:
-            - If fast is True and a fresh CSV (mtime < CSV_FRESHNESS_MINUTES) exists, skip API call.
-            - Falls back to normal fetch otherwise.
-        SECURITY: Read-only operation; safe to cache.
-        """
-        output_file = "OrgDeviceStats.csv"  # Define output filename.
-        if fast and os.path.exists(output_file):  # Branch: fast cache check.
-            try:
-                mtime = os.path.getmtime(output_file)  # Read file modified time.
-                age_minutes = (time.time() - mtime) / 60.0  # Compute file age in minutes.
-                if age_minutes < CSV_FRESHNESS_MINUTES:  # Branch: cache still fresh.
-                    logging.info(  # Log cache reuse.
-                        " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
-                        output_file,
-                        age_minutes,
-                        CSV_FRESHNESS_MINUTES,
-                    )
-                    print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")
-                    return  # Skip re-fetch.
-            except Exception as e:  # Catch freshness-check error.
-                logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)  # Log freshness failure.
-        logging.info("Starting export of organization device statistics...")  # Log stats export start.
-        emitter = PROGRESS_EMITTER  # Capture progress emitter.
-        if emitter:  # Branch: emitter present.
-            emitter.emit_progress_start("13", "device_stats", 1)  # Emit progress start.
-        op_start = time.time()  # Record operation start time.
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
-        TimeUtils.log_dynamic_lookback("org device statistics export", hours)  # Log chosen lookback window.
-        APIDataFetcher(  # Fetch and write device stats.
+    @staticmethod
+    def device_stats(fast: bool = False):  # Export org device stats.
+        """Export statistics for all devices in the organization to OrgDeviceStats.csv."""
+        output_file = "OrgDeviceStats.csv"  # Output filename
+        if OrgDeviceStatsExporter._device_stats_cache_hit(output_file, fast):  # Fast cache check
+            return  # Skip re-fetch when cache fresh
+        logging.info("Starting export of organization device statistics...")  # Log start
+        emitter = PROGRESS_EMITTER  # Capture progress emitter
+        if emitter:
+            emitter.emit_progress_start("13", "device_stats", 1)  # Emit progress start
+        op_start = time.time()  # Record operation start time
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Dynamic lookback hours
+        TimeUtils.log_dynamic_lookback("org device statistics export", hours)  # Log lookback window
+        APIDataFetcher(  # Fetch and write device stats
             title="Org Device Stats:",
             api_call=mistapi.api.v1.orgs.stats.listOrgDevicesStats,
             filename=output_file,
@@ -10234,181 +10230,175 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             duration=f"{hours}h",
             limit=1000,
         ).execute()
-        if emitter:  # Branch: emitter present.
+        if emitter:
             emitter.emit_progress_complete(ProgressContext("13", "device_stats", 1), 1, False, time.time() - op_start)
 
     @staticmethod
     def _port_stats_cache_hit(output_file: str, fast: bool) -> bool:  # Check port-stats cache hit.
         """Return True when fast mode can safely reuse a fresh cached CSV."""
-        if not fast or not os.path.exists(
-            output_file
-        ):  # Cache reuse only applies to fast mode with an existing CSV file.
-            return False  # No valid cache path exists, so the caller must fetch fresh data.
-        try:  # Filesystem metadata lookup should never crash the export path.
-            mtime = os.path.getmtime(output_file)  # Read last-modified time to compute cache age.
-            age_minutes = (
-                time.time() - mtime
-            ) / 60.0  # Convert file age to minutes for comparison against freshness policy.
-            if age_minutes < CSV_FRESHNESS_MINUTES:  # Fresh cache means a read-only export can safely skip API calls.
+        if not (fast and os.path.exists(output_file)):  # Cache reuse needs flag + file
+            return False  # No valid cache path
+        try:  # Filesystem metadata lookup should never crash export path
+            mtime = os.path.getmtime(output_file)  # Read last-modified time
+            age_minutes = (time.time() - mtime) / 60.0  # Convert to minutes
+            if age_minutes < CSV_FRESHNESS_MINUTES:  # Fresh cache means skip API
                 logging.info(
                     " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
                     output_file,
                     age_minutes,
                     CSV_FRESHNESS_MINUTES,
-                )  # Record why no API calls were made in fast mode.
-                print(
-                    f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)"
-                )  # Tell the operator cache reuse occurred.
-                return True  # Caller can return early because cache satisfies the request.
-        except Exception as exception:  # Cache metadata problems should degrade gracefully to a fresh fetch.
-            logging.debug(
-                "Fast mode freshness check failed for %s: %s", output_file, exception
-            )  # Log the fallback reason for troubleshooting.
-        return False  # Cache was missing, stale, or unreadable, so a fresh fetch is required.
+                )  # Record why no API calls were made
+                print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # User notice
+                return True  # Caller can return early
+        except Exception as exception:  # Cache metadata problems degrade gracefully
+            logging.debug("Fast mode freshness check failed for %s: %s", output_file, exception)  # Log fallback
+        return False  # Cache missing, stale, or unreadable
+
+    @staticmethod
+    def _load_port_stats_sites_from_api(org_id: str) -> list[tuple[str | None, str]]:
+        """API fallback path for loading port-stats sites when cache fails."""
+        site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)  # API fallback
+        site_data = mistapi.get_all(response=site_response, mist_session=apisession)  # Paginate
+        sites = [
+            (site.get("id"), site.get("name", "Unknown")) for site in site_data if site.get("id")
+        ]  # Normalize into worker tuples
+        logging.info("* Fetched %s sites from API", len(sites))  # API fallback count for cache-miss visibility
+        logging.debug(
+            "First site sample: %s, type: %s",
+            sites[0] if sites else "No sites",
+            type(sites[0]) if sites else "N/A",
+        )  # One sample tuple for debug
+        return sites  # Normalized site tuples for fast-mode worker pool
 
     @staticmethod
     def _load_port_stats_sites(org_id: str) -> list[tuple[str | None, str]]:  # Load sites for port stats.
         """Load site identifiers and names for fast-mode per-site port stats collection."""
-        try:  # Prefer cached site CSV because it avoids one extra API call in fast mode.
-            CacheUtils.check_and_generate_csv(
-                "SiteList.csv", OrgSiteExporter.sites
-            )  # Ensure a site list CSV exists before reading it.
-            site_list_path = FilePathUtils.get_csv_path(
-                "SiteList.csv"
-            )  # Resolve the current CSV path through shared utility logic.
-            with open(site_list_path, encoding="utf-8") as file:  # Open cached site list for lightweight CSV parsing.
-                reader = csv.DictReader(file)  # Parse site rows using field names from the cache file.
+        try:  # Prefer cached site CSV to avoid extra API call
+            CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure CSV exists
+            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve path
+            with open(site_list_path, encoding="utf-8") as file:  # Open cached CSV
+                reader = csv.DictReader(file)  # Parse rows
                 sites = [
                     (row.get("id"), row.get("name", "Unknown")) for row in reader if row.get("id")
-                ]  # Build tuple list used by pool workers.
-            logging.info(
-                "* Loaded %s sites from cached data", len(sites)
-            )  # Confirm cached site count for operator visibility.
+                ]  # Build tuple list used by pool workers
+            logging.info("* Loaded %s sites from cached data", len(sites))  # Confirm cached count
             logging.debug(
-                "First site sample: %s, type: %s", sites[0] if sites else "No sites", type(sites[0]) if sites else "N/A"
-            )  # Keep one sample for debugging malformed site rows.
-            return sites  # Return cached site tuples when CSV read succeeds.
-        except Exception as exception:  # Cache read failure should fall back to API immediately.
-            logging.warning(
-                "* Could not use cached sites, fetching from API: %s", exception
-            )  # Explain why the slower fallback path is being used.
-        site_response = mistapi.api.v1.orgs.sites.listOrgSites(
-            apisession, org_id, limit=1000
-        )  # Fetch sites directly from the Mist API as fallback.
-        site_data = mistapi.get_all(
-            response=site_response, mist_session=apisession
-        )  # Paginate all site records from the API response.
-        sites = [
-            (site.get("id"), site.get("name", "Unknown")) for site in site_data if site.get("id")
-        ]  # Normalize API records into worker tuples.
-        logging.info(
-            "* Fetched %s sites from API", len(sites)
-        )  # Record API fallback count so operators can spot cache misses.
-        logging.debug(
-            "First site sample: %s, type: %s", sites[0] if sites else "No sites", type(sites[0]) if sites else "N/A"
-        )  # Provide one representative tuple for debug diagnostics.
-        return sites  # Return normalized site tuples for the fast-mode worker pool.
+                "First site sample: %s, type: %s",
+                sites[0] if sites else "No sites",
+                type(sites[0]) if sites else "N/A",
+            )  # Sample for malformed-row debugging
+            return sites  # Cached site tuples
+        except Exception as exception:  # Cache read failure -> API fallback
+            logging.warning("* Could not use cached sites, fetching from API: %s", exception)  # Explain fallback
+        return OrgDeviceStatsExporter._load_port_stats_sites_from_api(org_id)  # API fallback
+
+    @staticmethod
+    def _attempt_site_port_stats_fetch(site_id, site_name, connection_semaphore):
+        """Single fetch attempt for one site's port stats; returns list or raises."""
+        with connection_semaphore:  # Bound concurrent API calls
+            response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(apisession, site_id, limit=1000)
+            port_stats = mistapi.get_all(response=response, mist_session=apisession)  # Paginate
+        if not isinstance(port_stats, list):  # Defensive type check
+            logging.error(
+                "! API returned non-list type for site %s: type=%s, value=%s",
+                site_name,
+                type(port_stats),
+                port_stats,
+            )  # Log malformed payload
+            return []  # Empty for malformed sites
+        for stat in port_stats:  # Annotate each port row with site metadata
+            stat["site_id"] = site_id  # Persist site identifier
+            stat["site_name"] = site_name  # Persist site name
+        return port_stats  # Annotated rows for caller
+
+    @staticmethod
+    def _handle_site_port_stats_retry(attempt, site_name, exception):
+        """Backoff + log retry; return True if more attempts remain."""
+        if attempt < FAST_MODE_MAX_RETRIES:  # More retries remain
+            backoff_delay = FAST_MODE_RETRY_DELAY * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)  # Backoff curve
+            logging.warning("! Attempt %s failed for site %s: %s", attempt + 1, site_name, exception)  # Log fail
+            logging.info(
+                "! Retrying in %.1fs (attempt %s/%s)",
+                backoff_delay,
+                attempt + 2,
+                FAST_MODE_MAX_RETRIES + 1,
+            )  # When next retry will occur
+            time.sleep(backoff_delay)  # Pause before retry
+            return True  # Continue loop
+        logging.error("! Final attempt failed for site %s: %s", site_name, exception)  # Terminal failure
+        return False  # No more retries
 
     @staticmethod
     def _fetch_site_port_stats(site_info, connection_semaphore):  # Fetch port stats for a site.
         """Fetch one site's switch/gateway port stats with bounded concurrency and retries."""
-        site_id, site_name = site_info  # Unpack tuple so logging and API calls have stable local names.
-        for attempt in range(
-            FAST_MODE_MAX_RETRIES + 1
-        ):  # Retry transient site fetch failures up to configured fast-mode limit.
-            try:  # Wrap each attempt so transient API failures can back off and retry.
-                with connection_semaphore:  # Bound concurrent API calls to protect session and upstream rate limits.
-                    response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
-                        apisession, site_id, limit=1000
-                    )  # Pull site-level port statistics from Mist.
-                    port_stats = mistapi.get_all(
-                        response=response, mist_session=apisession
-                    )  # Collect all paginated results for this site.
-                if not isinstance(
-                    port_stats, list
-                ):  # Defensive type check prevents malformed API payloads from poisoning downstream flattening.
-                    logging.error(
-                        "! API returned non-list type for site %s: type=%s, value=%s",
+        site_id, site_name = site_info  # Unpack tuple
+        for attempt in range(FAST_MODE_MAX_RETRIES + 1):  # Retry loop
+            try:
+                port_stats = OrgDeviceStatsExporter._attempt_site_port_stats_fetch(
+                    site_id, site_name, connection_semaphore
+                )
+                if attempt > 0:  # Retries that later succeed get info-level log
+                    logging.info(
+                        "! Retry %s successful for site %s (%s records)",
+                        attempt,
                         site_name,
-                        type(port_stats),
-                        port_stats,
-                    )  # Log malformed payload details for debugging.
-                    return []  # Return empty result for malformed sites so overall export can continue.
-                for stat in port_stats:  # Annotate each port row with site metadata for org-level export output.
-                    stat["site_id"] = site_id  # Persist site identifier on every row for downstream analysis.
-                    stat["site_name"] = site_name  # Persist site name on every row for human-readable reports.
-                if attempt > 0:  # Retries that later succeed should be visible in logs.
-                    logging.info(
-                        "! Retry %s successful for site %s (%s records)", attempt, site_name, len(port_stats)
-                    )  # Record successful retry outcome with row count.
-                else:  # First-try success belongs at debug level to avoid noisy logs.
-                    logging.debug(
-                        "! Collected %s port stats from site %s", len(port_stats), site_name
-                    )  # Record successful site harvest count.
-                return port_stats  # Return this site's fully annotated port rows to pool caller.
-            except Exception as exception:  # Retry transient API and network errors with controlled backoff.
-                if attempt < FAST_MODE_MAX_RETRIES:  # More retries remain, so back off and continue.
-                    backoff_delay = FAST_MODE_RETRY_DELAY * (
-                        FAST_MODE_BACKOFF_MULTIPLIER**attempt
-                    )  # Increase wait time per retry attempt to ease pressure on API.
-                    logging.warning(
-                        "! Attempt %s failed for site %s: %s", attempt + 1, site_name, exception
-                    )  # Record failing attempt number and root cause.
-                    logging.info(
-                        "! Retrying in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, FAST_MODE_MAX_RETRIES + 1
-                    )  # Tell operators when next retry will occur.
-                    time.sleep(backoff_delay)  # Pause before retrying to reduce repeated immediate failures.
-                else:  # Final attempt failed, so this site will be reported as empty/failed.
-                    logging.error(
-                        "! Final attempt failed for site %s: %s", site_name, exception
-                    )  # Record terminal site failure for support review.
-                    return []  # Return empty list so caller can track failed sites cleanly.
-        return []  # Defensive fallback keeps return type stable even if retry loop exits unexpectedly.
+                        len(port_stats),
+                    )  # Successful retry outcome
+                else:
+                    logging.debug("! Collected %s port stats from site %s", len(port_stats), site_name)  # First-try
+                return port_stats  # Annotated rows
+            except Exception as exception:  # Retry on transient failure
+                if not OrgDeviceStatsExporter._handle_site_port_stats_retry(attempt, site_name, exception):
+                    return []  # Final failure path
+        return []  # Defensive fallback
+
+    @staticmethod
+    def _process_retry_future(future, retry_futures, retry_results, still_failed):
+        """Resolve one retried-site future; mutate retry_results + still_failed."""
+        site_info = retry_futures[future]  # Recover original site tuple
+        try:
+            result = future.result()  # Resolve retried site rows
+            if result:  # Site recovered
+                retry_results.extend(result)  # Merge recovered rows
+                logging.info(" FAST RETRY OK: %s", site_info[1])  # Record recovered site
+            else:  # Site still failed logically
+                still_failed.append(site_info)  # Keep for summary
+                logging.warning(" FAST RETRY EMPTY: %s", site_info[1])  # Record unresolved
+        except Exception as exception:  # Future itself raised unexpectedly
+            still_failed.append(site_info)  # Preserve in failure list
+            logging.error(" FAST RETRY EXC: %s -> %s", site_info[1], exception)  # Log
+
+    @staticmethod
+    def _dispatch_site_port_retries(failed_sites, connection_semaphore, retry_threads, retry_results, still_failed):
+        """Run bounded retry pool and partition outcomes into retry_results / still_failed in place."""
+        import concurrent.futures  # Local import keeps main module unchanged
+
+        with ThreadPoolExecutor(max_workers=retry_threads) as executor:  # Bounded retry concurrency
+            retry_futures = {
+                executor.submit(OrgDeviceStatsExporter._fetch_site_port_stats, s, connection_semaphore): s
+                for s in failed_sites
+            }
+            futures_list = list(retry_futures.keys())  # Materialize for tqdm total
+            with tqdm(total=len(futures_list), desc="Retrying Failed Sites", unit="site") as pbar:  # type: ignore[call-arg, no-untyped-call]
+                for future in concurrent.futures.as_completed(futures_list):  # Handle results as they complete
+                    OrgDeviceStatsExporter._process_retry_future(future, retry_futures, retry_results, still_failed)
+                    pbar.update(1)  # Advance progress
 
     @staticmethod
     def _retry_failed_site_port_stats(failed_sites, connection_semaphore):  # Retry failed site port stats.
         """Retry previously failed site fetches using a smaller worker pool."""
-        retry_results = []  # Accumulate successful retry rows so they can merge with first-pass results.
-        still_failed = []  # Track sites that remain failed after dedicated retry attempts.
+        retry_results: list = []  # Successful retry rows
+        still_failed: list = []  # Sites remaining failed after retries
         retry_threads = min(
             FAST_MODE_RETRY_THREADS, len(failed_sites), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
-        )  # Keep retry pool smaller to avoid saturating remaining connections.
-        if retry_threads <= 0:  # Defensive guard for pathological configuration values.
-            logging.warning(
-                " FAST MODE: No available threads for retry; skipping retries"
-            )  # Explain why retry stage is skipped.
-            return [], failed_sites  # Preserve failed sites list for summary reporting.
-        with ThreadPoolExecutor(max_workers=retry_threads) as executor:  # Use bounded concurrency for retry wave.
-            retry_futures = {
-                executor.submit(
-                    OrgDeviceStatsExporter._fetch_site_port_stats, site_info, connection_semaphore
-                ): site_info
-                for site_info in failed_sites
-            }  # Submit each failed site back through shared worker logic.
-            import concurrent.futures  # Import locally so main module import path stays unchanged.
-
-            retry_futures_list = list(retry_futures.keys())  # Materialize futures so tqdm has stable total length.
-            with tqdm(total=len(retry_futures_list), desc="Retrying Failed Sites", unit="site") as pbar:  # type: ignore[call-arg, no-untyped-call]  # Show retry progress to the operator.
-                for future in concurrent.futures.as_completed(
-                    retry_futures_list
-                ):  # Handle results as retries complete.
-                    site_info = retry_futures[future]  # Recover original site tuple for logging.
-                    try:  # Each future can still raise, so handle per-site safely.
-                        result = future.result()  # Resolve retried site rows from the worker.
-                        if result:  # Non-empty retry result means site recovered successfully.
-                            retry_results.extend(result)  # Merge recovered rows into retry result set.
-                            logging.info(" FAST RETRY OK: %s", site_info[1])  # Record recovered site name in logs.
-                        else:  # Empty retry result means site still failed logically.
-                            still_failed.append(site_info)  # Keep site for final failure summary.
-                            logging.warning(" FAST RETRY EMPTY: %s", site_info[1])  # Record unresolved site in logs.
-                    except Exception as exception:  # Future itself raised unexpectedly.
-                        still_failed.append(site_info)  # Preserve site in failure list for summary reporting.
-                        logging.error(
-                            " FAST RETRY EXC: %s -> %s", site_info[1], exception
-                        )  # Log unexpected retry exception.
-                    finally:  # Progress bar should advance regardless of success or failure.
-                        pbar.update(1)  # Advance retry progress count for every completed future.
-        return retry_results, still_failed  # Return recovered rows and sites that remain unresolved.
+        )  # Smaller retry pool
+        if retry_threads <= 0:  # Defensive guard
+            logging.warning(" FAST MODE: No available threads for retry; skipping retries")  # Explain skip
+            return [], failed_sites  # Preserve failed sites
+        OrgDeviceStatsExporter._dispatch_site_port_retries(
+            failed_sites, connection_semaphore, retry_threads, retry_results, still_failed
+        )
+        return retry_results, still_failed  # Return recovered rows + unresolved sites
 
     @staticmethod
     def _flatten_site_port_results(successful_results):  # Flatten site port results.
