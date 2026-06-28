@@ -11396,152 +11396,133 @@ class OrgClientSecurityExporter:  # Org client security exporters.
         SecurityEventsService.execute(fast)  # Run the security export.
 
     @staticmethod
-    def rogue_clients(fast: bool = False):  # noqa: C901, PLR0915
-        """Export rogue clients to OrgRogueClients.csv.
-
-        Fast Mode Behavior:
-            - Cache hit: If fresh CSV exists, skip fetch entirely.
-            - Reduced lookback: Dynamic hours (1h in test) instead of hardcoded 7d.
-        """
+    def rogue_clients(fast: bool = False) -> None:
+        """Export rogue clients to OrgRogueClients.csv with fast-mode cache reuse."""
         output_file = "OrgRogueClients.csv"  # Destination CSV for this export
-        if fast:  # Fast mode may reuse a fresh cached file
-            try:
-                path = FilePathUtils.get_csv_path(output_file)  # Resolve the cached file path
-                if os.path.exists(path):  # A prior export exists
-                    age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # Compute the file's age in minutes
-                    if age_minutes < CSV_FRESHNESS_MINUTES:  # The file is still within the freshness window
-                        logging.info(
-                            # Log the cache hit with file freshness info
-                            "Fast mode cache hit: %s is fresh (%.1fm); skipping fetch.",
-                            output_file,
-                            age_minutes,
-                        )
-                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform user
-                        return  # Skip the API calls entirely
-            except Exception as cache_error:  # Inspecting the cache failed
-                logging.debug(
-                    "Fast mode freshness check failed for %s: %s", output_file, cache_error
-                )  # Note and fall through to fetch
+        if OrgClientSecurityExporter._check_csv_cache_fresh(output_file, fast):  # Fast-mode cache hit short-circuits
+            return  # Skip the API calls entirely
         logging.info("Starting export of rogue clients from all sites...")  # Log the start of the export
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
         rogue_duration = f"{lookback_hours}h"  # Format the lookback as the API's duration string
         TimeUtils.log_dynamic_lookback("rogue clients fetch", lookback_hours)  # Log which lookback window is used
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure the site list CSV is current
-        all_rogue_clients: list[dict[str, Any]] = []  # Accumulate rogue clients across all sites
-        try:
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve the site list CSV path
-            with open(site_list_path, encoding="utf-8") as f:  # Open the cached site list
-                sites = list(csv.DictReader(f))  # Read all sites as dictionaries
-            for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]  # Iterate sites with a progress bar
-                if ConfigUtils.check_stop_signal():  # The user requested an early stop
-                    break  # Exit the loop gracefully
-                site_id = site.get("id")  # The site's unique ID
-                site_name = site.get("name", "Unknown Site")  # The site's display name
-                if not site_id:  # Defensive: skip rows missing an ID
-                    continue  # Move to the next site
-                try:
-                    response = (
-                        mistapi.api.v1.sites.insights.listSiteRogueClients(  # Request rogue clients for this site
-                            apisession, site_id, duration=rogue_duration, limit=1000  # Use the chosen lookback window
-                        )
-                    )
-                    clients = mistapi.get_all(response=response, mist_session=apisession)  # Page through all results
-                    for client in clients:  # Tag each rogue client with site context
-                        client["site_id"] = site_id  # Record which site detected it
-                        client["site_name"] = site_name  # Record the site name for readability
-                    all_rogue_clients.extend(clients)  # Add this site's rogue clients to the aggregate
-                    logging.info(
-                        "! Fetched %s rogue clients from site: %s", len(clients), site_name
-                    )  # Per-site summary
-                except Exception as e:  # This site's fetch failed
-                    logging.warning(
-                        "! Failed to fetch rogue clients from site %s: %s", site_name, e
-                    )  # Warn but keep going
-                    continue  # Move to the next site
-        except Exception as e:  # Failure iterating the site list itself
-            logging.error("Failed to process sites for rogue clients: %s", e)  # Log the broader failure
+        rogues = OrgClientSecurityExporter._collect_rogues_across_sites(
+            mistapi.api.v1.sites.insights.listSiteRogueClients,  # Per-site rogue-clients API endpoint
+            rogue_duration,
+            "rogue clients",
+        )  # Fan out to every site
+        if rogues is None:  # Iterating the site list failed
             return  # Abort the export
-        if all_rogue_clients:  # At least one rogue client was found
-            flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_clients)  # Flatten nested JSON to CSV rows
-            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
-            DataExporter.write_with_format_selection(sanitized, "OrgRogueClients")  # type: ignore[no-untyped-call]  # Write to the output backend
-            logging.info("! %s rogue clients exported to OrgRogueClients", len(all_rogue_clients))  # Log the export
-            print(
-                f"! {len(all_rogue_clients)} rogue clients exported to OrgRogueClients"
-            )  # Report the count to the user
-        else:  # No rogue clients found anywhere
-            logging.info("No rogue clients found across all sites")  # Log the empty result
-            print(" No rogue clients detected across all sites")  # Inform the user
+        OrgClientSecurityExporter._export_rogues(rogues, "OrgRogueClients", "rogue clients")  # Write the CSV
 
     @staticmethod
-    def rogue_aps(fast: bool = False):  # noqa: C901, PLR0915
-        """Export rogue APs to OrgRogueAps.csv.
-
-        Fast Mode Behavior:
-            - Cache hit: If fresh CSV exists, skip fetch entirely.
-            - Reduced lookback: Dynamic hours (1h in test) instead of hardcoded 7d.
-        """
+    def rogue_aps(fast: bool = False) -> None:
+        """Export rogue APs to OrgRogueAPs.csv with fast-mode cache reuse."""
         output_file = "OrgRogueAPs.csv"  # Destination CSV for this export
-        if fast:  # Fast mode may reuse a fresh cached file
-            try:
-                path = FilePathUtils.get_csv_path(output_file)  # Resolve the cached file path
-                if os.path.exists(path):  # A prior export exists
-                    age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # Compute the file's age in minutes
-                    if age_minutes < CSV_FRESHNESS_MINUTES:  # The file is still within the freshness window
-                        logging.info(
-                            # Log the cache hit with file freshness info
-                            "Fast mode cache hit: %s is fresh (%.1fm); skipping fetch.",
-                            output_file,
-                            age_minutes,
-                        )
-                        print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform user
-                        return  # Skip the API calls entirely
-            except Exception as cache_error:  # Inspecting the cache failed
-                logging.debug(
-                    "Fast mode freshness check failed for %s: %s", output_file, cache_error
-                )  # Note and fall through to fetch
+        if OrgClientSecurityExporter._check_csv_cache_fresh(output_file, fast):  # Fast-mode cache hit short-circuits
+            return  # Skip the API calls entirely
         logging.info("Starting export of rogue APs from all sites...")  # Log the start of the export
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
         rogue_duration = f"{lookback_hours}h"  # Format the lookback as the API's duration string
         TimeUtils.log_dynamic_lookback("rogue APs fetch", lookback_hours)  # Log which lookback window is used
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # Ensure the site list CSV is current
-        all_rogue_aps: list[dict[str, Any]] = []  # Accumulate rogue APs across all sites
-        try:
-            site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve the site list CSV path
-            with open(site_list_path, encoding="utf-8") as f:  # Open the cached site list
-                sites = list(csv.DictReader(f))  # Read all sites as dictionaries
-            for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]  # Iterate sites with a progress bar
-                if ConfigUtils.check_stop_signal():  # The user requested an early stop
-                    break  # Exit the loop gracefully
-                site_id = site.get("id")  # The site's unique ID
-                site_name = site.get("name", "Unknown Site")  # The site's display name
-                if not site_id:  # Defensive: skip rows missing an ID
-                    continue  # Move to the next site
-                try:
-                    response = mistapi.api.v1.sites.insights.listSiteRogueAPs(  # Request rogue APs for this site
-                        apisession, site_id, duration=rogue_duration, limit=1000  # Use the chosen lookback window
-                    )
-                    aps = mistapi.get_all(response=response, mist_session=apisession)  # Page through all results
-                    for access_point in aps:  # Tag each rogue AP with site context
-                        access_point["site_id"] = site_id  # Record which site detected it
-                        access_point["site_name"] = site_name  # Record the site name for readability
-                    all_rogue_aps.extend(aps)  # Add this site's rogue APs to the aggregate
-                    logging.info("! Fetched %s rogue APs from site: %s", len(aps), site_name)  # Per-site summary
-                except Exception as e:  # This site's fetch failed
-                    logging.warning("! Failed to fetch rogue APs from site %s: %s", site_name, e)  # Warn but keep going
-                    continue  # Move to the next site
-        except Exception as e:  # Failure iterating the site list itself
-            logging.error("Failed to process sites for rogue APs: %s", e)  # Log the broader failure
+        rogues = OrgClientSecurityExporter._collect_rogues_across_sites(
+            mistapi.api.v1.sites.insights.listSiteRogueAPs,  # Per-site rogue-APs API endpoint
+            rogue_duration,
+            "rogue APs",
+        )  # Fan out to every site
+        if rogues is None:  # Iterating the site list failed
             return  # Abort the export
-        if all_rogue_aps:  # At least one rogue AP was found
-            flattened = DataProcessingUtils.flatten_nested_fields(all_rogue_aps)  # Flatten nested JSON to CSV rows
-            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape newlines for CSV safety
-            DataExporter.write_with_format_selection(sanitized, "OrgRogueAPs")  # type: ignore[no-untyped-call]  # Write to the output backend
-            logging.info("! %s rogue APs exported to OrgRogueAPs", len(all_rogue_aps))  # Log the export
-            print(f"! {len(all_rogue_aps)} rogue APs exported to OrgRogueAPs")  # Report the count to the user
-        else:  # No rogue APs found anywhere
-            logging.info("No rogue APs found across all sites")  # Log no rogues.
-            print(" No rogue APs detected across all sites")  # Tell the user.
+        OrgClientSecurityExporter._export_rogues(rogues, "OrgRogueAPs", "rogue APs")  # Write the CSV
+
+    @staticmethod
+    def _check_csv_cache_fresh(output_file: str, fast: bool) -> bool:
+        """Return True when fast-mode is on AND a CSV named output_file exists within the freshness window."""
+        if not fast:  # Cache check only matters in fast mode
+            return False  # Force a fresh fetch in normal mode
+        try:
+            path = FilePathUtils.get_csv_path(output_file)  # Resolve the cached file path
+            if not os.path.exists(path):  # No prior export to reuse
+                return False  # Fall through to fetch
+            age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # File age in minutes
+            if age_minutes >= CSV_FRESHNESS_MINUTES:  # Cached file is stale
+                logging.debug("Cache for %s is stale (%.1fm)", output_file, age_minutes)  # Trace staleness
+                return False  # Force a fresh fetch
+            logging.info(
+                "Fast mode cache hit: %s is fresh (%.1fm); skipping fetch.", output_file, age_minutes
+            )  # Log the cache hit
+            print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform user
+            return True  # Cache hit short-circuits the orchestrator
+        except Exception as cache_error:  # Inspecting the cache failed
+            logging.debug("Fast mode freshness check failed for %s: %s", output_file, cache_error)  # Trace
+            return False  # Fall through to fetch on any cache error
+
+    @staticmethod
+    def _load_site_list() -> list[dict[str, Any]] | None:
+        """Load the cached SiteList.csv into a list of dict rows, or None when reading the CSV fails."""
+        site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve the site list CSV path
+        try:
+            with open(site_list_path, encoding="utf-8") as f:  # Open the cached site list
+                rows = list(csv.DictReader(f))  # Read all sites as dictionaries
+            logging.debug("Loaded %s sites from SiteList.csv", len(rows))  # Trace site count
+            return rows  # Return the loaded rows
+        except Exception as e:  # Failure reading the cached site list
+            logging.error("Failed to process sites for rogue export: %s", e)  # Log the broader failure
+            return None  # Signal caller to abort
+
+    @staticmethod
+    def _fetch_rogues_for_one_site(
+        fetch_callable: Any, site_id: str, site_name: str, rogue_duration: str, label: str
+    ) -> list[dict[str, Any]]:
+        """Fetch one site's rogue entries (clients or APs) and tag each with site_id and site_name."""
+        try:
+            response = fetch_callable(
+                apisession, site_id, duration=rogue_duration, limit=1000
+            )  # Request this site's rogues
+            rogues = mistapi.get_all(response=response, mist_session=apisession)  # Page through all results
+            for rogue in rogues:  # Tag each rogue with site context
+                rogue["site_id"] = site_id  # Record which site detected it
+                rogue["site_name"] = site_name  # Record the site name for readability
+            logging.info("! Fetched %s %s from site: %s", len(rogues), label, site_name)  # Per-site summary
+            return rogues  # Return the tagged list
+        except Exception as e:  # This site's fetch failed
+            logging.warning("! Failed to fetch %s from site %s: %s", label, site_name, e)  # Warn but keep going
+            return []  # Empty result lets the aggregator continue with the next site
+
+    @staticmethod
+    def _collect_rogues_across_sites(
+        fetch_callable: Any, rogue_duration: str, label: str
+    ) -> list[dict[str, Any]] | None:
+        """Aggregate rogue entries (clients or APs) across every site, returning None if the site list fails to load."""
+        sites = OrgClientSecurityExporter._load_site_list()  # Read SiteList.csv into rows
+        if sites is None:  # Failure reading the cached site list
+            return None  # Signal caller to abort
+        aggregate: list[dict[str, Any]] = []  # Accumulate rogues across all sites
+        for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]  # Iterate with progress bar
+            if ConfigUtils.check_stop_signal():  # The user requested an early stop
+                break  # Exit the loop gracefully
+            site_id = site.get("id")  # The site's unique ID
+            site_name = site.get("name", "Unknown Site")  # The site's display name
+            if not site_id:  # Defensive: skip rows missing an ID
+                continue  # Move to the next site
+            site_rogues = OrgClientSecurityExporter._fetch_rogues_for_one_site(
+                fetch_callable, site_id, site_name, rogue_duration, label
+            )  # Fetch this site's rogues
+            aggregate.extend(site_rogues)  # Add this site's rogues to the aggregate
+        return aggregate  # Return the cross-site list
+
+    @staticmethod
+    def _export_rogues(rogues: list[dict[str, Any]], csv_basename: str, label: str) -> None:
+        """Flatten + escape + write the aggregated rogue list, or report the empty-result case."""
+        if rogues:  # At least one rogue was found
+            flattened = DataProcessingUtils.flatten_nested_fields(rogues)  # Flatten nested JSON to CSV rows
+            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
+            DataExporter.write_with_format_selection(sanitized, csv_basename)  # type: ignore[no-untyped-call]
+            logging.info("! %s %s exported to %s", len(rogues), label, csv_basename)  # Log the export
+            print(f"! {len(rogues)} {label} exported to {csv_basename}")  # Report the count to the user
+        else:  # No rogues found anywhere
+            logging.info("No %s found across all sites", label)  # Log the empty result
+            print(f" No {label} detected across all sites")  # Inform the user
 
 
 class FilterOperatorEngine:  # Filter operator evaluation engine.
