@@ -14775,9 +14775,20 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             return {}  # Empty signals caller to use fallback
 
     @staticmethod
+    def _is_valid_alpha2(code: str) -> bool:
+        """Return True only when the code is a 2-letter alphabetic string."""
+        if not code:  # Reject empty/None up front
+            return False
+        if len(code) != 2:  # Must be exactly 2 characters per ISO 3166-1 alpha-2
+            return False
+        return code.isalpha()  # Final alpha-only guard
+
+    @staticmethod
     def _filter_valid_alpha2_codes(country_codes: list[str]) -> list[str]:
         """Keep only 2-letter alphabetic country codes (logs how many were dropped)."""
-        valid = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]  # Strict alpha-2 filter
+        valid = [
+            c for c in country_codes if ConstDefinitionsExporter._is_valid_alpha2(c)
+        ]  # Delegate predicate to helper
         if len(valid) < len(country_codes):  # Some entries failed validation
             logging.debug("Filtered out %s invalid country codes", len(country_codes) - len(valid))
         return valid
@@ -14809,21 +14820,26 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             return item["alpha2"]
         return item.get("name", "")[:2].upper()  # Last resort: derive from name
 
+    @staticmethod
+    def _codes_from_list(items: list) -> list[str]:  # type: ignore[type-arg]
+        """Resolve country codes from a list of country dicts (skips non-dicts and empty resolutions)."""
+        codes = []  # Accumulator for resolved codes
+        for item in items:  # Walk each entry
+            if not isinstance(item, dict):  # Skip non-dict items
+                continue
+            code = ConstDefinitionsExporter._resolve_country_code(item)  # Resolve via per-item helper
+            if not code:  # Empty resolution — skip
+                continue
+            codes.append(code)
+        return codes
+
     def _extract_country_codes(self, countries_data) -> list[str]:  # Extract country codes.
         """Extract country codes from countries data."""
         if isinstance(countries_data, dict):  # Dict payload — keys are codes
             return list(countries_data.keys())
         if not isinstance(countries_data, list):  # Unknown shape — return empty
             return []
-        codes = []  # Accumulate codes from list items
-        for item in countries_data:
-            if not isinstance(item, dict):  # Skip non-dict items
-                continue
-            code = ConstDefinitionsExporter._resolve_country_code(item)  # Resolve via helper
-            if not code:  # Empty resolution — skip
-                continue
-            codes.append(code)
-        return codes
+        return ConstDefinitionsExporter._codes_from_list(countries_data)  # Delegate list walk to helper
 
     @staticmethod
     def _normalize_states_dict(country_code: str, country_data: dict) -> list[dict]:  # type: ignore[type-arg]
@@ -14884,7 +14900,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
     def _filter_to_iso2_country_codes(country_codes: list[str]) -> list[str]:
         """Keep only 2-letter alphabetic ISO country codes; log when entries were dropped."""
         original_count = len(country_codes)  # Remember the original count for logging.
-        filtered = [c for c in country_codes if c and len(c) == 2 and c.isalpha()]  # ISO-2 filter.
+        filtered = [c for c in country_codes if ConstDefinitionsExporter._is_valid_alpha2(c)]  # Delegate predicate
         if len(filtered) < original_count:  # Some were filtered.
             logging.debug(  # Trace the filter.
                 "Filtered out %s invalid country codes for ap_channels", original_count - len(filtered)
@@ -15088,13 +15104,18 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
             print("! Warning: ConstInsightMetrics.csv was not created during dynamic export")
 
     @staticmethod
+    def _should_skip_row(metric_name: str, scopes: str) -> bool:
+        """Return True when a row is incomplete or uses a template-placeholder name."""
+        if not metric_name or not scopes:  # Incomplete row — missing required fields
+            return True
+        return "{" in metric_name or "}" in metric_name  # Template placeholders are skip candidates
+
+    @staticmethod
     def _row_matches_scope(row, normalized_target_scope: str) -> str | None:  # type: ignore[no-untyped-def]
         """Return ``metric_name`` when the row supports the target scope, else None to signal skip."""
         scopes = row.get("scopes", "")  # Scope string for this metric
         metric_name = row.get("metric_name", "")  # Display name
-        if not metric_name or not scopes:  # Skip incomplete rows
-            return None
-        if "{" in metric_name or "}" in metric_name:  # Skip template placeholder rows
+        if InsightMetricsUtils._should_skip_row(metric_name, scopes):  # Delegate skip-checks
             return None
         parsed_scopes = InsightMetricsUtils._parse_scopes(scopes)  # Tokenize scopes
         return metric_name if normalized_target_scope in parsed_scopes else None  # Match check
@@ -15677,14 +15698,22 @@ class GatewayTestExporter:  # Gateway synthetic test exporter.
         )
 
     @staticmethod
-    def fetch_synthetic_test_stats_with_retry(
-        device_info, max_retries=None, retry_delay=None, connection_semaphore=None
-    ):
-        """Fetch synthetic test stats for one gateway with retry + optional connection pool gating."""
+    def _resolve_retry_defaults(max_retries, retry_delay):  # type: ignore[no-untyped-def]
+        """Apply FAST_MODE defaults for unset retry budget / delay (returns the tuple)."""
         if max_retries is None:  # Default max retries.
             max_retries = FAST_MODE_MAX_RETRIES  # Fast-mode default.
         if retry_delay is None:  # Default retry delay.
             retry_delay = FAST_MODE_RETRY_DELAY  # Fast-mode default.
+        return max_retries, retry_delay  # Tuple back to caller
+
+    @staticmethod
+    def fetch_synthetic_test_stats_with_retry(
+        device_info, max_retries=None, retry_delay=None, connection_semaphore=None
+    ):
+        """Fetch synthetic test stats for one gateway with retry + optional connection pool gating."""
+        max_retries, retry_delay = GatewayTestExporter._resolve_retry_defaults(
+            max_retries, retry_delay
+        )  # Defaults via helper
         site_id, device_id, _device_name, _site_name = device_info  # Unpack for backoff/error logs only.
         for attempt in range(max_retries + 1):  # Bounded retry loop.
             stats = GatewayTestExporter._try_synthetic_fetch_attempt(
@@ -16666,6 +16695,11 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             logging.error("! Failed to save ARP output to file: %s", e)  # Log the error.
 
     @staticmethod
+    def _extract_arp_columns(line: str) -> list[str]:
+        """Tab-split a line and return non-empty stripped columns."""
+        return [col.strip() for col in line.split("\t") if col.strip()]  # Split + strip + drop empties
+
+    @staticmethod
     def _split_arp_text_into_datasets(raw_text: str) -> tuple[list[list[str]], list[list[str]]]:
         """Split raw ARP text into two tab-delimited datasets separated by a 'Total' marker line."""
         lines = raw_text.splitlines()  # Split into lines.
@@ -16676,7 +16710,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             if "Total" in line:  # Total marker.
                 current_dataset = dataset2  # Switch datasets.
                 continue  # Marker isn't a row.
-            columns = [col.strip() for col in line.split("\t") if col.strip()]  # Split the columns.
+            columns = ARPCommandManager._extract_arp_columns(line)  # Delegate tab-split + strip
             if columns:  # Have columns.
                 current_dataset.append(columns)  # Collect the row.
         return dataset1, dataset2  # Return both datasets.
@@ -17161,15 +17195,18 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             self._existing[config_type["key"]] = items  # Cache for conflict checks
         logging.debug("Cached %s total existing objects", sum(len(v) for v in self._existing.values()))  # Log count
 
+    def _needs_subnet_check(self, type_key: str) -> bool:
+        """Return True when this type's config entry has conflict_check enabled."""
+        config_entry = next((ct for ct in self.CONFIG_TYPES if ct["key"] == type_key), None)  # Find metadata
+        return bool(config_entry and config_entry.get("conflict_check"))  # Only subnet-aware types qualify
+
     def _detect_conflicts(self, new_obj: dict, type_key: str) -> dict | None:  # type: ignore[type-arg]
         """Check for name match and IP/subnet overlap with existing objects."""
         existing_list = self._existing.get(type_key, [])  # Get cached objects for this type
         conflict = self._check_name_conflict(new_obj, existing_list)  # Check name collision first
         if conflict:  # Name match found -- return immediately
             return conflict  # Return the conflict.
-
-        config_entry = next((ct for ct in self.CONFIG_TYPES if ct["key"] == type_key), None)  # Find config metadata
-        if config_entry and config_entry.get("conflict_check"):  # Only check subnets for types that need it
+        if self._needs_subnet_check(type_key):  # Delegate config-metadata check
             return self._check_subnet_overlap(new_obj, existing_list, type_key)  # Check IP/subnet overlaps
         return None  # No conflicts detected
 
@@ -18910,6 +18947,14 @@ class FirmwareUpgradeStatusChecker:
             return fw_status == "failed"  # type: ignore[no-any-return]
         return True  # Default scope keeps every device.
 
+    def _render_active_progress(self, fw_progress, fw_timestamp) -> str:  # type: ignore[no-untyped-def]
+        """Render the cell for a device that reports an in-flight upgrade."""
+        if self._is_stale_upgrade(fw_progress, fw_timestamp):  # No movement past threshold = stuck.
+            return "[===============] 100% (Complete - Stale)"  # Full bar but flag staleness.
+        if fw_progress is not None:  # A real percent is available.
+            return DisplayUtils.create_progress_bar(fw_progress, bar_length=15)  # Proportional bar.
+        return "N/A"  # Active but no percent yet — match outer fallback.
+
     def _create_progress_display(self, fw_info: dict[str, Any]) -> str:  # Build the progress cell text.
         """Create visual progress display for CSV."""
         fw_status = fw_info["fw_status"]  # Status selects which glyph to render.
@@ -18917,13 +18962,10 @@ class FirmwareUpgradeStatusChecker:
         fw_timestamp = fw_info["fw_timestamp"]  # Timestamp detects stale rows.
 
         if fw_status in ("inprogress", "upgrading", "downloading"):  # Device reports active work.
-            if self._is_stale_upgrade(fw_progress, fw_timestamp):  # No movement past threshold = stuck.
-                return "[===============] 100% (Complete - Stale)"  # Full bar but flag staleness.
-            if fw_progress is not None:  # A real percent is available.
-                return DisplayUtils.create_progress_bar(fw_progress, bar_length=15)  # Proportional bar.
-        elif fw_status in ("upgraded", "success"):  # Upgrade finished cleanly.
+            return self._render_active_progress(fw_progress, fw_timestamp)  # Delegate active rendering
+        if fw_status in ("upgraded", "success"):  # Upgrade finished cleanly.
             return "[===============] 100% (Complete)"  # Full bar marks completion.
-        elif fw_status == "failed":  # Upgrade ended in failure.
+        if fw_status == "failed":  # Upgrade ended in failure.
             return "[!!!!! FAILED !!!!!]"  # Loud marker for failures.
         return "N/A"  # Idle/unknown devices have no progress.
 
@@ -19045,25 +19087,27 @@ class FirmwareUpgradeStatusChecker:
         self._check_device_events()
         self._check_site_upgrades()
 
+    def _fetch_ssr_upgrades_payload(self) -> list | None:  # type: ignore[type-arg]
+        """Fetch SSR upgrades list; returns list-or-None (empty list signals 'no upgrades')."""
+        ssr_resp = mistapi.api.v1.orgs.ssr.listOrgSsrUpgrades(apisession, self.org_id)  # API call
+        if ssr_resp.status_code != 200 or not hasattr(ssr_resp, "data"):  # HTTP or shape error
+            print(f"   -> Failed to retrieve SSR upgrade operations: {ssr_resp.status_code}")  # User-facing
+            return None  # Signal hard failure to caller
+        return ssr_resp.data or []  # Empty list keeps caller's truthiness check intact
+
     def _check_ssr_upgrades(self) -> None:
         """Check for active SSR upgrade operations."""
         try:
             print("   Checking for active SSR upgrade operations...")
-            ssr_resp = mistapi.api.v1.orgs.ssr.listOrgSsrUpgrades(apisession, self.org_id)
-
-            if ssr_resp.status_code != 200 or not hasattr(ssr_resp, "data"):
-                print(f"   -> Failed to retrieve SSR upgrade operations: {ssr_resp.status_code}")
+            ssr_upgrades = self._fetch_ssr_upgrades_payload()  # Delegate API call + validation
+            if ssr_upgrades is None:  # Hard failure already logged by helper
                 return
-
-            ssr_upgrades = ssr_resp.data
-            if not ssr_upgrades:
+            if not ssr_upgrades:  # Empty payload — nothing to process
                 print("   -> No active SSR upgrade operations found")
                 return
-
             print(f"   !? Found {len(ssr_upgrades)} SSR upgrade operation(s)")
             for upgrade in ssr_upgrades:
                 self._process_ssr_upgrade(upgrade)
-
         except Exception as exception:
             print(f"   -> Error checking SSR upgrade operations: {exception}")
             logging.warning("Failed to check SSR upgrade operations: %s", exception)
@@ -19203,6 +19247,10 @@ class FirmwareUpgradeStatusChecker:
         logging.debug("Org audit logs returned %s entries", len(logs) if logs else 0)  # Log after API.
         return logs or []
 
+    def _filter_upgrade_events(self, logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return only the audit-log entries that look like upgrade events."""
+        return [log for log in logs if self._is_upgrade_event(log)]  # Delegate per-row predicate
+
     def _check_audit_logs(self) -> None:
         """Check organization audit logs for recent upgrade events."""
         try:
@@ -19211,7 +19259,7 @@ class FirmwareUpgradeStatusChecker:
             if not logs:
                 print("   -> No audit logs available for the last 24 hours")
                 return
-            upgrade_events = [log for log in logs if self._is_upgrade_event(log)]  # Filter.
+            upgrade_events = self._filter_upgrade_events(logs)  # Delegate keyword filter
             if not upgrade_events:
                 print("   -> No upgrade-related events found in audit logs")
                 return
@@ -19697,6 +19745,13 @@ class MSPInventoryExporter:
             return (None, msp_name)
         return (msp_id, msp_name)
 
+    @staticmethod
+    def _normalize_msp_orgs_response(orgs_data) -> list:  # type: ignore[no-untyped-def, type-arg]
+        """Coerce listMspOrgs payload into a list (handles single-dict and None)."""
+        if not isinstance(orgs_data, list):  # Not a list — wrap or default
+            return [orgs_data] if orgs_data else []  # Single dict → 1-element list; None → empty
+        return orgs_data  # Already a list
+
     def _fetch_msp_orgs(self, msp_id: str, msp_name: str) -> list:  # type: ignore[type-arg]
         """Fetch organizations under this MSP. Returns empty list on failure."""
         if apisession is None:
@@ -19711,10 +19766,7 @@ class MSPInventoryExporter:
             self.errors.append(f"MSP {msp_name}: Failed to fetch orgs")
             return []
 
-        orgs_data = response.data
-        if not isinstance(orgs_data, list):
-            orgs_data = [orgs_data] if orgs_data else []
-        return orgs_data
+        return MSPInventoryExporter._normalize_msp_orgs_response(response.data)  # Delegate shape coercion
 
     def _process_msp_orgs_inventory(self, msp_id: str, msp_name: str) -> None:
         """Fetch the MSP's org list, log/print the count, then dispatch each org through _process_org."""
@@ -19802,13 +19854,21 @@ class MSPInventoryExporter:
         type_summary = ", ".join(f"{t}:{c}" for t, c in sorted(type_counts.items()))
         print(f"      {org_name}: {len(devices_data)} devices ({type_summary})")
 
-    def _process_org(self, msp_id: str, msp_name: str, org: dict) -> None:  # type: ignore[type-arg]
-        """Process a single organization - fetch all devices from inventory."""
-        org_id = org.get("id")
-        org_name = org.get("name", "Unknown Org")
+    def _validate_org(self, org: dict) -> tuple[str, str] | None:  # type: ignore[type-arg]
+        """Pull (org_id, org_name) from an org dict; return None when org_id is missing/invalid."""
+        org_id = org.get("id")  # Required identifier
+        org_name = org.get("name", "Unknown Org")  # Default name for diagnostics
         if not org_id or not isinstance(org_id, str):  # Bad org row.
             print(f"      {org_name}: Invalid org ID")
+            return None
+        return org_id, org_name  # Both valid
+
+    def _process_org(self, msp_id: str, msp_name: str, org: dict) -> None:  # type: ignore[type-arg]
+        """Process a single organization - fetch all devices from inventory."""
+        resolved = self._validate_org(org)  # Delegate input validation
+        if resolved is None:  # Bad input — helper already logged
             return
+        org_id, org_name = resolved
         self.org_count += 1  # Count toward run total.
         if apisession is None:  # API not initialized.
             return
@@ -20307,6 +20367,25 @@ class WLANRadiusTimerManager:
         except Exception as error:  # Network or parsing failure
             logging.error("Error fetching site WLANs: %s", error)  # Log the exception detail
 
+    @staticmethod
+    def _extract_template_wlans(template_data: dict) -> list:  # type: ignore[type-arg]
+        """Flatten the ``wlans`` map of a template to a list (returns [] when absent/empty)."""
+        if "wlans" in template_data and template_data["wlans"]:  # The template embeds WLAN definitions
+            return list(template_data["wlans"].values())  # Flatten the WLAN map to a list
+        return []  # No embedded WLANs
+
+    def _apply_site_template_response(self, response) -> None:  # type: ignore[no-untyped-def]
+        """Persist site-template name + WLANs from a getOrgSiteTemplate response."""
+        if response.status_code != 200:  # Non-success status
+            logging.warning("Failed to fetch site template: HTTP %s", response.status_code)  # Warn but continue
+            return
+        template_data = response.data  # Decode the template record
+        self.template_name = template_data.get("name", "Unknown Template")  # Capture a display name
+        wlans = WLANRadiusTimerManager._extract_template_wlans(template_data)  # Delegate wlan extraction
+        if wlans:  # Only persist when the template actually had WLANs
+            self.site_template_wlans = wlans  # Record on instance
+            logging.info("Found %s site template-level WLANs", len(self.site_template_wlans))  # Report the count
+
     def _fetch_site_template_wlans(self) -> None:
         """Fetch WLANs from site template if assigned."""
         if not self.site_template_id:  # No site template is assigned
@@ -20316,16 +20395,7 @@ class WLANRadiusTimerManager:
             response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(  # Request the assigned site template
                 apisession, self.org_id, self.site_template_id  # Scope the lookup to this org and template
             )
-            if response.status_code == 200:  # The request succeeded
-                template_data = response.data  # Decode the template record
-                self.template_name = template_data.get("name", "Unknown Template")  # Capture a display name
-                if "wlans" in template_data and template_data["wlans"]:  # The template embeds WLAN definitions
-                    self.site_template_wlans = list(template_data["wlans"].values())  # Flatten the WLAN map to a list
-                    logging.info(
-                        "Found %s site template-level WLANs", len(self.site_template_wlans)
-                    )  # Report the count
-            else:  # Non-success status
-                logging.warning("Failed to fetch site template: HTTP %s", response.status_code)  # Warn but continue
+            self._apply_site_template_response(response)  # Delegate response handling
         except Exception as error:  # Network or parsing failure
             logging.error("Error fetching site template: %s", error)  # Log the exception detail
 
@@ -20383,6 +20453,15 @@ class WLANRadiusTimerManager:
         site_tags = self.site_info.get("wxtag_ids", [])  # Wx tags applied to this site
         return type(self)._template_matches_grouping(applies, site_groups, site_tags)  # Group/tag match
 
+    def _collect_assigned_org_wlan(self, wlan: dict[str, Any]) -> bool:
+        """Tag and keep an org WLAN if it uses a template assigned to this site (True on keep)."""
+        wlan_template_id = wlan.get("template_id")  # The template this WLAN belongs to
+        if not wlan_template_id or wlan_template_id not in self.assigned_template_ids:
+            return False  # Skip — no template or not in assigned set
+        self._add_org_wlan_metadata(wlan, wlan_template_id)  # Tag it with inheritance metadata
+        self.org_wlans.append(wlan)  # Keep it as a relevant org WLAN
+        return True
+
     def _fetch_and_filter_org_wlans(self) -> None:
         """Fetch org WLANs and filter to those using assigned templates."""
         response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)  # Request every WLAN in the org
@@ -20392,12 +20471,7 @@ class WLANRadiusTimerManager:
         all_org_wlans = response.data  # Decode the full org WLAN list
         logging.info("Found %s total org WLANs", len(all_org_wlans))  # Report the total count
         for wlan in all_org_wlans:  # Examine each org WLAN
-            wlan_template_id = wlan.get("template_id")  # The template this WLAN belongs to
-            if (
-                wlan_template_id and wlan_template_id in self.assigned_template_ids
-            ):  # It uses a template assigned to this site
-                self._add_org_wlan_metadata(wlan, wlan_template_id)  # Tag it with inheritance metadata
-                self.org_wlans.append(wlan)  # Keep it as a relevant org WLAN
+            self._collect_assigned_org_wlan(wlan)  # Delegate per-WLAN match + keep
         if self.org_wlans:  # At least one relevant org WLAN was kept
             logging.info(
                 "Found %s org WLANs using templates assigned to this site", len(self.org_wlans)
@@ -23838,6 +23912,13 @@ def _resolve_cli_org_id(args: argparse.Namespace) -> str:
     return ConfigUtils.get_cached_or_prompted_org_id()  # Fall back to cache or prompt.
 
 
+def _build_site_name_to_id_map(sites: list[dict[str, Any]]) -> dict[str, str]:
+    """Build a {name: id} lookup map from a list of site dicts, skipping entries missing either field."""
+    return {
+        site.get("name"): site.get("id") for site in sites if site.get("name") and site.get("id")
+    }  # Build name->id map; drop sites missing name or id
+
+
 def _resolve_cli_site_id(args: argparse.Namespace, org_id: str) -> str | None:
     """Resolve --site name to a site_id via API lookup. Exit 1 if name not found. Return None if no --site."""
     if not args.site:  # No --site supplied; nothing to resolve.
@@ -23848,9 +23929,7 @@ def _resolve_cli_site_id(args: argparse.Namespace, org_id: str) -> str | None:
         DEFAULT_API_PAGE_LIMIT,
     )  # Log before site resolution.
     sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all org sites from Mist API.
-    site_lookup = {
-        site.get("name"): site.get("id") for site in sites if site.get("name") and site.get("id")
-    }  # Build name->id map.
+    site_lookup = _build_site_name_to_id_map(sites)  # Delegate name->id map construction
     site_id = site_lookup.get(args.site)  # Look up site ID by human-readable name.
     if not site_id:  # Site name not found in org -- abort with error.
         logging.error("! Site name '%s' not found.", args.site)  # Log resolution failure.
@@ -24115,11 +24194,19 @@ def _dispatch_main_mode(args: argparse.Namespace) -> None:
     _run_interactive_mode(args)  # Fallback: interactive menu loop
 
 
+_MEANINGFUL_CLI_ATTRS: tuple[str, ...] = (
+    "menu",
+    "org",
+    "site",
+    "device",
+    "port",
+    "test",
+)  # CLI flags that flip MistHelper into non-interactive one-shot dispatch mode
+
+
 def _has_meaningful_cli_args(args: argparse.Namespace) -> bool:
     """Return True if any non-interactive CLI flag was provided (triggers CLI dispatch mode)."""
-    return bool(
-        args.menu or args.org or args.site or args.device or args.port or args.test
-    )  # Any of these flags means the user wanted a one-shot CLI invocation.
+    return any(getattr(args, name, None) for name in _MEANINGFUL_CLI_ATTRS)  # Any flag => CLI mode
 
 
 if __name__ == "__main__":
