@@ -8134,25 +8134,33 @@ class PromptClientUtils:  # Client selection prompt helpers.
             return None  # Abort on error.
 
     @staticmethod
+    def _log_combined_client_counts(wireless: list | None, wired: list | None) -> None:
+        """Log counts when at least one of the two client lists has data; silent on fully empty input."""
+        wireless_list = wireless or []  # Coerce None -> empty for safe len()
+        wired_list = wired or []  # Coerce None -> empty for safe len()
+        if not (wireless_list or wired_list):  # Nothing to log when both empty
+            return
+        logging.info(
+            "Found %s connected clients at site (%s wireless, %s wired)",
+            len(wireless_list) + len(wired_list),  # Combined total
+            len(wireless_list),  # Per-type breakdown
+            len(wired_list),
+        )
+
+    @staticmethod
     def _fetch_all_clients_for_site(site_id: str) -> list:
         """Fetch wireless and wired clients for ``site_id`` and tag each with a ``connection_type``."""
         wireless = PromptClientUtils._normalize_clients_response(
             mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)
-        )  # Wifi search + payload normalize.
+        )  # Wifi search + payload normalize
         wired = PromptClientUtils._normalize_clients_response(
             mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id)
-        )  # Wired search + payload normalize.
-        PromptClientUtils._tag_connection_type(wireless, "Wireless")  # Tag wireless rows in place.
-        PromptClientUtils._tag_connection_type(wired, "Wired")  # Tag wired rows in place.
-        all_clients = (wireless or []) + (wired or [])  # Combined list (handle None payloads safely).
-        if all_clients:  # Only log counts when we have data.
-            logging.info(
-                "Found %s connected clients at site (%s wireless, %s wired)",
-                len(all_clients),
-                len(wireless or []),
-                len(wired or []),
-            )
-        return all_clients  # Return combined list.
+        )  # Wired search + payload normalize
+        PromptClientUtils._tag_connection_type(wireless, "Wireless")  # Tag wireless rows in place
+        PromptClientUtils._tag_connection_type(wired, "Wired")  # Tag wired rows in place
+        all_clients = (wireless or []) + (wired or [])  # Combined list (handle None payloads safely)
+        PromptClientUtils._log_combined_client_counts(wireless, wired)  # Operator-visible count log
+        return all_clients  # Return combined list
 
     @staticmethod
     def _normalize_clients_response(response: Any) -> list:
@@ -15227,24 +15235,36 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
         return parts[1], parts[2]  # (index, field).
 
     @staticmethod
+    def _ensure_result_row(
+        results_data: list[dict],  # type: ignore[type-arg]
+        result_index,  # type: ignore[no-untyped-def]
+        org_id: str,
+        metric_type: str,
+    ) -> dict:
+        """Return the existing row matching ``result_index`` from ``results_data`` or append+return a new one."""
+        existing = next((r for r in results_data if r["result_index"] == result_index), None)  # Lookup
+        if existing is not None:  # Reuse existing row
+            return existing
+        new_row = {  # New row with normalized index
+            "org_id": org_id,
+            "metric_type": metric_type,
+            "result_index": int(result_index) if result_index.isdigit() else result_index,
+        }
+        results_data.append(new_row)  # Append into caller-owned list
+        return new_row
+
+    @staticmethod
     def _extract_results(metric_data: dict, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
         """Extract results array data from metric."""
-        results_data: list[dict] = []  # Accumulate result rows.
-        for key, value in metric_data.items():  # Walk metric fields.
-            parsed = InsightMetricsUtils._parse_results_key(key)  # Parse the key shape.
-            if parsed is None:  # Not a results_* field.
-                continue  # Skip it.
-            result_index, result_field = parsed  # Unpack index/field.
-            existing_result = next((r for r in results_data if r["result_index"] == result_index), None)
-            if existing_result is None:  # First field for this index.
-                existing_result = {  # Start a new result row.
-                    "org_id": org_id,  # Tenant org id.
-                    "metric_type": metric_type,  # Metric name.
-                    "result_index": int(result_index) if result_index.isdigit() else result_index,
-                }
-                results_data.append(existing_result)  # Collect the new row.
-            existing_result[result_field] = value  # Set the field on the row.
-        return results_data  # Return the results.
+        results_data: list[dict] = []  # Accumulator
+        for key, value in metric_data.items():  # Walk metric fields
+            parsed = InsightMetricsUtils._parse_results_key(key)  # Parse the key shape
+            if parsed is None:  # Not a results_* field
+                continue
+            result_index, result_field = parsed  # Unpack
+            row = InsightMetricsUtils._ensure_result_row(results_data, result_index, org_id, metric_type)
+            row[result_field] = value  # Set the field on the row
+        return results_data
 
     @staticmethod
     def _extract_sites_data(metric_data: dict, org_id: str, metric_type: str) -> list[dict]:  # type: ignore[type-arg]
@@ -16499,29 +16519,36 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         return inner_data  # Caller checks session id
 
     @staticmethod
+    def _safe_parse_ws_arp_payload(message):  # type: ignore[no-untyped-def]
+        """Parse the nested ARP payload and log+swallow JSON/key errors; return inner dict or ``None`` on failure."""
+        try:
+            return ARPCommandManager._parse_ws_arp_payload(message)  # Nested JSON unwrap
+        except json.JSONDecodeError as exception:  # Malformed JSON anywhere in the chain
+            logging.error("WebSocket message JSON decode error: %s", exception)
+            return None
+        except KeyError as exception:  # Missing expected key in inner payload
+            logging.warning("WebSocket message missing expected key: %s", exception)
+            return None
+        except Exception as exception:  # Defensive catch
+            logging.error("Unexpected error parsing WebSocket message: %s", exception)
+            return None
+
+    @staticmethod
     def _handle_message(message, session_id, buffer, output_lines, debug=False):  # Parse one ARP message.
         """Handle incoming WebSocket message."""
-        last_message_time = time.time()  # Record arrival timestamp
-        if debug:  # Debug trace of raw frame
+        last_message_time = time.time()  # Arrival timestamp
+        if debug:  # Optional raw-frame trace
             logging.debug("WebSocket raw message received: %s", message)
-        try:
-            inner_data = ARPCommandManager._parse_ws_arp_payload(message)  # Unwrap nested JSON
-        except json.JSONDecodeError as e:  # Malformed JSON anywhere in the chain
-            logging.error("WebSocket message JSON decode error: %s", e)
-            return last_message_time, buffer  # Preserve buffer; caller continues
-        except KeyError as e:  # Missing expected key
-            logging.warning("WebSocket message missing expected key: %s", e)
+        inner_data = ARPCommandManager._safe_parse_ws_arp_payload(message)  # Parse + log-on-fail
+        if inner_data is None:  # Parse failed -> caller continues
             return last_message_time, buffer
-        except Exception as e:  # Unexpected failure (defensive)
-            logging.error("Unexpected error parsing WebSocket message: %s", e)
+        if inner_data.get("session") != session_id:  # Not our session -> ignore
             return last_message_time, buffer
-        if inner_data.get("session") != session_id:  # Frame is for a different session — ignore
-            return last_message_time, buffer
-        raw_output = inner_data.get("raw", "")  # Append fragment to running buffer
+        raw_output = inner_data.get("raw", "")  # Append fragment
         buffer = ARPCommandManager._drain_buffer_to_lines(buffer + raw_output, output_lines)  # Flush full lines
-        if debug:  # Debug trace of processed size
+        if debug:  # Size-trace after processing
             logging.debug("Processed WebSocket data: %s chars", len(raw_output))
-        return last_message_time, buffer  # Return updated time + remaining buffer
+        return last_message_time, buffer
 
     @staticmethod
     def _handle_close(output_lines, debug=False):  # Handle the close.
@@ -17123,29 +17150,42 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             return self._check_service_address_overlap(new_obj, existing_list)  # Check address overlap.
         return None  # Other types don't have IP fields
 
+    @staticmethod
+    def _build_subnet_overlap_conflict(new_subnet: str, existing: dict, existing_subnet: str) -> dict:
+        """Return the canonical overlap-conflict dict used by network/subnet checks."""
+        return {
+            "reason": "subnet_overlap",  # Conflict type for reporting
+            "detail": f"{new_subnet} overlaps with '{existing.get('name')}' ({existing_subnet})",
+        }
+
+    @staticmethod
+    def _existing_overlaps_new(new_net, existing: dict, new_subnet: str) -> dict | None:  # type: ignore[no-untyped-def]
+        """Return a conflict dict if ``existing``'s subnet overlaps ``new_net``; else None (also on parse error)."""
+        existing_subnet = existing.get("subnet")  # Existing CIDR
+        if not existing_subnet:  # Skip un-subnetted existing entries
+            return None
+        try:
+            existing_net = ipaddress.ip_network(existing_subnet, strict=False)  # Parse for comparison
+        except ValueError:
+            return None
+        if not new_net.overlaps(existing_net):  # No shared addresses
+            return None
+        return OrgConfigMigrationManager._build_subnet_overlap_conflict(new_subnet, existing, existing_subnet)
+
     def _check_network_subnet_overlap(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
         """Check network subnet overlap using ipaddress module."""
-        new_subnet = new_obj.get("subnet")  # Get the CIDR subnet string
-        if not new_subnet:  # No subnet defined -- skip overlap check
-            return None  # No conflict.
+        new_subnet = new_obj.get("subnet")  # Source CIDR
+        if not new_subnet:  # No subnet -> nothing to check
+            return None
         try:
             new_net = ipaddress.ip_network(new_subnet, strict=False)  # Parse CIDR, allow host bits
-        except ValueError:  # Invalid CIDR format -- skip gracefully
-            return None  # No conflict.
+        except ValueError:
+            return None
         for existing in existing_list:  # Compare against each existing network
-            existing_subnet = existing.get("subnet")  # Get existing network's CIDR
-            if not existing_subnet:  # Skip existing networks without subnets
-                continue  # Skip it.
-            try:
-                existing_net = ipaddress.ip_network(existing_subnet, strict=False)  # Parse for comparison
-                if new_net.overlaps(existing_net):  # Check if any IP addresses are shared
-                    return {
-                        "reason": "subnet_overlap",  # Conflict type for reporting
-                        "detail": f"{new_subnet} overlaps with '{existing.get('name')}' ({existing_subnet})",
-                    }
-            except ValueError:  # Invalid existing CIDR -- skip and continue
-                continue  # Skip it.
-        return None  # No subnet overlaps found
+            conflict = type(self)._existing_overlaps_new(new_net, existing, new_subnet)  # Per-existing check
+            if conflict is not None:  # First overlap wins
+                return conflict
+        return None
 
     def _check_service_address_overlap(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
         """Check service address overlap for objects with addresses[] field."""
@@ -17474,26 +17514,32 @@ class WANProbeConfigManager:  # WAN probe config manager.
         print("  No changes needed.")  # Tell the user.
         logging.info("Menu #166: No WAN interfaces found in selected templates")  # Log it.
 
+    def _prepare_templates_with_changes(self) -> list | None:  # type: ignore[type-arg]
+        """Run all init/load/select/analyze guard steps; return analyzed list or ``None`` to signal abort."""
+        if not self._initialize():  # Org id resolution
+            return None
+        if not self._load_data():  # Sites + templates load
+            return None
+        templates_to_modify = self._select_templates()  # Operator picks targets
+        if not templates_to_modify:  # User cancelled / empty
+            return None
+        templates_with_changes = self._analyze_templates(templates_to_modify)  # Diff per template
+        if not templates_with_changes:  # Nothing to change
+            self._announce_no_wan_interfaces()  # Operator notice + log
+            return None
+        return templates_with_changes
+
     def _execute(self, dry_run: bool) -> None:  # Run the probe config flow.
         """Main execution flow for WAN probe configuration."""
-        self._display_header(dry_run)  # Show the header.
-        if not self._initialize():  # Initialize state.
-            return  # Abort.
-        if not self._load_data():  # Load the data.
-            return  # Abort.
-        templates_to_modify = self._select_templates()  # Select templates.
-        if not templates_to_modify:  # None selected.
-            return  # Abort.
-        templates_with_changes = self._analyze_templates(templates_to_modify)  # Analyze templates.
-        if not templates_with_changes:  # No changes.
-            self._announce_no_wan_interfaces()  # Announce and log.
-            return  # Abort.
-        self._show_preview(templates_with_changes, dry_run)  # Show the preview.
-        if not dry_run:  # Real run.
-            if not self._confirm_operation(len(templates_with_changes)):  # Need confirmation.
-                return  # Abort.
-        results = self._apply_changes(templates_with_changes, dry_run)  # Apply the changes.
-        self._generate_report(results, dry_run)  # Generate the report.
+        self._display_header(dry_run)  # Show the banner
+        templates_with_changes = self._prepare_templates_with_changes()  # Init -> load -> select -> analyze
+        if templates_with_changes is None:  # Any prep step aborted
+            return
+        self._show_preview(templates_with_changes, dry_run)  # Operator preview
+        if not dry_run and not self._confirm_operation(len(templates_with_changes)):  # Confirm before destructive
+            return
+        results = self._apply_changes(templates_with_changes, dry_run)  # Execute writes
+        self._generate_report(results, dry_run)  # Final summary
 
     def _display_header(self, dry_run: bool) -> None:  # Show the header.
         """Display operation header with configuration details."""
@@ -17692,24 +17738,26 @@ class WANProbeConfigManager:  # WAN probe config manager.
             "current_profile": current_profile,
         }  # Return the interface record
 
+    def _print_wan_interface_change(self, wan_if: dict[str, Any]) -> None:
+        """Print a single WAN interface's before/after probe override block."""
+        port = wan_if["port_name"]  # Port the override targets
+        current_ips = wan_if["current_ips"] or ["(none)"]  # Substitute literal for empty list display
+        current_profile = wan_if["current_profile"] or "(none)"  # Substitute literal for missing profile
+        print(f"     {port}:")  # Header line for this port
+        print(f"       Current: ips={current_ips}, profile={current_profile}")  # Pre-change state
+        print(f"       New:     ips={self.probe_ips}, profile={self.probe_profile}")  # Post-change state
+
     def _show_preview(self, templates_with_changes: list[dict[str, Any]], dry_run: bool) -> None:
         """Display preview of changes to be made."""
-        total_interfaces = sum(len(t["wan_interfaces"]) for t in templates_with_changes)  # Total interfaces.
-        total_sites = sum(t["site_count"] for t in templates_with_changes)  # Total sites.
-
-        print("\n  Preview of Changes:")  # Header.
-        print(f"  {len(templates_with_changes)} templates with {total_interfaces} WAN interfaces")  # Show the counts.
-        print(f"  Affecting {total_sites} sites")  # Show affected sites.
-
-        for template in templates_with_changes:  # Walk templates.
-            print(f"\n   Template: {template['name']} ({template['site_count']} sites)")  # Print the template.
-            for wan_if in template["wan_interfaces"]:  # Walk WAN ports.
-                port = wan_if["port_name"]  # Port name.
-                current_ips = wan_if["current_ips"] or ["(none)"]  # Current IPs.
-                current_profile = wan_if["current_profile"] or "(none)"  # Current profile.
-                print(f"     {port}:")  # Print the port.
-                print(f"       Current: ips={current_ips}, profile={current_profile}")  # Show current.
-                print(f"       New:     ips={self.probe_ips}, profile={self.probe_profile}")  # Show new.
+        total_interfaces = sum(len(t["wan_interfaces"]) for t in templates_with_changes)  # Sum across all
+        total_sites = sum(t["site_count"] for t in templates_with_changes)  # Sum site reach
+        print("\n  Preview of Changes:")  # Section header
+        print(f"  {len(templates_with_changes)} templates with {total_interfaces} WAN interfaces")  # Scale line
+        print(f"  Affecting {total_sites} sites")  # Blast-radius line
+        for template in templates_with_changes:  # Iterate each impacted template
+            print(f"\n   Template: {template['name']} ({template['site_count']} sites)")  # Template subheader
+            for wan_if in template["wan_interfaces"]:  # Iterate each affected WAN port
+                self._print_wan_interface_change(wan_if)  # Delegate per-port formatting
 
     def _confirm_operation(self, template_count: int) -> bool:  # Confirm the operation.
         """Prompt for confirmation. Returns True if confirmed."""
@@ -19022,31 +19070,33 @@ class FirmwareUpgradeStatusChecker:
             return f"-> {target_versions[0]}"
         return f"Multiple versions ({len(target_versions)} different)"
 
+    def _load_org_upgrades_from_file(self, upgrade_file: str) -> list[dict[str, Any]] | None:
+        """Read ``ActiveUpgrades.json`` and return rows matching ``self.org_id`` (``None`` on read error)."""
+        try:
+            with open(upgrade_file, encoding="utf-8") as f:  # Open tracking file
+                stored = json.load(f)  # Deserialize JSON list
+        except Exception as exception:  # Tolerate IO/JSON errors
+            print(f"   -> Failed to read stored upgrade tracking data: {exception}")  # User notice
+            logging.warning("Failed to read stored upgrade tracking: %s", exception)  # Log warning
+            return None  # Signal failure to caller
+        return [u for u in stored if u.get("org_id") == self.org_id]  # Filter to current org
+
     def _check_stored_upgrades(self) -> None:
         """Check stored upgrade IDs from ActiveUpgrades.json."""
-        print("   Checking for site-level upgrade operations...")
-        upgrade_file = "ActiveUpgrades.json"
-
-        if not os.path.exists(upgrade_file):
-            print("   -> No site-level upgrade tracking file found")
+        print("   Checking for site-level upgrade operations...")  # Section banner
+        upgrade_file = "ActiveUpgrades.json"  # Persistent tracker path
+        if not os.path.exists(upgrade_file):  # No tracker file yet
+            print("   -> No site-level upgrade tracking file found")  # Inform operator
             return
-
-        try:
-            with open(upgrade_file, encoding="utf-8") as f:
-                stored = json.load(f)
-
-            org_upgrades = [u for u in stored if u.get("org_id") == self.org_id]
-            if not org_upgrades:
-                print("   -> No stored upgrades match current organization")
-                return
-
-            print(f"   !? Found {len(org_upgrades)} stored upgrade operation(s)")
-            for record in org_upgrades:
-                self._check_stored_upgrade(record)
-
-        except Exception as exception:
-            print(f"   -> Failed to read stored upgrade tracking data: {exception}")
-            logging.warning("Failed to read stored upgrade tracking: %s", exception)
+        org_upgrades = self._load_org_upgrades_from_file(upgrade_file)  # Load + filter to org
+        if org_upgrades is None:  # Read/parse failed (logged inside helper)
+            return
+        if not org_upgrades:  # Empty after filter
+            print("   -> No stored upgrades match current organization")  # Inform operator
+            return
+        print(f"   !? Found {len(org_upgrades)} stored upgrade operation(s)")  # Summary
+        for record in org_upgrades:  # Probe each tracked upgrade
+            self._check_stored_upgrade(record)  # Per-record API status check
 
     def _record_stored_upgrade(
         self, upgrade_id: str, site_id: str, site_name: str, details: dict
@@ -19066,21 +19116,30 @@ class FirmwareUpgradeStatusChecker:
             }
         )
 
+    @staticmethod
+    def _safe_get_site_upgrade_data(upgrade_id: str, site_id: str, site_name: str) -> dict[str, Any] | None:
+        """Call ``getSiteDeviceUpgrade`` and return ``resp.data`` if present, otherwise ``None`` (errors logged)."""
+        try:
+            resp = mistapi.api.v1.sites.devices.getSiteDeviceUpgrade(apisession, site_id, upgrade_id)  # API call
+        except Exception as exception:  # Tolerate transient API failures
+            print(f"      Failed to check upgrade {upgrade_id[:8]}...: {exception}")  # Operator notice
+            return None
+        if resp and hasattr(resp, "data") and resp.data:  # Live upgrade with details present
+            return resp.data  # type: ignore[no-any-return]
+        return None  # API returned empty body -> upgrade no longer active
+
     def _check_stored_upgrade(self, record: dict[str, Any]) -> None:
         """Check status of a stored upgrade record."""
-        upgrade_id = record.get("upgrade_id")
-        site_id = record.get("site_id")
-        site_name = record.get("site_name", "Unknown")
-        if not upgrade_id or not site_id:  # Skip blank tracking rows.
+        upgrade_id = record.get("upgrade_id")  # Tracked upgrade id
+        site_id = record.get("site_id")  # Site the upgrade ran against
+        site_name = record.get("site_name", "Unknown")  # Display name fallback
+        if not upgrade_id or not site_id:  # Skip blank tracking rows
             return
-        try:
-            resp = mistapi.api.v1.sites.devices.getSiteDeviceUpgrade(apisession, site_id, upgrade_id)  # API.
-            if resp and hasattr(resp, "data") and resp.data:  # Live upgrade with details.
-                self._record_stored_upgrade(upgrade_id, site_id, site_name, resp.data)
-            else:
-                print(f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': No longer active")
-        except Exception as exception:  # Tolerate transient API failures.
-            print(f"      Failed to check upgrade {upgrade_id[:8]}...: {exception}")
+        data = type(self)._safe_get_site_upgrade_data(upgrade_id, site_id, site_name)  # Single API + data extraction
+        if data:  # Still tracked upstream
+            self._record_stored_upgrade(upgrade_id, site_id, site_name, data)  # Append to active list
+            return
+        print(f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': No longer active")  # Stale tracking row
 
     def _fetch_audit_logs_24h(self) -> list[dict[str, Any]]:
         """Fetch the last 24h of org audit logs (paginated to completion) for upgrade triage."""
@@ -19170,22 +19229,24 @@ class FirmwareUpgradeStatusChecker:
             display = event_type.replace("SYSTEM_UPGRADE_", "").title()
             print(f"      {display}: {len(type_events)} event(s)")
 
+    def _report_sites_without_upgrades(self, total: int, sites_with_upgrades: int) -> None:
+        """Print the trailing 'N site(s) have no active upgrade operations' line when scanning all sites."""
+        if self.site_filter:  # Caller scoped to one site -> no summary line needed
+            return
+        without = total - sites_with_upgrades  # Sites that came back empty
+        if without > 0:  # Only print when there's something to report
+            print(f"   -> {without} site(s) have no active upgrade operations")  # Operator summary
+
     def _check_site_upgrades(self) -> None:
         """Check individual site upgrade operations."""
-        if not self.site_filter:
+        if not self.site_filter:  # Banner only for full-org scan
             print("\n   Checking individual site upgrade operations (first 5 sites)...")
-
-        sites = [self.site_filter] if self.site_filter else list(self.site_lookup.keys())[:5]
-        sites_with_upgrades = 0
-
-        for site_id in sites:
-            if self._check_single_site_upgrades(site_id):
+        sites = [self.site_filter] if self.site_filter else list(self.site_lookup.keys())[:5]  # Scope selector
+        sites_with_upgrades = 0  # Counter for trailing summary
+        for site_id in sites:  # Probe each scoped site
+            if self._check_single_site_upgrades(site_id):  # True -> upgrade(s) found at site
                 sites_with_upgrades += 1
-
-        if not self.site_filter:
-            without = len(sites) - sites_with_upgrades
-            if without > 0:
-                print(f"   -> {without} site(s) have no active upgrade operations")
+        self._report_sites_without_upgrades(len(sites), sites_with_upgrades)  # Emit trailing summary
 
     def _check_single_site_upgrades(self, site_id: str) -> bool:
         """Check upgrades for a single site. Returns True if upgrades found."""
@@ -23035,22 +23096,30 @@ def _systematic_test_run_option(
     return _invoke_one_systematic_test(emitter, case, invoke_kwargs, op_start)
 
 
+def _fast_mode_from_global() -> bool:
+    """Return True iff the module-level ``FAST_MODE_ENABLED`` flag is set (errors -> False)."""
+    try:  # globals() access is normally safe but guarded for parity with original.
+        return bool(globals().get("FAST_MODE_ENABLED", False))  # Module flag set by CLI parse at startup.
+    except Exception:  # Defensive -- never propagate.
+        return False  # Safe default for any introspection failure.
+
+
+def _fast_mode_from_cli_args() -> bool:
+    """Return True iff parsed ``args`` exist in globals and carry ``--fast`` (errors -> False)."""
+    try:  # CLI args presence + attribute lookup can both fail; degrade safely.
+        cli_args = globals().get("args") if "args" in globals() else None  # Locate parsed args, if any.
+        return bool(cli_args and getattr(cli_args, "fast", False))  # Truthy only when --fast was set.
+    except Exception:  # Defensive -- never propagate.
+        return False  # Safe default for any introspection failure.
+
+
 def _systematic_test_resolve_fast_mode() -> bool:
     """Return whether fast mode is active for the current systematic test run."""
-    try:  # Global flag is the primary source; evaluate it first before falling back to CLI args.
-        if globals().get("FAST_MODE_ENABLED", False):  # Module-level flag set by CLI arg parsing at startup.
-            return True  # Global fast mode is active.
-    except Exception:  # globals() access failure is non-fatal.
-        pass  # Fall through to CLI args check.
-    cli_args = (
-        globals().get("args") if "args" in globals() else None
-    )  # Retrieve parsed CLI args if they exist in globals.
-    try:  # CLI args access can fail; degrade safely.
-        if cli_args and getattr(cli_args, "fast", False):  # Check --fast on parsed args.
-            return True  # CLI explicitly requested fast mode.
-    except Exception:  # Ignore all failures from args inspection.
-        pass  # Return False as safe default.
-    return False  # Neither global nor CLI source enabled fast mode.
+    if _fast_mode_from_global():  # Primary source: module-level flag set at startup.
+        return True
+    if _fast_mode_from_cli_args():  # Fallback: parsed --fast on CLI args namespace.
+        return True
+    return False  # Neither source enabled fast mode.
 
 
 def run_systematic_test():  # noqa: C901, PLR0912, PLR0915
