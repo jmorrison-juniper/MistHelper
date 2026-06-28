@@ -14529,23 +14529,27 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
 
     def _extract_gateway_models(self, device_models_data) -> list[str]:  # Filter to gateway models.
         """Extract gateway model names from device models data."""
-        gateway_models = []  # Collect model names.
+        gateway_models = []  # Collect model names
 
-        if isinstance(device_models_data, dict):  # Dict payload.
-            for model_name, model_details in device_models_data.items():  # Walk models.
-                if isinstance(model_details, dict):  # Dict details.
-                    model_type = model_details.get("type", "").lower()  # Read the type.
-                    if model_type == "gateway":  # Gateway type.
-                        gateway_models.append(model_name)  # Keep the model.
-        elif isinstance(device_models_data, list):  # List payload.
-            for model_item in device_models_data:  # Walk models.
-                if isinstance(model_item, dict):  # Dict item.
-                    model_name = model_item.get("model", model_item.get("name", ""))  # Read the name.
-                    model_type = model_item.get("type", "").lower()  # Read the type.
-                    if model_name and model_type == "gateway":  # Gateway with a name.
-                        gateway_models.append(model_name)  # Keep the model.
+        if isinstance(device_models_data, dict):  # Dict payload
+            for model_name, model_details in device_models_data.items():  # Walk models
+                if not isinstance(model_details, dict):  # Skip non-dict values for safety
+                    continue
+                if model_details.get("type", "").lower() != "gateway":  # Only keep gateway entries
+                    continue
+                gateway_models.append(model_name)  # Keep the model
+        elif isinstance(device_models_data, list):  # List payload
+            for model_item in device_models_data:  # Walk models
+                if not isinstance(model_item, dict):  # Skip non-dict items
+                    continue
+                model_name = model_item.get("model", model_item.get("name", ""))  # Read the name
+                if not model_name:  # Empty name = unusable entry
+                    continue
+                if model_item.get("type", "").lower() != "gateway":  # Only keep gateway entries
+                    continue
+                gateway_models.append(model_name)  # Keep the model
 
-        return gateway_models  # Return gateway models.
+        return gateway_models  # Return gateway models
 
     def _normalize_model_data(self, model: str, model_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize model data into list of records with model identifier."""
@@ -20787,35 +20791,44 @@ class BulkRadiusWLANConfigManager:
             wlan["_inheritance_level"] = "org"
             wlan["_inheritance_source"] = "Org-Level WLAN"
 
-    def _display_wlans(self) -> None:
-        """Display unified table of all RADIUS WLANs with compliance markers."""
-        print("\n" + "-" * 70)  # Top border of the WLAN table
-        print("  RADIUS-ENABLED WLANs")  # Table title
-        print("-" * 70)  # Separator under the title
-        print(f"  {'#':<4} {'SSID':<25} {'Level':<12} {'Timeout':<8} {'Retries':<8} {'Fast':<6}")  # Column headers
-        print("-" * 70)  # Separator under the headers
-        display_index = 1  # Running 1-based number for selectable (non-compliant) WLANs
-        combined: list[tuple[dict[str, Any], int | None]] = []  # Pairs of (wlan, display index or None for compliant)
+    def _build_combined_wlan_rows(self) -> list[tuple[dict[str, Any], int | None]]:
+        """Pair WLANs with display indices: selectable WLANs get 1-based numbers; compliant ones get None."""
+        display_index = 1  # Running 1-based number for selectable WLANs
+        combined: list[tuple[dict[str, Any], int | None]] = []  # Output pairs
         for wlan in self.radius_wlans:  # Selectable WLANs that need configuration
             combined.append((wlan, display_index))  # Give each a selectable index
-            display_index += 1  # Advance the index for the next selectable WLAN
-        for wlan in self.compliant_wlans:  # Already-compliant WLANs (shown but not selectable)
-            combined.append((wlan, None))  # No index -- they cannot be selected
-        combined.sort(key=lambda item: item[0].get("ssid", "").lower())  # Sort the table alphabetically by SSID
-        for wlan, idx in combined:  # Render each row in sorted order
-            ssid = wlan.get("ssid", "Unknown")  # The WLAN's SSID (fallback if missing)
-            is_compliant = wlan.get("_compliance_status") == "COMPLIANT"  # Whether this WLAN already meets the target
-            suffix = " (COMPLIANT)" if is_compliant else ""  # Tag compliant rows for clarity
-            ssid_display = (ssid[:13] + suffix) if is_compliant else ssid[:24]  # Truncate SSID to fit the column
-            level = wlan.get("_inheritance_level", "unknown")[:11]  # Inheritance level, truncated to the column width
-            timeout = wlan.get("auth_servers_timeout", 5)  # Current timeout value
-            retries = wlan.get("auth_servers_retries", 2)  # Current retry value
-            fast = "Yes" if wlan.get("fast_dot1x_timers", False) else "No"  # Fast-timer flag as a friendly string
-            idx_str = str(idx) if idx is not None else "--"  # Show the index, or '--' for non-selectable rows
-            print(f"  {idx_str:<4} {ssid_display:<25} {level:<12} {timeout:<8} {retries:<8} {fast:<6}")  # Print the row
-        print("-" * 70)  # Bottom border of the table
-        total = len(self.radius_wlans) + len(self.compliant_wlans)  # Total RADIUS WLANs across both buckets
-        print(  # Summary line of selectable vs compliant counts
+            display_index += 1  # Advance the index
+        for wlan in self.compliant_wlans:  # Already-compliant WLANs (not selectable)
+            combined.append((wlan, None))  # No index for compliant rows
+        combined.sort(key=lambda item: item[0].get("ssid", "").lower())  # Sort by SSID
+        return combined  # Ready for rendering
+
+    def _print_wlan_row(self, wlan: dict[str, Any], idx: int | None) -> None:
+        """Print one WLAN row in the compliance table, with COMPLIANT tag suffix where applicable."""
+        ssid = wlan.get("ssid", "Unknown")  # The WLAN's SSID (fallback if missing)
+        is_compliant = wlan.get("_compliance_status") == "COMPLIANT"  # Whether already at target
+        suffix = " (COMPLIANT)" if is_compliant else ""  # Tag for clarity
+        ssid_display = (ssid[:13] + suffix) if is_compliant else ssid[:24]  # Truncate to column width
+        level = wlan.get("_inheritance_level", "unknown")[:11]  # Inheritance level
+        timeout = wlan.get("auth_servers_timeout", 5)  # Current timeout value
+        retries = wlan.get("auth_servers_retries", 2)  # Current retry value
+        fast = "Yes" if wlan.get("fast_dot1x_timers", False) else "No"  # Fast-timer flag
+        idx_str = str(idx) if idx is not None else "--"  # Index, or '--' for non-selectable
+        print(f"  {idx_str:<4} {ssid_display:<25} {level:<12} {timeout:<8} {retries:<8} {fast:<6}")
+
+    def _display_wlans(self) -> None:
+        """Display unified table of all RADIUS WLANs with compliance markers."""
+        print("\n" + "-" * 70)  # Top border
+        print("  RADIUS-ENABLED WLANs")  # Title
+        print("-" * 70)  # Separator
+        print(f"  {'#':<4} {'SSID':<25} {'Level':<12} {'Timeout':<8} {'Retries':<8} {'Fast':<6}")  # Headers
+        print("-" * 70)  # Separator
+        combined = self._build_combined_wlan_rows()  # Sorted (wlan, idx) pairs
+        for wlan, idx in combined:  # Render each row
+            self._print_wlan_row(wlan, idx)
+        print("-" * 70)  # Bottom border
+        total = len(self.radius_wlans) + len(self.compliant_wlans)  # Total across both buckets
+        print(
             f"  Total: {total} RADIUS WLANs ({len(self.radius_wlans)} selectable, {len(self.compliant_wlans)} compliant)"  # noqa: E501
         )
         print("")  # Blank spacer line
@@ -21057,47 +21070,46 @@ class BulkRadiusWLANConfigManager:
             "enabled": wlan.get("enabled", ""),  # Whether the WLAN itself is enabled
         }
 
+    _AUDIT_TRAIL_FIELDNAMES = [
+        "timestamp",
+        "wlan_id",
+        "ssid",
+        "site_name",
+        "inheritance_level",
+        "before_timeout",
+        "after_timeout",
+        "before_retries",
+        "after_retries",
+        "before_fast_dot1x",
+        "after_fast_dot1x",
+        "status",
+        "error_message",
+    ]
+
+    def _write_audit_csv(self, filepath: str) -> None:
+        """Write self.change_records to a CSV at filepath; log success or surface failure to the user."""
+        try:
+            with open(filepath, "w", newline="", encoding="utf-8") as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=self._AUDIT_TRAIL_FIELDNAMES)
+                writer.writeheader()  # Write the column header row
+                writer.writerows(self.change_records)  # Write every recorded change
+            print(f"\n[+] Audit trail exported to: {filepath}")
+            logging.info("Audit trail exported to %s with %s records", filepath, len(self.change_records))
+        except Exception as e:  # Writing the CSV failed (permissions, disk, etc.)
+            print(f"\n[!] Failed to export audit trail: {e}")
+            logging.error("Failed to export audit trail: %s", e)
+
     def _export_audit_trail(self) -> None:
         """Export change records to CSV in data/ directory."""
         if not self.change_records:  # No changes were recorded this run
-            print("[*] No changes to export.")  # Tell the user there is nothing to write
-            return  # Nothing to export
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Timestamp for a unique filename
+            print("[*] No changes to export.")
+            return
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Unique filename timestamp
         prefix = "DRYRUN_" if self.dry_run else ""  # Mark dry-run exports distinctly
-        filename = f"{prefix}RadiusWLANBulkConfig_{timestamp}.csv"  # Compose the audit CSV filename
-        filepath = os.path.join("data", filename)  # Place it under the data/ directory (cross-platform join)
-
-        os.makedirs("data", exist_ok=True)  # Ensure the data/ directory exists before writing
-
-        fieldnames = [
-            "timestamp",
-            "wlan_id",
-            "ssid",
-            "site_name",
-            "inheritance_level",
-            "before_timeout",
-            "after_timeout",
-            "before_retries",
-            "after_retries",
-            "before_fast_dot1x",
-            "after_fast_dot1x",
-            "status",
-            "error_message",
-        ]
-
-        try:
-            with open(filepath, "w", newline="", encoding="utf-8") as csvfile:  # Open the audit CSV for writing
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)  # Map dict records to CSV columns
-                writer.writeheader()  # Write the column header row
-                writer.writerows(self.change_records)  # Write every recorded change
-            print(f"\n[+] Audit trail exported to: {filepath}")  # Tell the user where the file landed
-            logging.info(
-                "Audit trail exported to %s with %s records", filepath, len(self.change_records)
-            )  # Log the export
-        except Exception as e:  # Writing the CSV failed (permissions, disk, etc.)
-            print(f"\n[!] Failed to export audit trail: {e}")  # Inform the user of the failure
-            logging.error("Failed to export audit trail: %s", e)  # Log the error detail
+        filename = f"{prefix}RadiusWLANBulkConfig_{timestamp}.csv"  # Composed audit CSV name
+        filepath = os.path.join("data", filename)  # Place under data/ (cross-platform)
+        os.makedirs("data", exist_ok=True)  # Ensure target directory exists
+        self._write_audit_csv(filepath)  # Open + write + report
 
     def manage(self, dry_run: bool = False) -> None:
         """Main entry point - orchestrates the bulk RADIUS WLAN configuration."""
@@ -21206,6 +21218,43 @@ class AuditAnalysisOps:
     """Menu #25: Audit Log Analysis operations."""
 
     @staticmethod
+    def _prompt_audit_time_range_input() -> str:
+        """Capture the audit-log time-range input string (test-mode fixed default or interactive prompt)."""
+        if IS_TEST_MODE:  # Use a fixed time range so --test runs without interactive input
+            return "7d"  # Default to 7 days in test mode; skips the safe_input prompt
+        print("\nTime range examples: 7d, 4w, 3m, 1y, 6w-2w (6 weeks ago to 2 weeks ago)")
+        return InputUtils.safe_input("Enter time range [7d]: ", context="audit_analysis").strip()
+
+    @staticmethod
+    def _fetch_filtered_audit_entries(org_id, time_range):
+        """Call Mist audit-logs API for the chosen org+time-range and return paginated entries (None on failure)."""
+        api_kwargs = TimeRangeParser.to_api_kwargs(time_range)  # Convert to API start/end params
+        try:
+            logging.info(
+                "Fetching audit logs for org %s with range %s",
+                org_id,
+                time_range.description,
+            )  # Log before API call
+            response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **api_kwargs, limit=1000)
+            entries = mistapi.get_all(response=response, mist_session=apisession) or []
+            logging.debug("Retrieved %d raw audit log entries", len(entries))
+            return entries
+        except Exception as exc:
+            logging.error("API call failed: %s", exc)  # Log API failure with context
+            return None
+
+    @staticmethod
+    def _render_audit_analysis_reports(analysis) -> None:
+        """Render the analysis to both the Mermaid markdown file and the interactive HTML file."""
+        renderer = AuditReportRenderer()  # Initialize report generator
+        md_path = os.path.join("data", "OrgAuditAnalysis.md")  # Mermaid timeline output path
+        renderer.render_mermaid(analysis, md_path)
+        print(f"Mermaid report: {md_path}")
+        html_path = os.path.join("data", "OrgAuditAnalysis.html")  # Interactive HTML output path
+        renderer.render_html(analysis, html_path)
+        print(f"HTML report: {html_path}")
+
+    @staticmethod
     def audit_log_analysis():
         """Fetch org audit logs, filter noise, generate analysis reports."""
         if CacheUtils.fast_cache_hit("OrgAuditAnalysis.md"):  # Skip if cached report exists
@@ -21213,58 +21262,24 @@ class AuditAnalysisOps:
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org context
         if not org_id:
             return
-
-        if IS_TEST_MODE:  # Use a fixed time range so --test runs without interactive input
-            time_input = "7d"  # Default to 7 days in test mode; skips the safe_input prompt
-        else:
-            print("\nTime range examples: 7d, 4w, 3m, 1y, 6w-2w (6 weeks ago to 2 weeks ago)")
-            time_input = InputUtils.safe_input(  # Prompt for time range
-                "Enter time range [7d]: ", context="audit_analysis"
-            ).strip()
-
+        time_input = AuditAnalysisOps._prompt_audit_time_range_input()  # Test-mode default or interactive prompt
         parser = TimeRangeParser()  # Parse human-readable time range
         try:
             time_range = parser.parse(time_input)  # Convert input to TimeRange object
         except ValueError as exc:
-            logging.error("Invalid time range: %s", exc)  # Log parse failure
+            logging.error("Invalid time range: %s", exc)
             return
-
         print(f"\nFetching audit logs for: {time_range.description}")
-        api_kwargs = TimeRangeParser.to_api_kwargs(time_range)  # Convert to API start/end params
-
-        try:
-            logging.info(
-                "Fetching audit logs for org %s with range %s",
-                org_id,
-                time_range.description,
-            )  # Log before API call
-            response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(
-                apisession, org_id, **api_kwargs, limit=1000
-            )  # Call Mist audit logs API
-            entries = mistapi.get_all(response=response, mist_session=apisession) or []  # Paginate all results
-            logging.debug("Retrieved %d raw audit log entries", len(entries))  # Log result count
-        except Exception as exc:
-            logging.error("API call failed: %s", exc)  # Log API failure with context
+        entries = AuditAnalysisOps._fetch_filtered_audit_entries(org_id, time_range)  # API call + paginate
+        if entries is None:  # API failed (already logged inside helper)
             return
-
         print(f"Retrieved {len(entries)} raw entries")
-
-        log_filter = AuditLogFilter()  # Initialize noise filter
+        log_filter = AuditLogFilter()  # Noise filter
         filtered, stats = log_filter.filter_with_stats(entries)  # Remove noise entries with stats
         print(f"Filtered: {stats['kept_count']} kept, {stats['removed_count']} noise removed")
-
-        analyzer = AuditLogAnalyzer()  # Initialize pattern analyzer
+        analyzer = AuditLogAnalyzer()  # Pattern analyzer
         analysis = analyzer.analyze(filtered, time_range.description)  # Detect patterns and anomalies
-
-        renderer = AuditReportRenderer()  # Initialize report generator
-
-        md_path = os.path.join("data", "OrgAuditAnalysis.md")  # Mermaid timeline output path
-        renderer.render_mermaid(analysis, md_path)  # Generate Mermaid timeline report
-        print(f"Mermaid report: {md_path}")
-
-        html_path = os.path.join("data", "OrgAuditAnalysis.html")  # Interactive HTML output path
-        renderer.render_html(analysis, html_path)  # Generate interactive HTML report
-        print(f"HTML report: {html_path}")
+        AuditAnalysisOps._render_audit_analysis_reports(analysis)  # Markdown + HTML reports
 
 
 menu_actions = {
@@ -22741,6 +22756,40 @@ def _systematic_test_emit_skips(emitter: Any, unsafe_list: list[str]) -> int:
     return len([opt for opt in unsafe_list if opt in menu_actions])  # Return actual skip count for summary reporting.
 
 
+def _resolve_systematic_test_invoke_kwargs(func: Any, fast_enabled: bool) -> dict[str, Any]:
+    """Inspect a menu function's signature and build invoke kwargs (fast=True only if supported)."""
+    supports_fast = False  # Default to no fast-mode support until introspection confirms it.
+    try:  # inspect.signature can raise on built-in callables; degrade gracefully.
+        sig = inspect.signature(func)  # type: ignore[arg-type]  # Detect optional 'fast' parameter
+        supports_fast = "fast" in sig.parameters  # True when function accepts fast-mode
+    except Exception:  # Signature inspection failure is non-fatal
+        supports_fast = False  # Treat as non-fast-capable when signature is uninspectable
+    invoke_kwargs: dict[str, Any] = {}  # Build kwargs dict
+    if supports_fast and fast_enabled:  # Both function and global mode agree
+        invoke_kwargs["fast"] = True  # Activate fast mode for this operation
+    return invoke_kwargs
+
+
+def _invoke_one_systematic_test(
+    emitter: Any, case: SystematicTestOption, invoke_kwargs: dict, op_start: float
+) -> tuple[bool, float]:
+    """Call one menu func with the resolved kwargs; record pass/fail in telemetry and return (success, duration)."""
+    option, func, description = case.option, case.func, case.description  # Unpack identity (issue #470)
+    try:  # Each option runs independently so one failure does not abort remaining tests
+        func(**invoke_kwargs)  # type: ignore[operator, no-untyped-call]  # Call menu action
+        duration = time.time() - op_start  # Elapsed seconds
+        print(f"   [SUCCESS] Option {option} completed successfully")
+        emitter.emit_test_pass(option, description, duration, "systematic")  # Record pass
+        logging.info("SYSTEMATIC_TEST: Successfully completed menu option %s", option)
+        return True, duration
+    except Exception as exc:  # Catch all so harness continues
+        duration = time.time() - op_start  # Still record elapsed
+        print(f"   [FAILED]  Option {option} failed: {str(exc)[:100]}...")
+        emitter.emit_test_fail(option, description, duration, exc, "systematic")  # Record failure
+        logging.error("SYSTEMATIC_TEST: Failed menu option %s: %s", option, exc)
+        return False, duration
+
+
 def _systematic_test_run_option(
     emitter: Any,
     case: SystematicTestOption,
@@ -22749,51 +22798,19 @@ def _systematic_test_run_option(
     fast_enabled: bool,
 ) -> tuple[bool, float]:
     """Run one menu option in the systematic test harness and return (success, duration)."""
-    option, func, description = case.option, case.func, case.description  # Unpack the option identity (issue #470).
-    print(
-        f"   [{i:2}/{total_safe}] Testing option {option:>3}: {description[:60]}..."
-    )  # Show current progress position before invoking.
-    emitter.emit_test_start(
-        option, description, "systematic"
-    )  # Record test start in telemetry for elapsed-time tracking.
-    op_start = time.time()  # Capture start time before any invocation overhead.
-    supports_fast = False  # Default to no fast-mode support until introspection confirms it.
-    try:  # inspect.signature can raise on built-in callables; degrade gracefully.
-        sig = inspect.signature(func)  # type: ignore[arg-type]  # Inspect function signature to detect optional 'fast' parameter.
-        supports_fast = "fast" in sig.parameters  # True when the operation accepts fast-mode acceleration.
-    except Exception:  # Signature inspection failure is non-fatal; fall back to standard invocation.
-        supports_fast = False  # Treat as non-fast-capable when signature is uninspectable.
-    invoke_kwargs = {}  # Build kwargs dict so fast-mode flag is only passed when the function supports it.
-    if supports_fast and fast_enabled:  # Only pass fast=True when both the function and global mode agree.
-        invoke_kwargs["fast"] = True  # Activate fast mode for this operation to reduce test time.
+    option, func, description = case.option, case.func, case.description  # Unpack identity (issue #470)
+    print(f"   [{i:2}/{total_safe}] Testing option {option:>3}: {description[:60]}...")
+    emitter.emit_test_start(option, description, "systematic")  # Telemetry start
+    op_start = time.time()  # Capture start time before invocation overhead
+    invoke_kwargs = _resolve_systematic_test_invoke_kwargs(func, fast_enabled)  # Signature-aware kwargs
     logging.info(
         "SYSTEMATIC_TEST: INVOKE option=%s fast_supported=%s fast_enabled=%s test_mode=True description='%s'",
         option,
-        supports_fast,
+        "fast" in invoke_kwargs,
         fast_enabled,
         description,
-    )  # Log invocation details before calling so post-mortem analysis can match events to options.
-    try:  # Each option runs independently so one failure does not abort remaining tests.
-        func(**invoke_kwargs)  # type: ignore[operator, no-untyped-call]  # Call menu action with resolved kwargs.
-        duration = time.time() - op_start  # Compute elapsed seconds for telemetry and summary.
-        print(f"   [SUCCESS] Option {option} completed successfully")  # Confirm success immediately after call returns.
-        emitter.emit_test_pass(option, description, duration, "systematic")  # Record pass event in telemetry.
-        logging.info(
-            "SYSTEMATIC_TEST: Successfully completed menu option %s", option
-        )  # Log success for log-correlation.
-        return True, duration  # Signal success to the caller for count tracking.
-    except Exception as exc:  # Catch all exceptions so the test harness can continue to the next option.
-        duration = time.time() - op_start  # Still record elapsed time for failed options.
-        print(
-            f"   [FAILED]  Option {option} failed: {str(exc)[:100]}..."
-        )  # Surface failure immediately without crashing the loop.
-        emitter.emit_test_fail(
-            option, description, duration, exc, "systematic"
-        )  # Record failure in telemetry for coverage reporting.
-        logging.error(
-            "SYSTEMATIC_TEST: Failed menu option %s: %s", option, exc
-        )  # Log full error for detailed investigation.
-        return False, duration  # Signal failure to the caller for count tracking.
+    )  # Log invocation details for post-mortem correlation
+    return _invoke_one_systematic_test(emitter, case, invoke_kwargs, op_start)
 
 
 def _systematic_test_resolve_fast_mode() -> bool:
@@ -22968,44 +22985,55 @@ def _report_systematic_outcome(success_count, error_count, safe_count, total_tim
     return False  # Signal partial failure to callers.
 
 
-def run_interactive_test():
-    """Compatibility facade that delegates interactive-safe tests to extracted runner."""
-    global org_id
-
-    logging.info(
-        "Delegating run_interactive_test to InteractiveTestRunner"
-    )  # Log before helper creation and runner construction.
-
-    def _get_org_id():
-        return org_id  # Return current module-level org_id so extracted runner can read shared runtime context.
-
-    def _set_org_id(new_org_id):
-        global org_id
-        org_id = new_org_id  # Persist resolved org_id from runner back into module-level shared state.
-
-    logging.info(
-        "Constructing InteractiveTestRunner facade dependencies"
-    )  # Log before creating extracted runner instance.
-    runner = InteractiveTestRunner(  # Build extracted runner with runtime deps.
+def _build_interactive_test_runner(get_org_id: Any, set_org_id: Any) -> Any:
+    """Construct InteractiveTestRunner with the current runtime context and return it."""
+    logging.info("Constructing InteractiveTestRunner dependencies")  # Log before instance creation
+    runner = InteractiveTestRunner(  # Build runner with runtime deps
         menu_actions=menu_actions,
         operation_registry=OperationRegistry,
         telemetry_emitter_cls=TelemetryEmitter,
         config_utils=ConfigUtils,
         mistapi_module=mistapi,
         apisession=apisession,
-        org_id_getter=_get_org_id,
-        org_id_setter=_set_org_id,
+        org_id_getter=get_org_id,
+        org_id_setter=set_org_id,
     )
-    logging.debug("InteractiveTestRunner initialized successfully")  # Log runner construction completion.
+    logging.debug("InteractiveTestRunner initialized successfully")  # Confirm construction
+    return runner
 
-    logging.info(
-        "Executing delegated interactive test runner"
-    )  # Log before invoking extracted runner execution action.
-    result = runner.execute()  # Execute extracted interactive test workflow and capture boolean result.
-    logging.debug(
-        "Completed delegated run_interactive_test with result=%s", result
-    )  # Log delegated execution outcome summary.
-    return result  # Return delegated execution result to preserve prior function contract.
+
+def run_interactive_test():
+    """Run interactive-safe tests through the extracted InteractiveTestRunner."""
+    global org_id
+
+    logging.info("Routing run_interactive_test to InteractiveTestRunner")  # Log entry
+
+    def _get_org_id():
+        return org_id  # Return current module-level org_id so runner can read shared runtime context
+
+    def _set_org_id(new_org_id):
+        global org_id
+        org_id = new_org_id  # Persist resolved org_id from runner back into module-level state
+
+    runner = _build_interactive_test_runner(_get_org_id, _set_org_id)  # Build runner with context closures
+    logging.info("Executing interactive test runner")  # Log before invocation
+    result = runner.execute()  # Execute extracted interactive test workflow
+    logging.debug("Completed run_interactive_test with result=%s", result)  # Log outcome
+    return result
+
+
+def _run_web_portal_server(app: Any, host: str, port: int, dev_debug: bool) -> None:
+    """Start the Flask app in container mode (Gunicorn-aware) or local Flask dev server mode."""
+    in_container = EnvironmentUtils.is_running_in_container()  # Detect container runtime to switch banner + debug flag
+    if in_container:
+        logging.info("WEB_PORTAL: Container detected - use wsgi.py with Gunicorn")  # Log container path
+        print(f">> Running Flask dev server on {host}:{port}")  # Notify user
+        print(">> For production, use: gunicorn wsgi:app")  # Hint at prod runner
+        app.run(host=host, port=port, debug=False)  # Force debug=False inside container
+    else:
+        logging.info("WEB_PORTAL: Local mode - Flask dev server on %s:%s", host, port)  # Log local dev path
+        print(f">> Web portal starting at http://127.0.0.1:{port}")  # Notify user
+        app.run(host=host, port=port, debug=dev_debug)  # Honor caller's debug flag locally
 
 
 def _launch_web_portal(args):
@@ -23019,27 +23047,18 @@ def _launch_web_portal(args):
     from web_portal.app import WebPortalApp
     from web_portal.services.config import PortalConfigLoader
 
-    loader = PortalConfigLoader()
+    loader = PortalConfigLoader()  # Read web_port + other portal settings from env/.env
     config = loader.load_config()
     port = config["web_port"]
-    host = "0.0.0.0"  # nosec B104
+    host = "0.0.0.0"  # nosec B104  # Bind all interfaces so container port maps work
 
-    app = WebPortalApp.create_app(
+    app = WebPortalApp.create_app(  # Construct Flask app with shared API session + menu registry
         apisession=apisession,
         menu_actions=menu_actions,
         org_id=org_id,
     )
 
-    in_container = EnvironmentUtils.is_running_in_container()
-    if in_container:
-        logging.info("WEB_PORTAL: Container detected - use wsgi.py with Gunicorn")
-        print(f">> Running Flask dev server on {host}:{port}")
-        print(">> For production, use: gunicorn wsgi:app")
-        app.run(host=host, port=port, debug=False)
-    else:
-        logging.info("WEB_PORTAL: Local mode - Flask dev server on %s:%s", host, port)
-        print(f">> Web portal starting at http://127.0.0.1:{port}")
-        app.run(host=host, port=port, debug=args.debug)
+    _run_web_portal_server(app, host, port, args.debug)  # Dispatch to container/local runner
 
 
 def _report_tqdm_status() -> None:
@@ -23203,6 +23222,35 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     return parser  # Return parser for caller to call parse_args() on
 
 
+_FAST_MODE_CAPABLE_FUNCTIONS: tuple[str, ...] = (
+    "export_gateway_synthetic_tests_to_csv",
+    "get_gateway_devices_with_sites",
+    "export_gateway_device_stats_to_csv_with_freshness_check",
+    "export_gateway_device_stats_to_csv",
+    "GatewayTestExporter.test_results_by_site",
+    "OrgInventoryExporter.devices_with_site_info",
+    "export_gateway_device_configs_to_csv",
+    "APIFetchUtils.gateway_device_configs",
+    "InventoryCSVComparator",
+    "export_gateways_with_wan_overrides_to_csv",
+    "OrgDeviceStatsExporter.device_stats",
+    "OrgDeviceStatsExporter.device_port_stats",
+    "OrgDeviceStatsExporter.vpn_peer_stats",
+    "OrgDeviceStatsExporter.switch_vc_stats",
+)
+
+
+def _announce_fast_mode_scope() -> None:
+    """Log and print the list of fast-capable functions so operators know which paths get accelerated."""
+    logging.info(
+        "FAST MODE ACTIVE: Enabling caching/concurrency shortcuts for: %s",
+        ", ".join(_FAST_MODE_CAPABLE_FUNCTIONS),
+    )  # Log fast scope for log-correlation
+    print("* Fast mode active (caching/concurrency). Functions optimized:")  # Inform operator at console
+    for name in _FAST_MODE_CAPABLE_FUNCTIONS:  # Iterate the module-level constant
+        print(f"  - {name}")  # Print each fast-capable function name for operator awareness
+
+
 def _setup_runtime_flags(args: argparse.Namespace) -> None:
     """Apply standalone env flag, register args globally, and configure FAST_MODE_ENABLED."""
     logging.debug("_setup_runtime_flags: applying standalone and fast mode flags")  # Log entry
@@ -23217,31 +23265,8 @@ def _setup_runtime_flags(args: argparse.Namespace) -> None:
     except Exception:
         FAST_MODE_ENABLED = False  # Fail-safe: ensure symbol exists even if args access fails
     logging.debug("FAST_MODE_ENABLED set to %s", FAST_MODE_ENABLED)  # Log fast mode state
-    if args.fast:  # Print fast-capable function list so operators know the scope of fast mode
-        fast_capable = [
-            "export_gateway_synthetic_tests_to_csv",
-            "get_gateway_devices_with_sites",
-            "export_gateway_device_stats_to_csv_with_freshness_check",
-            "export_gateway_device_stats_to_csv",
-            "GatewayTestExporter.test_results_by_site",
-            "OrgInventoryExporter.devices_with_site_info",
-            "export_gateway_device_configs_to_csv",
-            "APIFetchUtils.gateway_device_configs",
-            "InventoryCSVComparator",
-            "export_gateways_with_wan_overrides_to_csv",
-            "OrgDeviceStatsExporter.device_stats",
-            "OrgDeviceStatsExporter.device_port_stats",
-            "OrgDeviceStatsExporter.vpn_peer_stats",
-            "OrgDeviceStatsExporter.switch_vc_stats",
-        ]
-        logging.info(
-            "FAST MODE ACTIVE: Enabling caching/concurrency shortcuts for: %s", ", ".join(fast_capable)
-        )  # Log fast scope  # noqa: E501
-        print(
-            "* Fast mode active (caching/concurrency). Functions optimized:"
-        )  # Inform operator which functions benefit  # noqa: E501
-        for name in fast_capable:
-            print(f"  - {name}")  # Print each fast-capable function name for operator awareness
+    if args.fast:  # Announce scope only when fast mode actually engaged
+        _announce_fast_mode_scope()  # Log + print fast-capable function list
     logging.debug("_setup_runtime_flags: complete")  # Log exit
 
 
@@ -23316,6 +23341,19 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
     logging.debug("_establish_mist_session: session established successfully")  # Log successful auth
 
 
+def _apply_debug_log_level() -> None:
+    """Set DEBUG on root + file handlers and keep console at INFO so DEBUG noise stays out of the terminal."""
+    logging.getLogger().setLevel(logging.DEBUG)  # Enable DEBUG on root logger
+    for handler in logging.getLogger().handlers:  # Iterate each registered handler
+        if isinstance(handler, logging.FileHandler):  # File handlers get full DEBUG output
+            handler.setLevel(logging.DEBUG)
+        elif isinstance(handler, logging.StreamHandler):  # Console stays at INFO to avoid noise
+            handler.setLevel(logging.INFO)
+    logging.debug("Debug logging enabled via --debug flag")  # Confirm debug mode active in log file
+    logging.debug("Command line arguments: %s", " ".join(sys.argv))  # Log full command line for diagnostics
+    logging.debug("Performance monitoring will trigger circuit breakers for infinite loops")  # Remind about CBs
+
+
 def _configure_runtime_options(args: argparse.Namespace) -> None:
     """Set OUTPUT_FORMAT, initialize PROGRESS_EMITTER, and configure debug log level."""
     global OUTPUT_FORMAT, PROGRESS_EMITTER  # Declare intent to modify module-level runtime config
@@ -23326,25 +23364,15 @@ def _configure_runtime_options(args: argparse.Namespace) -> None:
     try:
         PROGRESS_EMITTER = TelemetryEmitter(
             os.path.join("data", "test_events.jsonl")
-        )  # Initialize JSONL telemetry emitter  # noqa: E501
+        )  # Initialize JSONL telemetry emitter
         logging.info("Progress telemetry emitter initialized: data/test_events.jsonl")  # Log emitter ready
     except Exception as emitter_exc:
         logging.warning(
             "Progress telemetry emitter init failed (non-blocking): %s", emitter_exc
-        )  # Log non-fatal failure  # noqa: E501
+        )  # Log non-fatal failure
         PROGRESS_EMITTER = None  # Set to None so callers skip telemetry gracefully
     if args.debug:  # Apply debug logging level to file handlers; keep console at INFO to avoid noise
-        logging.getLogger().setLevel(logging.DEBUG)  # Enable DEBUG on root logger
-        for handler in logging.getLogger().handlers:
-            if isinstance(handler, logging.FileHandler):  # File handlers get full DEBUG output
-                handler.setLevel(logging.DEBUG)
-            elif isinstance(handler, logging.StreamHandler):  # Console stays at INFO to avoid noise
-                handler.setLevel(logging.INFO)
-        logging.debug("Debug logging enabled via --debug flag")  # Confirm debug mode active in log file
-        logging.debug("Command line arguments: %s", " ".join(sys.argv))  # Log full command line for diagnostics
-        logging.debug(
-            "Performance monitoring will trigger circuit breakers for infinite loops"
-        )  # Remind about circuit breakers  # noqa: E501
+        _apply_debug_log_level()  # Promote root + file handlers to DEBUG
     logging.debug("_configure_runtime_options: complete")  # Log exit
 
 
@@ -23388,36 +23416,46 @@ def _silence_console_handlers_for_tui() -> None:
         logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")  # Log removal.
 
 
+def _handle_tui_keyboard_interrupt(debug: bool) -> None:
+    """Log clean exit when user pressed Ctrl+C inside the TUI and inform them at the console."""
+    if debug:  # Debug: log timestamped interrupt event
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp
+        logging.debug(
+            "TUI_DEBUG: [%s] KeyboardInterrupt caught - user pressed Ctrl+C", timestamp
+        )  # Log interrupt with time
+    logging.info("TUI_MODE: User interrupted with Ctrl+C")  # Log clean user exit
+    print("\n[EXIT] TUI mode stopped by user")  # Inform user TUI was stopped
+
+
+def _handle_tui_exception(debug: bool, error: Exception) -> None:
+    """Log fatal error from the TUI event loop and exit with code 1."""
+    if debug:  # Debug: log timestamped exception detail
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp
+        logging.debug(
+            "TUI_DEBUG: [%s] Exception caught in TUI mode: %s: %s",
+            timestamp,
+            type(error).__name__,
+            error,
+        )  # Log error
+    logging.exception("TUI_MODE: Fatal error - %s", error)  # Log full traceback to file
+    print(f"\n[ERROR] TUI mode crashed: {error}")  # Inform user of crash
+    sys.exit(1)  # Exit with error code after TUI crash
+
+
 def _run_tui_event_loop(args: argparse.Namespace) -> None:
     """Instantiate and run the TUI event loop. Handles Ctrl+C cleanly and Exceptions with traceback."""
     try:
-        from src.ui.tui import MistHelperTUI  # PLC0415: lazy import avoids loading Rich at startup.
+        from src.ui.tui import MistHelperTUI  # PLC0415: lazy import avoids loading Rich at startup
 
-        tui = MistHelperTUI(debug_mode=args.debug)  # type: ignore[no-untyped-call]  # Create TUI with debug flag.
-        tui.apisession = apisession  # Pass global API session so TUI can execute live API calls.
-        if args.debug:  # Debug: record that TUI was launched with debug enabled.
-            logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Log debug state.
-        tui.run()  # type: ignore[no-untyped-call]  # Launch TUI event loop (blocks until user exits).
-    except KeyboardInterrupt:  # User pressed Ctrl+C inside the TUI.
-        if args.debug:  # Debug: log timestamped interrupt event.
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp.
-            logging.debug(
-                "TUI_DEBUG: [%s] KeyboardInterrupt caught - user pressed Ctrl+C", timestamp
-            )  # Log interrupt with time.
-        logging.info("TUI_MODE: User interrupted with Ctrl+C")  # Log clean user exit.
-        print("\n[EXIT] TUI mode stopped by user")  # Inform user TUI was stopped.
-    except Exception as error:  # Unexpected error inside the TUI event loop.
-        if args.debug:  # Debug: log timestamped exception detail.
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp.
-            logging.debug(
-                "TUI_DEBUG: [%s] Exception caught in TUI mode: %s: %s",
-                timestamp,
-                type(error).__name__,
-                error,
-            )  # Log error.
-        logging.exception("TUI_MODE: Fatal error - %s", error)  # Log full traceback to file.
-        print(f"\n[ERROR] TUI mode crashed: {error}")  # Inform user of crash.
-        sys.exit(1)  # Exit with error code after TUI crash.
+        tui = MistHelperTUI(debug_mode=args.debug)  # type: ignore[no-untyped-call]  # Create TUI with debug flag
+        tui.apisession = apisession  # Pass global API session so TUI can execute live API calls
+        if args.debug:  # Debug: record that TUI was launched with debug enabled
+            logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Log debug state
+        tui.run()  # type: ignore[no-untyped-call]  # Launch TUI event loop (blocks until user exits)
+    except KeyboardInterrupt:  # User pressed Ctrl+C inside the TUI
+        _handle_tui_keyboard_interrupt(args.debug)  # Log and inform user of clean exit
+    except Exception as error:  # Unexpected error inside the TUI event loop
+        _handle_tui_exception(args.debug, error)  # Log + print + exit(1)
 
 
 def _run_cli_mode(args: argparse.Namespace) -> None:
