@@ -23056,122 +23056,157 @@ def _systematic_test_resolve_fast_mode() -> bool:
 
 
 def run_systematic_test():  # noqa: C901, PLR0912, PLR0915
-    """
-    Run systematic test of all safe menu options.
-
-    This function cycles through all menu options that are safe for automated testing:
-    - Only GET operations (no POST/PUT/DELETE)
-    - No interactive functions requiring user input
-    - No websocket operations
-    - No reboot or destructive operations
-    - No continuous loops
-
-    Unsafe operations are skipped with explanatory messages.
+    """Run systematic test of safe (GET-only, non-interactive, non-destructive) menu options.
 
     Returns:
-        bool: True if all tests passed, False if any failed
+        bool: True if all tested options passed, False if any failed.
     """
-    start_time = time.time()  # Record start time before any setup work for accurate total duration.
-    print(" Starting systematic test of MistHelper menu options...")  # Announce test start to the operator.
+    start_time = time.time()  # Capture total-duration baseline before any setup work.
+    _print_systematic_banner()  # Banner + start timestamp + separator.
+    safe_options, unsafe_list, all_options = _build_systematic_test_options()  # Classify menu options.
+    _print_systematic_pre_run_counts(all_options, safe_options, unsafe_list)  # Print pre-run counts.
+    emitter, telemetry_path, skip_count = _initialize_systematic_telemetry(unsafe_list)  # Open telemetry.
+    fast_enabled = _resolve_systematic_test_context()  # Resolve org + fast mode once for the loop.
+    success_count, error_count = _execute_systematic_test_loop(
+        emitter, safe_options, fast_enabled
+    )  # Run every safe option through telemetry.
+    total_time = time.time() - start_time  # Total elapsed includes setup, execution, and delays.
+    summary = TestSummary(
+        len(all_options), success_count, error_count, skip_count, total_time, "systematic"
+    )  # Aggregate event reused by both finalize + print helpers (cuts param count to <=5).
+    _finalize_systematic_telemetry(emitter, summary)  # Emit summary, close, enforce retention.
+    _print_systematic_summary(summary, telemetry_path)  # Print user-facing summary block.
+    return _report_systematic_outcome(success_count, error_count, len(safe_options), total_time)
+
+
+def _print_systematic_banner():
+    """Print the test-start banner + timestamp + separator to the operator console."""
+    print(" Starting systematic test of MistHelper menu options...")  # Announce test start.
     print(
         "  Note: This will skip interactive, websocket, POST, and destructive operations"
-    )  # Set expectations about what will run.
+    )  # Set operator expectations.
     print(
         f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )  # Emit timestamped start marker for log correlation.
     print("=" * 80)  # Visual separator before first section.
 
-    optimized_test_order = [  # Execute shortest-running operations first to surface failures early.
-        "22",
-        "9",
-        "1",  # Fast tests (~0.6-3.5 seconds)
-        "8",
-        "51",
-        "52",
-        "20",  # Medium tests (~18-30 seconds)
-        "15",
-        "16",  # Slower tests (~1-5 minutes)
-        "21",
-        "33",  # Slow tests (~8+ minutes)
-    ]
 
+_SYSTEMATIC_TEST_OPTIMIZED_ORDER = [  # Shortest-running operations first to surface failures early.
+    "22",
+    "9",
+    "1",  # Fast tests (~0.6-3.5 seconds)
+    "8",
+    "51",
+    "52",
+    "20",  # Medium tests (~18-30 seconds)
+    "15",
+    "16",  # Slower tests (~1-5 minutes)
+    "21",
+    "33",  # Slow tests (~8+ minutes)
+]
+
+
+def _build_systematic_test_options():
+    """Compute the safe/unsafe option lists in optimized execution order.
+
+    Returns:
+        tuple: ``(safe_options, unsafe_list, all_options)``
+    """
     all_options = sorted(
         menu_actions.keys(), key=lambda x: float(x.replace("a", ".1"))
     )  # Sort option keys numerically for consistent ordering.
     safe_options, unsafe_list = _systematic_test_build_safe_list(
-        all_options, optimized_test_order
+        all_options, _SYSTEMATIC_TEST_OPTIMIZED_ORDER
     )  # Classify all options and order safe ones optimally.
+    return safe_options, unsafe_list, all_options
 
+
+def _print_systematic_pre_run_counts(all_options, safe_options, unsafe_list):
+    """Print the total / safe / unsafe option counts before the test loop runs."""
     print(f"! Found {len(all_options)} total menu options")  # Report total option count before filtering.
     print(f"! {len(safe_options)} safe options will be tested")  # Confirm how many options will run.
     print(f"!  {len(unsafe_list)} unsafe options will be skipped")  # Confirm how many options will be skipped.
     print()  # Blank line before skip listing.
 
+
+def _initialize_systematic_telemetry(unsafe_list):
+    """Open the timestamped telemetry emitter and emit skip events. Return (emitter, path, skip_count)."""
     telemetry_path = TelemetryEmitter.timestamped_path(
         "data"
     )  # Compute timestamped telemetry file path before starting events.
-    emitter = TelemetryEmitter(telemetry_path)  # Open telemetry emitter so all events land in one timestamped file.
+    emitter = TelemetryEmitter(telemetry_path)  # Open emitter so all events land in one timestamped file.
     skip_count = _systematic_test_emit_skips(
         emitter, unsafe_list
     )  # Print skip list and emit skip events; returns actual skip count.
+    return emitter, telemetry_path, skip_count
 
-    print(" Testing safe operations:")  # Announce test execution phase.
-    success_count = 0  # Track how many options completed without raising.
-    error_count = 0  # Track how many options raised an exception.
 
+def _resolve_systematic_test_context():
+    """Resolve module-level org_id and the fast-mode flag once before the test loop."""
     global org_id  # Access module-level org_id so tests inherit the resolved org context.
     if not org_id:  # Resolve org_id once before the test loop so every option shares the same org.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Prompt or use cached org identifier.
+    return _systematic_test_resolve_fast_mode()  # Resolve fast-mode flag once for the loop.
 
-    fast_enabled = (
-        _systematic_test_resolve_fast_mode()
-    )  # Resolve fast-mode flag once before the test loop so every option uses the same setting.
 
+def _execute_systematic_test_loop(emitter, safe_options, fast_enabled):
+    """Iterate safe options through the runner, counting successes/failures."""
+    print(" Testing safe operations:")  # Announce test execution phase.
+    success_count = 0  # Track how many options completed without raising.
+    error_count = 0  # Track how many options raised an exception.
     for i, option in enumerate(safe_options, 1):  # Iterate options in optimized order, 1-indexed for display.
-        func, description = menu_actions[option]  # Unpack the callable and display name for this option.
+        func, description = menu_actions[option]  # Unpack callable and display name for this option.
         success, _duration = _systematic_test_run_option(
             emitter, SystematicTestOption(option, func, description), i, len(safe_options), fast_enabled
-        )  # Execute option with telemetry and return result (issue #470: option identity bundled).
+        )  # Execute option with telemetry (issue #470: option identity bundled).
         if success:  # Count success and failure separately for the final summary.
             success_count += 1  # Increment on successful option execution.
         else:  # Non-success means the option raised or returned an error.
             error_count += 1  # Increment on failed option execution.
         if not fast_enabled:  # API-respectful delay between test runs in normal mode.
             time.sleep(1)  # One-second pause so the API isn't hammered by rapid-fire requests.
+    return success_count, error_count
 
-    total_time = time.time() - start_time  # Total elapsed time includes setup, option execution, and delays.
-    total_ops = len(all_options)  # Use total option count (including skipped) as denominator for coverage %.
-    emitter.emit_test_summary(
-        TestSummary(total_ops, success_count, error_count, skip_count, total_time, "systematic")
-    )  # Emit aggregate telemetry summary.
+
+def _finalize_systematic_telemetry(emitter, summary):
+    """Emit the final summary event, close the telemetry file, and enforce retention."""
+    emitter.emit_test_summary(summary)  # Emit aggregate telemetry summary.
     emitter.close()  # Flush and close telemetry file before printing summary.
     emitter.enforce_retention()  # Clean up old telemetry files per configured retention policy.
 
+
+def _print_systematic_summary(summary, telemetry_path):
+    """Print the human-readable summary block (totals, coverage %, paths)."""
     print()  # Blank line before summary.
     print("=" * 80)  # Visual separator for summary section.
     print(" Systematic Test Summary:")  # Label the results block.
-    print(f"   Successful operations: {success_count}")  # Show successful count.
-    print(f"   Failed operations: {error_count}")  # Show failure count.
-    print(f"   Skipped unsafe operations: {skip_count}")  # Show skip count.
+    print(f"   Successful operations: {summary.success_count}")  # Show successful count.
+    print(f"   Failed operations: {summary.error_count}")  # Show failure count.
+    print(f"   Skipped unsafe operations: {summary.skip_count}")  # Show skip count.
+    coverage_pct = summary.success_count / summary.total_ops * 100  # Coverage as a percent.
     print(
-        f"   Total coverage: {success_count}/{total_ops} ({success_count / total_ops * 100:.1f}%)"
+        f"   Total coverage: {summary.success_count}/{summary.total_ops} ({coverage_pct:.1f}%)"
     )  # Show coverage percentage.
-    print(f"    Total execution time: {total_time:.2f} seconds")  # Show total elapsed time.
+    print(f"    Total execution time: {summary.total_time:.2f} seconds")  # Show total elapsed time.
     print(f"   Telemetry written to: {telemetry_path}")  # Tell operator where telemetry landed.
     print("   Detailed logs in: script.log")  # Remind operator of the log file location.
 
+
+def _report_systematic_outcome(success_count, error_count, safe_count, total_time):
+    """Emit the final all-pass / partial-failure message and return the boolean result."""
     if error_count == 0:  # All-pass outcome deserves an explicit success message.
         print("   All tested operations completed successfully!")  # Confirm all-green result to the operator.
         logging.info(
-            "SYSTEMATIC_TEST: All %s tested operations completed successfully in %.2fs", success_count, total_time
+            "SYSTEMATIC_TEST: All %s tested operations completed successfully in %.2fs",
+            success_count,
+            total_time,
         )  # Record all-pass event for monitoring.
         return True  # Signal all-pass to callers (e.g., for exit-code logic).
-    else:  # Some failures occurred; surface them without hiding the partial success.
-        print(f"    {error_count} operations failed - check logs for details")  # Prompt operator to review logs.
-        logging.warning(
-            "SYSTEMATIC_TEST: %s operations failed out of %s tested", error_count, len(safe_options)
-        )  # Log failure count for alerting systems.
-        return False  # Signal partial failure to callers.
+    print(f"    {error_count} operations failed - check logs for details")  # Prompt operator to review logs.
+    logging.warning(
+        "SYSTEMATIC_TEST: %s operations failed out of %s tested", error_count, safe_count
+    )  # Log failure count for alerting systems.
+    return False  # Signal partial failure to callers.
 
 
 def run_interactive_test():
