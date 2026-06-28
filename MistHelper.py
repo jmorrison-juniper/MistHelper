@@ -5569,18 +5569,7 @@ class CacheUtils:
 
     @staticmethod
     def fast_cache_hit(filename: str, max_age_minutes: int = 60) -> bool:  # Check if cached output file is fresh
-        """Return True if the file exists in data/ and was written within max_age_minutes.
-
-        Used as a lightweight guard to skip expensive re-generation when a fresh
-        output already exists (e.g. a Markdown report generated earlier in the session).
-
-        Args:
-            filename: Filename to check inside the data/ directory
-            max_age_minutes: How old the file can be before it is considered stale
-
-        Returns:
-            bool: True if file exists and is fresh (skip re-generation), False otherwise
-        """
+        """Return True when filename exists in data/ and is younger than max_age_minutes."""
         full_path = FilePathUtils.get_csv_path(filename)  # Resolve path inside data/ directory
         logging.debug("fast_cache_hit check for %s (max_age=%d min)", filename, max_age_minutes)  # Log check
         if not os.path.exists(full_path):  # File not present -- always a miss
@@ -5591,9 +5580,7 @@ class CacheUtils:
             age_minutes = age_seconds / 60.0  # Convert to minutes for readable comparison
             if age_minutes <= max_age_minutes:  # File is within the freshness window
                 logging.info("fast_cache_hit HIT: %s (%.1f min old)", filename, age_minutes)  # Log cache hit
-                print(  # Inform user that cached output is being reused
-                    f"! Using cached {filename} ({age_minutes:.0f} min old) -- skipping re-generation."
-                )
+                print(f"! Using cached {filename} ({age_minutes:.0f} min old) -- skipping re-generation.")
                 return True  # Cache hit -- caller can skip expensive work
             logging.debug("fast_cache_hit MISS: %s is stale (%.1f min old)", filename, age_minutes)  # Log stale
             return False  # File is too old -- cache miss
@@ -5615,36 +5602,18 @@ class DisplayUtils:
     def dict_list_as_pretty_table(
         data: list[dict[str, Any]], fields: list[str] | None = None, sortby: str | None = None
     ) -> None:
-        """
-        Displays a PrettyTable from a list of dictionaries.
-
-        Args:
-            data: List of dictionaries to display
-            fields: Optional list of field names to display
-            sortby: Optional field name to sort by
-        """
-        # Return early if there's no data to display
-        if not data:
+        """Render a PrettyTable from a list of dicts; debug-log the result. No-op if data is empty."""
+        if not data:  # Nothing to render
             return
-
-        # Use provided fields or extract all unique keys
         fields = fields or DataProcessingUtils.get_unique_keys(data)  # type: ignore[no-untyped-call]
-
-        # Initialize the PrettyTable with field names
-        table = PrettyTable()
-        table.field_names = fields
-
-        # Set the sort column if it's valid
-        if sortby and sortby in fields:
+        table = PrettyTable()  # Build a fresh table per call
+        table.field_names = fields  # Apply column ordering
+        if sortby and sortby in fields:  # Honor caller's sort request when the column exists
             table.sortby = sortby
-
-        # Add each row of data to the table
-        for item in data:
-            row = [item.get(field, "") for field in fields]
+        for item in data:  # Walk every input row
+            row = [item.get(field, "") for field in fields]  # Pull cells in column order, default ""
             table.add_row(row)
-
-        # Log the table as a string (debug mode only)
-        logging.debug("\n%s", table.get_string())
+        logging.debug("\n%s", table.get_string())  # Emit fully rendered table at debug level
 
     @staticmethod
     def create_progress_bar(progress_percentage: float | None, bar_length: int = 20) -> str:
@@ -5971,27 +5940,13 @@ class FilePathUtils:
     def create_csv_template(
         filename: str, headers: list[str] | None = None, sample_data: list[list[str]] | None = None
     ) -> str:  # Create an empty CSV placeholder with optional headers.
-        """
-        Creates a basic CSV file placeholder in the correct location.
-
-        Args:
-            filename (str): Name of the CSV file to create
-            headers (list): List of header names (optional)
-            sample_data (list): Optional list of sample data rows (optional)
-
-        Returns:
-            str: Full path to the created file
-        """
+        """Create an empty CSV under data/ with optional header row; sample_data is intentionally ignored."""
         file_path = FilePathUtils.get_csv_path(filename)  # Normalize the destination under data/.
-
         try:
-            # Just create an empty file in the correct location
             with open(file_path, "w", newline="", encoding="utf-8") as f:  # Truncate/create the file.
                 if headers:  # Only write a header row when headers were provided.
                     writer = csv.writer(f)  # Wrap the handle in a CSV writer.
                     writer.writerow(headers)  # Emit the single header row.
-                # Don't write sample data - user will add their own content
-
             logging.info("Created template file: %s", file_path)  # Record the created placeholder.
             return file_path  # Hand the path back to the caller.
         except Exception as error:  # Never leave a partial file without surfacing the cause.
@@ -6089,47 +6044,33 @@ class EnvironmentUtils:  # Centralized runtime/container environment detection.
         return False  # Layout not present: inconclusive.
 
     @staticmethod
+    def _run_container_detectors() -> bool:
+        """Run the ordered fallback container detectors; return True if any positive."""
+        checks = [  # Ordered fallback detectors in reliability order
+            EnvironmentUtils._check_dockerenv_file,
+            EnvironmentUtils._check_container_env_vars,
+            EnvironmentUtils._check_cgroup_markers,
+            EnvironmentUtils._check_runtime_user,
+            EnvironmentUtils._check_app_path_with_sshd,
+        ]
+        for check in checks:  # Run each detector in order
+            if check():  # First positive detector wins
+                return True
+        return False  # No detector matched
+
+    @staticmethod
     def is_running_in_container() -> bool:  # Public aggregate container check.
-        """Determine if execution appears to be inside a container.
-
-        Detection strategy is deliberately multi-factor and conservative. A positive
-        result enables continuous interactive looping behavior. False negatives can
-        cause the menu to exit after one operation.
-
-        Order of checks (first positive returns immediately):
-          1. Explicit override environment variables
-          2. Standard /.dockerenv sentinel file
-          3. Well-known container environment variables
-          4. cgroup markers
-          5. Runtime user name 'misthelper'
-          6. /app path detection with sshd presence
-
-        SECURITY: Only boolean enabling of loop behavior; no privileged actions.
-        """
+        """Multi-factor container detection: override env -> /.dockerenv -> env vars -> cgroup -> user -> /app."""
         try:
-            # Check override first (explicit operator control)
-            override_result = EnvironmentUtils._check_override_env_vars()  # Operator override wins first.
-            if override_result is not None:  # Override explicitly set the answer.
-                return override_result  # Honor the forced value.
-
-            # Check standard indicators in order of reliability
-            checks = [  # Ordered fallback detectors.
-                EnvironmentUtils._check_dockerenv_file,
-                EnvironmentUtils._check_container_env_vars,
-                EnvironmentUtils._check_cgroup_markers,
-                EnvironmentUtils._check_runtime_user,
-                EnvironmentUtils._check_app_path_with_sshd,
-            ]
-
-            for check in checks:  # Run each detector in order.
-                if check():  # First positive detector wins.
-                    return True  # A detector confirmed container.
-
-        except Exception as container_detection_error:  # Never let detection crash startup.
-            logging.debug("Container detection failed with exception: %s", container_detection_error)  # log failure.
-
-        logging.debug("Container detection: no container indicators found - running in direct mode")  # direct mode.
-        return False  # Default: not containerized.
+            override_result = EnvironmentUtils._check_override_env_vars()  # Operator override wins first
+            if override_result is not None:  # Override explicitly set the answer
+                return override_result  # Honor the forced value
+            if EnvironmentUtils._run_container_detectors():  # Run the chained detectors
+                return True  # A detector confirmed container
+        except Exception as container_detection_error:  # Never let detection crash startup
+            logging.debug("Container detection failed with exception: %s", container_detection_error)  # log failure
+        logging.debug("Container detection: no container indicators found - running in direct mode")  # direct mode
+        return False  # Default: not containerized
 
     @staticmethod
     def is_debug_mode() -> bool:  # Report whether debug logging is on.
@@ -6248,45 +6189,47 @@ class ConfigUtils:  # Org id and run-control helpers.
     """
 
     @staticmethod
-    def get_cached_or_prompted_org_id() -> str:  # Resolve org_id from cache/env/.env/prompt.
-        """
-        Get organization ID from various sources in order of preference:
-        1. Global variable
-        2. Environment variable
-        3. .env file
-        4. Interactive prompt
-        """
-        global org_id  # Cache resolved id in the module global.
-        # 1. Check global variable
-        if org_id:  # Reuse an already-resolved id.
-            logging.info("! Using org_id from global variable: %s", org_id)  # Trace the cached source.
-            return org_id  # type: ignore[no-any-return]
-        # 2. Check environment variable (set by dotenv or OS)
-        org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")  # Try environment variables next.
-        if org_id_env:  # Environment provided the id.
-            org_id = org_id_env  # Cache the env value.
-            logging.info("! Loaded org_id from environment: %s", org_id)  # Trace the env source.
-            return org_id  # Use the env id.
-        # 3. Fallback: Try to load from .env manually (rarely needed)
+    def _resolve_org_id_from_dotenv() -> str | None:
+        """Try to parse org_id from a sibling .env file; return value or None."""
         try:
-            with open(".env") as env_file:  # Fall back to the .env file.
-                for line in env_file:  # Scan each line for org_id.
-                    if line.strip().startswith("org_id="):  # Match the org_id assignment.
-                        org_id = line.strip().split("=", 1)[1].strip().strip('"')  # Extract and unquote the value.
-            if org_id:  # A value was parsed.
-                logging.info("! Loaded org_id from .env: %s", org_id)  # Trace the .env source.
-                return org_id  # Use the .env id.
-        except FileNotFoundError:  # No .env file present.
-            logging.warning("! .env file not found.")  # Warn that .env is missing.
-        # 4. Prompt if still not set
-        logging.info("* No org_id found in .env or CLI. Prompting user...")  # Prompt the user as last resort.
-        org_id_list = mistapi.cli.select_org(apisession)  # Interactive org selection.
-        if not org_id_list:  # Selection returned nothing.
-            logging.error("Failed to retrieve org list. Check your API token and authentication.")  # Log list failure.
-            print("[ERROR] Unable to retrieve organizations. Your API token may be invalid or expired.")  # Token hint.
-            print("[ERROR] Please update MIST_API_TOKEN in your .env file and try again.")  # Point to .env token.
-            sys.exit(1)  # Abort: no org to proceed with.
-        org_id = org_id_list[0]  # Use the first selected org.
+            with open(".env") as env_file:  # Fall back to the .env file
+                for line in env_file:  # Scan each line for org_id
+                    if line.strip().startswith("org_id="):  # Match the org_id assignment
+                        return line.strip().split("=", 1)[1].strip().strip('"')  # Extract and unquote
+        except FileNotFoundError:  # No .env file present
+            logging.warning("! .env file not found.")
+        return None  # No value found
+
+    @staticmethod
+    def _resolve_org_id_via_prompt() -> str:
+        """Prompt the user (via mistapi) to select an org; sys.exit on failure."""
+        logging.info("* No org_id found in .env or CLI. Prompting user...")  # Prompt the user as last resort
+        org_id_list = mistapi.cli.select_org(apisession)  # Interactive org selection
+        if not org_id_list:  # Selection returned nothing
+            logging.error("Failed to retrieve org list. Check your API token and authentication.")
+            print("[ERROR] Unable to retrieve organizations. Your API token may be invalid or expired.")
+            print("[ERROR] Please update MIST_API_TOKEN in your .env file and try again.")
+            sys.exit(1)  # Abort: no org to proceed with
+        return org_id_list[0]  # Use the first selected org
+
+    @staticmethod
+    def get_cached_or_prompted_org_id() -> str:  # Resolve org_id from cache/env/.env/prompt.
+        """Resolve org_id by precedence: module global -> env vars -> .env file -> interactive prompt."""
+        global org_id  # Cache resolved id in the module global
+        if org_id:  # Reuse an already-resolved id
+            logging.info("! Using org_id from global variable: %s", org_id)
+            return org_id  # type: ignore[no-any-return]
+        org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")  # Try environment variables next
+        if org_id_env:  # Environment provided the id
+            org_id = org_id_env  # Cache the env value
+            logging.info("! Loaded org_id from environment: %s", org_id)
+            return org_id
+        dotenv_org = ConfigUtils._resolve_org_id_from_dotenv()  # Try the .env file fallback
+        if dotenv_org:  # .env file provided the id
+            org_id = dotenv_org  # Cache the .env value
+            logging.info("! Loaded org_id from .env: %s", org_id)
+            return org_id
+        org_id = ConfigUtils._resolve_org_id_via_prompt()  # Last resort: interactive prompt
         return org_id  # type: ignore[no-any-return]
 
     @staticmethod
@@ -6419,41 +6362,34 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         return services_list  # Return normalized services.
 
     @staticmethod
+    def _fetch_single_site_setting(apisession, site):
+        """Fetch one site's settings; tag with id/name; return dict or None on failure."""
+        site_id = site.get("id")  # Target site id
+        site_name = site.get("name", "Unnamed Site")  # Friendly site label
+        try:
+            config = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data  # Fetch site settings
+            config["site_id"] = site_id  # Tag with site id
+            config["site_name"] = site_name  # Tag with site name
+            logging.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)
+            return config
+        except Exception as error:  # Skip sites that fail
+            logging.warning("! Failed to fetch config for %s (ID: %s): %s", site_name, site_id, error)
+            return None
+
+    @staticmethod
     def all_site_settings(apisession, org_id, limit=1000):  # Fetch settings for every site.
-        """
-        Fetches configuration settings for all sites in the organization.
-
-        Args:
-            apisession: The Mist API session object.
-            org_id: The organization ID.
-            limit: (Unused) Maximum number of sites to fetch per API call.
-
-        Returns:
-            List of dictionaries, each containing the settings for a site.
-        """
-        logging.info("Fetching all site settings...")  # Log before fetching sites.
-
-        # Use mistapi.get_all to ensure pagination is handled for all sites
-        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites first.
-
-        all_configs = []  # Collect per-site settings.
+        """Fetch per-site settings for every site in the org; limit param is unused (kept for back-compat)."""
+        logging.info("Fetching all site settings...")  # Log before fetching sites
+        sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites first
+        all_configs = []  # Collect per-site settings
         for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]
-            if ConfigUtils.check_stop_signal():  # Honor a user stop request.
-                break  # Stop iterating sites.
-            site_id = site.get("id")  # Target site id.
-            site_name = site.get("name", "Unnamed Site")  # Friendly site label.
-            try:
-                # Fetch the site settings using the Mist API
-                config = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data  # Fetch site settings.
-                config["site_id"] = site_id  # Tag with site id.
-                config["site_name"] = site_name  # Tag with site name.
-                all_configs.append(config)  # Collect the setting.
-                logging.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)  # Log fetched config.
-            except Exception as error:  # Skip sites that fail.
-                logging.warning("! Failed to fetch config for %s (ID: %s): %s", site_name, site_id, error)  # log fail.
-
-        logging.info("Fetched settings for %s sites.", len(all_configs))  # Log total fetched.
-        return all_configs  # Return all site settings.
+            if ConfigUtils.check_stop_signal():  # Honor a user stop request
+                break  # Stop iterating sites
+            config = APIFetchUtils._fetch_single_site_setting(apisession, site)  # One site at a time
+            if config is not None:  # Skip failed fetches
+                all_configs.append(config)
+        logging.info("Fetched settings for %s sites.", len(all_configs))  # Log total fetched
+        return all_configs  # Return all site settings
 
     @staticmethod
     def _gw_load_inventory(apisession, org_id):
@@ -6614,20 +6550,7 @@ class DataProcessingUtils:  # JSON flattening/normalization.
 
     @staticmethod
     def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:  # Flatten nested dict.
-        """
-        Recursively flattens a nested dictionary, joining keys with sep.
-        Lists of dicts are flattened with indexed keys.
-        Non-dict lists are joined as comma-separated strings.
-        All keys are converted to strings for CSV/JSON compatibility.
-
-        Args:
-            d: Dictionary to flatten
-            parent_key: Parent key prefix for nested keys
-            sep: Separator for nested keys
-
-        Returns:
-            dict: Flattened dictionary
-        """
+        """Recursively flatten nested dict for CSV/JSON; lists-of-dicts get index keys, scalar lists join as CSV."""
         items: list[tuple[str, Any]] = []  # Accumulate flattened pairs.
         for k, v in d.items():  # Walk each key/value.
             k_str = str(k)  # Stringify the key.
@@ -6788,19 +6711,11 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
 
     @staticmethod
     def determine_api_function_name_from_context() -> str:  # Infer API name from the call stack.
-        """
-        Attempts to determine the API function name from the current call stack.
-        This helps identify which endpoint strategy to use for table schema.
-
-        Returns:
-            str: The API function name if found, else 'unknown'
-        """
-        # Look through the call stack for known API function patterns
+        """Walk the call stack and return the first frame whose name looks like a Mist API call; else 'unknown'."""
         frame = inspect.currentframe()  # Start at the current frame.
         try:
             while frame:  # Walk up the stack.
                 function_name = frame.f_code.co_name  # Name of this frame's function.
-                # Check if this looks like an API function name
                 if any(  # Match known API call patterns.
                     pattern in function_name
                     for pattern in ["getOrg", "listOrg", "searchOrg", "getSite", "listSite", "searchSite"]
@@ -6812,7 +6727,6 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
             logging.debug("Error determining API function name: %s", error)  # Trace the inspection error.
         finally:
             del frame  # Break the reference cycle.
-
         return "unknown"  # Fallback when undetected.
 
     @staticmethod
@@ -6955,31 +6869,17 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
 
     @staticmethod
     def build_indexes_sql(table_name: str, fields: list[str], strategy: dict[str, Any]) -> list[str]:  # Build indexes.
-        """
-        Builds CREATE INDEX SQL statements for the specified strategy.
-
-        Args:
-            table_name (str): Name of the table
-            fields (list): Available fields in the data
-            strategy (dict): Strategy configuration
-
-        Returns:
-            list: List of CREATE INDEX SQL statements
-        """
+        """Build CREATE INDEX IF NOT EXISTS statements for fields named in strategy['indexes'] that exist in fields."""
         safe_table_name = re.sub(r"[^a-zA-Z0-9_]", "_", table_name)  # Sanitize the table name.
         if not safe_table_name or safe_table_name[0].isdigit():  # Names cannot start with a digit.
             safe_table_name = f"table_{safe_table_name}"  # Prefix to make it valid.
-
         index_sqls = []  # Collect index statements.
-
-        # Create indexes for fields specified in strategy
         for field_name in strategy.get("indexes", []):  # One index per configured field.
             if field_name in fields:  # Only index present columns.
                 safe_field = re.sub(r"[^a-zA-Z0-9_]", "_", str(field_name))  # Sanitize the column name.
                 index_name = f"idx_{safe_table_name}_{safe_field}"  # Deterministic index name.
                 index_sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {safe_table_name} ({safe_field})"  # index DDL.
                 index_sqls.append(index_sql)  # Collect the statement.
-
         return index_sqls  # Return all index DDL.
 
 
@@ -7336,6 +7236,23 @@ class DataExporter:  # Multi-backend export facade.
             cls._router = None  # Force the safe CSV/SQLite path when the router could not be constructed.
 
     @staticmethod
+    def _dispatch_format_write(
+        data: list[dict[str, Any]],
+        filename_or_table: str,
+        output_format: str,
+        fieldnames: list[str] | None,
+        api_function_name: str | None,
+    ) -> bool:
+        """Pick CSV vs SQLite write path; return success flag; catches and logs write exceptions."""
+        try:
+            if output_format == "csv":  # CSV branch
+                return DataExporter._write_csv_format(data, filename_or_table, fieldnames=fieldnames)
+            return DataExporter._write_sqlite_format(data, filename_or_table, api_function_name)  # SQLite branch
+        except Exception as error:  # Never crash on write
+            logging.error("Failed to write data to %s in %s format: %s", filename_or_table, output_format, error)
+            return False
+
+    @staticmethod
     def write_with_format_selection(  # Public export entry point.
         data: list[dict[str, Any]],
         filename_or_table: str,
@@ -7343,49 +7260,23 @@ class DataExporter:  # Multi-backend export facade.
         fieldnames: list[str] | None = None,
         backend_options: "ExportBackendOptions | None" = None,
     ) -> bool:
-        """
-        Writes data to either CSV or SQLite database based on global OUTPUT_FORMAT or override.
-
-        Args:
-            data: List of dictionaries containing the data to write
-            filename_or_table: CSV filename or database table name
-            api_function_name: Name of the API function for SQLite strategy selection
-            fieldnames: Optional explicit column order for CSV output.  When provided the
-                columns are written in exactly this order instead of being sorted alphabetically.
-            backend_options: Optional output-backend overrides (format_override, raw_data).
-                Issue #470: bundled into one ExportBackendOptions so the signature stays <=5 params.
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        opts = (
-            backend_options if backend_options is not None else ExportBackendOptions()
-        )  # Resolve to defaults when no overrides were supplied (avoids a mutable default arg).
-        output_format = opts.format_override if opts.format_override else OUTPUT_FORMAT  # Override or global format.
-        logging.debug(  # Trace the write request.
+        """Write data to CSV or SQLite per OUTPUT_FORMAT (or backend_options.format_override); mirror to polyglot DB."""
+        opts = backend_options if backend_options is not None else ExportBackendOptions()  # Resolve defaults
+        output_format = opts.format_override if opts.format_override else OUTPUT_FORMAT  # Override or global format
+        logging.debug(
             "DataExporter.write_with_format_selection: rows=%s, target=%s, format=%s, api_func=%s",
             len(data) if data else 0,
             filename_or_table,
             output_format,
             api_function_name,
         )
-
-        if not DataExporter._validate_write_inputs(data, filename_or_table, output_format):  # Validate before writing.
-            return False  # Reject invalid input.
-
-        try:
-            if output_format == "csv":  # CSV branch.
-                csv_ok = DataExporter._write_csv_format(data, filename_or_table, fieldnames=fieldnames)  # Write CSV.
-            else:
-                csv_ok = DataExporter._write_sqlite_format(data, filename_or_table, api_function_name)  # Write SQLite.
-        except Exception as error:  # Never crash on write.
-            logging.error("Failed to write data to %s in %s format: %s", filename_or_table, output_format, error)
-            return False  # Write failed.
-
-        DataExporter._route_to_polyglot(
-            data, api_function_name, raw_data=opts.raw_data
-        )  # Mirror to polyglot DB (issue #470: raw_data from bundled backend options).
-        return csv_ok  # Return the primary result.
+        if not DataExporter._validate_write_inputs(data, filename_or_table, output_format):  # Pre-validate
+            return False
+        csv_ok = DataExporter._dispatch_format_write(
+            data, filename_or_table, output_format, fieldnames, api_function_name
+        )  # Run the chosen writer
+        DataExporter._route_to_polyglot(data, api_function_name, raw_data=opts.raw_data)  # Mirror to polyglot DB
+        return csv_ok  # Return the primary result
 
     _standalone_logged = False  # One-shot standalone log guard.
 
