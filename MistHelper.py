@@ -11030,6 +11030,22 @@ class OrgTemplateExporter:  # Org template exporters.
             raise  # Re-raise to caller.
 
     @staticmethod
+    def _persist_switch_template_csv(switch_profiles: list, filename: str) -> None:
+        """Flatten + escape + write switch-template payload, then log/emit a success line."""
+        if not switch_profiles:  # No templates returned from the API.
+            print("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")  # User notice.
+            logging.info(  # Trace empty-result branch.
+                "No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv"
+            )
+            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
+            return  # Done; empty CSV written.
+        processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)  # Flatten nested template fields.
+        processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe.
+        DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Persist.
+        print(f"! {len(processed)} switch templates exported to {filename}")  # User notice.
+        logging.info("Exported %s switch templates to %s.", len(processed), filename)  # Trace count.
+
+    @staticmethod
     def switch_templates():  # Export switch templates.
         """Export switch templates to OrgSwitchTemplates.csv."""
         print("Export Organization Switch Templates:")  # Header.
@@ -11038,19 +11054,8 @@ class OrgTemplateExporter:  # Org template exporters.
         filename = "OrgSwitchTemplates.csv"  # Build the CSV name.
         try:
             response = mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates(apisession, org_id, limit=1000)
-            switch_profiles = mistapi.get_all(response=response, mist_session=apisession) or []
-            if not switch_profiles:  # None found.
-                print("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")
-                logging.info(  # Log zero exported.
-                    "No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv"
-                )
-                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
-                return  # Abort.
-            processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)  # Flatten nested fields.
-            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-            print(f"! {len(processed)} switch templates exported to {filename}")  # Tell the user.
-            logging.info("Exported %s switch templates to %s.", len(processed), filename)  # Log export count.
+            switch_profiles = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all.
+            OrgTemplateExporter._persist_switch_template_csv(switch_profiles, filename)  # Persist + log.
         except Exception as e:  # Export failed.
             logging.error("Failed to export switch templates: %s", e)  # log error.
             try:
@@ -11454,33 +11459,43 @@ class GlobalWiredClientReportGenerator:  # Global wired client report.
         return remote_used  # Report whether any server-side prefilter was used
 
     @staticmethod
+    def _build_no_filter_result(
+        records: list[dict[str, Any]],
+        remote_used: bool,
+        criteria: dict[str, str] | None,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Build the (records, metadata) tuple for the empty-criteria path — every record passes."""
+        total_retrieved = len(records)  # Pre-filter API record count.
+        metadata = GlobalWiredClientReportGenerator._build_metadata(  # No-filter metadata block.
+            total_retrieved,
+            total_retrieved,
+            remote_used,
+            False,
+            criteria,
+        )
+        return records, metadata  # Records pass through unchanged.
+
+    @staticmethod
     def _apply_filters(  # Apply local filters.
         records: list[dict[str, Any]],
         criteria: dict[str, str] | None,
         remote_used: bool,
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """Apply local authoritative filtering with AND logic. Returns matched records and metadata."""
-        total_retrieved = len(records)  # How many records the API returned before local filtering
-        if not criteria:  # No criteria (None/empty) -- every record passes; narrows criteria to dict[str,str] after
-            metadata = GlobalWiredClientReportGenerator._build_metadata(  # Build metadata noting no filtering occurred
-                total_retrieved,
-                total_retrieved,
-                remote_used,
-                False,
-                criteria,
-            )
-            return records, metadata  # Return all records unchanged with metadata
+        if not criteria:  # No criteria — every record passes via the no-filter result builder.
+            return GlobalWiredClientReportGenerator._build_no_filter_result(records, remote_used, criteria)
+        total_retrieved = len(records)  # Pre-filter API record count for metadata.
         matched = [
             record for record in records if GlobalWiredClientReportGenerator._record_matches(record, criteria)
-        ]  # Keep only records passing all criteria
-        metadata = GlobalWiredClientReportGenerator._build_metadata(  # Build metadata describing the filter results
+        ]  # Keep only records passing all criteria.
+        metadata = GlobalWiredClientReportGenerator._build_metadata(  # Build metadata describing the filter results.
             total_retrieved,
             len(matched),
             remote_used,
             True,
             criteria,
         )
-        return matched, metadata  # Return the filtered records plus metadata
+        return matched, metadata  # Return the filtered records plus metadata.
 
     @staticmethod
     def _record_matches(record: dict[str, Any], criteria: dict[str, str]) -> bool:  # Test one record vs criteria.
@@ -11624,34 +11639,44 @@ class WiredClientManufacturerReportGenerator:  # Wired client manufacturer repor
         return sorted_manufacturers  # Return the summary.
 
     @staticmethod
-    def _prompt_selection(summary: list[tuple[str, int]]) -> str | None:  # Prompt manufacturer selection.
-        """Display manufacturer list with counts and prompt user to select one."""
-        total_clients = sum(count for _, count in summary)  # Total client count.
-        print(f"\n  Found {total_clients} clients from {len(summary)} manufacturers\n")  # Tell the user.
+    def _print_manufacturer_table(summary: list[tuple[str, int]]) -> None:
+        """Render the manufacturer/count picker table to stdout."""
+        total_clients = sum(count for _, count in summary)  # Aggregate total client count for header line.
+        print(f"\n  Found {total_clients} clients from {len(summary)} manufacturers\n")  # Tell the user totals.
         print(f"  {'#':<5} {'Manufacturer':<45} {'Count':>8}")  # Column header.
         print(f"  {'-' * 5} {'-' * 45} {'-' * 8}")  # Separator row.
         for index, (manufacturer, count) in enumerate(summary, 1):  # List each manufacturer.
-            display_name = manufacturer[:44]  # Truncate long names.
+            display_name = manufacturer[:44]  # Truncate long names so column stays aligned.
             print(f"  {index:<5} {display_name:<45} {count:>8}")  # Print the row.
+
+    @staticmethod
+    def _parse_manufacturer_choice(choice: str, summary: list[tuple[str, int]]) -> str | None:
+        """Map user input to a manufacturer name, returning None for empty/invalid/out-of-range."""
+        if not choice:  # User skipped the selection prompt.
+            return None  # Caller treats None as "no filter".
+        try:
+            selection_index = int(choice)  # Parse the numeric selection.
+        except ValueError:  # Non-numeric input.
+            print("  Invalid selection.")  # Tell the user.
+            return None  # Abort.
+        if 1 <= selection_index <= len(summary):  # In valid range.
+            selected_manufacturer = summary[selection_index - 1][0]  # Pick the manufacturer name.
+            logging.info("User selected manufacturer: %s", selected_manufacturer)  # Log the choice.
+            return selected_manufacturer  # Return chosen manufacturer.
+        print("  Selection out of range.")  # Out-of-range selection.
+        return None  # Abort.
+
+    @staticmethod
+    def _prompt_selection(summary: list[tuple[str, int]]) -> str | None:  # Prompt manufacturer selection.
+        """Display manufacturer list with counts and prompt user to select one."""
+        GlobalWiredClientReportGenerator._print_manufacturer_table(summary)  # Render the picker table.
         choice = InputUtils.safe_input(  # Read the choice.
             "\n  Enter manufacturer number for filtered report (Enter to skip): ",
             default_value="",
             allow_empty=True,
             context="manufacturer_report_selection",
         )
-        if not choice:  # No choice.
-            return None  # Abort.
-        try:
-            selection_index = int(choice)  # Parse the selection.
-        except ValueError:  # Non-numeric input.
-            print("  Invalid selection.")  # Tell the user.
-            return None  # Abort.
-        if 1 <= selection_index <= len(summary):  # In range?
-            selected_manufacturer = summary[selection_index - 1][0]  # Pick the manufacturer.
-            logging.info("User selected manufacturer: %s", selected_manufacturer)  # Log the choice.
-            return selected_manufacturer  # Return it.
-        print("  Selection out of range.")  # Out of range.
-        return None  # Abort.
+        return GlobalWiredClientReportGenerator._parse_manufacturer_choice(choice, summary)  # Map input → choice.
 
     @staticmethod
     def _filter_by_manufacturer(records: list[dict[str, Any]], manufacturer: str) -> list[dict[str, Any]]:
@@ -11730,26 +11755,32 @@ class OrgAdminExporter:  # Org admin/token exporters.
         OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.ssos.listOrgSsos, data_type="sso", sort_key="name")  # type: ignore[no-untyped-call]
 
     @staticmethod
+    def _fetch_license_records(current_org_id: str) -> list:
+        """Fetch license rows via wrapper or raw GET fallback, normalized to a list."""
+        list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)  # Find the list function.
+        if list_func is None:  # Wrapper missing in installed mistapi.
+            logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
+            raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Build the raw URL.
+            if apisession is None:  # No session.
+                raise ValueError("API session not initialized")  # No session: fail loudly.
+            response = apisession.mist_get(raw_url)  # Direct GET fallback.
+            raw_items = getattr(response, "data", response) or []  # Unwrap data; default empty.
+        else:
+            response = list_func(apisession, current_org_id, limit=1000)  # Call the wrapper.
+            raw_items = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all.
+        if not isinstance(raw_items, list):  # Normalize to a list.
+            logging.debug("License endpoint returned non-list payload; normalizing to list")  # Trace normalization.
+            raw_items = [raw_items]  # Wrap single item.
+        return raw_items  # Caller decides empty/persist.
+
+    @staticmethod
     def licenses():  # Export licenses.
         """Export organization licenses to OrgLicenses.csv."""
         logging.info("Starting export of organization licenses (canonical endpoint)...")  # Log start.
         filename = "OrgLicenses.csv"  # Build the CSV name.
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         try:
-            list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)  # Find the list function.
-            if list_func is None:  # Wrapper missing.
-                logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
-                raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Build the raw URL.
-                if apisession is None:  # No session.
-                    raise ValueError("API session not initialized")  # No session: fail loudly.
-                response = apisession.mist_get(raw_url)  # Direct GET fallback.
-                raw_items = getattr(response, "data", response) or []  # Unwrap data; default empty.
-            else:
-                response = list_func(apisession, current_org_id, limit=1000)  # Call the wrapper.
-                raw_items = mistapi.get_all(response=response, mist_session=apisession) or []
-            if not isinstance(raw_items, list):  # Normalize to a list.
-                logging.debug("License endpoint returned non-list payload; normalizing to list")  # Trace normalization.
-                raw_items = [raw_items]  # Wrap single item.
+            raw_items = OrgConfigExporter._fetch_license_records(current_org_id)  # Fetch rows via wrapper/fallback.
             if not raw_items:  # No records.
                 logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
                 DataExporter.write_with_format_selection([], filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
@@ -11790,35 +11821,36 @@ class SelfExportUtils:  # Self/account exporters.
     """
 
     @staticmethod
+    def _persist_self_audit_rows(rows: list, filename: str, hours: int) -> None:
+        """Flatten + persist self audit rows, or write an empty file when nothing was returned."""
+        if not rows:  # No data returned — write empty output rather than failing silently.
+            logging.warning("No self audit log records returned for the last %d hours", hours)  # Warn on empty result.
+            DataExporter.write_with_format_selection([], filename)  # Empty file signals successful run.
+            return  # Done.
+        rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested change-detail dicts for CSV.
+        DataExporter.write_with_format_selection(rows, filename, api_function_name="listSelfAuditLogs")  # Persist.
+        logging.info("Exported %d self audit log records to %s", len(rows), filename)  # Log success.
+
+    @staticmethod
     def audit_logs() -> None:  # Export audit logs.
         """Export audit log of changes made by the authenticated admin account to SelfAuditLogs.csv."""
-        logging.info("Starting export of self (admin account) audit logs...")  # Log before operation
-        filename = "SelfAuditLogs.csv"  # Output filename for self audit log entries
+        logging.info("Starting export of self (admin account) audit logs...")  # Log before operation.
+        filename = "SelfAuditLogs.csv"  # Output filename for self audit log entries.
         try:
-            hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Use same lookback window as other audit log exports
-            TimeUtils.log_dynamic_lookback("self audit logs export", hours)  # Log lookback window selection
-            logging.info("Fetching self audit logs for last %d hours...", hours)  # Log before API call
-            response = mistapi.api.v1.self.logs.listSelfAuditLogs(  # Call Mist API for admin account audit log
+            hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Use same lookback window as other audit log exports.
+            TimeUtils.log_dynamic_lookback("self audit logs export", hours)  # Log lookback window selection.
+            logging.info("Fetching self audit logs for last %d hours...", hours)  # Log before API call.
+            response = mistapi.api.v1.self.logs.listSelfAuditLogs(  # Call Mist API for admin account audit log.
                 apisession,
-                duration=f"{hours}h",  # Limit results to the dynamic lookback window
-                limit=1000,  # Request large page to minimise pagination round-trips
+                duration=f"{hours}h",  # Limit results to the dynamic lookback window.
+                limit=1000,  # Request large page to minimise pagination round-trips.
             )
-            logging.debug("Raw API response received for self audit logs")  # Log after API call
-            rows = mistapi.get_all(response=response, mist_session=apisession)  # Paginate through all results
-            logging.debug("Received %d self audit log records after pagination", len(rows))  # Log record count
-            if not rows:  # No data returned — write empty output rather than failing silently
-                logging.warning(
-                    "No self audit log records returned for the last %d hours", hours
-                )  # Warn on empty result
-                DataExporter.write_with_format_selection([], filename)  # Write empty file to signal successful run
-                return  # Abort.
-            rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested change-detail dicts for CSV
-            DataExporter.write_with_format_selection(
-                rows, filename, api_function_name="listSelfAuditLogs"
-            )  # Write to configured backend
-            logging.info("Exported %d self audit log records to %s", len(rows), filename)  # Log success
-        except Exception as exception:  # Catch any API or processing error
-            logging.exception("Failed to export self audit logs: %s", exception)  # Log full traceback
+            logging.debug("Raw API response received for self audit logs")  # Log after API call.
+            rows = mistapi.get_all(response=response, mist_session=apisession)  # Paginate through all results.
+            logging.debug("Received %d self audit log records after pagination", len(rows))  # Log record count.
+            SelfExportUtils._persist_self_audit_rows(rows, filename, hours)  # Persist or write empty.
+        except Exception as exception:  # Catch any API or processing error.
+            logging.exception("Failed to export self audit logs: %s", exception)  # Log full traceback.
 
 
 class OrgConfigExporter:  # Org config exporters.
@@ -12005,19 +12037,7 @@ class OrgExportUtils:  # Generic org export helpers.
 
     @staticmethod
     def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):  # Export an org endpoint.
-        """
-        Generic function to export organization-specific data to CSV.
-
-        Args:
-            api_call: The mistapi function to call
-            data_type: Description of the data type (e.g., "licenses", "templates")
-            sort_key: Field to sort results by
-            limit: Page size for paginated APIs. Pass None to omit (non-paginated APIs).
-            **api_kwargs: Additional arguments to pass to the API call
-
-        Returns:
-            None
-        """
+        """Generic org-data export: build Org<DataType>.csv from `api_call`, pass `limit`/extras as API kwargs."""
         logging.info("Starting export of organization %s...", data_type)  # Log start.
 
         # Create filename from data_type
@@ -12037,60 +12057,76 @@ class OrgExportUtils:  # Generic org export helpers.
         ).execute()
 
     @staticmethod
+    def _collect_one_sle_type(
+        org_id: str,
+        sle_type: str,
+        all_sites_sle_data: list,
+    ) -> None:
+        """Fetch sites-SLE rows for one type and append (tagged) into the shared accumulator."""
+        try:
+            response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the SLE API for this type.
+                apisession, org_id, sle=sle_type, duration="7d", limit=1000
+            )
+            sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all rows.
+            for site_data in sites_sle_data:  # Tag each row with its SLE type.
+                site_data["sle_type"] = sle_type  # Record the SLE type on the row.
+                all_sites_sle_data.append(site_data)  # Collect into accumulator.
+            logging.debug("Retrieved SLE data for %s sites with SLE type: %s", len(sites_sle_data), sle_type)
+        except Exception as exception:  # Fetch failed — skip this type but continue overall.
+            logging.warning("Failed to get sites SLE data for type %s: %s", sle_type, exception)  # Warn and skip.
+
+    @staticmethod
+    def _persist_sites_sle_summary(all_sites_sle_data: list) -> None:
+        """Persist aggregated sites-SLE rows to OrgSitesSLESummary.csv (or write empty + warn)."""
+        if all_sites_sle_data:  # Have data — flatten + write + tell user.
+            processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)  # Flatten nested fields.
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe.
+            DataExporter.write_with_format_selection(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
+            print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")  # Tell the user.
+            logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))  # Log count.
+            return  # Done.
+        print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")  # Tell user zero.
+        logging.warning("No sites SLE data available for organization")  # Warn no data.
+        DataExporter.write_with_format_selection([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
+
+    @staticmethod
+    def _gather_all_sites_sle(org_id: str, sle_types: list, emitter: Any) -> tuple[list, int]:
+        """Walk SLE types, accumulate rows, tick progress per type; return (rows, items_done)."""
+        all_sites_sle_data: list = []  # Accumulator for SLE rows across types.
+        items_done = 0  # Items processed counter.
+        for sle_type in sle_types:  # Fetch each SLE type.
+            OrgExportUtils._collect_one_sle_type(org_id, sle_type, all_sites_sle_data)  # Fetch + tag + accumulate.
+            items_done += 1  # Count this item regardless of success/failure.
+            if emitter:  # Emitter present — tick progress for UI.
+                emitter.emit_progress_tick(
+                    ProgressContext("67", "sites_sle_summary", len(sle_types)),
+                    sle_type,
+                    items_done,
+                    len(sle_types) - items_done,
+                )
+        return all_sites_sle_data, items_done  # Caller persists + emits completion.
+
+    @staticmethod
     def sites_sle_summary():  # Export sites SLE summary.
         """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
         print("Export Organization Sites SLE Summary:")  # Header.
         logging.info("Starting export of sites SLE summary...")  # Log start.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-
-        # SLE types to export
         sle_types = ["wifi", "wired", "wan"]  # SLE types to fetch.
-        all_sites_sle_data = []  # Accumulate SLE rows.
-        emitter = PROGRESS_EMITTER  # Progress emitter.
+        emitter = PROGRESS_EMITTER  # Progress emitter handle.
         if emitter:  # Emitter present.
             emitter.emit_progress_start("67", "sites_sle_summary", len(sle_types))  # Signal progress start.
         op_start = time.time()  # Start the timer.
-        items_done = 0  # Items processed.
-
-        for sle_type in sle_types:  # Fetch each SLE type.
-            try:
-                response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the SLE API.
-                    apisession, org_id, sle=sle_type, duration="7d", limit=1000
-                )
-                sites_sle_data = mistapi.get_all(response=response, mist_session=apisession) or []
-
-                for site_data in sites_sle_data:  # Tag each row.
-                    # Add SLE type identifier to the data
-                    site_data["sle_type"] = sle_type  # Record the SLE type.
-                    all_sites_sle_data.append(site_data)  # Collect the row.
-
-                logging.debug("Retrieved SLE data for %s sites with SLE type: %s", len(sites_sle_data), sle_type)
-            except Exception as exception:  # Fetch failed.
-                logging.warning("Failed to get sites SLE data for type %s: %s", sle_type, exception)  # Warn and skip.
-                continue  # Next SLE type.
-            finally:
-                items_done += 1  # Count this item.
-                if emitter:  # Emitter present.
-                    emitter.emit_progress_tick(  # Tick progress.
-                        ProgressContext("67", "sites_sle_summary", len(sle_types)),
-                        sle_type,
-                        items_done,
-                        len(sle_types) - items_done,
-                    )
-
-        if all_sites_sle_data:  # Have data.
-            processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)  # Flatten nested fields.
-            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")  # Tell the user.
-            logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))  # Log export count.
-        else:
-            print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")  # Tell the user zero.
-            logging.warning("No sites SLE data available for organization")  # Warn no data.
-            DataExporter.write_with_format_selection([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
+        all_sites_sle_data, items_done = OrgExportUtils._gather_all_sites_sle(  # Walk types + tick.
+            org_id, sle_types, emitter
+        )
+        OrgExportUtils._persist_sites_sle_summary(all_sites_sle_data)  # Write CSV (or empty placeholder).
         if emitter:  # Emitter present.
             emitter.emit_progress_complete(  # Signal progress complete.
-                ProgressContext("67", "sites_sle_summary", len(sle_types)), items_done, False, time.time() - op_start
+                ProgressContext("67", "sites_sle_summary", len(sle_types)),
+                items_done,
+                False,
+                time.time() - op_start,
             )
 
     @staticmethod
@@ -12218,31 +12254,21 @@ class OrgExportUtils:  # Generic org export helpers.
 
     @staticmethod
     def _insight_fetch_one_sle_category(org_id: str, metric: str, sle_category: str) -> dict[str, Any] | None:
-        """Fetch one SLE category's site data; return an aggregated result row, or None when empty or failed."""
+        """Fetch one SLE category's site data; return aggregated result row, or None when empty/failed."""
         try:  # Isolate this category so one failure doesn't abort the others.
             response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the sites-SLE API for this category.
                 apisession, org_id, sle=sle_category, duration="7d", limit=1000
             )
             sites_data = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all site rows.
-            if sites_data:  # The category returned at least one site's SLE data.
-                logging.debug(  # Trace the successful category fetch with its site count.
-                    "Successfully retrieved sites data for insight metric: %s with SLE: %s (%s sites)",
-                    metric,
-                    sle_category,
-                    len(sites_data),
-                )
-                return OrgExportUtils._insight_build_sites_result(
-                    org_id, metric, sle_category, sites_data
-                )  # Result row.
-            logging.debug("No sites data available for insight metric: %s with SLE: %s", metric, sle_category)  # Empty.
-            return None  # No data for this category.
-        except Exception as sites_error:  # Category fetch failed; log and report None without counting a failure.
-            logging.debug(
-                "Failed to get sites data for insight metric '%s' with SLE '%s': %s",
-                metric,
-                sle_category,
-                sites_error,
+            if not sites_data:  # Category empty — log and return None.
+                logging.debug("No sites data for insight metric: %s with SLE: %s", metric, sle_category)
+                return None  # No data for this category.
+            logging.debug(  # Trace the successful category fetch with its site count.
+                "Got %s sites for insight metric: %s SLE: %s", len(sites_data), metric, sle_category
             )
+            return OrgExportUtils._insight_build_sites_result(org_id, metric, sle_category, sites_data)
+        except Exception as sites_error:  # Category fetch failed; log and report None without counting a failure.
+            logging.debug("Failed to get sites data for metric '%s' SLE '%s': %s", metric, sle_category, sites_error)
             return None  # Treat the failed category as no data.
 
     @staticmethod
@@ -12570,30 +12596,31 @@ class OrgExportUtils:  # Generic org export helpers.
         )
 
     @staticmethod
+    def _build_audit_log_kwargs(full_history: bool, duration: str | None) -> dict[str, Any]:
+        """Resolve API kwargs (limit + duration/start) for org audit-log listing based on caller flags."""
+        kwargs: dict[str, Any] = {"limit": 1000}  # Base API params.
+        if duration:  # Caller-supplied duration takes priority.
+            kwargs["duration"] = duration  # Set explicit duration string.
+            logging.info("Exporting audit logs for duration: %s", duration)  # Log the window.
+            return kwargs  # Done.
+        if not full_history:  # No duration, recent-only mode.
+            hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve lookback hours.
+            TimeUtils.log_dynamic_lookback("audit logs export", hours)  # Log the window.
+            kwargs["duration"] = f"{hours}h"  # Set the duration.
+            logging.info("Exporting only last %s hours of audit logs (duration=%sh).", hours, hours)
+            return kwargs  # Done.
+        kwargs["start"] = 0  # Full history from start.
+        logging.info("Exporting full audit log history (start=0).")  # Log full history.
+        return kwargs  # Done.
+
+    @staticmethod
     def audit_logs(full_history: bool = False, duration: str | None = None) -> None:  # Export audit logs.
-        """
-        Export organization audit logs to OrgAuditLogs.csv.
-        Fetches all pages using mistapi.get_all.
-        If full_history is True, pulls all audit logs (start=0).
-        If False, pulls only the last 24 hours.
-        If duration is provided, uses it as the duration parameter.
-        """
+        """Export org audit logs (24h/explicit duration/full history) to OrgAuditLogs.csv."""
         logging.info("Menu #22: Starting audit logs export")  # Log start.
         logging.debug("ENTRY: OrgExportUtils.audit_logs(full_history=%s, duration=%s)", full_history, duration)
         try:
             org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-            kwargs: dict[str, Any] = {"limit": 1000}  # Base API params.
-            if duration:  # Duration provided.
-                kwargs["duration"] = duration  # Set the duration.
-                logging.info("Exporting audit logs for duration: %s", duration)  # Log the window.
-            elif not full_history:  # No duration, recent only.
-                hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve lookback hours.
-                TimeUtils.log_dynamic_lookback("audit logs export", hours)  # Log the window.
-                kwargs["duration"] = f"{hours}h"  # Set the duration.
-                logging.info("Exporting only last %s hours of audit logs (duration=%sh).", hours, hours)
-            else:
-                kwargs["start"] = 0  # Full history from start.
-                logging.info("Exporting full audit log history (start=0).")  # Log full history.
+            kwargs = OrgExportUtils._build_audit_log_kwargs(full_history, duration)  # Resolve API kwargs.
             logging.debug("Making API call with parameters: %s", kwargs)  # Trace the params.
             response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)  # List audit logs.
             rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
@@ -12714,6 +12741,18 @@ class SiteDeviceExporter:  # Site device exporters.
         logging.debug("\n%s", table.get_string())  # Log the table.
 
     @staticmethod
+    def _persist_site_device_stats(rawdata: list, site_name: str) -> None:
+        """Flatten + write device-stats rows to a per-site CSV, or tell the user when empty."""
+        if not rawdata:  # No data — tell the user and return.
+            print("! No device statistics found for this site")  # User notice.
+            return  # Done.
+        flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
+        sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]  # CSV-safe.
+        filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"  # Build per-site CSV name.
+        DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]  # Persist.
+        print(f"! {len(rawdata)} device stats exported to {filename}")  # User notice with count.
+
+    @staticmethod
     def device_stats():  # Export site device stats.
         """Export device statistics for a site to SiteDeviceStats.csv."""
         print("Site Device Statistics:")  # Header.
@@ -12732,14 +12771,7 @@ class SiteDeviceExporter:  # Site device exporters.
         try:
             response = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="all", limit=1000)
             rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
-            if rawdata:  # Have data.
-                flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
-                sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]
-                filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"  # Build the CSV name.
-                DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]
-                print(f"! {len(rawdata)} device stats exported to {filename}")  # Tell the user.
-            else:
-                print("! No device statistics found for this site")  # Tell the user none.
+            SiteExportUtils._persist_site_device_stats(rawdata, site_name)  # Persist or tell user empty.
         except Exception as e:  # Fetch failed.
             logging.error("Error fetching device stats for site %s: %s", site_name, e)  # Log the error.
             print(f"! Error fetching device statistics: {e}")  # Tell the user.
