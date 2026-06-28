@@ -6549,23 +6549,31 @@ class DataProcessingUtils:  # JSON flattening/normalization.
     """
 
     @staticmethod
+    def _flatten_list_value(new_key: str, sep: str, v: list) -> list[tuple[str, Any]]:
+        """Flatten a list value: list-of-dicts gets index keys; scalar lists join as CSV. Returns pairs to extend."""
+        out: list[tuple[str, Any]] = []  # Accumulator for produced pairs
+        if all(isinstance(i, dict) for i in v):  # List of dicts: index each
+            for idx, item in enumerate(v):  # Walk list items
+                out.extend(DataProcessingUtils.flatten_dict(item, f"{new_key}{sep}{idx}", sep=sep).items())
+            return out
+        out.append((new_key, ",".join(map(str, v))))  # Join scalar list as CSV
+        return out
+
+    @staticmethod
     def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:  # Flatten nested dict.
         """Recursively flatten nested dict for CSV/JSON; lists-of-dicts get index keys, scalar lists join as CSV."""
-        items: list[tuple[str, Any]] = []  # Accumulate flattened pairs.
-        for k, v in d.items():  # Walk each key/value.
-            k_str = str(k)  # Stringify the key.
-            new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str  # Compose the dotted key.
-            if isinstance(v, dict):  # Recurse into nested dicts.
-                items.extend(DataProcessingUtils.flatten_dict(v, new_key, sep=sep).items())  # Merge nested results.
-            elif isinstance(v, list):  # Lists need index expansion.
-                if all(isinstance(i, dict) for i in v):  # List of dicts: index each.
-                    for idx, item in enumerate(v):  # Walk list items.
-                        items.extend(DataProcessingUtils.flatten_dict(item, f"{new_key}{sep}{idx}", sep=sep).items())
-                else:
-                    items.append((new_key, ",".join(map(str, v))))  # Join scalar list as CSV.
-            else:
-                items.append((new_key, v))  # Keep scalar value as-is.
-        return dict(items)  # Return the flat dict.
+        items: list[tuple[str, Any]] = []  # Accumulate flattened pairs
+        for k, v in d.items():  # Walk each key/value
+            k_str = str(k)  # Stringify the key
+            new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str  # Compose the dotted key
+            if isinstance(v, dict):  # Recurse into nested dicts
+                items.extend(DataProcessingUtils.flatten_dict(v, new_key, sep=sep).items())
+                continue
+            if isinstance(v, list):  # Lists need index expansion
+                items.extend(DataProcessingUtils._flatten_list_value(new_key, sep, v))
+                continue
+            items.append((new_key, v))  # Keep scalar value as-is
+        return dict(items)  # Return the flat dict
 
     @staticmethod
     def flatten_nested_fields(data: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -7886,28 +7894,31 @@ def _pool_advance_progress_bar(pbar: Any) -> None:
         logging.error("! Progress bar update failed: %s", upd_err)  # Log progress bar failure for debugging.
 
 
+def _record_future_outcome(future: Any, item: Any, config: "BatchWorkerConfig", accumulator: dict) -> None:
+    """Inspect one completed future and update accumulator with the success/failure outcome."""
+    outcome, payload = _pool_collect_future_result(future, item, config)  # Resolve future to (status, payload)
+    if outcome == "success":  # Worker returned usable data
+        accumulator["successful"].append(payload)  # Collect successful result
+        if not accumulator["first_logged"]:  # First-result one-shot debug log
+            logging.debug("! First future result type: %s", type(payload))  # One-shot shape debug log
+            accumulator["first_logged"] = True  # Prevent repeated debug log
+        return
+    accumulator["failed"].append(payload)  # Empty result or worker exception — track for retry
+
+
 def _pool_drain_wait_loop(future_to_item: dict, batch_desc: str, config: "BatchWorkerConfig") -> tuple[list, list]:
     """Wait on the futures, collecting successful results and failed items until all have resolved."""
-    batch_successful: list[Any] = []  # Accumulate successful worker results for this batch.
-    batch_failed: list[Any] = []  # Accumulate items whose futures raised or returned empty for this batch.
-    first_result_logged = False  # Track whether the first-result debug log has fired to avoid repeated noise.
-    pending = set(future_to_item.keys())  # Track in-flight futures so the wait loop can detect completion.
-    with tqdm(  # Show per-batch progress to the operator (issue #431: batch_description from config).
+    accumulator: dict[str, Any] = {"successful": [], "failed": [], "first_logged": False}  # Mutable batch state
+    pending = set(future_to_item.keys())  # Track in-flight futures so the wait loop can detect completion
+    with tqdm(  # Show per-batch progress to the operator (issue #431: batch_description from config)
         total=len(pending), desc=batch_desc, unit=config.batch_description.rstrip("s")
     ) as pbar:  # type: ignore[call-arg, no-untyped-call]
-        while pending:  # Keep collecting futures until all have resolved.
-            done, pending = wait(pending, return_when=FIRST_COMPLETED)  # Wake up as soon as any future finishes.
-            for future in done:  # Inspect each completed future before moving on.
-                outcome, payload = _pool_collect_future_result(future, future_to_item[future], config)  # Resolve it
-                if outcome == "success":  # Worker returned usable data.
-                    batch_successful.append(payload)  # Collect successful result for the caller's output list.
-                    if not first_result_logged:  # Log the first result's type once to help debug worker outputs.
-                        logging.debug("! First future result type: %s", type(payload))  # One-shot shape debug log.
-                        first_result_logged = True  # Prevent repeated debug log on subsequent results.
-                else:  # Empty result or worker exception.
-                    batch_failed.append(payload)  # Track the failed item for potential retry.
-                _pool_advance_progress_bar(pbar)  # Advance progress regardless of success or failure.
-    return batch_successful, batch_failed  # Return batch-level results so caller can accumulate them.
+        while pending:  # Keep collecting futures until all have resolved
+            done, pending = wait(pending, return_when=FIRST_COMPLETED)  # Wake on any future finish
+            for future in done:  # Inspect each completed future before moving on
+                _record_future_outcome(future, future_to_item[future], config, accumulator)  # Resolve + record
+                _pool_advance_progress_bar(pbar)  # Advance progress regardless of success or failure
+    return accumulator["successful"], accumulator["failed"]  # Return batch-level results for caller
 
 
 def _pool_process_batch_wait_loop(  # Submit one batch to a thread pool.
@@ -14623,17 +14634,19 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
 
     def _extract_country_codes(self, countries_data) -> list[str]:  # Extract country codes.
         """Extract country codes from countries data."""
-        if isinstance(countries_data, dict):  # Dict payload.
-            return list(countries_data.keys())  # Return the keys.
-        elif isinstance(countries_data, list):  # List payload.
-            codes = []  # Collect codes.
-            for item in countries_data:  # Walk items.
-                if isinstance(item, dict):  # Dict item.
-                    code = item.get("code") or item.get("alpha2") or item.get("name", "")[:2].upper()  # Resolve a code.
-                    if code:  # Have a code.
-                        codes.append(code)  # Keep it.
-            return codes  # Return the codes.
-        return []  # Unknown shape.
+        if isinstance(countries_data, dict):  # Dict payload
+            return list(countries_data.keys())  # Return the keys
+        if not isinstance(countries_data, list):  # Unknown shape — return empty
+            return []
+        codes = []  # Collect codes
+        for item in countries_data:  # Walk items
+            if not isinstance(item, dict):  # Skip non-dict items
+                continue
+            code = item.get("code") or item.get("alpha2") or item.get("name", "")[:2].upper()  # Resolve a code
+            if not code:  # Empty code = skip
+                continue
+            codes.append(code)  # Keep it
+        return codes  # Return the codes
 
     def _normalize_states_data(self, country_code: str, country_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize states data into list of records with country identifier."""
@@ -14715,17 +14728,19 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
 
     def _extract_channel_country_codes(self, countries_data) -> list[str]:  # Extract channel countries.
         """Extract country codes from countries data for channel lookup."""
-        if isinstance(countries_data, dict):  # Dict payload.
-            return list(countries_data.keys())  # Return the keys.
-        elif isinstance(countries_data, list):  # List payload.
-            codes = []  # Collect codes.
-            for item in countries_data:  # Walk items.
-                if isinstance(item, dict):  # Dict item.
-                    code = item.get("alpha2") or item.get("code")  # Resolve a code.
-                    if code:  # Have a code.
-                        codes.append(code)  # Keep it.
-            return codes  # Return the codes.
-        return []  # Unknown shape.
+        if isinstance(countries_data, dict):  # Dict payload
+            return list(countries_data.keys())  # Return the keys
+        if not isinstance(countries_data, list):  # Unknown shape — return empty
+            return []
+        codes = []  # Collect codes
+        for item in countries_data:  # Walk items
+            if not isinstance(item, dict):  # Skip non-dict items
+                continue
+            code = item.get("alpha2") or item.get("code")  # Resolve a code
+            if not code:  # Empty code = skip
+                continue
+            codes.append(code)  # Keep it
+        return codes  # Return the codes
 
     def _normalize_channels_data(self, country_code: str, country_data) -> list[dict]:  # type: ignore[no-untyped-def, type-arg]
         """Normalize channels data into list of records with country identifier."""
@@ -15839,27 +15854,57 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
         print()  # Spacer.
 
     @staticmethod
+    def _handle_marvis_invalid_choice(choice: str) -> None:
+        """Handle an out-of-range Marvis menu selection (warn + log)."""
+        print(" Invalid option selected.")  # User-facing notice
+        logging.warning("MARVIS DEBUG: Invalid troubleshooting option selected: %s", choice)  # Audit trail
+        logging.debug("MARVIS DEBUG: Exiting launch_interactive() due to invalid choice")  # Trace exit reason
+
+    @staticmethod
+    def _handle_marvis_exit() -> None:
+        """Handle the Marvis exit menu pick."""
+        logging.debug("MARVIS DEBUG: User chose to exit")  # Trace the exit
+        print("Exiting Marvis troubleshooting.")  # Tell the user
+
+    @staticmethod
+    def _invoke_marvis_client_connectivity() -> None:
+        """Run the client-connectivity troubleshooter."""
+        logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.client_connectivity()")  # Trace the call
+        TroubleshootUtils.client_connectivity()  # type: ignore[no-untyped-call]
+
+    @staticmethod
+    def _invoke_marvis_device_performance() -> None:
+        """Run the device-performance troubleshooter."""
+        logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.device_performance()")  # Trace the call
+        TroubleshootUtils.device_performance()  # type: ignore[no-untyped-call]
+
+    @staticmethod
+    def _invoke_marvis_network_connectivity() -> None:
+        """Run the network-connectivity troubleshooter."""
+        logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.network_connectivity()")  # Trace the call
+        TroubleshootUtils.network_connectivity()  # type: ignore[no-untyped-call]
+
+    @staticmethod
+    def _invoke_marvis_view_insights() -> None:
+        """Run the insights viewer."""
+        logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.view_insights()")  # Trace the call
+        TroubleshootUtils.view_insights()  # Show the insights
+
+    @staticmethod
     def _dispatch_marvis_choice(choice: str) -> None:
         """Dispatch the user's menu pick to the matching TroubleshootUtils entrypoint."""
-        if choice == "1":  # Client connectivity.
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.client_connectivity()")  # Trace the call.
-            TroubleshootUtils.client_connectivity()  # type: ignore[no-untyped-call]
-        elif choice == "2":  # Device performance.
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.device_performance()")  # Trace the call.
-            TroubleshootUtils.device_performance()  # type: ignore[no-untyped-call]
-        elif choice == "3":  # Network connectivity.
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.network_connectivity()")  # Trace the call.
-            TroubleshootUtils.network_connectivity()  # type: ignore[no-untyped-call]
-        elif choice == "4":  # View insights.
-            logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.view_insights()")  # Trace the call.
-            TroubleshootUtils.view_insights()  # Show the insights.
-        elif choice == "5":  # Exit option.
-            logging.debug("MARVIS DEBUG: User chose to exit")  # Trace the exit.
-            print("Exiting Marvis troubleshooting.")  # Tell the user.
-        else:
-            print(" Invalid option selected.")  # Tell the user invalid.
-            logging.warning("MARVIS DEBUG: Invalid troubleshooting option selected: %s", choice)  # %s not f-string
-            logging.debug("MARVIS DEBUG: Exiting launch_interactive() due to invalid choice")  # Trace the exit.
+        handlers = {  # Map menu pick → handler (eliminates if/elif chain)
+            "1": TroubleshootUtils._invoke_marvis_client_connectivity,  # Client connectivity
+            "2": TroubleshootUtils._invoke_marvis_device_performance,  # Device performance
+            "3": TroubleshootUtils._invoke_marvis_network_connectivity,  # Network connectivity
+            "4": TroubleshootUtils._invoke_marvis_view_insights,  # View insights
+            "5": TroubleshootUtils._handle_marvis_exit,  # Exit option
+        }
+        handler = handlers.get(choice)  # Lookup the picked handler
+        if handler is None:  # Unknown pick = invalid path
+            TroubleshootUtils._handle_marvis_invalid_choice(choice)  # Warn + log
+            return  # Early return to keep depth flat
+        handler()  # Invoke the matched handler
 
     @staticmethod
     def launch_interactive() -> None:  # Launch interactive Marvis.
@@ -18701,26 +18746,28 @@ class FirmwareUpgradeStatusChecker:
         progress_bar = DisplayUtils.create_progress_bar(device["progress"], bar_length=15)
         print(f"  {name:<35} {dtype:<8} {site:<35} {progress_bar}")
 
+    @staticmethod
+    def _classify_progress_bucket(progress: int) -> str:
+        """Return the histogram bucket label for one device progress value."""
+        if progress <= 25:  # First quartile
+            return "0-25%"
+        if progress <= 50:  # Second quartile
+            return "26-50%"
+        if progress <= 75:  # Third quartile
+            return "51-75%"
+        if progress < 100:  # Pre-completion bucket
+            return "76-99%"
+        return "100%"  # Fully complete
+
     def _display_progress_distribution(self, sorted_upgrading: list[dict[str, Any]]) -> None:
         """Display progress distribution for upgrading devices."""
-        ranges = {"0-25%": 0, "26-50%": 0, "51-75%": 0, "76-99%": 0, "100%": 0}
-
-        for device in sorted_upgrading:
-            progress = device["progress"]
-            if progress <= 25:
-                ranges["0-25%"] += 1
-            elif progress <= 50:
-                ranges["26-50%"] += 1
-            elif progress <= 75:
-                ranges["51-75%"] += 1
-            elif progress < 100:
-                ranges["76-99%"] += 1
-            else:
-                ranges["100%"] += 1
-
-        print("\n  Progress Distribution:")
-        for range_label, count in ranges.items():
-            if count > 0:
+        ranges = {"0-25%": 0, "26-50%": 0, "51-75%": 0, "76-99%": 0, "100%": 0}  # Histogram buckets
+        for device in sorted_upgrading:  # Count each device into its bucket
+            bucket = self._classify_progress_bucket(device["progress"])  # Resolve the bucket
+            ranges[bucket] += 1  # Increment that bucket
+        print("\n  Progress Distribution:")  # Section header
+        for range_label, count in ranges.items():  # Print each non-empty bucket
+            if count > 0:  # Skip zero buckets to keep output compact
                 print(f"   X  {range_label}: {count} device(s)")
 
     def _check_active_operations(self) -> None:
