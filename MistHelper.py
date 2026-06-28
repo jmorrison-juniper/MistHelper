@@ -7541,22 +7541,12 @@ class APIDataFetcher:  # Fetch, export, display a result.
         sort_key: str | None = None,
         **kwargs,
     ):
-        """
-        Initialize the API data fetcher.
-
-        Args:
-            title: Display title for the operation
-            api_call: Mist API function to call
-            filename: Output filename (without extension)
-            sort_key: Optional field to sort results by
-            **kwargs: Additional arguments passed to the API call
-        """
+        """Capture fetch parameters: title, api_call, filename, sort_key, and **kwargs for the API call."""
         self.title = title  # Human-readable title.
         self.api_call = api_call  # Callable that fetches data.
         self.filename = filename  # Output filename.
         self.sort_key = sort_key  # Optional sort key.
         self.kwargs = kwargs  # Extra API arguments.
-
         self.org_id = ""  # Resolved org id.
         self.rawdata: list[dict[str, Any]] = []  # Raw API rows.
         self.smoothed: float | None = None  # Smoothed delay metric.
@@ -7622,42 +7612,33 @@ class APIDataFetcher:  # Fetch, export, display a result.
             self._handle_api_exception(error)  # Handle/raise the failure.
 
     def _call_api_with_retry(self, api_name: str) -> Any:  # Retry the API call.
-        """Call API with retry logic for timeout and connection errors.
-
-        Detects failures by checking response.status_code (None when mistapi
-        swallows a timeout/connection exception). Retries up to
-        API_REQUEST_MAX_RETRIES times with exponential backoff.
-
-        Args:
-            api_name: Name of the API function for logging.
-
-        Returns:
-            The API response object.
-        """
+        """Call API with retry/backoff (mistapi swallows timeouts as status_code=None)."""
         last_response = None  # Track the last response.
         for attempt in range(API_REQUEST_MAX_RETRIES + 1):  # Bounded retry loop.
             response = self.api_call(apisession, self.org_id, **self.kwargs)  # Invoke the API.
             last_response = response  # Remember it.
-
             if self._is_response_valid(response):  # Good response?
                 return response  # Return on success.
-
             if attempt < API_REQUEST_MAX_RETRIES:  # More attempts left.
                 delay = API_REQUEST_RETRY_DELAY * (2**attempt)  # Exponential backoff.
-                logging.warning(  # Warn and back off.
-                    "API call %s failed (attempt %s/%s) - retrying in %.0fs",
-                    api_name,
-                    attempt + 1,
-                    API_REQUEST_MAX_RETRIES + 1,
-                    delay,
-                )
-                print(
-                    f"! API call timed out - retrying in {delay:.0f}s (attempt {attempt + 2}/{API_REQUEST_MAX_RETRIES + 1})"  # noqa: E501
-                )
-                time.sleep(delay)  # Wait before retry.
-
+                APIDataFetcher._log_retry_attempt(api_name, attempt, delay)  # Log + print + sleep.
         logging.error("API call %s failed after %s attempts", api_name, API_REQUEST_MAX_RETRIES + 1)
         return last_response  # Return last response.
+
+    @staticmethod
+    def _log_retry_attempt(api_name: str, attempt: int, delay: float) -> None:  # Log + sleep before retry.
+        """Log a warning, print user-visible retry notice, and sleep for the backoff window."""
+        logging.warning(  # Warn and back off.
+            "API call %s failed (attempt %s/%s) - retrying in %.0fs",
+            api_name,
+            attempt + 1,
+            API_REQUEST_MAX_RETRIES + 1,
+            delay,
+        )
+        print(
+            f"! API call timed out - retrying in {delay:.0f}s (attempt {attempt + 2}/{API_REQUEST_MAX_RETRIES + 1})"  # noqa: E501
+        )
+        time.sleep(delay)  # Wait before retry.
 
     @staticmethod
     def _is_response_valid(response: Any) -> bool:  # Validate an API response.
@@ -7871,37 +7852,18 @@ class APIDataFetcher:  # Fetch, export, display a result.
 def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int, threading.Semaphore, int, str]:
     """Determine threading strategy, semaphore, and batch size for a pool run."""
     if FAST_MODE_USE_CONNECTION_AWARE_THREADING:  # Connection-aware mode limits threads to API connection pool size.
-        max_threads = FAST_MODE_MAX_CONCURRENT_CONNECTIONS  # Cap threads at configured connection pool capacity.
-        threading_mode = "connection-aware"  # Label used in log output so operators can identify which strategy ran.
-        logging.info(
-            "! Connection-aware threading: Using %s threads (respects connection pool limit)", max_threads
-        )  # Confirm strategy selection and thread limit.
+        max_threads = FAST_MODE_MAX_CONCURRENT_CONNECTIONS  # Cap threads at configured pool capacity.
+        threading_mode = "connection-aware"  # Strategy label for log identification.
+        logging.info("! Connection-aware threading: Using %s threads (respects connection pool limit)", max_threads)
     else:  # CPU-aware mode maximizes parallelism up to available CPU cores.
-        max_threads = (
-            os.cpu_count() or FAST_MODE_FALLBACK_THREADS
-        )  # Use CPU count or configured fallback when cpu_count returns None.
-        threading_mode = "CPU-aware"  # Label used in log output so operators can identify which strategy ran.
-        logging.info(
-            "! CPU-aware threading: Using %s threads (maximum CPU utilization)", max_threads
-        )  # Confirm strategy selection and thread limit.
-    connection_semaphore = threading.Semaphore(
-        FAST_MODE_MAX_CONCURRENT_CONNECTIONS
-    )  # Limit simultaneous API calls regardless of thread count.
-    logging.info(
-        "* Connection pool protection: Maximum %s concurrent API calls", FAST_MODE_MAX_CONCURRENT_CONNECTIONS
-    )  # Log semaphore bound for observability.
-    batch_size = (
-        max_threads * FAST_MODE_DEVICES_PER_THREAD
-    )  # Scale batch size to thread count and items-per-thread setting.
-    logging.info(
-        "* Processing %s %s with connection pool management...", len(work_items), batch_description
-    )  # Log total work-item count before batching begins.
-    return (
-        max_threads,
-        connection_semaphore,
-        batch_size,
-        threading_mode,
-    )  # Return all pool configuration values as a bundle.
+        max_threads = os.cpu_count() or FAST_MODE_FALLBACK_THREADS  # Use cpu_count or fallback.
+        threading_mode = "CPU-aware"  # Strategy label for log identification.
+        logging.info("! CPU-aware threading: Using %s threads (maximum CPU utilization)", max_threads)
+    connection_semaphore = threading.Semaphore(FAST_MODE_MAX_CONCURRENT_CONNECTIONS)  # Bound simultaneous API calls.
+    logging.info("* Connection pool protection: Maximum %s concurrent API calls", FAST_MODE_MAX_CONCURRENT_CONNECTIONS)
+    batch_size = max_threads * FAST_MODE_DEVICES_PER_THREAD  # Scale batch size to thread count and per-thread setting.
+    logging.info("* Processing %s %s with connection pool management...", len(work_items), batch_description)
+    return (max_threads, connection_semaphore, batch_size, threading_mode)  # Bundle pool configuration values.
 
 
 def _pool_collect_future_result(future: Any, item: Any, config: "BatchWorkerConfig") -> tuple[str, Any]:
@@ -7954,27 +7916,21 @@ def _pool_process_batch_wait_loop(  # Submit one batch to a thread pool.
     total_batches: int,
     config: "BatchWorkerConfig",
 ) -> tuple[list[Any], list[Any]]:
-    """Submit one batch to a thread pool and collect results via a wait loop.
-
-    Issue #431: the per-batch values (batch, batch_number, total_batches) stay as
-    direct parameters because they change every iteration; the constant worker
-    configuration (worker_function, semaphore, thread count, description) moves
-    into ``config`` so the public signature stays at 4 parameters (the 5-Item Rule).
-    """
+    """Submit one batch to a thread pool and collect results via a wait loop (Issue #431 config dataclass)."""
     logging.info(
         "! Processing batch %s/%s (%s %s, ~%.0f per thread)",
         batch_number,
         total_batches,
         len(batch),
-        config.batch_description,  # Issue #431: pulled from the config dataclass; was a positional param.
-        len(batch) / config.max_threads,  # Issue #431: pulled from the config dataclass; was a positional param.
+        config.batch_description,  # Issue #431: from config dataclass.
+        len(batch) / config.max_threads,  # Issue #431: from config dataclass.
     )  # Log batch progress before dispatching to the thread pool.
-    with ThreadPoolExecutor(max_workers=config.max_threads) as executor:  # Bound thread count to configured pool size.
+    with ThreadPoolExecutor(max_workers=config.max_threads) as executor:  # Bound thread count to pool size.
         future_to_item = {
             executor.submit(config.worker_function, item, config.connection_semaphore): item  # Worker per item
             for item in batch
         }  # Map each future back to its source item for error reporting.
-        batch_desc = f"Batch {batch_number}/{total_batches}"  # tqdm description so the progress label is consistent.
+        batch_desc = f"Batch {batch_number}/{total_batches}"  # tqdm progress label.
         return _pool_drain_wait_loop(future_to_item, batch_desc, config)  # Collect results as futures resolve.
 
 
@@ -7982,31 +7938,28 @@ def _pool_log_batch_exception(  # Log a batch-level exception with context.
     batch_exc: Exception, batch_index: int, batch_size: int, max_threads: int, threading_mode: str
 ) -> None:
     """Log a batch-level exception with full context then re-raise it."""
-    logging.error(
-        "! Batch-level exception in execute_with_connection_pool_management: %s", batch_exc
-    )  # Surface root exception message for immediate diagnosis.
+    logging.error("! Batch-level exception in execute_with_connection_pool_management: %s", batch_exc)
     logging.error(
         "! Batch context: batch_index=%s, batch_size=%s, max_threads=%s, threading_mode=%s",
         batch_index,
         batch_size,
         max_threads,
         threading_mode,
-    )  # Log batch configuration context to support post-mortem analysis.
-    try:  # Best-effort traceback capture preserves stack information in the log file.
-        import traceback as _tb2  # Import locally to avoid affecting module-level namespace.
+    )  # Log batch configuration context for post-mortem analysis.
+    _pool_emit_traceback_lines(batch_exc)  # Best-effort traceback capture.
+    raise batch_exc  # Re-raise so outer handlers see the original failure.
 
-        formatted = "".join(
-            _tb2.format_exception(type(batch_exc), batch_exc, batch_exc.__traceback__)
-        )  # Render full traceback as a single string.
-        for (
-            line
-        ) in formatted.rstrip().splitlines():  # Log each traceback line separately for log-aggregation compatibility.
+
+def _pool_emit_traceback_lines(batch_exc: Exception) -> None:  # Emit traceback lines to log.
+    """Format batch exception traceback and emit each line as an error record (best-effort)."""
+    try:  # Best-effort capture; serialization failure must not suppress the re-raise.
+        import traceback as _tb2  # Local import to avoid affecting module namespace.
+
+        formatted = "".join(_tb2.format_exception(type(batch_exc), batch_exc, batch_exc.__traceback__))
+        for line in formatted.rstrip().splitlines():  # One record per traceback line for log-aggregation tools.
             logging.error(line)  # Emit one traceback line per log record.
-    except Exception as trace_log_err:  # Traceback serialization failure should not suppress the re-raise.
-        logging.error(
-            "! Failed to log batch exception traceback: %s", trace_log_err
-        )  # Surface traceback logging failure as a secondary error.
-    raise batch_exc  # Re-raise so outer handlers and the global excepthook can capture the original failure.
+    except Exception as trace_log_err:  # Traceback serialization failure must not suppress the re-raise.
+        logging.error("! Failed to log batch exception traceback: %s", trace_log_err)
 
 
 def _pool_run_all_batches(
@@ -8047,61 +8000,42 @@ def _pool_apply_retry(
     return still_failed  # Return items that still failed after retry so the caller can replace its failed list.
 
 
-def execute_with_connection_pool_management(
-    work_items: list[Any], worker_function: Any, batch_description: str = "items", retry_function: Any | None = None
-) -> tuple[list[Any], list[Any]]:
-    """
-    Execute a list of work items using connection pool management and configurable threading.
-
-    This is a reusable helper that any function can use to benefit from:
-    - Connection-aware vs CPU-aware threading
-    - Semaphore-based connection limiting
-    - Configurable batch processing
-    - Automatic retry handling
-    - Progress tracking
-
-    Args:
-        work_items: List of items to process
-        worker_function: Function to call for each item. Should accept (item, connection_semaphore) parameters
-        batch_description: Description for progress tracking (e.g., "devices", "sites")
-        retry_function: Optional function to call for retry logic.
-            Should accept (failed_items, connection_semaphore) parameters
-
-    Returns:
-        Tuple of (successful_results, failed_items)
-    """
-    if not work_items:  # Empty work list is a valid fast-exit condition.
-        logging.info("* No %s to process.", batch_description)  # Tell caller why nothing ran.
-        return [], []  # Return empty results without configuring a thread pool.
-
-    max_threads, connection_semaphore, batch_size, threading_mode = _pool_configure(
-        work_items, batch_description
-    )  # Resolve threading strategy and pool parameters from environment config.
-    total_batches = (
-        len(work_items) + batch_size - 1
-    ) // batch_size  # Pre-compute total batch count for progress labels.
-    # Issue #431: bundle the 4 constant params into a frozen dataclass so
-    # the inner loop signature stays within the 5-Item Rule's <=5 limit.
-    batch_config = BatchWorkerConfig(  # Bundle constant worker params per 5-Item Rule.
+def _pool_prepare_execution(  # Resolve pool config + BatchWorkerConfig.
+    work_items: list[Any], batch_description: str, worker_function: Any
+) -> tuple["BatchWorkerConfig", int, int, str]:
+    """Resolve threading config, batch sizing, and BatchWorkerConfig for a pool execution run."""
+    max_threads, connection_semaphore, batch_size, threading_mode = _pool_configure(work_items, batch_description)
+    total_batches = (len(work_items) + batch_size - 1) // batch_size  # Pre-compute total batch count.
+    batch_config = BatchWorkerConfig(  # Issue #431: bundle the 4 constant worker params per 5-Item Rule.
         worker_function=worker_function,
         connection_semaphore=connection_semaphore,
         max_threads=max_threads,
         batch_description=batch_description,
     )
+    return batch_config, batch_size, total_batches, threading_mode
 
+
+def execute_with_connection_pool_management(
+    work_items: list[Any], worker_function: Any, batch_description: str = "items", retry_function: Any | None = None
+) -> tuple[list[Any], list[Any]]:
+    """Execute work_items via connection-pool-managed threading with semaphore limits, batching, retry, and progress."""
+    if not work_items:  # Empty work list is a valid fast-exit condition.
+        logging.info("* No %s to process.", batch_description)  # Tell caller why nothing ran.
+        return [], []  # Return empty results without configuring a thread pool.
+    batch_config, batch_size, total_batches, threading_mode = _pool_prepare_execution(
+        work_items, batch_description, worker_function
+    )  # Resolve threading + batching config in one helper.
     successful_results, failed_items = _pool_run_all_batches(  # Run every batch through the bounded thread pool.
         work_items, batch_size, batch_config, total_batches, threading_mode
     )  # Accumulate successes and failures across all batches.
-
     if failed_items and retry_function:  # Only invoke retry when failures exist and a retry function was provided.
         failed_items = _pool_apply_retry(  # Retry failed items and merge recoveries into successful_results.
-            failed_items, retry_function, connection_semaphore, successful_results, batch_description
+            failed_items, retry_function, batch_config.connection_semaphore, successful_results, batch_description
         )  # Replace failed list with items that still failed after retry.
-
     logging.info(
         "! Processed %s %s successfully, %s failed", len(successful_results), batch_description, len(failed_items)
     )  # Log final success/failure tally for the whole pool run.
-    return successful_results, failed_items  # Return both result lists so callers can report or act on failures.
+    return successful_results, failed_items  # Both result lists so callers can report or act on failures.
 
 
 # ============================================================================
@@ -8243,40 +8177,32 @@ class PromptClientUtils:  # Client selection prompt helpers.
         return client_mac  # Return chosen MAC.
 
     def select_client(site_id: str | None = None) -> tuple[str | None, str | None, str | None]:
-        """
-        Prompts the user to select a client from available wireless or wired clients.
-
-        Args:
-            site_id: If provided, searches within the specific site.
-                    If None, prompts for site-specific or org-wide search.
-
-        Returns:
-            tuple: (client_mac, client_type, site_id) or (None, None, None) if no selection
-        """
+        """Prompt user to select a wireless/wired client; returns (mac, type, site_id) or (None,None,None)."""
         print("\n  Client Selection")  # Print selection heading.
         print("=" * 30)  # Print separator rule.
-
         site_id = PromptUtils._determine_search_scope(site_id)  # type: ignore[assignment]
         if site_id is False:  # type: ignore[comparison-overlap]  # User explicitly cancelled
-            return None, None, None  # Abort when no org resolved.
-
+            return None, None, None  # Abort when no scope resolved.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id from cache/prompt.
-
         try:
-            all_clients = PromptUtils._fetch_all_clients(org_id, site_id)  # Fetch all clients for org/site.
-            if not all_clients:  # Handle empty client set.
-                print(" No clients found.")  # Tell operator none found.
-                return None, None, None  # Abort with empty result.
-
-            sites_cache = PromptUtils._load_sites_cache(org_id)  # Load sites cache for names.
-            PromptUtils._display_client_table(all_clients, sites_cache)  # Display the client table.
-
-            return PromptUtils._handle_client_selection(all_clients, sites_cache, site_id)
-
+            return PromptClientUtils._run_client_selection_flow(org_id, site_id)  # Run fetch/display/select flow.
         except Exception as exception:  # Catch selection errors.
             logging.error("Error during client selection: %s", exception)  # Log selection error.
             print(f"! Error searching for clients: {exception}")  # Show error to operator.
             return None, None, None  # Abort on error.
+
+    @staticmethod
+    def _run_client_selection_flow(  # Fetch -> display -> prompt for client.
+        org_id: str, site_id: str | None
+    ) -> tuple[str | None, str | None, str | None]:
+        """Fetch all clients for org/site, render table, and prompt the user to pick one (returns selection tuple)."""
+        all_clients = PromptUtils._fetch_all_clients(org_id, site_id)  # Fetch all clients for org/site.
+        if not all_clients:  # Handle empty client set.
+            print(" No clients found.")  # Tell operator none found.
+            return None, None, None  # Abort with empty result.
+        sites_cache = PromptUtils._load_sites_cache(org_id)  # Load sites cache for names.
+        PromptUtils._display_client_table(all_clients, sites_cache)  # Display the client table.
+        return PromptUtils._handle_client_selection(all_clients, sites_cache, site_id)
 
     @staticmethod
     def select_site_and_device_ids(site_id=None, device_id=None):  # Prompt for site and device ids.
@@ -8395,63 +8321,57 @@ class PromptUtils:  # General prompt helpers.
         return None  # Abort.
 
     def select_site_id_from_csv(csv_file: str = "SiteList.csv") -> str | None:  # Prompt site id from CSV.
-        """
-        Prompts the user to select a site by index or name from SiteList.csv.
-        Returns the corresponding site ID.
-
-        Args:
-            csv_file (str): Name of the site list CSV file
-
-        Returns:
-            str: The selected site ID or None if no selection made
-        """
-        # Ensure the site list CSV is fresh or generate it if missing/stale
-        CacheUtils.check_and_generate_csv(csv_file, OrgSiteExporter.sites)  # Ensure site CSV exists.
-
-        # Get the full path to the CSV file in the data directory
-        csv_file_path = FilePathUtils.get_csv_path(csv_file)  # Resolve CSV file path.
-
-        # Load the site list from CSV
-        with open(csv_file_path, encoding="utf-8") as file:  # Open the site CSV.
-            reader = list(csv.DictReader(file))  # Read all CSV rows.
-            index_to_site = {i: row for i, row in enumerate(reader)}  # Map index to site row.
-            name_to_site = {row["name"]: row for row in reader if "name" in row}  # Map name to site row.
-
-        # Display available sites to the user
+        """Prompt user to select a site by index or name from csv_file; returns the site ID or None."""
+        CacheUtils.check_and_generate_csv(csv_file, OrgSiteExporter.sites)  # Ensure site CSV exists/fresh.
+        index_to_site, name_to_site = PromptUtils._load_site_csv_maps(csv_file)  # Read CSV into index/name maps.
         print("\nAvailable Sites:")  # Print available sites heading.
         for idx, row in index_to_site.items():  # Enumerate site rows.
             print(f"[{idx}] {row.get('name', 'Unnamed')}")  # Print each site option.
-
         user_input = InputUtils.safe_input("\nEnter site index or name: ", context="site_selection").strip()
         logging.debug("User input for site selection: %s", user_input)  # Log raw site input.
-
         global LAST_SELECTED_SITE_ID  # Track last selected site globally.
-
-        # Try index selection
         if user_input.isdigit():  # Branch: numeric index choice.
-            idx = int(user_input)  # Parse index to integer.
-            if idx in index_to_site:  # Validate index exists.
-                site_id = index_to_site[idx].get("id")  # Read selected site id.
-                print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")  # Confirm site selection.
-                logging.info("User selected site by index: %s (site_id: %s)", idx, site_id)  # Log index selection.
+            site_id = PromptUtils._pick_site_by_index(int(user_input), index_to_site)  # Resolve by index.
+            if site_id is not None:  # Cache successful selection.
                 LAST_SELECTED_SITE_ID = site_id  # Remember last selected site.
-                return site_id  # Return selected site id.
-            else:
-                print(" Invalid index.")  # Reject out-of-range index.
-                logging.warning("Invalid site index entered: %s", idx)  # Log invalid index.
-                return None  # Abort on invalid index.
-
-        # Try name selection
+            return site_id  # Return resolved id (or None on invalid index).
         if user_input in name_to_site:  # Branch: name match.
-            site_id = name_to_site[user_input].get("id")  # Read site id by name.
-            print(f"! Selected site: {user_input} (ID: {site_id})")  # Confirm site selection.
-            logging.info("User selected site by name: %s (site_id: %s)", user_input, site_id)  # Log name selection.
+            site_id = PromptUtils._pick_site_by_name(user_input, name_to_site)  # Resolve by name.
             LAST_SELECTED_SITE_ID = site_id  # Remember last selected site.
-            return site_id  # Return selected site id.
-
+            return site_id  # Return resolved id.
         print(" Site not found by name or index.")  # Report not-found site.
         logging.warning("Site not found by name or index: %s", user_input)  # Log not-found site.
         return None  # Abort on not found.
+
+    @staticmethod
+    def _load_site_csv_maps(csv_file: str) -> tuple[dict[int, dict], dict[str, dict]]:  # type: ignore[type-arg]
+        """Read site CSV at FilePathUtils.get_csv_path(csv_file) and return (index_to_site, name_to_site) maps."""
+        csv_file_path = FilePathUtils.get_csv_path(csv_file)  # Resolve CSV file path.
+        with open(csv_file_path, encoding="utf-8") as file:  # Open the site CSV.
+            reader = list(csv.DictReader(file))  # Read all CSV rows.
+        index_to_site = {i: row for i, row in enumerate(reader)}  # Map index to site row.
+        name_to_site = {row["name"]: row for row in reader if "name" in row}  # Map name to site row.
+        return index_to_site, name_to_site
+
+    @staticmethod
+    def _pick_site_by_index(idx: int, index_to_site: dict[int, dict]) -> str | None:  # type: ignore[type-arg]
+        """Resolve a numeric site index to a site_id; print/log selection or invalid-index message."""
+        if idx not in index_to_site:  # Validate index exists.
+            print(" Invalid index.")  # Reject out-of-range index.
+            logging.warning("Invalid site index entered: %s", idx)  # Log invalid index.
+            return None  # Abort on invalid index.
+        site_id = index_to_site[idx].get("id")  # Read selected site id.
+        print(f"! Selected site: {index_to_site[idx].get('name')} (ID: {site_id})")  # Confirm site selection.
+        logging.info("User selected site by index: %s (site_id: %s)", idx, site_id)  # Log index selection.
+        return site_id  # Return selected site id.
+
+    @staticmethod
+    def _pick_site_by_name(name: str, name_to_site: dict[str, dict]) -> str | None:  # type: ignore[type-arg]
+        """Resolve a site name to a site_id; print/log the selection."""
+        site_id = name_to_site[name].get("id")  # Read site id by name.
+        print(f"! Selected site: {name} (ID: {site_id})")  # Confirm site selection.
+        logging.info("User selected site by name: %s (site_id: %s)", name, site_id)  # Log name selection.
+        return site_id  # Return selected site id.
 
     @staticmethod
     def select_site() -> str | None:  # Convenience site selector.
@@ -8486,17 +8406,9 @@ class PromptUtils:  # General prompt helpers.
 
     @staticmethod
     def _determine_search_scope(site_id: str | None) -> str | None | Literal[False]:  # Determine client search scope.
-        """
-        Determines whether to search site-specific or org-wide.
-
-        Returns:
-            str: site_id for site-specific search
-            None: for org-wide search
-            False: if user cancelled selection
-        """
+        """Resolve search scope: provided site_id, prompted site_id, None (org-wide), or False (user cancelled)."""
         if site_id:  # Use provided site directly.
             return site_id  # Return supplied site id.
-
         scope_choice = (  # Prompt for scope choice.
             InputUtils.safe_input(
                 "Search scope - (s)ite-specific or (o)rganization-wide? [s/o]: ",
@@ -8511,7 +8423,6 @@ class PromptUtils:  # General prompt helpers.
                 print(" No site selected.")  # Tell operator none selected.
                 return False  # Signal scope failure.
             return selected_site  # Return chosen site scope.
-
         return None  # Org-wide search
 
     @staticmethod
@@ -8611,42 +8522,39 @@ class PromptUtils:  # General prompt helpers.
 
     @staticmethod
     def _display_client_table(all_clients: list[dict], sites_cache: dict[str, str]) -> dict[int, dict]:  # type: ignore[type-arg]
-        """
-        Displays the client selection table.
-
-        Returns:
-            Dictionary mapping index to client data.
-        """
-        table = PrettyTable()  # Build client display table.
-        table.field_names = ["#", "Hostname", "MAC Address", "Type", "IP Address", "SSID/VLAN", "Site", "Status"]
-        table.align["#"] = "r"  # Right-align index column.
-        table.align["Hostname"] = "l"  # Left-align hostname.
-        table.align["MAC Address"] = "l"  # Left-align MAC.
-        table.align["Type"] = "c"  # Center type column.
-        table.align["IP Address"] = "l"  # Left-align IP.
-        table.align["SSID/VLAN"] = "l"  # Left-align SSID/VLAN.
-        table.align["Site"] = "l"  # Left-align site.
-        table.align["Status"] = "c"  # Center status column.
-        table.max_width["Hostname"] = 20  # Cap hostname width.
-        table.max_width["IP Address"] = 16  # Cap IP width.
-        table.max_width["SSID/VLAN"] = 15  # Cap SSID/VLAN width.
-        table.max_width["Site"] = 15  # Cap site width.
-
+        """Render the client selection table and a summary line; return an index-to-client map for selection."""
+        table = PromptUtils._build_client_table_skeleton()  # Build empty table with columns + alignment.
         for idx, client in enumerate(all_clients):  # Enumerate clients for rows.
             row = PromptUtils._format_client_row(idx, client, sites_cache)  # Format a client row.
             table.add_row(row)  # Add row to table.
-
         print(f"\n  Found {len(all_clients)} clients:")  # Show client count.
         print(table)  # Render the table.
-
         wireless_count = sum(1 for c in all_clients if c.get("client_type") == "wireless")  # Count wireless clients.
         wired_count = sum(1 for c in all_clients if c.get("client_type") == "wired")  # Count wired clients.
         print(f"\n  Summary: {wireless_count} wireless, {wired_count} wired clients")  # Print client summary.
         print("\n  [+] = Online  [~] = Recently seen  [-] = Offline")  # Explain status legend.
         print("---" * 20)  # Print separator rule.
-
-        # Return mapping of index to client data
         return {idx: client for idx, client in enumerate(all_clients)}  # Return index-to-client map.
+
+    @staticmethod
+    def _build_client_table_skeleton() -> PrettyTable:  # Build empty client display table.
+        """Build an empty PrettyTable with the client-selection columns, alignment, and per-column max widths."""
+        table = PrettyTable()  # Build client display table.
+        table.field_names = ["#", "Hostname", "MAC Address", "Type", "IP Address", "SSID/VLAN", "Site", "Status"]
+        for column, alignment in (  # Per-column alignment map.
+            ("#", "r"),
+            ("Hostname", "l"),
+            ("MAC Address", "l"),
+            ("Type", "c"),
+            ("IP Address", "l"),
+            ("SSID/VLAN", "l"),
+            ("Site", "l"),
+            ("Status", "c"),
+        ):
+            table.align[column] = alignment  # Apply column alignment.
+        for column, width in (("Hostname", 20), ("IP Address", 16), ("SSID/VLAN", 15), ("Site", 15)):
+            table.max_width[column] = width  # Cap column width.
+        return table
 
     @staticmethod
     def _format_client_row(idx: int, client: dict, sites_cache: dict[str, str]) -> list:  # type: ignore[type-arg]
