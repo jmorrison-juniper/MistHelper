@@ -140,6 +140,26 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
     # MSP mode helpers
     # ------------------------------------------------------------------
 
+    def _print_shared_version_summary(self) -> None:  # Show the pre-selected shared MSP versions for this org.
+        """Print shared firmware versions reused during MSP mode."""
+        print(
+            f"\n  Using pre-selected firmware versions ({len(self.custom_versions)} models):"
+        )  # Announce shared version reuse.
+        for model, version in sorted(self.custom_versions.items()):  # Walk each model/version pair in order.
+            print(f"    {model}: {version}")  # Print the model/version pair for operator visibility.
+
+    def _prepare_msp_versions(self) -> bool:  # Resolve firmware versions for one org in MSP mode.
+        """Load shared versions or auto-select per-model versions for MSP mode."""
+        if self.shared_versions:  # Shared versions were pre-selected earlier in the MSP workflow.
+            self.custom_versions = self.shared_versions.copy()  # Copy shared versions so per-org runs stay isolated.
+            self._print_shared_version_summary()  # Show the reused shared versions before applying them.
+            return True  # Version preparation succeeded using shared selections.
+        if (
+            not self._step3_fetch_available_versions()
+        ):  # Shared versions absent, so fetch this org's available versions.
+            return False  # Abort version preparation when the fetch fails.
+        return self._auto_select_versions()  # Auto-pick stable versions for this org's models.
+
     def run_msp_mode(self) -> tuple[bool, int]:  # Run the MSP bulk all-sites configuration flow.
         """Execute configuration workflow for MSP mode (all sites)."""
         logging.debug("Entering run_msp_mode() for org: %s", self.org_name)  # Trace entry for the MSP flow.
@@ -150,16 +170,8 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
         self.selected_sites = self.all_sites.copy()  # MSP mode auto-selects every site.
         print(f"  + Auto-selected ALL {len(self.selected_sites)} site(s)")
 
-        if self.shared_versions:  # Versions were pre-chosen for the MSP run.
-            self.custom_versions = self.shared_versions.copy()  # Reuse the shared version map.
-            print(f"\n  Using pre-selected firmware versions ({len(self.custom_versions)} models):")
-            for model, version in sorted(self.custom_versions.items()):  # List each model/version pair in order.
-                print(f"    {model}: {version}")  # Print the pair.
-        else:
-            if not self._step3_fetch_available_versions():  # Otherwise fetch available versions for this org.
-                return (False, 0)  # Abort on version-fetch failure.
-            if not self._auto_select_versions():  # Auto-pick a version per model.
-                return (False, 0)  # Abort if no versions could be selected.
+        if not self._prepare_msp_versions():  # Resolve shared or auto-selected firmware versions for this org.
+            return (False, 0)  # Abort when no firmware versions could be prepared.
 
         success, count = self._apply_auto_upgrade_config()  # Apply the auto-upgrade config to all sites.
         logging.info("MSP mode complete for %s: success=%s, sites=%s", self.org_name, success, count)
@@ -318,26 +330,76 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
         self._fetch_current_site_settings(self.all_sites[idx]["id"])  # Pull current settings for that site.
         return True  # Selection succeeded.
 
+    def _extract_site_auto_upgrade(
+        self, response: Any
+    ) -> dict[str, Any]:  # Pull the auto-upgrade block from site settings.
+        """Extract the auto_upgrade settings block from a site-settings response."""
+        if not response or not hasattr(response, "data"):  # Response missing or malformed.
+            return {}  # Return empty settings when nothing usable exists.
+        payload = response.data  # Read the raw response payload.
+        if not isinstance(payload, dict):  # Payload must be a dict for settings access.
+            return {}  # Return empty settings for non-dict payloads.
+        auto_upgrade = payload.get("auto_upgrade", {})  # Pull the nested auto_upgrade block.
+        if not isinstance(auto_upgrade, dict):  # auto_upgrade must be a dict to be useful.
+            return {}  # Return empty settings for malformed auto_upgrade blocks.
+        return auto_upgrade  # Return the validated auto-upgrade settings.
+
+    def _apply_current_site_schedule(
+        self, auto_upgrade: dict[str, Any]
+    ) -> None:  # Pre-load current schedule fields from site settings.
+        """Apply existing schedule values from an auto-upgrade settings block."""
+        day_of_week = auto_upgrade.get("day_of_week")  # Read the existing day-of-week value.
+        if day_of_week:  # Only write back truthy day values.
+            self.schedule["day_of_week"] = day_of_week  # Pre-fill the schedule day for the operator.
+        time_of_day = auto_upgrade.get("time_of_day")  # Read the existing time-of-day value.
+        if time_of_day:  # Only write back truthy time values.
+            self.schedule["time_of_day"] = time_of_day  # Pre-fill the schedule time for the operator.
+
+    def _print_current_site_settings_summary(self) -> None:  # Summarize any pre-existing model selections for a site.
+        """Print summary of existing per-model auto-upgrade selections."""
+        if not self.current_site_versions:  # Nothing configured means nothing to summarize.
+            return  # Exit quietly when no current versions exist.
+        count = len(self.current_site_versions)  # Count configured models for the summary.
+        print(f"  + Current auto-upgrade settings found ({count} model(s) configured)")  # Confirm discovered config.
+
+    def _fetch_site_auto_upgrade_block(
+        self, site_id: str
+    ) -> dict[str, Any]:  # Fetch and normalize one site's auto-upgrade settings block.
+        """Fetch the raw auto-upgrade settings block for one site."""
+        import mistapi.api.v1.sites.setting as sites_setting_api  # Import the site-settings API lazily.
+
+        response = sites_setting_api.getSiteSettings(
+            self.apisession, site_id
+        )  # Fetch the site's settings payload from Mist.
+        auto_upgrade = self._extract_site_auto_upgrade(
+            response
+        )  # Extract the validated auto-upgrade block from the API payload.
+        return auto_upgrade  # Return the normalized auto-upgrade block for downstream processing.
+
+    def _store_current_site_versions(
+        self, auto_upgrade: dict[str, Any]
+    ) -> None:  # Persist current per-model versions from a site's auto-upgrade block.
+        """Store the current site's custom version selections when present."""
+        custom_versions = auto_upgrade.get(
+            "custom_versions", {}
+        )  # Read the existing custom version mapping from the site settings.
+        self.current_site_versions = (
+            custom_versions if isinstance(custom_versions, dict) else {}
+        )  # Keep only dict-shaped custom version data to avoid malformed payloads.
+
     def _fetch_current_site_settings(self, site_id: str) -> None:  # Read a site's existing auto-upgrade settings.
         """Fetch current auto-upgrade settings for a single site."""
         try:
-            import mistapi.api.v1.sites.setting as sites_setting_api  # Import the site-settings API lazily.
-
-            response = sites_setting_api.getSiteSettings(self.apisession, site_id)  # Fetch the site settings.
-            if not response or not hasattr(response, "data") or not response.data:  # No usable settings payload.
-                return  # Nothing to read.
-            settings = response.data if isinstance(response.data, dict) else {}  # Use the dict payload or empty.
-            auto_upgrade = settings.get("auto_upgrade", {})  # Read any existing auto_upgrade block.
+            auto_upgrade = self._fetch_site_auto_upgrade_block(
+                site_id
+            )  # Fetch and normalize the site's auto-upgrade settings block in one step.
             if not auto_upgrade:  # No auto-upgrade configured yet.
                 return  # Nothing to pre-fill.
-            self.current_site_versions = auto_upgrade.get("custom_versions", {})
-            if auto_upgrade.get("day_of_week"):  # Existing schedule day present.
-                self.schedule["day_of_week"] = auto_upgrade["day_of_week"]  # Pre-fill the schedule day.
-            if auto_upgrade.get("time_of_day"):  # Existing schedule time present.
-                self.schedule["time_of_day"] = auto_upgrade["time_of_day"]  # Pre-fill the schedule time.
-            if self.current_site_versions:  # Found existing version config.
-                count = len(self.current_site_versions)  # Count configured models.
-                print(f"  + Current auto-upgrade settings found ({count} model(s) configured)")  # Tell the operator.
+            self._store_current_site_versions(
+                auto_upgrade
+            )  # Persist current per-model version overrides from the site settings block.
+            self._apply_current_site_schedule(auto_upgrade)  # Pre-fill schedule values for the current site.
+            self._print_current_site_settings_summary()  # Tell the operator what existing config was discovered.
         except Exception as exc:  # Settings read failed.
             logging.debug("Could not fetch current site settings: %s", exc)  # Trace the (non-fatal) failure.
 
@@ -362,26 +424,59 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
 
         return self._apply_site_indices(indices)  # Apply the parsed indices.
 
+    def _resolve_selected_sites(
+        self, indices: list[int]
+    ) -> list[dict[str, Any]]:  # Resolve requested indices to in-range site records.
+        """Resolve validated indices into a list of selected site dicts."""
+        selected_sites: list[dict[str, Any]] = []  # Start with an empty selection list.
+        for idx in indices:  # Walk each requested 1-based index.
+            if 1 <= idx <= len(self.all_sites):  # Keep only indices that point at an actual site.
+                selected_sites.append(self.all_sites[idx - 1])  # Add the referenced site to the result list.
+        return selected_sites  # Return every resolved site in request order.
+
+    def _print_selected_site_preview(self) -> None:  # Show a short preview of the chosen site list.
+        """Print a preview of selected sites for operator confirmation."""
+        print(f"  + Selected {len(self.selected_sites)} site(s):")  # Confirm the final selection count.
+        for site in self.selected_sites[:5]:  # Preview only the first few sites to keep output readable.
+            print(f"      - {site.get('name')}")  # Print each previewed site name.
+        if len(self.selected_sites) > 5:  # More sites exist beyond the preview window.
+            print(f"      ... and {len(self.selected_sites) - 5} more")  # Report the number of additional sites.
+
     def _apply_site_indices(self, indices: list[int]) -> bool:  # Resolve index list to selected sites.
         """Apply indices to select sites."""
-        for idx in indices:  # Walk each requested index.
-            if 1 <= idx <= len(self.all_sites):  # Keep only in-range indices.
-                self.selected_sites.append(self.all_sites[idx - 1])  # Add the 1-based-indexed site.
-
+        self.selected_sites = self._resolve_selected_sites(
+            indices
+        )  # Resolve the requested indices into actual site records.
         if not self.selected_sites:  # No valid sites resolved.
             print("  X No valid sites selected")  # Tell the operator.
             return False  # Abort selection.
-
-        print(f"  + Selected {len(self.selected_sites)} site(s):")  # Confirm the selection count.
-        for site in self.selected_sites[:5]:  # Preview the first few sites.
-            print(f"      - {site.get('name')}")  # Print each previewed site.
-        if len(self.selected_sites) > 5:  # More sites than previewed.
-            print(f"      ... and {len(self.selected_sites) - 5} more")  # Note the remainder.
+        self._print_selected_site_preview()  # Show the operator a short preview of the resolved sites.
         return True  # Selection succeeded.
 
     # ------------------------------------------------------------------
     # Step 3: Fetch available versions
     # ------------------------------------------------------------------
+
+    def _can_fetch_available_versions(self) -> bool:  # Validate state required for firmware-version fetch.
+        """Return True when API session and org id are available for version fetch."""
+        if self.apisession is None or self.org_id is None:  # Session or org context missing prevents the API query.
+            print("  X API session or org_id not initialized")  # Tell the operator the fetch cannot proceed yet.
+            return False  # Abort step 3 when required context is missing.
+        return True  # Required API context exists.
+
+    def _populate_available_versions(self) -> bool:  # Fetch versions and build the per-model map.
+        """Fetch available versions and build the model-version map."""
+        self.available_versions = (
+            self._fetch_available_ap_versions()
+        )  # Fetch the organization's available AP firmware versions from Mist.
+        if self.available_versions is None:  # None means the API helper could not produce a usable payload.
+            print("  X Failed to fetch available versions")  # Tell the operator the fetch failed.
+            return False  # Abort step 3 because no usable versions are available.
+        self._build_model_version_map()  # Rebuild the model->versions map from the fetched payload.
+        print(
+            f"  + Found firmware for {len(self.model_version_map)} AP model(s)"
+        )  # Confirm the number of AP models with available firmware.
+        return True  # Step 3 data preparation succeeded.
 
     def _step3_fetch_available_versions(self) -> bool:  # Step 3: fetch available AP firmware versions.
         """Fetch available firmware versions."""
@@ -390,89 +485,133 @@ class SiteAutoUpgradeConfigurator:  # pylint: disable=too-many-instance-attribut
         print("-" * 70)  # Section divider.
         print("  Fetching available AP firmware versions...")  # Tell the operator we are fetching.
 
-        if self.apisession is None or self.org_id is None:  # Session or org not initialized.
-            print("  X API session or org_id not initialized")  # Tell the operator.
-            return False  # Abort step 3.
+        if not self._can_fetch_available_versions():  # Missing session or org context blocks firmware-version fetch.
+            return False  # Abort step 3 until required API context exists.
 
         try:
-            import mistapi.api.v1.orgs.devices as org_devices_api  # Import the org-devices API lazily.
-
-            response = org_devices_api.listOrgAvailableDeviceVersions(self.apisession, self.org_id, type="ap")
-            if not response or not hasattr(response, "data"):  # No usable response.
-                print("  X Failed to fetch available versions")  # Tell the operator.
-                return False  # Abort step 3.
-
-            self.available_versions = response.data if isinstance(response.data, list) else []
-            self._build_model_version_map()  # Build the per-model version map.
-            print(f"  + Found firmware for {len(self.model_version_map)} AP model(s)")  # Confirm model count.
-            return True  # Step 3 succeeded.
+            return (
+                self._populate_available_versions()
+            )  # Fetch versions and build the model-version map in one focused helper.
         except Exception as exc:  # Version fetch failed.
             print(f"  X Error fetching firmware versions: {exc}")  # Tell the operator the error.
             logging.error("SiteAutoUpgradeConfigurator: Failed to fetch versions: %s", exc)  # Log the failure.
             return False  # Abort step 3.
 
+    def _fetch_available_ap_versions(
+        self,
+    ) -> list[Any] | None:  # Query Mist for available AP firmware versions for this org.
+        """Fetch available AP firmware versions for the current organization."""
+        import mistapi.api.v1.orgs.devices as org_devices_api  # Import the org-devices API lazily.
+
+        response = org_devices_api.listOrgAvailableDeviceVersions(
+            self.apisession, self.org_id, type="ap"
+        )  # Fetch AP firmware versions.
+        if not response or not hasattr(response, "data"):  # Response missing or malformed.
+            return None  # Signal fetch failure to the caller.
+        if not isinstance(response.data, list):  # Non-list payload cannot be iterated as version records.
+            return []  # Return an empty version list for unexpected payload types.
+        return response.data  # Return the validated list payload.
+
+    def _extract_model_version_record(
+        self, version_info: Any
+    ) -> tuple[str, dict[str, Any]] | None:  # Validate one version record for model mapping.
+        """Validate one available-version record for model grouping."""
+        if not isinstance(version_info, dict):  # Only dict records can contain model/version metadata.
+            return None  # Skip malformed entries.
+        model = version_info.get("model")  # Read the model identifier from the record.
+        version = version_info.get("version")  # Read the version string from the record.
+        if not model or not version:  # Both model and version are required for mapping.
+            return None  # Skip incomplete records.
+        return (str(model), version_info)  # Return the normalized model key with the original record.
+
     def _build_model_version_map(self) -> None:  # Group available versions by AP model.
         """Build model -> versions map from available versions."""
+        self.model_version_map = {}  # Rebuild the map from scratch for each fetch.
         for version_info in self.available_versions:  # Walk each version record.
-            if not isinstance(version_info, dict):  # Skip malformed records.
+            record = self._extract_model_version_record(version_info)  # Validate and normalize the version record.
+            if not record:  # Skip malformed or incomplete records.
                 continue  # Continue to the next record.
-            model = version_info.get("model")  # Read the model name.
-            version = version_info.get("version")  # Read the version string.
-            if model and version:  # Only map records with both.
-                if model not in self.model_version_map:  # First version for this model.
-                    self.model_version_map[model] = []  # Start the model's list.
-                self.model_version_map[model].append(version_info)  # Append the version record.
+            model, normalized_record = record  # Unpack the model key and original version record.
+            self.model_version_map.setdefault(model, []).append(
+                normalized_record
+            )  # Append the record to the model's list.
 
     # ------------------------------------------------------------------
     # Step 4: Select versions
     # ------------------------------------------------------------------
 
+    def _seed_current_versions_for_step4(self) -> None:  # Pre-load existing versions into the working selection map.
+        """Seed step-4 custom versions from current site settings when applicable."""
+        if (
+            self.is_single_site and self.current_site_versions
+        ):  # Single-site mode can reuse the site's existing custom versions.
+            self.custom_versions = (
+                self.current_site_versions.copy()
+            )  # Start selection from the current site configuration to support Enter-to-keep behavior.
+
+    def _select_family_versions(
+        self, model_families: dict[str, list[str]]
+    ) -> bool:  # Walk each model family and collect version selections.
+        """Prompt for version selection across every model family."""
+        for family, models in sorted(model_families.items()):  # Walk each AP model family in stable display order.
+            if not self._select_family_version(
+                family, models
+            ):  # Abort immediately if the operator cancels a family prompt.
+                return False  # Signal step-4 cancellation to the caller.
+        return True  # All model families were processed successfully.
+
+    def _finalize_step4_selection(self) -> bool:  # Validate that step 4 produced at least one version selection.
+        """Validate and report the final result of step-4 version selection."""
+        if not self.custom_versions:  # Empty custom-version map means no AP models were selected for auto-upgrade.
+            print("\n  X No versions selected")  # Tell the operator they must select at least one model version.
+            return False  # Abort step 4 because nothing would be configured.
+        print(f"\n  + Configured {len(self.custom_versions)} model(s)")  # Confirm the number of configured AP models.
+        return True  # Step 4 completed with at least one selected model.
+
     def _step4_select_versions(self) -> bool:  # Step 4: choose firmware versions per model.
         """Select firmware version per AP model."""
         _print_step4_header(self.is_single_site, self.current_site_versions)  # Print the step-4 header.
-        if self.is_single_site and self.current_site_versions:  # Single-site with existing versions.
-            self.custom_versions = self.current_site_versions.copy()  # Pre-fill from current site versions.
-
+        self._seed_current_versions_for_step4()  # Pre-load current site versions so Enter can keep existing selections.
         model_families = _group_models_by_family(self.model_version_map)  # Group AP models into families.
+        if not self._select_family_versions(
+            model_families
+        ):  # Prompt through each family until completion or cancellation.
+            return False  # Abort step 4 when the operator cancels a family prompt.
+        return self._finalize_step4_selection()  # Validate and report the final set of configured model versions.
 
-        for family, models in sorted(model_families.items()):  # Walk each family in order.
-            sorted_versions = _get_family_versions(self.model_version_map, models)
-            if not sorted_versions:  # Skip families with no versions.
-                continue  # Continue to the next family.
-
-            current_version = _get_current_family_version(  # Resolve the family's current version.
-                self.is_single_site,
-                self.current_site_versions,
-                models,
-            )
-            _display_family_versions(family, models, sorted_versions, current_version)
-
-            try:
-                choice = self.safe_input_fn(  # Read the operator's choice safely.
-                    f"  Select version (1-{len(sorted_versions)}): ",
-                    "auto_upgrade_config",
-                ).strip()
-            except SystemExit:  # Operator aborted at the prompt.
-                return False  # Abort step 4.
-
-            _apply_family_selection(
-                choice,
-                self.custom_versions,
-                FamilySelectionContext(  # Issue #433 Phase B: 5-field bundle for the prompt inputs.
-                    family=family,
-                    models=models,
-                    sorted_versions=sorted_versions,
-                    current_version=current_version,
-                    model_version_map=self.model_version_map,
-                ),
-            )
-
-        if not self.custom_versions:  # No versions were selected.
-            print("\n  X No versions selected")  # Tell the operator.
-            return False  # Abort step 4.
-
-        print(f"\n  + Configured {len(self.custom_versions)} model(s)")  # Confirm the configured model count.
-        return True  # Step 4 succeeded.
+    def _select_family_version(
+        self, family: str, models: list[str]
+    ) -> bool:  # Prompt for and apply one family's version choice.
+        """Run version-selection flow for one AP model family."""
+        sorted_versions = _get_family_versions(
+            self.model_version_map, models
+        )  # Collect versions available across this family.
+        if not sorted_versions:  # Families without versions do not need operator input.
+            return True  # Continue with the next family.
+        current_version = _get_current_family_version(
+            self.is_single_site, self.current_site_versions, models
+        )  # Resolve the current family version.
+        _display_family_versions(
+            family, models, sorted_versions, current_version
+        )  # Show numbered version choices to the operator.
+        try:
+            choice = self.safe_input_fn(
+                f"  Select version (1-{len(sorted_versions)}): ", "auto_upgrade_config"
+            ).strip()  # Read the operator's choice safely.
+        except SystemExit:  # Operator aborted at the prompt.
+            return False  # Abort step 4 entirely.
+        _apply_family_selection(  # Apply the chosen selection to the shared custom_versions dict.
+            choice,  # Pass the raw operator input for interpretation.
+            self.custom_versions,  # Mutate the accumulated model->version map in place.
+            FamilySelectionContext(
+                family=family,
+                models=models,
+                sorted_versions=sorted_versions,
+                current_version=current_version,
+                model_version_map=self.model_version_map,
+            ),  # Bundle per-family prompt context.
+        )
+        return True  # This family was handled successfully.
 
     # ------------------------------------------------------------------
     # Step 5: Configure schedule
@@ -717,6 +856,30 @@ def _msp_confirm_and_apply(  # Confirm then apply across MSP orgs.
     _print_msp_summary(all_results, core.dry_run)  # Final results table for the operator.
 
 
+def _msp_dependencies_ready(msp: SiteAutoUpgradeMspDeps) -> bool:  # Validate MSP-only dependency injection helpers.
+    """Return True when both MSP selection callables are available."""
+    return bool(msp.select_msps_fn and msp.select_orgs_fn)  # Require both MSP selection helpers to proceed.
+
+
+def _select_msp_orgs_and_versions(  # Select target orgs and shared versions for MSP mode.
+    core: SiteAutoUpgradeCoreDeps,
+    msp: SiteAutoUpgradeMspDeps,
+) -> tuple[list[dict[str, Any]], dict[str, str] | None] | None:
+    """Resolve selected organizations and optional shared versions for MSP mode."""
+    selected_orgs = _msp_select_entities(msp.select_msps_fn, msp.select_orgs_fn)  # Step 1 + 2: select MSPs and orgs.
+    if not selected_orgs:  # Operator cancelled or selected nothing.
+        return None  # Signal cancellation to the caller.
+    shared_versions = _msp_get_firmware_config(
+        core.apisession, selected_orgs, core.safe_input_fn
+    )  # Step 3: choose shared versions.
+    if shared_versions is None:  # None means the operator aborted the firmware-selection prompt.
+        return None  # Signal cancellation to the caller.
+    return (
+        selected_orgs,
+        shared_versions if shared_versions else None,
+    )  # Return resolved orgs with optional shared versions.
+
+
 def _execute_msp_mode(  # Execute the MSP multi-org flow.
     core: SiteAutoUpgradeCoreDeps,
     msp: SiteAutoUpgradeMspDeps,
@@ -728,27 +891,19 @@ def _execute_msp_mode(  # Execute the MSP multi-org flow.
     """
     logging.debug("Entering _execute_msp_mode")  # Action-log entry.
 
-    if not msp.select_msps_fn or not msp.select_orgs_fn:  # MSP DI is optional at call boundary; guard here.
+    if not _msp_dependencies_ready(msp):  # MSP DI is optional at call boundary; guard here.
         print("  X MSP functions not available")  # MSP helper callables missing.
         return  # Bail out -- caller did not wire in MSP selection functions.
 
-    selected_orgs = _msp_select_entities(msp.select_msps_fn, msp.select_orgs_fn)  # Step 1 + 2: pick MSPs and orgs.
-    if not selected_orgs:  # Operator cancelled the selection.
+    selection = _select_msp_orgs_and_versions(core, msp)  # Run target-org and shared-version selection.
+    if not selection:  # Operator cancelled one of the MSP selection prompts.
         return  # Cleanly exit -- nothing to apply.
+    selected_orgs, shared_versions = selection  # Unpack the selected orgs and optional shared versions.
 
-    shared_versions = _msp_get_firmware_config(  # Step 3: pick firmware versions to apply across all orgs.
-        core.apisession,
-        selected_orgs,
-        core.safe_input_fn,
-    )
-    if shared_versions is None:  # None means the operator cancelled the firmware-version prompt.
-        return  # Cleanly exit -- nothing to apply.
-
-    print("\n" + "-" * 70)  # Visual step separator -- ASCII only per logging standards.
-    print("  STEP 4: Schedule Configuration")  # Step header.
-    print("-" * 70 + "\n")  # Section divider.
-    shared_schedule = _get_shared_schedule(core.safe_input_fn)  # Step 4 + 5: pick day/time for all orgs.
-    if shared_schedule is None:  # Operator cancelled the schedule prompt.
+    shared_schedule = _prompt_msp_shared_schedule(
+        core.safe_input_fn
+    )  # Prompt once for the shared MSP upgrade schedule after org/version selection succeeds.
+    if shared_schedule is None:  # Operator cancelled the shared schedule prompt.
         return  # Cleanly exit -- nothing to apply.
 
     _msp_confirm_and_apply(  # Step 6: confirm + apply across every org (4-param signature).
@@ -757,6 +912,19 @@ def _execute_msp_mode(  # Execute the MSP multi-org flow.
         shared_schedule,
         shared_versions if shared_versions else None,
     )
+
+
+def _prompt_msp_shared_schedule(
+    safe_input_fn: SafeInputFn,
+) -> dict[str, str] | None:  # Prompt for the shared MSP schedule block with step banner.
+    """Prompt for shared schedule settings during MSP mode."""
+    print("\n" + "-" * 70)  # Visual step separator -- ASCII only per logging standards.
+    print("  STEP 4: Schedule Configuration")  # Step header.
+    print("-" * 70 + "\n")  # Section divider.
+    shared_schedule = _get_shared_schedule(
+        safe_input_fn
+    )  # Step 4 + 5: collect one shared schedule for every selected organization.
+    return shared_schedule  # Return the collected shared schedule or None on cancellation.
 
 
 def _apply_to_all_orgs(  # Apply shared config to every selected org.
@@ -840,26 +1008,41 @@ def _display_selection_instructions() -> None:  # Show index-selection instructi
     print("    - Combined: 1-5,8,12-15\n")  # Combined example.
 
 
+def _parse_index_part(part: str) -> list[int]:  # Parse one single or range index fragment.
+    """Parse one comma-delimited index fragment."""
+    if "-" not in part:  # Single-number fragment.
+        return _parse_single_index(part)  # Parse a single index value.
+    return _parse_index_range(part)  # Parse an inclusive range fragment.
+
+
+def _parse_single_index(part: str) -> list[int]:  # Parse one single index token.
+    """Parse one index token into a one-item list."""
+    try:
+        return [int(part)]  # Return the parsed index in list form for easy set updates.
+    except ValueError:  # Non-numeric single index.
+        return []  # Skip malformed single-index tokens.
+
+
+def _parse_index_range(part: str) -> list[int]:  # Parse one start-end range token.
+    """Parse one inclusive range token into a list of indices."""
+    range_parts = part.split("-")  # Split the range token into start and end parts.
+    if len(range_parts) != 2:  # Malformed ranges cannot be interpreted safely.
+        return []  # Skip malformed range tokens.
+    try:
+        start = int(range_parts[0])  # Parse the range start.
+        end = int(range_parts[1])  # Parse the range end.
+    except ValueError:  # Non-numeric range endpoints.
+        return []  # Skip malformed range tokens.
+    return list(range(start, end + 1))  # Return the inclusive range as a list of indices.
+
+
 def _parse_index_selection(selection: str) -> list[int]:  # Parse an index expression into a list.
     """Parse index selection string into sorted list of integers."""
     indices: set[int] = set()  # Collect distinct indices.
     parts = selection.replace(" ", "").split(",")  # Split on commas (whitespace stripped).
 
     for part in parts:  # Walk each comma-separated part.
-        if "-" in part:  # Range expression.
-            try:
-                range_parts = part.split("-")  # Split the range.
-                if len(range_parts) == 2:  # Well-formed start-end pair.
-                    start = int(range_parts[0])  # Parse the start index.
-                    end = int(range_parts[1])  # Parse the end index.
-                    indices.update(range(start, end + 1))  # Add the inclusive range.
-            except ValueError:  # Non-numeric range.
-                continue  # Skip this part.
-        else:
-            try:
-                indices.add(int(part))  # Add a single index.
-            except ValueError:  # Non-numeric single index.
-                continue  # Skip this part.
+        indices.update(_parse_index_part(part))  # Merge parsed indices from this selection fragment.
 
     return sorted(indices)  # Return the sorted distinct indices.
 
@@ -925,6 +1108,46 @@ def _display_family_versions(  # Display a family's version choices.
         print("    [Enter] Skip")  # Offer to skip on Enter.
 
 
+def _handle_unselected_family_choice(
+    choice: str,
+    ctx: FamilySelectionContext,
+) -> None:  # Report keep/skip behavior when no new family version was chosen.
+    """Handle Enter-to-keep and Enter-to-skip behavior for one family."""
+    if not choice and ctx.current_version:  # Bare Enter in single-site mode keeps the current configured version.
+        print(
+            f"    + Keeping {ctx.family} models at {ctx.current_version}"
+        )  # Confirm that the current family version remains unchanged.
+        return  # Family outcome handled completely.
+    if not choice:  # Bare Enter with no current version means skip this family entirely.
+        print(f"    - Skipped {ctx.family} family")  # Tell the operator this family will not be configured.
+
+
+def _resolve_family_selected_version(
+    choice: str, sorted_versions: list[str]
+) -> str | None:  # Resolve numeric family choice into a version string.
+    """Resolve a numeric family choice into the selected version string."""
+    if not choice or not choice.isdigit():  # Only numeric non-empty choices can select a version.
+        return None  # Signal that no concrete version was selected.
+    idx = int(choice) - 1  # Translate the 1-based display index into a 0-based list index.
+    if idx < 0 or idx >= len(sorted_versions):  # Out-of-range choices are invalid.
+        return None  # Signal invalid or absent version selection.
+    return sorted_versions[idx]  # Return the selected version string.
+
+
+def _apply_family_version_to_models(  # Apply one selected family version to each compatible model.
+    selected: str,
+    custom_versions: dict[str, str],
+    ctx: FamilySelectionContext,
+) -> None:
+    """Apply a selected family version to all models that support it."""
+    for model in ctx.models:  # Walk each model in the selected family.
+        model_versions = _extract_version_strings(
+            ctx.model_version_map.get(model, [])
+        )  # Read valid versions for this model.
+        if selected in model_versions:  # Only apply versions available for the current model.
+            custom_versions[model] = selected  # Record the family selection for the compatible model.
+
+
 def _apply_family_selection(  # Apply the operator's family selection.
     choice: str,
     custom_versions: dict[str, str],
@@ -936,21 +1159,18 @@ def _apply_family_selection(  # Apply the operator's family selection.
     FamilySelectionContext dataclass.
     """
     logging.debug("Entering _apply_family_selection for family %s", ctx.family)  # Action-log entry.
-    if choice and choice.isdigit():  # Operator typed a number -> they picked a specific version.
-        idx = int(choice) - 1  # Translate from 1-based display to 0-based list index.
-        if 0 <= idx < len(ctx.sorted_versions):  # Guard the index against off-by-one mistakes.
-            selected = ctx.sorted_versions[idx]  # Pull the chosen version string.
-            for model in ctx.models:  # Apply the same chosen version across every model in this family.
-                model_versions = _extract_version_strings(  # Pull the per-model version list to validate availability.
-                    ctx.model_version_map.get(model, []),
-                )
-                if selected in model_versions:  # Only set when the chosen version actually exists for this model.
-                    custom_versions[model] = selected  # Record the selection in the operator-mutable dict.
-            print(f"    + Set {ctx.family} models to {selected}")  # Confirm to operator with the chosen version.
-    elif not choice and ctx.current_version:  # Bare Enter + currently-set version -> keep current.
-        print(f"    + Keeping {ctx.family} models at {ctx.current_version}")  # Keeping the current version.
-    elif not choice:  # Bare Enter + no current version -> skip this family entirely.
-        print(f"    - Skipped {ctx.family} family")  # Skipping the family.
+    selected = _resolve_family_selected_version(
+        choice, ctx.sorted_versions
+    )  # Resolve the chosen version from the operator input.
+    if selected:  # Numeric selection resolved to a real version string.
+        _apply_family_version_to_models(
+            selected, custom_versions, ctx
+        )  # Apply the chosen version to compatible models.
+        print(f"    + Set {ctx.family} models to {selected}")  # Confirm to operator with the chosen version.
+        return  # Family selection handled completely.
+    _handle_unselected_family_choice(
+        choice, ctx
+    )  # Handle Enter-to-keep and Enter-to-skip behavior when no new version was selected.
 
 
 def _extract_version_strings(entries: list[Any]) -> list[str]:  # Extract version strings from entries.
@@ -983,17 +1203,38 @@ def _print_step4_header(  # Print the step-4 header.
     print("")  # Spacer.
 
 
+def _find_first_stable_version(versions: list[Any]) -> str:  # Find first stable-tagged version string.
+    """Return the first stable version string from a version list."""
+    for entry in versions:  # Walk version entries in API-provided order.
+        if isinstance(entry, dict) and entry.get("tag") == "stable":  # Stable-tagged dict entry found.
+            return str(entry.get("version", ""))  # Return its version string immediately.
+    return ""  # No stable-tagged version found.
+
+
+def _version_string_from_entry(entry: Any) -> str:  # Normalize one version entry to a string.
+    """Normalize a version entry to a version string."""
+    if isinstance(entry, dict):  # Dict-shaped version entry.
+        return str(entry.get("version", ""))  # Return the dict's version field.
+    return str(entry)  # Non-dict entries are already version-like values.
+
+
+def _fallback_version_string(
+    versions: list[Any],
+) -> str:  # Return the first available version string when no stable tag exists.
+    """Return the first available version string from a version list."""
+    if not versions:  # No version entries exist at all.
+        return ""  # Return empty string when no versions are available.
+    return _version_string_from_entry(
+        versions[0]
+    )  # Fall back to the first available version entry from the API payload.
+
+
 def _pick_stable_version(versions: list[Any]) -> str:  # Pick the most stable version available.
     """Pick the latest stable version from a list of version entries."""
-    stable = [v for v in versions if isinstance(v, dict) and v.get("tag") == "stable"]
-    if stable:  # Stable versions exist.
-        return str(stable[0].get("version", ""))  # Return the first stable version.
-    if versions:  # Fall back to any version.
-        first = versions[0]  # Take the first entry.
-        if isinstance(first, dict):  # Dict-shaped entry.
-            return str(first.get("version", ""))  # Return its version field.
-        return str(first)  # Return the entry as a string.
-    return ""  # No versions: empty string.
+    stable_version = _find_first_stable_version(versions)  # Prefer the first stable-tagged version when available.
+    if stable_version:  # Stable version found.
+        return stable_version  # Return the stable version immediately.
+    return _fallback_version_string(versions)  # Fall back to the first available version when no stable tag exists.
 
 
 def _prompt_day_of_week(safe_input_fn: SafeInputFn) -> str:  # Prompt for the upgrade day-of-week.
@@ -1036,6 +1277,38 @@ def _prompt_time_of_day(  # Prompt for the upgrade time-of-day.
     return result  # Return the parsed time.
 
 
+def _normalize_time_input_markers(
+    time_input: str,
+) -> tuple[str, bool, bool]:  # Normalize free-form time input and detect AM/PM markers.
+    """Normalize time input text and return cleaned value plus AM/PM flags."""
+    time_upper = time_input.upper().strip()  # Uppercase and trim input for easier marker detection.
+    is_pm = "PM" in time_upper  # Detect whether the operator explicitly entered PM.
+    is_am = "AM" in time_upper  # Detect whether the operator explicitly entered AM.
+    time_clean = time_upper.replace("AM", "").replace("PM", "").strip()  # Remove AM/PM markers before numeric parsing.
+    return (time_clean, is_am, is_pm)  # Return cleaned text with the detected AM/PM flags.
+
+
+def _time_components_in_range(hour: int, minute: int) -> bool:  # Validate parsed hour/minute values.
+    """Return True when parsed hour and minute values are within 24-hour bounds."""
+    return 0 <= hour <= 23 and 0 <= minute <= 59  # Require valid 24-hour clock bounds.
+
+
+def _parse_time_components(
+    time_input: str,
+) -> tuple[int, int] | None:  # Parse and validate hour/minute components from free-form input.
+    """Parse free-form time input into validated 24-hour components."""
+    time_clean, is_am, is_pm = _normalize_time_input_markers(
+        time_input
+    )  # Normalize casing and strip any AM/PM markers before numeric parsing.
+    hour, minute = _parse_hour_minute(time_clean)  # Parse the cleaned time string into hour and minute values.
+    if hour < 0:  # Negative hour signals parsing failure from the lower-level helper.
+        return None  # Signal invalid time input to the caller.
+    hour = _apply_ampm(hour, is_am, is_pm)  # Apply AM/PM conversion after basic numeric parsing succeeds.
+    if not _time_components_in_range(hour, minute):  # Reject out-of-range hour/minute values after AM/PM conversion.
+        return None  # Signal invalid time input to the caller.
+    return (hour, minute)  # Return the validated 24-hour time components.
+
+
 def parse_time_input(time_input: str) -> str:  # Parse a free-form time string to HH:MM.
     """Parse various time formats to HH:MM for the API.
 
@@ -1044,21 +1317,10 @@ def parse_time_input(time_input: str) -> str:  # Parse a free-form time string t
     """
     if not time_input:  # Empty input.
         return "any"  # Return 'any'.
-
-    time_upper = time_input.upper().strip()  # Uppercase and trim.
-    is_pm = "PM" in time_upper  # Detect PM marker.
-    is_am = "AM" in time_upper  # Detect AM marker.
-    time_clean = time_upper.replace("AM", "").replace("PM", "").strip()  # Strip AM/PM markers.
-
-    hour, minute = _parse_hour_minute(time_clean)  # Parse hour and minute.
-    if hour < 0:  # Unparseable hour.
-        return "any"  # Return 'any'.
-
-    hour = _apply_ampm(hour, is_am, is_pm)  # Apply AM/PM 24h conversion.
-
-    if hour < 0 or hour > 23 or minute < 0 or minute > 59:  # Out-of-range hour/minute.
-        return "any"  # Return 'any'.
-
+    parsed_time = _parse_time_components(time_input)  # Parse the operator input into validated 24-hour time components.
+    if parsed_time is None:  # Invalid or unparseable time input falls back to Mist's any-time token.
+        return "any"  # Return 'any' for invalid free-form time input.
+    hour, minute = parsed_time  # Unpack validated 24-hour hour/minute components for formatting.
     return f"{hour:02d}:{minute:02d}"  # Return zero-padded HH:MM.
 
 
@@ -1117,6 +1379,38 @@ def _build_auto_upgrade_payload(  # Build the auto_upgrade settings payload.
     }
 
 
+def _extract_site_identity(
+    site: dict[str, Any],
+) -> tuple[str | None, str]:  # Pull common site identity fields from a site record.
+    """Extract a site's ID and display name from a site record."""
+    site_id = site.get("id")  # Read the site id field.
+    site_name = site.get("name", "Unknown")  # Read the site display name with fallback.
+    return (site_id, site_name)  # Return the extracted site identity tuple.
+
+
+def _apply_settings_to_site(  # Apply or simulate one site-settings update.
+    site_id: str,
+    site_name: str,
+    settings: dict[str, Any],
+    apisession: Any,
+    dry_run: bool,
+) -> bool:
+    """Apply or simulate one site-settings update and return success status."""
+    try:
+        if dry_run:  # Dry-run path only reports the planned site update.
+            print(f"    [DRY-RUN] {site_name}")  # Report the would-apply action.
+            return True  # Treat dry-run reporting as success.
+        import mistapi.api.v1.sites.setting as sites_setting_api  # Import the settings API lazily.
+
+        sites_setting_api.updateSiteSettings(apisession, site_id, body=settings)  # Push the updated settings to Mist.
+        print(f"    [OK] {site_name}")  # Report per-site success.
+        return True  # Report successful apply.
+    except Exception as exc:  # Apply failed for this site.
+        print(f"    [FAIL] {site_name}: {exc}")  # Report the failure to the operator.
+        logging.error("Failed to configure auto-upgrade for site %s: %s", site_name, exc)  # Log the per-site failure.
+        return False  # Report failed apply.
+
+
 def _apply_settings_to_sites(  # Apply settings to each site, counting results.
     sites: list[dict[str, Any]],
     settings: dict[str, Any],
@@ -1130,28 +1424,16 @@ def _apply_settings_to_sites(  # Apply settings to each site, counting results.
     for site in sites:  # Walk each site.
         if check_stop_fn():  # Honor a stop request.
             break  # Stop processing sites.
-        site_id = site.get("id")  # Read the site id.
-        site_name = site.get("name", "Unknown")  # Read the site name.
+        site_id, site_name = _extract_site_identity(site)  # Read the site's id and display name.
         if not site_id:  # Missing site id.
             failed += 1  # Count as a failure.
             continue  # Skip this site.
-        try:
-            if dry_run:  # Dry-run path.
-                print(f"    [DRY-RUN] {site_name}")  # Report the would-apply.
-            else:
-                import mistapi.api.v1.sites.setting as sites_setting_api  # Import the settings API lazily.
-
-                sites_setting_api.updateSiteSettings(  # Push the updated settings.
-                    apisession,
-                    site_id,
-                    body=settings,
-                )
-                print(f"    [OK] {site_name}")  # Report success.
+        if _apply_settings_to_site(
+            site_id, site_name, settings, apisession, dry_run
+        ):  # Apply or simulate config for this site.
             successful += 1  # Count the success.
-        except Exception as exc:  # Apply failed for this site.
-            print(f"    [FAIL] {site_name}: {exc}")  # Report the failure.
-            logging.error("Failed to configure auto-upgrade for site %s: %s", site_name, exc)  # Log the failure.
-            failed += 1  # Count the failure.
+            continue  # Continue to the next site after a successful apply.
+        failed += 1  # Count failed apply attempts.
     return (successful, failed)  # Return success/failure counts.
 
 
@@ -1194,30 +1476,44 @@ def _print_msp_failed_orgs(results: list[dict[str, Any]]) -> None:  # List MSP o
     print("")  # Spacer.
 
 
+def _build_msp_summary_label(dry_run: bool) -> str:  # Build dry-run-aware MSP summary title.
+    """Build summary title for MSP output."""
+    label = "MSP MULTI-ORG AUTO-UPGRADE SUMMARY"  # Base summary title used for real applies.
+    if dry_run:  # Dry-run summaries need explicit operator labeling.
+        label += " (DRY-RUN)"  # Append dry-run annotation to the title.
+    return label  # Return the final display label.
+
+
+def _print_msp_totals(  # Print dry-run-aware MSP totals.
+    total_orgs: int,
+    successful_orgs: int,
+    total_sites: int,
+    dry_run: bool,
+) -> None:
+    """Print total organizations and sites for MSP summary output."""
+    print(f"  Organizations processed: {total_orgs}")  # Show how many organizations were evaluated.
+    if dry_run:  # Dry-run wording differs from real-apply wording.
+        print(f"  Would configure: {successful_orgs} org(s)")  # Show would-configure organization count.
+        print(f"  Total sites WOULD be configured: {total_sites}")  # Show would-configure site count.
+        return  # Dry-run totals block is complete.
+    print(f"  Successful: {successful_orgs}")  # Show successful organization count for real applies.
+    print(f"  Total sites configured: {total_sites}")  # Show configured site count for real applies.
+
+
 def _print_msp_summary(  # Print the MSP multi-org summary.
     results: list[dict[str, Any]],
     dry_run: bool,
 ) -> None:
     """Print summary of MSP multi-org auto-upgrade configuration."""
     print("\n" + "=" * 70)  # Divider.
-    label = "MSP MULTI-ORG AUTO-UPGRADE SUMMARY"  # Summary title.
-    if dry_run:  # Dry-run path.
-        label += " (DRY-RUN)"  # Annotate dry-run.
-    print(f"  {label}")  # Print the title.
+    print(f"  {_build_msp_summary_label(dry_run)}")  # Print dry-run-aware summary title.
     print("=" * 70 + "\n")  # Divider.
 
     if dry_run:  # Dry-run path.
         print("  >> DRY-RUN MODE: No actual changes were made <<\n")  # Warn no changes made.
 
     total_orgs, successful_orgs, total_sites = _compute_msp_totals(results)  # Compute the roll-up totals.
-
-    print(f"  Organizations processed: {total_orgs}")  # Show orgs processed.
-    if dry_run:  # Dry-run path.
-        print(f"  Would configure: {successful_orgs} org(s)")  # Show would-configure orgs.
-        print(f"  Total sites WOULD be configured: {total_sites}")  # Show would-configure sites.
-    else:
-        print(f"  Successful: {successful_orgs}")  # Show successful orgs.
-        print(f"  Total sites configured: {total_sites}")  # Show configured sites.
+    _print_msp_totals(total_orgs, successful_orgs, total_sites, dry_run)  # Print dry-run-aware totals block.
     print("")  # Spacer.
 
     if successful_orgs < total_orgs:  # Some orgs failed.
@@ -1229,29 +1525,19 @@ def _print_msp_summary(  # Print the MSP multi-org summary.
         print("  Configuration complete.")  # Report completion.
 
 
-def _get_shared_schedule(  # Prompt for the shared MSP schedule.
-    safe_input_fn: SafeInputFn,
-) -> dict[str, str] | None:
-    """Get shared schedule settings for MSP mode."""
-    print("  Schedule Configuration:")  # Schedule header.
-    print("    When should auto-upgrades occur?\n")  # Explain the prompt.
-    print("    Day of week:")  # Day-of-week header.
-    print("      [1] any - Any day")  # Any-day option.
-    print("      [2] mon, tue, wed, thu, fri, sat, sun\n")  # Weekday options.
-
+def _prompt_shared_day_of_week(safe_input_fn: SafeInputFn) -> str | None:  # Prompt for shared MSP schedule day.
+    """Prompt for shared day-of-week input and normalize it."""
     try:
-        day_input = (  # Read the day input.
-            safe_input_fn(
-                "  Day of week [any]: ",
-                "msp_schedule",
-            )
-            .strip()
-            .lower()
-            or "any"
-        )
-    except SystemExit:  # Operator aborted.
-        return None  # Abort with no schedule.
+        day_input = (
+            safe_input_fn("  Day of week [any]: ", "msp_schedule").strip().lower() or "any"
+        )  # Read operator day input with default.
+    except SystemExit:  # Operator aborted the schedule prompt.
+        return None  # Signal cancellation to the caller.
+    return _normalize_shared_day_of_week(day_input)  # Normalize operator input into Mist day tokens.
 
+
+def _normalize_shared_day_of_week(day_input: str) -> str:  # Normalize shared day input into Mist API token.
+    """Normalize shared day-of-week input to a Mist-supported value."""
     day_map = {  # Day-input -> day-name map.
         "1": "any",
         "2": "mon",
@@ -1270,26 +1556,112 @@ def _get_shared_schedule(  # Prompt for the shared MSP schedule.
         "sat": "sat",
         "sun": "sun",
     }
-    day_of_week = day_map.get(day_input, "any")  # Resolve the day (default any).
+    return day_map.get(day_input, "any")  # Default unexpected values to Mist's "any" token.
 
+
+def _prompt_shared_time_of_day(safe_input_fn: SafeInputFn) -> str | None:  # Prompt for shared MSP schedule time.
+    """Prompt for shared time-of-day input and normalize it."""
+    try:
+        time_input = (
+            safe_input_fn("  Time of day [02:00]: ", "msp_schedule").strip() or "02:00"
+        )  # Read operator time input with default.
+    except SystemExit:  # Operator aborted the schedule prompt.
+        return None  # Signal cancellation to the caller.
+    if time_input.lower() == "any":  # Mist accepts explicit "any" time token.
+        return "any"  # Normalize any-time input.
+    return time_input  # Return literal HH:MM input unchanged.
+
+
+def _get_shared_schedule(  # Prompt for the shared MSP schedule.
+    safe_input_fn: SafeInputFn,
+) -> dict[str, str] | None:
+    """Get shared schedule settings for MSP mode."""
+    print("  Schedule Configuration:")  # Schedule header.
+    print("    When should auto-upgrades occur?\n")  # Explain the prompt.
+    print("    Day of week:")  # Day-of-week header.
+    print("      [1] any - Any day")  # Any-day option.
+    print("      [2] mon, tue, wed, thu, fri, sat, sun\n")  # Weekday options.
+
+    day_of_week = _prompt_shared_day_of_week(safe_input_fn)  # Prompt for the shared day-of-week value.
+    if day_of_week is None:  # Operator aborted the day prompt.
+        return None  # Abort with no schedule.
     print(f"    + Day: {day_of_week}\n")  # Confirm the chosen day.
     print("    Time of day (HH:MM in site's local timezone, or 'any'):")  # Time prompt explanation.
 
-    try:
-        time_input = (  # Read the time input.
-            safe_input_fn(
-                "  Time of day [02:00]: ",
-                "msp_schedule",
-            ).strip()
-            or "02:00"
-        )
-    except SystemExit:  # Operator aborted.
+    time_of_day = _prompt_shared_time_of_day(safe_input_fn)  # Prompt for the shared time-of-day value.
+    if time_of_day is None:  # Operator aborted the time prompt.
         return None  # Abort with no schedule.
-
-    time_of_day = time_input if time_input.lower() != "any" else "any"  # Normalize 'any' time.
     print(f"    + Time: {time_of_day}")  # Confirm the chosen time.
 
     return {"day_of_week": day_of_week, "time_of_day": time_of_day}  # Return the shared schedule.
+
+
+def _get_reference_org_context(  # Validate reference org and normalize org display fields.
+    reference_org: dict[str, Any],
+    apisession: Any,
+) -> tuple[str, str] | None:
+    """Validate reference-org context for shared firmware selection."""
+    org_id = reference_org.get("id")  # Read the reference org id from the selected org dict.
+    if not org_id or apisession is None:  # Shared firmware selection requires both org id and API session.
+        return None  # Signal missing context to the caller.
+    org_name = reference_org.get("name", "Unknown")  # Read the reference org display name with fallback.
+    return (str(org_id), org_name)  # Return normalized org id and name.
+
+
+def _fetch_reference_org_versions(
+    apisession: Any, org_id: str
+) -> list[Any] | None:  # Fetch available AP versions for one reference org.
+    """Fetch available AP firmware versions for a reference organization."""
+    import mistapi.api.v1.orgs.devices as org_devices_api  # Import the org-devices API lazily.
+
+    response = org_devices_api.listOrgAvailableDeviceVersions(
+        apisession, org_id, type="ap"
+    )  # Fetch AP firmware versions for the reference org.
+    if not response or not hasattr(response, "data"):  # Response missing or malformed.
+        return None  # Signal unusable response payload.
+    if not isinstance(response.data, list):  # Non-list payload cannot be processed as version records.
+        return []  # Treat unexpected payload types as an empty version set.
+    return response.data  # Return the validated list payload.
+
+
+def _load_reference_org_versions(
+    apisession: Any, org_id_str: str
+) -> list[Any] | None:  # Fetch reference-org firmware versions while handling user-visible errors.
+    """Fetch reference-org firmware versions and handle fetch failures consistently."""
+    try:
+        available_versions = _fetch_reference_org_versions(
+            apisession, org_id_str
+        )  # Fetch available AP firmware versions for the chosen reference organization.
+    except Exception as error:  # Network, SDK, or API exceptions are non-fatal to the overall workflow.
+        print(f"  X Error fetching firmware versions: {error}")  # Tell the operator the fetch failed unexpectedly.
+        return None  # Signal that the reference-org version fetch failed.
+    if available_versions is None:  # None means the helper could not produce a usable response payload.
+        print(
+            "  X Failed to fetch available firmware versions"
+        )  # Tell the operator the reference-org payload was unusable.
+        return None  # Signal failure to the caller.
+    return available_versions  # Return the validated reference-org version list for further processing.
+
+
+def _prepare_shared_firmware_selection(
+    available_versions: list[Any],
+) -> (
+    tuple[dict[str, list[str]], dict[str, list[dict[str, Any]]]] | None
+):  # Build family-selection data from raw reference-org versions.
+    """Build model-family structures for shared MSP firmware selection."""
+    model_version_map = _build_version_map_from_list(
+        available_versions
+    )  # Build the per-model version map from the raw API payload.
+    if not model_version_map:  # Empty map means no AP firmware versions were discoverable for the reference org.
+        print("  X No AP firmware versions found")  # Tell the operator there is nothing to select from.
+        return None  # Signal that interactive selection cannot proceed.
+    print(
+        f"  + Found firmware for {len(model_version_map)} AP model(s)"
+    )  # Confirm the number of AP models with available firmware.
+    model_families = _group_models_for_msp(
+        model_version_map
+    )  # Group the model-version map into AP model families for selection UX.
+    return (model_families, model_version_map)  # Return the family map and raw model-version map together.
 
 
 def _get_shared_firmware_versions(  # Pick shared firmware versions from a reference org.
@@ -1303,46 +1675,42 @@ def _get_shared_firmware_versions(  # Pick shared firmware versions from a refer
         Dict mapping model to selected version, None if cancelled,
         empty dict if no selection.
     """
-    org_id = reference_org.get("id")  # Read the reference org id.
-    org_name = reference_org.get("name", "Unknown")  # Read the reference org name.
-
-    if not org_id or apisession is None:  # Missing org id or session.
+    org_context = _get_reference_org_context(reference_org, apisession)  # Validate the reference org and API session.
+    if not org_context:  # Missing organization context or API session.
         print("  X Missing organization ID or API session")  # Tell the operator.
         return {}  # Return empty versions.
-
-    org_id_str: str = str(org_id)  # Stringify the org id.
+    org_id_str, org_name = org_context  # Unpack normalized org id and display name.
     print(f"\n  Fetching available firmware versions from: {org_name}")  # Announce the fetch source.
-
-    try:
-        import mistapi.api.v1.orgs.devices as org_devices_api  # Import the org-devices API lazily.
-
-        response = org_devices_api.listOrgAvailableDeviceVersions(  # List available AP firmware versions.
-            apisession,
-            org_id_str,
-            type="ap",
-        )
-        if not response or not hasattr(response, "data"):  # No usable response.
-            print("  X Failed to fetch available firmware versions")  # Tell the operator.
-            return {}  # Return empty versions.
-
-        available_versions = response.data if isinstance(response.data, list) else []  # Use the list payload or empty.
-    except Exception as error:  # Fetch failed.
-        print(f"  X Error fetching firmware versions: {error}")  # Tell the operator.
-        return {}  # Return empty versions.
-
-    model_version_map = _build_version_map_from_list(available_versions)  # Build the per-model version map.
-    if not model_version_map:  # No versions mapped.
-        print("  X No AP firmware versions found")  # Tell the operator.
-        return {}  # Return empty versions.
-
-    print(f"  + Found firmware for {len(model_version_map)} AP model(s)")  # Confirm model count.
-    model_families = _group_models_for_msp(model_version_map)  # Group models into families.
-
+    available_versions = _load_reference_org_versions(
+        apisession, org_id_str
+    )  # Fetch the reference organization's firmware catalog with user-visible error handling.
+    if available_versions is None:  # Reference-org fetch failed or returned no usable payload.
+        return {}  # Return empty versions so MSP mode can fall back to auto-detect behavior.
+    selection_data = _prepare_shared_firmware_selection(
+        available_versions
+    )  # Build family-selection structures from the fetched version catalog.
+    if selection_data is None:  # No usable AP firmware versions existed in the reference org.
+        return {}  # Return empty versions so MSP mode can fall back to auto-detect behavior.
+    model_families, model_version_map = selection_data  # Unpack the prepared family-selection structures.
     return _select_versions_interactively(  # Select shared versions interactively.
         model_families,
         model_version_map,
         safe_input_fn,
     )
+
+
+def _extract_version_map_entry(
+    entry: Any,
+) -> tuple[str, dict[str, Any]] | None:  # Normalize one API version record for MSP mapping.
+    """Normalize one API version record for model->versions mapping."""
+    if not isinstance(entry, dict):  # Only dict records contain model/version fields.
+        return None  # Skip malformed version entries.
+    model = entry.get("model")  # Read the model identifier.
+    version = entry.get("version")  # Read the firmware version string.
+    if not model or not version:  # Both fields are required for mapping.
+        return None  # Skip incomplete version entries.
+    tag = entry.get("tag", "")  # Read the release tag with empty-string fallback.
+    return (str(model), {"version": version, "tag": tag})  # Return normalized model key with version payload.
 
 
 def _build_version_map_from_list(  # Build a model->versions map from a list.
@@ -1351,15 +1719,11 @@ def _build_version_map_from_list(  # Build a model->versions map from a list.
     """Build model -> versions map from API response."""
     result: dict[str, list[dict[str, Any]]] = {}  # Result map.
     for entry in available_versions:  # Walk each version record.
-        if not isinstance(entry, dict):  # Skip malformed records.
-            continue  # Continue to the next.
-        model = entry.get("model")  # Read the model.
-        version = entry.get("version")  # Read the version.
-        tag = entry.get("tag", "")  # Read the release tag.
-        if model and version:  # Only map records with model+version.
-            if model not in result:  # First version for this model.
-                result[model] = []  # Start the model's list.
-            result[model].append({"version": version, "tag": tag})  # Append the version+tag.
+        mapped_entry = _extract_version_map_entry(entry)  # Validate and normalize one version record.
+        if not mapped_entry:  # Skip malformed or incomplete records.
+            continue  # Continue to the next version record.
+        model, version_record = mapped_entry  # Unpack the normalized model key and version payload.
+        result.setdefault(model, []).append(version_record)  # Append the normalized version record for this model.
     return result  # Return the map.
 
 
@@ -1420,6 +1784,79 @@ def _apply_version_to_models(  # Apply a chosen version to a family's models.
     print(f"    + Set {family} family to {selected_version}")  # Confirm the family selection.
 
 
+def _prompt_msp_family_choice(
+    safe_input_fn: SafeInputFn, option_count: int
+) -> str | None:  # Prompt once for one MSP family selection.
+    """Prompt for one MSP family version choice."""
+    try:
+        return safe_input_fn(
+            f"  Select version (1-{option_count}): ", "msp_firmware_select"
+        ).strip()  # Read one family selection safely.
+    except SystemExit:  # Operator aborted the prompt.
+        return None  # Signal cancellation to the caller.
+
+
+def _apply_msp_family_choice(  # Apply or skip one MSP family choice.
+    choice: str,
+    family: str,
+    models: list[str],
+    sorted_versions: list[tuple[str, str]],
+    model_version_map: dict[str, list[dict[str, Any]]],
+    custom_versions: dict[str, str],
+) -> None:
+    """Apply one MSP family selection or print the corresponding skip message."""
+    selected_version = _resolve_msp_selected_version(
+        choice, sorted_versions
+    )  # Resolve numeric choice into a version string.
+    if selected_version:  # Valid numeric selection resolved successfully.
+        _apply_version_to_models(
+            selected_version, family, models, model_version_map, custom_versions
+        )  # Apply the chosen version to compatible models.
+        return  # Family selection handled completely.
+    if choice:  # Non-empty invalid input means explicit invalid selection.
+        print(f"    - Invalid selection, skipped {family}")  # Report invalid selection and skip this family.
+        return  # Family selection handled completely.
+    print(f"    - Skipped {family} family")  # Empty input skips this family silently.
+
+
+def _resolve_msp_selected_version(  # Resolve numeric MSP family choice into a version string.
+    choice: str,
+    sorted_versions: list[tuple[str, str]],
+) -> str | None:
+    """Resolve a numeric MSP family choice into a version string."""
+    if not choice or not choice.isdigit():  # Only numeric non-empty choices can select a version.
+        return None  # Signal absent or invalid selection.
+    idx = int(choice) - 1  # Convert from 1-based display index to 0-based list index.
+    if idx < 0 or idx >= len(sorted_versions):  # Guard against out-of-range selections.
+        return None  # Signal invalid selection.
+    return sorted_versions[idx][0]  # Return the selected version string from the tuple payload.
+
+
+def _select_one_family_version(
+    family: str,
+    models: list[str],
+    model_version_map: dict[str, list[dict[str, Any]]],
+    safe_input_fn: SafeInputFn,
+    custom_versions: dict[str, str],
+) -> bool | None:  # Prompt for one MSP family and apply the result.
+    """Prompt for one MSP family selection and return False on cancellation."""
+    sorted_versions = _collect_family_versions(
+        models, model_version_map
+    )  # Collect the family's distinct firmware versions in newest-first order.
+    if not sorted_versions:  # Families without versions do not need operator input.
+        return True  # Continue with the next family.
+    _display_msp_family_versions(family, models, sorted_versions)  # Show numbered firmware choices for this family.
+    choice = _prompt_msp_family_choice(
+        safe_input_fn, len(sorted_versions)
+    )  # Read the operator's selection for this family safely.
+    if choice is None or choice.lower() == "q":  # EOF or explicit q both cancel the entire shared-selection flow.
+        return None  # Signal full interactive-selection cancellation.
+    _apply_msp_family_choice(
+        choice, family, models, sorted_versions, model_version_map, custom_versions
+    )  # Apply, skip, or reject the family's chosen version.
+    return True  # This family was processed successfully.
+
+
 def _select_versions_interactively(  # Interactively select versions per family.
     model_families: dict[str, list[str]],
     model_version_map: dict[str, list[dict[str, Any]]],
@@ -1433,38 +1870,11 @@ def _select_versions_interactively(  # Interactively select versions per family.
     custom_versions: dict[str, str] = {}  # Operator-chosen versions.
 
     for family, models in sorted(model_families.items()):  # Walk families in order.
-        sorted_versions = _collect_family_versions(models, model_version_map)  # Collect the family's versions.
-        if not sorted_versions:  # Skip families with no versions.
-            continue  # Continue to the next family.
-
-        _display_msp_family_versions(family, models, sorted_versions)  # Show the family's choices.
-
-        try:
-            choice = safe_input_fn(  # Read the choice safely.
-                f"  Select version (1-{len(sorted_versions)}): ",
-                "msp_firmware_select",
-            ).strip()
-        except SystemExit:  # Operator aborted.
-            return None  # Abort selection.
-
-        if choice.lower() == "q":  # Operator cancelled.
-            return None  # Abort selection.
-
-        if choice and choice.isdigit():  # Numeric choice given.
-            idx = int(choice) - 1  # Convert to a 0-based index.
-            if 0 <= idx < len(sorted_versions):  # In range.
-                _apply_version_to_models(  # Apply the chosen version.
-                    sorted_versions[idx][0],
-                    family,
-                    models,
-                    model_version_map,
-                    custom_versions,
-                )
-            else:
-                print(f"    - Invalid selection, skipped {family}")  # Out-of-range selection.
-        else:
-            print(f"    - Skipped {family} family")  # Empty choice skips the family.
-
+        selection_result = _select_one_family_version(
+            family, models, model_version_map, safe_input_fn, custom_versions
+        )  # Prompt for this family and apply the operator's chosen outcome.
+        if selection_result is None:  # Operator cancelled the interactive shared-version workflow.
+            return None  # Abort selection for the entire MSP shared-version flow.
     return custom_versions  # Return the selected versions.
 
 
