@@ -8,6 +8,13 @@ description: "Task list for Site Address Audit from CSV"
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/ (class-contracts.md, cli-contract.md, geocoding-cache-contract.md, ui-geocoder-contract.md)
 **Branch**: `1003-site-address-audit`
 
+> **STATUS — IMPLEMENTED.** All P1-P4 tasks (T004-T033) are implemented and verified:
+> 11 modules under `src/site/address_audit/`, 8 unit-test files (58 tests passing),
+> `MistHelper.py` menu registered at key **195** (keys 0-194 were fully saturated)
+> plus the `--ui-geocode` flag. Gates clean: `py_compile` + `ruff` + `black`.
+> End-to-end pipeline verified against mocked mistapi/Nominatim. The setup tasks
+> (T001-T003, T031) shipped earlier in commit 3ef899f.
+
 **Tests**: Unit tests ARE requested (spec Test Plan, mandatory). Each user story carries its own test tasks under `tests/unit/site/address_audit/`. Maintain >=70% coverage.
 
 **Organization**: Tasks grouped by user story (P1 -> P4) for independent implementation and testing.
