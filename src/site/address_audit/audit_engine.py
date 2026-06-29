@@ -281,8 +281,8 @@ class AddressAuditEngine:
         resolver_result: Any,
     ) -> str:
         """Return exactly one of the eight classification states for a resolved row."""
-        if resolver_result is None or resolver_result.canonical_address is None:  # Nothing resolved.
-            return "NO_RESULT"  # Internal inconclusive and no external result.
+        if resolver_result is None or resolver_result.canonical_address is None:  # No external result.
+            return self._classify_internal(mist_addr, csv_addr, snmp_loc)  # Fall back to internal signals.
         if resolver_result.ambiguous:  # Multiple plausible candidates (mall scenario).
             return "AMBIGUOUS"  # Needs manual disambiguation.
         mist_street = mist_addr.get("address", "")  # Mist street line is the stable anchor.
@@ -292,6 +292,14 @@ class AddressAuditEngine:
         if not self._same_street(mist_street, canonical):  # Street number/name does not line up.
             return "WRONG_STREET"  # Beyond a suite-level difference.
         return self._classify_suite(mist_street, canonical)  # Same street: compare suites.
+
+    def _classify_internal(self, mist_addr: dict[str, Any], csv_addr: dict[str, Any], snmp_loc: str | None) -> str:
+        """Classify on internal CSV/SNMP signals alone when no external result exists."""
+        mist_street = mist_addr.get("address", "")  # Mist street anchor.
+        candidate = snmp_loc or csv_addr.get("address", "")  # Best internal candidate (SNMP preferred).
+        if candidate and self._has_suite_discrepancy(mist_street, candidate):  # Internal adds a missing suite.
+            return "MISSING_SUITE"  # The common strip-mall case, caught without any external call.
+        return "NO_RESULT"  # Internal inconclusive and nothing external resolved.
 
     def _classify_suite(self, mist_street: str, canonical: str) -> str:
         """Classify a same-street pair by comparing suite/unit specificity."""
@@ -411,5 +419,7 @@ class AddressAuditEngine:
 
     def apply_corrections(self, *args: Any, **kwargs: Any) -> None:
         """Deferred write-back surface (OQ-003); intentionally not menu-registered."""
-        logging.info("apply_corrections invoked (feature disabled)")  # Action-log the attempt.
+        logging.info(  # Action-log the attempt (and reference args/kwargs for the deferred signature).
+            "apply_corrections invoked with %d args / %d kwargs (feature disabled)", len(args), len(kwargs)
+        )
         raise NotImplementedError("Address write-back is not enabled in this release.")  # Deferred.

@@ -28,6 +28,11 @@ class TestClassify:
         """A None resolver result -> NO_RESULT."""
         assert self.engine._classify(_MIST_NO_SUITE, _CSV, None, None) == "NO_RESULT"
 
+    def test_internal_fallback_missing_suite(self):
+        """No external result but SNMP adds a suite Mist lacks -> MISSING_SUITE."""
+        snmp = "08095 - 100 Main St Suite 9"
+        assert self.engine._classify(_MIST_NO_SUITE, _CSV, snmp, _rr(None)) == "MISSING_SUITE"
+
     def test_ambiguous(self):
         """An ambiguous result -> AMBIGUOUS."""
         assert self.engine._classify(_MIST_NO_SUITE, _CSV, None, _rr("X", ambiguous=True)) == "AMBIGUOUS"
