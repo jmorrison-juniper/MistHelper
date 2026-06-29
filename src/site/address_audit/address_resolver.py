@@ -68,22 +68,34 @@ class AddressResolver:
         return result  # Hand the result back to the engine.
 
     def _resolve_uncached(self, candidates: ResolveCandidates, query: str) -> ResolverResult:
-        """Run Tier 1 -> Tier 2 -> Tier 3 with a fail-soft envelope (FR-013)."""
+        """Run Tier 1 (internal) + Tier 2 (OSM street validation) + optional Tier 3, fail-soft."""
         try:
-            internal = self._compare_internal(candidates)  # Tier 1: no network.
-            if internal is not None:  # Internal signal already answers the question.
-                internal.query = query  # Stamp the query for cache consistency.
-                return internal  # Return the internal suggestion.
-            nominatim = self._validate_nominatim(candidates, query)  # Tier 2: free OSM validation.
-            if nominatim is not None:  # Nominatim produced a usable result.
-                return nominatim  # Return the validated address.
-            ui_result = self._maybe_ui(candidates, query)  # Tier 3: optional, flagged.
-            if ui_result is not None:  # UI tier captured a suggestion.
-                return ui_result  # Return the UI-sourced address.
-            return ResolverResult(query=query, canonical_address=None, source="internal", confidence=0.0)
+            internal = self._compare_internal(candidates)  # Tier 1: internal suite candidate (no network).
+            osm = self._validate_nominatim(candidates, query)  # Tier 2: OpenStreetMap street validation.
+            return self._combine(internal, osm, candidates, query)  # Merge the tiers into one result.
         except Exception as exc:  # noqa: BLE001 -- one row must never abort the audit.
             logging.warning("Resolve failed for key derived from '%s': %s", query, exc)  # Log and continue.
             return ResolverResult(query=query, canonical_address=None, source="internal", confidence=0.0)
+
+    def _combine(
+        self,
+        internal: ResolverResult | None,
+        osm: ResolverResult | None,
+        candidates: ResolveCandidates,
+        query: str,
+    ) -> ResolverResult:
+        """Merge internal + OSM (+ optional UI) results, recording external validation."""
+        if internal is not None:  # Internal supplied the suite-corrected suggestion.
+            internal.query = query  # Stamp the query for cache consistency.
+            internal.street_validated = osm is not None  # OSM confirmed the base street exists.
+            return internal  # Suite from internal source, street externally cross-checked.
+        if osm is not None:  # No internal suite, but OSM validated the street.
+            osm.street_validated = True  # OSM itself is the external validator here.
+            return osm  # Return the OSM-canonical result.
+        ui_result = self._maybe_ui(candidates, query)  # Tier 3: optional, flagged.
+        if ui_result is not None:  # UI tier captured a suggestion.
+            return ui_result  # Return the UI-sourced address.
+        return ResolverResult(query=query, canonical_address=None, source="internal", confidence=0.0)
 
     def _compare_internal(self, candidates: ResolveCandidates) -> ResolverResult | None:
         """Tier 1: suggest a CSV/SNMP candidate that adds a suite the Mist address lacks."""
@@ -100,14 +112,18 @@ class AddressResolver:
         """Tier 2: validate the base street via the reused ``NominatimValidator``."""
         self._respect_rate_limit()  # Enforce <=1 req/sec before calling out.
         self.external_calls += 1  # Count this external call for the run summary.
+        mist_street = self._strip_suite_from_dict(candidates.mist_address)  # OSM has no suites -> validate street.
+        csv_street = self._strip_suite_from_dict(candidates.csv_address)  # Strip suite so the street can match.
+        logging.info("Validating street via OpenStreetMap/Nominatim: %s", csv_street.get("address", query))
         validator = NominatimValidator(self._nominatim_config)  # Build the reused validator.
-        outcome = validator.validate(candidates.mist_address, candidates.csv_address)  # Geocode both addresses.
+        outcome = validator.validate(mist_street, csv_street)  # Geocode both suite-stripped streets.
         comparison = outcome.get("comparison_validation", {})  # The CSV-side geocode result.
         if not comparison.get("valid"):  # Nominatim could not validate the candidate street.
-            logging.debug("Nominatim returned no valid comparison result")  # Trace the miss.
+            logging.warning("Nominatim returned no result for %s (check network/SSL)", query)  # Visible miss.
             return None  # Defer to Tier 3 / NO_RESULT.
         confidence = float(comparison.get("confidence", 0.0))  # OSM importance-derived confidence.
         canonical = comparison.get("display_name") or self._format_address(candidates.csv_address)  # Canonical.
+        logging.info("Nominatim validated street: %s (confidence=%.2f)", canonical, confidence)  # Visible hit.
         return ResolverResult(  # Build the Tier-2 result.
             query=query,  # Echo the query for caching.
             canonical_address=canonical,  # OSM-canonicalized address.
@@ -163,6 +179,19 @@ class AddressResolver:
         return " ".join(part for part in parts if part).strip()  # Skip blanks; trim.
 
     @staticmethod
+    def _strip_suite_from_dict(address: dict[str, Any]) -> dict[str, Any]:
+        """Return a copy of an address dict with any suite/unit token removed from the street.
+
+        OpenStreetMap does not carry US retail suite numbers, so the suite is
+        stripped before geocoding to let the base street match.
+        """
+        cleaned = dict(address)  # Shallow copy so the caller's dict is untouched.
+        street = cleaned.get("address", "")  # Original street line (may carry a suite).
+        without_suite = re.sub(_SUITE_PATTERN, "", street, flags=re.IGNORECASE)  # Drop the suite token.
+        cleaned["address"] = re.sub(r"[,\s]+$", "", without_suite).strip()  # Trim trailing comma/space.
+        return cleaned  # Suite-free address dict for OSM geocoding.
+
+    @staticmethod
     def _adds_suite(base: str, candidate: str) -> bool:
         """Return True when ``candidate`` contains a suite/unit marker ``base`` lacks."""
         candidate_has = re.search(_SUITE_PATTERN, candidate.lower()) is not None  # Candidate carries a suite.
@@ -200,12 +229,14 @@ class AddressResolver:
             return None  # Caller resolves live.
         self.cache_hits += 1  # Count the hit for the run summary.
         logging.debug("cache hit for %s", key)  # Action-log the hit.
+        raw = self._loads_json(row[3])  # Restore the raw payload (carries street-validation flag).
         return ResolverResult(  # Reconstruct the result from the cached row.
             query=key,  # Use the key as the query echo.
             canonical_address=row[0],  # Cached canonical address (may be None => NO_RESULT).
             source="cache",  # Mark the source as the cache.
             confidence=float(row[2] or 0.0),  # Cached confidence.
-            raw_response=self._loads_json(row[3]),  # Restore the raw payload.
+            raw_response=raw,  # Restore the raw payload.
+            street_validated=bool(raw.get("_street_validated", False)),  # Restore OSM confirmation flag.
         )
 
     def _to_cache(self, key: str, result: ResolverResult) -> None:
@@ -222,7 +253,7 @@ class AddressResolver:
                         result.canonical_address,
                         result.source,
                         result.confidence,
-                        json.dumps(result.raw_response),
+                        json.dumps({**result.raw_response, "_street_validated": result.street_validated}),
                         datetime.now(UTC).isoformat(),
                     ),
                 )

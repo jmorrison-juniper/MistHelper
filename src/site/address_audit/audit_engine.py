@@ -188,7 +188,19 @@ class AddressAuditEngine:
         ui_geocoder = None  # Default: Tier 3 disabled.
         if ui_geocode:  # Operator opted into UI geocoding.
             ui_geocoder = self._make_ui_geocoder()  # Build and connect the browser geocoder.
-        return AddressResolver(ui_geocoder=ui_geocoder)  # Resolver with optional Tier 3.
+        skip_ssl = self._skip_ssl_verify()  # Skip cert checks behind corporate SSL inspection (Zscaler).
+        return AddressResolver(skip_ssl_verify=skip_ssl, ui_geocoder=ui_geocoder)  # Resolver with optional Tier 3.
+
+    @staticmethod
+    def _skip_ssl_verify() -> bool:
+        """Return whether to skip TLS verification for the public Nominatim call.
+
+        Defaults to True because the deployment environment sits behind Zscaler
+        SSL inspection, whose MITM cert otherwise breaks the OpenStreetMap call.
+        Set ``MIST_SKIP_SSL_VERIFY=false`` to enforce verification (non-Zscaler hosts).
+        """
+        raw = os.environ.get("MIST_SKIP_SSL_VERIFY", "true").strip().lower()  # Env override; default on.
+        return raw not in ("false", "0", "no", "off")  # Any falsey token re-enables verification.
 
     @staticmethod
     def _make_ui_geocoder() -> Any:
@@ -373,7 +385,10 @@ class AddressAuditEngine:
         }
         if resolver_result is None or resolver_result.canonical_address is None:  # No suggestion.
             return "-"  # Placeholder when nothing was resolved.
-        return labels.get(resolver_result.source, "-")  # Mapped label or placeholder.
+        base = labels.get(resolver_result.source, "-")  # Tier label for the resolved source.
+        if resolver_result.source == "internal" and getattr(resolver_result, "street_validated", False):
+            return "Internal+OSM"  # Internal suite, street externally confirmed by OpenStreetMap.
+        return base  # Mapped label or placeholder.
 
     def _finish(self, results: list[AuditResult]) -> None:
         """Run the post-table prompt and save the CSV when the operator chooses to."""

@@ -37,15 +37,30 @@ def _db(tmp_path):
 class TestTier1Internal:
     """Tier 1 internal comparison (no network)."""
 
-    def test_internal_suite_no_network(self, tmp_path, monkeypatch):
-        """CSV carrying a suite Mist lacks resolves internally with zero network."""
-        # Any attempt to construct the validator would be a network path -> fail the test.
-        monkeypatch.setattr(resolver_mod, "NominatimValidator", MagicMock(side_effect=AssertionError("no net")))
+    def test_internal_suite_with_osm_street_validation(self, tmp_path, monkeypatch):
+        """CSV suite resolves internally; OSM additionally confirms the street."""
+        _FakeValidator.count = 0
+        _FakeValidator.valid = True  # OSM validates the street successfully.
+        monkeypatch.setattr(resolver_mod, "NominatimValidator", _FakeValidator)
+        monkeypatch.setattr(resolver_mod.time, "sleep", lambda *_: None)  # Skip rate-limit sleeps.
+        resolver = AddressResolver(db_path=_db(tmp_path))
+        candidates = ResolveCandidates(mist_address=_NO_SUITE, csv_address=_WITH_SUITE)
+        result = resolver.resolve(candidates)
+        assert result.source == "internal"  # Suite came from the internal CSV candidate.
+        assert "Suite 5" in result.canonical_address
+        assert result.street_validated is True  # OSM externally confirmed the base street.
+
+    def test_internal_suite_osm_unconfirmed(self, tmp_path, monkeypatch):
+        """When OSM cannot confirm the street, the internal suite still resolves, unflagged."""
+        _FakeValidator.count = 0
+        _FakeValidator.valid = False  # OSM returns nothing.
+        monkeypatch.setattr(resolver_mod, "NominatimValidator", _FakeValidator)
+        monkeypatch.setattr(resolver_mod.time, "sleep", lambda *_: None)
         resolver = AddressResolver(db_path=_db(tmp_path))
         candidates = ResolveCandidates(mist_address=_NO_SUITE, csv_address=_WITH_SUITE)
         result = resolver.resolve(candidates)
         assert result.source == "internal"
-        assert "Suite 5" in result.canonical_address
+        assert result.street_validated is False  # OSM did not confirm the street.
 
 
 class TestTier2Nominatim:
