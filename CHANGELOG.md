@@ -7,6 +7,17 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Address audit CSV delimiter (menu 195)**: The CSV ingester assumed tab
+  delimiters and silently skipped every row of a comma-delimited file (the Excel
+  default `.csv`), reporting "No valid rows parsed". The delimiter is now
+  **auto-detected** per file (tab / comma / semicolon / pipe), an Excel BOM is
+  stripped, blank lines no longer count as parse failures, and addresses that
+  contain the delimiter (e.g. "6670 US Highway 129, Suite 1") are reconstructed
+  by parsing on the fixed serial/model + city/state/zip anchors. Verified against
+  a real 44-row customer export (44 parsed, 0 skipped).
+
 ### Added
 
 - **Site Address Audit from CSV (menu 195, read-only)**: New `src/site/address_audit/`

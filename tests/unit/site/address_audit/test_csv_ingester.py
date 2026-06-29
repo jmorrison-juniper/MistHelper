@@ -32,13 +32,15 @@ class TestLoad:
         assert rows[0].serial == "2012233588"
         assert rows[0].city == "Boca Raton"
 
-    def test_embedded_newline_sanitized(self, tmp_path):
-        """An address with an embedded newline is flattened to a single line."""
-        text = "2012233588\tSSR130\t5550 N Military Trail\n Unit 200\tBoca Raton\tFL\t33431\n"
-        # The embedded newline splits the record; the ingester reads the serial-bearing line.
-        rows, _ = CSVAddressIngester().load(_write(tmp_path, text))
+    def test_embedded_newline_in_quoted_field_flattened(self, tmp_path):
+        """A quoted address with an embedded newline is read as one field and flattened."""
+        text = '2012233588\tSSR130\t"5550 N Military Trail\n Unit 200"\tBoca Raton\tFL\t33431\n'
+        rows, failures = CSVAddressIngester().load(_write(tmp_path, text))
+        assert failures == 0
         assert rows[0].serial == "2012233588"
         assert "\n" not in rows[0].address
+        assert rows[0].address == "5550 N Military Trail Unit 200"
+        assert rows[0].city == "Boca Raton"
 
     def test_empty_serial_skipped(self, tmp_path):
         """A row with an empty serial is skipped and counted as a failure."""
@@ -66,6 +68,56 @@ class TestLoad:
         """A missing file raises a controlled FileNotFoundError."""
         with pytest.raises(FileNotFoundError):
             CSVAddressIngester().load("does_not_exist_12345.tsv")
+
+
+class TestDelimiterDetection:
+    """Auto-detection of comma vs tab delimiters (the Book1.csv bug)."""
+
+    def _write_csv(self, tmp_path, text):
+        """Write to a .csv file and return its path."""
+        path = tmp_path / "Book1.csv"
+        path.write_text(text, encoding="utf-8")
+        return str(path)
+
+    def test_comma_delimited_excel_export(self, tmp_path):
+        """A comma-delimited .csv (Excel default) parses all rows -- regression for Book1.csv."""
+        text = (
+            "2012233588,SSR130,5550 N Military Trail Unit 200,Boca Raton,FL,33431\n"
+            "2012234081,SSR130,6000 Glades Rd Suite 1019A,Boca Raton,FL,33431\n"
+            "2017233102,SSR130,4103 14th St W Suite 101,Bradenton,FL,34205\n"
+        )
+        rows, failures = CSVAddressIngester().load(self._write_csv(tmp_path, text))
+        assert failures == 0
+        assert len(rows) == 3
+        assert rows[0].serial == "2012233588"
+        assert rows[0].address == "5550 N Military Trail Unit 200"
+        assert rows[0].city == "Boca Raton"
+        assert rows[0].zip_code == "33431"
+
+    def test_comma_in_address_reconstructed(self, tmp_path):
+        """An unquoted address containing a comma is rejoined; city/state/zip stay correct."""
+        text = "2017233783,SSR130,6670 US Highway 129, Suite 1,Live Oak,FL,32060\n"
+        rows, failures = CSVAddressIngester().load(self._write_csv(tmp_path, text))
+        assert failures == 0
+        assert len(rows) == 1
+        assert rows[0].address == "6670 US Highway 129, Suite 1"
+        assert rows[0].city == "Live Oak"
+        assert rows[0].state == "FL"
+        assert rows[0].zip_code == "32060"
+
+    def test_bom_stripped(self, tmp_path):
+        """A UTF-8 BOM on the first serial does not break numeric detection."""
+        text = "\ufeff2012233588,SSR130,1 A St,Town,FL,33000\n"
+        rows, failures = CSVAddressIngester().load(self._write_csv(tmp_path, text))
+        assert failures == 0
+        assert rows[0].serial == "2012233588"
+
+    def test_blank_lines_skipped_silently(self, tmp_path):
+        """Trailing blank lines are skipped and do not inflate the failure count."""
+        text = "2012233588,SSR130,1 A St,Town,FL,33000\n\n\n"
+        rows, failures = CSVAddressIngester().load(self._write_csv(tmp_path, text))
+        assert len(rows) == 1
+        assert failures == 0
 
 
 class TestSanitize:
