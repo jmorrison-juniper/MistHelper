@@ -26,7 +26,13 @@ from src.site.address_audit.address_resolver import AddressResolver  # Tiered re
 from src.site.address_audit.audit_reporter import AddressAuditReporter  # CSV writer.
 from src.site.address_audit.comparison_display import ComparisonTableRenderer  # Table + prompt.
 from src.site.address_audit.csv_ingester import CSVAddressIngester  # CSV parser.
-from src.site.address_audit.models import AddressRow, AuditResult, MatchedSite, ResolveCandidates
+from src.site.address_audit.models import (  # Shared dataclasses.
+    AddressRow,
+    AuditResult,
+    MatchedSite,
+    ResolveCandidates,
+    UIGeocoderConfig,
+)
 from src.site.address_audit.site_matcher import SiteMatchingEngine  # Serial/fuzzy matcher.
 from src.site.address_audit.snmp_enricher import SNMPLocationEnricher  # SNMP enrichment.
 from src.utils.input_utils import InputUtils  # EOF-safe operator prompts.
@@ -82,7 +88,7 @@ class AddressAuditEngine:
     ) -> list[AuditResult]:
         """Load Mist data, match/enrich/resolve every row, and classify the outcomes."""
         inventory_by_serial, sites_by_id, sites_list = self._load_mist_data(apisession, org_id)  # One read.
-        matcher = SiteMatchingEngine(inventory_by_serial, sites_by_id)  # In-memory matcher.
+        matcher = SiteMatchingEngine(inventory_by_serial, sites_by_id, self._fuzzy_threshold())  # In-memory matcher.
         matched = self._match_sites(rows, matcher, sites_list)  # Serial -> fuzzy fallback per row.
         self._enrich_sites(apisession, matched)  # Fill SNMP location on matched sites.
         resolver = self._build_resolver(ui_geocode)  # Tiered resolver (+ optional Tier 3).
@@ -186,14 +192,42 @@ class AddressAuditEngine:
 
     @staticmethod
     def _make_ui_geocoder() -> Any:
-        """Build and connect a ``MistUIGeocoder``; return ``None`` if unavailable."""
+        """Build and connect a ``MistUIGeocoder`` from env config; ``None`` if unavailable."""
         from src.site.address_audit.ui_geocoder import MistUIGeocoder  # Lazy: optional Playwright.
 
-        geocoder = MistUIGeocoder()  # Default attach/launch config.
+        geocoder = MistUIGeocoder(AddressAuditEngine._ui_config())  # Env-driven attach/launch config.
         if not geocoder.connect():  # Establish the browser session (fail-soft).
             logging.warning("Tier-3 UI geocoder unavailable; continuing with Tier 1/2 only")  # Inform.
             return None  # Disable Tier 3 for this run.
         return geocoder  # Connected geocoder ready for selective lookups.
+
+    @staticmethod
+    def _ui_config() -> UIGeocoderConfig:
+        """Build a ``UIGeocoderConfig`` from environment overrides (with safe defaults)."""
+        config = UIGeocoderConfig()  # Start from the Zscaler-safe defaults.
+        config.dashboard_url = os.environ.get("MIST_DASHBOARD_URL", config.dashboard_url).strip()  # Cloud region.
+        config.per_lookup_timeout_s = AddressAuditEngine._env_float(  # Per-lookup timeout override.
+            "UI_GEOCODE_TIMEOUT_SECONDS", config.per_lookup_timeout_s
+        )
+        config.max_lookups = int(AddressAuditEngine._env_float("UI_GEOCODE_MAX_LOOKUPS", config.max_lookups))  # Cap.
+        return config  # Hand back the env-merged config.
+
+    @staticmethod
+    def _fuzzy_threshold() -> float:
+        """Return the rapidfuzz score cutoff from env (default 85)."""
+        return AddressAuditEngine._env_float("FUZZY_MATCH_THRESHOLD", 85.0)  # .env override or default.
+
+    @staticmethod
+    def _env_float(name: str, default: float) -> float:
+        """Parse a float env var, falling back to ``default`` on absence/parse error."""
+        raw = os.environ.get(name, "").strip()  # Read the raw env value.
+        if not raw:  # Unset or blank -> use the default.
+            return default  # Caller's default.
+        try:
+            return float(raw)  # Parse the configured numeric value.
+        except ValueError:  # Malformed value must not crash the audit.
+            logging.warning("Invalid %s=%r; using default %s", name, raw, default)  # Warn and fall back.
+            return default  # Safe default.
 
     def _resolve_and_classify(
         self,

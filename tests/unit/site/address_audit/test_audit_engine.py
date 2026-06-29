@@ -83,3 +83,32 @@ class TestResolveAndClassify:
         """An empty input produces an empty result list (no exception)."""
         engine = AddressAuditEngine()
         assert engine._resolve_and_classify([], [], None, "", False) == []
+
+
+class TestEnvConfig:
+    """Environment-driven configuration helpers."""
+
+    def test_env_float_default_when_unset(self, monkeypatch):
+        """An unset env var returns the supplied default."""
+        monkeypatch.delenv("UI_GEOCODE_MAX_LOOKUPS", raising=False)
+        assert AddressAuditEngine._env_float("UI_GEOCODE_MAX_LOOKUPS", 50.0) == 50.0
+
+    def test_env_float_parses_value(self, monkeypatch):
+        """A valid env value is parsed as a float."""
+        monkeypatch.setenv("FUZZY_MATCH_THRESHOLD", "92")
+        assert AddressAuditEngine._fuzzy_threshold() == 92.0
+
+    def test_env_float_invalid_falls_back(self, monkeypatch):
+        """A malformed env value falls back to the default without raising."""
+        monkeypatch.setenv("FUZZY_MATCH_THRESHOLD", "not-a-number")
+        assert AddressAuditEngine._fuzzy_threshold() == 85.0
+
+    def test_ui_config_reads_env(self, monkeypatch):
+        """UI config merges dashboard URL and bounds from the environment."""
+        monkeypatch.setenv("MIST_DASHBOARD_URL", "https://manage.eu.mist.com/")
+        monkeypatch.setenv("UI_GEOCODE_TIMEOUT_SECONDS", "30")
+        monkeypatch.setenv("UI_GEOCODE_MAX_LOOKUPS", "10")
+        config = AddressAuditEngine._ui_config()
+        assert config.dashboard_url == "https://manage.eu.mist.com/"
+        assert config.per_lookup_timeout_s == 30.0
+        assert config.max_lookups == 10
