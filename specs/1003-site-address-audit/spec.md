@@ -3,7 +3,7 @@
 **Feature Branch**: `1003-site-address-audit`
 **Created**: 2026-06-29
 **Status**: Draft
-**Input**: User description: "A new read-only menu option that reads a customer-provided CSV, matches rows to Mist sites via serial number, pulls SNMP location vars, geocodes addresses via Mist API, and displays a CLI comparison table."
+**Input**: User description: "A new read-only menu option that reads a customer-provided tab-delimited CSV, matches rows to Mist sites via device serial number, pulls SNMP location vars as an extra reference, resolves/validates each address against free sources (internal CSV/SNMP comparison, Nominatim, and an optional Mist-dashboard UI autocomplete tier), and displays a CLI comparison table (old vs suggested) with an option to save results to CSV."
 
 ---
 
@@ -26,7 +26,7 @@ Deliver a read-only CLI menu option (safe export range 1–59) that:
 1. Ingests a tab-delimited customer CSV from `data/` (serial → address)
 2. Resolves each row to a Mist site via device serial number lookup, with an address-fuzzy-match fallback
 3. Enriches each site record with the `snmp_location` variable and SNMP config location field
-4. Geocodes the best available address candidate using Mist's authenticated geocoding API (Google Places via Mist's account), with Nominatim as fallback
+4. Detects suite/unit discrepancies primarily from internal signals (customer CSV and SNMP location, which already carry suite/unit data), then validates the base street address against a free external geocoder (Nominatim), with an optional operator-driven Mist dashboard UI tier for Google-quality suite resolution on ambiguous cases
 5. Classifies each site into one of eight address-state categories
 6. Displays a prettytable comparison in the terminal
 7. Offers to save the comparison as a CSV to `data/`
@@ -111,13 +111,13 @@ As a NOC operator running the audit a second time on the same or updated CSV, I 
 
 - **CSV with zero matchable rows**: All rows flagged `UNMATCHED`; table renders with all `UNMATCHED` entries; no crash.
 - **Empty address column in CSV row**: Row is flagged `UNMATCHED` with reason "empty address"; no geocoding attempted.
-- **Mist geocoding returns zero results**: Fallback to Nominatim; if Nominatim also returns zero results, row classified `NO_RESULT`.
+- **Mist geocoding returns zero results**: Not applicable — no Mist geocoding endpoint exists. If Tier 2 Nominatim returns zero results, row classified `NO_RESULT` (unless Tier 3 UI geocode is enabled and resolves it).
 - **Multiple CSV files in `data/`**: Operator is prompted to select one by index; `safe_input()` used; invalid input loops gracefully.
 - **Single CSV file in `data/`**: Auto-selected without prompting.
 - **SNMP location variable absent or empty**: Treated as missing; comparison proceeds with remaining candidates; no error.
-- **Mist API rate limit (HTTP 429)**: Back-off with configurable `MIST_GEOCODING_DELAY_SECONDS` (default 0.5 s); retry up to 3 times; log warning on each retry.
+- **Mist API rate limit (HTTP 429)** on inventory/site calls: Back-off with configurable delay; retry up to 3 times; log warning on each retry. (Note: this applies to the standard mistapi inventory/site reads, not geocoding — there is no Mist geocoding call.)
 - **Device serial in Mist but not assigned to any site**: Row flagged `UNMATCHED` with reason "device unassigned"; serial is found but `site_id` is null.
-- **Mall/multi-tenant building (ambiguous geocoding result)**: Multiple business results returned by geocoding API → classified `AMBIGUOUS`; first result's address shown in Suggested Address column.
+- **Mall/multi-tenant building (ambiguous result)**: Multiple plausible business results (Tier 2 Nominatim, or Tier 3 UI autocomplete when enabled) -> classified `AMBIGUOUS`; first result's address shown in Suggested Address column.
 - **`BUSINESS_NAME` env var absent and operator skips the prompt**: Raw address used as geocoding query (no business name prefix); behavior logged.
 - **`rapidfuzz` not installed**: Fuzzy-match fallback disabled gracefully; rows that would have matched via fuzzy only are flagged `UNMATCHED`; a one-time WARNING logged at startup.
 - **`scourgify` not installed**: Address normalization uses a regex-based fallback; one-time WARNING logged at startup.
@@ -132,10 +132,12 @@ New subpackage lives entirely within `src/site/address_audit/`. Each module hold
 ```
 src/site/address_audit/
   __init__.py                # Package init; exports AddressAuditEngine for menu registration
+  models.py                  # Dataclasses: AddressRow, MatchedSite, ResolverResult, AuditResult
   csv_ingester.py            # CSVAddressIngester  — parse & sanitize tab-delimited input
-  site_matcher.py            # SiteMatchingEngine  — serial → site_id; fuzzy fallback
+  site_matcher.py            # SiteMatchingEngine  — serial -> site_id; fuzzy fallback
   snmp_enricher.py           # SNMPLocationEnricher — pull snmp_location and snmp_config.location
-  mist_geocoder.py           # MistGeocodingClient — Mist API + Nominatim geocoding with cache
+  address_resolver.py        # AddressResolver     — tiered resolution; Nominatim + cache (Tier 1/2)
+  ui_geocoder.py             # MistUIGeocoder      — optional Playwright "hijack" of Mist site-edit address field (Tier 3)
   audit_engine.py            # AddressAuditEngine  — orchestrator; menu entry point
   comparison_display.py      # ComparisonTableRenderer — prettytable build and print
   audit_reporter.py          # AddressAuditReporter — CSV save to data/
@@ -155,7 +157,8 @@ No changes to any other existing file except where required by the import.
 | `CSVAddressIngester` | Read & sanitize tab-delimited CSV; yield `AddressRow` dataclass per valid row | `load(path)`, `sanitize_address(raw)` |
 | `SiteMatchingEngine` | Resolve serial → `site_id` via Mist inventory; fuzzy fallback on normalized address | `match_serial(serial)`, `match_fuzzy(address, sites)` |
 | `SNMPLocationEnricher` | Fetch `vars["snmp_location"]` and `snmp_config.location` for a site | `enrich(site_id)` |
-| `MistGeocodingClient` | Query Mist geocoding API; fall back to Nominatim; read/write SQLite cache | `geocode(query)`, `_from_cache(key)`, `_to_cache(key, result)` |
+| `AddressResolver` | Tier 1: compare internal candidates (CSV/SNMP/Mist) for suite discrepancy; Tier 2: validate base street via Nominatim; read/write SQLite cache | `resolve(candidates)`, `_validate_nominatim(query)`, `_from_cache(key)`, `_to_cache(key, result)` |
+| `MistUIGeocoder` | Tier 3 (optional, flagged): drive the live Mist dashboard site-edit address autocomplete via Playwright; capture the top Google-Places suggestion | `geocode_via_ui(query)`, `_capture_autocomplete()` |
 | `AddressAuditEngine` | Orchestrate full audit pipeline; entry point for menu registration | `run(apisession, org_id)` |
 | `ComparisonTableRenderer` | Build and print prettytable from list of `AuditResult` dataclasses | `render(results)` |
 | `AddressAuditReporter` | Write comparison CSV to `data/` with timestamp filename | `save(results, output_dir)` |
@@ -202,12 +205,12 @@ After geocoding, each audited site is assigned exactly one of eight mutually exc
 | State | Meaning | Action needed |
 |---|---|---|
 | `ADDRESS_MATCH` | Mist address and geocoded result agree (normalized) | None |
-| `MISSING_SUITE` | Geocoded result includes suite/unit; Mist address does not | Operator review |
+| `MISSING_SUITE` | Resolved candidate (CSV/SNMP/UI) includes suite/unit; Mist address does not | Operator review |
 | `WRONG_STREET` | Mismatch beyond suite level (different street number or name) | Operator review |
 | `CSV_BETTER` | CSV or SNMP address is more specific than the current Mist address | Operator review |
 | `MIST_BETTER` | Mist address is already the most specific source | None |
-| `AMBIGUOUS` | Geocoding returned multiple plausible results (e.g. mall scenario) | Manual lookup |
-| `NO_RESULT` | Both Mist geocoding and Nominatim returned no usable result | Manual lookup |
+| `AMBIGUOUS` | Resolution returned multiple plausible results (e.g. mall scenario) | Manual lookup |
+| `NO_RESULT` | Internal comparison inconclusive and Nominatim (and UI tier, if enabled) returned no usable result | Manual lookup |
 | `UNMATCHED` | No CSV row could be paired to a Mist site via serial or fuzzy match | Manual follow-up |
 
 ---
@@ -228,21 +231,26 @@ Two registrations in `MistHelper.py`:
 
 > **Rule**: The write-back menu entry must NOT appear in this release. The `AddressCorrector` class exists as a stub with `NotImplementedError` methods; it is not registered.
 
-### Geocoding Priority
+### Address Resolution Tiers
 
-1. **Mist geocoding API** — `GET /api/v1/utils/geocoding?q=<query>` using the existing authenticated `apisession`; same endpoint as the Mist UI address autocomplete.  
-2. **Nominatim** — `https://nominatim.openstreetmap.org/search?q=<query>&format=json&limit=3`; rate-limited to ≤ 1 request/second per ToS.  
-3. **Cache** — SQLite table `geocoding_cache` in `mist_data.db`; checked before either live API call.
+> **Critical design note**: Mist does **not** expose a public/authenticated geocoding REST endpoint. The `/api/v1/utils/geocoding` route assumed in the original draft does not exist in the `mistapi` SDK or in either OpenAPI spec (3.0 / 3.1); the `utils` namespace only contains SMS test endpoints. The Mist dashboard's address autocomplete calls Google Places **client-side from the browser** with a frontend key we cannot reuse server-side. Resolution is therefore tiered across sources that are actually free and available.
+
+The customer CSV and the SNMP location field already carry suite/unit data on the majority of rows (the sample CSV has `Unit 200`, `Suite 1019A`, `Suite 101`, etc.). Internal signals are therefore the primary suite source; external geocoding is a validator, not the suite origin.
+
+1. **Tier 1 — Internal candidate comparison (no network)**: Compare the Mist site address against the CSV address and the SNMP location. Detect the common case where Mist is missing a suite/unit that the CSV or SNMP value supplies. This catches most discrepancies with zero external calls.
+2. **Tier 2 — Nominatim validation (free, no key)**: `https://nominatim.openstreetmap.org/search?q=<query>&format=json&limit=3`, rate-limited to <= 1 request/second per ToS. Reuses the existing `NominatimValidator` in `src/utils/address_utils.py`. Confirms the base street address resolves and is consistent; drives the `WRONG_STREET` classification. Nominatim/OSM does not reliably carry US retail suite numbers, so it validates the street, not the unit.
+3. **Tier 3 — Mist dashboard UI automation (optional, flagged)**: The operator-authorized "hijack" path. Using Playwright (already a repo dependency with e2e infrastructure), drive the live Mist site-edit **address autocomplete field**, type `"{business_name} {address}"`, and capture the top Google-Places suggestion — the same suite-corrected result an operator sees today when editing a site by hand. This is the only free path to Google-quality retail suite data. Gated behind a `--ui-geocode` flag because it requires an authenticated dashboard session and is slower/more fragile than the API tiers. Invoked selectively (e.g. for `AMBIGUOUS` mall cases), not for every row.
+4. **Cache** — SQLite table `geocoding_cache` in `mist_data.db`, checked before any Tier 2/3 network/UI call.
 
 **Query construction**:
-- Best candidate = `snmp_location` → `csv_address` → `mist_address` (first non-empty, in that priority order)
+- Best candidate = `snmp_location` -> `csv_address` -> `mist_address` (first non-empty, in that priority order)
 - Full query = `"{BUSINESS_NAME} {best_candidate}"` if `BUSINESS_NAME` is set; otherwise raw best candidate
 - Query is normalized (lowercased, whitespace collapsed) before cache lookup
 
 **Business name resolution**:
 1. Read `BUSINESS_NAME` from `.env`
 2. If absent/empty: prompt operator with `safe_input("Enter business name (or press Enter to skip): ")`
-3. If operator presses Enter: geocode with address only (no business name prefix)
+3. If operator presses Enter: resolve with address only (no business name prefix) — for private/internal addresses with no public business listing
 
 ### SNMP Location Pull
 
@@ -275,7 +283,8 @@ Implemented in `ComparisonTableRenderer`; input via `safe_input()`. Invalid inpu
 - **FR-003**: When multiple CSV files exist in `data/`, the operator MUST be prompted to select one by index using `safe_input()`; when exactly one CSV exists, it MUST be auto-selected.
 - **FR-004**: `SiteMatchingEngine` MUST first attempt a serial number lookup via the Mist device inventory API; on miss, MUST attempt a rapidfuzz address fuzzy-match at threshold ≥ 85 % against all org sites; on miss of both strategies, the row MUST be classified `UNMATCHED`.
 - **FR-005**: `SNMPLocationEnricher` MUST read both `vars["snmp_location"]` and `snmp_config.location` from the site record; MUST return the more authoritative non-empty value; MUST not raise an exception if either field is absent.
-- **FR-006**: `MistGeocodingClient` MUST query `GET /api/v1/utils/geocoding?q=...` using the authenticated `apisession`; MUST fall back to Nominatim if the Mist API returns no results or raises an exception; MUST apply a configurable per-request delay (`MIST_GEOCODING_DELAY_SECONDS`, default 0.5 s) between Mist API calls.
+- **FR-006**: `AddressResolver` MUST resolve addresses in tiers: Tier 1 compares internal candidates (CSV, SNMP, Mist) for suite/unit discrepancies with no network call; Tier 2 validates the base street address via Nominatim (reusing `NominatimValidator`) with a <= 1 request/second rate limit; MUST NOT depend on any Mist geocoding REST endpoint (none exists).
+- **FR-006a**: When the `--ui-geocode` flag is set, `MistUIGeocoder` MAY drive the live Mist dashboard site-edit address autocomplete via Playwright to capture a Google-Places suggestion (Tier 3); this tier MUST be optional, MUST default to OFF, and MUST be invoked selectively (e.g. only for `AMBIGUOUS` rows), never as a per-row default.
 - **FR-007**: Geocoding results MUST be cached in an SQLite table `geocoding_cache` within `mist_data.db`; a cache-hit MUST skip all live API calls for that query string.
 - **FR-008**: `AddressAuditEngine` MUST classify each audited row into exactly one of the eight defined states (see Address Classification States section).
 - **FR-009**: `ComparisonTableRenderer` MUST render a prettytable with columns: Site Name, Current Mist Address, CSV Address, SNMP Location, Suggested Address, Source, Issue Type.
@@ -288,7 +297,7 @@ Implemented in `ComparisonTableRenderer`; input via `safe_input()`. Invalid inpu
 ### Coding-Standard Requirements (NON-NEGOTIABLE — from `agents.md` / `copilot-instructions.md`)
 
 - **CR-001 Inline comments**: Every executable line in every new module MUST carry an inline comment explaining *why*, not just *what*.
-- **CR-002 Action logging**: `logging.info()` MUST appear before each meaningful operation (e.g., "Starting CSV ingestion", "Querying Mist geocoding API for site {name}"); `logging.debug()` MUST appear after with a result summary; ASCII-only (no Unicode/emoji in log strings).
+- **CR-002 Action logging**: `logging.info()` MUST appear before each meaningful operation (e.g., "Starting CSV ingestion", "Validating base street via Nominatim for site {name}"); `logging.debug()` MUST appear after with a result summary; ASCII-only (no Unicode/emoji in log strings).
 - **CR-003 safe_input**: Every `input()` call MUST be replaced with `InputUtils.safe_input(prompt, context=<tag>)`; no bare `input()` calls in any new file.
 - **CR-004 Class-based**: No standalone functions outside a class body in any new module; all logic lives inside the class defined in that module.
 - **CR-005 5-Item Rule**: No new method exceeds 5 parameters / 25 lines / 5 nested blocks; orchestration that needs more state MUST be split into smaller private methods.
@@ -299,9 +308,9 @@ Implemented in `ComparisonTableRenderer`; input via `safe_input()`. Invalid inpu
 
 - **`AddressRow`** — Dataclass representing one parsed CSV row: `serial`, `model`, `address`, `city`, `state`, `zip_code`.
 - **`MatchedSite`** — Dataclass representing a resolved Mist site: `site_id`, `site_name`, `mist_address` (dict), `snmp_location` (str or None), `match_strategy` (serial | fuzzy | unmatched), `match_confidence` (float).
-- **`GeocodingResult`** — Dataclass: `query`, `canonical_address`, `source` (mist_geo | nominatim | cache), `raw_response` (dict).
+- **`ResolverResult`** — Dataclass: `query`, `canonical_address`, `source` (internal | nominatim | mist_ui | cache), `confidence` (float), `raw_response` (dict).
 - **`AuditResult`** — Dataclass combining all above plus `issue_type` (str), `suggested_address` (str), and `source` (str); one per CSV row; drives both table and CSV output.
-- **`geocoding_cache` table** — SQLite: `query_key TEXT PRIMARY KEY, canonical_address TEXT, source TEXT, cached_at TEXT`.
+- **`geocoding_cache` table** — SQLite: `query_key TEXT PRIMARY KEY, canonical_address TEXT, source TEXT, confidence REAL, cached_at TEXT`.
 
 ---
 
@@ -310,7 +319,7 @@ Implemented in `ComparisonTableRenderer`; input via `safe_input()`. Invalid inpu
 - **Mist API session**: Passed through the existing `apisession` parameter already established by the menu framework; no new credential storage.
 - **`BUSINESS_NAME` in `.env`**: Read via `python-dotenv`; treated as non-secret configuration (it is a public business name). No logging of `.env` file contents.
 - **Nominatim ToS compliance**: The User-Agent header MUST identify MistHelper (e.g., `User-Agent: MistHelper/1.0 (address-audit)`); per Nominatim policy, no more than 1 request/second; no scraping.
-- **No new API keys**: The Mist geocoding endpoint uses the existing authenticated session; no additional tokens or secrets required.
+- **No new API keys**: All resolution tiers are key-free — internal comparison uses data already in hand, Nominatim is open/keyless, and the optional Tier 3 reuses the operator's existing authenticated Mist dashboard session (no server-side key).
 - **SQLite cache (`mist_data.db`)**: Cache stores geocoded addresses (public data) and query strings (addresses); no credentials or PII beyond what is already present in the DB. Cache is local to the deployment environment and not transmitted.
 - **Operator-entered business name**: Not stored persistently (runtime-only); not logged at INFO level.
 - **SSL verification**: Follows the existing `skip_ssl_verify` flag pattern already present in `InventoryCSVComparator`; not bypassed by default.
@@ -320,12 +329,11 @@ Implemented in `ComparisonTableRenderer`; input via `safe_input()`. Invalid inpu
 ## Constraints / Performance
 
 - **No new required dependencies**: All production dependencies (`requests`, `prettytable`, `python-dotenv`, `mistapi`) are already in `requirements.txt`. `rapidfuzz` and `scourgify` are optional with graceful fallbacks.
-- **Geocoding throughput**: Mist API default delay of 0.5 s/request gives ≈ 120 sites/minute live; with a warm cache, a 500-site audit should complete in < 30 seconds.
+- **Geocoding throughput**: Tier 1 internal comparison is in-memory (instant). Tier 2 Nominatim at 1 req/sec gives ~60 rows/minute when a row needs street validation; with a warm cache and most rows resolved internally, a 500-site audit should complete in well under a minute. Tier 3 UI automation is slow (seconds per lookup) and used selectively only.
 - **SQLite cache write**: Must use `INSERT OR REPLACE` (upsert) to avoid duplicate-key errors on reruns.
-- **Memory**: `AddressRow`, `MatchedSite`, `GeocodingResult`, `AuditResult` dataclasses are all allocated in memory for the duration of the run; for typical deployments (< 2000 rows), peak memory is negligible.
+- **Memory**: `AddressRow`, `MatchedSite`, `ResolverResult`, `AuditResult` dataclasses are all allocated in memory for the duration of the run; for typical deployments (< 2000 rows), peak memory is negligible.
 - **Rate limiting (Nominatim)**: `time.sleep(1.0)` between each Nominatim call; configurable via `NOMINATIM_DELAY_SECONDS` in `.env` (default 1.0; minimum 1.0 enforced).
-- **Mist geocoding delay**: Configurable via `MIST_GEOCODING_DELAY_SECONDS` in `.env` (default 0.5; minimum 0.0).
-- **Retry on HTTP 429**: Back-off up to 3 retries with 2× delay multiplier; log WARNING on each retry; after 3 retries, classify the row `NO_RESULT` and continue.
+- **Tier 3 UI automation budget**: Optional and OFF by default; when `--ui-geocode` is set, a per-lookup timeout (default 20 s) and a hard cap on total UI lookups per run (default 50) MUST bound runtime; configurable via `.env`.
 - **prettytable max width**: Truncate the Suggested Address and SNMP Location columns to 40 characters for terminal readability; full values written to CSV output.
 
 ---
@@ -358,13 +366,13 @@ $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD="1"; & ".venv\Scripts\python.exe" -m pytest 
    - Site with only `vars["snmp_location"]` → returns that value
    - Site with neither → returns `None`; no exception
 
-4. **`test_mist_geocoder.py`**
-   - Query with cache hit → returns cached result; zero HTTP calls made
-   - Query with cache miss → calls Mist API; result written to cache
-   - Mist API returns empty → Nominatim called; result returned and cached
-   - Both APIs return empty → returns `GeocodingResult` with `canonical_address = None`
-   - HTTP 429 from Mist API → retried up to 3×; classified `NO_RESULT` after 3 failures
-   - Nominatim delay of 1 s enforced (monkeypatched `time.sleep` call count ≥ 1)
+4. **`test_address_resolver.py`**
+   - Internal candidate comparison: CSV has suite, Mist does not -> returns suite-bearing canonical; zero network calls
+   - Query with cache hit -> returns cached result; zero network calls made
+   - Query with cache miss -> calls Nominatim (mocked); result written to cache
+   - Nominatim returns empty -> returns `ResolverResult` with `canonical_address = None`; row will classify `NO_RESULT`
+   - Nominatim delay of 1 s enforced (monkeypatched `time.sleep` call count >= 1)
+   - `MistUIGeocoder` is NOT invoked unless `ui_geocode=True` is passed (mocked Playwright; assert not called by default)
 
 5. **`test_audit_engine.py`** (integration-style with mocked dependencies)
    - All 8 classification states reachable via distinct input combinations
@@ -407,12 +415,12 @@ black --check src/site/address_audit/       # Must pass clean
 - [ ] Drop a tab-delimited CSV (no headers) into `data/` and run the menu option; if multiple CSV files exist, operator is prompted to select one using `safe_input()`.
 - [ ] Script looks up each serial number in Mist device inventory; rows with matching serials show `match_strategy = serial` in logs.
 - [ ] Script pulls `snmp_location` and `snmp_config.location` for each matched site; non-empty values appear in the SNMP Location column.
-- [ ] Script calls Mist geocoding API (`/api/v1/utils/geocoding`) with business name + best address candidate; falls back to Nominatim if Mist returns no result.
+- [ ] Script resolves each row in tiers: Tier 1 compares CSV/SNMP/Mist internally for suite discrepancies; Tier 2 validates the base street via Nominatim; Tier 3 (only when `--ui-geocode` is set) drives the Mist dashboard autocomplete via Playwright. No dependency on any Mist geocoding REST endpoint.
 - [ ] Script displays comparison table in terminal using prettytable; all seven columns present; every CSV row has an entry with exactly one of the eight Issue Type classifications.
 - [ ] Operator can save results as CSV to `data/` with a timestamped filename; file contains a header row matching the table columns.
 - [ ] No writes to any Mist site record occur in any code path of this release.
-- [ ] Geocoding results are cached in `mist_data.db`; a second run on the same CSV retrieves from cache (zero new geocoding API calls for unchanged addresses, visible in DEBUG logs).
-- [ ] Graceful fallback when SNMP var is missing (row processes normally), geocoding fails (row classified `NO_RESULT`), or CSV row is malformed (row skipped with logged parse failure).
+- [ ] Resolver results are cached in `mist_data.db`; a second run on the same CSV retrieves from cache (zero new Nominatim/UI calls for unchanged addresses, visible in DEBUG logs).
+- [ ] Graceful fallback when SNMP var is missing (row processes normally), resolution fails (row classified `NO_RESULT`), or CSV row is malformed (row skipped with logged parse failure).
 - [ ] `python -m py_compile MistHelper.py`, `ruff check`, and `black --check` all pass after the feature is added.
 - [ ] Every executable line in every new file carries an inline comment; `logging.info()` before every meaningful operation; `logging.debug()` after with a result summary; ASCII-only log strings.
 - [ ] No method in any new class exceeds 5 parameters, 25 lines, or 5 nested blocks.
@@ -424,32 +432,31 @@ black --check src/site/address_audit/       # Must pass clean
 
 > These notes are for the AI/developer implementing the feature. They do not define requirements — they describe the expected implementation path.
 
-1. **Start with dataclasses first** (`AddressRow`, `MatchedSite`, `GeocodingResult`, `AuditResult` in a new `src/site/address_audit/models.py`). Every class that produces or consumes these types can then be written with clear type hints.
+1. **Start with dataclasses first** (`AddressRow`, `MatchedSite`, `ResolverResult`, `AuditResult` in a new `src/site/address_audit/models.py`). Every class that produces or consumes these types can then be written with clear type hints.
 
 2. **Reuse `InputUtils.safe_input()`** from `src/utils/input_utils.py`; do not create new input wrappers.
 
-3. **`MistGeocodingClient` cache table DDL** (place in `_ensure_cache_table(conn)`):
+3. **`AddressResolver` cache table DDL** (place in `_ensure_cache_table(conn)`):
    ```sql
    CREATE TABLE IF NOT EXISTS geocoding_cache (
-       query_key     TEXT PRIMARY KEY,
+       query_key      TEXT PRIMARY KEY,
        canonical_addr TEXT,
-       source        TEXT,
-       raw_json      TEXT,
-       cached_at     TEXT
+       source         TEXT,
+       confidence     REAL,
+       raw_json       TEXT,
+       cached_at      TEXT
    );
    ```
    Use `os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "mist_data.db")` resolved via `os.path.realpath()` to locate the DB regardless of CWD.
 
-4. **Mist geocoding API call** (existing `apisession` already has auth headers):
-   ```python
-   response = apisession.get("/api/v1/utils/geocoding", params={"q": query})
-   # response is a requests.Response; parse response.json()
-   ```
-   Inspect `mistapi` source (`mistapi/_api/v1/utils/geocoding.py`) for the exact call signature — it may be `mistapi.api.v1.utils.geocoding.getGeocode(apisession, q=query)`.
+4. **There is NO Mist geocoding REST endpoint.** Do not attempt `apisession.get("/api/v1/utils/geocoding", ...)` — it returns 404. Verified absent from the `mistapi` SDK (`api/v1/utils/` has only SMS test endpoints) and from both OpenAPI specs. Resolution tiers:
+   - **Tier 1 (internal)**: compare normalized Mist address vs CSV vs SNMP location; if CSV/SNMP carry a suite the Mist address lacks, that is the suggested correction — no network call.
+   - **Tier 2 (Nominatim)**: reuse `NominatimValidator` in `src/utils/address_utils.py` (`validate()` / `_geocode_address()`); validates the base street, drives `WRONG_STREET`. Honor the 1 req/sec ToS and the existing `User-Agent` convention.
+   - **Tier 3 (optional, `--ui-geocode`)**: `MistUIGeocoder` uses Playwright to drive the live Mist dashboard site-edit address field, type `"{business_name} {address}"`, and read back the top autocomplete suggestion. Requires an authenticated dashboard session (see open question on credentials). Bound by per-lookup timeout and a max-lookups-per-run cap.
 
 5. **Fuzzy match pattern**: Load all site names + concatenated addresses into a list; use `rapidfuzz.process.extractOne(query, choices, score_cutoff=85)`. The match threshold of 85 % is a constant in `SiteMatchingEngine`, overridable via `.env` key `FUZZY_MATCH_THRESHOLD`.
 
-6. **Classification logic** should live in a private `_classify(mist_addr, csv_addr, snmp_loc, geo_result)` method on `AddressAuditEngine`. Keep it ≤ 25 lines by delegating to helpers (`_addresses_agree()`, `_has_suite_discrepancy()`, etc.).
+6. **Classification logic** should live in a private `_classify(mist_addr, csv_addr, snmp_loc, resolver_result)` method on `AddressAuditEngine`. Keep it <= 25 lines by delegating to helpers (`_addresses_agree()`, `_has_suite_discrepancy()`, etc.).
 
 7. **prettytable column widths**: Use `table.max_width = 40` per column for SNMP Location and Suggested Address. Full values should still be in the underlying `AuditResult` passed to `AddressAuditReporter`.
 
@@ -463,8 +470,8 @@ black --check src/site/address_audit/       # Must pass clean
    ```
 
 9. **5-Item Rule split points** to watch for:
-   - `AddressAuditEngine.run()` will naturally want > 25 lines — split into `_load_csv()`, `_match_sites()`, `_enrich_and_geocode()`, `_classify_and_render()` private methods, each called from `run()`.
-   - `MistGeocodingClient.geocode()` — split into `_query_mist()`, `_query_nominatim()`, `_build_query_key()`.
+   - `AddressAuditEngine.run()` will naturally want > 25 lines — split into `_load_csv()`, `_match_sites()`, `_enrich_and_resolve()`, `_classify_and_render()` private methods, each called from `run()`.
+   - `AddressResolver.resolve()` — split into `_compare_internal()`, `_validate_nominatim()`, `_build_query_key()`, `_from_cache()` / `_to_cache()`.
 
 10. **Existing `AddressComparisonCounters`** at `src/inventory/csv_comparator.py` should NOT be reused for this feature; create fresh counters inline in `AddressAuditEngine` or a lightweight dataclass to avoid coupling the two workflows.
 
@@ -539,7 +546,7 @@ Choice: _
 
 - **SC-001**: Operators complete an address audit of up to 500 sites in under 15 minutes on a warm geocoding cache (from running the audit once to producing a saved CSV).
 - **SC-002**: 100 % of CSV rows appear in the output table — no rows silently dropped; every row has exactly one non-blank Issue Type.
-- **SC-003**: On a second identical run, geocoding API calls are zero (all cache hits); rerun completes in under 30 seconds for a 200-row CSV.
+- **SC-003**: On a second identical run, external resolution calls (Nominatim/UI) are zero (all cache hits); rerun completes in under 30 seconds for a 200-row CSV.
 - **SC-004**: Zero Mist site records are modified during any run of this feature.
 - **SC-005**: All quality gates (`py_compile`, `ruff`, `black`) pass after the feature is merged.
 - **SC-006**: Graceful degradation confirmed: if `rapidfuzz` is absent, the tool completes the audit (with unmatched fuzzy rows) rather than crashing.
@@ -548,11 +555,18 @@ Choice: _
 
 ## Assumptions
 
-- The Mist API endpoint `GET /api/v1/utils/geocoding?q=...` is available in the authenticated session with the same organization scope as other mistapi calls; no additional OAuth scope is required.
 - `mist_data.db` may already exist with other tables from prior MistHelper operations; `CREATE TABLE IF NOT EXISTS` handles this safely.
 - The customer CSV contains only SSR/gateway device serials; non-gateway serials are not an expected input but will be processed through the same pipeline (serial lookup will either match or miss).
 - Tab-delimited files use `.tsv` or `.csv` extension; the file-picker in `data/` filters for both.
 - The `data/` directory is always present or can be created; no elevated permissions are required on the deployment host.
 - The operator runs the tool in a terminal wide enough to display prettytable output (minimum 120 columns); no fallback table format is required for v1.
 - `python-dotenv` `load_dotenv()` is already called at MistHelper startup; no duplicate call needed in the new module.
-- The Mist geocoding API response JSON follows the same schema as the Mist UI autocomplete: `{ "results": [{ "formatted_address": "...", ... }] }` — to be confirmed against `mistapi` source before implementation.
+- The optional Tier 3 UI path assumes the operator has a working, authenticated Mist dashboard session reachable by Playwright; the exact credential/session-handoff mechanism is an open question to be resolved in planning (see Open Questions).
+
+---
+
+## Open Questions
+
+- **OQ-001 (Tier 3 dashboard auth)**: How does the optional `--ui-geocode` tier obtain an authenticated Mist dashboard session? Options: (a) operator logs in interactively in a Playwright-launched browser at run start; (b) dashboard credentials stored in `.env` and used to script login; (c) reuse of an existing browser profile/cookie. Recommendation: start with (a) interactive login (no new secrets, lowest risk), make (b) a later opt-in. To be decided in `speckit.plan`.
+- **OQ-002 (UI selector stability)**: The Mist dashboard site-edit address field selectors are not contract-stable and may change. Plan should capture current selectors plus a documented re-capture procedure, and the tier must fail soft (log + skip to `NO_RESULT`/`AMBIGUOUS`) rather than crash the audit.
+- **OQ-003 (future write-back)**: When the deferred `AddressCorrector` is enabled, confirm the real Mist site-update endpoint and required payload shape (from the OpenAPI spec) and the destructive-confirmation UX (`safe_input` "UPGRADE"-style gate). Out of scope for v1.
