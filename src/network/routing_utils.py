@@ -150,25 +150,33 @@ class RoutingUtils:
                         entries.append(self._normalize_forwarding_entry(item))
         return entries
 
+    @staticmethod
+    def _should_skip_forwarding_line(line: str) -> bool:
+        """Return True for empty/comment/divider lines in a text-format forwarding dump."""
+        return not line or line.startswith("#") or line.startswith("---")
+
+    @staticmethod
+    def _normalize_forwarding_text_row(parts: list[str]) -> dict[str, Any]:
+        """Normalize a tokenized forwarding-table line into the standard entry dict."""
+        return {
+            "destination": parts[0],
+            "next_hop": parts[1] if len(parts) > 1 else "",
+            "interface": parts[2] if len(parts) > 2 else "",  # noqa: PLR2004
+            "service": parts[3] if len(parts) > 3 else "",  # noqa: PLR2004
+            "table": "",
+            "type": "",
+        }
+
     def _parse_forwarding_text(self, raw_output: str) -> list[dict[str, Any]]:
         """Parse text-format forwarding table lines."""
-        entries: list[dict[str, Any]] = []
-        for line in raw_output.strip().split("\n"):
-            line = line.strip()
-            if not line or line.startswith("#") or line.startswith("---"):
+        entries: list[dict[str, Any]] = []  # Accumulator for parsed entries
+        for line in raw_output.strip().split("\n"):  # One entry per non-skip line
+            line = line.strip()  # Strip leading/trailing whitespace
+            if self._should_skip_forwarding_line(line):  # Skip empty/comment/divider
                 continue
-            parts = line.split()
-            if len(parts) >= 2:  # noqa: PLR2004
-                entries.append(
-                    {
-                        "destination": parts[0],
-                        "next_hop": parts[1] if len(parts) > 1 else "",
-                        "interface": parts[2] if len(parts) > 2 else "",  # noqa: PLR2004
-                        "service": parts[3] if len(parts) > 3 else "",  # noqa: PLR2004
-                        "table": "",
-                        "type": "",
-                    }
-                )
+            parts = line.split()  # Whitespace-split into tokens
+            if len(parts) >= 2:  # noqa: PLR2004 — at least destination + next-hop
+                entries.append(self._normalize_forwarding_text_row(parts))  # Project tokens
         return entries
 
     def _display_forwarding_summary(self, entries: list[dict[str, Any]]) -> None:
@@ -196,27 +204,29 @@ class RoutingUtils:
         print("\n-> Forwarding table entries:")
         self._display_prefix_table_impl(entries)
 
+    @staticmethod
+    def _update_set_if_present(target_set: set[str], value: Any, sentinel: str = "-") -> None:
+        """Add ``value`` to ``target_set`` if it is truthy and not the sentinel placeholder."""
+        if value and value != sentinel:
+            target_set.add(value)
+
     def _collect_forwarding_stats(
         self,
         entries: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """Collect summary statistics from forwarding table entries."""
-        services: dict[str, int] = {}
-        tables: set[str] = set()
-        next_hops: set[str] = set()
-        interfaces: set[str] = set()
-
-        for entry in entries:
-            service = entry.get("service", "")
+        services: dict[str, int] = {}  # Service-name -> count map
+        tables: set[str] = set()  # Distinct routing tables
+        next_hops: set[str] = set()  # Distinct next-hops (excluding "-")
+        interfaces: set[str] = set()  # Distinct interfaces (excluding "-")
+        for entry in entries:  # One pass over the entries list
+            service = entry.get("service", "")  # Cache to avoid double-lookup
             if service:
-                services[service] = services.get(service, 0) + 1
+                services[service] = services.get(service, 0) + 1  # Count by service
             if entry.get("table"):
-                tables.add(entry["table"])
-            if entry.get("next_hop") and entry["next_hop"] != "-":
-                next_hops.add(entry["next_hop"])
-            if entry.get("interface") and entry["interface"] != "-":
-                interfaces.add(entry["interface"])
-
+                tables.add(entry["table"])  # Record distinct table
+            self._update_set_if_present(next_hops, entry.get("next_hop"))  # Delegate sentinel check
+            self._update_set_if_present(interfaces, entry.get("interface"))  # Delegate sentinel check
         return {
             "services": services,
             "tables": tables,
@@ -224,18 +234,24 @@ class RoutingUtils:
             "interfaces": interfaces,
         }
 
+    @staticmethod
+    def _extract_prefix_group(dest: str) -> str | None:
+        """Return the /16 group for an IPv4 destination prefix, or None if not parseable."""
+        if not (dest and "/" in dest):
+            return None
+        prefix = dest.split("/")[0]
+        octets = prefix.split(".")
+        if len(octets) < 2:  # noqa: PLR2004 — first two octets needed for /16 group
+            return None
+        return f"{octets[0]}.{octets[1]}.0.0/16"
+
     def _display_prefix_groups(self, entries: list[dict[str, Any]]) -> None:
         """Analyze and display top prefix groups from entries."""
-        prefix_groups: dict[str, int] = {}
-        for entry in entries:
-            dest = entry.get("destination", "")
-            if dest and "/" in dest:
-                prefix = dest.split("/")[0]
-                octets = prefix.split(".")
-                if len(octets) >= 2:  # noqa: PLR2004
-                    group = f"{octets[0]}.{octets[1]}.0.0/16"
-                    prefix_groups[group] = prefix_groups.get(group, 0) + 1
-
+        prefix_groups: dict[str, int] = {}  # /16 group -> count
+        for entry in entries:  # One pass over entries
+            group = self._extract_prefix_group(entry.get("destination", ""))  # Delegate parsing
+            if group:
+                prefix_groups[group] = prefix_groups.get(group, 0) + 1  # Increment count
         if prefix_groups:
             top_groups = sorted(prefix_groups.items(), key=lambda x: x[1], reverse=True)[:5]
             print("\n-> Top prefix groups:")
