@@ -362,26 +362,56 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
     def _collect_msp_selection(self, default_idx: int | None) -> list[Any]:
         """Collect MSP selection from user."""
-        if default_idx:
-            prompt = f"  Select MSP(s) [Enter for current selection {default_idx}]: "
-        else:
-            prompt = "  Select MSP(s): "
-
-        try:
-            selection = self._input_fn(prompt, "msp_select").strip().lower()
-        except SystemExit:
+        prompt = self._build_msp_selection_prompt(default_idx)  # Build prompt once so default wording stays consistent.
+        selection = self._read_selection_value(
+            prompt, "msp_select"
+        )  # Centralize EOF-safe input handling for selection parsing.
+        if selection is None:  # Treat EOF-safe cancellation as an empty result so callers can stop gracefully.
             return []
-
-        if selection == "" and default_idx and self._selected_msp is not None:
+        if self._should_use_default_msp_selection(
+            selection, default_idx
+        ):  # Reuse current MSP only when Enter has explicit meaning.
             return self._use_default_msp()
-        if selection in ["q", ""]:
-            print("  Cancelled.")
-            logging.info("MSP selection cancelled")
+        if self._is_cancelled_selection(
+            selection
+        ):  # Stop early when operator cancels or submits blank without a default.
+            print("  Cancelled.")  # Make cancellation obvious in interactive runs.
+            logging.info("MSP selection cancelled")  # Preserve audit trail for operator cancellation.
             return []
-        if selection == "all":
+        if self._is_select_all_selection(selection):  # Route explicit bulk selection through dedicated summary logic.
             return self._select_all_msps()
+        return self._select_msps_by_indices(selection)  # Fall back to index parsing for single, multi, and range input.
 
-        return self._select_msps_by_indices(selection)
+    @staticmethod
+    def _build_msp_selection_prompt(default_idx: int | None) -> str:
+        """Build MSP selection prompt text."""
+        if default_idx:  # Mention current selection only when operator can safely reuse it.
+            return f"  Select MSP(s) [Enter for current selection {default_idx}]: "
+        return "  Select MSP(s): "  # Keep prompt simple when no default exists.
+
+    def _read_selection_value(self, prompt: str, context: str) -> str | None:
+        """Read and normalize a selection string."""
+        try:
+            return self._input_fn(prompt, context).strip().lower()  # Normalize once so later checks stay deterministic.
+        except SystemExit:
+            return None  # Convert controlled exits into sentinel value for caller-specific cancellation handling.
+
+    def _should_use_default_msp_selection(self, selection: str, default_idx: int | None) -> bool:
+        """Determine whether Enter should keep the current MSP."""
+        has_default = bool(
+            default_idx and self._selected_msp is not None
+        )  # Require both visible prompt state and stored MSP data.
+        return selection == "" and has_default  # Only blank input should reuse the active MSP context.
+
+    @staticmethod
+    def _is_cancelled_selection(selection: str) -> bool:
+        """Determine whether selection means cancel."""
+        return selection in ["q", ""]  # Support quit token and blank-without-default using one rule.
+
+    @staticmethod
+    def _is_select_all_selection(selection: str) -> bool:
+        """Determine whether selection means all items."""
+        return selection == "all"  # Keep bulk-selection keyword check explicit and reusable.
 
     def _use_default_msp(self) -> list[Any]:
         """Return the currently selected MSP as a list."""
@@ -487,38 +517,70 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
     def _collect_org_selection(self, orgs: list[Any], msp_name: str) -> list[Any]:
         """Collect org selection from user."""
-        try:
-            selection = self._input_fn("  Select organization(s): ", "org_select").strip().lower()
-        except SystemExit:
-            logging.debug("SystemExit during org selection")
+        selection = (
+            self._read_org_selection_value()
+        )  # Reuse normalized input flow so org logic stays focused on outcomes.
+        if selection is None:  # Stop quietly when safe_input requests controlled exit.
+            logging.debug("SystemExit during org selection")  # Preserve existing diagnostic event for early exits.
             return []
-
-        logging.debug("User selection input: '%s'", selection)
-
-        if selection in ["q", ""]:
-            print(f"  Skipping {msp_name}")
-            logging.info("User skipped MSP %s", msp_name)
+        logging.debug("User selection input: '%s'", selection)  # Keep traceability for operator-entered scope.
+        if self._should_skip_org_selection(selection):  # Treat quit and blank as intentional MSP skip actions.
+            print(f"  Skipping {msp_name}")  # Confirm which MSP branch is being skipped.
+            logging.info("User skipped MSP %s", msp_name)  # Preserve operator choice in logs.
             return []
-        if selection == "all":
-            print("")
-            print(f"  + Selected ALL {len(orgs)} organization(s) under {msp_name}:")
-            for org in orgs:
-                print(f"      - {org.get('name', 'Unknown')}")
-            logging.info("User selected ALL %s organizations from MSP %s", len(orgs), msp_name)
+        if self._is_select_all_selection(selection):  # Bulk select needs separate summary output for clarity.
+            self._print_all_org_selection(orgs, msp_name)  # Show full list so operator can verify wide scope.
+            logging.info(
+                "User selected ALL %s organizations from MSP %s", len(orgs), msp_name
+            )  # Keep existing summary logging.
             return orgs
+        return self._select_orgs_by_indices(
+            selection, orgs, msp_name
+        )  # Delegate index parsing and summary display to cohesive helper.
 
-        indices = self._parse_selection(selection, len(orgs))
-        if not indices:
-            print("  X Invalid selection, skipping this MSP")
-            logging.warning("Invalid org selection '%s' for MSP %s", selection, msp_name)
+    def _read_org_selection_value(self) -> str | None:
+        """Read organization selection input."""
+        return self._read_selection_value(
+            "  Select organization(s): ", "org_select"
+        )  # Share common normalization behavior across selectors.
+
+    @staticmethod
+    def _should_skip_org_selection(selection: str) -> bool:
+        """Determine whether org selection should skip current MSP."""
+        return selection in ["q", ""]  # Blank input means skip because org selection has no default value.
+
+    @staticmethod
+    def _print_selection_names(items: list[Any]) -> None:
+        """Print item names in standard bullet format."""
+        for item in items:  # Use one display helper so selection summaries stay visually consistent.
+            print(f"      - {item.get('name', 'Unknown')}")  # Fall back to placeholder when API data is incomplete.
+
+    def _print_all_org_selection(self, orgs: list[Any], msp_name: str) -> None:
+        """Print summary for selecting all orgs under an MSP."""
+        print("")  # Separate summary block from prompt section for readability.
+        print(
+            f"  + Selected ALL {len(orgs)} organization(s) under {msp_name}:"
+        )  # Confirm wide-scope action before execution continues.
+        self._print_selection_names(orgs)  # Reuse standard name-list formatting across selection summaries.
+
+    def _select_orgs_by_indices(self, selection: str, orgs: list[Any], msp_name: str) -> list[Any]:
+        """Select organizations by parsed indices."""
+        indices = self._parse_selection(selection, len(orgs))  # Convert free-form tokens into zero-based org positions.
+        if not indices:  # Reject invalid selections before any orgs are accepted.
+            print("  X Invalid selection, skipping this MSP")  # Make skipped scope explicit to operator.
+            logging.warning(
+                "Invalid org selection '%s' for MSP %s", selection, msp_name
+            )  # Preserve invalid-input diagnostics.
             return []
-
-        selected = [orgs[i] for i in indices]
-        print("")
-        print(f"  + Selected {len(selected)} organization(s) from {msp_name}:")
-        for org in selected:
-            print(f"      - {org.get('name', 'Unknown')}")
-        logging.info("User selected %s organization(s) from MSP %s", len(selected), msp_name)
+        selected = [orgs[i] for i in indices]  # Materialize chosen org records only after validation succeeds.
+        print("")  # Add spacing so positive summary stands out from prompt area.
+        print(
+            f"  + Selected {len(selected)} organization(s) from {msp_name}:"
+        )  # Echo exact scope to reduce destructive mistakes.
+        self._print_selection_names(selected)  # Keep list formatting identical to ALL-selection summary.
+        logging.info(
+            "User selected %s organization(s) from MSP %s", len(selected), msp_name
+        )  # Preserve existing success logging.
         return selected
 
     # =========================================================================
@@ -543,24 +605,51 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
     @staticmethod
     def _parse_selection_part(part: str, max_items: int) -> list[int]:
         """Parse a single selection part (number or range)."""
-        if "-" in part and not part.startswith("-"):
-            try:
-                start, end = part.split("-", 1)
-                start_idx, end_idx = int(start) - 1, int(end) - 1
-                if 0 <= start_idx <= end_idx < max_items:
-                    return list(range(start_idx, end_idx + 1))
-            except ValueError:
-                pass
+        dash_range = OrgLevelAPFirmwareUpgrader._parse_dash_selection_range(
+            part, max_items
+        )  # Prefer explicit range parsing before single-index fallback.
+        if dash_range is not None:  # Distinguish invalid dash syntax from non-range tokens.
+            return dash_range
+        if OrgLevelAPFirmwareUpgrader._contains_through_keyword(
+            part
+        ):  # Ignore split "through" token because full-range parser handles it later.
             return []
-        if "through" in part.lower():
-            return []
+        return OrgLevelAPFirmwareUpgrader._parse_single_selection_index(
+            part, max_items
+        )  # Parse remaining token as one-based index.
+
+    @staticmethod
+    def _parse_dash_selection_range(part: str, max_items: int) -> list[int] | None:
+        """Parse a dashed numeric range token."""
+        if "-" not in part or part.startswith("-"):  # Only treat internal dashes as valid range syntax.
+            return None
         try:
-            idx = int(part) - 1
-            if 0 <= idx < max_items:
-                return [idx]
+            start, end = part.split("-", 1)  # Split once so accidental extra dashes fail validation naturally.
+            start_idx = int(start) - 1  # Convert user-facing numbering into zero-based list positions.
+            end_idx = int(end) - 1  # Keep same conversion for upper bound before validation.
         except ValueError:
-            pass
-        return []
+            return []  # Invalid numeric range should be rejected instead of crashing selection flow.
+        if 0 <= start_idx <= end_idx < max_items:  # Reject inverted or out-of-range selections consistently.
+            return list(range(start_idx, end_idx + 1))
+        return []  # Return empty list so caller can mark selection invalid.
+
+    @staticmethod
+    def _contains_through_keyword(part: str) -> bool:
+        """Determine whether token belongs to a through-range expression."""
+        return (
+            "through" in part.lower()
+        )  # Skip token here because whole-expression parser handles natural-language ranges.
+
+    @staticmethod
+    def _parse_single_selection_index(part: str, max_items: int) -> list[int]:
+        """Parse a single numeric selection token."""
+        try:
+            idx = int(part) - 1  # Convert one-based user input into internal zero-based position.
+        except ValueError:
+            return []  # Non-numeric tokens are invalid once range cases are exhausted.
+        if 0 <= idx < max_items:  # Only accept indices that point at actual list members.
+            return [idx]
+        return []  # Out-of-range tokens should not silently coerce to valid values.
 
     @staticmethod
     def _parse_through_range(selection: str, max_items: int) -> list[int]:
@@ -597,41 +686,56 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         print(f"  Devices: {total_devices}")
 
         print("\n  Per-Org Breakdown:")
-        for result in results:
-            status = "OK" if result["failed"] == 0 else "PARTIAL"
-            print(f"    {result['org_name']}: {result['devices']} devices ({status})")
+        for result in results:  # Print each org outcome separately so partial failures stay obvious.
+            OrgLevelAPFirmwareUpgrader._print_single_msp_result(result)  # Keep per-org formatting logic in one place.
+
+    @staticmethod
+    def _print_single_msp_result(result: dict[str, Any]) -> None:
+        """Print one MSP summary line."""
+        status = "OK" if result["failed"] == 0 else "PARTIAL"  # Highlight partial failures without adding more columns.
+        print(
+            f"    {result['org_name']}: {result['devices']} devices ({status})"
+        )  # Preserve compact at-a-glance summary format.
 
     # =========================================================================
     # MAIN EXECUTE WORKFLOW
     # =========================================================================
 
+    def _get_execute_steps(self) -> tuple[Any, ...]:
+        """Return workflow steps in execution order."""
+        return (  # Keep workflow definition centralized so execute() stays linear and easy to audit.
+            self._step1_select_site_scope,
+            self._step2_discover_aps,
+            self._step3_fetch_firmware_stats,
+            self._step4_fetch_available_firmware,
+            self._step5_select_firmware_versions,
+            self._step6_configure_upgrade,
+            self._step7_confirm_and_execute,
+        )
+
+    def _run_execute_steps(self) -> bool:
+        """Run upgrade workflow steps until one fails."""
+        for step in self._get_execute_steps():  # Iterate ordered steps so future insertions touch one place only.
+            if not step():  # Stop immediately because later steps depend on prior collected state.
+                return False
+        return True  # Signal completion so caller can perform final result writing once.
+
     def execute(self) -> None:
         """Execute the org-level AP firmware upgrade workflow."""
-        logging.info("Starting org-level AP firmware upgrade...")
-        logging.debug("OrgLevelAPFirmwareUpgrader.execute() initiated")
-        logging.debug("Using org_id: %s", self.org_id)
-
-        self._print_execute_header()
-
+        logging.info(
+            "Starting org-level AP firmware upgrade..."
+        )  # Keep top-level entry log for workflow observability.
+        logging.debug("OrgLevelAPFirmwareUpgrader.execute() initiated")  # Preserve detailed lifecycle tracing.
+        logging.debug("Using org_id: %s", self.org_id)  # Capture current org context before any prompts mutate state.
+        self._print_execute_header()  # Show operator-facing banner before interactive workflow starts.
         try:
-            if not self._step1_select_site_scope():
-                return
-            if not self._step2_discover_aps():
-                return
-            if not self._step3_fetch_firmware_stats():
-                return
-            if not self._step4_fetch_available_firmware():
-                return
-            if not self._step5_select_firmware_versions():
-                return
-            if not self._step6_configure_upgrade():
-                return
-            if not self._step7_confirm_and_execute():
-                return
-            self._step8_write_results()
+            if self._run_execute_steps():  # Run ordered steps through shared loop to reduce branching noise.
+                self._step8_write_results()  # Only persist results after full workflow succeeds.
         except KeyboardInterrupt:
-            print("\n Operation cancelled by user.")
-            logging.info("Org-level AP firmware upgrade cancelled by user interrupt")
+            print("\n Operation cancelled by user.")  # Mirror prior cancel message for operator awareness.
+            logging.info(
+                "Org-level AP firmware upgrade cancelled by user interrupt"
+            )  # Preserve interruption audit trail.
 
     def _print_execute_header(self) -> None:
         """Print execute workflow header."""
@@ -915,42 +1019,88 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         print("-" * 70)
         print("  Fetching device firmware versions...")
 
+    def _fetch_ap_stats_data(self) -> list[Any]:
+        """Fetch AP stats payload from org stats API."""
+        import mistapi  # Keep import local so module load stays lightweight for non-upgrade flows.
+
+        org_stats_api = importlib.import_module(
+            "mistapi.api.v1.orgs.stats"
+        )  # Resolve API lazily because upgrade path is optional.
+        response = org_stats_api.listOrgDevicesStats(
+            self.apisession, self.org_id, type="ap", limit=1000
+        )  # Request AP stats in largest supported page.
+        if not response or not hasattr(
+            response, "data"
+        ):  # Treat missing response payload as no stats instead of raising here.
+            return []
+        stats_data = mistapi.get_all(
+            response=response, mist_session=self.apisession
+        )  # Expand paginated response so every discovered AP can be matched.
+        return self._normalize_stats_data(
+            stats_data
+        )  # Normalize singleton payloads into one list shape for downstream processing.
+
+    @staticmethod
+    def _normalize_stats_data(stats_data: Any) -> list[Any]:
+        """Normalize Mist stats payload into a list."""
+        if isinstance(stats_data, list):  # Preserve already-expanded pagination output as-is.
+            return stats_data
+        if stats_data:  # Wrap truthy singleton payloads so loop logic never branches on shape.
+            return [stats_data]
+        return []  # Return empty list for missing payloads to keep callers simple.
+
+    def _record_ap_version(self, stat: dict[str, Any]) -> None:
+        """Record firmware version for one AP stat entry."""
+        mac = stat.get("mac")  # Use MAC as stable lookup key because later steps map firmware by device MAC.
+        if mac:  # Skip malformed stat rows that cannot be joined back to discovered APs.
+            self.ap_versions[mac] = (
+                stat.get("version") or "Unknown"
+            )  # Preserve explicit Unknown marker for offline or incomplete devices.
+
     def _populate_ap_versions(self) -> None:
         """Populate ap_versions dict from org stats API."""
-        if self.apisession is None:
+        if self.apisession is None:  # Leave existing state untouched when API session has not been established.
             return
-        import mistapi
+        for stat in self._fetch_ap_stats_data():  # Isolate API fetch complexity from per-record state updates.
+            if isinstance(stat, dict):  # Ignore any unexpected payload fragments returned by SDK helpers.
+                self._record_ap_version(stat)  # Capture version mapping through one dedicated mutation helper.
 
-        org_stats_api = importlib.import_module("mistapi.api.v1.orgs.stats")
-        response = org_stats_api.listOrgDevicesStats(self.apisession, self.org_id, type="ap", limit=1000)
+    @staticmethod
+    def _format_unknown_device_names(unknown_devices: list[Any]) -> str:
+        """Format short offline-device summary."""
+        device_names = [
+            d.get("name", d.get("mac", "unnamed")) for d in unknown_devices[:5]
+        ]  # Show recognizable identifiers for first few offline APs.
+        names_str = ", ".join(device_names)  # Keep summary concise because this appears in dense distribution output.
+        if len(unknown_devices) > 5:  # Avoid flooding screen when many devices lack current firmware data.
+            names_str += f" +{len(unknown_devices) - 5} more"
+        return names_str  # Return ready-to-print label so caller only decides which format path to use.
 
-        if not response or not hasattr(response, "data"):
+    def _print_distribution_entry(self, version: str, count: int, unknown_devices: list[Any]) -> None:
+        """Print one firmware distribution line."""
+        if (
+            version == "Unknown" and unknown_devices
+        ):  # Add richer context only for unknown versions linked to likely offline APs.
+            names_str = self._format_unknown_device_names(
+                unknown_devices
+            )  # Reuse compact formatter to keep branch focused on messaging.
+            print(f"      {version}: {count} device(s) - likely offline ({names_str})")
             return
-
-        stats_data = mistapi.get_all(response=response, mist_session=self.apisession)
-        if not isinstance(stats_data, list):
-            stats_data = [stats_data] if stats_data else []
-
-        for stat in stats_data:
-            mac = stat.get("mac")
-            if mac:
-                self.ap_versions[mac] = stat.get("version") or "Unknown"
+        print(f"      {version}: {count} device(s)")  # Use simple summary for all known versions.
 
     def _display_version_distribution(self) -> None:
         """Display firmware version distribution."""
-        version_counts = self._count_versions_by_mac()
-        unknown_devices = self._get_unknown_firmware_devices()
-
-        print("  + Current firmware distribution:")
-        for version, count in sorted(version_counts.items(), key=lambda x: x[0] or "", reverse=True):
-            if version == "Unknown" and unknown_devices:
-                device_names = [d.get("name", d.get("mac", "unnamed")) for d in unknown_devices[:5]]
-                names_str = ", ".join(device_names)
-                if len(unknown_devices) > 5:
-                    names_str += f" +{len(unknown_devices) - 5} more"
-                print(f"      {version}: {count} device(s) - likely offline ({names_str})")
-            else:
-                print(f"      {version}: {count} device(s)")
+        version_counts = self._count_versions_by_mac()  # Count by discovered AP list so offline devices remain visible.
+        unknown_devices = (
+            self._get_unknown_firmware_devices()
+        )  # Collect offline or unreported devices once for richer Unknown output.
+        print("  + Current firmware distribution:")  # Keep summary header unchanged for operator familiarity.
+        for version, count in sorted(
+            version_counts.items(), key=lambda x: x[0] or "", reverse=True
+        ):  # Preserve descending version display order.
+            self._print_distribution_entry(
+                version, count, unknown_devices
+            )  # Delegate special Unknown formatting to focused helper.
 
     def _get_unknown_firmware_devices(self) -> list[Any]:
         """Get devices with unknown firmware."""
@@ -1117,20 +1267,48 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         print("    Available versions:")
         self._print_version_list(model_versions, current_versions)
 
+    def _get_unknown_devices_for_model(self, devices: list[Any]) -> list[Any]:
+        """Return devices whose current firmware version is unknown."""
+        return [
+            d for d in devices if self.ap_versions.get(d.get("mac"), "Unknown") == "Unknown"
+        ]  # Keep offline detection consistent with earlier summaries.
+
+    @staticmethod
+    def _get_known_current_versions(current_versions: set[str]) -> list[str]:
+        """Return sorted known firmware versions."""
+        return sorted(
+            [version for version in current_versions if version != "Unknown"], reverse=True
+        )  # Exclude Unknown so current-version line stays precise.
+
+    @staticmethod
+    def _format_offline_device_names(unknown_devs: list[Any]) -> str:
+        """Format short list of offline device names."""
+        offline_names = ", ".join(
+            [d.get("name", d.get("mac", "unnamed")[:8]) for d in unknown_devs[:3]]
+        )  # Prefer human-friendly names while keeping width manageable.
+        if len(unknown_devs) > 3:  # Collapse long tails so summary remains readable in terminal width.
+            offline_names += f" +{len(unknown_devs) - 3} more"
+        return offline_names  # Return one compact label for caller to print.
+
     def _print_current_versions(self, devices: list[Any], current_versions: set[str]) -> None:
         """Print current version info including offline devices."""
-        if "Unknown" not in current_versions:
+        if "Unknown" not in current_versions:  # Use compact one-line output when all devices report a concrete version.
             print(f"    Current: {', '.join(sorted(current_versions, reverse=True))}")
             return
-
-        unknown_devs = [d for d in devices if self.ap_versions.get(d.get("mac"), "Unknown") == "Unknown"]
-        known_versions = sorted([v for v in current_versions if v != "Unknown"], reverse=True)
-        offline_names = ", ".join([d.get("name", d.get("mac", "unnamed")[:8]) for d in unknown_devs[:3]])
-        if len(unknown_devs) > 3:
-            offline_names += f" +{len(unknown_devs) - 3} more"
-        if known_versions:
+        unknown_devs = self._get_unknown_devices_for_model(
+            devices
+        )  # Gather offline devices once so both count and names stay aligned.
+        known_versions = self._get_known_current_versions(
+            current_versions
+        )  # Separate known versions from Unknown marker for cleaner messaging.
+        offline_names = self._format_offline_device_names(
+            unknown_devs
+        )  # Reuse compact formatter to avoid long inline list logic.
+        if known_versions:  # Only print known-version line when at least one device reports firmware successfully.
             print(f"    Current: {', '.join(known_versions)}")
-        print(f"    Offline ({len(unknown_devs)}): {offline_names}")
+        print(
+            f"    Offline ({len(unknown_devs)}): {offline_names}"
+        )  # Always show offline count when Unknown appears in current set.
 
     @staticmethod
     def _print_version_list(model_versions: list[Any], current_versions: set[str]) -> None:
@@ -1167,55 +1345,114 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         user_input: str,
     ) -> dict[str, Any]:
         """Apply user's version selection for a model."""
-        try:
-            idx = int(user_input)
-            if not (0 <= idx < len(model_versions)):
-                print("    Invalid input - skipping model")
-                return {}
-        except ValueError:
+        selected = self._resolve_selected_version(
+            model_versions, user_input
+        )  # Validate numeric selection before reading version metadata.
+        if selected is None:  # Skip model cleanly when operator input cannot map to a version row.
             print("    Invalid input - skipping model")
             return {}
-
-        selected = model_versions[idx]
-        target_version = selected.get("version")
-
-        devices_needing = [d for d in devices if self.ap_versions.get(d.get("mac")) != target_version]
-        if not devices_needing:
+        target_version = selected.get("version")  # Extract final target once to keep later comparisons readable.
+        devices_needing = self._get_devices_needing_version(
+            devices, target_version
+        )  # Upgrade only devices that differ from selected target.
+        if not devices_needing:  # Avoid cluttering plan with no-op entries when every device already matches.
             print(f"    All {model} devices already at {target_version}")
             return {}
-
-        skipped = len(devices) - len(devices_needing)
-        if skipped:
-            print(f"    Skipping {skipped} device(s) already at target")
-            self.skipped_already_at_target += skipped
-
-        print(f"    + Selected {target_version} for {len(devices_needing)} device(s)")
+        self._record_already_at_target_devices(
+            len(devices), len(devices_needing)
+        )  # Track skipped devices and inform operator when work is reduced.
+        print(
+            f"    + Selected {target_version} for {len(devices_needing)} device(s)"
+        )  # Echo effective target scope after filtering no-op devices.
         return {"version": target_version, "devices": devices_needing}
+
+    @staticmethod
+    def _resolve_selected_version(model_versions: list[Any], user_input: str) -> dict[str, Any] | None:
+        """Resolve validated user selection to a version entry."""
+        try:
+            idx = int(user_input)  # Accept only explicit numeric menu choices from operator input.
+        except ValueError:
+            return None  # Reject non-numeric tokens so caller can skip model safely.
+        if 0 <= idx < len(model_versions):  # Ensure index points at an available version before returning record.
+            return model_versions[idx]
+        return None  # Reject out-of-range menu choices without mutating plan state.
+
+    def _get_devices_needing_version(self, devices: list[Any], target_version: Any) -> list[Any]:
+        """Return devices not already on the target firmware."""
+        return [
+            d for d in devices if self.ap_versions.get(d.get("mac")) != target_version
+        ]  # Use MAC lookup so offline devices still remain eligible.
+
+    def _record_already_at_target_devices(self, total_devices: int, devices_needing: int) -> None:
+        """Record and display count of devices already on target."""
+        skipped = (
+            total_devices - devices_needing
+        )  # Compute no-op count once because both print and counter need same value.
+        if skipped:  # Only mention skipped devices when optimization actually removed work.
+            print(f"    Skipping {skipped} device(s) already at target")
+            self.skipped_already_at_target += skipped  # Preserve cumulative metric for final summary reporting.
+
+    @staticmethod
+    def _version_matches_model(version_entry: dict[str, Any], model: str) -> bool:
+        """Check whether a firmware entry applies to a model."""
+        models = version_entry.get("models", [])  # Prefer explicit multi-model compatibility list when present.
+        single_model = version_entry.get("model")  # Fall back to legacy single-model field for older API responses.
+        return (
+            model in models or single_model == model
+        )  # Support both response shapes without branching in main collector.
+
+    def _collect_matching_versions(self, model: str) -> list[Any]:
+        """Collect firmware entries that apply to a model."""
+        matching: list[Any] = []  # Keep collector local so caller receives only model-relevant entries.
+        for version_entry in self.available_versions:  # Scan raw API list once for target model compatibility.
+            if isinstance(version_entry, dict) and self._version_matches_model(version_entry, model):
+                matching.append(
+                    version_entry
+                )  # Preserve original entry so later callers retain recommended flags and metadata.
+        return matching
+
+    @staticmethod
+    def _deduplicate_version_entries(version_entries: list[Any]) -> list[Any]:
+        """Deduplicate firmware entries by version string."""
+        seen: set[str] = set()  # Track emitted versions so duplicate compatibility rows collapse cleanly.
+        unique: list[Any] = []  # Preserve first occurrence because it carries full metadata already.
+        for version_entry in version_entries:  # Walk in API order before final sorting deduplicates versions.
+            version_num = version_entry.get("version")  # Deduplicate by displayed firmware version value.
+            if version_num and version_num not in seen:
+                seen.add(version_num)
+                unique.append(version_entry)
+        return unique
+
+    @staticmethod
+    def _build_version_sort_key(version_entry: dict[str, Any]) -> tuple[bool, tuple[int, ...], str]:
+        """Build comparable key for version sorting."""
+        version_num = str(
+            version_entry.get("version", "")
+        )  # Normalize missing values to empty string for stable sorting.
+        numeric_parts = tuple(
+            int(part) for part in version_num.split(".") if part.isdigit()
+        )  # Parse dotted numeric versions without raising on suffixes.
+        is_fully_numeric = bool(version_num) and all(
+            part.isdigit() for part in version_num.split(".")
+        )  # Ensure partially numeric tags do not outrank clean semantic versions.
+        return (
+            is_fully_numeric,
+            numeric_parts,
+            version_num,
+        )  # Favor numeric versions, then numeric tuple, then raw string as final tiebreaker.
 
     def _get_versions_for_model(self, model: str) -> list[Any]:
         """Get sorted versions for a model."""
-        versions: list[Any] = []
-        for version_entry in self.available_versions:
-            if isinstance(version_entry, dict):
-                models = version_entry.get("models", [])
-                single = version_entry.get("model")
-                if model in models or single == model:
-                    versions.append(version_entry)
-
-        seen: set[str] = set()
-        unique: list[Any] = []
-        for version_entry in versions:
-            num = version_entry.get("version")
-            if num and num not in seen:
-                seen.add(num)
-                unique.append(version_entry)
-
-        try:
-            unique.sort(key=lambda x: tuple(map(int, x.get("version", "0").split("."))), reverse=True)
-        except ValueError:
-            unique.sort(key=lambda x: x.get("version", ""), reverse=True)
-
-        return unique
+        matching_versions = self._collect_matching_versions(
+            model
+        )  # Isolate compatibility filtering from dedupe and sort steps.
+        unique_versions = self._deduplicate_version_entries(
+            matching_versions
+        )  # Collapse duplicate version rows before presenting choices.
+        unique_versions.sort(
+            key=self._build_version_sort_key, reverse=True
+        )  # Keep highest numeric or lexical versions first for operator convenience.
+        return unique_versions
 
     def _organize_by_version(self, model_selections: dict[str, Any]) -> None:
         """Reorganize selections by version for org-level API."""
@@ -1310,33 +1547,51 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         self.upgrade_config["reboot_strategy"] = strategies.get(choice, "big_bang")
         return True
 
-    def _parse_relative_offset(self, offset_str: str) -> timedelta | None:
-        """Parse relative time offset like 'in 15 minutes', '+3h', '2 days'."""
-        offset_str = offset_str.strip().lower()
+    @staticmethod
+    def _normalize_relative_offset_input(offset_str: str) -> str:
+        """Normalize relative-offset text before pattern matching."""
+        normalized = offset_str.strip().lower()  # Collapse surrounding whitespace and case so regex rules stay simple.
+        if normalized.startswith(
+            "in "
+        ):  # Remove conversational prefix because parser only cares about quantity and unit.
+            return normalized[3:].strip()
+        if normalized.startswith("+"):  # Remove symbolic relative marker for same reason as natural-language prefix.
+            return normalized[1:].strip()
+        return normalized  # Return untouched normalized text when no prefix stripping is required.
 
-        if offset_str.startswith("in "):
-            offset_str = offset_str[3:].strip()
-        elif offset_str.startswith("+"):
-            offset_str = offset_str[1:].strip()
-
-        patterns = [
+    @staticmethod
+    def _iter_relative_offset_patterns() -> tuple[tuple[str, str], ...]:
+        """Return supported relative-offset regex patterns."""
+        return (  # Keep accepted units centralized so schedule parsers share one grammar.
             (r"^(\d+)\s*m(?:in(?:ute)?s?)?$", "minutes"),
             (r"^(\d+)\s*h(?:(?:ou)?rs?)?$", "hours"),
             (r"^(\d+)\s*d(?:ays?)?$", "days"),
-        ]
+        )
 
-        for pattern, unit in patterns:
-            match = re.match(pattern, offset_str)
+    @staticmethod
+    def _build_relative_timedelta(value: int, unit: str) -> timedelta:
+        """Build a timedelta from parsed relative units."""
+        delta_factories = {  # Map units to constructors so caller avoids branching by unit.
+            "minutes": timedelta(minutes=value),
+            "hours": timedelta(hours=value),
+            "days": timedelta(days=value),
+        }
+        return delta_factories[unit]
+
+    def _parse_relative_offset(self, offset_str: str) -> timedelta | None:
+        """Parse relative time offset like 'in 15 minutes', '+3h', '2 days'."""
+        normalized = self._normalize_relative_offset_input(
+            offset_str
+        )  # Normalize once so each regex sees same canonical text.
+        for (
+            pattern,
+            unit,
+        ) in self._iter_relative_offset_patterns():  # Try each supported relative unit until one matches.
+            match = re.match(pattern, normalized)
             if match:
-                value = int(match.group(1))
-                if unit == "minutes":
-                    return timedelta(minutes=value)
-                if unit == "hours":
-                    return timedelta(hours=value)
-                if unit == "days":
-                    return timedelta(days=value)
-
-        return None
+                value = int(match.group(1))  # Convert captured quantity only after syntax is known to be valid.
+                return self._build_relative_timedelta(value, unit)
+        return None  # Return no match when string does not fit any supported relative format.
 
     def _parse_time_input(
         self,
@@ -1399,26 +1654,45 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             return target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         return ""
 
-    def _parse_absolute_time(self, time_str: str, use_site_local: bool) -> str | None:
-        """Parse absolute HH:MM time input."""
-        is_utc = time_str.upper().endswith(" UTC")
+    @staticmethod
+    def _strip_utc_suffix(time_str: str) -> tuple[str, bool]:
+        """Strip optional UTC suffix from time input."""
+        is_utc = time_str.upper().endswith(" UTC")  # Detect explicit timezone token before trimming text.
         if is_utc:
-            time_str = time_str[:-4].strip()
+            return time_str[:-4].strip(), True  # Remove suffix so remaining parser sees raw HH:MM content.
+        return time_str, False  # Keep original text when no explicit UTC suffix is present.
 
+    @staticmethod
+    def _parse_hour_minute_parts(time_str: str) -> tuple[int, int] | None:
+        """Parse validated HH:MM components."""
         try:
-            time_parts = time_str.split(":")
+            time_parts = time_str.split(":")  # Split once on colon because only HH:MM format is supported.
             if len(time_parts) != 2:
                 return None
-            hour = int(time_parts[0])
-            minute = int(time_parts[1])
-            if not (0 <= hour <= 23 and 0 <= minute <= 59):
-                return None
-
-            if use_site_local:
-                return self._format_site_local_time(hour, minute)
-            return self._format_utc_time(hour, minute, is_utc)
+            hour = int(time_parts[0])  # Convert hour only after structural validation succeeds.
+            minute = int(time_parts[1])  # Convert minute from same validated shape.
         except (ValueError, IndexError):
+            return None  # Reject malformed numeric parts without propagating parse exceptions.
+        if 0 <= hour <= 23 and 0 <= minute <= 59:  # Enforce valid 24-hour clock range before formatting.
+            return hour, minute
+        return None  # Reject impossible times so callers can re-prompt operator.
+
+    def _parse_absolute_time(self, time_str: str, use_site_local: bool) -> str | None:
+        """Parse absolute HH:MM time input."""
+        normalized_time, is_utc = self._strip_utc_suffix(
+            time_str
+        )  # Separate suffix handling from numeric parsing for reuse.
+        parsed_parts = self._parse_hour_minute_parts(
+            normalized_time
+        )  # Parse and validate HH:MM once for both UTC and site-local modes.
+        if parsed_parts is None:
             return None
+        hour, minute = parsed_parts  # Unpack only after successful validation keeps values trustworthy.
+        if use_site_local:  # Site-local mode keeps local wall-clock value without UTC conversion.
+            return self._format_site_local_time(hour, minute)
+        return self._format_utc_time(
+            hour, minute, is_utc
+        )  # Global mode converts plain local or explicit UTC input appropriately.
 
     @staticmethod
     def _format_site_local_time(hour: int, minute: int) -> str:
@@ -1462,24 +1736,18 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
 
     def _parse_download_absolute(self, time_str: str) -> datetime | None:
         """Parse absolute time string into datetime for download scheduling."""
-        is_utc = time_str.upper().endswith(" UTC")
-        if is_utc:
-            time_str = time_str[:-4].strip()
-
-        try:
-            time_parts = time_str.split(":")
-            if len(time_parts) != 2:
-                return None
-            hour = int(time_parts[0])
-            minute = int(time_parts[1])
-            if not (0 <= hour <= 23 and 0 <= minute <= 59):
-                return None
-
-            if is_utc:
-                return self._resolve_utc_datetime(hour, minute)
-            return self._resolve_local_to_utc_datetime(hour, minute)
-        except (ValueError, IndexError):
+        normalized_time, is_utc = self._strip_utc_suffix(
+            time_str
+        )  # Reuse same UTC-suffix logic as string formatter to keep behavior aligned.
+        parsed_parts = self._parse_hour_minute_parts(
+            normalized_time
+        )  # Share HH:MM validation so absolute parsers reject same invalid inputs.
+        if parsed_parts is None:
             return None
+        hour, minute = parsed_parts  # Unpack only after validation ensures values fit datetime replace().
+        if is_utc:  # Explicit UTC input should not be treated as local wall-clock time.
+            return self._resolve_utc_datetime(hour, minute)
+        return self._resolve_local_to_utc_datetime(hour, minute)  # Default plain HH:MM input to operator local time.
 
     @staticmethod
     def _resolve_utc_datetime(hour: int, minute: int) -> datetime:
@@ -1619,31 +1887,68 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         self.upgrade_config["force"] = False
         return True
 
+    @staticmethod
+    def _default_canary_phases() -> list[int]:
+        """Return default canary phase percentages."""
+        return [
+            1,
+            2,
+            4,
+            8,
+            16,
+            32,
+            64,
+            100,
+        ]  # Keep default wave plan defined once for prompt, fallback, and body generation.
+
+    @staticmethod
+    def _parse_canary_phase_values(phases_input: str) -> list[int] | None:
+        """Parse comma-separated canary phases."""
+        try:
+            phases = [
+                int(part.strip()) for part in phases_input.split(",") if part.strip()
+            ]  # Ignore empty segments so stray commas do not abort valid input.
+        except ValueError:
+            return None  # Reject any non-integer wave definitions so caller can fall back to safe default.
+        if phases and all(
+            0 < phase <= 100 for phase in phases
+        ):  # Require all waves to stay inside valid percentage bounds.
+            return phases
+        return None  # Reject empty or out-of-range phase lists to prevent invalid API payloads.
+
+    def _set_default_canary_phases(self, message: str | None = None) -> None:
+        """Store default canary phases with optional explanation."""
+        if message:  # Print explanation only when user input was provided but invalid.
+            print(message)
+        self.upgrade_config["canary_phases"] = (
+            self._default_canary_phases()
+        )  # Always fall back to known-safe wave progression.
+
     def _configure_canary_phases(self) -> bool:
         """Configure canary phase percentages."""
-        print("\n  Canary Configuration:")
+        print("\n  Canary Configuration:")  # Separate canary prompt from prior config section for readability.
         print("    Canary phases define what percentage of devices to upgrade in each wave.")
         print("    Example: '1,2,4,8,16,32,64,100' means 1%, then 2%, then 4%, etc.")
         try:
-            phases_input = self._input_fn(
-                "  Canary phases (comma-separated) [1,2,4,8,16,32,64,100]: ", "canary_phases"
-            ).strip()
+            phases_input = (
+                self._input_fn(  # Preserve safe_input wrapper because SSH/container sessions may disconnect mid-prompt.
+                    "  Canary phases (comma-separated) [1,2,4,8,16,32,64,100]: ", "canary_phases"
+                ).strip()
+            )
         except SystemExit:
             return False
-
-        if phases_input:
-            try:
-                phases = [int(p.strip()) for p in phases_input.split(",") if p.strip()]
-                if phases and all(0 < p <= 100 for p in phases):
-                    self.upgrade_config["canary_phases"] = phases
-                else:
-                    print("    ! Invalid phases, using default [1,2,4,8,16,32,64,100]")
-                    self.upgrade_config["canary_phases"] = [1, 2, 4, 8, 16, 32, 64, 100]
-            except ValueError:
-                print("    ! Invalid input, using default [1,2,4,8,16,32,64,100]")
-                self.upgrade_config["canary_phases"] = [1, 2, 4, 8, 16, 32, 64, 100]
-        else:
-            self.upgrade_config["canary_phases"] = [1, 2, 4, 8, 16, 32, 64, 100]
+        if not phases_input:  # Blank input should intentionally use default rollout profile.
+            self._set_default_canary_phases()
+            return True
+        parsed_phases = self._parse_canary_phase_values(
+            phases_input
+        )  # Validate custom wave percentages before mutating config.
+        if parsed_phases is None:
+            self._set_default_canary_phases("    ! Invalid phases, using default [1,2,4,8,16,32,64,100]")
+            return True
+        self.upgrade_config["canary_phases"] = (
+            parsed_phases  # Store validated custom rollout plan for later API body construction.
+        )
         return True
 
     def _configure_failure_threshold(self) -> bool:
@@ -1740,31 +2045,68 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             self.upgrade_config["p2p_parallelism"] = 100
         return True
 
-    def _display_configuration(self) -> None:
-        """Display configured upgrade settings."""
-        print("\n  + Configuration:")
-        print(f"      Download Strategy: {self.upgrade_config['download_strategy']}")
-        print(f"      Reboot Strategy: {self.upgrade_config['reboot_strategy']}")
+    def _print_time_mode_summary(self) -> None:
+        """Print time-mode summary line."""
+        use_site_local = self.upgrade_config.get(
+            "use_site_local_time", False
+        )  # Read mode flag once so label logic stays simple.
+        time_mode = (
+            "Site-Local" if use_site_local else "Global (UTC)"
+        )  # Convert boolean config into operator-friendly wording.
+        print(
+            f"      Time Mode: {time_mode}"
+        )  # Keep time-mode visibility high because schedule semantics depend on it.
 
-        use_site_local = self.upgrade_config.get("use_site_local_time", False)
-        time_mode = "Site-Local" if use_site_local else "Global (UTC)"
-        print(f"      Time Mode: {time_mode}")
-
-        start_dt = self.upgrade_config.get("start_datetime")
-        reboot_dt = self.upgrade_config.get("reboot_datetime")
+    def _print_schedule_summary(self) -> None:
+        """Print download and reboot schedule summary."""
+        start_dt = self.upgrade_config.get(
+            "start_datetime"
+        )  # Pull configured download schedule for immediate fallback wording.
+        reboot_dt = self.upgrade_config.get(
+            "reboot_datetime"
+        )  # Pull configured reboot schedule for dependent fallback wording.
+        reboot_label = (
+            reboot_dt if reboot_dt else ("Same as download" if start_dt else "Immediate")
+        )  # Explain implicit reboot timing explicitly.
         print(f"      Download Time: {start_dt if start_dt else 'Immediate'}")
-        print(f"      Reboot Time: {reboot_dt if reboot_dt else ('Same as download' if start_dt else 'Immediate')}")
-        print(f"      Max Failure: {self.upgrade_config['max_failure_percentage']}%")
-        if "canary_phases" in self.upgrade_config:
-            phases_str = ", ".join(str(p) for p in self.upgrade_config["canary_phases"])
+        print(f"      Reboot Time: {reboot_label}")
+
+    def _print_canary_summary(self) -> None:
+        """Print canary summary when configured."""
+        if (
+            "canary_phases" in self.upgrade_config
+        ):  # Only show canary field when strategy actually requires or captured it.
+            phases_str = ", ".join(
+                str(phase) for phase in self.upgrade_config["canary_phases"]
+            )  # Render stored wave list compactly.
             print(f"      Canary Phases: [{phases_str}]%")
-        if self.upgrade_config.get("enable_p2p"):
+
+    def _print_p2p_summary(self) -> None:
+        """Print peer-to-peer summary."""
+        if self.upgrade_config.get("enable_p2p"):  # Show detailed knobs only when P2P is active in final payload.
             print(
                 f"      P2P Enabled: Yes (cluster: {self.upgrade_config.get('p2p_cluster_size', 5)}, "
                 f"parallel: {self.upgrade_config.get('p2p_parallelism', 100)})"
             )
-        else:
-            print("      P2P Enabled: No")
+            return
+        print("      P2P Enabled: No")  # Keep explicit disabled state so operator does not infer omission accidentally.
+
+    def _display_configuration(self) -> None:
+        """Display configured upgrade settings."""
+        print("\n  + Configuration:")  # Start summary block after configuration prompts finish.
+        print(
+            f"      Download Strategy: {self.upgrade_config['download_strategy']}"
+        )  # Show chosen download behavior prominently for final confirmation.
+        print(
+            f"      Reboot Strategy: {self.upgrade_config['reboot_strategy']}"
+        )  # Show chosen reboot behavior beside download strategy for comparison.
+        self._print_time_mode_summary()  # Keep time-mode wording isolated.
+        self._print_schedule_summary()  # Keep schedule output isolated.
+        print(
+            f"      Max Failure: {self.upgrade_config['max_failure_percentage']}%"
+        )  # Preserve hard-stop threshold visibility before execution.
+        self._print_canary_summary()  # Print optional rollout phases only when present in config.
+        self._print_p2p_summary()  # Print P2P details or explicit disabled state in one place.
 
     # =========================================================================
     # STEP 7: CONFIRM AND EXECUTE
@@ -1950,34 +2292,55 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
             logging.error("Org-level upgrade failed for version %s: %s", version, exc)
             self.failed_api_calls += 1
 
-    def _build_upgrade_body(self, version: str, data: dict[str, Any]) -> dict[str, Any]:
-        """Build the API request body for an upgrade."""
-        body: dict[str, Any] = {
+    def _create_base_upgrade_body(self, version: str, data: dict[str, Any]) -> dict[str, Any]:
+        """Create required base upgrade payload."""
+        return {  # Build required fields first so optional enrichments can layer on top deterministically.
             "versions": [{"firmware_type": "ap", "version": version}],
-            "models": [[m] for m in data["models"]],
+            "models": [[model] for model in data["models"]],
             "strategy": self.upgrade_config["reboot_strategy"],
             "download_strategy": self.upgrade_config["download_strategy"],
             "max_failure_percentage": self.upgrade_config["max_failure_percentage"],
         }
 
-        if self.upgrade_config.get("start_datetime"):
+    def _add_schedule_fields(self, body: dict[str, Any]) -> None:
+        """Add optional schedule fields to upgrade body."""
+        if self.upgrade_config.get(
+            "start_datetime"
+        ):  # Include download schedule only when operator requested delayed execution.
             body["start_datetime"] = self.upgrade_config["start_datetime"]
-        if self.upgrade_config.get("reboot_datetime"):
+        if self.upgrade_config.get(
+            "reboot_datetime"
+        ):  # Include reboot schedule only when it differs from default implied behavior.
             body["reboot_datetime"] = self.upgrade_config["reboot_datetime"]
 
-        if self.target_all_sites:
+    def _add_scope_fields(self, body: dict[str, Any]) -> None:
+        """Add org-vs-site scope fields to upgrade body."""
+        if self.target_all_sites:  # Use org-wide flag when operator targeted every site in the organization.
             body["all_sites"] = True
-        else:
-            body["site_ids"] = self.selected_site_ids
+            return
+        body["site_ids"] = self.selected_site_ids  # Otherwise restrict payload to explicit site subset chosen earlier.
 
-        if "canary_phases" in self.upgrade_config:
+    def _add_canary_fields(self, body: dict[str, Any]) -> None:
+        """Add optional canary rollout fields to upgrade body."""
+        if "canary_phases" in self.upgrade_config:  # Send phased rollout details only when configuration captured them.
             body["canary_phases"] = self.upgrade_config["canary_phases"]
 
-        if self.upgrade_config.get("enable_p2p"):
+    def _add_p2p_fields(self, body: dict[str, Any]) -> None:
+        """Add optional peer-to-peer settings to upgrade body."""
+        if self.upgrade_config.get("enable_p2p"):  # Include P2P knobs only when feature is enabled.
             body["enable_p2p"] = True
             body["p2p_cluster_size"] = self.upgrade_config.get("p2p_cluster_size", 5)
             body["p2p_parallelism"] = self.upgrade_config.get("p2p_parallelism", 100)
 
+    def _build_upgrade_body(self, version: str, data: dict[str, Any]) -> dict[str, Any]:
+        """Build the API request body for an upgrade."""
+        body = self._create_base_upgrade_body(
+            version, data
+        )  # Start from required fields shared by every upgrade request.
+        self._add_schedule_fields(body)  # Layer in optional schedule controls when configured.
+        self._add_scope_fields(body)  # Add either org-wide or scoped site targeting fields.
+        self._add_canary_fields(body)  # Add rollout phases only when present in config.
+        self._add_p2p_fields(body)  # Add P2P options last because they are fully optional payload enrichments.
         return body
 
     def _process_upgrade_response(
