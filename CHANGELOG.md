@@ -7,6 +7,32 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Added
+
+- **Site Address Audit from CSV (menu 195, read-only)**: New `src/site/address_audit/`
+  subpackage that reconciles a customer-provided tab-delimited CSV (serial, model,
+  address, city, state, zip) against Mist site records and surfaces address
+  discrepancies (the common strip-mall "missing suite/unit" case for retail
+  fleets). Pipeline: ingest + sanitize CSV -> match each row to a Mist site by
+  device **serial number** (golden key) with a rapidfuzz >=85% address fallback
+  -> enrich with SNMP location (`vars.snmp_location` + `snmp_config.location`)
+  -> resolve/validate the address through three **free** tiers and classify into
+  one of eight states -> render an old-vs-suggested comparison table -> optionally
+  save a timestamped CSV to `data/`. **Zero Mist writes**; write-back is an inert
+  `AddressCorrector` stub. Address resolution tiers (no paid APIs; there is no Mist
+  geocoding endpoint): (1) internal CSV/SNMP/Mist comparison, no network;
+  (2) Nominatim street validation reusing `NominatimValidator`; (3) optional
+  Playwright "hijack" of the live Mist dashboard Location Search field
+  (`--ui-geocode`, OFF by default) that launches or takes over (CDP) the system
+  browser -- the only free path to Google-quality retail suite numbers. Results
+  cached in an additive `geocoding_cache` table in `data/mist_data.db`
+  (`INSERT OR REPLACE`). Classification anchors on the street house number plus a
+  street-name word so SNMP store-number prefixes and partial addresses do not
+  cause false `WRONG_STREET` results. Adds the `--ui-geocode` CLI flag and a
+  `BUSINESS_NAME` `.env` lookup (prompted at runtime when blank, skippable for
+  private addresses). 11 new modules + 8 unit-test files (58 tests). Spec:
+  `specs/1003-site-address-audit/`.
+
 ### Lint / Compliance
 
 - **Issue #429 -- CONV-LOG-FSTRING sweep**: Converted all 695 eager-formatting
