@@ -205,9 +205,7 @@ class RoutingUtils:
         self._display_prefix_table_impl(entries)
 
     @staticmethod
-    def _update_set_if_present(
-        target_set: set[str], value: Any, sentinel: str = "-"
-    ) -> None:
+    def _update_set_if_present(target_set: set[str], value: Any, sentinel: str = "-") -> None:
         """Add ``value`` to ``target_set`` if it is truthy and not the sentinel placeholder."""
         if value and value != sentinel:
             target_set.add(value)
