@@ -117,3 +117,37 @@ class TestEnvConfig:
         assert config.dashboard_url == "https://manage.eu.mist.com/"
         assert config.per_lookup_timeout_s == 30.0
         assert config.max_lookups == 10
+
+    def test_skip_ssl_verify_defaults_true(self, monkeypatch):
+        """SSL verification is skipped by default (corporate Zscaler environment)."""
+        monkeypatch.delenv("MIST_SKIP_SSL_VERIFY", raising=False)
+        assert AddressAuditEngine._skip_ssl_verify() is True
+
+    def test_skip_ssl_verify_env_disable(self, monkeypatch):
+        """Setting MIST_SKIP_SSL_VERIFY=false re-enables certificate verification."""
+        monkeypatch.setenv("MIST_SKIP_SSL_VERIFY", "false")
+        assert AddressAuditEngine._skip_ssl_verify() is False
+
+
+class TestSourceLabel:
+    """Source-column labelling, including OSM street-validation."""
+
+    def test_internal_with_osm_confirmation(self):
+        """An internal suite whose street OSM confirmed is labelled Internal+OSM."""
+        rr = ResolverResult(query="q", canonical_address="X Suite 5", source="internal", street_validated=True)
+        assert AddressAuditEngine._source_label(rr) == "Internal+OSM"
+
+    def test_internal_without_osm(self):
+        """An internal suite OSM could not confirm is labelled plain Internal."""
+        rr = ResolverResult(query="q", canonical_address="X Suite 5", source="internal", street_validated=False)
+        assert AddressAuditEngine._source_label(rr) == "Internal"
+
+    def test_nominatim_label(self):
+        """A Nominatim-sourced result is labelled Nominatim."""
+        rr = ResolverResult(query="q", canonical_address="X", source="nominatim")
+        assert AddressAuditEngine._source_label(rr) == "Nominatim"
+
+    def test_no_result_label(self):
+        """A result with no canonical address is labelled '-'."""
+        rr = ResolverResult(query="q", canonical_address=None, source="internal")
+        assert AddressAuditEngine._source_label(rr) == "-"

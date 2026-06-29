@@ -9,6 +9,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Fixed
 
+- **Address audit external validation via OpenStreetMap (menu 195)**: Nominatim
+  (Tier 2) silently failed for every site because the resolver verified TLS
+  certificates, which Zscaler SSL inspection breaks -- so the audit only ever
+  used internal CSV/SNMP comparison and the "Source" column never showed external
+  validation. The resolver now skips TLS verification for the public Nominatim
+  call by default (override with `MIST_SKIP_SSL_VERIFY=false`), strips the
+  suite/unit before geocoding (OpenStreetMap has no US retail suites) so the base
+  street can match, validates the street on **every** row, and records a
+  `street_validated` flag surfaced as `Internal+OSM` / `Nominatim` in the Source
+  column. The Nominatim step now logs visibly (INFO on hit, WARNING on miss).
+  Verified live: real streets validate (confidence ~0.88), nonsense streets do
+  not. NOTE: OpenStreetMap validates the street only; business-name + suite
+  confirmation still requires the optional `--ui-geocode` Google-Places tier.
+
 - **Address audit CSV delimiter (menu 195)**: The CSV ingester assumed tab
   delimiters and silently skipped every row of a comma-delimited file (the Excel
   default `.csv`), reporting "No valid rows parsed". The delimiter is now

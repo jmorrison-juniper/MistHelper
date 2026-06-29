@@ -57,6 +57,7 @@ class ResolverResult:
     confidence: float = 0.0  # Heuristic 0.0-1.0 confidence in the result.
     raw_response: dict[str, Any] = field(default_factory=dict)  # Raw tier payload (cached as raw_json).
     ambiguous: bool = False  # True when multiple plausible results (mall) -> drives AMBIGUOUS.
+    street_validated: bool = False  # True when OpenStreetMap/Nominatim confirmed the base street exists.
 
 
 @dataclass
