@@ -3,19 +3,66 @@
 Resolves OQ-001 and OQ-002. This tier is OFF by default, enabled only by
 `--ui-geocode`, invoked selectively (e.g. `AMBIGUOUS` rows), and MUST fail soft.
 
+> **Status**: connection foundation IMPLEMENTED and verified
+> (`src/site/address_audit/ui_geocoder.py`, `models.py`). Both connection modes
+> below were proven end-to-end against the system browser on 2026-06-29. The
+> per-row resolver wiring (selective invocation from `AddressResolver`) lands
+> with the full feature implementation.
+
 ---
 
-## Authentication (OQ-001 -> resolved)
+## Environment constraint (verified)
 
-**v1 = interactive operator login.** At run start (when `--ui-geocode` set), launch
-a non-headless Playwright browser, navigate to the Mist dashboard login, and pause
-for the operator to authenticate manually. No credentials stored in `.env`; no new
-secrets. The audit proceeds once the operator confirms the session is ready (via a
-`safe_input()` "press Enter when logged in" gate).
+On a Zscaler SSL-inspected Windows host, **Playwright cannot download its own
+Chromium** (`UNABLE_TO_GET_ISSUER_CERT_LOCALLY` from the Playwright CDN -- same
+root cause as the documented GHCR-push block). Therefore this tier MUST drive a
+**system-installed browser**, never a Playwright-bundled one:
+
+- `chromium.launch(channel="msedge")` (or `"chrome"`) uses the OS browser -- no download.
+- `chromium.connect_over_cdp(...)` attaches to a browser the OS already has.
+
+The host used for verification has **Microsoft Edge** (Chromium) and no Chrome,
+so `browser_channel` defaults to `"msedge"`.
+
+---
+
+## Connection modes (OQ-001 -> resolved)
+
+Configured via `UIGeocoderConfig.connect_mode`:
+
+**1. `attach` (DEFAULT, recommended) -- CDP takeover.** Reuse a browser the
+operator already has open and logged into Mist. The operator (or
+`MistUIGeocoder.spawn_debuggable_browser()`) starts Edge with
+`--remote-debugging-port=9222` and a throwaway `--user-data-dir`; the tier calls
+`connect_over_cdp("http://localhost:9222")` and reuses `browser.contexts[0]` --
+the live SSO session, cookies intact. **No credentials stored in `.env`; no new
+secrets; no re-auth per run.** This is the cleanest fit for SSO/MFA dashboards.
+
+**2. `launch` -- fresh system Edge + interactive login.** `chromium.launch(
+channel="msedge", headless=False)`, navigate to `dashboard_url`, then block on a
+`InputUtils.safe_input()` "press Enter when logged in" gate before the first
+lookup.
 
 Deferred opt-ins (documented, NOT built in v1):
-- (b) scripted login from `.env` dashboard credentials,
-- (c) reuse of an existing browser profile / cookie jar.
+- scripted login from `.env` dashboard credentials,
+- reuse of the operator's *default* browser profile / cookie jar (we use an
+  isolated throwaway profile instead, to avoid touching their real session).
+
+---
+
+## Selectors (anchored on Google, not Mist)
+
+The Location Search field is a **Google Places Autocomplete** widget ("powered
+by Google"). The implementation anchors on Google's own stable classes rather
+than Mist's surrounding markup:
+
+- Input candidates (first match wins): `input.pac-target-input` ->
+  `input[placeholder*='Location Search']` -> `input[placeholder*='Location']`.
+- Suggestion rows: `.pac-container .pac-item`.
+
+These `.pac-*` classes are emitted by Google's JS and are far more stable than
+Mist's DOM. Constants are dated at the top of `ui_geocoder.py`; see the
+re-capture procedure below.
 
 ---
 
@@ -23,13 +70,15 @@ Deferred opt-ins (documented, NOT built in v1):
 
 Input: a query string `"{business_name} {address}"` (or raw address if no business
 name). Steps:
-1. Open/focus the site-edit **address autocomplete** field.
-2. Type the query.
+1. Open/focus the site-edit **address autocomplete** field (selector candidates above).
+2. Type the query (with a small per-key delay so Google fires autocomplete).
 3. Wait for the Google-Places suggestion dropdown (bounded by per-lookup timeout).
 4. Capture the top suggestion text; capture additional suggestions to detect ambiguity.
 
-Output: `ResolverResult(source="mist_ui", canonical_address=<top suggestion>,
-ambiguous=<len(suggestions) > 1>)`, or `None` on any failure.
+The tier **never commits** a change (read-only): it reads the suggestion text and
+backs out. Output: `ResolverResult(source="mist_ui", canonical_address=<top
+suggestion>, confidence=0.9 single / 0.6 ambiguous, raw_response={suggestions,
+ambiguous})`, or `None` on any failure.
 
 ---
 
