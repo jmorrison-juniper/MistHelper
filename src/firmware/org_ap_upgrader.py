@@ -1374,7 +1374,8 @@ class OrgLevelAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attribute
         except ValueError:
             return None  # Reject non-numeric tokens so caller can skip model safely.
         if 0 <= idx < len(model_versions):  # Ensure index points at an available version before returning record.
-            return model_versions[idx]
+            result: dict[str, Any] = model_versions[idx]  # Narrow Any to expected dict shape for mypy strict.
+            return result
         return None  # Reject out-of-range menu choices without mutating plan state.
 
     def _get_devices_needing_version(self, devices: list[Any], target_version: Any) -> list[Any]:
