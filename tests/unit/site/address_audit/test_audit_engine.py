@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from src.site.address_audit import audit_engine as eng_mod
 from src.site.address_audit.audit_engine import AddressAuditEngine
-from src.site.address_audit.models import AddressRow, MatchedSite, ResolverResult
+from src.site.address_audit.models import AddressRow, AuditResult, MatchedSite, ResolverResult
 
 _MIST_NO_SUITE = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
 _MIST_WITH_SUITE = {"address": "100 Main St Suite 5", "city": "Town", "state": "FL", "zip": "33000"}
@@ -369,3 +369,100 @@ class TestSourceLabel:
         """A result with no canonical address is labelled '-'."""
         rr = ResolverResult(query="q", canonical_address=None, source="internal")
         assert AddressAuditEngine._source_label(rr) == "-"
+
+
+class TestConflictingHints:
+    """A no-majority hint disagreement short-circuits to CONFLICTING_HINTS without resolving."""
+
+    def test_conflicting_hints_short_circuits(self):
+        """When the resolver reports conflicting hints, the row is review-only and resolve() never runs."""
+        engine = AddressAuditEngine()  # Real engine; resolver is a guard stub below.
+        row = AddressRow(
+            serial="111", model="SSR130", address="2825 Crossroads Blvd", city="Waterloo", state="IA", zip_code="50702"
+        )  # CSV hint.
+        site = MatchedSite(
+            site_id="s1",
+            site_name="IAS0252F",
+            mist_address={"address": "1523 E San Marnan Dr", "city": "Waterloo", "state": "IA", "zip": "50702"},
+            snmp_location="100 Mall Dr Waterloo IA 50702",
+            match_strategy="serial",
+        )  # Three divergent hints.
+
+        class _Guard:
+            def has_conflicting_hints(self, _candidates):
+                return True  # Force the conflict path.
+
+            def resolve(self, *_):
+                raise AssertionError("resolver must not run on a conflict row")  # Must be skipped.
+
+        result = engine._build_audit_result(row, site, _Guard(), "", False)  # Drive the short-circuit.
+        assert result.issue_type == "CONFLICTING_HINTS"  # Flagged review-only.
+        assert result.suggested_address == ""  # No recommendation offered.
+        assert result.source == "-"  # No single trustworthy source.
+
+
+class TestFlagDuplicateAddresses:
+    """Cross-row collision: one address shared by 2+ distinct sites -> DUPLICATE_ADDRESS."""
+
+    @staticmethod
+    def _result(site_id, name, suggested="", mist_addr=None, issue="ADDRESS_MATCH", source="Google (Mist UI)"):
+        """Build a minimal AuditResult for the collision pass."""
+        row = AddressRow(serial=site_id, model="M", address="x", city="c", state="s", zip_code="z")  # Stub row.
+        site = MatchedSite(site_id=site_id, site_name=name, mist_address=mist_addr or {}, match_strategy="serial")
+        return AuditResult(
+            address_row=row, matched_site=site, issue_type=issue, suggested_address=suggested, source=source
+        )
+
+    def test_two_sites_same_suggested_are_flagged(self):
+        """Two different sites with the identical suggested address -> both DUPLICATE_ADDRESS."""
+        a = self._result("s1", "A", suggested="100 Main St, Town, FL 33000")  # Site A.
+        b = self._result("s2", "B", suggested="100 Main St, Town, FL 33000")  # Site B, same address.
+        AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
+        assert a.issue_type == "DUPLICATE_ADDRESS" and b.issue_type == "DUPLICATE_ADDRESS"  # Both flagged.
+        assert a.suggested_address == "" and a.source == "-"  # No push, no credited source.
+
+    def test_strip_mall_different_suites_untouched(self):
+        """Same street but different suites are distinct full addresses -> not a collision."""
+        a = self._result("s1", "A", suggested="100 Main St Ste 100, Town, FL 33000")  # Unit 100.
+        b = self._result("s2", "B", suggested="100 Main St Ste 200, Town, FL 33000")  # Unit 200.
+        AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
+        assert a.issue_type == "ADDRESS_MATCH" and b.issue_type == "ADDRESS_MATCH"  # Strip-mall case preserved.
+
+    def test_single_site_not_flagged(self):
+        """A lone site is never a collision."""
+        a = self._result("s1", "A", suggested="100 Main St, Town, FL 33000")  # Only one site.
+        AddressAuditEngine._flag_duplicate_addresses([a])  # Run the post-pass.
+        assert a.issue_type == "ADDRESS_MATCH"  # Untouched.
+
+    def test_same_site_twice_not_flagged(self):
+        """Two rows for the SAME site (same id) are not a cross-site collision."""
+        a = self._result("s1", "A", suggested="100 Main St, Town, FL 33000")  # Same site_id ...
+        b = self._result("s1", "A", suggested="100 Main St, Town, FL 33000")  # ... appearing twice.
+        AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
+        assert a.issue_type == "ADDRESS_MATCH" and b.issue_type == "ADDRESS_MATCH"  # Not flagged.
+
+    def test_conflicting_hints_row_is_preserved(self):
+        """A CONFLICTING_HINTS row keeps its (more specific) reason and is skipped by the pass."""
+        a = self._result(
+            "s1",
+            "A",
+            suggested="",
+            mist_addr={"address": "100 Main St, Town, FL 33000"},
+            issue="CONFLICTING_HINTS",
+            source="-",
+        )  # Already review-only.
+        b = self._result("s2", "B", suggested="100 Main St, Town, FL 33000")  # Different site, same address.
+        AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
+        assert a.issue_type == "CONFLICTING_HINTS"  # Preserved (skipped).
+        assert b.issue_type == "ADDRESS_MATCH"  # Alone in its bucket -> not flagged.
+
+    def test_collision_detected_via_mist_fallback_and_country_strip(self):
+        """Suite-less ADDRESS_MATCH rows collide via the Mist address even when one carries a ', USA' suffix."""
+        a = self._result(
+            "s1", "A", suggested="", mist_addr={"address": "100 Main St, Town, FL 33000, USA"}, issue="ADDRESS_MATCH"
+        )  # Country suffix.
+        b = self._result(
+            "s2", "B", suggested="", mist_addr={"address": "100 Main St, Town, FL 33000"}, issue="ADDRESS_MATCH"
+        )  # No suffix.
+        AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
+        assert a.issue_type == "DUPLICATE_ADDRESS" and b.issue_type == "DUPLICATE_ADDRESS"  # Normalized to one key.

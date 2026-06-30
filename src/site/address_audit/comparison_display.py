@@ -23,7 +23,7 @@ _COLUMN_NAMES = [  # The seven table columns, in display order.
     "SNMP Location",  # SNMP-derived location reference (truncated in terminal).
     "Suggested Address",  # Resolver's best correction (truncated in terminal).
     "Source",  # Which tier produced the suggestion.
-    "Issue Type",  # One of the nine classification states.
+    "Issue Type",  # One of the eleven classification states.
 ]
 _TRUNCATE_WIDTH = 40  # Max terminal width for the two widest columns.
 

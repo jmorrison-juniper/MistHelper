@@ -67,7 +67,7 @@ class AuditResult:
     address_row: AddressRow  # Original CSV input row.
     matched_site: MatchedSite  # Match outcome (+ SNMP enrichment).
     resolver_result: ResolverResult | None = None  # None for UNMATCHED rows (no resolution attempted).
-    issue_type: str = "UNMATCHED"  # Exactly one of the nine classification states.
+    issue_type: str = "UNMATCHED"  # Exactly one of the eleven classification states.
     suggested_address: str = ""  # Best correction to display (full value; truncated only in terminal).
     source: str = "-"  # Source column label (Internal/Internal+OSM/Nominatim/Google (Mist UI)/Cache/-).
 
