@@ -43,7 +43,9 @@ except ImportError:  # pragma: no cover -- exercised only when tqdm is absent.
     tqdm = None  # type: ignore[assignment]  # Sentinel; _progress degrades to a plain iterator.
 
 _DATA_DIR = "data"  # Directory scanned for the customer CSV.
-_SUITE_PATTERN = r"\b(?:ste|suite|unit|apt|bldg|building)\.?\s+#?\s*([\w-]+)"  # Suite token (state-safe).
+_SUITE_PATTERN = (  # Suite token with a capture group for the unit id (state-safe).
+    r"\b(?:ste|suite|unit|apt|apartment|bldg|building|space|spc|rm|room|lot)\b\.?\s*#?\s*([\w-]+)" r"|#\s*(\d[\w-]*)"
+)
 
 
 class AddressAuditEngine:
@@ -62,9 +64,17 @@ class AddressAuditEngine:
         self._renderer = renderer or ComparisonTableRenderer()  # Table + prompt.
         self._reporter = reporter or AddressAuditReporter()  # CSV report writer.
 
-    def run(self, apisession: Any, org_id: str, ui_geocode: bool = False) -> None:
-        """Menu entry point: drive the full read-only audit pipeline end-to-end."""
-        logging.info("Starting site address audit (ui_geocode=%s)", ui_geocode)  # Action-log start.
+    def run(self, apisession: Any, org_id: str) -> None:
+        """Menu entry point: drive the full read-only audit pipeline end-to-end.
+
+        The Mist site address, the SNMP location variable, and the customer CSV
+        are all treated as *hints* -- none is authoritative. The resolver fuses
+        them into one best-guess query and prefers an external verifier
+        (OpenStreetMap, plus Tier-3 browser geocoding when a debuggable browser
+        is reachable) to deduce the true, shippable address.
+        """
+        ui_geocode = self._ui_geocode_enabled()  # Tier-3 web geocoding: env-gated, default auto, no CLI flag.
+        logging.info("Starting site address audit (tier3_geocode=%s)", ui_geocode)  # Action-log start.
         csv_path = self._select_csv_file()  # Pick the customer CSV from data/.
         if csv_path is None:  # No CSV present -> nothing to audit.
             print("No CSV/TSV files found in data/. Drop your address file there and retry.")  # Inform.
@@ -186,10 +196,21 @@ class AddressAuditEngine:
     def _build_resolver(self, ui_geocode: bool) -> AddressResolver:
         """Construct the tiered resolver, wiring the Tier-3 UI geocoder when enabled."""
         ui_geocoder = None  # Default: Tier 3 disabled.
-        if ui_geocode:  # Operator opted into UI geocoding.
-            ui_geocoder = self._make_ui_geocoder()  # Build and connect the browser geocoder.
+        if ui_geocode:  # Tier 3 permitted (env default auto) -> try to attach a browser.
+            ui_geocoder = self._make_ui_geocoder()  # Build and connect the browser geocoder (fail-soft).
         skip_ssl = self._skip_ssl_verify()  # Skip cert checks behind corporate SSL inspection (Zscaler).
         return AddressResolver(skip_ssl_verify=skip_ssl, ui_geocoder=ui_geocoder)  # Resolver with optional Tier 3.
+
+    @staticmethod
+    def _ui_geocode_enabled() -> bool:
+        """Return whether Tier-3 web geocoding may run (env-gated, default on, no CLI flag).
+
+        Tier 3 engages automatically when a debuggable browser is reachable and
+        degrades silently to Tier 1/2 otherwise, so routine runs are never
+        disrupted. Set ``ADDRESS_AUDIT_GEOCODE=off`` to skip the attempt.
+        """
+        raw = os.environ.get("ADDRESS_AUDIT_GEOCODE", "auto").strip().lower()  # Env override; default auto/on.
+        return raw not in ("off", "0", "no", "false", "none", "disabled")  # Any disable token turns it off.
 
     @staticmethod
     def _skip_ssl_verify() -> bool:
@@ -209,7 +230,11 @@ class AddressAuditEngine:
 
         geocoder = MistUIGeocoder(AddressAuditEngine._ui_config())  # Env-driven attach/launch config.
         if not geocoder.connect():  # Establish the browser session (fail-soft).
-            logging.warning("Tier-3 UI geocoder unavailable; continuing with Tier 1/2 only")  # Inform.
+            logging.info(  # No debuggable browser is the normal case; degrade quietly to Tier 1/2.
+                "Tier-3 web geocoder not attached (no debuggable browser found); "
+                "using internal + OpenStreetMap hints only. Open Edge with "
+                "--remote-debugging-port=9222 to enable, or set ADDRESS_AUDIT_GEOCODE=off to skip."
+            )
             return None  # Disable Tier 3 for this run.
         return geocoder  # Connected geocoder ready for selective lookups.
 
@@ -366,7 +391,9 @@ class AddressAuditEngine:
     def _suite(text: str) -> str:
         """Extract a normalized suite/unit identifier from an address, or ''."""
         match = re.search(_SUITE_PATTERN, text.lower())  # Find the first suite token.
-        return match.group(1).strip() if match else ""  # The unit identifier (e.g. "200").
+        if not match:  # No suite token present.
+            return ""  # Signal absence.
+        return (match.group(1) or match.group(2) or "").strip()  # Unit id from whichever alt matched.
 
     @staticmethod
     def _normalize(text: str) -> str:

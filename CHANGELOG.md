@@ -7,7 +7,33 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Changed
+
+- **Address audit Tier-3 web geocoding is now flag-free (menu 195)**: The
+  Tier-3 browser geocoder no longer requires the `--ui-geocode` CLI flag (the
+  flag has been removed). It is treated as the natural extension of the
+  "everything is a hint" model: the Mist site address, the SNMP location
+  variable, and the customer CSV are all *hints*, fused into one best-guess
+  query and verified against the web to deduce the true, shippable address.
+  Tier-3 now auto-engages whenever a debuggable browser is reachable and
+  degrades quietly to the internal + OpenStreetMap baseline otherwise, so
+  routine runs are never disrupted. A new `ADDRESS_AUDIT_GEOCODE=off` env knob
+  skips the attempt; the "no browser attached" message dropped from WARNING to
+  an informational note with enablement guidance.
+
 ### Fixed
+
+- **Address audit suggested-address cleanup (menu 195)**: Suggested addresses
+  were polluted with the customer's SAP internal store-code prefix
+  (e.g. `S2SJB - `, `08806 - `) and sometimes carried the SNMP field's stale ZIP.
+  The SNMP enricher now strips the leading SAP store code (it is not part of the
+  postal address), and Tier-1 rebuilds a clean suggestion from Mist's own
+  street/city/state/ZIP plus the discovered suite -- preferring the customer CSV
+  suite over the SNMP one. The suite detector was broadened to catch `#3`,
+  `Space P239`, `Spc`, `Rm`, `Lot`, and `Apartment` in addition to
+  Suite/Ste/Unit/Apt/Bldg. Result: `S2SJB - 5550 N Military Trl Unit 200 ... FL
+  33496` now renders as the clean, shippable `5550 N Military Trl Unit 200,
+  Boca Raton, FL 33431`.
 
 - **Address audit external validation via OpenStreetMap (menu 195)**: Nominatim
   (Tier 2) silently failed for every site because the resolver verified TLS
@@ -21,7 +47,8 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   column. The Nominatim step now logs visibly (INFO on hit, WARNING on miss).
   Verified live: real streets validate (confidence ~0.88), nonsense streets do
   not. NOTE: OpenStreetMap validates the street only; business-name + suite
-  confirmation still requires the optional `--ui-geocode` Google-Places tier.
+  confirmation still requires the optional Tier-3 Google-Places browser tier
+  (auto-engaged when a debuggable browser is available).
 
 - **Address audit CSV delimiter (menu 195)**: The CSV ingester assumed tab
   delimiters and silently skipped every row of a comma-delimited file (the Excel

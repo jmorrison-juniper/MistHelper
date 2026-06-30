@@ -21699,10 +21699,8 @@ menu_actions = {
     # SITE ADDRESS AUDIT (read-only)
     # ==============================
     "195": (
-        lambda ui_geocode=False: AddressAuditEngine().run(  # type: ignore[misc]
-            apisession, ConfigUtils.get_cached_or_prompted_org_id(), ui_geocode=ui_geocode
-        ),
-        "Audit site addresses from CSV (data/) - compare Mist vs. customer CSV vs. web; READ-ONLY, saves report. Optional --ui-geocode enables Tier-3 browser lookup",  # noqa: E501
+        lambda: AddressAuditEngine().run(apisession, ConfigUtils.get_cached_or_prompted_org_id()),  # type: ignore[misc]
+        "Audit site addresses from CSV (data/) - fuse Mist + SNMP + CSV hints, verify vs. web; READ-ONLY, saves report. Tier-3 browser geocoding auto-engages when available (ADDRESS_AUDIT_GEOCODE=off to skip)",  # noqa: E501
     ),
     # ==============================
     # READ-ONLY OPERATIONS
@@ -23598,11 +23596,6 @@ def _add_safety_arguments(parser: argparse.ArgumentParser) -> None:
         help="Enable external address validation using Nominatim API for address comparison operations",  # Nominatim toggle  # noqa: E501
     )
     parser.add_argument(
-        "--ui-geocode",
-        action="store_true",
-        help="Enable Tier-3 browser-based address lookup (menu 195) by driving/taking over the Mist dashboard address screen",  # noqa: E501
-    )
-    parser.add_argument(
         "--skip-ssl-verify",
         action="store_true",
         help="Skip SSL certificate verification for external API calls (use with caution - for corporate networks only)",  # noqa: E501
@@ -24004,7 +23997,6 @@ def _build_cli_func_kwargs(args: argparse.Namespace, site_id: str | None, device
         "fast": args.fast,  # Pass fast mode flag to enable concurrency.
         "dry_run": args.dry_run,  # Pass dry-run flag to skip destructive actions.
         "address_check": args.address_check,  # Pass address validation toggle.
-        "ui_geocode": args.ui_geocode,  # Pass Tier-3 UI geocoding toggle (menu 195).
         "skip_ssl_verify": args.skip_ssl_verify,  # Pass SSL verification bypass flag.
     }
 
