@@ -70,11 +70,12 @@ class AddressResolver:
         return result  # Hand the result back to the engine.
 
     def _resolve_uncached(self, candidates: ResolveCandidates, query: str) -> ResolverResult:
-        """Run Tier 1 (internal) + Tier 2 (OSM street validation) + optional Tier 3, fail-soft."""
+        """Run Tier 1 (internal) + Tier 2 (OSM) + optional Tier 3 (web authority), fail-soft."""
         try:
             internal = self._compare_internal(candidates)  # Tier 1: internal suite candidate (no network).
             osm = self._validate_nominatim(candidates, query)  # Tier 2: OpenStreetMap street validation.
-            return self._combine(internal, osm, candidates, query)  # Merge the tiers into one result.
+            ui = self._maybe_ui(candidates, query)  # Tier 3: Google-via-Mist authority (gated; fail-soft).
+            return self._combine(internal, osm, ui, candidates, query)  # Merge the tiers into one result.
         except Exception as exc:  # noqa: BLE001 -- one row must never abort the audit.
             logging.warning("Resolve failed for key derived from '%s': %s", query, exc)  # Log and continue.
             return ResolverResult(query=query, canonical_address=None, source="internal", confidence=0.0)
@@ -83,20 +84,29 @@ class AddressResolver:
         self,
         internal: ResolverResult | None,
         osm: ResolverResult | None,
+        ui: ResolverResult | None,
         candidates: ResolveCandidates,
         query: str,
     ) -> ResolverResult:
-        """Merge internal + OSM (+ optional UI) results, recording external validation."""
+        """Merge results with the web (Tier 3) as the authority for the true suite.
+
+        Priority: a confident Tier-3 (Google-via-Mist) suggestion WINS because it is
+        the only source that knows the real suite; otherwise the internal suite
+        candidate (street cross-checked by OSM); otherwise OSM's validated street;
+        otherwise NO_RESULT. Tier 3 only overrides when it actually returned an
+        address, so a missing/failed browser never makes results worse.
+        """
+        if ui is not None and ui.canonical_address:  # Tier 3 deduced a real (suite-bearing) address.
+            ui.query = query  # Stamp the query for cache consistency.
+            ui.street_validated = ui.street_validated or osm is not None  # Note OSM street cross-check.
+            return ui  # Web authority wins -> the true shippable address.
         if internal is not None:  # Internal supplied the suite-corrected suggestion.
             internal.query = query  # Stamp the query for cache consistency.
             internal.street_validated = osm is not None  # OSM confirmed the base street exists.
-            return internal  # Suite from internal source, street externally cross-checked.
+            return internal  # Suite from internal hint, street externally cross-checked.
         if osm is not None:  # No internal suite, but OSM validated the street.
             osm.street_validated = True  # OSM itself is the external validator here.
             return osm  # Return the OSM-canonical result.
-        ui_result = self._maybe_ui(candidates, query)  # Tier 3: optional, flagged.
-        if ui_result is not None:  # UI tier captured a suggestion.
-            return ui_result  # Return the UI-sourced address.
         return ResolverResult(query=query, canonical_address=None, source="internal", confidence=0.0)
 
     def _compare_internal(self, candidates: ResolveCandidates) -> ResolverResult | None:
@@ -151,7 +161,10 @@ class AddressResolver:
         outcome = validator.validate(mist_street, csv_street)  # Geocode both suite-stripped streets.
         comparison = outcome.get("comparison_validation", {})  # The CSV-side geocode result.
         if not comparison.get("valid"):  # Nominatim could not validate the candidate street.
-            logging.warning("Nominatim returned no result for %s (check network/SSL)", query)  # Visible miss.
+            street_for_log = csv_street.get("address") or mist_street.get("address") or query  # Actual street tried.
+            logging.warning(  # Show the street actually geocoded (not the business+suite query string).
+                "Nominatim returned no result for street '%s' (check network/SSL)", street_for_log
+            )
             return None  # Defer to Tier 3 / NO_RESULT.
         confidence = float(comparison.get("confidence", 0.0))  # OSM importance-derived confidence.
         canonical = comparison.get("display_name") or self._format_address(candidates.csv_address)  # Canonical.
@@ -166,15 +179,30 @@ class AddressResolver:
         )
 
     def _maybe_ui(self, candidates: ResolveCandidates, query: str) -> ResolverResult | None:
-        """Tier 3: delegate to the optional ``MistUIGeocoder`` when permitted."""
+        """Tier 3: consult the Google-via-Mist authority when a suite is actually missing.
+
+        Only runs when UI geocoding is permitted AND the Mist street lacks a
+        suite -- that is exactly the case the operator wants resolved (the true
+        suite/unit for shipping). Rows where Mist already carries a suite skip the
+        (slow) browser lookup. Always fail-soft to ``None``.
+        """
         if not candidates.ui_geocode or self._ui_geocoder is None:  # Tier 3 disabled for this row/run.
             return None  # Skip the UI tier.
-        logging.info("Delegating to Tier 3 UI geocoder")  # Action-log the delegation.
+        if self._mist_has_suite(candidates.mist_address):  # Mist is already suite-specific.
+            logging.debug("Mist already has a suite; skipping Tier-3 lookup")  # No suite to discover.
+            return None  # Save a browser lookup.
+        logging.info("Delegating to Tier 3 (Google-via-Mist) to deduce the suite")  # Action-log delegation.
         self.external_calls += 1  # Count the UI lookup as an external call.
         result = self._ui_geocoder.geocode_via_ui(query)  # Drive the dashboard autocomplete (fail-soft).
         if result is not None:  # Stamp the query so caching stays consistent.
             result.query = query  # Align the result's query with the cache key source.
-        return result  # May be None (fail-soft) -> caller yields NO_RESULT.
+        return result  # May be None (fail-soft) -> caller falls back to Tier 1/2.
+
+    @staticmethod
+    def _mist_has_suite(mist_address: dict[str, Any]) -> bool:
+        """Return True when the Mist street line already carries a suite/unit token."""
+        street = mist_address.get("address", "")  # Mist's street line.
+        return bool(re.search(_SUITE_PATTERN, street, flags=re.IGNORECASE))  # Suite already present?
 
     def _respect_rate_limit(self) -> None:
         """Sleep as needed so consecutive Nominatim calls stay within ToS."""

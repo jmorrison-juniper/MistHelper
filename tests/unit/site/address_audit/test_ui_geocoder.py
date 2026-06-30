@@ -147,3 +147,101 @@ class TestHelpers:
         """No Edge binary => spawn_debuggable_browser returns None gracefully."""
         monkeypatch.setattr(MistUIGeocoder, "_edge_executable", staticmethod(lambda: None))
         assert MistUIGeocoder.spawn_debuggable_browser() is None
+
+
+class TestAutoConnect:
+    """The default 'auto' mode: take over an existing browser, else spawn one."""
+
+    def test_auto_attaches_when_browser_present(self, monkeypatch):
+        """Auto reuses a running debuggable browser without spawning."""
+        browser = MagicMock()
+        ctx = MagicMock()
+        browser.contexts = [ctx]
+        factory, _ = _fake_playwright(browser)
+        monkeypatch.setattr(ui_mod, "sync_playwright", factory)
+        spy = MagicMock()
+        monkeypatch.setattr(MistUIGeocoder, "spawn_debuggable_browser", staticmethod(spy))
+        geo = MistUIGeocoder(UIGeocoderConfig(connect_mode="auto"))
+        assert geo.connect() is True
+        assert geo._context is ctx
+        spy.assert_not_called()  # Existing browser taken over; no spawn needed.
+
+    def test_auto_spawns_when_no_browser(self, monkeypatch):
+        """Auto spawns Edge, waits for login, then takes it over via CDP."""
+        browser = MagicMock()
+        ctx = MagicMock()
+        browser.contexts = [ctx]
+        driver = MagicMock()
+        driver.chromium.connect_over_cdp.side_effect = [RuntimeError("no endpoint"), browser]  # miss, then hit.
+        factory = MagicMock()
+        factory.return_value.start.return_value = driver
+        monkeypatch.setattr(ui_mod, "sync_playwright", factory)
+        proc = MagicMock()
+        monkeypatch.setattr(MistUIGeocoder, "spawn_debuggable_browser", staticmethod(lambda *a, **k: proc))
+        monkeypatch.setattr(ui_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: ""))
+        geo = MistUIGeocoder(UIGeocoderConfig(connect_mode="auto"))
+        assert geo.connect() is True
+        assert geo._spawned_proc is proc
+        assert driver.chromium.connect_over_cdp.call_count == 2  # Attach-miss, then attach-after-spawn.
+
+    def test_auto_falls_back_to_launch_when_no_edge(self, monkeypatch):
+        """Auto falls back to Playwright launch when Edge cannot be spawned."""
+        browser = MagicMock()
+        browser.new_context.return_value = MagicMock()
+        driver = MagicMock()
+        driver.chromium.connect_over_cdp.side_effect = RuntimeError("no endpoint")  # No browser to attach.
+        driver.chromium.launch.return_value = browser
+        factory = MagicMock()
+        factory.return_value.start.return_value = driver
+        monkeypatch.setattr(ui_mod, "sync_playwright", factory)
+        monkeypatch.setattr(MistUIGeocoder, "spawn_debuggable_browser", staticmethod(lambda *a, **k: None))
+        monkeypatch.setattr(ui_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: ""))
+        geo = MistUIGeocoder(UIGeocoderConfig(connect_mode="auto"))
+        assert geo.connect() is True
+        driver.chromium.launch.assert_called_once()
+
+
+class TestPortAndReadiness:
+    """CDP port parsing, the Location Search readiness probe, and spawned teardown."""
+
+    def test_cdp_port_parses_endpoint(self):
+        """A port in the CDP endpoint is parsed correctly."""
+        geo = MistUIGeocoder(UIGeocoderConfig(cdp_endpoint="http://127.0.0.1:9333"))
+        assert geo._cdp_port() == 9333
+
+    def test_cdp_port_defaults_when_no_digits(self):
+        """An endpoint without a port falls back to the documented 9222 default."""
+        geo = MistUIGeocoder(UIGeocoderConfig(cdp_endpoint="http://localhost"))
+        assert geo._cdp_port() == 9222
+
+    def test_ensure_ready_false_when_disconnected(self):
+        """The readiness probe returns False without a connection."""
+        assert MistUIGeocoder().ensure_location_field_ready() is False
+
+    def test_ensure_ready_detects_field(self):
+        """A present Location Search field is detected without prompting."""
+        geo = MistUIGeocoder()
+        geo._connected = True  # Simulate a successful connect().
+        page = MagicMock()
+        page.query_selector.return_value = object()  # Field present on first probe.
+        geo._active_page = MagicMock(return_value=page)
+        assert geo.ensure_location_field_ready() is True
+
+    def test_ensure_ready_guides_then_finds(self, monkeypatch):
+        """When the field is missing, the operator is prompted, then it's found."""
+        geo = MistUIGeocoder()
+        geo._connected = True  # Simulate a successful connect().
+        page = MagicMock()
+        page.query_selector.side_effect = [None, None, None, object()]  # All miss, then a hit next attempt.
+        geo._active_page = MagicMock(return_value=page)
+        monkeypatch.setattr(ui_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: ""))
+        assert geo.ensure_location_field_ready(max_prompts=2) is True
+
+    def test_close_terminates_spawned(self):
+        """close() terminates a browser we spawned and clears the handle."""
+        geo = MistUIGeocoder()
+        proc = MagicMock()
+        geo._spawned_proc = proc
+        geo.close()
+        proc.terminate.assert_called_once()
+        assert geo._spawned_proc is None

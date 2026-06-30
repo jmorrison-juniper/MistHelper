@@ -9,19 +9,35 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Changed
 
-- **Address audit Tier-3 web geocoding is now flag-free (menu 195)**: The
-  Tier-3 browser geocoder no longer requires the `--ui-geocode` CLI flag (the
-  flag has been removed). It is treated as the natural extension of the
-  "everything is a hint" model: the Mist site address, the SNMP location
-  variable, and the customer CSV are all *hints*, fused into one best-guess
-  query and verified against the web to deduce the true, shippable address.
-  Tier-3 now auto-engages whenever a debuggable browser is reachable and
-  degrades quietly to the internal + OpenStreetMap baseline otherwise, so
-  routine runs are never disrupted. A new `ADDRESS_AUDIT_GEOCODE=off` env knob
-  skips the attempt; the "no browser attached" message dropped from WARNING to
-  an informational note with enablement guidance.
+- **Address audit Tier-3 now self-spawns a browser and deduces the suite (menu 195)**:
+  Two gaps stopped the Mist-portal path from ever working. (1) Tier-3 only ever
+  *took over* a browser at `localhost:9222` -- which nothing was running, and
+  `localhost` resolved to IPv6 `::1` (`ECONNREFUSED`). The default mode is now
+  `auto`: it takes over a running debuggable browser if present, otherwise it
+  **spawns Edge for you**, waits while you log into Mist and open a site's
+  settings page, then takes it over (CDP endpoint fixed to `127.0.0.1`). A
+  one-time readiness probe confirms the "Location Search" box is visible and
+  guides you to it if not. (2) Tier-3 never ran for the rows that needed it --
+  `_combine` returned the Tier-1/Tier-2 result first, so Google-via-Mist (the
+  only source that knows the real suite) was skipped on every MISSING_SUITE row.
+  Tier-3 now runs whenever a suite is actually missing and, when it returns a
+  confident result, **acts as the authority** (overriding the internal guess);
+  if it returns nothing, results are exactly as before (graceful). The single
+  `ADDRESS_AUDIT_GEOCODE` knob now accepts `off | auto | attach | launch`
+  (default `auto`).
+
+- **Address audit Tier-3 web geocoding is flag-free (menu 195)**: The Tier-3
+  browser geocoder no longer requires the `--ui-geocode` CLI flag (removed). The
+  Mist site address, the SNMP location variable, and the customer CSV are all
+  treated as *hints*, fused into one best-guess query and verified against the
+  web to deduce the true, shippable address.
 
 ### Fixed
+
+- **Address audit misleading Nominatim log (menu 195)**: The "Nominatim returned
+  no result" warning printed the business-name + suite query string even though
+  the actual geocode used the suite-stripped street, making it look like the
+  wrong thing was searched. It now logs the street actually geocoded.
 
 - **Address audit suggested-address cleanup (menu 195)**: Suggested addresses
   were polluted with the customer's SAP internal store-code prefix

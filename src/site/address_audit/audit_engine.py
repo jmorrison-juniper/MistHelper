@@ -202,15 +202,31 @@ class AddressAuditEngine:
         return AddressResolver(skip_ssl_verify=skip_ssl, ui_geocoder=ui_geocoder)  # Resolver with optional Tier 3.
 
     @staticmethod
+    def _geocode_mode() -> str:
+        """Return the Tier-3 connection mode from a single env knob (no CLI flag).
+
+        ``ADDRESS_AUDIT_GEOCODE`` accepts: ``off`` (disable Tier 3), ``auto``
+        (default -- take over a debuggable browser if present, else spawn one and
+        guide login), ``attach`` (take over only; operator pre-started Edge), or
+        ``launch`` (Playwright launches a fresh Edge). Unknown values fall back to
+        ``auto`` so a typo never disables suite discovery.
+        """
+        raw = os.environ.get("ADDRESS_AUDIT_GEOCODE", "auto").strip().lower()  # Single env knob; default auto.
+        if raw in ("off", "0", "no", "false", "none", "disabled"):  # Any disable token.
+            return "off"  # Tier 3 turned off.
+        if raw in ("attach", "launch", "auto"):  # Explicit, recognized mode.
+            return raw  # Honor the operator's choice.
+        return "auto"  # Unknown value -> safe default keeps suite discovery on.
+
+    @staticmethod
     def _ui_geocode_enabled() -> bool:
         """Return whether Tier-3 web geocoding may run (env-gated, default on, no CLI flag).
 
-        Tier 3 engages automatically when a debuggable browser is reachable and
-        degrades silently to Tier 1/2 otherwise, so routine runs are never
-        disrupted. Set ``ADDRESS_AUDIT_GEOCODE=off`` to skip the attempt.
+        Tier 3 engages automatically when a browser is reachable (taking one over
+        or spawning one) and degrades silently to Tier 1/2 otherwise, so routine
+        runs are never disrupted. Set ``ADDRESS_AUDIT_GEOCODE=off`` to skip it.
         """
-        raw = os.environ.get("ADDRESS_AUDIT_GEOCODE", "auto").strip().lower()  # Env override; default auto/on.
-        return raw not in ("off", "0", "no", "false", "none", "disabled")  # Any disable token turns it off.
+        return AddressAuditEngine._geocode_mode() != "off"  # Enabled for every non-off mode.
 
     @staticmethod
     def _skip_ssl_verify() -> bool:
@@ -228,20 +244,21 @@ class AddressAuditEngine:
         """Build and connect a ``MistUIGeocoder`` from env config; ``None`` if unavailable."""
         from src.site.address_audit.ui_geocoder import MistUIGeocoder  # Lazy: optional Playwright.
 
-        geocoder = MistUIGeocoder(AddressAuditEngine._ui_config())  # Env-driven attach/launch config.
+        geocoder = MistUIGeocoder(AddressAuditEngine._ui_config())  # Env-driven auto/attach/launch config.
         if not geocoder.connect():  # Establish the browser session (fail-soft).
-            logging.info(  # No debuggable browser is the normal case; degrade quietly to Tier 1/2.
-                "Tier-3 web geocoder not attached (no debuggable browser found); "
-                "using internal + OpenStreetMap hints only. Open Edge with "
-                "--remote-debugging-port=9222 to enable, or set ADDRESS_AUDIT_GEOCODE=off to skip."
+            logging.info(  # No browser is the normal case; degrade quietly to Tier 1/2.
+                "Tier-3 web geocoder not available; using internal + OpenStreetMap hints only. "
+                "Set ADDRESS_AUDIT_GEOCODE=off to skip, or 'launch' to force a fresh Edge."
             )
             return None  # Disable Tier 3 for this run.
-        return geocoder  # Connected geocoder ready for selective lookups.
+        geocoder.ensure_location_field_ready()  # Guide the operator to a page with the Location Search box.
+        return geocoder  # Connected geocoder ready for suite-discovery lookups.
 
     @staticmethod
     def _ui_config() -> UIGeocoderConfig:
         """Build a ``UIGeocoderConfig`` from environment overrides (with safe defaults)."""
         config = UIGeocoderConfig()  # Start from the Zscaler-safe defaults.
+        config.connect_mode = AddressAuditEngine._geocode_mode()  # off is filtered earlier; auto/attach/launch here.
         config.dashboard_url = os.environ.get("MIST_DASHBOARD_URL", config.dashboard_url).strip()  # Cloud region.
         config.per_lookup_timeout_s = AddressAuditEngine._env_float(  # Per-lookup timeout override.
             "UI_GEOCODE_TIMEOUT_SECONDS", config.per_lookup_timeout_s

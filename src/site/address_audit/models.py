@@ -103,8 +103,8 @@ class UIGeocoderConfig:
     or take over an already-authenticated browser over CDP.
     """
 
-    connect_mode: str = "attach"  # "attach" (CDP takeover) or "launch" (fresh Edge + interactive login).
-    cdp_endpoint: str = "http://localhost:9222"  # DevTools endpoint of the operator's debuggable browser.
+    connect_mode: str = "auto"  # "auto" (take over else spawn), "attach" (CDP only), or "launch" (fresh Edge).
+    cdp_endpoint: str = "http://127.0.0.1:9222"  # DevTools endpoint (127.0.0.1, not localhost: avoids IPv6 ::1).
     browser_channel: str = "msedge"  # System browser channel; avoids the Zscaler-blocked Chromium CDN.
     dashboard_url: str = "https://manage.mist.com/"  # Regional Mist cloud login/landing URL (override per cloud).
     headless: bool = False  # Must be visible so the operator can log in / observe the takeover.
