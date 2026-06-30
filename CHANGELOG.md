@@ -121,6 +121,18 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Fixed
 
+- **Address audit Nominatim suggestion leaked raw OpenStreetMap formatting (menu
+  195)**: when a row was validated by Tier-2 (OpenStreetMap) rather than Tier-3,
+  the "Suggested Address" showed OSM's verbose `display_name` -- e.g.
+  `T-Mobile, 1200, Northwest 87th Avenue, Doral, Miami-Dade County, Florida,
+  33172, United States` -- complete with the business name, county, and country.
+  OSM only validates the *street*, so the suggestion is now Mist's own
+  already-formatted address with the trailing country dropped
+  (`1200 NW 87th Ave #1st, Doral, FL 33172`), consistent with the Tier-1/Tier-3
+  outputs and never losing an existing suite. (Side effect: a row where Mist's
+  address already matches now reads ADDRESS_MATCH instead of the misleading
+  MIST_BETTER.)
+
 - **Address audit MISSING_NUMBER never fired on real data (menu 195)**: the
   missing-house-number check (added in the prior release) tested the whole Mist
   address string for any digit, but Mist stores the address as one formatted
