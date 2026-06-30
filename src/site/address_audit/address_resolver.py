@@ -167,7 +167,7 @@ class AddressResolver:
             )
             return None  # Defer to Tier 3 / NO_RESULT.
         confidence = float(comparison.get("confidence", 0.0))  # OSM importance-derived confidence.
-        canonical = comparison.get("display_name") or self._format_address(candidates.csv_address)  # Canonical.
+        canonical = self._nominatim_canonical(candidates, comparison)  # Clean street line (not raw display_name).
         logging.info("Nominatim validated street: %s (confidence=%.2f)", canonical, confidence)  # Visible hit.
         return ResolverResult(  # Build the Tier-2 result.
             query=query,  # Echo the query for caching.
@@ -177,6 +177,22 @@ class AddressResolver:
             ambiguous=confidence < 0.4,  # Low confidence flags a possible mall/ambiguous case.
             raw_response=outcome,  # Full validator payload for audit/debug.
         )
+
+    def _nominatim_canonical(self, candidates: ResolveCandidates, comparison: dict[str, Any]) -> str:
+        """Return a clean suggestion for an OSM-validated row from Mist's own address.
+
+        OpenStreetMap validates only the *street*; its ``display_name`` is verbose
+        and noisy (``Business, 1200, Northwest 87th Avenue, Doral, Miami-Dade
+        County, Florida, 33172, United States``). Since OSM merely confirms the
+        street is real, the cleanest, most useful suggestion is Mist's own
+        already-formatted address string with the trailing country dropped --
+        consistent with the Tier-1/Tier-3 outputs and never losing an existing
+        suite. Falls back to the raw display_name only if Mist has no usable address.
+        """
+        mist_address = (candidates.mist_address.get("address") or "").strip()  # Mist's full address string.
+        if mist_address:  # Mist has a usable address line.
+            return re.sub(r",?\s*(?:USA|United States)\s*$", "", mist_address, flags=re.IGNORECASE).strip()
+        return comparison.get("display_name") or self._format_address(candidates.csv_address)  # Last resort.
 
     def _maybe_ui(self, candidates: ResolveCandidates, query: str) -> ResolverResult | None:
         """Tier 3: consult the Google-via-Mist authority to find or adjudicate the suite.

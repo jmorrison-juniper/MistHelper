@@ -148,6 +148,29 @@ class TestTier2Nominatim:
         result = resolver.resolve(ResolveCandidates(mist_address=_NO_SUITE, csv_address=_NO_SUITE))
         assert result.canonical_address is None
 
+    def test_nominatim_canonical_cleans_display_name(self):
+        """An OSM-validated row surfaces Mist's clean address, not the noisy display_name."""
+        resolver = AddressResolver()
+        # Real Mist structure: 'address' is the full formatted string (no separate city/state/zip).
+        cand = ResolveCandidates(
+            mist_address={"address": "1200 NW 87th Ave #1st, Doral, FL 33172, USA", "city": "", "state": "", "zip": ""},
+            csv_address={"address": "1200 NW 87th Ave", "city": "Doral", "state": "FL", "zip": "33172"},
+        )
+        comparison = {
+            "valid": True,
+            "confidence": 0.82,
+            "display_name": "T-Mobile, 1200, Northwest 87th Avenue, Doral, Miami-Dade County, Florida, 33172, USA",
+        }
+        # Trailing country dropped, suite preserved, county/business noise gone.
+        assert resolver._nominatim_canonical(cand, comparison) == "1200 NW 87th Ave #1st, Doral, FL 33172"
+
+    def test_nominatim_canonical_falls_back_to_display_name(self):
+        """With no usable Mist address, the raw display_name is the last resort."""
+        resolver = AddressResolver()
+        cand = ResolveCandidates(mist_address={"address": ""}, csv_address={})
+        comparison = {"display_name": "5 Main St, Town, FL"}
+        assert resolver._nominatim_canonical(cand, comparison) == "5 Main St, Town, FL"
+
 
 class TestTier3Gating:
     """Tier 3 UI geocoder must be opt-in only."""
