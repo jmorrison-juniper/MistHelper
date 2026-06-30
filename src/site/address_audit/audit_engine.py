@@ -46,6 +46,24 @@ _DATA_DIR = "data"  # Directory scanned for the customer CSV.
 _SUITE_PATTERN = (  # Suite token with a capture group for the unit id (state-safe).
     r"\b(?:ste|suite|unit|apt|apartment|bldg|building|space|spc|rm|room|lot)\b\.?\s*#?\s*([\w-]+)" r"|#\s*(\d[\w-]*)"
 )
+_DIRECTIONALS = {  # Street-name directional tokens, normalized to their abbreviation.
+    "n": "N",
+    "s": "S",
+    "e": "E",
+    "w": "W",
+    "ne": "NE",
+    "nw": "NW",
+    "se": "SE",
+    "sw": "SW",
+    "north": "N",
+    "south": "S",
+    "east": "E",
+    "west": "W",
+    "northeast": "NE",
+    "northwest": "NW",
+    "southeast": "SE",
+    "southwest": "SW",
+}
 
 
 class AddressAuditEngine:
@@ -375,22 +393,56 @@ class AddressAuditEngine:
 
         Robust to SNMP/geocoder strings that add a store-number prefix or drop the
         city/ZIP: anchors on the Mist house number plus at least one street-name word.
+        A conflicting leading directional (Mist 'E Jefferson' vs web 'West Jefferson')
+        is treated as a different street so a wrong-side address never reads as a match.
         """
         mist_number = self._house_number(mist_street)  # Mist street's house number.
         if mist_number and mist_number not in self._all_numbers(candidate):  # House number must appear.
             return False  # Different building number -> different street.
+        mist_dir = self._leading_directional(mist_street)  # Directional right after the house number.
+        cand_dir = self._leading_directional(candidate)  # Same for the candidate (city dirs ignored).
+        if mist_dir and cand_dir and mist_dir != cand_dir:  # Opposite directionals (E vs W).
+            return False  # Different side of the street -> different street.
         overlap = self._name_words(mist_street) & self._name_words(candidate)  # Shared street words.
         return bool(overlap)  # Same street when at least one street-name word matches.
+
+    @staticmethod
+    def _leading_directional(street: str) -> str:
+        """Return the directional immediately after the house number, normalized, or ''.
+
+        Only the leading directional (e.g. the ``E`` in ``1606 E Jefferson``) is
+        considered, so a directional inside a later city name (``West Palm Beach``)
+        never triggers a false street mismatch.
+        """
+        tokens = re.sub(r"[^A-Za-z0-9 ]", " ", street).split()  # Punctuation-free tokens.
+        if not tokens:  # Empty street line.
+            return ""  # No directional.
+        index = 1 if tokens[0].isdigit() else 0  # Skip a leading house number.
+        if index >= len(tokens):  # Nothing past the house number.
+            return ""  # No directional.
+        return _DIRECTIONALS.get(tokens[index].lower(), "")  # Normalized directional or ''.
 
     def _has_suite_discrepancy(self, base: str, candidate: str) -> bool:
         """Return True when ``candidate`` carries a suite the ``base`` address lacks."""
         return bool(self._suite(candidate)) and not self._suite(base)  # Candidate-only suite.
 
     def _name_words(self, text: str) -> set[str]:
-        """Return the set of alphabetic street-name words (suite-stripped, len >= 2)."""
+        """Return the comparable street-name tokens (suite-stripped).
+
+        Includes alphabetic words (``jefferson``) AND ordinal/alphanumeric street
+        names (``107th``, ``a1a``) so a numeric-named street still matches when
+        Google spells out ``NW``/``Avenue``; the pure-digit house number is
+        excluded so two different streets at the same number never match on it.
+        """
         without_suite = re.sub(_SUITE_PATTERN, " ", text.lower())  # Drop the suite token.
         normalized = self._normalize(without_suite)  # Lowercase, de-punctuate, collapse.
-        return {token for token in normalized.split() if token.isalpha() and len(token) >= 2}  # Name words.
+        words: set[str] = set()  # Accumulate comparable name tokens.
+        for token in normalized.split():  # Walk every token.
+            if token.isalpha() and len(token) >= 2:  # Street-name words (military, jefferson).
+                words.add(token)  # Keep the word.
+            elif any(ch.isdigit() for ch in token) and any(ch.isalpha() for ch in token):  # Ordinals: 107th, a1a.
+                words.add(token)  # Keep numeric-named streets (pure digits like the house number excluded).
+        return words  # Comparable street-name token set.
 
     @staticmethod
     def _house_number(text: str) -> str:

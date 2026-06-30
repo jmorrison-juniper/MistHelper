@@ -62,6 +62,52 @@ class TestClassify:
         rr = _rr("100 Main St Suite 7 Town FL 33000")
         assert self.engine._classify(_MIST_WITH_SUITE, _CSV, None, rr) == "CSV_BETTER"
 
+    def test_directional_conflict_is_wrong_street(self):
+        """Mist 'E Jefferson' vs web 'West Jefferson' is a different street, not a match."""
+        mist = {"address": "1606 E Jefferson St", "city": "Quincy", "state": "FL", "zip": "32351"}
+        rr = _rr("1606 West Jefferson Street, Quincy, FL 32351")
+        assert self.engine._classify(mist, _CSV, None, rr) == "WRONG_STREET"
+
+    def test_abbreviated_directional_still_matches(self):
+        """Mist 'NW 107th Ave' vs web 'Northwest 107th Avenue' is the same street."""
+        mist = {"address": "1455 NW 107th Ave", "city": "Miami", "state": "FL", "zip": "33172"}
+        rr = _rr("1455 Northwest 107th Avenue #410, Miami, FL 33172")
+        assert self.engine._classify(mist, _CSV, None, rr) == "MISSING_SUITE"
+
+    def test_city_directional_does_not_cause_false_mismatch(self):
+        """A directional inside the city (West Palm Beach) does not break the street match."""
+        mist = {"address": "940 S Military Trail", "city": "West Palm Beach", "state": "FL", "zip": "33415"}
+        rr = _rr("940 South Military Trail #3, West Palm Beach, FL 33415")
+        assert self.engine._classify(mist, _CSV, None, rr) == "MISSING_SUITE"
+
+
+class TestSameStreet:
+    """Street-equality helper: directionals, ordinals, and abbreviations."""
+
+    def setup_method(self):
+        """Fresh engine per test."""
+        self.engine = AddressAuditEngine()
+
+    def test_opposite_directionals_differ(self):
+        """East vs West on the same street name are different streets."""
+        assert self.engine._same_street("1606 E Jefferson St", "1606 West Jefferson Street, Quincy, FL") is False
+
+    def test_abbrev_vs_spelled_directional_same(self):
+        """NW and Northwest are the same directional."""
+        assert self.engine._same_street("1455 NW 107th Ave", "1455 Northwest 107th Avenue #410, Miami, FL") is True
+
+    def test_directional_S_vs_South_same(self):
+        """S and South are the same directional (no false mismatch)."""
+        assert self.engine._same_street("1671 US 41 Bypass S", "1671 U.S. 41 Bypass South Unit 100, Venice, FL") is True
+
+    def test_same_house_number_different_street_differs(self):
+        """The same house number on a different street is not a match."""
+        assert self.engine._same_street("100 Main St", "100 Oak Ave, Town, FL") is False
+
+    def test_leading_directional_ignores_city(self):
+        """Only the directional after the house number counts, not one inside the city."""
+        assert self.engine._leading_directional("940 South Military Trail #3, West Palm Beach, FL") == "S"
+
 
 class TestBuildAuditResult:
     """Unmatched rows short-circuit to UNMATCHED without resolution."""
