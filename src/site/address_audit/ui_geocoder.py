@@ -353,14 +353,17 @@ class MistUIGeocoder:
         """Strip a glued leading place/business name and a trailing country from a suggestion.
 
         Google's ``.pac-item`` rows glue the establishment name to the address with
-        no separator (e.g. ``T-Mobile931 US Highway 331 Ste A2, ..., USA``). We drop
-        the trailing country and any leading non-digit run that precedes a
-        ``<house-number> <street>`` start, yielding the clean shippable street line.
-        Addresses with no house number are returned as-is (rare for retail).
+        no separator (e.g. ``T-Mobile931 US Highway 331 Ste A2, ..., USA``) and glue
+        a trailing directional to the city (``...Ave NLive Oak``). We drop the
+        trailing country, split a directional fused to the next word, then drop any
+        leading non-digit run before a ``<house-number> <street>`` start -- yielding
+        the clean shippable street line. Addresses with no house number are returned
+        as-is (rare for retail).
         """
         s = text.strip()  # Normalize surrounding whitespace.
         s = re.sub(r",?\s*(?:USA|United States)\s*$", "", s, flags=re.IGNORECASE).strip()  # Drop trailing country.
-        match = re.match(r"^\D*?(\d+\s+\D.*)$", s)  # Find "<house-number> <street>..." after any name prefix.
+        s = re.sub(r"\b(US|NE|NW|SE|SW|N|S|E|W)([A-Z][a-z])", r"\1 \2", s)  # Split directional glue (NLive).
+        match = re.match(r"^\D*?(\d+\s+\S.*)$", s)  # "<house-number> <street>..." after any name prefix.
         cleaned = match.group(1) if match else s  # Use the address tail when a real street start is present.
         return cleaned.strip().strip(",").strip() or text.strip()  # Never return empty.
 

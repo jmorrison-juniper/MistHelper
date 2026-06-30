@@ -219,6 +219,16 @@ class TestCleanAddress:
         result = MistUIGeocoder()._build_result("q", [raw])
         assert result.canonical_address == "7535 North Kendall Drive #1515b, Miami, FL 33156"
 
+    def test_strips_business_when_street_starts_with_number(self):
+        """The business prefix is stripped even when the street name starts with a digit."""
+        raw = "T-Mobile4103 14th St W, Bradenton, FL 34205, USA"
+        assert MistUIGeocoder._clean_address(raw) == "4103 14th St W, Bradenton, FL 34205"
+
+    def test_splits_directional_glued_to_city(self):
+        """A directional fused to the city is split (NLive Oak -> N Live Oak)."""
+        raw = "1701 Ohio Ave NLive Oak, FL 32064"
+        assert MistUIGeocoder._clean_address(raw) == "1701 Ohio Ave N Live Oak, FL 32064"
+
 
 class TestAutoConnect:
     """The default 'auto' mode: take over an existing browser, else spawn one."""
