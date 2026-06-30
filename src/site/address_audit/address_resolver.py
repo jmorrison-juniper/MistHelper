@@ -179,17 +179,18 @@ class AddressResolver:
         )
 
     def _maybe_ui(self, candidates: ResolveCandidates, query: str) -> ResolverResult | None:
-        """Tier 3: consult the Google-via-Mist authority when a suite is actually missing.
+        """Tier 3: consult the Google-via-Mist authority to find or adjudicate the suite.
 
-        Only runs when UI geocoding is permitted AND the Mist street lacks a
-        suite -- that is exactly the case the operator wants resolved (the true
-        suite/unit for shipping). Rows where Mist already carries a suite skip the
-        (slow) browser lookup. Always fail-soft to ``None``.
+        Runs when UI geocoding is permitted AND either the Mist street lacks a
+        suite (discover the true unit for shipping) or the CSV claims a different
+        unit than Mist (adjudicate the conflict). Rows where Mist already carries a
+        suite that matches the CSV skip the (slow) browser lookup. Fail-soft to
+        ``None``.
         """
         if not candidates.ui_geocode or self._ui_geocoder is None:  # Tier 3 disabled for this row/run.
             return None  # Skip the UI tier.
-        if self._mist_has_suite(candidates.mist_address):  # Mist is already suite-specific.
-            logging.debug("Mist already has a suite; skipping Tier-3 lookup")  # No suite to discover.
+        if not self._should_consult_ui(candidates):  # Mist suite present and consistent with the CSV.
+            logging.debug("Mist suite present and matches CSV; skipping Tier-3 lookup")  # Nothing to discover.
             return None  # Save a browser lookup.
         logging.info("Delegating to Tier 3 (Google-via-Mist) to deduce the suite")  # Action-log delegation.
         result = self._ui_lookup_with_fallback(candidates, query)  # Business query, then plain on a miss.
@@ -221,11 +222,31 @@ class AddressResolver:
         """Return True when a resolver result actually carries a canonical address."""
         return result is not None and bool(result.canonical_address)  # Non-empty suggestion present.
 
+    def _should_consult_ui(self, candidates: ResolveCandidates) -> bool:
+        """Run Tier 3 when Mist lacks a suite, or when the CSV claims a different one.
+
+        The goal is the true shippable unit. Tier 3 runs when Mist has no suite
+        (discover it) or when the CSV's unit disagrees with Mist's (adjudicate the
+        conflict via the web). It is skipped only when Mist already carries a suite
+        that matches the CSV, sparing a browser lookup.
+        """
+        mist_unit = self._suite_unit(candidates.mist_address.get("address", ""))  # Mist's unit id (or '').
+        if not mist_unit:  # Mist has no suite at all.
+            return True  # Discover the missing suite.
+        csv_unit = self._suite_unit(candidates.csv_address.get("address", ""))  # CSV's unit id (or '').
+        if csv_unit and csv_unit != mist_unit:  # CSV claims a different unit.
+            logging.info("Mist unit %r conflicts with CSV unit %r; adjudicating via Tier 3", mist_unit, csv_unit)
+            return True  # Resolve the conflict against the web.
+        return False  # Mist already specific and consistent with the CSV.
+
     @staticmethod
-    def _mist_has_suite(mist_address: dict[str, Any]) -> bool:
-        """Return True when the Mist street line already carries a suite/unit token."""
-        street = mist_address.get("address", "")  # Mist's street line.
-        return bool(re.search(_SUITE_PATTERN, street, flags=re.IGNORECASE))  # Suite already present?
+    def _suite_unit(street: str) -> str:
+        """Extract the bare unit identifier from a street's suite token (e.g. 'h200', '204', '')."""
+        token = AddressResolver._extract_suite(street)  # e.g. 'Suite H200', '#204', 'Space P239'.
+        if not token:  # No suite token present.
+            return ""  # No unit.
+        parts = token.split()  # Split the keyword from the identifier.
+        return parts[-1].lstrip("#").lower() if parts else token.lower()  # Trailing unit id, '#' stripped.
 
     def _respect_rate_limit(self) -> None:
         """Sleep as needed so consecutive Nominatim calls stay within ToS."""

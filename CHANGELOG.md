@@ -9,6 +9,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Changed
 
+- **Address audit now adjudicates suite *conflicts*, not just missing suites (menu
+  195)**: Tier-3 was skipped whenever the Mist address already carried any suite,
+  so when the customer CSV claimed a *different* unit (Mist `#204` vs CSV
+  `Suite H200` at the Mall at Millenia) the audit reported MIST_BETTER without ever
+  checking which unit is real. Tier-3 now also runs when the CSV unit disagrees
+  with Mist's, so the web adjudicates the correct shippable unit. Identical units
+  expressed differently (`Suite 100` vs `Ste 100`) still skip the lookup.
+
 - **Address audit query is now built by house-number consensus (menu 195)**: the
   geocoding query was built SNMP-location-first, so when a site's SNMP location
   pointed at a different address -- even a different state -- the audit geocoded
@@ -48,7 +56,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Fixed
 
-- **Address audit suggested-address still showed the business name on number-first
+- **Address audit hid wrong-side-of-street addresses as a MATCH (menu 195)**: the
+  street comparison ignored directionals, so a Mist address of `1606 E Jefferson`
+  was reported as ADDRESS_MATCH against the web-confirmed `1606 West Jefferson` --
+  East vs West are different streets, and shipping to the wrong one is a real risk.
+  The comparison now flags a conflicting *leading* directional (the one right after
+  the house number, so a directional inside a city name like `West Palm Beach` is
+  ignored) as WRONG_STREET, while treating abbreviations as equal (`S` = `South`,
+  `NW` = `Northwest`). The street-name comparison also now includes ordinal names
+  (`107th`, `A1A`), so `1455 NW 107th Ave` reliably matches `1455 Northwest 107th
+  Avenue` regardless of whether Google abbreviates or spells out the directional
+  and street type.
+
+
   streets (menu 195)**: the suggestion cleaner stripped Google's glued business
   name only when the street name began with a letter, so rows whose street starts
   with a digit kept the prefix (`T-Mobile4103 14th St W`). It now strips the

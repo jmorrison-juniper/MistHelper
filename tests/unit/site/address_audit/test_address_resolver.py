@@ -195,7 +195,7 @@ class TestTier3Gating:
         assert result.street_validated is True  # OSM cross-checked the street.
 
     def test_ui_skipped_when_mist_has_suite(self, tmp_path, monkeypatch):
-        """No Tier-3 lookup when Mist already carries a suite (nothing to discover)."""
+        """No Tier-3 lookup when Mist already carries a suite that matches the CSV."""
         _FakeValidator.count = 0
         _FakeValidator.valid = False
         monkeypatch.setattr(resolver_mod, "NominatimValidator", _FakeValidator)
@@ -203,7 +203,43 @@ class TestTier3Gating:
         ui = MagicMock()
         resolver = AddressResolver(db_path=_db(tmp_path), ui_geocoder=ui)
         resolver.resolve(ResolveCandidates(mist_address=_WITH_SUITE, csv_address=_WITH_SUITE, ui_geocode=True))
-        ui.geocode_via_ui.assert_not_called()  # Mist is already suite-specific -> skip the slow lookup.
+        ui.geocode_via_ui.assert_not_called()  # Mist suite matches the CSV -> skip the slow lookup.
+
+    def test_ui_consulted_when_suite_conflicts(self, tmp_path, monkeypatch):
+        """Tier 3 runs to adjudicate when Mist's suite differs from the CSV's."""
+        _FakeValidator.count = 0
+        _FakeValidator.valid = False
+        monkeypatch.setattr(resolver_mod, "NominatimValidator", _FakeValidator)
+        monkeypatch.setattr(resolver_mod.time, "sleep", lambda *_: None)
+        ui = MagicMock()
+        ui.geocode_via_ui.return_value = ResolverResult(
+            query="q", canonical_address="4200 Conroy Rd Suite H200, Orlando, FL", source="mist_ui"
+        )
+        resolver = AddressResolver(db_path=_db(tmp_path), ui_geocoder=ui)
+        mist = {"address": "4200 Conroy Rd #204", "city": "Orlando", "state": "FL", "zip": "32839"}
+        csv = {"address": "4200 Conroy Rd Suite H200", "city": "Orlando", "state": "FL", "zip": "32839"}
+        resolver.resolve(ResolveCandidates(mist_address=mist, csv_address=csv, ui_geocode=True))
+        ui.geocode_via_ui.assert_called()  # Conflicting suites -> adjudicate via the web.
+
+    def test_suite_unit_extracts_identifier(self):
+        """The bare unit identifier is extracted for conflict comparison."""
+        assert AddressResolver._suite_unit("4200 Conroy Rd #204") == "204"
+        assert AddressResolver._suite_unit("4200 Conroy Rd Suite H200") == "h200"
+        assert AddressResolver._suite_unit("100 Main St Ste 100") == "100"
+        assert AddressResolver._suite_unit("100 Main St") == ""
+
+    def test_should_consult_ui_matrix(self):
+        """The Tier-3 gate: run on missing or conflicting suites, skip on a match."""
+        res = AddressResolver()
+
+        def gate(mist, csv):
+            cand = ResolveCandidates(mist_address={"address": mist}, csv_address={"address": csv})
+            return res._should_consult_ui(cand)
+
+        assert gate("100 Main St", "100 Main St Suite 5") is True  # Mist missing -> discover.
+        assert gate("100 Main St #204", "100 Main St Suite H200") is True  # Conflict -> adjudicate.
+        assert gate("100 Main St Suite 100", "100 Main St Ste 100") is False  # Same unit -> skip.
+        assert gate("100 Main St #1st", "100 Main St") is False  # CSV claims no unit -> skip.
 
     def test_internal_used_when_ui_returns_none(self, tmp_path, monkeypatch):
         """When Tier 3 returns None, the internal suite suggestion is used (no worse than before)."""
