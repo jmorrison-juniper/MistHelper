@@ -28,6 +28,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Changed
 
+- **Address audit diagnostic logging no longer prints to the terminal (menu
+  195)**: the audit's `logging.*` calls (e.g. the Nominatim "no result" warnings)
+  were written to both `data/script.log` AND the console, where they interleaved
+  with and corrupted the tqdm progress bar. The feature speaks to the operator
+  exclusively through `print` (the comparison table, the prompts, the write-back
+  confirmations), so its logging is purely a diagnostic trail. For the duration of
+  a run a filter is attached to the root logger's CONSOLE handlers that drops only
+  this package's records; the file handler is untouched, so `script.log` still
+  captures everything while the terminal shows just the table, prompts, and a
+  clean progress bar.
+
+- **Address audit types into Google's box with a human-like, randomized cadence
+  (menu 195)**: the Tier-3 geocoder previously typed each query at a fixed 40 ms
+  cadence, which is robotic and risks Google's autocomplete throttling / bot
+  heuristics. It now types one character at a time with a randomized
+  inter-keystroke delay (default 60-190 ms, from an unpredictable `SystemRandom`
+  source) plus an occasional longer "thinking" pause, so the input rhythm
+  resembles a person. The bounds are tunable via `UI_GEOCODE_MIN_KEY_DELAY_MS` /
+  `UI_GEOCODE_MAX_KEY_DELAY_MS`.
+
 - **Address audit now flags incomplete Mist addresses (missing house number)
   (menu 195)**: a Mist site whose street had no house number (`S Federal Hwy`)
   was reported ADDRESS_MATCH against the web-resolved `2315 S Federal Hwy` --

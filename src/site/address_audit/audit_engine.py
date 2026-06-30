@@ -20,6 +20,7 @@ import logging  # Action logging before/after every operation (project NON-NEGOT
 import os  # Path handling and environment access.
 import re  # Address normalization / suite extraction in classification.
 import sys  # Detect a non-interactive stdout to suppress the progress bar.
+from contextlib import contextmanager  # Scope the console-log suppression to one run.
 from typing import Any  # Loose typing for Mist API records.
 
 import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
@@ -69,8 +70,27 @@ _DIRECTIONALS = {  # Street-name directional tokens, normalized to their abbrevi
 }
 
 
+class _AddressAuditConsoleFilter(logging.Filter):
+    """Console filter that drops log records emitted from the address_audit package.
+
+    The address audit talks to the operator through ``print`` (the comparison
+    table, the post-table prompts, the write-back confirmations); every
+    ``logging.*`` call it makes is a diagnostic trail destined for
+    ``data/script.log``. Attached to the root logger's CONSOLE handlers (and only
+    for the duration of a run), this filter keeps that diagnostic noise -- e.g. the
+    Nominatim "no result" warnings -- out of the terminal, where it would corrupt
+    the tqdm progress bar. File handlers never receive this filter, so the full log
+    trail is preserved.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Return False (drop from console) for records whose source is in address_audit."""
+        path = (record.pathname or "").replace("\\", "/")  # Normalize separators for a portable check.
+        return "/address_audit/" not in path  # Keep every record except this package's own logs.
+
+
 class AddressAuditEngine:
-    """Orchestrate the read-only CSV address audit and render the comparison."""
+    """Orchestrate the CSV address audit, render the comparison, and optionally write back."""
 
     def __init__(
         self,
@@ -86,14 +106,21 @@ class AddressAuditEngine:
         self._reporter = reporter or AddressAuditReporter()  # CSV report writer.
 
     def run(self, apisession: Any, org_id: str) -> None:
-        """Menu entry point: drive the full read-only audit pipeline end-to-end.
+        """Menu entry point: drive the full audit pipeline end-to-end.
 
         The Mist site address, the SNMP location variable, and the customer CSV
         are all treated as *hints* -- none is authoritative. The resolver fuses
         them into one best-guess query and prefers an external verifier
         (OpenStreetMap, plus Tier-3 browser geocoding when a debuggable browser
-        is reachable) to deduce the true, shippable address.
+        is reachable) to deduce the true, shippable address. The whole run is
+        wrapped so this feature's diagnostic logging goes to ``data/script.log``
+        only, never the terminal (keeps the progress bar clean).
         """
+        with self._console_logs_to_file_only():  # Address-audit logs -> file only; console stays clean.
+            self._run_pipeline(apisession, org_id)  # Drive the actual audit pipeline.
+
+    def _run_pipeline(self, apisession: Any, org_id: str) -> None:
+        """Run the audit pipeline: select CSV, audit, render, and offer write-back."""
         ui_geocode = self._ui_geocode_enabled()  # Tier-3 web geocoding: env-gated, default auto, no CLI flag.
         logging.info("Starting site address audit (tier3_geocode=%s)", ui_geocode)  # Action-log start.
         csv_path = self._select_csv_file()  # Pick the customer CSV from data/.
@@ -108,6 +135,31 @@ class AddressAuditEngine:
         results = self._audit_rows(apisession, org_id, rows, business, ui_geocode)  # Core pipeline.
         self._renderer.render(results)  # Render the comparison table.
         self._finish(results, apisession)  # Post-table save/quit prompt + optional write-back.
+
+    @contextmanager
+    def _console_logs_to_file_only(self) -> Any:
+        """Suppress this feature's logging on CONSOLE handlers for the duration of a run.
+
+        Attaches an ``_AddressAuditConsoleFilter`` to every console (stream)
+        handler on the root logger, then removes it afterwards. The file handler is
+        never touched, so ``data/script.log`` still captures everything -- the
+        operator sees only the table, prompts, and progress bar on screen, with the
+        Nominatim "no result" warnings and other diagnostics confined to the file.
+        """
+        root = logging.getLogger()  # Root logger carries both file and console handlers.
+        console = [  # Console handlers are StreamHandlers that are not FileHandlers.
+            handler
+            for handler in root.handlers
+            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler)
+        ]
+        log_filter = _AddressAuditConsoleFilter()  # Drops only address_audit records from console.
+        for handler in console:  # Attach the filter to each console handler.
+            handler.addFilter(log_filter)
+        try:
+            yield  # Run the audit with console diagnostics suppressed.
+        finally:
+            for handler in console:  # Always detach, even when the run raises.
+                handler.removeFilter(log_filter)
 
     def _audit_rows(
         self,
@@ -285,6 +337,18 @@ class AddressAuditEngine:
             "UI_GEOCODE_TIMEOUT_SECONDS", config.per_lookup_timeout_s
         )
         config.max_lookups = int(AddressAuditEngine._env_float("UI_GEOCODE_MAX_LOOKUPS", config.max_lookups))  # Cap.
+        config.min_key_delay_s = (
+            AddressAuditEngine._env_float(  # Lower bound of the typing jitter (ms -> s).
+                "UI_GEOCODE_MIN_KEY_DELAY_MS", config.min_key_delay_s * 1000.0
+            )
+            / 1000.0
+        )
+        config.max_key_delay_s = (
+            AddressAuditEngine._env_float(  # Upper bound of the typing jitter (ms -> s).
+                "UI_GEOCODE_MAX_KEY_DELAY_MS", config.max_key_delay_s * 1000.0
+            )
+            / 1000.0
+        )
         return config  # Hand back the env-merged config.
 
     @staticmethod

@@ -177,6 +177,69 @@ class TestWriteBackWiring:
         engine._reporter.save_corrections.assert_called_once()
 
 
+class TestConsoleLogSuppression:
+    """Address-audit logs are routed off the console (kept in the file) during a run."""
+
+    def _filter(self):
+        """Return a fresh console filter."""
+        return eng_mod._AddressAuditConsoleFilter()
+
+    def _record(self, pathname):
+        """Build a log record as if emitted from ``pathname``."""
+        import logging
+
+        return logging.LogRecord("root", logging.WARNING, pathname, 1, "msg", None, None)
+
+    def test_filter_drops_address_audit_records(self):
+        """A record emitted from the address_audit package is dropped from console."""
+        rec = self._record("/x/src/site/address_audit/address_resolver.py")
+        assert self._filter().filter(rec) is False
+
+    def test_filter_keeps_other_records(self):
+        """A record from elsewhere is kept on console."""
+        rec = self._record("/x/src/utils/address_utils.py")
+        assert self._filter().filter(rec) is True
+
+    def test_filter_is_separator_portable(self):
+        """Windows-style backslash paths are matched too."""
+        rec = self._record("C:\\x\\src\\site\\address_audit\\ui_geocoder.py")
+        assert self._filter().filter(rec) is False
+
+    def test_context_attaches_console_only_and_removes(self):
+        """The context manager filters console handlers (not file) and detaches afterwards."""
+        import io
+        import logging
+
+        root = logging.getLogger()
+        saved = list(root.handlers)
+        for handler in saved:
+            root.removeHandler(handler)
+        console = logging.StreamHandler(io.StringIO())
+
+        class _FakeFile(logging.FileHandler):
+            def __init__(self, stream):
+                logging.Handler.__init__(self)
+                self.stream = stream
+                self.baseFilename = "x"
+
+            def _open(self):
+                return self.stream
+
+        file_handler = _FakeFile(io.StringIO())
+        root.addHandler(console)
+        root.addHandler(file_handler)
+        try:
+            with AddressAuditEngine()._console_logs_to_file_only():
+                assert len(console.filters) == 1  # Console handler filtered.
+                assert len(file_handler.filters) == 0  # File handler untouched.
+            assert len(console.filters) == 0  # Filter removed after the run.
+        finally:
+            root.removeHandler(console)
+            root.removeHandler(file_handler)
+            for handler in saved:
+                root.addHandler(handler)
+
+
 class TestBuildAuditResult:
     """Unmatched rows short-circuit to UNMATCHED without resolution."""
 

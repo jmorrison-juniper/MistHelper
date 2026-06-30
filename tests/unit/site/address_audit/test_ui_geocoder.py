@@ -126,6 +126,40 @@ class TestBuildResult:
         assert result.confidence == pytest.approx(0.6)
 
 
+class TestTypingJitter:
+    """Human-like, randomized typing cadence into the Google autocomplete box."""
+
+    def test_types_each_char_with_randomized_delay(self, monkeypatch):
+        """Each character is typed individually with a randomized sleep between keys."""
+        sleeps: list[float] = []
+        monkeypatch.setattr(ui_mod.time, "sleep", lambda s: sleeps.append(s))
+        geo = MistUIGeocoder(UIGeocoderConfig(min_key_delay_s=0.05, max_key_delay_s=0.15))
+        field = MagicMock()
+        geo._type_humanlike(field, "940 Main")
+        assert field.type.call_count == len("940 Main")  # One keystroke per character.
+        assert len(sleeps) == len("940 Main")  # One delay per character.
+        assert all(s >= 0.05 for s in sleeps)  # Never below the configured floor.
+        assert len(set(round(s, 5) for s in sleeps)) > 1  # Delays vary (not a fixed cadence).
+
+    def test_key_delay_within_bounds(self):
+        """A normal keystroke delay stays within [min, max]."""
+        geo = MistUIGeocoder(UIGeocoderConfig(min_key_delay_s=0.05, max_key_delay_s=0.15))
+        for index in range(1, 7):  # Indices that do not trigger the thinking pause.
+            assert 0.05 <= geo._key_delay(index) <= 0.15
+
+    def test_thinking_pause_extends_delay(self):
+        """Every Nth character adds an extra 'thinking' pause, so the delay can exceed max."""
+        geo = MistUIGeocoder(UIGeocoderConfig(min_key_delay_s=0.10, max_key_delay_s=0.10))
+        # min==max==0.10 -> base is exactly 0.10; the thinking pause at index 7 doubles it.
+        assert geo._key_delay(1) == pytest.approx(0.10)
+        assert geo._key_delay(7) == pytest.approx(0.20)
+
+    def test_key_delay_guards_inverted_bounds(self):
+        """If max < min, the upper bound is clamped to min (never negative range)."""
+        geo = MistUIGeocoder(UIGeocoderConfig(min_key_delay_s=0.20, max_key_delay_s=0.05))
+        assert geo._key_delay(1) == pytest.approx(0.20)
+
+
 class TestHelpers:
     """Selector fallthrough, item-text safety, and Edge discovery."""
 
