@@ -352,18 +352,32 @@ class AddressAuditEngine:
         snmp_loc: str | None,
         resolver_result: Any,
     ) -> str:
-        """Return exactly one of the eight classification states for a resolved row."""
+        """Return exactly one of the nine classification states for a resolved row."""
         if resolver_result is None or resolver_result.canonical_address is None:  # No external result.
             return self._classify_internal(mist_addr, csv_addr, snmp_loc)  # Fall back to internal signals.
         if resolver_result.ambiguous:  # Multiple plausible candidates (mall scenario).
             return "AMBIGUOUS"  # Needs manual disambiguation.
         mist_street = mist_addr.get("address", "")  # Mist street line is the stable anchor.
         canonical = resolver_result.canonical_address  # Suggested/validated address (may be prefixed/partial).
-        if self._addresses_agree(mist_street, canonical):  # Same street AND same suite.
-            return "ADDRESS_MATCH"  # No change needed.
         if not self._same_street(mist_street, canonical):  # Street number/name does not line up.
             return "WRONG_STREET"  # Beyond a suite-level difference.
+        if self._missing_house_number(mist_street, canonical):  # Mist street lacks the house number we found.
+            return "MISSING_NUMBER"  # Incomplete Mist address -> surface, do not call it a match.
+        if self._addresses_agree(mist_street, canonical):  # Same street AND same suite.
+            return "ADDRESS_MATCH"  # No change needed.
         return self._classify_suite(mist_street, canonical)  # Same street: compare suites.
+
+    @staticmethod
+    def _missing_house_number(mist_street: str, candidate: str) -> bool:
+        """Return True when Mist's street lacks a house number that the candidate supplies.
+
+        A Mist record like ``S Federal Hwy`` with no street number is an
+        incomplete shipping address; surfacing it (instead of calling it a match)
+        lets the operator add the number the web resolved.
+        """
+        mist_has = bool(re.search(r"\d", mist_street))  # Mist street carries any number at all.
+        cand_has = bool(re.match(r"\s*\d", candidate))  # Candidate leads with a house number.
+        return cand_has and not mist_has  # Missing only when Mist has no number but the candidate does.
 
     def _classify_internal(self, mist_addr: dict[str, Any], csv_addr: dict[str, Any], snmp_loc: str | None) -> str:
         """Classify on internal CSV/SNMP signals alone when no external result exists."""

@@ -229,6 +229,26 @@ class TestCleanAddress:
         raw = "1701 Ohio Ave NLive Oak, FL 32064"
         assert MistUIGeocoder._clean_address(raw) == "1701 Ohio Ave N Live Oak, FL 32064"
 
+    def test_splits_street_suffix_glued_to_city(self):
+        """A street suffix fused to the city is split (HwyFort Pierce -> Hwy Fort Pierce)."""
+        raw = "2315 S Federal HwyFort Pierce, FL 34982"
+        assert MistUIGeocoder._clean_address(raw) == "2315 S Federal Hwy Fort Pierce, FL 34982"
+
+    def test_splits_number_glued_to_city(self):
+        """A suite number fused to the city is split (330Brandon -> 330 Brandon)."""
+        raw = "459 Brandon Town Center Drive suite 330Brandon, FL 33511"
+        assert MistUIGeocoder._clean_address(raw) == "459 Brandon Town Center Drive suite 330 Brandon, FL 33511"
+
+    def test_camelcase_city_is_preserved(self):
+        """A legitimately camel-cased city (DeFuniak) is never split."""
+        raw = "931 US Highway 331 Ste A2, DeFuniak Springs, FL 32435, USA"
+        assert MistUIGeocoder._clean_address(raw) == "931 US Highway 331 Ste A2, DeFuniak Springs, FL 32435"
+
+    def test_alphanumeric_street_name_preserved(self):
+        """An alphanumeric street name (A1A) is not split by the number-glue rule."""
+        raw = "1015 A1A Beach Blvd Unit 4, St. Augustine Beach, FL 32080"
+        assert MistUIGeocoder._clean_address(raw) == "1015 A1A Beach Blvd Unit 4, St. Augustine Beach, FL 32080"
+
 
 class TestAutoConnect:
     """The default 'auto' mode: take over an existing browser, else spawn one."""
