@@ -9,6 +9,18 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Fixed
 
+- **Address audit suggested-address cleanup (menu 195)**: Suggested addresses
+  were polluted with the customer's SAP internal store-code prefix
+  (e.g. `S2SJB - `, `08806 - `) and sometimes carried the SNMP field's stale ZIP.
+  The SNMP enricher now strips the leading SAP store code (it is not part of the
+  postal address), and Tier-1 rebuilds a clean suggestion from Mist's own
+  street/city/state/ZIP plus the discovered suite -- preferring the customer CSV
+  suite over the SNMP one. The suite detector was broadened to catch `#3`,
+  `Space P239`, `Spc`, `Rm`, `Lot`, and `Apartment` in addition to
+  Suite/Ste/Unit/Apt/Bldg. Result: `S2SJB - 5550 N Military Trl Unit 200 ... FL
+  33496` now renders as the clean, shippable `5550 N Military Trl Unit 200,
+  Boca Raton, FL 33431`.
+
 - **Address audit external validation via OpenStreetMap (menu 195)**: Nominatim
   (Tier 2) silently failed for every site because the resolver verified TLS
   certificates, which Zscaler SSL inspection breaks -- so the audit only ever

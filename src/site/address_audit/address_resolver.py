@@ -34,7 +34,9 @@ from src.utils.address_utils import AddressValidationConfig, NominatimValidator 
 
 _DB_RELATIVE_PATH = os.path.join("data", "mist_data.db")  # Constitution-fixed cache location.
 _NOMINATIM_MIN_INTERVAL = 1.1  # Seconds between Nominatim calls (>=1 req/sec ToS).
-_SUITE_PATTERN = r"\b(?:ste|suite|unit|apt|bldg|building)\.?\s+#?\s*[\w-]+"  # Suite/unit markers (state-safe).
+_SUITE_PATTERN = (  # Suite/unit markers (state-safe: explicit keywords or "#NNN", never bare "FL").
+    r"\b(?:ste|suite|unit|apt|apartment|bldg|building|space|spc|rm|room|lot)\b\.?\s*#?\s*[\w-]+" r"|#\s*\d[\w-]*"
+)
 
 
 class AddressResolver:
@@ -98,15 +100,45 @@ class AddressResolver:
         return ResolverResult(query=query, canonical_address=None, source="internal", confidence=0.0)
 
     def _compare_internal(self, candidates: ResolveCandidates) -> ResolverResult | None:
-        """Tier 1: suggest a CSV/SNMP candidate that adds a suite the Mist address lacks."""
-        mist_text = self._format_address(candidates.mist_address)  # Current Mist address as text.
-        candidate_text = candidates.snmp_location or self._format_address(candidates.csv_address)  # Best internal.
-        if not candidate_text:  # Nothing internal to compare against.
-            return None  # Defer to Tier 2.
-        if self._adds_suite(mist_text, candidate_text):  # Candidate carries a suite Mist is missing.
-            logging.debug("Tier 1 internal suggestion: %s", candidate_text)  # Trace the internal hit.
-            return ResolverResult(query="", canonical_address=candidate_text, source="internal", confidence=0.7)
-        return None  # No clear internal discrepancy -> let Tier 2 validate.
+        """Tier 1: build a clean Mist-base + suite suggestion when Mist is missing a suite.
+
+        The suite is taken preferentially from the customer CSV (their authoritative
+        corrected data), then the SNMP location. The suggestion is rebuilt from
+        Mist's own clean street/city/state/zip so SNMP store-number prefixes and
+        stale ZIPs never leak into the output.
+        """
+        mist_street = candidates.mist_address.get("address", "")  # Mist street line (the clean base).
+        if re.search(_SUITE_PATTERN, mist_street, flags=re.IGNORECASE):  # Mist already carries a suite.
+            return None  # No discrepancy to surface; defer to Tier 2.
+        csv_suite = self._extract_suite(candidates.csv_address.get("address", ""))  # CSV suite (authoritative).
+        snmp_suite = self._extract_suite(candidates.snmp_location or "")  # SNMP suite (fallback).
+        suite = csv_suite or snmp_suite  # Prefer the CSV's suite over the SNMP one.
+        if not suite:  # Neither internal source supplies a suite Mist lacks.
+            return None  # Nothing to add; defer to Tier 2.
+        clean = self._build_clean_suggestion(candidates.mist_address, suite)  # Mist base + suite, no pollution.
+        logging.debug("Tier 1 internal suggestion (suite=%s): %s", suite, clean)  # Trace the internal hit.
+        return ResolverResult(query="", canonical_address=clean, source="internal", confidence=0.7)
+
+    @staticmethod
+    def _extract_suite(text: str) -> str:
+        """Return the normalized suite/unit token from an address string, or ''."""
+        match = re.search(_SUITE_PATTERN, text, flags=re.IGNORECASE)  # First suite token in the string.
+        if not match:  # No suite present.
+            return ""  # Signal absence.
+        return " ".join(match.group(0).split()).strip()  # Collapse whitespace in the matched token.
+
+    def _build_clean_suggestion(self, mist_address: dict[str, Any], suite: str) -> str:
+        """Compose a clean suggested address from Mist's own fields plus the suite."""
+        base = mist_address.get("address", "").strip()  # Mist's street line.
+        base = re.sub(_SUITE_PATTERN, "", base, flags=re.IGNORECASE).strip().rstrip(",").strip()  # De-dupe suite.
+        street = f"{base} {suite}".strip() if suite else base  # Append the discovered suite.
+        locality = " ".join(  # "STATE ZIP" tail built from Mist's own fields.
+            part
+            for part in (mist_address.get("state", ""), str(mist_address.get("zip", mist_address.get("zipcode", ""))))
+            if part
+        ).strip()
+        parts = [street, mist_address.get("city", ""), locality]  # Ordered output components.
+        return ", ".join(part for part in parts if part).strip()  # Clean "street, city, ST ZIP".
 
     def _validate_nominatim(self, candidates: ResolveCandidates, query: str) -> ResolverResult | None:
         """Tier 2: validate the base street via the reused ``NominatimValidator``."""
@@ -190,13 +222,6 @@ class AddressResolver:
         without_suite = re.sub(_SUITE_PATTERN, "", street, flags=re.IGNORECASE)  # Drop the suite token.
         cleaned["address"] = re.sub(r"[,\s]+$", "", without_suite).strip()  # Trim trailing comma/space.
         return cleaned  # Suite-free address dict for OSM geocoding.
-
-    @staticmethod
-    def _adds_suite(base: str, candidate: str) -> bool:
-        """Return True when ``candidate`` contains a suite/unit marker ``base`` lacks."""
-        candidate_has = re.search(_SUITE_PATTERN, candidate.lower()) is not None  # Candidate carries a suite.
-        base_has = re.search(_SUITE_PATTERN, base.lower()) is not None  # Base already has a suite.
-        return candidate_has and not base_has  # Discrepancy only when candidate adds one.
 
     def _ensure_db_dir(self) -> None:
         """Create the cache DB's parent directory if it does not yet exist."""

@@ -34,6 +34,64 @@ def _db(tmp_path):
     return str(tmp_path / "mist_data.db")
 
 
+class TestCleanSuggestion:
+    """Tier 1 builds a clean Mist-base + suite suggestion, free of SAP/zip pollution."""
+
+    def test_suggestion_uses_mist_base_and_zip(self):
+        """Suggestion = Mist street + CSV suite + Mist city/state/zip (not the SNMP zip)."""
+        res = AddressResolver()
+        mist = {"address": "5550 N Military Trl", "city": "Boca Raton", "state": "FL", "zip": "33431"}
+        csv = {"address": "5550 N Military Trail Unit 200", "city": "Boca Raton", "state": "FL", "zip": "33431"}
+        # SNMP carries a different (wrong) zip; it must not leak into the suggestion.
+        cand = ResolveCandidates(
+            mist_address=mist, csv_address=csv, snmp_location="5550 N Military Trl Unit 200 FL 33496"
+        )
+        result = res._compare_internal(cand)
+        assert result is not None
+        assert result.canonical_address == "5550 N Military Trl Unit 200, Boca Raton, FL 33431"
+
+    def test_hash_suite_detected(self):
+        """A bare '#3' suite is detected and appended cleanly."""
+        res = AddressResolver()
+        mist = {"address": "940 S Military Trail", "city": "West Palm Beach", "state": "FL", "zip": "33415"}
+        csv = {"address": "940 S Military Trail #3", "city": "West Palm Beach", "state": "FL", "zip": "33415"}
+        result = res._compare_internal(ResolveCandidates(mist_address=mist, csv_address=csv))
+        assert result.canonical_address == "940 S Military Trail #3, West Palm Beach, FL 33415"
+
+    def test_space_suite_detected(self):
+        """A 'Space P239' suite is detected (broadened keyword set)."""
+        res = AddressResolver()
+        mist = {"address": "3101 PGA Boulevard", "city": "Palm Beach Gardens", "state": "FL", "zip": "33410"}
+        csv = {"address": "3101 PGA Boulevard Space P239", "city": "Palm Beach Gardens", "state": "FL", "zip": "33410"}
+        result = res._compare_internal(ResolveCandidates(mist_address=mist, csv_address=csv))
+        assert result.canonical_address == "3101 PGA Boulevard Space P239, Palm Beach Gardens, FL 33410"
+
+    def test_prefers_csv_suite_over_bad_snmp(self):
+        """When SNMP holds a different (stale) address, the CSV suite is used on the Mist base."""
+        res = AddressResolver()
+        mist = {"address": "3101 PGA Boulevard", "city": "Palm Beach Gardens", "state": "FL", "zip": "33410"}
+        csv = {"address": "3101 PGA Boulevard Space P239", "city": "Palm Beach Gardens", "state": "FL", "zip": "33410"}
+        cand = ResolveCandidates(
+            mist_address=mist, csv_address=csv, snmp_location="1520 Route 38 Bldg 4 Hainesport NJ 08060"
+        )
+        result = res._compare_internal(cand)
+        assert result.canonical_address == "3101 PGA Boulevard Space P239, Palm Beach Gardens, FL 33410"
+
+    def test_no_suite_anywhere_defers(self):
+        """With no suite in CSV or SNMP, Tier 1 returns None (defers to OSM)."""
+        res = AddressResolver()
+        mist = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
+        csv = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
+        assert res._compare_internal(ResolveCandidates(mist_address=mist, csv_address=csv)) is None
+
+    def test_mist_already_has_suite_defers(self):
+        """If Mist already carries a suite, Tier 1 does not flag MISSING_SUITE."""
+        res = AddressResolver()
+        mist = {"address": "100 Main St Suite 9", "city": "Town", "state": "FL", "zip": "33000"}
+        csv = {"address": "100 Main St Suite 5", "city": "Town", "state": "FL", "zip": "33000"}
+        assert res._compare_internal(ResolveCandidates(mist_address=mist, csv_address=csv)) is None
+
+
 class TestTier1Internal:
     """Tier 1 internal comparison (no network)."""
 

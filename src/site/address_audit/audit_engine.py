@@ -43,7 +43,9 @@ except ImportError:  # pragma: no cover -- exercised only when tqdm is absent.
     tqdm = None  # type: ignore[assignment]  # Sentinel; _progress degrades to a plain iterator.
 
 _DATA_DIR = "data"  # Directory scanned for the customer CSV.
-_SUITE_PATTERN = r"\b(?:ste|suite|unit|apt|bldg|building)\.?\s+#?\s*([\w-]+)"  # Suite token (state-safe).
+_SUITE_PATTERN = (  # Suite token with a capture group for the unit id (state-safe).
+    r"\b(?:ste|suite|unit|apt|apartment|bldg|building|space|spc|rm|room|lot)\b\.?\s*#?\s*([\w-]+)" r"|#\s*(\d[\w-]*)"
+)
 
 
 class AddressAuditEngine:
@@ -366,7 +368,9 @@ class AddressAuditEngine:
     def _suite(text: str) -> str:
         """Extract a normalized suite/unit identifier from an address, or ''."""
         match = re.search(_SUITE_PATTERN, text.lower())  # Find the first suite token.
-        return match.group(1).strip() if match else ""  # The unit identifier (e.g. "200").
+        if not match:  # No suite token present.
+            return ""  # Signal absence.
+        return (match.group(1) or match.group(2) or "").strip()  # Unit id from whichever alt matched.
 
     @staticmethod
     def _normalize(text: str) -> str:
