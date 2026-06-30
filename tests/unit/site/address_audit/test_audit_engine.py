@@ -1,5 +1,8 @@
 """Unit tests for AddressAuditEngine classification + assembly (1003-site-address-audit)."""
 
+from unittest.mock import MagicMock
+
+from src.site.address_audit import audit_engine as eng_mod
 from src.site.address_audit.audit_engine import AddressAuditEngine
 from src.site.address_audit.models import AddressRow, MatchedSite, ResolverResult
 
@@ -70,15 +73,20 @@ class TestClassify:
 
     def test_missing_house_number_not_match(self):
         """Mist street with no house number + a numbered suggestion -> MISSING_NUMBER, not ADDRESS_MATCH."""
-        mist = {"address": "S Federal Hwy", "city": "Fort Pierce", "state": "FL", "zip": "34982"}
+        mist = {"address": "S Federal Hwy, Fort Pierce, FL 34982, USA", "city": "", "state": "", "zip": ""}
         rr = _rr("2315 S Federal Hwy Fort Pierce, FL 34982")
         assert self.engine._classify(mist, _CSV, None, rr) == "MISSING_NUMBER"
 
     def test_missing_house_number_helper(self):
-        """The helper fires only when Mist has no number but the candidate leads with one."""
-        assert self.engine._missing_house_number("S Federal Hwy", "2315 S Federal Hwy") is True
-        assert self.engine._missing_house_number("1606 E Jefferson St", "1606 West Jefferson St") is False
-        assert self.engine._missing_house_number("S Federal Hwy", "S Federal Hwy") is False
+        """The helper inspects the leading street segment, ignoring a trailing ZIP."""
+        # Full Mist string: street has no leading number even though the ZIP has digits.
+        assert (
+            self.engine._missing_house_number("S Federal Hwy, Fort Pierce, FL 34982, USA", "2315 S Federal Hwy") is True
+        )
+        assert (
+            self.engine._missing_house_number("1606 E Jefferson St, Quincy, FL 32351", "1606 W Jefferson St") is False
+        )
+        assert self.engine._missing_house_number("S Federal Hwy, Fort Pierce, FL 34982", "S Federal Hwy") is False
 
     def test_abbreviated_directional_still_matches(self):
         """Mist 'NW 107th Ave' vs web 'Northwest 107th Avenue' is the same street."""
@@ -119,6 +127,54 @@ class TestSameStreet:
     def test_leading_directional_ignores_city(self):
         """Only the directional after the house number counts, not one inside the city."""
         assert self.engine._leading_directional("940 South Military Trail #3, West Palm Beach, FL") == "S"
+
+
+class TestWriteBackWiring:
+    """The optional write-back flow is correctly gated and wired into _finish."""
+
+    def _engine_with_mocks(self):
+        """Build an engine whose renderer/reporter/corrector are mocks."""
+        engine = AddressAuditEngine(renderer=MagicMock(), reporter=MagicMock())
+        corrector = MagicMock()
+        engine._make_corrector = staticmethod(lambda _api: corrector)  # Inject the mock corrector.
+        return engine, corrector
+
+    def test_quit_skips_save_and_writeback(self):
+        """Choosing quit saves nothing and never offers write-back."""
+        engine, corrector = self._engine_with_mocks()
+        engine._renderer.prompt_post_table.return_value = "quit"
+        engine._finish([], MagicMock())
+        engine._reporter.save.assert_not_called()
+        corrector.correctable.assert_not_called()
+
+    def test_save_then_offers_writeback(self):
+        """Choosing save writes the report and then offers write-back."""
+        engine, corrector = self._engine_with_mocks()
+        engine._renderer.prompt_post_table.return_value = "save"
+        engine._reporter.save.return_value = "data/x.csv"
+        corrector.correctable.return_value = []  # No targets -> offer ends quietly.
+        engine._finish([], MagicMock())
+        engine._reporter.save.assert_called_once()
+        corrector.correctable.assert_called_once()
+
+    def test_gate_no_skips_review(self, monkeypatch):
+        """Declining the batch gate means review_and_apply is never called."""
+        engine, corrector = self._engine_with_mocks()
+        corrector.correctable.return_value = [object()]  # One target exists.
+        monkeypatch.setattr(eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: "n"))
+        engine._offer_write_back([], MagicMock())
+        corrector.review_and_apply.assert_not_called()
+
+    def test_gate_yes_runs_review_and_report(self, monkeypatch):
+        """Accepting the batch gate runs review_and_apply and then offers the report."""
+        engine, corrector = self._engine_with_mocks()
+        corrector.correctable.return_value = [object()]
+        corrector.review_and_apply.return_value = [object()]
+        answers = iter(["y", "y"])  # Gate yes, then save-report yes.
+        monkeypatch.setattr(eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: next(answers)))
+        engine._offer_write_back([], MagicMock())
+        corrector.review_and_apply.assert_called_once()
+        engine._reporter.save_corrections.assert_called_once()
 
 
 class TestBuildAuditResult:

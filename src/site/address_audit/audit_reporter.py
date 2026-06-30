@@ -13,7 +13,7 @@ import logging  # Action logging before/after every operation (project NON-NEGOT
 import os  # Path construction and directory creation.
 from datetime import UTC, datetime  # Timestamped output filenames.
 
-from src.site.address_audit.models import AuditResult  # Per-row audit record.
+from src.site.address_audit.models import AuditResult, CorrectionOutcome  # Per-row audit + write-back records.
 
 _HEADER = [  # CSV header row -- matches the seven terminal columns.
     "Site Name",  # Mist site name.
@@ -23,6 +23,14 @@ _HEADER = [  # CSV header row -- matches the seven terminal columns.
     "Suggested Address",  # Resolver suggestion (full value).
     "Source",  # Originating tier.
     "Issue Type",  # Classification state.
+]
+_CORRECTION_HEADER = [  # Before/after write-back report columns.
+    "Site Name",  # Mist site name.
+    "Site ID",  # Mist site UUID.
+    "Before Address",  # Address before the (optional) write-back.
+    "After Address",  # Corrected address reviewed by the operator.
+    "Action",  # pushed | skipped | failed.
+    "Error",  # Failure detail when action == failed (else blank).
 ]
 
 
@@ -55,6 +63,22 @@ class AddressAuditReporter:
             result.source,  # Source label.
             result.issue_type,  # Classification state.
         ]
+
+    def save_corrections(self, outcomes: list[CorrectionOutcome], output_dir: str = "data") -> str:
+        """Write the before/after write-back outcomes to a timestamped CSV; return the path."""
+        logging.info("Saving address-correction report (%d outcome rows)", len(outcomes))  # Action-log start.
+        os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists.
+        stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # UTC timestamp for the filename.
+        path = os.path.join(output_dir, f"address_corrections_{stamp}.csv")  # Full output path.
+        with open(path, "w", encoding="utf-8", newline="") as handle:  # Open for CSV writing.
+            writer = csv.writer(handle)  # Standard CSV writer.
+            writer.writerow(_CORRECTION_HEADER)  # Write the before/after header first.
+            for outcome in outcomes:  # One row per reviewed site.
+                writer.writerow(  # Six cells matching _CORRECTION_HEADER order.
+                    [outcome.site_name, outcome.site_id, outcome.before, outcome.after, outcome.action, outcome.error]
+                )
+        logging.debug("Address-correction report written to %s", path)  # Action-log completion.
+        return path  # Return the written path to the caller.
 
     @staticmethod
     def _format_address(address: dict) -> str:
