@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Changed
+
+- **Address audit Tier-3 web geocoding is now flag-free (menu 195)**: The
+  Tier-3 browser geocoder no longer requires the `--ui-geocode` CLI flag (the
+  flag has been removed). It is treated as the natural extension of the
+  "everything is a hint" model: the Mist site address, the SNMP location
+  variable, and the customer CSV are all *hints*, fused into one best-guess
+  query and verified against the web to deduce the true, shippable address.
+  Tier-3 now auto-engages whenever a debuggable browser is reachable and
+  degrades quietly to the internal + OpenStreetMap baseline otherwise, so
+  routine runs are never disrupted. A new `ADDRESS_AUDIT_GEOCODE=off` env knob
+  skips the attempt; the "no browser attached" message dropped from WARNING to
+  an informational note with enablement guidance.
+
 ### Fixed
 
 - **Address audit suggested-address cleanup (menu 195)**: Suggested addresses
@@ -33,7 +47,8 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   column. The Nominatim step now logs visibly (INFO on hit, WARNING on miss).
   Verified live: real streets validate (confidence ~0.88), nonsense streets do
   not. NOTE: OpenStreetMap validates the street only; business-name + suite
-  confirmation still requires the optional `--ui-geocode` Google-Places tier.
+  confirmation still requires the optional Tier-3 Google-Places browser tier
+  (auto-engaged when a debuggable browser is available).
 
 - **Address audit CSV delimiter (menu 195)**: The CSV ingester assumed tab
   delimiters and silently skipped every row of a comma-delimited file (the Excel

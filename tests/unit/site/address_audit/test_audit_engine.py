@@ -128,6 +128,21 @@ class TestEnvConfig:
         monkeypatch.setenv("MIST_SKIP_SSL_VERIFY", "false")
         assert AddressAuditEngine._skip_ssl_verify() is False
 
+    def test_ui_geocode_enabled_defaults_true(self, monkeypatch):
+        """Tier-3 web geocoding is permitted by default (no CLI flag required)."""
+        monkeypatch.delenv("ADDRESS_AUDIT_GEOCODE", raising=False)
+        assert AddressAuditEngine._ui_geocode_enabled() is True
+
+    def test_ui_geocode_enabled_env_off(self, monkeypatch):
+        """Setting ADDRESS_AUDIT_GEOCODE=off disables the Tier-3 attempt."""
+        monkeypatch.setenv("ADDRESS_AUDIT_GEOCODE", "off")
+        assert AddressAuditEngine._ui_geocode_enabled() is False
+
+    def test_ui_geocode_enabled_env_auto(self, monkeypatch):
+        """An explicit 'auto' value keeps Tier-3 enabled."""
+        monkeypatch.setenv("ADDRESS_AUDIT_GEOCODE", "auto")
+        assert AddressAuditEngine._ui_geocode_enabled() is True
+
 
 class TestSourceLabel:
     """Source-column labelling, including OSM street-validation."""
