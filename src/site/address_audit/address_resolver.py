@@ -295,6 +295,31 @@ class AddressResolver:
         group = [hint for hint in hints if hint[2] == winner] or hints  # Sources matching the winner.
         return self._prefer_hint(group)[1]  # Suite-bearing first, then CSV > Mist > SNMP.
 
+    def has_conflicting_hints(self, candidates: ResolveCandidates) -> bool:
+        """Return True when the hints disagree on the house number with no majority.
+
+        The Mist address, the customer CSV, and the SNMP location are independent
+        hints. A 2-vs-1 split still has a clear majority (the lone dissenter is the
+        outlier and is intentionally trusted away), but when every hint that has a
+        house number names a *different* one -- or only two hints have numbers and
+        they differ -- there is no majority to break the tie. Silently picking one
+        could push a different real store's address onto the site, so such rows are
+        surfaced for manual review instead of auto-corrected. A suite on a hint does
+        not rescue it: a suite is only meaningful on the agreed-upon street number.
+        """
+        hints = self._gather_hints(candidates)  # [(label, text, house_no, has_suite), ...].
+        numbers = [house for _, _, house, _ in hints if house]  # Non-empty leading house numbers only.
+        distinct = set(numbers)  # Unique house numbers across the hints.
+        if len(distinct) < 2:  # Zero or one distinct number -> consensus or a single source.
+            return False  # Nothing for the sources to disagree about.
+        counts = {number: numbers.count(number) for number in distinct}  # Votes per distinct number.
+        top = max(counts.values())  # Highest vote count among the numbers.
+        leaders = [number for number, votes in counts.items() if votes == top]  # Numbers tied at the top.
+        conflict = len(leaders) > 1  # More than one number shares the lead -> no majority -> conflict.
+        if conflict:  # Action-log only the genuine conflict so script.log explains the flag.
+            logging.info("Conflicting hint house numbers %s; no majority to trust", sorted(distinct))
+        return conflict  # True only when the sources actively disagree with no winner.
+
     def _gather_hints(self, candidates: ResolveCandidates) -> list[tuple[str, str, str, bool]]:
         """Normalize each hint into (label, text, house_number, has_suite); drop empties."""
         raw = [  # Source label -> raw text (CSV/Mist first so ties prefer the customer data).

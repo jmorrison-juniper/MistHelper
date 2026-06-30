@@ -25,6 +25,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Added
 
+- **Address audit now flags rows it cannot safely auto-correct, as review-only
+  (menu 195)**: two new classification states protect against pushing a wrong or
+  non-unique address to Mist, and both are **excluded from write-back** (they are
+  never offered for push, and they show a blank Suggested Address so the operator
+  decides by hand from the Mist/CSV/SNMP columns):
+  - **`CONFLICTING_HINTS`** -- the Mist address, the customer CSV, and the SNMP
+    location disagree on the **house number with no majority** (every hint names a
+    different number, or only two hints have numbers and they differ). A 2-vs-1
+    split still has a clear majority and is left alone (the lone dissenter is the
+    outlier); a suite on a dissenting hint does not rescue it, because a suite is
+    only meaningful on the agreed-upon street number. This stops the tool from
+    silently picking one of several *different valid stores* for a single site --
+    e.g. a real T-Mobile site whose SNMP location was stale ``1520 Route 38 ...
+    Hainesport NJ`` while Mist and the CSV pointed at a Hawaii address.
+  - **`DUPLICATE_ADDRESS`** -- two or more *different* sites resolve to the
+    **identical** full address (same suite, or both lacking one), which would make
+    them indistinguishable for shipping. Sites that share only a base street but
+    carry *different* suites are the normal strip-mall case and are left untouched
+    because their full addresses differ.
+
 - **Address audit can now push corrected addresses back to Mist (menu 195)**: the
   audit was read-only; you reviewed the comparison and fixed addresses by hand.
   After saving the comparison report you are now offered an **optional write-back**.

@@ -382,3 +382,61 @@ class TestHelpers:
         resolver._respect_rate_limit()
         resolver._respect_rate_limit()
         assert slept  # Second rapid call paused.
+
+
+class TestHasConflictingHints:
+    """has_conflicting_hints flags only genuine no-majority house-number disagreement."""
+
+    def test_all_three_differ_is_conflict(self):
+        """Three distinct house numbers with no majority -> conflict (three different stores)."""
+        cand = ResolveCandidates(
+            mist_address={"address": "1523 E San Marnan Dr", "city": "Waterloo", "state": "IA", "zip": "50702"},
+            csv_address={"address": "2825 Crossroads Blvd", "city": "Waterloo", "state": "IA", "zip": "50702"},
+            snmp_location="100 Mall Dr Waterloo IA 50702",
+        )
+        assert AddressResolver().has_conflicting_hints(cand) is True
+
+    def test_two_agree_one_differs_is_not_conflict(self):
+        """A 2-vs-1 split has a clear majority -> not a conflict (the outlier is trusted away)."""
+        cand = ResolveCandidates(
+            mist_address={"address": "100 Main St", "city": "T", "state": "FL", "zip": "1"},
+            csv_address={"address": "100 Main St", "city": "T", "state": "FL", "zip": "1"},
+            snmp_location="456 Oak Ave Ste 200 T FL 1",
+        )
+        assert AddressResolver().has_conflicting_hints(cand) is False
+
+    def test_all_same_number_is_not_conflict(self):
+        """All hints on the same house number -> consensus, never a conflict."""
+        cand = ResolveCandidates(
+            mist_address={"address": "100 Main St", "city": "T", "state": "FL", "zip": "1"},
+            csv_address={"address": "100 Main St Suite 5", "city": "T", "state": "FL", "zip": "1"},
+            snmp_location="100 Main St T FL 1",
+        )
+        assert AddressResolver().has_conflicting_hints(cand) is False
+
+    def test_suite_on_dissenter_does_not_rescue(self):
+        """A suite-bearing dissenter on a different number is still a conflict (suite is irrelevant off-street)."""
+        cand = ResolveCandidates(
+            mist_address={"address": "100 Main St", "city": "T", "state": "FL", "zip": "1"},
+            csv_address={"address": "200 Oak Ave", "city": "T", "state": "FL", "zip": "1"},
+            snmp_location="300 Pine Rd Ste 9 T FL 1",
+        )
+        assert AddressResolver().has_conflicting_hints(cand) is True
+
+    def test_mist_missing_number_others_agree_is_not_conflict(self):
+        """Mist lacks a house number but CSV+SNMP agree -> majority, not a conflict."""
+        cand = ResolveCandidates(
+            mist_address={"address": "S Federal Hwy", "city": "Ft Pierce", "state": "FL", "zip": "34982"},
+            csv_address={"address": "2315 S Federal Hwy", "city": "Ft Pierce", "state": "FL", "zip": "34982"},
+            snmp_location="2315 S Federal Hwy Ft Pierce FL 34982",
+        )
+        assert AddressResolver().has_conflicting_hints(cand) is False
+
+    def test_mist_missing_number_others_differ_is_conflict(self):
+        """Mist lacks a number and CSV/SNMP disagree -> no tiebreaker -> conflict."""
+        cand = ResolveCandidates(
+            mist_address={"address": "S Federal Hwy", "city": "Ft Pierce", "state": "FL", "zip": "34982"},
+            csv_address={"address": "2315 S Federal Hwy", "city": "Ft Pierce", "state": "FL", "zip": "34982"},
+            snmp_location="2400 S Federal Hwy Ft Pierce FL 34982",
+        )
+        assert AddressResolver().has_conflicting_hints(cand) is True
