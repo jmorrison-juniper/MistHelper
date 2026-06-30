@@ -34,6 +34,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Fixed
 
+- **Address audit Tier-3 captured the WRONG suggestion (one-row lag) (menu 195)**:
+  Google Places leaves the previous query's suggestions in the dropdown until the
+  new request returns, so the geocoder read each address's result one lookup late
+  -- every row was shifted by one and therefore wrong (e.g. the query for
+  `1701 Ohio Ave` captured `7535 North Kendall Drive`). The geocoder now anchors
+  on the query's house number and polls until the TOP suggestion actually
+  contains it, dismissing the stale dropdown first; on timeout it returns
+  NO_RESULT rather than risk a stale, wrong address. It also cleans Google's row
+  text -- stripping the glued business-name prefix (`T-Mobile931 US Highway...`)
+  and trailing `, USA` -- so the suggested value is the clean, shippable street
+  line with its suite preserved (`931 US Highway 331 Ste A2, DeFuniak Springs, FL
+  32435`). NOTE: anyone who ran the audit before this fix should re-run it and
+  discard the prior output; the cached results were shifted.
+
 - **Address audit misleading Nominatim log (menu 195)**: The "Nominatim returned
   no result" warning printed the business-name + suite query string even though
   the actual geocode used the suite-stripped street, making it look like the

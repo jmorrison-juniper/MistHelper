@@ -42,6 +42,7 @@ from __future__ import annotations  # PEP 604 union syntax on Python 3.13.
 
 import logging  # Action logging before/after every operation (project NON-NEGOTIABLE).
 import os  # Filesystem probing for the Edge executable.
+import re  # House-number extraction + suggestion cleanup (defeats the autocomplete lag race).
 import shutil  # PATH lookup fallback for the Edge executable.
 import subprocess  # Spawn a debuggable browser for CDP takeover.
 import tempfile  # Dedicated throwaway profile for the spawned browser.
@@ -252,17 +253,64 @@ class MistUIGeocoder:
         return self._context.new_page()  # Otherwise open a fresh tab (launch mode).
 
     def _perform_lookup(self, page: Any, query: str) -> list[str]:
-        """Type ``query`` into the Location Search field and read suggestion texts."""
+        """Type ``query``, then read ONLY the suggestion list that belongs to it (stale-safe)."""
         timeout_ms = int(self._config.per_lookup_timeout_s * 1000)  # Playwright uses milliseconds.
         field = self._locate_input(page, timeout_ms)  # Find the autocomplete input element.
-        field.click()  # Focus the field so Google binds keystrokes.
-        field.fill("")  # Clear any pre-existing text.
-        field.type(query, delay=30)  # Type slowly so Google fires the autocomplete request.
-        page.wait_for_selector(PAC_ITEM_SELECTOR, timeout=timeout_ms)  # Wait for the suggestion dropdown.
-        items = page.query_selector_all(PAC_ITEM_SELECTOR)  # Collect every suggestion row.
-        texts = [self._item_text(item) for item in items]  # Extract each row's visible text.
-        logging.debug("UI autocomplete returned %d suggestion(s)", len(texts))  # Action-log count.
-        return [text for text in texts if text]  # Drop empties.
+        self._enter_query(page, field, query)  # Focus, clear the stale dropdown, type the new query.
+        expected = self._house_number(query)  # House number anchors the fresh-result wait.
+        texts = self._read_fresh_suggestions(page, expected, timeout_ms)  # Wait for THIS query's suggestions.
+        logging.debug("UI autocomplete returned %d fresh suggestion(s)", len(texts))  # Action-log count.
+        return texts  # May be empty -> NO_RESULT (never a stale, wrong answer).
+
+    def _enter_query(self, page: Any, field: Any, query: str) -> None:
+        """Focus the field, clear any stale value/dropdown, then type the new query."""
+        field.click()  # Focus so Google binds keystrokes.
+        field.fill("")  # Clear any previous text.
+        self._settle(page, 150)  # Let Google tear down the previous dropdown before typing.
+        field.type(query, delay=40)  # Type slowly so Google fires the autocomplete request.
+
+    def _read_fresh_suggestions(self, page: Any, expected: str, timeout_ms: int) -> list[str]:
+        """Poll until the TOP suggestion matches ``expected`` (this query's house number).
+
+        Google leaves the PREVIOUS query's suggestions in the DOM until the new
+        request returns, so reading immediately yields a stale (wrong) answer -- the
+        observed one-row lag. We wait until the top row actually contains this
+        query's house number; on timeout we return [] (NO_RESULT) rather than risk
+        a stale, wrong address. Queries without a house number cannot be anchored,
+        so they read the first stable list (rare for retail addresses).
+        """
+        deadline = time.monotonic() + max(0.0, timeout_ms / 1000.0)  # Absolute wait deadline.
+        while time.monotonic() < deadline:  # Poll until fresh or timed out.
+            texts = self._current_suggestions(page)  # Snapshot the current dropdown rows.
+            if texts and (not expected or self._matches_house_number(texts[0], expected)):  # Fresh top row.
+                return texts  # The top suggestion belongs to THIS query.
+            self._settle(page, 200)  # Brief pause before re-polling.
+        logging.info("No fresh suggestion for house number '%s' within timeout; skipping (stale-guard)", expected)
+        return []  # Fail-soft to NO_RESULT.
+
+    def _current_suggestions(self, page: Any) -> list[str]:
+        """Return the non-empty visible texts of the current suggestion rows."""
+        items = page.query_selector_all(PAC_ITEM_SELECTOR)  # All suggestion rows in the dropdown.
+        return [text for text in (self._item_text(item) for item in items) if text]  # Drop empties.
+
+    @staticmethod
+    def _settle(page: Any, millis: int) -> None:
+        """Pause via Playwright's clock between polls (no-op-safe in tests)."""
+        try:
+            page.wait_for_timeout(millis)  # Cooperative wait that yields to the browser event loop.
+        except Exception as exc:  # noqa: BLE001 -- a timing helper must never abort the lookup.
+            logging.debug("wait_for_timeout ignored: %s", exc)  # Trace and continue.
+
+    @staticmethod
+    def _house_number(text: str) -> str:
+        """Return the first digit-run (the house number); names like 'T-Mobile' have none."""
+        match = re.search(r"\d+", text)  # First run of digits in the query.
+        return match.group(0) if match else ""  # House number or empty when none present.
+
+    @staticmethod
+    def _matches_house_number(text: str, expected: str) -> bool:
+        """Return True when ``expected`` is one of the digit-runs in ``text`` (glue-safe)."""
+        return expected in re.findall(r"\d+", text)  # Compare extracted numbers, not a raw substring.
 
     def _locate_input(self, page: Any, timeout_ms: int) -> Any:
         """Probe candidate selectors and return the first matching input element."""
@@ -284,21 +332,37 @@ class MistUIGeocoder:
             return ""  # Treat as empty so it is filtered out.
 
     def _build_result(self, query: str, suggestions: list[str]) -> ResolverResult:
-        """Turn ranked Google suggestions into a ``ResolverResult``."""
+        """Turn ranked Google suggestions into a ``ResolverResult`` (cleaned address)."""
         if not suggestions:  # No autocomplete suggestions at all.
             logging.debug("No UI suggestions for query: %s", query)  # Trace the empty result.
             return ResolverResult(query=query, canonical_address=None, source="mist_ui", confidence=0.0)
-        top = suggestions[0]  # Google ranks the best match first.
+        top = self._clean_address(suggestions[0])  # Strip the glued business name + trailing country.
         ambiguous = len(suggestions) > 1  # Multiple hits => mall/strip-center ambiguity.
         confidence = 0.6 if ambiguous else 0.9  # Lower confidence when several candidates exist.
         logging.info("UI geocode top suggestion: %s (ambiguous=%s)", top, ambiguous)  # Action-log result.
         return ResolverResult(
             query=query,  # Echo the query for cache keying.
-            canonical_address=top,  # Best suite-corrected address.
+            canonical_address=top,  # Best suite-corrected, shippable address.
             source="mist_ui",  # Mark the originating tier.
             confidence=confidence,  # Heuristic confidence.
             raw_response={"suggestions": suggestions, "ambiguous": ambiguous},  # Full payload for cache.
         )
+
+    @staticmethod
+    def _clean_address(text: str) -> str:
+        """Strip a glued leading place/business name and a trailing country from a suggestion.
+
+        Google's ``.pac-item`` rows glue the establishment name to the address with
+        no separator (e.g. ``T-Mobile931 US Highway 331 Ste A2, ..., USA``). We drop
+        the trailing country and any leading non-digit run that precedes a
+        ``<house-number> <street>`` start, yielding the clean shippable street line.
+        Addresses with no house number are returned as-is (rare for retail).
+        """
+        s = text.strip()  # Normalize surrounding whitespace.
+        s = re.sub(r",?\s*(?:USA|United States)\s*$", "", s, flags=re.IGNORECASE).strip()  # Drop trailing country.
+        match = re.match(r"^\D*?(\d+\s+\D.*)$", s)  # Find "<house-number> <street>..." after any name prefix.
+        cleaned = match.group(1) if match else s  # Use the address tail when a real street start is present.
+        return cleaned.strip().strip(",").strip() or text.strip()  # Never return empty.
 
     def close(self) -> None:
         """Tear down browser and driver handles; never raises."""
