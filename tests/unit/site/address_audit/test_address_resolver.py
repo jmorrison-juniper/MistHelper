@@ -221,6 +221,93 @@ class TestTier3Gating:
         assert "Unit 200" in result.canonical_address  # Internal suite preserved.
 
 
+class TestConsensusQuery:
+    """The geocoding query is built by house-number consensus, not blind SNMP-first."""
+
+    def test_out_of_state_snmp_does_not_hijack(self):
+        """When SNMP points to another state, Mist+CSV consensus wins the query."""
+        res = AddressResolver()
+        mist = {"address": "3101 PGA Boulevard", "city": "Palm Beach Gardens", "state": "FL", "zip": "33410"}
+        csv = {"address": "3101 PGA Boulevard Space P239", "city": "Palm Beach Gardens", "state": "FL", "zip": "33410"}
+        cand = ResolveCandidates(
+            mist_address=mist, csv_address=csv, snmp_location="1520 Route 38 Bldg 4 Hainesport NJ 08060"
+        )
+        query = res._build_query(cand)
+        assert "3101 PGA Boulevard Space P239" in query  # FL consensus address.
+        assert "1520" not in query and "NJ" not in query  # The NJ SNMP outlier is rejected.
+
+    def test_csv_outlier_uses_mist_snmp_consensus(self):
+        """When the CSV house number is the lone outlier, Mist+SNMP consensus wins."""
+        res = AddressResolver()
+        mist = {"address": "1701 Ohio Ave N", "city": "Live Oak", "state": "FL", "zip": "32064"}
+        csv = {"address": "6670 US Highway 129, Suite 1", "city": "Live Oak", "state": "FL", "zip": "32060"}
+        cand = ResolveCandidates(mist_address=mist, csv_address=csv, snmp_location="1701 Ohio Ave N Live Oak FL 32064")
+        query = res._build_query(cand)
+        assert "1701 Ohio Ave N" in query  # Mist+SNMP agree on 1701.
+        assert "6670" not in query  # The CSV outlier is rejected.
+
+    def test_business_name_prefixes_query(self):
+        """A configured business name is prepended to the consensus address."""
+        res = AddressResolver()
+        addr = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
+        query = res._build_query(ResolveCandidates(mist_address=addr, csv_address=addr, business_name="T-Mobile"))
+        assert query.startswith("T-Mobile 100 Main St")
+
+    def test_normalize_glue_splits_directional(self):
+        """Directional/US glue from SNMP is repaired before voting."""
+        assert AddressResolver._normalize_glue("2315 SFederal Hwy") == "2315 S Federal Hwy"
+        assert AddressResolver._normalize_glue("931 USHighway 331") == "931 US Highway 331"
+        assert AddressResolver._normalize_glue("5550 NMilitary Trl") == "5550 N Military Trl"
+
+    def test_leading_house_number_ignores_zip(self):
+        """A street with no leading number yields '' (the trailing ZIP is not a house number)."""
+        assert AddressResolver._leading_house_number("S Federal Hwy Fort Pierce FL 34982") == ""
+        assert AddressResolver._leading_house_number("2315 S Federal Hwy") == "2315"
+
+    def test_consensus_prefers_suite_bearing_source(self):
+        """Within the winning house-number group, a suite-bearing source is preferred."""
+        res = AddressResolver()
+        mist = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
+        csv = {"address": "100 Main St Suite 7", "city": "Town", "state": "FL", "zip": "33000"}
+        assert "Suite 7" in res._consensus_address(ResolveCandidates(mist_address=mist, csv_address=csv))
+
+
+class TestUiBusinessFallback:
+    """Tier 3 retries without the business prefix when the prefixed query finds nothing."""
+
+    def test_retry_plain_when_business_query_empty(self, tmp_path, monkeypatch):
+        """An empty business-prefixed result triggers one plain-address retry."""
+        _FakeValidator.count = 0
+        _FakeValidator.valid = False  # Tier 2 yields nothing so Tier 3 is consulted.
+        monkeypatch.setattr(resolver_mod, "NominatimValidator", _FakeValidator)
+        monkeypatch.setattr(resolver_mod.time, "sleep", lambda *_: None)
+        ui = MagicMock()
+        empty = ResolverResult(query="q", canonical_address=None, source="mist_ui")  # No fresh suggestion.
+        found = ResolverResult(query="q", canonical_address="2315 S Federal Hwy, Fort Pierce, FL", source="mist_ui")
+        ui.geocode_via_ui.side_effect = [empty, found]  # First (business) empty, then (plain) hit.
+        resolver = AddressResolver(db_path=_db(tmp_path), ui_geocoder=ui)
+        mist = {"address": "S Federal Hwy", "city": "Fort Pierce", "state": "FL", "zip": "34982"}
+        csv = {"address": "2315 S Federal Hwy", "city": "Fort Pierce", "state": "FL", "zip": "34982"}
+        result = resolver.resolve(
+            ResolveCandidates(mist_address=mist, csv_address=csv, business_name="T-Mobile", ui_geocode=True)
+        )
+        assert ui.geocode_via_ui.call_count == 2  # Business query, then plain retry.
+        assert "T-Mobile" not in ui.geocode_via_ui.call_args_list[1].args[0]  # Retry had no business prefix.
+        assert result.canonical_address == "2315 S Federal Hwy, Fort Pierce, FL"
+
+    def test_no_retry_without_business_name(self, tmp_path, monkeypatch):
+        """Without a business name there is nothing to strip, so no second lookup."""
+        _FakeValidator.count = 0
+        _FakeValidator.valid = False
+        monkeypatch.setattr(resolver_mod, "NominatimValidator", _FakeValidator)
+        monkeypatch.setattr(resolver_mod.time, "sleep", lambda *_: None)
+        ui = MagicMock()
+        ui.geocode_via_ui.return_value = ResolverResult(query="q", canonical_address=None, source="mist_ui")
+        resolver = AddressResolver(db_path=_db(tmp_path), ui_geocoder=ui)
+        resolver.resolve(ResolveCandidates(mist_address=_NO_SUITE, csv_address=_NO_SUITE, ui_geocode=True))
+        assert ui.geocode_via_ui.call_count == 1  # No business prefix -> no fallback.
+
+
 class TestHelpers:
     """Query-key normalization and rate limiting."""
 

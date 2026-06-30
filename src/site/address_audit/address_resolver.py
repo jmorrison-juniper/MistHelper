@@ -192,11 +192,34 @@ class AddressResolver:
             logging.debug("Mist already has a suite; skipping Tier-3 lookup")  # No suite to discover.
             return None  # Save a browser lookup.
         logging.info("Delegating to Tier 3 (Google-via-Mist) to deduce the suite")  # Action-log delegation.
-        self.external_calls += 1  # Count the UI lookup as an external call.
-        result = self._ui_geocoder.geocode_via_ui(query)  # Drive the dashboard autocomplete (fail-soft).
+        result = self._ui_lookup_with_fallback(candidates, query)  # Business query, then plain on a miss.
         if result is not None:  # Stamp the query so caching stays consistent.
             result.query = query  # Align the result's query with the cache key source.
-        return result  # May be None (fail-soft) -> caller falls back to Tier 1/2.
+        return result  # May be None / empty (fail-soft) -> caller falls back to Tier 1/2.
+
+    def _ui_lookup_with_fallback(self, candidates: ResolveCandidates, query: str) -> ResolverResult | None:
+        """Geocode the business-prefixed query; if it yields nothing, retry the plain address.
+
+        A business-name prefix (``T-Mobile <addr>``) helps Google return the exact
+        store unit, but when no store sits at that number Google returns unrelated
+        stores and the stale-guard rejects them all. Retrying the plain address
+        then resolves the street itself (e.g. ``2315 S Federal Hwy``).
+        """
+        self.external_calls += 1  # Count the primary UI lookup.
+        result = self._ui_geocoder.geocode_via_ui(query)  # Business-prefixed query first.
+        if self._has_address(result) or not candidates.business_name:  # Got an answer, or nothing to strip.
+            return result  # Use the primary result as-is.
+        plain = self._consensus_address(candidates)  # The same address without the business prefix.
+        if not plain:  # No usable plain query to retry with.
+            return result  # Keep the (empty) primary result.
+        logging.info("Tier 3 retrying without business prefix: %s", plain)  # Action-log the fallback.
+        self.external_calls += 1  # Count the fallback lookup.
+        return self._ui_geocoder.geocode_via_ui(plain)  # Plain-address retry (fail-soft).
+
+    @staticmethod
+    def _has_address(result: ResolverResult | None) -> bool:
+        """Return True when a resolver result actually carries a canonical address."""
+        return result is not None and bool(result.canonical_address)  # Non-empty suggestion present.
 
     @staticmethod
     def _mist_has_suite(mist_address: dict[str, Any]) -> bool:
@@ -212,15 +235,77 @@ class AddressResolver:
         self._last_nominatim_ts = time.monotonic()  # Record this call's timestamp.
 
     def _build_query(self, candidates: ResolveCandidates) -> str:
-        """Build the query string: best internal candidate, optionally business-prefixed."""
-        best = (  # First non-empty of SNMP -> CSV -> Mist, in priority order.
-            candidates.snmp_location
-            or self._format_address(candidates.csv_address)
-            or self._format_address(candidates.mist_address)
-        )
-        if candidates.business_name:  # Prepend the business name when configured.
-            return f"{candidates.business_name} {best}".strip()  # Business-qualified query.
-        return best.strip()  # Raw-address query (private/internal addresses).
+        """Build the geocoding query from the consensus hint, optionally business-prefixed."""
+        address = self._consensus_address(candidates)  # Best hint by house-number agreement.
+        if candidates.business_name:  # Prepend the business name (retail store disambiguation).
+            return f"{candidates.business_name} {address}".strip()  # Business-qualified query.
+        return address.strip()  # Raw-address query (private/internal addresses).
+
+    def _consensus_address(self, candidates: ResolveCandidates) -> str:
+        """Pick the hint whose house number the most sources agree on (suite-preferring).
+
+        The Mist address, the SNMP location, and the customer CSV are all hints,
+        and any single one can be wrong -- Mist may lack a house number, the SNMP
+        location may point at a different site (even a different state), and the
+        CSV was rejected by the shipping system. Voting on the house number means
+        one bad hint cannot hijack the geocoding query; the agreed-upon, cleanest,
+        suite-bearing source wins.
+        """
+        hints = self._gather_hints(candidates)  # [(label, text, house_no, has_suite), ...].
+        if not hints:  # No usable hint at all.
+            return ""  # Empty query -> NO_RESULT.
+        winner = self._majority_house_number(hints)  # House number with the most votes.
+        group = [hint for hint in hints if hint[2] == winner] or hints  # Sources matching the winner.
+        return self._prefer_hint(group)[1]  # Suite-bearing first, then CSV > Mist > SNMP.
+
+    def _gather_hints(self, candidates: ResolveCandidates) -> list[tuple[str, str, str, bool]]:
+        """Normalize each hint into (label, text, house_number, has_suite); drop empties."""
+        raw = [  # Source label -> raw text (CSV/Mist first so ties prefer the customer data).
+            ("csv", self._format_address(candidates.csv_address)),
+            ("mist", self._format_address(candidates.mist_address)),
+            ("snmp", candidates.snmp_location or ""),
+        ]
+        hints: list[tuple[str, str, str, bool]] = []  # Accumulate usable hints.
+        for label, text in raw:  # Walk each candidate source.
+            norm = self._normalize_glue(text)  # Repair directional glue (SFederal -> S Federal).
+            if norm:  # Skip empty sources.
+                has_suite = bool(re.search(_SUITE_PATTERN, norm, flags=re.IGNORECASE))  # Suite present?
+                hints.append((label, norm, self._leading_house_number(norm), has_suite))  # Record it.
+        return hints  # One tuple per non-empty source.
+
+    @staticmethod
+    def _normalize_glue(text: str) -> str:
+        """Repair common SNMP glue: split a directional/US prefix fused to a street name."""
+        spaced = re.sub(r"\b(US|NE|NW|SE|SW|N|S|E|W)([A-Z][a-z])", r"\1 \2", text)  # NMilitary -> N Military.
+        no_space_comma = re.sub(r"\s+,", ",", spaced)  # Drop any space before a comma.
+        return re.sub(r"\s{2,}", " ", no_space_comma).strip()  # Collapse repeated whitespace.
+
+    @staticmethod
+    def _leading_house_number(text: str) -> str:
+        """Return the leading 1-6 digit run (the house number), or '' when none leads.
+
+        Anchored at the start so a trailing ZIP is never mistaken for a house
+        number (e.g. ``S Federal Hwy ... 34982`` has no house number).
+        """
+        match = re.match(r"\s*(\d{1,6})\b", text)  # House numbers lead the street line.
+        return match.group(1) if match else ""  # Leading digits or empty.
+
+    @staticmethod
+    def _majority_house_number(hints: list[tuple[str, str, str, bool]]) -> str:
+        """Return the house number shared by the most sources (CSV wins ties via insertion order)."""
+        counts: dict[str, int] = {}  # House number -> vote count.
+        for _, _, number, _ in hints:  # Tally every non-empty house number.
+            if number:  # Ignore sources without a leading house number.
+                counts[number] = counts.get(number, 0) + 1  # One vote.
+        if not counts:  # No house numbers anywhere.
+            return ""  # No consensus possible.
+        return max(counts, key=lambda key: counts[key])  # Most-voted (first-inserted on ties = CSV).
+
+    @staticmethod
+    def _prefer_hint(group: list[tuple[str, str, str, bool]]) -> tuple[str, str, str, bool]:
+        """Pick the best hint in a group: suite-bearing first, then CSV > Mist > SNMP."""
+        rank = {"csv": 0, "mist": 1, "snmp": 2}  # Source preference for ties.
+        return sorted(group, key=lambda hint: (not hint[3], rank.get(hint[0], 9)))[0]  # Suite, then source.
 
     @staticmethod
     def _build_query_key(query: str) -> str:

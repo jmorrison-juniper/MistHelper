@@ -9,6 +9,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Changed
 
+- **Address audit query is now built by house-number consensus (menu 195)**: the
+  geocoding query was built SNMP-location-first, so when a site's SNMP location
+  pointed at a different address -- even a different state -- the audit geocoded
+  the wrong place. One real T-Mobile site in Palm Beach Gardens, FL had an SNMP
+  location of `1520 Route 38 ... Hainesport NJ`, and the audit "corrected" the FL
+  store to a **New Jersey** address (a shipping-safety bug). The Mist address, the
+  SNMP location, and the customer CSV are now treated as equal *hints*: the audit
+  votes on the house number across all three and uses the agreed-upon, cleanest,
+  suite-bearing source, so one bad hint can no longer hijack the query. SNMP
+  directional glue (`SFederal` -> `S Federal`, `NMilitary` -> `N Military`) is
+  repaired before voting. Tier 3 also retries once **without** the business-name
+  prefix when the `"<business> <address>"` query returns nothing (a store may not
+  sit at that exact number), which recovers rows that previously hit NO_RESULT.
+
 - **Address audit Tier-3 now self-spawns a browser and deduces the suite (menu 195)**:
   Two gaps stopped the Mist-portal path from ever working. (1) Tier-3 only ever
   *took over* a browser at `localhost:9222` -- which nothing was running, and
@@ -33,6 +47,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   web to deduce the true, shippable address.
 
 ### Fixed
+
+- **Address audit suggested-address still showed the business name on number-first
+  streets (menu 195)**: the suggestion cleaner stripped Google's glued business
+  name only when the street name began with a letter, so rows whose street starts
+  with a digit kept the prefix (`T-Mobile4103 14th St W`). It now strips the
+  prefix in that case too (`4103 14th St W, Bradenton, FL 34205`) and splits a
+  directional fused to the city (`...Ave NLive Oak` -> `...Ave N Live Oak`).
 
 - **Address audit Tier-3 captured the WRONG suggestion (one-row lag) (menu 195)**:
   Google Places leaves the previous query's suggestions in the dropdown until the
