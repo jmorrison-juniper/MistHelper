@@ -9,6 +9,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Changed
 
+- **Address audit now flags incomplete Mist addresses (missing house number)
+  (menu 195)**: a Mist site whose street had no house number (`S Federal Hwy`)
+  was reported ADDRESS_MATCH against the web-resolved `2315 S Federal Hwy` --
+  i.e. "no change needed" -- even though the street *number* was missing, which
+  makes the address unshippable. A new ninth classification state,
+  `MISSING_NUMBER`, now surfaces these so the operator can add the number the web
+  found. Rows where Mist already has a house number are unaffected.
+
 - **Address audit now adjudicates suite *conflicts*, not just missing suites (menu
   195)**: Tier-3 was skipped whenever the Mist address already carried any suite,
   so when the customer CSV claimed a *different* unit (Mist `#204` vs CSV
@@ -56,6 +64,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Fixed
 
+- **Address audit suggested address glued the street/suite to the city (menu
+  195)**: Google's autocomplete sometimes returned the street fused to the city
+  with no separator (`2315 S Federal HwyFort Pierce`, `...suite 330Brandon`),
+  leaving an un-shippable suggested address. The cleaner now splits a street-type
+  suffix (`Hwy`, `Blvd`, `Dr`, ...) or a number glued directly to a following
+  capitalized city word, while deliberately preserving legitimately camel-cased
+  cities (`DeFuniak`) and alphanumeric street names (`A1A`) -- only street
+  suffixes and digits trigger a split, never a generic lowercase->uppercase
+  boundary.
+
 - **Address audit hid wrong-side-of-street addresses as a MATCH (menu 195)**: the
   street comparison ignored directionals, so a Mist address of `1606 E Jefferson`
   was reported as ADDRESS_MATCH against the web-confirmed `1606 West Jefferson` --
@@ -68,7 +86,7 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   Avenue` regardless of whether Google abbreviates or spells out the directional
   and street type.
 
-
+- **Address audit suggested-address still showed the business name on number-first
   streets (menu 195)**: the suggestion cleaner stripped Google's glued business
   name only when the street name began with a letter, so rows whose street starts
   with a digit kept the prefix (`T-Mobile4103 14th St W`). It now strips the

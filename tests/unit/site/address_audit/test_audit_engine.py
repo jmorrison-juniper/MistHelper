@@ -68,6 +68,18 @@ class TestClassify:
         rr = _rr("1606 West Jefferson Street, Quincy, FL 32351")
         assert self.engine._classify(mist, _CSV, None, rr) == "WRONG_STREET"
 
+    def test_missing_house_number_not_match(self):
+        """Mist street with no house number + a numbered suggestion -> MISSING_NUMBER, not ADDRESS_MATCH."""
+        mist = {"address": "S Federal Hwy", "city": "Fort Pierce", "state": "FL", "zip": "34982"}
+        rr = _rr("2315 S Federal Hwy Fort Pierce, FL 34982")
+        assert self.engine._classify(mist, _CSV, None, rr) == "MISSING_NUMBER"
+
+    def test_missing_house_number_helper(self):
+        """The helper fires only when Mist has no number but the candidate leads with one."""
+        assert self.engine._missing_house_number("S Federal Hwy", "2315 S Federal Hwy") is True
+        assert self.engine._missing_house_number("1606 E Jefferson St", "1606 West Jefferson St") is False
+        assert self.engine._missing_house_number("S Federal Hwy", "S Federal Hwy") is False
+
     def test_abbreviated_directional_still_matches(self):
         """Mist 'NW 107th Ave' vs web 'Northwest 107th Avenue' is the same street."""
         mist = {"address": "1455 NW 107th Ave", "city": "Miami", "state": "FL", "zip": "33172"}
