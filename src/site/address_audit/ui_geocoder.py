@@ -1,0 +1,450 @@
+"""Tier-3 Mist-dashboard UI geocoder (feature 1003-site-address-audit).
+
+The Mist site-settings "Location Search" field is a Google Places Autocomplete
+widget ("powered by Google"). Typing ``"{business} {address}"`` returns the
+suite/unit-corrected retail address the operator sees by hand. This module
+drives that field through a real browser and reads back the top suggestion --
+WITHOUT ever committing a change (read-only audit).
+
+Three connection modes (all proven to work behind Zscaler SSL inspection, where
+Playwright CANNOT download its own Chromium):
+
+  * ``auto`` (default) -- take over an already-running debuggable browser if one
+    is present; otherwise spawn a debuggable Edge for the operator, wait for them
+    to log into Mist and open a site's settings page, then take it over. This is
+    the zero-setup path: the operator never has to start Edge with debug flags.
+
+  * ``attach`` -- take over an already-running, already logged-in browser via the
+    Chrome DevTools Protocol. The operator starts a debuggable browser (see
+    ``spawn_debuggable_browser``) and logs into Mist once; we reuse that live SSO
+    session. No bundled browser download, no stored credentials.
+
+  * ``launch`` -- Playwright launches the system Edge channel
+    (``channel="msedge"``, no download) non-headless and pauses for the
+    operator to log in interactively before the first lookup.
+
+Selector capture / re-capture procedure (OQ-002 -- the dashboard DOM is NOT
+contract-stable):
+  1. Selectors are centralized as the dated constants below.
+  2. To re-capture: open the Mist site-edit page in a browser, inspect the
+     Location Search input and the Google suggestion list, update the constants,
+     and re-run the Tier-3 e2e test.
+  3. We anchor on Google's own ``.pac-target-input`` / ``.pac-item`` classes,
+     which are far more stable than Mist's surrounding markup.
+
+Playwright is an OPTIONAL dependency (declared in ``pyproject.toml`` dev group,
+not in ``requirements.txt``). If it is absent the class degrades gracefully:
+``is_available()`` returns ``False`` and every lookup returns ``None`` instead
+of raising, so the audit still completes on its Tier-1/Tier-2 results.
+"""
+
+from __future__ import annotations  # PEP 604 union syntax on Python 3.13.
+
+import logging  # Action logging before/after every operation (project NON-NEGOTIABLE).
+import os  # Filesystem probing for the Edge executable.
+import re  # House-number extraction + suggestion cleanup (defeats the autocomplete lag race).
+import shutil  # PATH lookup fallback for the Edge executable.
+import subprocess  # Spawn a debuggable browser for CDP takeover.
+import tempfile  # Dedicated throwaway profile for the spawned browser.
+import time  # Politeness delay between Google Places lookups.
+from typing import Any  # Loose typing for Playwright handles (kept import-light).
+
+from src.site.address_audit.models import ResolverResult, UIGeocoderConfig  # Shared dataclasses.
+from src.utils.input_utils import InputUtils  # EOF-safe operator prompts.
+
+try:  # Optional dependency: Playwright may not be installed in every environment.
+    from playwright.sync_api import sync_playwright  # Sync browser-automation entry point.
+except ImportError:  # pragma: no cover -- exercised only on hosts without Playwright.
+    sync_playwright = None  # type: ignore[assignment]  # Sentinel; is_available() keys off this.
+
+# --- Selector constants (captured 2026-06-29; re-verify if the Mist dashboard UI changes) ---
+# Google Places Autocomplete attaches ``pac-target-input`` to the bound input and
+# renders suggestions in a ``.pac-container`` of ``.pac-item`` rows. These Google
+# classes are stable across sites, so we anchor on them rather than Mist's markup.
+INPUT_SELECTORS: tuple[str, ...] = (
+    "input.pac-target-input",  # Google's own class on autocomplete-bound inputs (most stable).
+    "input[placeholder*='Location Search']",  # Mist's placeholder text from the site-settings screen.
+    "input[placeholder*='Location']",  # Looser placeholder fallback.
+)
+PAC_ITEM_SELECTOR: str = ".pac-container .pac-item"  # Each Google suggestion row in the dropdown.
+
+
+class MistUIGeocoder:
+    """Drive the Mist site-settings Location Search field via a real browser.
+
+    Lifecycle: ``connect()`` -> one or more ``geocode_via_ui(query)`` -> ``close()``.
+    All failures are logged and swallowed (return ``None``) so a single flaky
+    lookup never aborts the surrounding audit loop (fail-soft, OQ-002).
+    """
+
+    def __init__(self, config: UIGeocoderConfig | None = None) -> None:
+        """Store configuration and initialize all browser-handle state."""
+        self._config = config or UIGeocoderConfig()  # Caller config or Zscaler-safe defaults.
+        self._playwright: Any = None  # Playwright driver handle (set on connect()).
+        self._browser: Any = None  # Browser or CDP-attached browser handle.
+        self._context: Any = None  # Active browser context (operator session or fresh).
+        self._connected: bool = False  # Whether a usable browser is attached.
+        self._spawned_proc: Any = None  # Popen handle when we spawned a debuggable Edge (auto mode).
+        self._lookups_done: int = 0  # Counter enforcing the per-run max-lookups cap.
+        logging.debug("MistUIGeocoder initialized (mode=%s)", self._config.connect_mode)  # Trace init.
+
+    def is_available(self) -> bool:
+        """Return True only when the optional Playwright dependency is importable."""
+        available = sync_playwright is not None  # Sentinel set at import time.
+        logging.debug("MistUIGeocoder.is_available -> %s", available)  # Trace capability check.
+        return available  # Callers gate Tier-3 on this before connect().
+
+    def connect(self) -> bool:
+        """Establish the browser per ``connect_mode``; return success (never raises)."""
+        if not self.is_available():  # Playwright missing -> Tier-3 is simply unavailable.
+            logging.warning("Playwright not installed; Tier-3 UI geocoding unavailable")  # Inform operator.
+            return False  # Audit continues on Tier-1/Tier-2 results.
+        logging.info("Connecting browser in '%s' mode", self._config.connect_mode)  # Action-log start.
+        try:
+            self._playwright = sync_playwright().start()  # Start the Playwright driver process.
+            ok = self._dispatch_connect()  # Branch to attach/launch.
+            self._connected = ok  # Record state for the geocode_via_ui guard.
+            logging.debug("Browser connect result=%s", ok)  # Action-log outcome.
+            return ok  # True when a usable context was established.
+        except Exception as exc:  # noqa: BLE001 -- never crash the audit on connect failure.
+            logging.warning("Browser connect failed: %s", exc)  # Surface the cause.
+            self.close()  # Tidy any partially started driver/browser.
+            return False  # Signal Tier-3 unavailable for this run.
+
+    def _dispatch_connect(self) -> bool:
+        """Route to the auto, attach, or launch connection strategy."""
+        mode = self._config.connect_mode  # Operator-selected strategy (default "auto").
+        if mode == "attach":  # Take over an already-running debuggable browser (no spawn).
+            return self._connect_attach()  # Reuse the operator's live SSO session.
+        if mode == "launch":  # Let Playwright launch a fresh system Edge.
+            return self._connect_launch()  # Interactive-login flow.
+        return self._connect_auto()  # Default: take over if possible, else spawn one for the operator.
+
+    def _connect_auto(self) -> bool:
+        """Take over a debuggable browser if present; otherwise spawn one and take it over."""
+        if self._try_attach():  # A debuggable browser is already running -> reuse it.
+            return True  # Attached to the operator's existing session.
+        logging.info("No debuggable browser found; spawning one for login")  # Action-log the spawn path.
+        proc = MistUIGeocoder.spawn_debuggable_browser(self._cdp_port(), self._config.dashboard_url)  # Spawn Edge.
+        if proc is None:  # Edge not installed -> fall back to a Playwright launch.
+            logging.info("Edge unavailable to spawn; falling back to launch mode")  # Inform operator.
+            return self._connect_launch()  # Last-resort interactive launch.
+        self._spawned_proc = proc  # Own the spawned browser's lifecycle (terminated on close()).
+        self._await_spawn_login()  # Block until the operator logs in and opens a site settings page.
+        return self._try_attach()  # Now take over the spawned, logged-in browser over CDP.
+
+    def _try_attach(self) -> bool:
+        """Attempt a CDP takeover without raising (used by the auto strategy)."""
+        try:
+            return self._connect_attach()  # Reuse the standard takeover path.
+        except Exception as exc:  # noqa: BLE001 -- a missing endpoint is expected in auto mode.
+            logging.info("CDP takeover at %s not available yet: %s", self._config.cdp_endpoint, exc)  # Trace.
+            return False  # Signal "no debuggable browser" so the caller can spawn one.
+
+    def _cdp_port(self) -> int:
+        """Parse the TCP port from the configured CDP endpoint (default 9222)."""
+        tail = self._config.cdp_endpoint.rsplit(":", 1)[-1]  # Text after the final colon.
+        digits = "".join(ch for ch in tail if ch.isdigit())  # Keep only the numeric run.
+        return int(digits) if digits else 9222  # Parsed port or the documented default.
+
+    def _await_spawn_login(self) -> None:
+        """Block until the operator has logged in and opened a site's Location Search page."""
+        InputUtils.safe_input(  # Pause the run until the operator confirms readiness.
+            "A browser opened. Log into Mist, open a SITE's settings page so the "
+            "'Location Search' box is visible, then press Enter to continue: ",
+            context="ui_geocoder_spawn_login",
+        )
+        logging.info("Operator confirmed spawned-browser login; taking over via CDP")  # Action-log gate pass.
+
+    def _connect_attach(self) -> bool:
+        """Take over a debuggable browser over CDP and reuse its first context."""
+        endpoint = self._config.cdp_endpoint  # DevTools URL of the operator's browser.
+        logging.info("Attaching over CDP at %s", endpoint)  # Action-log the takeover target.
+        self._browser = self._playwright.chromium.connect_over_cdp(endpoint)  # Attach to the session.
+        if not self._browser.contexts:  # A debuggable browser should expose >=1 context.
+            logging.warning("No browser context found at CDP endpoint %s", endpoint)  # Nothing to drive.
+            return False  # Cannot proceed without a context.
+        self._context = self._browser.contexts[0]  # Reuse the operator's context (cookies/SSO intact).
+        logging.debug("CDP attach succeeded; %d context(s) present", len(self._browser.contexts))  # Trace.
+        return True  # Ready to geocode against the operator's logged-in tab.
+
+    def _connect_launch(self) -> bool:
+        """Launch the system Edge channel and pause for interactive login."""
+        channel = self._config.browser_channel  # System channel (msedge) -- no Chromium download needed.
+        logging.info("Launching system browser channel '%s'", channel)  # Action-log launch.
+        self._browser = self._playwright.chromium.launch(channel=channel, headless=self._config.headless)  # Open.
+        self._context = self._browser.new_context()  # Fresh context for the interactive session.
+        self._await_interactive_login()  # Block until the operator authenticates to Mist.
+        logging.debug("Launch-mode context ready after interactive login")  # Trace readiness.
+        return True  # Ready to geocode.
+
+    def _await_interactive_login(self) -> None:
+        """Open the dashboard and block until the operator confirms login."""
+        page = self._context.new_page()  # Tab for the operator to authenticate in.
+        timeout_ms = int(self._config.per_lookup_timeout_s * 1000)  # Playwright navigation uses milliseconds.
+        page.goto(self._config.dashboard_url, timeout=timeout_ms)  # Navigate to the Mist login/landing page.
+        InputUtils.safe_input(  # Pause the run until the operator says they are in.
+            "Log into the Mist dashboard in the opened browser, then press Enter to continue: ",
+            context="ui_geocoder_login",
+        )
+        logging.info("Operator confirmed dashboard login; proceeding with UI geocoding")  # Action-log gate pass.
+
+    def ensure_location_field_ready(self, max_prompts: int = 3) -> bool:
+        """Probe for the Location Search field; guide the operator until it appears (fail-soft).
+
+        Tier-3 can only read Google's suggestions when the active tab is on a page
+        that renders the Location Search input. We probe, and if it is missing we
+        ask the operator to open a site's settings page, retrying a few times.
+        """
+        if not self._connected:  # Nothing to probe without a connection.
+            return False  # Caller already handled the disconnected case.
+        for attempt in range(1, max_prompts + 1):  # Bounded retries so we never loop forever.
+            page = self._active_page()  # Current tab in the operator's context.
+            if page is not None and self._field_present(page):  # Location Search input is visible.
+                logging.info("Location Search field detected on attempt %d; Tier-3 ready", attempt)  # Ready.
+                return True  # Proceed to the per-row lookups.
+            InputUtils.safe_input(  # Guide the operator to the correct page, then re-probe.
+                "Could not see the 'Location Search' box. In the browser, open a "
+                "SITE's settings page where that box is visible, then press Enter: ",
+                context="ui_geocoder_navigate",
+            )
+        logging.info("Location Search field not found after %d prompts; Tier-3 will fail-soft", max_prompts)
+        return False  # Lookups will return None; the audit still completes on Tier 1/2.
+
+    def _field_present(self, page: Any) -> bool:
+        """Return True when any Location Search input selector matches on ``page``."""
+        for selector in INPUT_SELECTORS:  # Probe each candidate selector quickly.
+            try:
+                if page.query_selector(selector) is not None:  # Immediate (non-waiting) DOM probe.
+                    return True  # Found the autocomplete input.
+            except Exception as exc:  # noqa: BLE001 -- a transient DOM error must not abort the probe.
+                logging.debug("Field probe error for %s: %s", selector, exc)  # Trace and keep probing.
+        return False  # No candidate matched on the current page.
+
+    def geocode_via_ui(self, query: str) -> ResolverResult | None:
+        """Resolve one address via the dashboard autocomplete; fail-soft to ``None``."""
+        if not self._connected:  # Guard: connect() must succeed first.
+            logging.warning("geocode_via_ui called before a successful connect(); returning None")  # Misuse.
+            return None  # Nothing to drive.
+        if self._lookups_done >= self._config.max_lookups:  # Respect the per-run cap.
+            logging.warning("UI geocode cap reached (%d); skipping lookup", self._config.max_lookups)  # Capped.
+            return None  # Row falls back to its Tier-1/Tier-2 outcome.
+        self._lookups_done += 1  # Count this attempt against the cap.
+        logging.info("UI geocode lookup %d for query: %s", self._lookups_done, query)  # Action-log start.
+        try:
+            page = self._active_page()  # Obtain a usable browser tab.
+            if page is None:  # No context/page -> cannot proceed.
+                return None  # Fail soft.
+            suggestions = self._perform_lookup(page, query)  # Type the query and read suggestions.
+            time.sleep(self._config.politeness_delay_s)  # >=1 req/sec politeness toward Google.
+            return self._build_result(query, suggestions)  # Convert suggestions to a ResolverResult.
+        except Exception as exc:  # noqa: BLE001 -- fail soft per OQ-002.
+            logging.warning("UI geocode failed for query '%s': %s", query, exc)  # Log and continue.
+            return None  # One flaky lookup must not abort the audit.
+
+    def _active_page(self) -> Any:
+        """Return a usable page from the active context, or ``None``."""
+        if self._context is None:  # No context established.
+            logging.debug("No active context for UI geocoding")  # Trace the miss.
+            return None  # Caller treats as fail-soft.
+        pages = self._context.pages  # Existing tabs in the context.
+        if pages:  # Reuse the operator's current tab (attach mode) when present.
+            return pages[0]  # First tab should hold the site-edit page.
+        return self._context.new_page()  # Otherwise open a fresh tab (launch mode).
+
+    def _perform_lookup(self, page: Any, query: str) -> list[str]:
+        """Type ``query``, then read ONLY the suggestion list that belongs to it (stale-safe)."""
+        timeout_ms = int(self._config.per_lookup_timeout_s * 1000)  # Playwright uses milliseconds.
+        field = self._locate_input(page, timeout_ms)  # Find the autocomplete input element.
+        self._enter_query(page, field, query)  # Focus, clear the stale dropdown, type the new query.
+        expected = self._house_number(query)  # House number anchors the fresh-result wait.
+        texts = self._read_fresh_suggestions(page, expected, timeout_ms)  # Wait for THIS query's suggestions.
+        logging.debug("UI autocomplete returned %d fresh suggestion(s)", len(texts))  # Action-log count.
+        return texts  # May be empty -> NO_RESULT (never a stale, wrong answer).
+
+    def _enter_query(self, page: Any, field: Any, query: str) -> None:
+        """Focus the field, clear any stale value/dropdown, then type the new query."""
+        field.click()  # Focus so Google binds keystrokes.
+        field.fill("")  # Clear any previous text.
+        self._settle(page, 150)  # Let Google tear down the previous dropdown before typing.
+        field.type(query, delay=40)  # Type slowly so Google fires the autocomplete request.
+
+    def _read_fresh_suggestions(self, page: Any, expected: str, timeout_ms: int) -> list[str]:
+        """Poll until the TOP suggestion matches ``expected`` (this query's house number).
+
+        Google leaves the PREVIOUS query's suggestions in the DOM until the new
+        request returns, so reading immediately yields a stale (wrong) answer -- the
+        observed one-row lag. We wait until the top row actually contains this
+        query's house number; on timeout we return [] (NO_RESULT) rather than risk
+        a stale, wrong address. Queries without a house number cannot be anchored,
+        so they read the first stable list (rare for retail addresses).
+        """
+        deadline = time.monotonic() + max(0.0, timeout_ms / 1000.0)  # Absolute wait deadline.
+        while time.monotonic() < deadline:  # Poll until fresh or timed out.
+            texts = self._current_suggestions(page)  # Snapshot the current dropdown rows.
+            if texts and (not expected or self._matches_house_number(texts[0], expected)):  # Fresh top row.
+                return texts  # The top suggestion belongs to THIS query.
+            self._settle(page, 200)  # Brief pause before re-polling.
+        logging.info("No fresh suggestion for house number '%s' within timeout; skipping (stale-guard)", expected)
+        return []  # Fail-soft to NO_RESULT.
+
+    def _current_suggestions(self, page: Any) -> list[str]:
+        """Return the non-empty visible texts of the current suggestion rows."""
+        items = page.query_selector_all(PAC_ITEM_SELECTOR)  # All suggestion rows in the dropdown.
+        return [text for text in (self._item_text(item) for item in items) if text]  # Drop empties.
+
+    @staticmethod
+    def _settle(page: Any, millis: int) -> None:
+        """Pause via Playwright's clock between polls (no-op-safe in tests)."""
+        try:
+            page.wait_for_timeout(millis)  # Cooperative wait that yields to the browser event loop.
+        except Exception as exc:  # noqa: BLE001 -- a timing helper must never abort the lookup.
+            logging.debug("wait_for_timeout ignored: %s", exc)  # Trace and continue.
+
+    @staticmethod
+    def _house_number(text: str) -> str:
+        """Return the first digit-run (the house number); names like 'T-Mobile' have none."""
+        match = re.search(r"\d+", text)  # First run of digits in the query.
+        return match.group(0) if match else ""  # House number or empty when none present.
+
+    @staticmethod
+    def _matches_house_number(text: str, expected: str) -> bool:
+        """Return True when ``expected`` is one of the digit-runs in ``text`` (glue-safe)."""
+        return expected in re.findall(r"\d+", text)  # Compare extracted numbers, not a raw substring.
+
+    def _locate_input(self, page: Any, timeout_ms: int) -> Any:
+        """Probe candidate selectors and return the first matching input element."""
+        per_try = max(1000, timeout_ms // max(1, len(INPUT_SELECTORS)))  # Split budget across candidates.
+        last_error: Exception | None = None  # Remember the final miss for the raise.
+        for selector in INPUT_SELECTORS:  # Try candidates in priority order.
+            try:
+                return page.wait_for_selector(selector, timeout=per_try)  # First hit wins.
+            except Exception as exc:  # noqa: BLE001 -- try the next candidate.
+                last_error = exc  # Keep probing.
+        raise RuntimeError(f"Location Search input not found: {last_error}")  # All candidates missed.
+
+    @staticmethod
+    def _item_text(element: Any) -> str:
+        """Return the trimmed visible text of a suggestion row, or empty on error."""
+        try:
+            return (element.inner_text() or "").strip()  # Visible text of the .pac-item row.
+        except Exception:  # noqa: BLE001 -- a stale DOM node yields no text.
+            return ""  # Treat as empty so it is filtered out.
+
+    def _build_result(self, query: str, suggestions: list[str]) -> ResolverResult:
+        """Turn ranked Google suggestions into a ``ResolverResult`` (cleaned address)."""
+        if not suggestions:  # No autocomplete suggestions at all.
+            logging.debug("No UI suggestions for query: %s", query)  # Trace the empty result.
+            return ResolverResult(query=query, canonical_address=None, source="mist_ui", confidence=0.0)
+        top = self._clean_address(suggestions[0])  # Strip the glued business name + trailing country.
+        ambiguous = len(suggestions) > 1  # Multiple hits => mall/strip-center ambiguity.
+        confidence = 0.6 if ambiguous else 0.9  # Lower confidence when several candidates exist.
+        logging.info("UI geocode top suggestion: %s (ambiguous=%s)", top, ambiguous)  # Action-log result.
+        return ResolverResult(
+            query=query,  # Echo the query for cache keying.
+            canonical_address=top,  # Best suite-corrected, shippable address.
+            source="mist_ui",  # Mark the originating tier.
+            confidence=confidence,  # Heuristic confidence.
+            raw_response={"suggestions": suggestions, "ambiguous": ambiguous},  # Full payload for cache.
+        )
+
+    # Street-type suffixes (abbreviated and spelled out) used to split a street glued to a city.
+    _STREET_SUFFIXES = (
+        r"Hwy|Highway|St|Street|Ave|Avenue|Blvd|Boulevard|Rd|Road|Dr|Drive|Trl|Trail|Pkwy|Parkway|"
+        r"Ln|Lane|Ct|Court|Cir|Circle|Pl|Place|Ter|Terrace|Sq|Square|Way|Loop|Pike|Plz|Plaza|Walk|Run|Row|Path"
+    )
+
+    @staticmethod
+    def _clean_address(text: str) -> str:
+        """Strip a glued leading place/business name and a trailing country from a suggestion.
+
+        Google's ``.pac-item`` rows glue the establishment name to the address with
+        no separator (e.g. ``T-Mobile931 US Highway 331 Ste A2, ..., USA``), glue a
+        trailing directional to the city (``...Ave NLive Oak``), and sometimes glue
+        the street or a suite number straight to the city (``...HwyFort Pierce``,
+        ``...suite 330Brandon``). We drop the trailing country, repair those glued
+        boundaries, then drop any leading non-digit run before a ``<house-number>
+        <street>`` start -- yielding the clean shippable street line. A real
+        camel-cased city (``DeFuniak``) is preserved because only street suffixes
+        and digits trigger a split, never a generic lowercase->uppercase boundary.
+        """
+        s = text.strip()  # Normalize surrounding whitespace.
+        s = re.sub(r",?\s*(?:USA|United States)\s*$", "", s, flags=re.IGNORECASE).strip()  # Drop trailing country.
+        s = re.sub(r"\b(US|NE|NW|SE|SW|N|S|E|W)([A-Z][a-z])", r"\1 \2", s)  # Split directional glue (NLive).
+        s = re.sub(rf"\b({MistUIGeocoder._STREET_SUFFIXES})([A-Z][a-z])", r"\1 \2", s)  # Split street->city (HwyFort).
+        s = re.sub(r"(\d)([A-Z][a-z]{2,})", r"\1 \2", s)  # Split a number glued to a city word (330Brandon).
+        match = re.match(r"^\D*?(\d+\s+\S.*)$", s)  # "<house-number> <street>..." after any name prefix.
+        cleaned = match.group(1) if match else s  # Use the address tail when a real street start is present.
+        return cleaned.strip().strip(",").strip() or text.strip()  # Never return empty.
+
+    def close(self) -> None:
+        """Tear down browser and driver handles; never raises."""
+        logging.debug("Closing MistUIGeocoder browser resources")  # Action-log teardown.
+        try:
+            if self._browser is not None:  # Disconnect/close the browser if open.
+                self._browser.close()  # In attach mode this only drops our CDP connection.
+        except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
+            logging.debug("Browser close error (ignored): %s", exc)  # Trace and continue.
+        try:
+            if self._playwright is not None:  # Stop the Playwright driver process.
+                self._playwright.stop()  # Release the driver subprocess.
+        except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
+            logging.debug("Playwright stop error (ignored): %s", exc)  # Trace and continue.
+        self._terminate_spawned()  # Close any Edge we spawned ourselves (auto mode).
+        self._connected = False  # Reset state so a stale handle is never reused.
+
+    def _terminate_spawned(self) -> None:
+        """Terminate the debuggable Edge we spawned in auto mode (never raises)."""
+        if self._spawned_proc is None:  # We only own a process when we spawned one.
+            return  # Attach/launch modes have nothing to clean up here.
+        try:
+            self._spawned_proc.terminate()  # Ask the spawned Edge to exit.
+            logging.debug("Terminated spawned debuggable Edge (pid=%s)", self._spawned_proc.pid)  # Trace.
+        except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
+            logging.debug("Spawned Edge terminate error (ignored): %s", exc)  # Trace and continue.
+        self._spawned_proc = None  # Drop the handle so close() is idempotent.
+
+    @staticmethod
+    def spawn_debuggable_browser(
+        cdp_port: int = 9222,
+        dashboard_url: str = "https://manage.mist.com/",
+    ) -> subprocess.Popen[bytes] | None:
+        """Launch system Edge with remote debugging so it can be taken over via CDP.
+
+        Returns the ``Popen`` handle (caller owns its lifecycle) or ``None`` when
+        Edge cannot be located. Uses a throwaway profile so the operator's normal
+        Edge profile is never touched; the operator logs into Mist in this window
+        once, then ``connect_mode="attach"`` reuses that session.
+        """
+        edge = MistUIGeocoder._edge_executable()  # Locate the system Edge binary.
+        if edge is None:  # No Edge -> cannot offer a takeover target.
+            logging.warning("Microsoft Edge not found; cannot spawn a debuggable browser")  # Inform operator.
+            return None  # Caller should fall back to launch mode.
+        profile = tempfile.mkdtemp(prefix="misthelper-edge-")  # Dedicated profile dir (never the default one).
+        args = [  # Edge CLI flags that enable CDP on the chosen port.
+            edge,  # Edge executable path.
+            f"--remote-debugging-port={cdp_port}",  # Expose the DevTools endpoint for connect_over_cdp.
+            f"--user-data-dir={profile}",  # Isolate cookies/session in a throwaway profile.
+            "--no-first-run",  # Skip Edge's first-run experience.
+            "--no-default-browser-check",  # Skip the default-browser nag.
+            dashboard_url,  # Open straight to the Mist login/landing page.
+        ]
+        logging.info("Spawning debuggable Edge on port %d (profile=%s)", cdp_port, profile)  # Action-log spawn.
+        proc = subprocess.Popen(args)  # Launch Edge; the operator logs in, then we attach.
+        logging.debug("Debuggable Edge started (pid=%s)", proc.pid)  # Trace the PID.
+        return proc  # Caller terminates it when the audit finishes.
+
+    @staticmethod
+    def _edge_executable() -> str | None:
+        """Locate ``msedge.exe`` via standard install paths, then PATH."""
+        candidates = [  # Standard per-machine Edge install locations on Windows.
+            os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Microsoft", "Edge", "Application", "msedge.exe"),
+            os.path.join(os.environ.get("ProgramFiles", ""), "Microsoft", "Edge", "Application", "msedge.exe"),
+        ]
+        for path in candidates:  # Probe each known location.
+            if path and os.path.isfile(path):  # First existing binary wins.
+                logging.debug("Edge located at %s", path)  # Trace the hit.
+                return path  # Return the absolute path.
+        found = shutil.which("msedge")  # Fall back to a PATH lookup.
+        logging.debug("Edge PATH lookup -> %s", found)  # Trace the fallback result.
+        return found  # May be None if Edge is absent.

@@ -1148,310 +1148,376 @@ class StarlinkDashboard(QMainWindow):
             logger.error("Connection failed: %s", error)
             return False
 
-    def get_starlink_stats(self) -> dict:
-        """
-        Query Starlink terminal for diagnostics via gRPC.
+    _DEFAULT_STARLINK_STATS: dict = {  # Returned when terminal cannot be reached
+        "connected": False,
+        "service_status": "UNKNOWN",
+        "hardware_test": "UNKNOWN",
+        "obstruction_status": "UNKNOWN",
+        "terminal_id": "N/A",
+        "software_version": "N/A",
+        "hardware_version": "N/A",
+        "utc_offset_hours": 0,
+        "azimuth_current": 0.0,
+        "elevation_current": 0.0,
+        "azimuth_target": 0.0,
+        "elevation_target": 0.0,
+        "status_message": "Disconnected",
+    }
 
-        Returns:
-            dict: Statistics dictionary with metrics and status, or default values on error
-        """
-        default_stats = {
-            "connected": False,
-            "service_status": "UNKNOWN",
-            "hardware_test": "UNKNOWN",
-            "obstruction_status": "UNKNOWN",
-            "terminal_id": "N/A",
-            "software_version": "N/A",
-            "hardware_version": "N/A",
-            "utc_offset_hours": 0,
-            "azimuth_current": 0.0,
-            "elevation_current": 0.0,
-            "azimuth_target": 0.0,
-            "elevation_target": 0.0,
-            "status_message": "Disconnected",
-        }
+    _SERVICE_STATUS_CODES: dict[int, str] = {  # Disablement code -> short status label
+        1: "ACTIVE",
+        2: "NO ACCOUNT",
+        3: "TOO FAR",
+        6: "BLOCKED",
+    }
 
-        if not self.channel:
-            logger.warning("Cannot get stats: Not connected to Starlink terminal")
-            return default_stats
+    _HARDWARE_TEST_RESULTS: dict[int, str] = {  # Self-test code -> short label
+        1: "PASSED",
+        2: "FAILED",
+    }
 
+    @staticmethod
+    def _load_starlink_proto_modules():
+        """Load device_pb2 + device_pb2_grpc from local reference dir. Returns (pb2, grpc, error_msg)."""
+        import os
+        import sys
+
+        device_api_path = os.path.join(
+            os.path.dirname(__file__), "starlink-api-reference", "device-api"
+        )  # Path to generated proto modules bundled with this repo
+        if device_api_path not in sys.path:
+            sys.path.insert(0, device_api_path)  # Make protos importable for this process
         try:
-            # Import Starlink protobuf modules from the generated files
-            # Add the device-api directory to Python path for import
-            import os
-            import sys
+            import device_pb2  # type: ignore[import]
+            import device_pb2_grpc  # type: ignore[import]
 
-            device_api_path = os.path.join(os.path.dirname(__file__), "starlink-api-reference", "device-api")
-            if device_api_path not in sys.path:
-                sys.path.insert(0, device_api_path)
+            return device_pb2, device_pb2_grpc, None  # Success path -- modules loaded
+        except ImportError as import_error:
+            logger.error("Starlink protobuf modules not found: %s", import_error)
+            return None, None, str(import_error)  # Caller will show user dialog
 
-            try:
-                import device_pb2  # type: ignore[import]
-                import device_pb2_grpc  # type: ignore[import]
-            except ImportError as import_error:
-                logger.error("Starlink protobuf modules not found: %s", import_error)
-                QMessageBox.critical(
-                    self,
-                    "Proto Files Missing",
-                    "Starlink protobuf modules not found.\n\n"
-                    "Please generate them from the Enterprise API repository:\n\n"
-                    "1. Navigate to: starlink-api-reference/device-api/\n"
-                    "2. Run: python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. device.proto\n"
-                    "3. Restart the dashboard\n\n"
-                    "The files should have been generated already. Check the directory.",
-                )
-                return default_stats
+    @staticmethod
+    def _compute_obstruction_status(diag) -> str:
+        """Return CLEAR or OBSTRUCTED for the current diagnostics snapshot."""
+        if hasattr(diag, "alerts") and diag.alerts.obstructed:  # Obstruction alert is set
+            return "OBSTRUCTED"
+        return "CLEAR"  # Default to clear when no obstruction signal
 
-            # Create gRPC stub for device service
-            stub = device_pb2_grpc.DeviceStub(self.channel)
+    @classmethod
+    def _compute_service_status(cls, diag) -> str:
+        """Return human-readable service status from disablement_code."""
+        if not hasattr(diag, "disablement_code"):  # Field missing -> unknown
+            return "UNKNOWN"
+        code = diag.disablement_code  # Numeric disablement code
+        if code in cls._SERVICE_STATUS_CODES:  # Mapped to a short label
+            return cls._SERVICE_STATUS_CODES[code]
+        return f"CODE {code}"  # Unknown code -> show raw value
 
-            # Create request for diagnostics information
-            request = device_pb2.Request()
-            request.get_diagnostics.CopyFrom(device_pb2.GetDiagnosticsRequest())
+    @classmethod
+    def _compute_hardware_test(cls, diag) -> str:
+        """Return PASSED, FAILED, NO RESULT, or UNKNOWN for hardware self-test."""
+        if not hasattr(diag, "hardware_self_test"):  # Field missing -> unknown
+            return "UNKNOWN"
+        return cls._HARDWARE_TEST_RESULTS.get(diag.hardware_self_test, "NO RESULT")
 
-            logger.info("Sending diagnostics request to Starlink terminal...")
+    @staticmethod
+    def _compute_alignment(diag) -> tuple[float, float, float, float]:
+        """Return (az_current, el_current, az_target, el_target) from alignment_stats, or zeros."""
+        if not hasattr(diag, "alignment_stats"):  # No alignment data -> zeros
+            return 0.0, 0.0, 0.0, 0.0
+        stats = diag.alignment_stats  # Alignment sub-message
+        return (
+            stats.boresight_azimuth_deg,
+            stats.boresight_elevation_deg,
+            stats.desired_boresight_azimuth_deg,
+            stats.desired_boresight_elevation_deg,
+        )
 
-            # Execute gRPC call with timeout
-            response = stub.Handle(request, timeout=10)
+    @staticmethod
+    def _compute_utc_offset_hours(diag) -> float:
+        """Return UTC offset hours from utc_offset_s, or 0 if unavailable."""
+        if not hasattr(diag, "utc_offset_s"):  # Field missing -> default offset
+            return 0
+        return diag.utc_offset_s / 3600.0  # Convert seconds to hours
 
-            logger.info("Received response, checking for dish_get_diagnostics field...")
+    @staticmethod
+    def _compute_short_terminal_id(diag) -> str:
+        """Return display-friendly terminal ID (shortened with ... if long)."""
+        raw = diag.id if hasattr(diag, "id") else "N/A"  # Full ID or N/A placeholder
+        if len(raw) > 20:  # IDs longer than 20 chars are abbreviated for the UI
+            return raw[:8] + "..." + raw[-8:]
+        return raw
 
-            # Extract diagnostics from response
-            if response.HasField("dish_get_diagnostics"):
-                diag = response.dish_get_diagnostics
+    @staticmethod
+    def _compute_is_operational(diag) -> bool:
+        """Return True if dish is operational (no shutdown/stuck alerts)."""
+        if not hasattr(diag, "alerts"):  # No alerts -> assume operational
+            return True
+        return not (diag.alerts.dish_thermal_shutdown or diag.alerts.motors_stuck)
 
-                logger.info(
-                    "Got diagnostics - ID: %s, Software: %s, Hardware: %s",
-                    diag.id if hasattr(diag, "id") else "N/A",
-                    diag.software_version if hasattr(diag, "software_version") else "N/A",
-                    diag.hardware_version if hasattr(diag, "hardware_version") else "N/A",
-                )
+    @staticmethod
+    def _safe_diag_field(diag, attr: str, default="N/A"):
+        """Return diag.attr if present, else the supplied default. Avoids `if hasattr` branches."""
+        return getattr(diag, attr, default)
 
-                # DEBUG: Print full diagnostics object structure
-                if logger.isEnabledFor(logging.DEBUG):
-                    print("\n" + "=" * 80)
-                    print("FULL DIAGNOSTIC DATA DUMP")
-                    print("=" * 80)
-                    print(f"\nRaw protobuf object:\n{diag}")
-                    print("\n" + "=" * 80)
-                    print("PARSED FIELDS:")
-                    print("=" * 80)
-                    print(f"Terminal ID: {diag.id if hasattr(diag, 'id') else 'N/A'}")
-                    print(f"Software Version: {diag.software_version if hasattr(diag, 'software_version') else 'N/A'}")
-                    print(f"Hardware Version: {diag.hardware_version if hasattr(diag, 'hardware_version') else 'N/A'}")
-                    print(f"UTC Offset: {diag.utc_offset_s if hasattr(diag, 'utc_offset_s') else 'N/A'} seconds")
-                    hw_test = diag.hardware_self_test if hasattr(diag, "hardware_self_test") else "N/A"
-                    print(f"Hardware Self Test: {hw_test}")
-                    print(f"Disablement Code: {diag.disablement_code if hasattr(diag, 'disablement_code') else 'N/A'}")
-                    print(f"Stowed: {diag.stowed if hasattr(diag, 'stowed') else 'N/A'}")
+    @classmethod
+    def _dump_diagnostics_main_fields(cls, diag) -> None:
+        """Pretty-print the top-level diagnostic scalar fields under DEBUG logging."""
+        print(f"Terminal ID: {cls._safe_diag_field(diag, 'id')}")
+        print(f"Software Version: {cls._safe_diag_field(diag, 'software_version')}")
+        print(f"Hardware Version: {cls._safe_diag_field(diag, 'hardware_version')}")
+        print(f"UTC Offset: {cls._safe_diag_field(diag, 'utc_offset_s')} seconds")
+        print(f"Hardware Self Test: {cls._safe_diag_field(diag, 'hardware_self_test')}")
+        print(f"Disablement Code: {cls._safe_diag_field(diag, 'disablement_code')}")
+        print(f"Stowed: {cls._safe_diag_field(diag, 'stowed')}")
 
-                    if hasattr(diag, "alerts"):
-                        print("\nALERTS:")
-                        print(f"  - Dish Heating: {diag.alerts.dish_is_heating}")
-                        print(f"  - Thermal Throttle: {diag.alerts.dish_thermal_throttle}")
-                        print(f"  - Thermal Shutdown: {diag.alerts.dish_thermal_shutdown}")
-                        print(f"  - Power Supply Throttle: {diag.alerts.power_supply_thermal_throttle}")
-                        print(f"  - Motors Stuck: {diag.alerts.motors_stuck}")
-                        print(f"  - Mast Not Vertical: {diag.alerts.mast_not_near_vertical}")
-                        print(f"  - Slow Ethernet: {diag.alerts.slow_ethernet_speeds}")
-                        print(f"  - Software Pending: {diag.alerts.software_install_pending}")
-                        print(f"  - Moving Too Fast: {diag.alerts.moving_too_fast_for_policy}")
-                        print(f"  - Obstructed: {diag.alerts.obstructed}")
+    @classmethod
+    def _dump_diagnostics_sub_messages(cls, diag) -> None:
+        """Pretty-print any present sub-messages (alerts/location/alignment) under DEBUG logging."""
+        if hasattr(diag, "alerts"):
+            cls._dump_diagnostics_alerts(diag.alerts)
+        if hasattr(diag, "location") and diag.location.enabled:
+            cls._dump_diagnostics_location(diag.location)
+        if hasattr(diag, "alignment_stats"):
+            cls._dump_diagnostics_alignment(diag.alignment_stats)
 
-                    if hasattr(diag, "location") and diag.location.enabled:
-                        print("\nLOCATION:")
-                        print(f"  - Latitude: {diag.location.latitude}")
-                        print(f"  - Longitude: {diag.location.longitude}")
-                        print(f"  - Altitude: {diag.location.altitude_meters}m")
-                        if diag.location.uncertainty_meters_valid:
-                            print(f"  - Uncertainty: {diag.location.uncertainty_meters}m")
+    def _dump_diagnostics_debug(self, diag) -> None:
+        """Pretty-print the full diagnostics object when DEBUG logging is enabled."""
+        if not logger.isEnabledFor(logging.DEBUG):  # No-op unless DEBUG is on
+            return
+        print("\n" + "=" * 80)
+        print("FULL DIAGNOSTIC DATA DUMP")
+        print("=" * 80)
+        print(f"\nRaw protobuf object:\n{diag}")
+        print("\n" + "=" * 80)
+        print("PARSED FIELDS:")
+        print("=" * 80)
+        self._dump_diagnostics_main_fields(diag)  # Top-level scalar fields
+        self._dump_diagnostics_sub_messages(diag)  # Nested alerts/location/alignment
+        print("=" * 80 + "\n")
 
-                    if hasattr(diag, "alignment_stats"):
-                        print("\nALIGNMENT:")
-                        print(f"  - Boresight Azimuth: {diag.alignment_stats.boresight_azimuth_deg}°")
-                        print(f"  - Boresight Elevation: {diag.alignment_stats.boresight_elevation_deg}°")
-                        print(f"  - Desired Azimuth: {diag.alignment_stats.desired_boresight_azimuth_deg}°")
-                        print(f"  - Desired Elevation: {diag.alignment_stats.desired_boresight_elevation_deg}°")
+    @staticmethod
+    def _dump_diagnostics_alerts(alerts) -> None:
+        """Pretty-print the alerts sub-message for DEBUG diagnostics."""
+        print("\nALERTS:")
+        print(f"  - Dish Heating: {alerts.dish_is_heating}")
+        print(f"  - Thermal Throttle: {alerts.dish_thermal_throttle}")
+        print(f"  - Thermal Shutdown: {alerts.dish_thermal_shutdown}")
+        print(f"  - Power Supply Throttle: {alerts.power_supply_thermal_throttle}")
+        print(f"  - Motors Stuck: {alerts.motors_stuck}")
+        print(f"  - Mast Not Vertical: {alerts.mast_not_near_vertical}")
+        print(f"  - Slow Ethernet: {alerts.slow_ethernet_speeds}")
+        print(f"  - Software Pending: {alerts.software_install_pending}")
+        print(f"  - Moving Too Fast: {alerts.moving_too_fast_for_policy}")
+        print(f"  - Obstructed: {alerts.obstructed}")
 
-                    print("=" * 80 + "\n")
+    @staticmethod
+    def _dump_diagnostics_location(loc) -> None:
+        """Pretty-print the location sub-message for DEBUG diagnostics."""
+        print("\nLOCATION:")
+        print(f"  - Latitude: {loc.latitude}")
+        print(f"  - Longitude: {loc.longitude}")
+        print(f"  - Altitude: {loc.altitude_meters}m")
+        if loc.uncertainty_meters_valid:
+            print(f"  - Uncertainty: {loc.uncertainty_meters}m")
 
-                # Parse all available metrics from diagnostics object
-                # Map to the keys expected by update_metrics()
+    @staticmethod
+    def _dump_diagnostics_alignment(align) -> None:
+        """Pretty-print the alignment_stats sub-message for DEBUG diagnostics."""
+        print("\nALIGNMENT:")
+        print(f"  - Boresight Azimuth: {align.boresight_azimuth_deg}°")
+        print(f"  - Boresight Elevation: {align.boresight_elevation_deg}°")
+        print(f"  - Desired Azimuth: {align.desired_boresight_azimuth_deg}°")
+        print(f"  - Desired Elevation: {align.desired_boresight_elevation_deg}°")
 
-                # Determine if system is operational
-                is_operational = True
-                if hasattr(diag, "alerts"):
-                    is_operational = not (diag.alerts.dish_thermal_shutdown or diag.alerts.motors_stuck)
-                    logger.debug(
-                        "Alert status: obstructed=%s, thermal_shutdown=%s, motors_stuck=%s",
-                        diag.alerts.obstructed,
-                        diag.alerts.dish_thermal_shutdown,
-                        diag.alerts.motors_stuck,
-                    )
+    def _build_starlink_stats_dict(self, diag) -> dict:
+        """Assemble the public stats dict from a populated diagnostics object."""
+        logger.debug("_build_starlink_stats_dict: parsing diagnostics into stats dict")
+        is_operational = self._compute_is_operational(diag)  # Overall connection health flag
+        azimuth_current, elevation_current, azimuth_target, elevation_target = self._compute_alignment(
+            diag
+        )  # Antenna pointing coordinates
+        self.dish_connected = is_operational  # Cached side-effect: reflect health on the widget
+        stats: dict = {
+            "connected": is_operational,
+            "service_status": self._compute_service_status(diag),
+            "hardware_test": self._compute_hardware_test(diag),
+            "obstruction_status": self._compute_obstruction_status(diag),
+            "terminal_id": self._compute_short_terminal_id(diag),
+            "software_version": (diag.software_version if hasattr(diag, "software_version") else "N/A"),
+            "hardware_version": (diag.hardware_version if hasattr(diag, "hardware_version") else "N/A"),
+            "utc_offset_hours": self._compute_utc_offset_hours(diag),
+            "azimuth_current": azimuth_current,
+            "elevation_current": elevation_current,
+            "azimuth_target": azimuth_target,
+            "elevation_target": elevation_target,
+            "status_message": self.format_status_message(diag),
+        }
+        logger.debug(
+            "_build_starlink_stats_dict: connected=%s, service=%s, obstruction=%s",
+            is_operational,
+            stats["service_status"],
+            stats["obstruction_status"],
+        )
+        return stats
 
-                # Determine obstruction status
-                obstruction_status = "CLEAR"
-                if hasattr(diag, "alerts") and diag.alerts.obstructed:
-                    obstruction_status = "OBSTRUCTED"
+    def _show_proto_files_missing_dialog(self) -> None:
+        """Show the 'protobuf modules missing' dialog with regeneration instructions."""
+        QMessageBox.critical(
+            self,
+            "Proto Files Missing",
+            "Starlink protobuf modules not found.\n\n"
+            "Please generate them from the Enterprise API repository:\n\n"
+            "1. Navigate to: starlink-api-reference/device-api/\n"
+            "2. Run: python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. device.proto\n"
+            "3. Restart the dashboard\n\n"
+            "The files should have been generated already. Check the directory.",
+        )
 
-                # Determine service status
-                service_status = "UNKNOWN"
-                if hasattr(diag, "disablement_code"):
-                    if diag.disablement_code == 1:  # OKAY
-                        service_status = "ACTIVE"
-                    elif diag.disablement_code == 2:
-                        service_status = "NO ACCOUNT"
-                    elif diag.disablement_code == 3:
-                        service_status = "TOO FAR"
-                    elif diag.disablement_code == 6:
-                        service_status = "BLOCKED"
-                    else:
-                        service_status = f"CODE {diag.disablement_code}"
+    def _fetch_diagnostics_from_terminal(self):
+        """Send the diagnostics gRPC request and return the raw response, or None on failure."""
+        pb2, pb2_grpc, error = self._load_starlink_proto_modules()  # Lazy-load generated proto bindings
+        if error is not None:  # Modules missing -> show dialog and bail
+            self._show_proto_files_missing_dialog()
+            return None
+        stub = pb2_grpc.DeviceStub(self.channel)  # gRPC client stub
+        request = pb2.Request()  # Top-level wrapper request
+        request.get_diagnostics.CopyFrom(pb2.GetDiagnosticsRequest())  # Embed diagnostics sub-request
+        logger.info("Sending diagnostics request to Starlink terminal...")
+        response = stub.Handle(request, timeout=10)  # Synchronous 10s gRPC call
+        logger.info("Received response, checking for dish_get_diagnostics field...")
+        return response
 
-                # Hardware self test
-                hardware_test = "UNKNOWN"
-                if hasattr(diag, "hardware_self_test"):
-                    if diag.hardware_self_test == 1:
-                        hardware_test = "PASSED"
-                    elif diag.hardware_self_test == 2:
-                        hardware_test = "FAILED"
-                    else:
-                        hardware_test = "NO RESULT"
+    @staticmethod
+    def _describe_diagnostics(diag) -> tuple[str, str, str]:
+        """Return (id, software_version, hardware_version) safely from a diag proto."""
+        return (
+            diag.id if hasattr(diag, "id") else "N/A",
+            diag.software_version if hasattr(diag, "software_version") else "N/A",
+            diag.hardware_version if hasattr(diag, "hardware_version") else "N/A",
+        )
 
-                # Alignment data
-                azimuth_current = 0.0
-                elevation_current = 0.0
-                azimuth_target = 0.0
-                elevation_target = 0.0
-                if hasattr(diag, "alignment_stats"):
-                    azimuth_current = diag.alignment_stats.boresight_azimuth_deg
-                    elevation_current = diag.alignment_stats.boresight_elevation_deg
-                    azimuth_target = diag.alignment_stats.desired_boresight_azimuth_deg
-                    elevation_target = diag.alignment_stats.desired_boresight_elevation_deg
-
-                # UTC offset in hours
-                utc_offset_hours = 0
-                if hasattr(diag, "utc_offset_s"):
-                    utc_offset_hours = diag.utc_offset_s / 3600.0
-
-                # Terminal ID (shortened for display)
-                terminal_id = diag.id if hasattr(diag, "id") else "N/A"
-                if len(terminal_id) > 20:
-                    terminal_id = terminal_id[:8] + "..." + terminal_id[-8:]
-
-                stats = {
-                    # Status and Service
-                    "connected": is_operational,
-                    "service_status": service_status,
-                    "hardware_test": hardware_test,
-                    "obstruction_status": obstruction_status,
-                    # Hardware and Software
-                    "terminal_id": terminal_id,
-                    "software_version": diag.software_version if hasattr(diag, "software_version") else "N/A",
-                    "hardware_version": diag.hardware_version if hasattr(diag, "hardware_version") else "N/A",
-                    "utc_offset_hours": utc_offset_hours,
-                    # Alignment
-                    "azimuth_current": azimuth_current,
-                    "elevation_current": elevation_current,
-                    "azimuth_target": azimuth_target,
-                    "elevation_target": elevation_target,
-                    # Status message with all diagnostic info
-                    "status_message": self.format_status_message(diag),
-                }
-
-                # Update dish connection status based on alerts
-                self.dish_connected = is_operational
-
-                logger.debug(
-                    "Retrieved Starlink diagnostics: connected=%s, service=%s, obstruction=%s",
-                    is_operational,
-                    service_status,
-                    obstruction_status,
-                )
-                return stats
-            else:
+    def get_starlink_stats(self) -> dict:
+        """Query Starlink terminal for diagnostics via gRPC. Returns default dict on error."""
+        if not self.channel:  # Caller hasn't connected to a terminal yet
+            logger.warning("Cannot get stats: Not connected to Starlink terminal")
+            return dict(self._DEFAULT_STARLINK_STATS)  # Return a fresh copy of the defaults
+        try:
+            response = self._fetch_diagnostics_from_terminal()  # Delegate gRPC + proto loading
+            if response is None or not response.HasField("dish_get_diagnostics"):
                 logger.warning("Response did not contain dish_get_diagnostics field")
-                return default_stats
-
+                return dict(self._DEFAULT_STARLINK_STATS)  # No diagnostics -> defaults
+            diag = response.dish_get_diagnostics  # Strongly-typed diagnostics sub-message
+            term_id, software_ver, hardware_ver = self._describe_diagnostics(diag)
+            logger.info(
+                "Got diagnostics - ID: %s, Software: %s, Hardware: %s",
+                term_id,
+                software_ver,
+                hardware_ver,
+            )
+            self._dump_diagnostics_debug(diag)  # No-op unless DEBUG logging is enabled
+            return self._build_starlink_stats_dict(diag)  # Final assembled stats dict
         except Exception as error:
             logger.error("Error retrieving Starlink diagnostics: %s", error)
             import traceback
 
             logger.error(traceback.format_exc())
-            return default_stats
+            return dict(self._DEFAULT_STARLINK_STATS)  # Failure path -> safe defaults
+
+    _DISABLEMENT_CODE_MESSAGES: dict[int, str] = {
+        1: "Service: ACTIVE",
+        2: "Service: NO ACTIVE ACCOUNT",
+        3: "Service: TOO FAR FROM SERVICE ADDRESS",
+        6: "Service: BLOCKED COUNTRY",
+    }
+
+    _STATUS_ALERT_FIELDS: tuple[tuple[str, str], ...] = (
+        ("motors_stuck", "Motors Stuck"),
+        ("dish_thermal_shutdown", "Thermal Shutdown"),
+        ("dish_thermal_throttle", "Thermal Throttle"),
+        ("mast_not_near_vertical", "Mast Not Vertical"),
+        ("obstructed", "Obstructed"),
+        ("dish_is_heating", "Heating"),
+        ("slow_ethernet_speeds", "Slow Ethernet"),
+    )
+
+    @staticmethod
+    def _status_part_terminal_id(diag) -> str | None:
+        """Return the terminal-ID status line or None if unavailable."""
+        if not (hasattr(diag, "id") and diag.id):  # No terminal ID -> nothing to report
+            return None
+        return f"Terminal ID: {diag.id}"  # Format the human-readable terminal identifier
+
+    @staticmethod
+    def _status_part_self_test(diag) -> str | None:
+        """Return the hardware self-test status line or None if unavailable."""
+        if not hasattr(diag, "hardware_self_test"):  # Field missing -> skip
+            return None
+        result = diag.hardware_self_test  # Numeric self-test result code
+        if result == 1:  # 1 == PASSED per Starlink proto
+            return "Self Test: PASSED"
+        if result == 2:  # 2 == FAILED per Starlink proto
+            return "Self Test: FAILED"
+        return None  # Any other code is treated as "no result"
+
+    @classmethod
+    def _status_part_disablement(cls, diag) -> str | None:
+        """Return the service disablement status line or None if unavailable."""
+        if not hasattr(diag, "disablement_code"):  # Field missing -> skip
+            return None
+        code = diag.disablement_code  # Numeric disablement code from proto
+        if code in cls._DISABLEMENT_CODE_MESSAGES:  # Known code -> use mapped message
+            return cls._DISABLEMENT_CODE_MESSAGES[code]
+        if code > 0:  # Unknown but non-zero -> generic disabled message
+            return f"Service: DISABLED (Code {code})"
+        return None  # Code 0 (or negative) means no message
+
+    @classmethod
+    def _status_part_alerts(cls, diag) -> str | None:
+        """Return the active-alerts status line or None if no alerts/field."""
+        if not hasattr(diag, "alerts"):  # Alerts sub-message missing -> skip
+            return None
+        alerts = diag.alerts  # Alerts sub-object from proto
+        triggered = [
+            label for attr, label in cls._STATUS_ALERT_FIELDS if getattr(alerts, attr, False)
+        ]  # Collect human-readable labels for any flag that is True
+        return f"Alerts: {', '.join(triggered)}" if triggered else None
+
+    @staticmethod
+    def _status_part_stowed(diag) -> str | None:
+        """Return the stowed-status line or None if not stowed/unknown."""
+        if not (hasattr(diag, "stowed") and diag.stowed):  # Not stowed (or unknown)
+            return None
+        return "Status: STOWED"
+
+    @staticmethod
+    def _status_part_location(diag) -> str | None:
+        """Return the location status line or None if disabled/unavailable."""
+        if not (hasattr(diag, "location") and diag.location.enabled):  # Location reporting off
+            return None
+        loc = diag.location  # Location sub-object
+        return f"Location: {loc.latitude:.4f}, {loc.longitude:.4f}"
+
+    @classmethod
+    def _collect_status_parts(cls, diag) -> list[str]:
+        """Run each status part builder and return non-empty results in display order."""
+        builders = (
+            cls._status_part_terminal_id,
+            cls._status_part_self_test,
+            cls._status_part_disablement,
+            cls._status_part_alerts,
+            cls._status_part_stowed,
+            cls._status_part_location,
+        )  # Ordered tuple of part builders -- evaluation order = display order
+        return [part for part in (build(diag) for build in builders) if part]
 
     def format_status_message(self, diag) -> str:
-        """
-        Format detailed status message from Starlink diagnostics object.
-
-        Args:
-            diag: Protobuf diagnostics object from dish_get_diagnostics
-
-        Returns:
-            str: Formatted multi-line status message
-        """
+        """Format detailed status message from Starlink diagnostics object."""
+        logger.debug("format_status_message: assembling parts from diagnostics object")
         try:
-            # Build status message with available information from diagnostics
-            message_parts = []
-
-            # Terminal identification
-            if hasattr(diag, "id") and diag.id:
-                message_parts.append(f"Terminal ID: {diag.id}")
-
-            # Hardware self-test result
-            if hasattr(diag, "hardware_self_test"):
-                test_result = diag.hardware_self_test
-                if test_result == 1:  # PASSED
-                    message_parts.append("Self Test: PASSED")
-                elif test_result == 2:  # FAILED
-                    message_parts.append("Self Test: FAILED")
-
-            # Disablement code (service status)
-            if hasattr(diag, "disablement_code"):
-                code = diag.disablement_code
-                if code == 1:  # OKAY
-                    message_parts.append("Service: ACTIVE")
-                elif code == 2:
-                    message_parts.append("Service: NO ACTIVE ACCOUNT")
-                elif code == 3:
-                    message_parts.append("Service: TOO FAR FROM SERVICE ADDRESS")
-                elif code == 6:
-                    message_parts.append("Service: BLOCKED COUNTRY")
-                elif code > 0:
-                    message_parts.append(f"Service: DISABLED (Code {code})")
-
-            # Alerts (if any)
-            if hasattr(diag, "alerts"):
-                alert_list = []
-                if diag.alerts.motors_stuck:
-                    alert_list.append("Motors Stuck")
-                if diag.alerts.dish_thermal_shutdown:
-                    alert_list.append("Thermal Shutdown")
-                if diag.alerts.dish_thermal_throttle:
-                    alert_list.append("Thermal Throttle")
-                if diag.alerts.mast_not_near_vertical:
-                    alert_list.append("Mast Not Vertical")
-                if diag.alerts.obstructed:
-                    alert_list.append("Obstructed")
-                if diag.alerts.dish_is_heating:
-                    alert_list.append("Heating")
-                if diag.alerts.slow_ethernet_speeds:
-                    alert_list.append("Slow Ethernet")
-                if alert_list:
-                    message_parts.append(f"Alerts: {', '.join(alert_list)}")
-
-            # Stow status
-            if hasattr(diag, "stowed") and diag.stowed:
-                message_parts.append("Status: STOWED")
-
-            # Location info (if enabled)
-            if hasattr(diag, "location") and diag.location.enabled:
-                loc = diag.location
-                message_parts.append(f"Location: {loc.latitude:.4f}, {loc.longitude:.4f}")
-
-            # Return formatted message or default
-            return "\n".join(message_parts) if message_parts else "Connected - No issues detected"
-
+            parts = self._collect_status_parts(diag)  # Delegate per-part assembly + filtering
+            logger.debug("format_status_message: produced %d non-empty parts", len(parts))
+            return "\n".join(parts) if parts else "Connected - No issues detected"
         except Exception as error:
             logger.error("Error formatting status message: %s", error)
             import traceback

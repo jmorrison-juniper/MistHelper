@@ -7,7 +7,7 @@
 - **Language**: Python 3.13+ | **File**: `MistHelper.py` (~23.5K lines, hot file)
 - **Analyzer**: `tools/check_compliance.py` (5-Item Rule grader) — source of truth
 - **Gates**: py_compile, ruff, black, mypy (no new errors), `--test` (0 failed ops)
-- **Scope**: 84 High violations / 57 functions (41 COMPLEXITY, 34 LENGTH, 9 PARAMS)
+- **Scope**: 50 High violations / 32 functions (28 COMPLEXITY, 22 LENGTH, 0 PARAMS — #431 closed)
 
 ## Constitution Check
 

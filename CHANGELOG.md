@@ -7,6 +7,8 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+## [Unreleased]
+
 ### Mist API Coverage Audit
 
 - **OpenAPI GET endpoint catalog + diff**: Added `tools/openapi_endpoint_catalog.py`
@@ -22,6 +24,203 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   `DataExporter`, `ENDPOINT_PRIMARY_KEY_STRATEGIES`, ASCII-only logging, README +
   CHANGELOG updates). Each spec is its own SpecKit workflow ready for
   `speckit.plan` / `speckit.tasks` / `speckit.implement`.
+
+### Added
+
+- **Address audit can now push corrected addresses back to Mist (menu 195)**: the
+  audit was read-only; you reviewed the comparison and fixed addresses by hand.
+  After saving the comparison report you are now offered an **optional write-back**.
+  It is gated twice for safety: a single batch opt-in (`[y/N]`, default No), then a
+  **per-site `[y/N]` confirmation** that shows the site's address BEFORE (current
+  Mist value) and AFTER (the suggested correction) side by side. Only the sites you
+  say yes to are written. The write is minimal and safe -- it fetches the full Mist
+  site record, replaces **only** the `address` field, and PUTs the record back, so
+  `latlng`, `timezone`, `country_code`, sitegroup and template IDs are all
+  preserved. Each write is fail-soft: a read-only token (HTTP 403) or any API error
+  is recorded as a failed outcome and never aborts the batch. Afterwards you are
+  prompted to save a **before/after correction report**
+  (`data/address_corrections_<timestamp>.csv`) listing every reviewed site and
+  whether it was pushed, skipped, or failed. Only correctable rows are offered
+  (MISSING_SUITE, MISSING_NUMBER, WRONG_STREET, CSV_BETTER, AMBIGUOUS); matches and
+  Mist-better rows are never touched.
+
+### Changed
+
+- **Address audit now flags incomplete Mist addresses (missing house number)
+  (menu 195)**: a Mist site whose street had no house number (`S Federal Hwy`)
+  was reported ADDRESS_MATCH against the web-resolved `2315 S Federal Hwy` --
+  i.e. "no change needed" -- even though the street *number* was missing, which
+  makes the address unshippable. A new ninth classification state,
+  `MISSING_NUMBER`, now surfaces these so the operator can add the number the web
+  found. Rows where Mist already has a house number are unaffected.
+
+- **Address audit now adjudicates suite *conflicts*, not just missing suites (menu
+  195)**: Tier-3 was skipped whenever the Mist address already carried any suite,
+  so when the customer CSV claimed a *different* unit (Mist `#204` vs CSV
+  `Suite H200` at the Mall at Millenia) the audit reported MIST_BETTER without ever
+  checking which unit is real. Tier-3 now also runs when the CSV unit disagrees
+  with Mist's, so the web adjudicates the correct shippable unit. Identical units
+  expressed differently (`Suite 100` vs `Ste 100`) still skip the lookup.
+
+- **Address audit query is now built by house-number consensus (menu 195)**: the
+  geocoding query was built SNMP-location-first, so when a site's SNMP location
+  pointed at a different address -- even a different state -- the audit geocoded
+  the wrong place. One real T-Mobile site in Palm Beach Gardens, FL had an SNMP
+  location of `1520 Route 38 ... Hainesport NJ`, and the audit "corrected" the FL
+  store to a **New Jersey** address (a shipping-safety bug). The Mist address, the
+  SNMP location, and the customer CSV are now treated as equal *hints*: the audit
+  votes on the house number across all three and uses the agreed-upon, cleanest,
+  suite-bearing source, so one bad hint can no longer hijack the query. SNMP
+  directional glue (`SFederal` -> `S Federal`, `NMilitary` -> `N Military`) is
+  repaired before voting. Tier 3 also retries once **without** the business-name
+  prefix when the `"<business> <address>"` query returns nothing (a store may not
+  sit at that exact number), which recovers rows that previously hit NO_RESULT.
+
+- **Address audit Tier-3 now self-spawns a browser and deduces the suite (menu 195)**:
+  Two gaps stopped the Mist-portal path from ever working. (1) Tier-3 only ever
+  *took over* a browser at `localhost:9222` -- which nothing was running, and
+  `localhost` resolved to IPv6 `::1` (`ECONNREFUSED`). The default mode is now
+  `auto`: it takes over a running debuggable browser if present, otherwise it
+  **spawns Edge for you**, waits while you log into Mist and open a site's
+  settings page, then takes it over (CDP endpoint fixed to `127.0.0.1`). A
+  one-time readiness probe confirms the "Location Search" box is visible and
+  guides you to it if not. (2) Tier-3 never ran for the rows that needed it --
+  `_combine` returned the Tier-1/Tier-2 result first, so Google-via-Mist (the
+  only source that knows the real suite) was skipped on every MISSING_SUITE row.
+  Tier-3 now runs whenever a suite is actually missing and, when it returns a
+  confident result, **acts as the authority** (overriding the internal guess);
+  if it returns nothing, results are exactly as before (graceful). The single
+  `ADDRESS_AUDIT_GEOCODE` knob now accepts `off | auto | attach | launch`
+  (default `auto`).
+
+- **Address audit Tier-3 web geocoding is flag-free (menu 195)**: The Tier-3
+  browser geocoder no longer requires the `--ui-geocode` CLI flag (removed). The
+  Mist site address, the SNMP location variable, and the customer CSV are all
+  treated as *hints*, fused into one best-guess query and verified against the
+  web to deduce the true, shippable address.
+
+### Fixed
+
+- **Address audit MISSING_NUMBER never fired on real data (menu 195)**: the
+  missing-house-number check (added in the prior release) tested the whole Mist
+  address string for any digit, but Mist stores the address as one formatted
+  string ending in the ZIP (`S Federal Hwy, Fort Pierce, FL 34982, USA`) -- so the
+  ZIP's digits made every address look like it already had a house number, and a
+  number-less street was still reported ADDRESS_MATCH. The check now inspects only
+  the leading street segment (before the first comma) for a leading house number,
+  so `S Federal Hwy, ...` is correctly flagged MISSING_NUMBER against the
+  web-resolved `2315 S Federal Hwy`. (The unit test was strengthened to use full
+  Mist-style strings so it would have caught this.)
+
+- **Address audit suggested address glued the street/suite to the city (menu
+  195)**: Google's autocomplete sometimes returned the street fused to the city
+  with no separator (`2315 S Federal HwyFort Pierce`, `...suite 330Brandon`),
+  leaving an un-shippable suggested address. The cleaner now splits a street-type
+  suffix (`Hwy`, `Blvd`, `Dr`, ...) or a number glued directly to a following
+  capitalized city word, while deliberately preserving legitimately camel-cased
+  cities (`DeFuniak`) and alphanumeric street names (`A1A`) -- only street
+  suffixes and digits trigger a split, never a generic lowercase->uppercase
+  boundary.
+
+- **Address audit hid wrong-side-of-street addresses as a MATCH (menu 195)**: the
+  street comparison ignored directionals, so a Mist address of `1606 E Jefferson`
+  was reported as ADDRESS_MATCH against the web-confirmed `1606 West Jefferson` --
+  East vs West are different streets, and shipping to the wrong one is a real risk.
+  The comparison now flags a conflicting *leading* directional (the one right after
+  the house number, so a directional inside a city name like `West Palm Beach` is
+  ignored) as WRONG_STREET, while treating abbreviations as equal (`S` = `South`,
+  `NW` = `Northwest`). The street-name comparison also now includes ordinal names
+  (`107th`, `A1A`), so `1455 NW 107th Ave` reliably matches `1455 Northwest 107th
+  Avenue` regardless of whether Google abbreviates or spells out the directional
+  and street type.
+
+- **Address audit suggested-address still showed the business name on number-first
+  streets (menu 195)**: the suggestion cleaner stripped Google's glued business
+  name only when the street name began with a letter, so rows whose street starts
+  with a digit kept the prefix (`T-Mobile4103 14th St W`). It now strips the
+  prefix in that case too (`4103 14th St W, Bradenton, FL 34205`) and splits a
+  directional fused to the city (`...Ave NLive Oak` -> `...Ave N Live Oak`).
+
+- **Address audit Tier-3 captured the WRONG suggestion (one-row lag) (menu 195)**:
+  Google Places leaves the previous query's suggestions in the dropdown until the
+  new request returns, so the geocoder read each address's result one lookup late
+  -- every row was shifted by one and therefore wrong (e.g. the query for
+  `1701 Ohio Ave` captured `7535 North Kendall Drive`). The geocoder now anchors
+  on the query's house number and polls until the TOP suggestion actually
+  contains it, dismissing the stale dropdown first; on timeout it returns
+  NO_RESULT rather than risk a stale, wrong address. It also cleans Google's row
+  text -- stripping the glued business-name prefix (`T-Mobile931 US Highway...`)
+  and trailing `, USA` -- so the suggested value is the clean, shippable street
+  line with its suite preserved (`931 US Highway 331 Ste A2, DeFuniak Springs, FL
+  32435`). NOTE: anyone who ran the audit before this fix should re-run it and
+  discard the prior output; the cached results were shifted.
+
+- **Address audit misleading Nominatim log (menu 195)**: The "Nominatim returned
+  no result" warning printed the business-name + suite query string even though
+  the actual geocode used the suite-stripped street, making it look like the
+  wrong thing was searched. It now logs the street actually geocoded.
+
+- **Address audit suggested-address cleanup (menu 195)**: Suggested addresses
+  were polluted with the customer's SAP internal store-code prefix
+  (e.g. `S2SJB - `, `08806 - `) and sometimes carried the SNMP field's stale ZIP.
+  The SNMP enricher now strips the leading SAP store code (it is not part of the
+  postal address), and Tier-1 rebuilds a clean suggestion from Mist's own
+  street/city/state/ZIP plus the discovered suite -- preferring the customer CSV
+  suite over the SNMP one. The suite detector was broadened to catch `#3`,
+  `Space P239`, `Spc`, `Rm`, `Lot`, and `Apartment` in addition to
+  Suite/Ste/Unit/Apt/Bldg. Result: `S2SJB - 5550 N Military Trl Unit 200 ... FL
+  33496` now renders as the clean, shippable `5550 N Military Trl Unit 200,
+  Boca Raton, FL 33431`.
+
+- **Address audit external validation via OpenStreetMap (menu 195)**: Nominatim
+  (Tier 2) silently failed for every site because the resolver verified TLS
+  certificates, which Zscaler SSL inspection breaks -- so the audit only ever
+  used internal CSV/SNMP comparison and the "Source" column never showed external
+  validation. The resolver now skips TLS verification for the public Nominatim
+  call by default (override with `MIST_SKIP_SSL_VERIFY=false`), strips the
+  suite/unit before geocoding (OpenStreetMap has no US retail suites) so the base
+  street can match, validates the street on **every** row, and records a
+  `street_validated` flag surfaced as `Internal+OSM` / `Nominatim` in the Source
+  column. The Nominatim step now logs visibly (INFO on hit, WARNING on miss).
+  Verified live: real streets validate (confidence ~0.88), nonsense streets do
+  not. NOTE: OpenStreetMap validates the street only; business-name + suite
+  confirmation still requires the optional Tier-3 Google-Places browser tier
+  (auto-engaged when a debuggable browser is available).
+
+- **Address audit CSV delimiter (menu 195)**: The CSV ingester assumed tab
+  delimiters and silently skipped every row of a comma-delimited file (the Excel
+  default `.csv`), reporting "No valid rows parsed". The delimiter is now
+  **auto-detected** per file (tab / comma / semicolon / pipe), an Excel BOM is
+  stripped, blank lines no longer count as parse failures, and addresses that
+  contain the delimiter (e.g. "6670 US Highway 129, Suite 1") are reconstructed
+  by parsing on the fixed serial/model + city/state/zip anchors. Verified against
+  a real 44-row customer export (44 parsed, 0 skipped).
+
+### Added
+
+- **Site Address Audit from CSV (menu 195, read-only)**: New `src/site/address_audit/`
+  subpackage that reconciles a customer-provided tab-delimited CSV (serial, model,
+  address, city, state, zip) against Mist site records and surfaces address
+  discrepancies (the common strip-mall "missing suite/unit" case for retail
+  fleets). Pipeline: ingest + sanitize CSV -> match each row to a Mist site by
+  device **serial number** (golden key) with a rapidfuzz >=85% address fallback
+  -> enrich with SNMP location (`vars.snmp_location` + `snmp_config.location`)
+  -> resolve/validate the address through three **free** tiers and classify into
+  one of eight states -> render an old-vs-suggested comparison table -> optionally
+  save a timestamped CSV to `data/`. **Zero Mist writes**; write-back is an inert
+  `AddressCorrector` stub. Address resolution tiers (no paid APIs; there is no Mist
+  geocoding endpoint): (1) internal CSV/SNMP/Mist comparison, no network;
+  (2) Nominatim street validation reusing `NominatimValidator`; (3) optional
+  Playwright "hijack" of the live Mist dashboard Location Search field
+  (`--ui-geocode`, OFF by default) that launches or takes over (CDP) the system
+  browser -- the only free path to Google-quality retail suite numbers. Results
+  cached in an additive `geocoding_cache` table in `data/mist_data.db`
+  (`INSERT OR REPLACE`). Classification anchors on the street house number plus a
+  street-name word so SNMP store-number prefixes and partial addresses do not
+  cause false `WRONG_STREET` results. Adds the `--ui-geocode` CLI flag and a
+  `BUSINESS_NAME` `.env` lookup (prompted at runtime when blank, skippable for
+  private addresses). 11 new modules + 8 unit-test files (58 tests). Spec:
+  `specs/1003-site-address-audit/`.
 
 ### Lint / Compliance
 
