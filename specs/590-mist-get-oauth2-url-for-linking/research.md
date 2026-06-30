@@ -1,199 +1,216 @@
-# Phase 0 Research: getOauth2UrlForLinking
+# Phase 0 Research: GetOauth2UrlForLinking
 
-**Spec**: [spec.md](./spec.md)
-**Plan**: [plan.md](./plan.md)
+**Feature**: 590-mist-get-oauth2-url-for-linking
 **Date**: 2026-06-29
+**Source doc**: `documentation/api/self/GET_self_oauth_provider.md`
 
-This document resolves the unknowns required before design and implementation. Each
-task follows the Decision / Rationale / Alternatives Considered format.
+---
 
-## Research Task 1: SDK function signature and behavior
+## Research Task 1: SDK Function Signature & Behavior
 
-**Source consulted**:
-`documentation/api/self/GET_self_oauth_provider.md` (enriched OpenAPI doc).
+### Decision
 
-**Decision**:
-Invoke the endpoint via the mistapi SDK using the URL-derived module path:
-`mistapi.api.v1.self.oauth.getOauth2UrlForLinking(apisession, provider, forward=None)`.
-The SDK returns a `mistapi.APIResponse` object whose `.data` attribute is the parsed
-JSON body. The body is a single two-field object (not a list and not paginated), with:
+Invoke `mistapi.api.v1.self.oauth2.getOauth2UrlForLinking(apisession, provider, forward=None)`.
 
-- `authorization_url` (string, required) -- HTTPS URL the operator's browser must
-  visit to authorize the link. Contains a short-lived state nonce that rotates on
-  every call.
-- `linked` (boolean, required) -- `true` when the provider is already linked to the
-  authenticated admin account, `false` otherwise.
+The function signature reads:
 
-Required path parameter: `provider` (string -- e.g., `google`, `azure`, `okta`).
-Optional query parameter: `forward` (string -- URL the provider should redirect to
-after authorization completes). When omitted, the SDK does not add the query parameter
-to the URL.
+- `apisession` -- the `mistapi.APISession` instance already constructed at MistHelper
+  startup (carries `MIST_HOST`, `MIST_API_TOKEN`).
+- `provider` -- required path parameter, string, OAuth2 provider slug
+  (e.g. `google`, `microsoft`, `azure`, `okta`).
+- `forward` -- optional query parameter, string, post-link redirect URL.
 
-**Rationale**:
-The enriched per-endpoint doc lists the SDK module path as
-`mistapi.api.v1.self.oauth2.getOauth2UrlForLinking()`, but the OpenAPI URL is
-`/api/v1/self/oauth/{provider}` (path segment `oauth`, not `oauth2`). The mistapi SDK
-historically generates module paths from the URL, not the OpenAPI tag, which is
-verified by inspecting the sibling endpoint `POST /api/v1/self/oauth/{provider}` whose
-SDK path is `mistapi.api.v1.self.oauth` (no trailing `2`). The spec.md explicitly
-names `mistapi.api.v1.self.oauth` and that matches the URL one-for-one, so we follow
-the spec. Final verification happens at implementation time via
-`python -c "from mistapi.api.v1.self import oauth; help(oauth)"` inside the venv;
-if the installed SDK ships the module as `oauth2`, the import is adjusted in a single
-line and the constant in `ENDPOINT_PRIMARY_KEY_STRATEGIES` (keyed by operationId, not
-module path) remains correct.
+Return: an `mistapi.APIResponse` object whose `.data` attribute holds the parsed JSON
+object with two fields:
 
-**Alternatives Considered**:
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `authorization_url` | string | yes | URL the operator must paste into a browser to authorize the provider link. Contains a one-time CSRF / state token. |
+| `linked` | boolean | yes | `true` when the provider is already linked to the current admin; `false` otherwise. |
 
-1. *Direct `requests.get` against
-   `https://{host}/api/v1/self/oauth/{provider}`.* Rejected -- the constitution
-   forbids direct HTTP when a mistapi method exists.
-2. *Trust the doc's `oauth2` module name verbatim.* Rejected -- the URL path token is
-   `oauth` (no `2`), and adjacent endpoints under the same path use the URL-based
-   module name. Following the spec is safer; we still verify with `help()` at
-   implementation time.
-3. *Auto-discover the provider name via `getSelf` first.* Rejected -- adds a second
-   round trip and a hidden dependency. The user explicitly knows which provider they
-   want to link.
+HTTP semantics: pure GET, idempotent, non-paginated, returns a single object (not a
+list). Mist applies standard 5000-calls-per-hour rate limiting.
+
+### Rationale
+
+The enriched per-endpoint doc at
+`documentation/api/self/GET_self_oauth_provider.md` lists the SDK path as
+`mistapi.api.v1.self.oauth2.getOauth2UrlForLinking()` and confirms the two-field
+response shape. The spec.md upstream input shows `mistapi.api.v1.self.oauth` as the
+module hint, but the authoritative per-endpoint doc uses the `oauth2` submodule
+naming -- which matches the OpenAPI tag `Self OAuth2`. The implementation MUST follow
+the per-endpoint doc; the spec field is a hint, not the canonical SDK path.
+
+### Alternatives Considered
+
+- **Raw `requests.get(...)`** -- rejected. The constitution mandates `mistapi` as the
+  sole permitted Mist Cloud interface. A direct `requests` call would bypass session
+  reuse, rate-limit handling, and 429 back-off built into `mistapi`.
+- **Use `mistapi.api.v1.self.oauth` (no trailing `2`)** -- rejected. The
+  per-endpoint doc emitted from the enriched OpenAPI run explicitly names the
+  submodule `oauth2`. If the SDK module path differs at implementation time, the
+  task agent re-verifies against the installed `mistapi` package and updates the
+  call site; this research note records the doc-authoritative path.
+- **Pre-cache the URL in Redis only** -- rejected. The constitution mandates
+  multi-backend output via `DataExporter`; caching alone would skip CSV / SQLite
+  consumers.
+
+---
 
 ## Research Task 2: Primary Key Strategy
 
-**Decision**:
-Use a **natural primary key** strategy on the single output table:
+### Decision
 
-- `self_oauth_link_urls`: PK = `(account_email, provider)` -- one row per
-  (authenticated account, OAuth2 provider). `account_email` is fetched once at
-  startup from the existing `getSelf` cache that MistHelper already maintains;
-  `provider` is the path parameter the user supplied.
+Strategy: **`natural_pk`** with `primary_key=['provider']`.
 
-The `ENDPOINT_PRIMARY_KEY_STRATEGIES` registration uses type `natural_pk`.
+```python
+'getOauth2UrlForLinking': {
+    'type': 'natural_pk',
+    'primary_key': ['provider'],
+    'indexes': ['linked', 'fetched_at_utc']
+}
+```
 
-**Rationale**:
-This endpoint is account-scoped, not org-scoped, so `org_id` is not part of the key.
-The natural identity of a row is "which provider's linking URL did we fetch for which
-admin account". The `authorization_url` field changes on every call (state nonce
-rotation), so re-running the menu item must overwrite the previous URL rather than
-append a duplicate row. Pairing `account_email` with `provider` gives one stable row
-per pair, and `INSERT OR REPLACE` keeps the freshest URL on each poll. `linked` is a
-state flag that flips when the user completes the link in their browser; storing it
-alongside the URL lets `getSelf`-style follow-up checks reuse the same row.
+The `provider` slug is the only stable identifier in the response; the
+`authorization_url` carries an embedded one-time state token and changes on every
+call, so it cannot be a key. The `fetched_at_utc` column is added by MistHelper at
+flatten time (not by the API) so re-runs upsert cleanly on the same provider row,
+keeping only the most recent URL.
 
-**Alternatives Considered**:
+### Rationale
 
-1. *`auto_increment_with_unique` on `provider` alone.* Rejected -- a developer running
-   MistHelper as several admin accounts (dev / staging / prod tokens) would silently
-   overwrite another account's row. Pairing with `account_email` keeps multi-tenant
-   safety.
-2. *`composite_pk` on `(account_email, provider, polled_at_utc)`.* Rejected --
-   appending a row per poll defeats the point of upsert and bloats the table because
-   the URL changes every call. Operators want the latest URL, not a history.
-3. *`natural_pk` on `provider` alone.* Rejected for the multi-account reason above.
+- The endpoint is scoped to the authenticated admin (no `org_id` is part of the
+  request), and only one URL exists per `provider` for that admin at any given
+  moment. `provider` is therefore the natural business key.
+- A composite key with `(provider, fetched_at_utc)` would accumulate history rows
+  (one per fetch) which is undesirable -- the URL is one-shot and the older row is
+  immediately stale.
+- `INSERT OR REPLACE` semantics on the single-column key give the operator a clean
+  "latest URL per provider" table without manual cleanup.
 
-## Research Task 3: Output filename and SQLite table
+### Alternatives Considered
 
-**Decision**:
+- **`composite_pk` with `(provider, fetched_at_utc)`** -- rejected. Creates
+  permanent history of stale, single-use URLs that cannot be replayed.
+- **`auto_increment_with_unique` with unique on `provider`** -- rejected. Adds a
+  synthetic `misthelper_internal_id` for no benefit; natural key is already stable
+  and small.
+- **No PK / append-only CSV** -- rejected. Violates the documented hybrid-PK
+  contract in `ENDPOINT_PRIMARY_KEY_STRATEGIES` and breaks SQLite upsert behavior.
 
-- CSV: `data/self_oauth_link_<provider>.csv`
-  (e.g., `data/self_oauth_link_google.csv`, `data/self_oauth_link_azure.csv`)
-- SQLite table: `self_oauth_link_urls`
-- ArangoDB collection (when active): `self_oauth_link_urls` (same name as SQLite)
-- The `api_function_name` argument passed to
-  `DataExporter.write_with_format_selection()` is `"getOauth2UrlForLinking"` (matches
-  the operationId). The DataExporter uses that string as the lookup key into
-  `ENDPOINT_PRIMARY_KEY_STRATEGIES`.
+---
 
-**Rationale**:
-Embedding the provider into the CSV filename keeps human-readable separation per
-provider when an operator links multiple identity sources sequentially. The provider
-token is already validated to ASCII `[a-z0-9_-]{1,32}` (Principle III), so no path
-sanitization is needed beyond the existing `pathlib.Path` join. The SQLite / Arango
-table is single because rows are differentiated by the `provider` column inside the
-table -- splitting tables per provider would explode the schema unnecessarily.
+## Research Task 3: Output Filename and SQLite Table
 
-**Alternatives Considered**:
+### Decision
 
-1. *One global file `data/self_oauth_link_urls.csv`.* Rejected -- mixes providers in
-   one CSV, which is harder to eyeball in `data/` directory listings. SQLite already
-   gives a unified table, so per-provider CSV is a usability win without losing
-   queryability.
-2. *Stash the URL in `data/.cache/` instead of `data/`.* Rejected -- the constitution
-   requires all outputs under `data/`. Operators may want to copy the URL to a browser
-   from `data/` listings.
+- **CSV filename**: `data/self_oauth_link_url.csv`
+- **SQLite table name**: `self_oauth_link_url`
+- **ArangoDB collection name**: `self_oauth_link_url`
+- **Redis key prefix**: `mist:self:oauth:link_url:<provider>`
 
-## Research Task 4: Menu category placement and next available menu number
+### Rationale
 
-**Decision**:
-Register the new operation as **menu number 58**, sitting inside the Safe Org Exports
-/ Safe Self-Account cluster (1-59), adjacent to the existing
-`SelfExportUtils.audit_logs()` entry. The category label is
-"Safe Self-Account -- OAuth2 Link URL".
+- The MistHelper naming convention for read-only export operations is
+  `<scope>_<resource>.csv` with snake_case tokens. `self_oauth_link_url` clearly
+  identifies the scope (`self` -- authenticated admin), the namespace (`oauth`),
+  and the artifact (`link_url`).
+- Keeping table and CSV names identical simplifies the existing `DataExporter`
+  routing logic, which derives the SQLite table from the filename stem.
+- The Redis key prefix is keyed on `provider` (the natural PK) so cache lookups are
+  O(1) per provider.
 
-**Rationale**:
-The constitution and `.github/copilot-instructions.md` describe the menu ranges as:
-1-59 Safe Org Exports, 60-96 Interactive Safe, 97-101 + 153 Resource Intensive,
-102-123 WebSocket, 124-152 Interactive, 154-194 Destructive. Self-account exports
-historically live inside the safe block; 58 is the next contiguous integer below the
-final safe-block slot at 59 and is far from the destructive block at 154-194,
-correctly signaling read-only safety to a junior NOC engineer scrolling the menu.
-The number is provisional -- at `/speckit.tasks` time, `MistHelper.py` is grep'd for
-the latest allocated menu integer and 58 is shifted forward if a conflict exists with
-another in-flight feature branch.
+### Alternatives Considered
 
-**Alternatives Considered**:
+- **`oauth_authorization_url.csv`** -- rejected. Drops the `self_` scope prefix
+  and loses parity with the other `self_*` artifacts that will appear when the
+  sibling POST endpoint is cataloged.
+- **`getOauth2UrlForLinking.csv`** -- rejected. Camel-case operationId names are
+  reserved for the `ENDPOINT_PRIMARY_KEY_STRATEGIES` key; on-disk filenames stay
+  snake_case for cross-platform / case-insensitive filesystem safety.
 
-1. *Append to the very end (e.g., 195).* Rejected -- the destructive cluster ends at
-   194 and placing a read-only OAuth check above the destructive block visually
-   mis-signals the risk level. Operators learn the cluster boundaries; placing this
-   item inside 1-59 follows the existing convention.
-2. *Slot inside the Interactive Safe range (60-96).* Rejected -- this endpoint
-   requires only two simple prompts and produces a single-row output. It is no more
-   "interactive" than the existing self audit-logs export at the same complexity
-   tier.
-3. *Slot inside the Resource Intensive range (97-101).* Rejected -- one GET, one
-   small response, no pagination, no long-running work. It belongs in the safe block.
+---
 
-## Research Task 5: Required user prompts
+## Research Task 4: Menu Category Placement and Next Available Menu Number
 
-**Decision**:
-The new menu method asks the user for **exactly two** values via `safe_input()`:
+### Decision
 
-1. `provider` -- prompt: `"OAuth2 provider name (e.g., google, azure): "`, context:
-   `"self_oauth_link:provider"`. Default: the value of `MIST_OAUTH_PROVIDER` in
-   `.env` if present (pressing Enter accepts the default; the variable is optional
-   and not added to `.env.example` because the value is operator-specific). Normalized
-   to lower-case and validated against `^[a-z0-9_-]{1,32}$` before the API call; on
-   failure, log `WARNING` and return early.
-2. `forward` -- prompt: `"Forward URL after authorization (optional, press Enter to
-   skip): "`, context: `"self_oauth_link:forward"`. Default: empty string (no
-   forward). When non-empty, must start with `https://`; otherwise log `WARNING` and
-   send the request without the `forward` query parameter.
+Place the new operation at **menu number 149**, within the Interactive Config cluster
+(menu range 148-150), under a category label such as "Self / OAuth2 -- Get link URL".
 
-`.env` values used (loaded via the existing `python-dotenv` bootstrap, never logged):
+If 149 collides with an in-flight feature branch at task-generation time, fall back
+to the next free integer in the Interactive cluster (124-150) in this priority order:
+148, 150, then highest-free-integer below 148.
 
-- `MIST_HOST` (e.g., `api.mist.com`) -- required by `mistapi.APISession`.
-- `MIST_API_TOKEN` -- required by `mistapi.APISession`.
-- `MIST_OAUTH_PROVIDER` -- optional default for prompt 1.
+### Rationale
 
-The authenticated account's `email` (used as the `account_email` PK column) is
-sourced from the existing in-process `getSelf` cache; no extra prompt is needed.
+- The Mist API tag `Self OAuth2` is account-configuration in nature -- the operator
+  fetches a URL to wire up an external identity provider. That is configuration,
+  not org-scoped export, so it belongs in the Interactive Config band (148-150),
+  not the Safe Org Exports band (1-59).
+- The op is read-only (HTTP GET, returns a URL string) so it does NOT belong in
+  the destructive range (154-194).
+- Numbers 124-147 host other interactive diagnostics and management items;
+  148-150 is the documented Config sub-cluster and currently has open slots. The
+  reference plan (spec 500) demonstrates the same "pick next free integer in the
+  natural cluster" pattern.
 
-**Rationale**:
-The endpoint is account-scoped, so `org_id` / `site_id` / `device_id` are not
-involved. The optional `forward` parameter materially changes the OAuth2 redirect
-flow but is only useful when the operator already has a callback URL ready -- making
-it optional with an empty default keeps the common "just give me the link" path to
-two keystrokes. Validating both inputs client-side keeps Mist from returning HTTP 400
-when the operator typos a provider name.
+### Alternatives Considered
 
-**Alternatives Considered**:
+- **Menu 59 (Misc, Safe Org Exports)** -- rejected. The op is not org-scoped;
+  placing it in the org-export band confuses the operator.
+- **Menu 96 (end of Interactive Safe Viewers)** -- rejected. Viewers are
+  inspection tools for site/org telemetry; OAuth link URL is account config.
+- **A brand-new top-level category** -- rejected. The existing Config sub-cluster
+  is exactly the right home; introducing a new category for a two-endpoint tag
+  inflates the menu hierarchy without benefit.
 
-1. *Single prompt: provider only; never expose `forward`.* Rejected -- the OpenAPI
-   doc lists `forward` as a real query parameter and operators integrating with a
-   custom portal will need it.
-2. *Auto-fill `provider` by listing supported providers via a discovery endpoint.*
-   Rejected -- Mist has no documented discovery endpoint for OAuth2 providers, and
-   the constitution forbids guessing API shapes.
-3. *Validate `forward` more strictly (must match the org's configured callback
-   domain).* Rejected -- MistHelper does not own that allow-list; Mist itself
-   rejects bad forwards at the OAuth2 redirect stage. Client-side `https://` check
-   is sufficient defensive validation.
+---
+
+## Research Task 5: Required User Prompts
+
+### Decision
+
+The menu method collects **two prompts** via `safe_input()`:
+
+1. `provider` (required, string) --
+   Prompt text: `"OAuth2 provider slug (e.g. google, microsoft, azure, okta): "`
+   Context tag: `"self_oauth_link_url:provider"`
+   Validation: non-empty, lowercased, restricted to a small allow-list seeded by
+   the constant `SUPPORTED_OAUTH_PROVIDERS = {"google", "microsoft", "azure", "okta"}`
+   defined at module level. Unknown values log a `WARNING` and the method returns
+   early without an API call.
+2. `forward` (optional, string) --
+   Prompt text: `"Optional post-link redirect URL (press Enter to skip): "`
+   Context tag: `"self_oauth_link_url:forward"`
+   Validation: if empty, set `forward=None` so `mistapi` omits the query string.
+   If non-empty, basic shape check (must start with `http://` or `https://`); on
+   failure log a `WARNING` and treat as `None`.
+
+No identifier is sourced from `.env` -- the endpoint is account-scoped, and the
+authenticated admin is already determined by `MIST_API_TOKEN` (loaded into the
+`mistapi.APISession` at startup). The optional `MISTHELPER_TEST_OAUTH_PROVIDER`
+environment variable is read only by the `--test` harness to supply a default
+provider value in non-interactive mode (defaulting to `google`).
+
+### Rationale
+
+- The OpenAPI doc lists `provider` as the only required parameter, and `forward`
+  as the only optional one. There are no org / site / device identifiers in this
+  call.
+- Provider validation against an allow-list prevents the operator from sending
+  arbitrary strings to Mist (which would return 404 and waste a rate-limit slot).
+- The optional `forward` follows the existing MistHelper pattern of empty-string
+  -> skip-parameter, established in adjacent menu items.
+
+### Alternatives Considered
+
+- **Prompt for `provider` from a numbered sub-menu** -- rejected for now. With
+  only four common providers the typed string is simpler; if Mist adds many more
+  providers, a future refactor can promote the allow-list to a sub-menu.
+- **Pull `provider` from `.env`** -- rejected for interactive use. The whole
+  point is the operator chooses which provider to link in this run; baking it
+  into `.env` would defeat that. The `--test` harness uses `.env` only as a
+  default for non-interactive sweeps.
+- **Make `forward` required** -- rejected. OpenAPI marks it optional; forcing it
+  on the operator would deviate from the upstream contract.

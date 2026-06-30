@@ -1,93 +1,124 @@
-# Phase 1 Data Model: getOauth2UrlForLinking
+# Phase 1 Data Model: GetOauth2UrlForLinking
 
-**Spec**: [spec.md](./spec.md)
-**Plan**: [plan.md](./plan.md)
-**Research**: [research.md](./research.md)
+**Feature**: 590-mist-get-oauth2-url-for-linking
 **Date**: 2026-06-29
+**Source**: `documentation/api/self/GET_self_oauth_provider.md` (response schema)
 
-## Source
+---
 
-API response schema lifted from `documentation/api/self/GET_self_oauth_provider.md`
-(200 OK body).
+## Entities Returned by the Endpoint
 
-## Entities
+The endpoint returns exactly one entity: a `SelfOauthLinkUrl` record describing the
+authorization URL for a single OAuth2 provider linked (or available to link) against
+the authenticated admin's account. The response is a single JSON object -- not a
+list and not paginated.
 
-The endpoint returns a single two-field JSON object describing the OAuth2 linking
-URL for a specific provider against the currently authenticated admin account.
-MistHelper persists this as one logical entity in one output table.
+### Entity: `SelfOauthLinkUrl`
 
-### Entity 1: `SelfOauthLinkUrl`
+| Field | Type | Source | Required | Description |
+|-------|------|--------|----------|-------------|
+| `provider` | TEXT (string) | request path param (echoed by MistHelper into the row) | yes | OAuth2 provider slug, e.g. `google`, `microsoft`, `azure`, `okta`. Lowercased before persistence. |
+| `authorization_url` | TEXT (string) | response body | yes | Full https URL the operator pastes into a browser to complete provider linkage. Carries a one-time CSRF / state token; do NOT log this value. |
+| `linked` | INTEGER (0/1, boolean) | response body | yes | Stored as 0/1 in SQLite (no native BOOLEAN). `1` = provider already linked to current admin; `0` = not yet linked. |
+| `forward` | TEXT (string, nullable) | request query param (echoed by MistHelper) | no | Post-link redirect URL the operator requested. `NULL` if not supplied. |
+| `fetched_at_utc` | TEXT (ISO-8601 UTC, e.g. `2026-06-29T22:51:22Z`) | MistHelper at flatten time | yes | When the URL was retrieved. Index for staleness checks (URLs are one-shot). |
+| `mist_host` | TEXT (string) | MistHelper at flatten time (from `apisession`) | yes | The Mist Cloud regional host (`api.mist.com`, `api.eu.mist.com`, etc.) the URL was fetched from. Disambiguates rows when an operator runs against multiple Mist clouds from the same workstation. |
 
-One row per (authenticated account, OAuth2 provider).
+**Primary key**: `provider` (single-column natural key -- see PK strategy below).
 
-| Field               | Type    | Source                  | PK? | FK? | Notes |
-|---------------------|---------|-------------------------|-----|-----|-------|
-| `account_email`     | TEXT    | MistHelper getSelf cache | YES | --  | Email of the authenticated admin account. Stable per `.env` token. |
-| `provider`          | TEXT    | User prompt / path param | YES | --  | OAuth2 provider name (e.g. `google`, `azure`). Lower-cased, regex-validated `^[a-z0-9_-]{1,32}$`. |
-| `authorization_url` | TEXT    | API `authorization_url`  | --  | --  | HTTPS URL the operator's browser must visit. Contains a short-lived state nonce; never logged at INFO. |
-| `linked`            | INTEGER | API `linked`             | --  | --  | `1` when the provider is already linked, `0` otherwise. Stored as INTEGER for SQLite portability. |
-| `forward`           | TEXT    | User prompt (optional)   | --  | --  | Forward URL passed as the `forward` query parameter, or empty string when omitted. |
-| `polled_at_utc`     | TEXT    | MistHelper clock         | --  | --  | ISO8601 UTC timestamp of the poll, for audit. Not part of the PK so repeated polls upsert in place. |
+**Foreign keys**: none. The endpoint is account-scoped; there is no `org_id`,
+`site_id`, or `device_id` reference in the payload. Cross-table joins are
+unnecessary.
+
+**Indexes**:
+- `linked` -- filter "all providers already linked" vs "all providers awaiting link".
+- `fetched_at_utc` -- spot stale rows (URL is one-shot, anything older than a few
+  minutes is unusable).
+
+---
 
 ## State Transitions
 
-N/A -- this is a read-only endpoint. The underlying *link* on the Mist side transitions
-through `not linked -> link initiated -> linked` once the operator visits the URL in a
-browser and completes the OAuth2 dance, but MistHelper does not drive or model those
-transitions; it merely captures snapshots. Each poll overwrites the prior snapshot for
-the same `(account_email, provider)` tuple via SQLite `INSERT OR REPLACE`. The
-`linked` column reflects whichever value the API returned at the last poll; the
-`authorization_url` likewise rotates on every poll because the state nonce changes.
+**N/A -- read-only endpoint.** `getOauth2UrlForLinking` is a pure HTTP GET. The
+client (MistHelper) does not transition any server-side state by calling it. The
+`linked` field is observed, not mutated. The companion `POST /api/v1/self/oauth/{provider}`
+endpoint (see `documentation/api/self/POST_self_oauth_provider.md`) is the one that
+mutates the link state, and is out of scope for this spec.
+
+Local row lifecycle inside SQLite:
+
+1. First run for a given `provider` -> `INSERT` new row.
+2. Subsequent runs for the same `provider` -> `INSERT OR REPLACE` -- the newer
+   `authorization_url` + `fetched_at_utc` overwrite the stale row. `linked` may
+   flip from `0` to `1` after the operator completes the browser handshake out of
+   band; MistHelper observes the new value on the next fetch.
+
+---
 
 ## SQLite DDL
 
 ```sql
--- One row per (authenticated account, OAuth2 provider).
-CREATE TABLE IF NOT EXISTS self_oauth_link_urls (
-    account_email      TEXT     NOT NULL,
-    provider           TEXT     NOT NULL,
-    authorization_url  TEXT,
-    linked             INTEGER,
-    forward            TEXT,
-    polled_at_utc      TEXT,
-    PRIMARY KEY (account_email, provider)
+CREATE TABLE IF NOT EXISTS self_oauth_link_url (
+    provider           TEXT NOT NULL,                -- OAuth2 provider slug (PK)
+    authorization_url  TEXT NOT NULL,                -- one-time URL, do not log
+    linked             INTEGER NOT NULL DEFAULT 0,   -- 0 = not linked, 1 = linked
+    forward            TEXT,                         -- optional post-link redirect
+    fetched_at_utc     TEXT NOT NULL,                -- ISO-8601 UTC timestamp
+    mist_host          TEXT NOT NULL,                -- regional Mist Cloud host
+    PRIMARY KEY (provider)
 );
 
-CREATE INDEX IF NOT EXISTS idx_self_oauth_link_provider
-    ON self_oauth_link_urls (provider);
+CREATE INDEX IF NOT EXISTS idx_self_oauth_link_url_linked
+    ON self_oauth_link_url (linked);
 
-CREATE INDEX IF NOT EXISTS idx_self_oauth_link_linked
-    ON self_oauth_link_urls (linked);
+CREATE INDEX IF NOT EXISTS idx_self_oauth_link_url_fetched_at
+    ON self_oauth_link_url (fetched_at_utc);
 ```
 
-`DataExporter.write_with_format_selection()` is responsible for emitting the
-equivalent DDL on first write per backend (SQLite via `CREATE TABLE IF NOT EXISTS`,
-ArangoDB via collection upsert, Redis via key namespacing). MistHelper does not run
-the DDL directly.
+`DataExporter.write_with_format_selection()` creates this table on first run if it
+does not already exist, using the strategy registered in
+`ENDPOINT_PRIMARY_KEY_STRATEGIES`. No manual migration is needed.
+
+---
 
 ## ENDPOINT_PRIMARY_KEY_STRATEGIES Entry
 
-Add the following single entry to the existing `ENDPOINT_PRIMARY_KEY_STRATEGIES`
-dictionary in `MistHelper.py` (around line 3019, single insert in the dict literal,
-no structural change).
+Add to the `ENDPOINT_PRIMARY_KEY_STRATEGIES` dictionary in `MistHelper.py`
+(currently around line 1672):
 
 ```python
-ENDPOINT_PRIMARY_KEY_STRATEGIES = {
-    # ... existing entries ...
-
-    # One row per (authenticated account, OAuth2 provider).
-    # The authorization_url rotates on every call (state nonce), so re-running
-    # the menu item upserts the freshest URL in place rather than appending.
-    'getOauth2UrlForLinking': {                                                     # operationId from OpenAPI
-        'type': 'natural_pk',                                                       # PK is the natural business key
-        'primary_key': ['account_email', 'provider'],                               # one row per account+provider
-        'indexes': ['provider', 'linked'],                                          # fast filter by provider / linked-state
-        'table': 'self_oauth_link_urls',                                            # target SQLite/ArangoDB table
-    },
+'getOauth2UrlForLinking': {                          # Mist API operationId (Self OAuth2)
+    'type': 'natural_pk',                            # provider is the natural business key
+    'primary_key': ['provider'],                     # one row per OAuth2 provider per admin
+    'indexes': ['linked', 'fetched_at_utc'],         # filter by link state / detect stale URLs
+    'table': 'self_oauth_link_url',                  # explicit table name override
+    'description': 'OAuth2 authorization URL for '   # short doc string surfaced in --list-pks
+                   'linking an external IdP to the '
+                   'currently authenticated Mist admin account.'
 }
 ```
 
-`account_email` is injected by MistHelper before the upsert by reading the cached
-`getSelf` payload that is already loaded at startup -- the Mist API does not return
-`account_email` in this endpoint's body but MistHelper always knows which admin token
-it is using.
+Notes:
+
+- The key in the dict is the camel-case `operationId` exactly as returned by the
+  Mist API and used by the `mistapi` SDK. This keeps the dictionary aligned with
+  upstream naming and supports operationId-driven lookups in `DataExporter`.
+- `INSERT OR REPLACE` semantics are derived automatically by `DataExporter` when
+  `type` is `natural_pk` -- no per-endpoint code change required.
+- The `description` field is informational only; consumed by the `--list-pks`
+  introspection helper if present, harmless if not.
+
+---
+
+## Multi-Backend Mapping
+
+| Backend | Artifact | Key |
+|---------|----------|-----|
+| CSV | `data/self_oauth_link_url.csv` | `provider` column |
+| SQLite | table `self_oauth_link_url` in `data/mist_data.db` | PK `(provider)` |
+| ArangoDB | collection `self_oauth_link_url`, `_key` = `provider` | document `_key` |
+| Redis | key `mist:self:oauth:link_url:<provider>` -> JSON-encoded row | string key |
+
+All four backends carry the same six-column shape so downstream consumers (Grafana,
+ad-hoc scripts, the web UI on port 8055) see a consistent record regardless of which
+backend the operator has configured.

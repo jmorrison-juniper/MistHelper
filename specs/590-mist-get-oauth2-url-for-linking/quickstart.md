@@ -1,192 +1,176 @@
-# Phase 1 Quickstart: getOauth2UrlForLinking
+# Phase 1 Quickstart: GetOauth2UrlForLinking (Menu 149)
 
-**Spec**: [spec.md](./spec.md)
-**Plan**: [plan.md](./plan.md)
+**Feature**: 590-mist-get-oauth2-url-for-linking
 **Date**: 2026-06-29
+**Audience**: Developers extending MistHelper; junior NOC engineers verifying the
+new menu item end-to-end.
 
-This quickstart shows a developer how to run, exercise, and validate the new menu
-item on a Windows 11 dev box. Container parity is identical (paths normalize via
-`pathlib.Path` and `os.path.join`).
+---
 
 ## Prerequisites
 
-- Windows 11 with PowerShell 7+ (or any shell inside the Podman container).
-- Python 3.13 or newer on PATH.
-- Repository cloned at the worktree root referenced in `plan.md`.
-- Working `.venv` activated:
+1. **Python 3.13+** active in a venv:
+   ```powershell
+   .venv\Scripts\Activate.ps1
+   python --version   # expect 3.13.x or newer
+   ```
+2. **mistapi 0.59+** installed:
+   ```powershell
+   pip show mistapi | Select-String Version
+   ```
+3. **`.env` populated** with the operator's Mist credentials (file is git-ignored).
 
-  ```powershell
-  .venv\Scripts\Activate.ps1
-  ```
+---
 
-- `mistapi` 0.59+ installed:
+## Required .env Variables
 
-  ```powershell
-  python -m pip install --upgrade mistapi python-dotenv
-  ```
+| Variable | Required | Example | Purpose |
+|----------|----------|---------|---------|
+| `MIST_HOST` | yes | `api.mist.com` | Regional Mist Cloud host. Passed to `mistapi.APISession`. |
+| `MIST_API_TOKEN` | yes | `abcdef...` | API token for the admin whose account will be link-fetched. Account-scoped endpoint -- no `org_id` needed. |
+| `MISTHELPER_TEST_OAUTH_PROVIDER` | no | `google` | Default provider slug used only by `--test` sweeps (non-interactive). Defaults to `google` if unset. |
+| `MIST_PAGE_LIMIT` | no | `1000` | Standard rate-limit / page-size tuning (irrelevant for this endpoint -- single object response -- but honoured for consistency). |
 
-## Required `.env` variables
+Never commit `.env`. The repo template lives at `deploy/.env.example`.
 
-Create or update `.env` in the repository root (git-ignored). Never commit this file.
+---
 
-```ini
-MIST_HOST=api.mist.com
-MIST_API_TOKEN=<your-mist-api-token>
-MIST_OAUTH_PROVIDER=google        # optional default for the provider prompt
-```
+## Expected Output (data/)
 
-Loading is handled by the existing `python-dotenv` bootstrap in `MistHelper.py`.
-The API token is consumed by `mistapi.APISession` and is never written to logs or
-stdout. The authenticated account's email is read from the in-process `getSelf`
-cache; no additional environment variable is required.
+| File / Table | Backend | Path / Name |
+|--------------|---------|-------------|
+| `self_oauth_link_url.csv` | CSV | `data/self_oauth_link_url.csv` |
+| `self_oauth_link_url` | SQLite | table inside `data/mist_data.db` |
+| `self_oauth_link_url` | ArangoDB | collection in the polyglot store |
+| `mist:self:oauth:link_url:<provider>` | Redis | string key, JSON value |
 
-## Expected output filenames
+Exactly one row is produced per invocation. Re-running with the same `provider`
+upserts the row (overwrites `authorization_url`, refreshes `fetched_at_utc`,
+preserves the schema).
 
-Files land under `data/` (the directory is enforced at runtime; create it with
-`chmod -R 777 data/` on Linux first to satisfy the non-root container user).
+---
 
-- CSV: `data/self_oauth_link_<provider>.csv`
-  (e.g. `data/self_oauth_link_google.csv`)
-- SQLite: `data/mist_data.db`, table `self_oauth_link_urls`
-- ArangoDB (when active): collection `self_oauth_link_urls`
-
-## Example invocation
+## Example Invocation -- Interactive
 
 ```powershell
+# from the repo root
+.venv\Scripts\Activate.ps1
 python MistHelper.py
 ```
 
-Interactive transcript (proposed menu number 58 -- final number confirmed at task
-time):
+Menu navigation:
 
 ```
-Select menu option: 58
-OAuth2 provider name (e.g., google, azure) [press Enter for .env default]: google
-Forward URL after authorization (optional, press Enter to skip):
-[INFO] Prompting for OAuth2 provider name
-[INFO] Prompting for forward URL
-[INFO] Fetching OAuth2 link URL for provider google
-[DEBUG] OAuth2 link response: linked=False url_len=312
-[INFO] Flattening OAuth2 link payload for provider google
-[DEBUG] Flattened 1 OAuth2 link row
-[INFO] Writing OAuth2 link URL via DataExporter
+Select operation: 149
+[Self / OAuth2 -- Get link URL]
+OAuth2 provider slug (e.g. google, microsoft, azure, okta): google
+Optional post-link redirect URL (press Enter to skip): https://localhost:8055/post-link
 ```
 
-Non-interactive smoke test (uses default provider from `.env`):
+Expected log lines (ASCII, no Unicode):
+
+```
+INFO  Fetching OAuth2 link URL for provider google
+DEBUG OAuth2 link URL fetched: linked=False, url_length=312
+INFO  Flattening 1 OAuth2 link URL record
+DEBUG Flatten complete: 1 row
+INFO  Writing 1 row to data/self_oauth_link_url.csv via DataExporter
+DEBUG DataExporter write_with_format_selection returned 1 row written
+```
+
+Note that the `authorization_url` value itself is never logged -- only its length
+and the `linked` flag, per Principle V (Observability).
+
+---
+
+## Example Invocation -- Direct CLI Flag
 
 ```powershell
-python MistHelper.py --menu 58
+python MistHelper.py --menu 149
 ```
 
-Pipe-friendly variant (forces a provider on stdin):
+In non-interactive (`--test`) mode the same menu is invoked with the `provider`
+sourced from `MISTHELPER_TEST_OAUTH_PROVIDER` (default `google`) and `forward`
+left unset (`None`).
 
-```powershell
-"google`n`n" | python MistHelper.py --menu 58
-```
+---
 
-## Skeleton of the new method
+## Method Outline (for implementers)
 
-The full implementation is generated by `/speckit.implement`; this skeleton documents
-the expected shape so that inline comment and action logging coverage can be reviewed
-before the code is written. Every executable line carries a `#` comment
-(Constitution VI), and every meaningful action is bracketed by `logging.info()` /
-`logging.debug()` calls (Constitution VII).
+The new method lives on the new `SelfOauthExportUtils` class in `MistHelper.py`:
 
 ```python
-class SelfExportUtils:                                                              # existing class, no new wrapper
+class SelfOauthExportUtils:                                    # New class for "Self OAuth2" tag operations
+    def __init__(self, apisession, data_exporter):             # Accept the session and exporter from the main app
+        self.apisession = apisession                           # Mist API session (token + host)
+        self.data_exporter = data_exporter                     # Shared multi-backend writer
 
-    @staticmethod
-    def export_self_oauth_link_url(provider=None, forward=None):                    # menu 58 entrypoint
-        logging.info("Prompting for OAuth2 provider name")                          # before-prompt action log
-        provider = provider or safe_input(                                          # honor caller override else prompt user
-            "OAuth2 provider name (e.g., google, azure): ",                         # human-readable prompt text
-            context="self_oauth_link:provider",                                     # SSH/container EOF context tag
-            default=os.environ.get("MIST_OAUTH_PROVIDER", ""),                      # fall back to .env default
-        )
-        provider = (provider or "").strip().lower()                                 # normalize for the regex check
-        if not re.fullmatch(r"[a-z0-9_-]{1,32}", provider):                         # validate before any API call
-            logging.warning("Invalid OAuth2 provider %r -- aborting menu 58",       # log validation failure (no traceback)
-                            provider)
-            return                                                                  # early return per safety-first principle
-
-        logging.info("Prompting for forward URL")                                   # before-prompt action log
-        forward = forward if forward is not None else safe_input(                   # accept None override; else prompt
-            "Forward URL after authorization (optional, press Enter to skip): ",    # explicit optional cue
-            context="self_oauth_link:forward",                                      # EOF context tag
-            default="",                                                             # default is no forward
-        )
-        forward = (forward or "").strip()                                           # normalize whitespace
-        if forward and not forward.startswith("https://"):                          # weak client-side validation
-            logging.warning("forward must start with https:// -- dropping value")   # warn but continue
-            forward = ""                                                            # drop bad value, proceed without it
-
-        logging.info("Fetching OAuth2 link URL for provider %s", provider)          # before-API-call action log
-        response = mistapi.api.v1.self.oauth.getOauth2UrlForLinking(                # actual SDK call (URL-derived module)
-            apisession, provider, forward=forward or None,                          # omit query param when blank
-        )
-        body = response.data or {}                                                  # normalize None to empty dict
-        authorization_url = body.get("authorization_url", "")                       # extract URL field (may be empty on error)
-        linked_flag = bool(body.get("linked"))                                      # coerce to a real Python bool
-        logging.debug("OAuth2 link response: linked=%s url_len=%d",                 # after-API-call shape summary
-                      linked_flag, len(authorization_url))
-
-        logging.info("Flattening OAuth2 link payload for provider %s", provider)    # before-flatten action log
-        account_email = ConfigUtils.cached_self_email()                             # account_email PK from getSelf cache
-        row = {                                                                     # one flat dict matches the table DDL
-            "account_email": account_email,                                         # PK column 1
-            "provider": provider,                                                   # PK column 2
-            "authorization_url": authorization_url,                                 # full URL (rotates every call)
-            "linked": 1 if linked_flag else 0,                                      # INTEGER for SQLite portability
-            "forward": forward,                                                     # what we sent (may be empty)
-            "polled_at_utc": TimeUtils.utc_iso_now(),                               # poll timestamp for audit
-        }
-        logging.debug("Flattened 1 OAuth2 link row")                                # after-flatten count log
-
-        logging.info("Writing OAuth2 link URL via DataExporter")                    # before-export action log
-        DataExporter.write_with_format_selection(                                   # multi-backend write
-            [row],                                                                  # list-of-rows interface
-            filename=f"self_oauth_link_{provider}",                                 # human-friendly stem per provider
-            api_function_name="getOauth2UrlForLinking",                             # PK strategy lookup key
-        )
+    def export_self_oauth_link_url(self, provider=None, forward=None):  # Menu 149 entry point
+        provider = self._prompt_provider(provider)             # safe_input wrapper, validates against allow-list
+        if provider is None:                                   # Unknown provider -> early return after WARNING
+            return                                             # No API call wasted on a guaranteed 404
+        forward = self._prompt_forward(forward)                # safe_input wrapper, returns None on empty input
+        logging.info("Fetching OAuth2 link URL for provider %s", provider)  # Action log: before API call
+        response = mistapi.api.v1.self.oauth2.getOauth2UrlForLinking(       # Sole permitted Mist interface
+            self.apisession, provider, forward=forward)
+        logging.debug("OAuth2 link URL fetched: linked=%s, url_length=%d",  # Action log: after API call
+                      response.data.get("linked"),
+                      len(response.data.get("authorization_url") or ""))
+        row = self._flatten(provider, forward, response.data)  # Build the six-column row
+        self.data_exporter.write_with_format_selection(        # Multi-backend write
+            data=[row],
+            filename="self_oauth_link_url.csv",
+            api_function_name="getOauth2UrlForLinking")
 ```
 
-Helper `cached_self_email` is an existing `ConfigUtils` accessor (or, if absent at
-implementation time, a new private staticmethod on `ConfigUtils` of <=10 lines that
-reads the cached `getSelf` payload). It follows the same comment- and log-density
-rules and stays under 25 lines -- no standalone wrapper functions.
+Total executable lines in the public method: 8 (well under the 25-line cap). The
+two helpers `_prompt_provider` and `_prompt_forward` are themselves <=10 lines
+each; the `_flatten` helper is <=8 lines. All three live on the same class, no
+wrappers.
 
-## Quality gates (all must pass before commit)
+Every executable line above has been illustrated with an inline comment, matching
+the Principle VI requirement that NEW code carry comments on every line.
 
-Run these from the repository root with the venv active:
+---
+
+## Quality Gates (run before every commit)
 
 ```powershell
-python -m py_compile MistHelper.py        # 1. Syntax check (zero output = pass)
-python -m ruff check MistHelper.py        # 2. Lint (zero violations = pass)
-python -m black --check MistHelper.py     # 3. Format (zero diffs = pass; rerun without --check to auto-fix)
-python MistHelper.py --test               # 4. Functional smoke test (menu 58 included)
+# Syntax
+python -m py_compile MistHelper.py
+
+# Lint
+python -m ruff check MistHelper.py
+
+# Format
+python -m black --check MistHelper.py
+
+# Functional sweep (uses MISTHELPER_TEST_OAUTH_PROVIDER from .env)
+python MistHelper.py --test
 ```
 
-The `--test` sweep automatically skips heavy/destructive operations (14, 18, 63-65,
-90-100). Menu 58 sits inside the standard sweep range, so a green run confirms the
-new item works end to end against the account configured in `.env`.
+All four must pass clean. If `black --check` fails, run `python -m black
+MistHelper.py` to auto-fix and rerun the gates.
 
-## Full deployment pipeline (Constitution Principle IV)
+---
 
-After all four quality gates pass:
+## Troubleshooting
+
+| Symptom | Likely Cause | Fix |
+|---------|--------------|-----|
+| `PermissionError: [Errno 13] Permission denied: '/app/data/...'` | Container `data/` dir not writable | `chmod -R 777 data/` before first container run |
+| 404 from Mist | Unknown provider slug | Confirm `provider` is one of `google`, `microsoft`, `azure`, `okta` |
+| 401 from Mist | `MIST_API_TOKEN` expired or absent | Regenerate token at `https://manage.mist.com/admin/?#!/myaccount/api-tokens` |
+| Traceback on EOF in SSH session | `safe_input` not used | Confirm every prompt routes through `safe_input(..., context=...)` |
+| Same `authorization_url` appears multiple times in CSV | PK strategy mis-registered | Verify entry in `ENDPOINT_PRIMARY_KEY_STRATEGIES` is `natural_pk` on `provider` |
+
+---
+
+## Sanity Test (no real Mist call)
 
 ```powershell
-git add MistHelper.py README.md CHANGELOG.md
-git commit -m "version YY.MM.DD.HH.MM - add menu 58 getOauth2UrlForLinking"
-git push origin main
-gh run list --workflow=container-build.yml --limit 1
-gh run watch <run-id>
-podman pull ghcr.io/jmorrison-juniper/misthelper:latest
-podman stop misthelper ; podman rm misthelper
-podman run -d --name misthelper -p 2200:2200 -p 8055:8055 `
-  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" `
-  ghcr.io/jmorrison-juniper/misthelper:latest
-podman ps
+python -c "from mistapi.api.v1.self import oauth2; print(oauth2.getOauth2UrlForLinking.__doc__)"
 ```
 
-The pipeline must not be skipped. The container in production reflects every commit
-on `main`.
+Should print the SDK docstring describing path / query parameters. If `ImportError`,
+the installed `mistapi` is below 0.59 -- upgrade with `pip install -U mistapi`.
