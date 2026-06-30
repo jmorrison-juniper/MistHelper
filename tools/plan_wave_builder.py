@@ -121,8 +121,7 @@ def main() -> int:
     wave_size = int(sys.argv[1]) if len(sys.argv) > 1 else 25
     con = sqlite3.connect(DB)
     rows = con.execute(
-        "SELECT spec_num, spec_dir, operation_id FROM plan_runs "
-        "WHERE status='pending' ORDER BY spec_num LIMIT ?",
+        "SELECT spec_num, spec_dir, operation_id FROM plan_runs " "WHERE status='pending' ORDER BY spec_num LIMIT ?",
         (wave_size,),
     ).fetchall()
     manifest = []
@@ -144,14 +143,16 @@ def main() -> int:
         )
         prompt_file = FILES / f"prompt_{spec_num}.txt"
         prompt_file.write_text(prompt, encoding="utf-8")
-        manifest.append({
-            "spec_num": spec_num,
-            "spec_dir": spec_dir,
-            "operation_id": op,
-            "agent_id": f"plan-{spec_num}-{op_to_snake(op)[:30]}",
-            "prompt_file": str(prompt_file),
-            "prompt_chars": len(prompt),
-        })
+        manifest.append(
+            {
+                "spec_num": spec_num,
+                "spec_dir": spec_dir,
+                "operation_id": op,
+                "agent_id": f"plan-{spec_num}-{op_to_snake(op)[:30]}",
+                "prompt_file": str(prompt_file),
+                "prompt_chars": len(prompt),
+            }
+        )
     (FILES / "wave_manifest.json").write_text(
         json.dumps(manifest, indent=2),
         encoding="utf-8",
