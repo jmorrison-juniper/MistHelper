@@ -44,6 +44,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Changed
 
+- **Address audit Source column now names Google explicitly (menu 195)**: the
+  Tier-3 web authority is Google Places autocomplete, accessed by driving the Mist
+  portal's address box, but the Source column labelled it only `Mist UI` -- which
+  does not make it obvious that Google deduced the suggested address. It now reads
+  `Google (Mist UI)` so it is unmistakable when Google found, filled in, or
+  confirmed an address (the Issue Type column still says *what* changed:
+  `MISSING_SUITE`/`MISSING_NUMBER`/`WRONG_STREET` mean Google corrected a blank,
+  `ADDRESS_MATCH` means Google confirmed the existing value).
+
 - **Address audit diagnostic logging no longer prints to the terminal (menu
   195)**: the audit's `logging.*` calls (e.g. the Nominatim "no result" warnings)
   were written to both `data/script.log` AND the console, where they interleaved

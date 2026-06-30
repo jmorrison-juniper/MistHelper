@@ -360,6 +360,11 @@ class TestSourceLabel:
         rr = ResolverResult(query="q", canonical_address="X", source="nominatim")
         assert AddressAuditEngine._source_label(rr) == "Nominatim"
 
+    def test_mist_ui_label_names_google(self):
+        """A Tier-3 result is labelled to make the Google authority explicit."""
+        rr = ResolverResult(query="q", canonical_address="X #5", source="mist_ui")  # Tier-3 (Google-via-Mist).
+        assert AddressAuditEngine._source_label(rr) == "Google (Mist UI)"  # Label must name Google, not just "Mist UI".
+
     def test_no_result_label(self):
         """A result with no canonical address is labelled '-'."""
         rr = ResolverResult(query="q", canonical_address=None, source="internal")
