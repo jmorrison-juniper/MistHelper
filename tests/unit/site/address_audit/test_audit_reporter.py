@@ -66,3 +66,25 @@ class TestSave:
         with open(path, encoding="utf-8") as handle:
             content = handle.read()
         assert "Y" * 80 in content
+
+
+class TestSaveCorrections:
+    """AddressAuditReporter.save_corrections before/after report."""
+
+    def test_writes_correction_report(self, tmp_path):
+        """save_corrections() writes a timestamped before/after CSV with the 6-column header."""
+        from src.site.address_audit.models import CorrectionOutcome
+
+        outcomes = [
+            CorrectionOutcome("Store 181", "s1", "100 Main St", "100 Main St Suite 5", "pushed"),
+            CorrectionOutcome("Store 7", "s2", "200 Oak Ave", "200 Oak Ave #3", "skipped"),
+            CorrectionOutcome("Store 9", "s3", "300 Pine Rd", "300 Pine Rd Unit 2", "failed", "HTTP 403"),
+        ]
+        path = AddressAuditReporter().save_corrections(outcomes, output_dir=str(tmp_path))
+        assert os.path.isfile(path)
+        assert re.search(r"address_corrections_\d{8}_\d{6}\.csv$", path)
+        with open(path, encoding="utf-8") as handle:
+            rows = list(csv.reader(handle))
+        assert rows[0] == ["Site Name", "Site ID", "Before Address", "After Address", "Action", "Error"]
+        assert rows[1] == ["Store 181", "s1", "100 Main St", "100 Main St Suite 5", "pushed", ""]
+        assert rows[3][4] == "failed" and rows[3][5] == "HTTP 403"

@@ -111,3 +111,20 @@ class UIGeocoderConfig:
     per_lookup_timeout_s: float = 20.0  # Hard per-lookup ceiling (UI_GEOCODE_TIMEOUT_SECONDS).
     max_lookups: int = 50  # Per-run cap on Tier-3 lookups (UI_GEOCODE_MAX_LOOKUPS).
     politeness_delay_s: float = 1.0  # >=1 req/sec politeness toward Google Places.
+
+
+@dataclass
+class CorrectionOutcome:
+    """Result of an optional write-back of one corrected address to a Mist site.
+
+    Produced by ``AddressCorrector`` for every site the operator reviewed, whether
+    the corrected address was pushed, skipped, or failed. Drives the optional
+    before/after correction report.
+    """
+
+    site_name: str  # Mist site display name (or "-").
+    site_id: str  # Mist site UUID the correction targets.
+    before: str  # Current Mist address string before the change.
+    after: str  # Corrected address the operator reviewed.
+    action: str  # One of: pushed | skipped | failed.
+    error: str = ""  # Failure detail when action == "failed" (else "").

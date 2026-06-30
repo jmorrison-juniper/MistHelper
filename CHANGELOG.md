@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Added
+
+- **Address audit can now push corrected addresses back to Mist (menu 195)**: the
+  audit was read-only; you reviewed the comparison and fixed addresses by hand.
+  After saving the comparison report you are now offered an **optional write-back**.
+  It is gated twice for safety: a single batch opt-in (`[y/N]`, default No), then a
+  **per-site `[y/N]` confirmation** that shows the site's address BEFORE (current
+  Mist value) and AFTER (the suggested correction) side by side. Only the sites you
+  say yes to are written. The write is minimal and safe -- it fetches the full Mist
+  site record, replaces **only** the `address` field, and PUTs the record back, so
+  `latlng`, `timezone`, `country_code`, sitegroup and template IDs are all
+  preserved. Each write is fail-soft: a read-only token (HTTP 403) or any API error
+  is recorded as a failed outcome and never aborts the batch. Afterwards you are
+  prompted to save a **before/after correction report**
+  (`data/address_corrections_<timestamp>.csv`) listing every reviewed site and
+  whether it was pushed, skipped, or failed. Only correctable rows are offered
+  (MISSING_SUITE, MISSING_NUMBER, WRONG_STREET, CSV_BETTER, AMBIGUOUS); matches and
+  Mist-better rows are never touched.
+
 ### Changed
 
 - **Address audit now flags incomplete Mist addresses (missing house number)
@@ -63,6 +82,17 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   web to deduce the true, shippable address.
 
 ### Fixed
+
+- **Address audit MISSING_NUMBER never fired on real data (menu 195)**: the
+  missing-house-number check (added in the prior release) tested the whole Mist
+  address string for any digit, but Mist stores the address as one formatted
+  string ending in the ZIP (`S Federal Hwy, Fort Pierce, FL 34982, USA`) -- so the
+  ZIP's digits made every address look like it already had a house number, and a
+  number-less street was still reported ADDRESS_MATCH. The check now inspects only
+  the leading street segment (before the first comma) for a leading house number,
+  so `S Federal Hwy, ...` is correctly flagged MISSING_NUMBER against the
+  web-resolved `2315 S Federal Hwy`. (The unit test was strengthened to use full
+  Mist-style strings so it would have caught this.)
 
 - **Address audit suggested address glued the street/suite to the city (menu
   195)**: Google's autocomplete sometimes returned the street fused to the city

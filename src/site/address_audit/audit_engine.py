@@ -3,8 +3,10 @@
 ``AddressAuditEngine`` is the single menu entry point. It loads the customer CSV,
 matches each row to a Mist site (serial golden key, fuzzy fallback), enriches with
 SNMP location, resolves/validates the address through the free tiers, classifies
-each row into one of eight states, renders the comparison table, and offers to
-save the results to CSV. It is READ-ONLY: no Mist site record is ever written.
+each row into one of nine states, renders the comparison table, and offers to save
+the results to CSV. The audit itself is read-only; afterwards the operator may
+opt in to push corrected addresses back to Mist via ``AddressCorrector``, gated by
+a batch confirmation and a per-site ``[y/N]`` before/after review.
 
 The orchestration is split into small private helpers so every method stays
 within the Five-Item Rule. The classification helpers (``_classify`` and its
@@ -22,6 +24,7 @@ from typing import Any  # Loose typing for Mist API records.
 
 import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
 
+from src.site.address_audit.address_corrector import AddressCorrector  # Optional Mist write-back.
 from src.site.address_audit.address_resolver import AddressResolver  # Tiered resolver.
 from src.site.address_audit.audit_reporter import AddressAuditReporter  # CSV writer.
 from src.site.address_audit.comparison_display import ComparisonTableRenderer  # Table + prompt.
@@ -104,7 +107,7 @@ class AddressAuditEngine:
         business = self._resolve_business_name()  # Business-name prefix (env or prompt).
         results = self._audit_rows(apisession, org_id, rows, business, ui_geocode)  # Core pipeline.
         self._renderer.render(results)  # Render the comparison table.
-        self._finish(results)  # Post-table save/quit prompt.
+        self._finish(results, apisession)  # Post-table save/quit prompt + optional write-back.
 
     def _audit_rows(
         self,
@@ -371,13 +374,15 @@ class AddressAuditEngine:
     def _missing_house_number(mist_street: str, candidate: str) -> bool:
         """Return True when Mist's street lacks a house number that the candidate supplies.
 
-        A Mist record like ``S Federal Hwy`` with no street number is an
-        incomplete shipping address; surfacing it (instead of calling it a match)
-        lets the operator add the number the web resolved.
+        Both inputs are full formatted address strings ("STREET, CITY, ST ZIP"),
+        so we inspect only the leading street segment (before the first comma) and
+        require a *leading* digit there. This avoids mistaking a trailing ZIP for a
+        house number -- e.g. Mist ``S Federal Hwy, Fort Pierce, FL 34982`` has no
+        house number even though the ZIP contains digits.
         """
-        mist_has = bool(re.search(r"\d", mist_street))  # Mist street carries any number at all.
-        cand_has = bool(re.match(r"\s*\d", candidate))  # Candidate leads with a house number.
-        return cand_has and not mist_has  # Missing only when Mist has no number but the candidate does.
+        mist_lead = re.match(r"\s*\d", mist_street.split(",", 1)[0])  # Leading digit of the Mist street.
+        cand_lead = re.match(r"\s*\d", candidate.split(",", 1)[0])  # Leading digit of the candidate street.
+        return bool(cand_lead) and not bool(mist_lead)  # Missing only when the candidate has one and Mist does not.
 
     def _classify_internal(self, mist_addr: dict[str, Any], csv_addr: dict[str, Any], snmp_loc: str | None) -> str:
         """Classify on internal CSV/SNMP signals alone when no external result exists."""
@@ -500,14 +505,52 @@ class AddressAuditEngine:
             return "Internal+OSM"  # Internal suite, street externally confirmed by OpenStreetMap.
         return base  # Mapped label or placeholder.
 
-    def _finish(self, results: list[AuditResult]) -> None:
-        """Run the post-table prompt and save the CSV when the operator chooses to."""
+    def _finish(self, results: list[AuditResult], apisession: Any) -> None:
+        """Save the report (operator's choice), then optionally write corrections back to Mist."""
         action = self._renderer.prompt_post_table(results)  # Ask save vs quit.
-        if action == "save":  # Operator chose to persist the report.
-            path = self._reporter.save(results)  # Write the timestamped CSV.
-            print(f"Saved to {path}")  # Confirm the written path.
+        if action != "save":  # Operator quit without saving.
+            print("No file saved. Exiting address audit.")  # Quit branch confirmation.
+            return  # No write-back when nothing was saved.
+        path = self._reporter.save(results)  # Write the timestamped comparison CSV.
+        print(f"Saved to {path}")  # Confirm the written path.
+        self._offer_write_back(results, apisession)  # Offer to push corrections to Mist.
+
+    def _offer_write_back(self, results: list[AuditResult], apisession: Any) -> None:
+        """Gate, then run, the optional per-site address write-back to Mist."""
+        corrector = self._make_corrector(apisession)  # Build the write-back collaborator.
+        targets = corrector.correctable(results)  # Rows with a pushable correction.
+        if not targets:  # Nothing to correct.
+            logging.debug("No correctable rows; skipping write-back offer")  # Trace the no-op.
+            return  # Audit ends here.
+        prompt = f"\nPush corrected addresses back to Mist for up to {len(targets)} site(s)? [y/N]: "
+        choice = InputUtils.safe_input(prompt, context="address_audit_writeback_gate").strip().lower()
+        if choice not in ("y", "yes"):  # Operator declined the whole batch.
+            print("Skipped write-back. No Mist changes made.")  # Confirm no writes.
+            return  # Audit ends here.
+        outcomes = corrector.review_and_apply(results)  # Per-site review + push.
+        self._maybe_save_corrections(outcomes)  # Offer the before/after report.
+
+    def _maybe_save_corrections(self, outcomes: list[Any]) -> None:
+        """Offer to save a before/after report of the reviewed sites."""
+        if not outcomes:  # No sites were reviewed.
+            return  # Nothing to report.
+        choice = (
+            InputUtils.safe_input(
+                "\nSave a before/after correction report to data/? [y/N]: ", context="address_audit_writeback_report"
+            )
+            .strip()
+            .lower()
+        )
+        if choice not in ("y", "yes"):  # Operator declined the report.
+            print("No correction report saved.")  # Confirm the skip.
             return  # Done.
-        print("No file saved. Exiting address audit.")  # Quit branch confirmation.
+        path = self._reporter.save_corrections(outcomes)  # Write the before/after CSV.
+        print(f"Saved correction report to {path}")  # Confirm the written path.
+
+    @staticmethod
+    def _make_corrector(apisession: Any) -> AddressCorrector:
+        """Construct the write-back collaborator (separated for test injection)."""
+        return AddressCorrector(apisession)  # Real Mist-backed corrector.
 
     def _progress(self, items: list[Any], total: int) -> Any:
         """Wrap an iterable in a tqdm progress bar when interactive and available."""
