@@ -149,6 +149,77 @@ class TestHelpers:
         assert MistUIGeocoder.spawn_debuggable_browser() is None
 
 
+class TestStaleGuard:
+    """The autocomplete lag race: never read the previous query's suggestion."""
+
+    def test_house_number_extracts_first_digits(self):
+        """The first digit-run of the query is the house-number anchor."""
+        assert MistUIGeocoder._house_number("T-Mobile 931 US Highway 331") == "931"
+        assert MistUIGeocoder._house_number("No digits here") == ""
+
+    def test_matches_house_number_is_glue_safe(self):
+        """House-number match works even when the name is glued to the number."""
+        assert MistUIGeocoder._matches_house_number("T-Mobile931 US Highway 331", "931") is True
+        assert MistUIGeocoder._matches_house_number("T-Mobile7535 Kendall Dr", "931") is False
+
+    def test_read_fresh_returns_when_top_matches(self):
+        """A top row containing the query's house number is returned immediately."""
+        geo = MistUIGeocoder()
+        page = MagicMock()
+        item = MagicMock()
+        item.inner_text.return_value = "T-Mobile931 US Highway 331 Ste A2, DeFuniak Springs, FL"
+        page.query_selector_all.return_value = [item]
+        out = geo._read_fresh_suggestions(page, "931", 5000)
+        assert out and out[0].startswith("T-Mobile931")
+
+    def test_read_fresh_skips_stale_then_returns(self):
+        """A stale top row (wrong house number) is skipped until the fresh one appears."""
+        geo = MistUIGeocoder()
+        page = MagicMock()
+        stale = MagicMock()
+        stale.inner_text.return_value = "T-Mobile7535 North Kendall Drive #1515b, Miami, FL"
+        fresh = MagicMock()
+        fresh.inner_text.return_value = "T-Mobile1701 Ohio Ave N, Live Oak, FL"
+        page.query_selector_all.side_effect = [[stale], [fresh]]  # First poll stale, second fresh.
+        out = geo._read_fresh_suggestions(page, "1701", 5000)
+        assert out[0].startswith("T-Mobile1701")
+        assert page.query_selector_all.call_count == 2
+
+    def test_read_fresh_times_out_to_empty(self):
+        """Persistent stale (never the right house number) fails soft to [] (NO_RESULT)."""
+        geo = MistUIGeocoder()
+        page = MagicMock()
+        stale = MagicMock()
+        stale.inner_text.return_value = "T-Mobile7535 North Kendall Drive, Miami, FL"
+        page.query_selector_all.return_value = [stale]
+        assert geo._read_fresh_suggestions(page, "9999", 0) == []  # Zero budget -> immediate timeout.
+
+
+class TestCleanAddress:
+    """The captured Google suggestion is reduced to a clean shippable street line."""
+
+    def test_strips_business_prefix_and_country(self):
+        """A glued business name and trailing ', USA' are removed."""
+        raw = "T-Mobile931 US Highway 331 Ste A2, DeFuniak Springs, FL 32435, USA"
+        assert MistUIGeocoder._clean_address(raw) == "931 US Highway 331 Ste A2, DeFuniak Springs, FL 32435"
+
+    def test_keeps_plain_address_unchanged(self):
+        """An already-clean address is returned as-is."""
+        assert MistUIGeocoder._clean_address("123 Main St Suite 4") == "123 Main St Suite 4"
+
+    def test_keeps_numberless_address(self):
+        """A place with no house number is preserved (cannot safely split)."""
+        assert MistUIGeocoder._clean_address("Brandon Town Center Mall, Brandon, FL") == (
+            "Brandon Town Center Mall, Brandon, FL"
+        )
+
+    def test_build_result_cleans_top_suggestion(self):
+        """_build_result returns the cleaned address, not the raw glued text."""
+        raw = "T-Mobile7535 North Kendall Drive #1515b, Miami, FL 33156, USA"
+        result = MistUIGeocoder()._build_result("q", [raw])
+        assert result.canonical_address == "7535 North Kendall Drive #1515b, Miami, FL 33156"
+
+
 class TestAutoConnect:
     """The default 'auto' mode: take over an existing browser, else spawn one."""
 
