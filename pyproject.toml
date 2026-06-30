@@ -118,6 +118,10 @@ known-first-party = ["src"]
 # cleaned up MistHelper.py). Only the codemod synthetic input fixture
 # retains G violations on purpose -- they are the test material.
 "tests/fixtures/issue_429_codemod_synthetic_input.py" = ["G"]
+# plan_wave_builder.py embeds a literal multi-line prompt template that is
+# rendered verbatim into subagent task payloads; reflowing the lines would
+# change the prompt content sent to the model.
+"tools/plan_wave_builder.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.13"

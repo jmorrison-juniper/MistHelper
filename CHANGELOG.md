@@ -7,6 +7,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+## [Unreleased]
+
+### Mist API Coverage Audit
+
+- **OpenAPI GET endpoint catalog + diff**: Added `tools/openapi_endpoint_catalog.py`
+  which parses `documentation/mist-api-openapi31json.json`, emits
+  `documentation/MIST_API_GET_ENDPOINTS.md` (508 GET ops across 190 tags) and
+  `documentation/MIST_API_MISSING_ENDPOINTS.md` (408 GETs not yet wired into
+  MistHelper.py). The tool is idempotent and runs `ruff` / `black` clean.
+- **SpecKit feature scaffolds (408 specs)**: Generated `specs/500-mist-*` through
+  `specs/907-mist-*` -- one feature dir per missing GET endpoint, each containing a
+  `spec.md` parameterized from the OpenAPI metadata (operationId, path, tag,
+  required/optional params, mistapi SDK module) and pre-checked against the
+  Constitution (Inline Comments VI, Action Logging VII, 5-Item Rule, `safe_input`,
+  `DataExporter`, `ENDPOINT_PRIMARY_KEY_STRATEGIES`, ASCII-only logging, README +
+  CHANGELOG updates). Each spec is its own SpecKit workflow ready for
+  `speckit.plan` / `speckit.tasks` / `speckit.implement`.
+
 ### Added
 
 - **Address audit can now push corrected addresses back to Mist (menu 195)**: the
