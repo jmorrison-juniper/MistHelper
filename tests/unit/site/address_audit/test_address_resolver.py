@@ -176,6 +176,50 @@ class TestTier3Gating:
         ui.geocode_via_ui.assert_called_once()
         assert result.source == "mist_ui"
 
+    def test_ui_wins_over_internal_and_osm(self, tmp_path, monkeypatch):
+        """Tier 3 (web authority) overrides internal + OSM when Mist lacks a suite."""
+        _FakeValidator.count = 0
+        _FakeValidator.valid = True  # OSM also validates -> proves Tier 3 still wins.
+        monkeypatch.setattr(resolver_mod, "NominatimValidator", _FakeValidator)
+        monkeypatch.setattr(resolver_mod.time, "sleep", lambda *_: None)
+        ui = MagicMock()
+        ui.geocode_via_ui.return_value = ResolverResult(
+            query="q", canonical_address="100 Main St #200, Town, FL 33000", source="mist_ui", confidence=0.9
+        )
+        resolver = AddressResolver(db_path=_db(tmp_path), ui_geocoder=ui)
+        csv = {"address": "100 Main St Unit 200", "city": "Town", "state": "FL", "zip": "33000"}  # Internal suite.
+        result = resolver.resolve(ResolveCandidates(mist_address=_NO_SUITE, csv_address=csv, ui_geocode=True))
+        ui.geocode_via_ui.assert_called_once()
+        assert result.source == "mist_ui"  # Web authority wins over the internal suggestion.
+        assert result.canonical_address == "100 Main St #200, Town, FL 33000"
+        assert result.street_validated is True  # OSM cross-checked the street.
+
+    def test_ui_skipped_when_mist_has_suite(self, tmp_path, monkeypatch):
+        """No Tier-3 lookup when Mist already carries a suite (nothing to discover)."""
+        _FakeValidator.count = 0
+        _FakeValidator.valid = False
+        monkeypatch.setattr(resolver_mod, "NominatimValidator", _FakeValidator)
+        monkeypatch.setattr(resolver_mod.time, "sleep", lambda *_: None)
+        ui = MagicMock()
+        resolver = AddressResolver(db_path=_db(tmp_path), ui_geocoder=ui)
+        resolver.resolve(ResolveCandidates(mist_address=_WITH_SUITE, csv_address=_WITH_SUITE, ui_geocode=True))
+        ui.geocode_via_ui.assert_not_called()  # Mist is already suite-specific -> skip the slow lookup.
+
+    def test_internal_used_when_ui_returns_none(self, tmp_path, monkeypatch):
+        """When Tier 3 returns None, the internal suite suggestion is used (no worse than before)."""
+        _FakeValidator.count = 0
+        _FakeValidator.valid = False
+        monkeypatch.setattr(resolver_mod, "NominatimValidator", _FakeValidator)
+        monkeypatch.setattr(resolver_mod.time, "sleep", lambda *_: None)
+        ui = MagicMock()
+        ui.geocode_via_ui.return_value = None  # Selectors/login failed -> fail-soft.
+        resolver = AddressResolver(db_path=_db(tmp_path), ui_geocoder=ui)
+        csv = {"address": "100 Main St Unit 200", "city": "Town", "state": "FL", "zip": "33000"}
+        result = resolver.resolve(ResolveCandidates(mist_address=_NO_SUITE, csv_address=csv, ui_geocode=True))
+        ui.geocode_via_ui.assert_called_once()
+        assert result.source == "internal"  # Graceful fallback to the internal suggestion.
+        assert "Unit 200" in result.canonical_address  # Internal suite preserved.
+
 
 class TestHelpers:
     """Query-key normalization and rate limiting."""

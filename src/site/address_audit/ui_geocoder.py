@@ -6,14 +6,18 @@ suite/unit-corrected retail address the operator sees by hand. This module
 drives that field through a real browser and reads back the top suggestion --
 WITHOUT ever committing a change (read-only audit).
 
-Two connection modes (both proven to work behind Zscaler SSL inspection, where
+Three connection modes (all proven to work behind Zscaler SSL inspection, where
 Playwright CANNOT download its own Chromium):
 
-  * ``attach`` (default, recommended) -- take over an already-running, already
-    logged-in browser via the Chrome DevTools Protocol. The operator starts a
-    debuggable browser (see ``spawn_debuggable_browser``) or one is spawned for
-    them, logs into Mist once, and we reuse that live SSO session. No bundled
-    browser download, no stored credentials.
+  * ``auto`` (default) -- take over an already-running debuggable browser if one
+    is present; otherwise spawn a debuggable Edge for the operator, wait for them
+    to log into Mist and open a site's settings page, then take it over. This is
+    the zero-setup path: the operator never has to start Edge with debug flags.
+
+  * ``attach`` -- take over an already-running, already logged-in browser via the
+    Chrome DevTools Protocol. The operator starts a debuggable browser (see
+    ``spawn_debuggable_browser``) and logs into Mist once; we reuse that live SSO
+    session. No bundled browser download, no stored credentials.
 
   * ``launch`` -- Playwright launches the system Edge channel
     (``channel="msedge"``, no download) non-headless and pauses for the
@@ -79,6 +83,7 @@ class MistUIGeocoder:
         self._browser: Any = None  # Browser or CDP-attached browser handle.
         self._context: Any = None  # Active browser context (operator session or fresh).
         self._connected: bool = False  # Whether a usable browser is attached.
+        self._spawned_proc: Any = None  # Popen handle when we spawned a debuggable Edge (auto mode).
         self._lookups_done: int = 0  # Counter enforcing the per-run max-lookups cap.
         logging.debug("MistUIGeocoder initialized (mode=%s)", self._config.connect_mode)  # Trace init.
 
@@ -106,10 +111,49 @@ class MistUIGeocoder:
             return False  # Signal Tier-3 unavailable for this run.
 
     def _dispatch_connect(self) -> bool:
-        """Route to the attach or launch connection strategy."""
-        if self._config.connect_mode == "attach":  # Takeover an existing logged-in browser.
+        """Route to the auto, attach, or launch connection strategy."""
+        mode = self._config.connect_mode  # Operator-selected strategy (default "auto").
+        if mode == "attach":  # Take over an already-running debuggable browser (no spawn).
             return self._connect_attach()  # Reuse the operator's live SSO session.
-        return self._connect_launch()  # Otherwise launch a fresh system-Edge for interactive login.
+        if mode == "launch":  # Let Playwright launch a fresh system Edge.
+            return self._connect_launch()  # Interactive-login flow.
+        return self._connect_auto()  # Default: take over if possible, else spawn one for the operator.
+
+    def _connect_auto(self) -> bool:
+        """Take over a debuggable browser if present; otherwise spawn one and take it over."""
+        if self._try_attach():  # A debuggable browser is already running -> reuse it.
+            return True  # Attached to the operator's existing session.
+        logging.info("No debuggable browser found; spawning one for login")  # Action-log the spawn path.
+        proc = MistUIGeocoder.spawn_debuggable_browser(self._cdp_port(), self._config.dashboard_url)  # Spawn Edge.
+        if proc is None:  # Edge not installed -> fall back to a Playwright launch.
+            logging.info("Edge unavailable to spawn; falling back to launch mode")  # Inform operator.
+            return self._connect_launch()  # Last-resort interactive launch.
+        self._spawned_proc = proc  # Own the spawned browser's lifecycle (terminated on close()).
+        self._await_spawn_login()  # Block until the operator logs in and opens a site settings page.
+        return self._try_attach()  # Now take over the spawned, logged-in browser over CDP.
+
+    def _try_attach(self) -> bool:
+        """Attempt a CDP takeover without raising (used by the auto strategy)."""
+        try:
+            return self._connect_attach()  # Reuse the standard takeover path.
+        except Exception as exc:  # noqa: BLE001 -- a missing endpoint is expected in auto mode.
+            logging.info("CDP takeover at %s not available yet: %s", self._config.cdp_endpoint, exc)  # Trace.
+            return False  # Signal "no debuggable browser" so the caller can spawn one.
+
+    def _cdp_port(self) -> int:
+        """Parse the TCP port from the configured CDP endpoint (default 9222)."""
+        tail = self._config.cdp_endpoint.rsplit(":", 1)[-1]  # Text after the final colon.
+        digits = "".join(ch for ch in tail if ch.isdigit())  # Keep only the numeric run.
+        return int(digits) if digits else 9222  # Parsed port or the documented default.
+
+    def _await_spawn_login(self) -> None:
+        """Block until the operator has logged in and opened a site's Location Search page."""
+        InputUtils.safe_input(  # Pause the run until the operator confirms readiness.
+            "A browser opened. Log into Mist, open a SITE's settings page so the "
+            "'Location Search' box is visible, then press Enter to continue: ",
+            context="ui_geocoder_spawn_login",
+        )
+        logging.info("Operator confirmed spawned-browser login; taking over via CDP")  # Action-log gate pass.
 
     def _connect_attach(self) -> bool:
         """Take over a debuggable browser over CDP and reuse its first context."""
@@ -143,6 +187,38 @@ class MistUIGeocoder:
             context="ui_geocoder_login",
         )
         logging.info("Operator confirmed dashboard login; proceeding with UI geocoding")  # Action-log gate pass.
+
+    def ensure_location_field_ready(self, max_prompts: int = 3) -> bool:
+        """Probe for the Location Search field; guide the operator until it appears (fail-soft).
+
+        Tier-3 can only read Google's suggestions when the active tab is on a page
+        that renders the Location Search input. We probe, and if it is missing we
+        ask the operator to open a site's settings page, retrying a few times.
+        """
+        if not self._connected:  # Nothing to probe without a connection.
+            return False  # Caller already handled the disconnected case.
+        for attempt in range(1, max_prompts + 1):  # Bounded retries so we never loop forever.
+            page = self._active_page()  # Current tab in the operator's context.
+            if page is not None and self._field_present(page):  # Location Search input is visible.
+                logging.info("Location Search field detected on attempt %d; Tier-3 ready", attempt)  # Ready.
+                return True  # Proceed to the per-row lookups.
+            InputUtils.safe_input(  # Guide the operator to the correct page, then re-probe.
+                "Could not see the 'Location Search' box. In the browser, open a "
+                "SITE's settings page where that box is visible, then press Enter: ",
+                context="ui_geocoder_navigate",
+            )
+        logging.info("Location Search field not found after %d prompts; Tier-3 will fail-soft", max_prompts)
+        return False  # Lookups will return None; the audit still completes on Tier 1/2.
+
+    def _field_present(self, page: Any) -> bool:
+        """Return True when any Location Search input selector matches on ``page``."""
+        for selector in INPUT_SELECTORS:  # Probe each candidate selector quickly.
+            try:
+                if page.query_selector(selector) is not None:  # Immediate (non-waiting) DOM probe.
+                    return True  # Found the autocomplete input.
+            except Exception as exc:  # noqa: BLE001 -- a transient DOM error must not abort the probe.
+                logging.debug("Field probe error for %s: %s", selector, exc)  # Trace and keep probing.
+        return False  # No candidate matched on the current page.
 
     def geocode_via_ui(self, query: str) -> ResolverResult | None:
         """Resolve one address via the dashboard autocomplete; fail-soft to ``None``."""
@@ -237,7 +313,19 @@ class MistUIGeocoder:
                 self._playwright.stop()  # Release the driver subprocess.
         except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
             logging.debug("Playwright stop error (ignored): %s", exc)  # Trace and continue.
+        self._terminate_spawned()  # Close any Edge we spawned ourselves (auto mode).
         self._connected = False  # Reset state so a stale handle is never reused.
+
+    def _terminate_spawned(self) -> None:
+        """Terminate the debuggable Edge we spawned in auto mode (never raises)."""
+        if self._spawned_proc is None:  # We only own a process when we spawned one.
+            return  # Attach/launch modes have nothing to clean up here.
+        try:
+            self._spawned_proc.terminate()  # Ask the spawned Edge to exit.
+            logging.debug("Terminated spawned debuggable Edge (pid=%s)", self._spawned_proc.pid)  # Trace.
+        except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
+            logging.debug("Spawned Edge terminate error (ignored): %s", exc)  # Trace and continue.
+        self._spawned_proc = None  # Drop the handle so close() is idempotent.
 
     @staticmethod
     def spawn_debuggable_browser(

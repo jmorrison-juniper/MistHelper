@@ -143,6 +143,27 @@ class TestEnvConfig:
         monkeypatch.setenv("ADDRESS_AUDIT_GEOCODE", "auto")
         assert AddressAuditEngine._ui_geocode_enabled() is True
 
+    def test_geocode_mode_default_auto(self, monkeypatch):
+        """Unset ADDRESS_AUDIT_GEOCODE defaults to auto (take over else spawn)."""
+        monkeypatch.delenv("ADDRESS_AUDIT_GEOCODE", raising=False)
+        assert AddressAuditEngine._geocode_mode() == "auto"
+
+    def test_geocode_mode_off(self, monkeypatch):
+        """'off' disables Tier 3 entirely."""
+        monkeypatch.setenv("ADDRESS_AUDIT_GEOCODE", "off")
+        assert AddressAuditEngine._geocode_mode() == "off"
+        assert AddressAuditEngine._ui_geocode_enabled() is False
+
+    def test_geocode_mode_launch(self, monkeypatch):
+        """'launch' selects the Playwright-launch strategy."""
+        monkeypatch.setenv("ADDRESS_AUDIT_GEOCODE", "launch")
+        assert AddressAuditEngine._geocode_mode() == "launch"
+
+    def test_geocode_mode_unknown_falls_back_auto(self, monkeypatch):
+        """An unrecognized value falls back to auto so a typo never disables Tier 3."""
+        monkeypatch.setenv("ADDRESS_AUDIT_GEOCODE", "banana")
+        assert AddressAuditEngine._geocode_mode() == "auto"
+
 
 class TestSourceLabel:
     """Source-column labelling, including OSM street-validation."""
