@@ -7,8 +7,6 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
-## [Unreleased]
-
 ### Mist API Coverage Audit
 
 - **OpenAPI GET endpoint catalog + diff**: Added `tools/openapi_endpoint_catalog.py`
@@ -120,6 +118,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   web to deduce the true, shippable address.
 
 ### Fixed
+
+- **Logging and on-screen output crashed on non-Western characters (all menus)**:
+  running any operation against data containing characters outside the Windows
+  console's default `cp1252` codec raised `UnicodeEncodeError` and dumped a
+  `--- Logging error ---` traceback. This surfaced in the address audit (menu 195)
+  with a real Hawaii dataset -- an address such as `315 East Makaʻala Street,
+  Hawaiʻi County` contains the Hawaiian ʻokina (`U+02BB`), which crashed the
+  `data/script.log` file handler and corrupted the progress bar. Both log file
+  handlers are now opened with `encoding="utf-8"`, and `stdout`/`stderr` are
+  reconfigured to UTF-8 with a `backslashreplace` fallback at startup, so the
+  comparison table and any other `print` of international addresses are safe too.
+  The fix is global (the logging setup lives in the root module) and fail-soft:
+  if a stream cannot be reconfigured the worst case is the prior behavior, with no
+  new failure introduced.
 
 - **Address audit Nominatim suggestion leaked raw OpenStreetMap formatting (menu
   195)**: when a row was validated by Tier-2 (OpenStreetMap) rather than Tier-3,

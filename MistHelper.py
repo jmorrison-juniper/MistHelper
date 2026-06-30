@@ -307,12 +307,23 @@ _early_file_level = int(
     os.environ.get("LOGGING_LOG_LEVEL", logging.INFO)
 )  # Read file log level from env (default: INFO=20)
 
+# Make stdout/stderr resilient to non-cp1252 characters in real data (e.g. the Hawaiian
+# 'okina in addresses like "Maka'ala Street"). Without this, printing the comparison table
+# or logging such strings raises UnicodeEncodeError under the default Windows console codec.
+for _std_stream in (sys.stdout, sys.stderr):  # Harden both standard streams (best-effort).
+    try:
+        _std_stream.reconfigure(encoding="utf-8", errors="backslashreplace")  # UTF-8 + never-crash fallback
+    except (AttributeError, ValueError):  # Stream lacks reconfigure (already wrapped/redirected) -> skip safely
+        pass  # Degradation is acceptable: worst case is the original behavior, no new failure introduced
+
 # Create handlers with appropriate levels
 _early_console_handler = logging.StreamHandler()  # Create handler for console output (stdout/stderr)
 _early_console_handler.setLevel(
     _early_console_level
 )  # Set console handler to respect CONSOLE_LOG_LEVEL environment variable
-_early_file_handler = logging.FileHandler(_early_log_path)  # Create handler for script.log file output
+_early_file_handler = logging.FileHandler(
+    _early_log_path, encoding="utf-8"
+)  # script.log file output; UTF-8 so non-cp1252 chars (e.g. Hawaiian 'okina) never crash logging
 _early_file_handler.setLevel(_early_file_level)  # Set file handler to respect LOGGING_LOG_LEVEL environment variable
 
 logging.basicConfig(  # Configure root logger with handlers and format
@@ -1017,7 +1028,9 @@ class GlobalImportManager:
         logging.debug("_build_file_log_handler: creating file handler at level %s", level)  # Log before build
         log_file_path = os.path.join("data", "script.log")  # Log path under data/ (writable in the container)
         os.makedirs("data", exist_ok=True)  # Create data/ if missing (no error if present)
-        file_handler = logging.FileHandler(log_file_path)  # Handler that writes to script.log
+        file_handler = logging.FileHandler(
+            log_file_path, encoding="utf-8"
+        )  # script.log writer; UTF-8 so non-cp1252 chars (e.g. Hawaiian 'okina) never crash logging
         file_handler.setLevel(level)  # Apply the file verbosity threshold
         file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")  # Same timestamped format
         file_handler.setFormatter(file_formatter)  # Attach the format to the file handler
