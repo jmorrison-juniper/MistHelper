@@ -43,6 +43,7 @@ from __future__ import annotations  # PEP 604 union syntax on Python 3.13.
 import logging  # Action logging before/after every operation (project NON-NEGOTIABLE).
 import os  # Filesystem probing for the Edge executable.
 import re  # House-number extraction + suggestion cleanup (defeats the autocomplete lag race).
+import secrets  # Unpredictable RNG source for human-like typing jitter (lint-clean, not security-critical).
 import shutil  # PATH lookup fallback for the Edge executable.
 import subprocess  # Spawn a debuggable browser for CDP takeover.
 import tempfile  # Dedicated throwaway profile for the spawned browser.
@@ -56,6 +57,9 @@ try:  # Optional dependency: Playwright may not be installed in every environmen
     from playwright.sync_api import sync_playwright  # Sync browser-automation entry point.
 except ImportError:  # pragma: no cover -- exercised only on hosts without Playwright.
     sync_playwright = None  # type: ignore[assignment]  # Sentinel; is_available() keys off this.
+
+_KEY_JITTER = secrets.SystemRandom()  # Per-keystroke delay source; unpredictable cadence dodges bot heuristics.
+_THINKING_PAUSE_EVERY = 7  # Add an occasional longer "thinking" pause every N characters while typing.
 
 # --- Selector constants (captured 2026-06-29; re-verify if the Mist dashboard UI changes) ---
 # Google Places Autocomplete attaches ``pac-target-input`` to the bound input and
@@ -263,11 +267,32 @@ class MistUIGeocoder:
         return texts  # May be empty -> NO_RESULT (never a stale, wrong answer).
 
     def _enter_query(self, page: Any, field: Any, query: str) -> None:
-        """Focus the field, clear any stale value/dropdown, then type the new query."""
+        """Focus the field, clear any stale value/dropdown, then type with human-like timing."""
         field.click()  # Focus so Google binds keystrokes.
         field.fill("")  # Clear any previous text.
         self._settle(page, 150)  # Let Google tear down the previous dropdown before typing.
-        field.type(query, delay=40)  # Type slowly so Google fires the autocomplete request.
+        self._type_humanlike(field, query)  # Randomized per-key cadence to avoid bot/throttle heuristics.
+
+    def _type_humanlike(self, field: Any, query: str) -> None:
+        """Type ``query`` one character at a time with a randomized inter-keystroke delay.
+
+        A fixed-cadence ``type(text, delay=N)`` looks robotic and can trip Google's
+        autocomplete throttling / bot detection. We emit each character then sleep a
+        random interval bounded by the config, with an occasional longer pause, so
+        the input rhythm resembles a person rather than a machine.
+        """
+        for index, char in enumerate(query):  # Walk the query one character at a time.
+            field.type(char)  # Emit a single keystroke into the focused field.
+            time.sleep(self._key_delay(index))  # Randomized human-like gap before the next key.
+
+    def _key_delay(self, index: int) -> float:
+        """Return a randomized inter-keystroke delay, occasionally adding a 'thinking' pause."""
+        low = max(0.0, self._config.min_key_delay_s)  # Lower bound (never negative).
+        high = max(low, self._config.max_key_delay_s)  # Upper bound (guarded >= low).
+        delay = _KEY_JITTER.uniform(low, high)  # Base per-keystroke jitter.
+        if index and index % _THINKING_PAUSE_EVERY == 0:  # Every few characters, pause a touch longer.
+            delay += _KEY_JITTER.uniform(low, high)  # Occasional human "thinking" gap.
+        return delay  # Seconds to sleep before the next keystroke.
 
     def _read_fresh_suggestions(self, page: Any, expected: str, timeout_ms: int) -> list[str]:
         """Poll until the TOP suggestion matches ``expected`` (this query's house number).

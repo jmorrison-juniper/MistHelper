@@ -111,6 +111,8 @@ class UIGeocoderConfig:
     per_lookup_timeout_s: float = 20.0  # Hard per-lookup ceiling (UI_GEOCODE_TIMEOUT_SECONDS).
     max_lookups: int = 50  # Per-run cap on Tier-3 lookups (UI_GEOCODE_MAX_LOOKUPS).
     politeness_delay_s: float = 1.0  # >=1 req/sec politeness toward Google Places.
+    min_key_delay_s: float = 0.06  # Lower bound of the randomized per-keystroke delay (anti-bot jitter).
+    max_key_delay_s: float = 0.19  # Upper bound of the randomized per-keystroke delay (anti-bot jitter).
 
 
 @dataclass
