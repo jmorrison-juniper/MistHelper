@@ -69,7 +69,7 @@ class AuditResult:
     resolver_result: ResolverResult | None = None  # None for UNMATCHED rows (no resolution attempted).
     issue_type: str = "UNMATCHED"  # Exactly one of the nine classification states.
     suggested_address: str = ""  # Best correction to display (full value; truncated only in terminal).
-    source: str = "-"  # Display label for the Source column (Internal/Nominatim/Mist UI/Cache/-).
+    source: str = "-"  # Source column label (Internal/Internal+OSM/Nominatim/Google (Mist UI)/Cache/-).
 
 
 @dataclass

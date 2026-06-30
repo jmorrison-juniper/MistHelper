@@ -559,7 +559,7 @@ class AddressAuditEngine:
         labels = {  # Source-code -> display label.
             "internal": "Internal",  # Tier 1 internal comparison.
             "nominatim": "Nominatim",  # Tier 2 OSM validation.
-            "mist_ui": "Mist UI",  # Tier 3 dashboard automation.
+            "mist_ui": "Google (Mist UI)",  # Tier 3: Google Places autocomplete via the Mist portal address box.
             "cache": "Cache",  # Served from the SQLite cache.
         }
         if resolver_result is None or resolver_result.canonical_address is None:  # No suggestion.
