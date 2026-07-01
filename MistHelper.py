@@ -12049,7 +12049,7 @@ class LicenseExportUtils:  # Hold custom license exporters.
             logging.debug("Resolved include_detail=%s", include_detail)  # Log parsed detail value.
         detail_query_value = True if include_detail else None  # Omit query param when detail is false.
         logging.info("Calling async-claim API for org %s", resolved_org_id)  # Log before SDK call.
-        response = mistapi.api.v1.orgs.claim.status.getOrgLicenseAsyncClaimStatus(  # Call SDK endpoint.
+        response = mistapi.api.v1.orgs.claim.GetOrgLicenseAsyncClaimStatus(  # Call SDK endpoint.
             apisession,  # Reuse global authenticated API session.
             resolved_org_id,  # Pass validated org id to API call.
             detail=detail_query_value,  # Pass optional detail query flag.
