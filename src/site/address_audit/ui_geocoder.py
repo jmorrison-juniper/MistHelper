@@ -51,6 +51,8 @@ import time  # Politeness delay between Google Places lookups.
 from typing import Any  # Loose typing for Playwright handles (kept import-light).
 
 from src.site.address_audit.models import ResolverResult, UIGeocoderConfig  # Shared dataclasses.
+from src.site.address_audit.perf import PhaseTimer  # Per-phase timing to expose slow sub-steps.
+from src.site.address_audit.suite_patterns import HASH_UNIT_PATTERN, SUITE_PHRASE_PATTERN  # Shared suite regexes.
 from src.utils.input_utils import InputUtils  # EOF-safe operator prompts.
 
 try:  # Optional dependency: Playwright may not be installed in every environment.
@@ -82,9 +84,10 @@ class MistUIGeocoder:
     lookup never aborts the surrounding audit loop (fail-soft, OQ-002).
     """
 
-    def __init__(self, config: UIGeocoderConfig | None = None) -> None:
+    def __init__(self, config: UIGeocoderConfig | None = None, perf: PhaseTimer | None = None) -> None:
         """Store configuration and initialize all browser-handle state."""
         self._config = config or UIGeocoderConfig()  # Caller config or Zscaler-safe defaults.
+        self._perf = perf or PhaseTimer()  # Timing sink (own no-op timer when the caller passes none).
         self._playwright: Any = None  # Playwright driver handle (set on connect()).
         self._browser: Any = None  # Browser or CDP-attached browser handle.
         self._context: Any = None  # Active browser context (operator session or fresh).
@@ -241,7 +244,8 @@ class MistUIGeocoder:
             if page is None:  # No context/page -> cannot proceed.
                 return None  # Fail soft.
             suggestions = self._perform_lookup(page, query)  # Type the query and read suggestions.
-            time.sleep(self._config.politeness_delay_s)  # >=1 req/sec politeness toward Google.
+            with self._perf.phase("ui.politeness"):  # Time the fixed >=1 req/sec courtesy delay.
+                time.sleep(self._config.politeness_delay_s)  # >=1 req/sec politeness toward Google.
             return self._build_result(query, suggestions)  # Convert suggestions to a ResolverResult.
         except Exception as exc:  # noqa: BLE001 -- fail soft per OQ-002.
             logging.warning("UI geocode failed for query '%s': %s", query, exc)  # Log and continue.
@@ -260,11 +264,14 @@ class MistUIGeocoder:
     def _perform_lookup(self, page: Any, query: str) -> list[str]:
         """Type ``query``, then read ONLY the suggestion list that belongs to it (stale-safe)."""
         timeout_ms = int(self._config.per_lookup_timeout_s * 1000)  # Playwright uses milliseconds.
-        field = self._locate_input(page, timeout_ms)  # Find the autocomplete input element.
-        self._enter_query(page, field, query)  # Focus, clear the stale dropdown, type the new query.
+        with self._perf.phase("ui.locate_input"):  # Time finding the autocomplete field.
+            field = self._locate_input(page, timeout_ms)  # Find the autocomplete input element.
+        with self._perf.phase("ui.type_query"):  # Time the human-like typing (usually the biggest cost).
+            self._enter_query(page, field, query)  # Focus, clear the stale dropdown, type the new query.
         expected = self._house_number(query)  # House number anchors the fresh-result wait.
         expected_suite = self._suite_id(query)  # Unit id we typed (e.g. "200"); "" when none -> suite wait is a no-op.
-        texts = self._read_fresh_suggestions(page, expected, timeout_ms, expected_suite)  # Wait for THIS query.
+        with self._perf.phase("ui.read_suggestions"):  # Time the fresh-result poll incl. the suite grace.
+            texts = self._read_fresh_suggestions(page, expected, timeout_ms, expected_suite)  # Wait for THIS query.
         logging.debug("UI autocomplete returned %d fresh suggestion(s)", len(texts))  # Action-log count.
         return texts  # May be empty -> NO_RESULT (never a stale, wrong answer).
 
@@ -370,11 +377,11 @@ class MistUIGeocoder:
         (whitespace-collapsed) so it can be re-appended verbatim to a suggestion.
         """
         keyword = re.search(
-            r"(?i)\b(?:suite|ste|unit|space|bldg|building|rm|room|apt)\.?\s*#?\s*[A-Za-z0-9][A-Za-z0-9\-]*", text
-        )  # Keyword + id (e.g. 'Suite 100', 'Ste A2').
+            SUITE_PHRASE_PATTERN, text
+        )  # Shared keyword+id form (e.g. 'Suite 100', 'Ste A2', 'Sute A-103').
         if keyword:  # Prefer the explicit keyword form.
             return re.sub(r"\s+", " ", keyword.group(0)).strip()  # Collapse internal whitespace.
-        hashed = re.search(r"#\s*[A-Za-z0-9][A-Za-z0-9\-]*", text)  # Bare hash form (e.g. '#3', '#1515b').
+        hashed = re.search(HASH_UNIT_PATTERN, text)  # Bare hash form (e.g. '#3', '#1515b').
         return hashed.group(0).replace(" ", "") if hashed else ""  # '#<id>' with no gap, or empty.
 
     @staticmethod

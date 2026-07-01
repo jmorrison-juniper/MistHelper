@@ -30,13 +30,12 @@ from datetime import UTC, datetime  # ISO-8601 UTC cache timestamps.
 from typing import Any  # Loose typing for address dicts and the UI geocoder handle.
 
 from src.site.address_audit.models import ResolveCandidates, ResolverResult  # Resolver I/O dataclasses.
+from src.site.address_audit.perf import PhaseTimer  # Per-phase timing to expose slow tiers.
+from src.site.address_audit.suite_patterns import SUITE_PATTERN as _SUITE_PATTERN  # Shared suite/unit detector.
 from src.utils.address_utils import AddressValidationConfig, NominatimValidator  # Reused Tier-2 validator.
 
 _DB_RELATIVE_PATH = os.path.join("data", "mist_data.db")  # Constitution-fixed cache location.
 _NOMINATIM_MIN_INTERVAL = 1.1  # Seconds between Nominatim calls (>=1 req/sec ToS).
-_SUITE_PATTERN = (  # Suite/unit markers (state-safe: explicit keywords or "#NNN", never bare "FL").
-    r"\b(?:ste|suite|unit|apt|apartment|bldg|building|space|spc|rm|room|lot)\b\.?\s*#?\s*[\w-]+" r"|#\s*\d[\w-]*"
-)
 
 
 class AddressResolver:
@@ -47,11 +46,13 @@ class AddressResolver:
         db_path: str | None = None,
         skip_ssl_verify: bool = False,
         ui_geocoder: Any = None,
+        perf: PhaseTimer | None = None,
     ) -> None:
         """Store cache path, build the reused Nominatim config, and init counters."""
         self._db_path = db_path or _DB_RELATIVE_PATH  # Cache DB path (injectable for tests).
         self._nominatim_config = AddressValidationConfig(skip_ssl_verify=skip_ssl_verify)  # Reused validator cfg.
         self._ui_geocoder = ui_geocoder  # Optional MistUIGeocoder (Tier 3); None disables it.
+        self._perf = perf or PhaseTimer()  # Timing sink (own no-op timer when the caller passes none).
         self.cache_hits = 0  # Count of cache hits this run (feeds AuditCounters).
         self.external_calls = 0  # Count of Nominatim/UI calls actually made.
         self._last_nominatim_ts = 0.0  # Timestamp of the last Nominatim call for rate limiting.
@@ -61,7 +62,8 @@ class AddressResolver:
         query = self._build_query(candidates)  # Construct the human-readable query string.
         key = self._build_query_key(query)  # Normalize it into a cache key.
         logging.info("Resolving address (key=%s)", key)  # Action-log the resolve start.
-        cached = self._from_cache(key)  # Cache read before any external call.
+        with self._perf.phase("cache_read"):  # Time the SQLite cache lookup.
+            cached = self._from_cache(key)  # Cache read before any external call.
         if cached is not None:  # Cache hit -> zero external calls.
             return cached  # Return the cached result verbatim.
         result = self._resolve_uncached(candidates, query)  # Run the tier cascade.
@@ -72,9 +74,12 @@ class AddressResolver:
     def _resolve_uncached(self, candidates: ResolveCandidates, query: str) -> ResolverResult:
         """Run Tier 1 (internal) + Tier 2 (OSM) + optional Tier 3 (web authority), fail-soft."""
         try:
-            internal = self._compare_internal(candidates)  # Tier 1: internal suite candidate (no network).
-            osm = self._validate_nominatim(candidates, query)  # Tier 2: OpenStreetMap street validation.
-            ui = self._maybe_ui(candidates, query)  # Tier 3: Google-via-Mist authority (gated; fail-soft).
+            with self._perf.phase("tier1_internal"):  # Time the no-network internal comparison.
+                internal = self._compare_internal(candidates)  # Tier 1: internal suite candidate (no network).
+            with self._perf.phase("tier2_nominatim"):  # Time OSM validation incl. its rate-limit sleep.
+                osm = self._validate_nominatim(candidates, query)  # Tier 2: OpenStreetMap street validation.
+            with self._perf.phase("tier3_ui"):  # Time the browser tier incl. typing/read/politeness.
+                ui = self._maybe_ui(candidates, query)  # Tier 3: Google-via-Mist authority (gated; fail-soft).
             return self._combine(internal, osm, ui, candidates, query)  # Merge the tiers into one result.
         except Exception as exc:  # noqa: BLE001 -- one row must never abort the audit.
             logging.warning("Resolve failed for key derived from '%s': %s", query, exc)  # Log and continue.

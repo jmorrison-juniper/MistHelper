@@ -25,6 +25,18 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Added
 
+- **Address audit now logs a per-phase timing breakdown (menu 195)**: a Tier-3 run
+  spends 12-20 seconds per site and it was not obvious where that time went. A tiny
+  always-on ``PhaseTimer`` now accumulates wall-clock time per stage (SQLite cache
+  read, Tier-1 internal, Tier-2 Nominatim incl. its rate-limit sleep, Tier-3 browser
+  total, and the Tier-3 sub-steps: locating the input, the human-like typing, the
+  fresh-result poll incl. the suite grace, and the politeness delay). At the end of
+  the run the audit logs the breakdown sorted slowest-first to ``data/script.log``,
+  turning "it feels slow" into a measurement. Live data shows the human-like typing
+  (``ui.type_query``) dominates -- tune it with ``UI_GEOCODE_MIN_KEY_DELAY_MS`` /
+  ``UI_GEOCODE_MAX_KEY_DELAY_MS`` (faster typing trades against Google's bot
+  heuristics), or lower the ``UI_GEOCODE`` politeness/timeout knobs.
+
 - **Address audit now flags rows it cannot safely auto-correct, as review-only
   (menu 195)**: two new classification states protect against pushing a wrong or
   non-unique address to Mist, and both are **excluded from write-back** (they are
@@ -63,6 +75,17 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   Mist-better rows are never touched.
 
 ### Changed
+
+- **Address audit suite/unit detection is consolidated and typo-tolerant (menu
+  195)**: three modules (``address_resolver``, ``audit_engine``, ``ui_geocoder``)
+  each defined their own suite/unit keyword regex, which drifted out of sync -- a
+  real customer file spelled it ``Sute A-103`` and only some detectors recognized
+  it, so that unit was dropped from the suggested address (cosmetic, but sloppy).
+  All three now derive from a single ``SUITE_KEYWORDS`` constant in a shared
+  ``suite_patterns`` module, so a spelling is added in exactly one place. The common
+  misspelling ``sute`` is now recognized everywhere (``ste``/``Ste.`` were already
+  covered); ``suit`` is deliberately excluded to avoid matching ``lawsuit`` /
+  ``pursuit``. Detection/classification behavior is otherwise unchanged.
 
 - **Address audit Source column now names Google explicitly (menu 195)**: the
   Tier-3 web authority is Google Places autocomplete, accessed by driving the Mist
