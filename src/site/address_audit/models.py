@@ -67,9 +67,9 @@ class AuditResult:
     address_row: AddressRow  # Original CSV input row.
     matched_site: MatchedSite  # Match outcome (+ SNMP enrichment).
     resolver_result: ResolverResult | None = None  # None for UNMATCHED rows (no resolution attempted).
-    issue_type: str = "UNMATCHED"  # Exactly one of the nine classification states.
+    issue_type: str = "UNMATCHED"  # Exactly one of the eleven classification states.
     suggested_address: str = ""  # Best correction to display (full value; truncated only in terminal).
-    source: str = "-"  # Display label for the Source column (Internal/Nominatim/Mist UI/Cache/-).
+    source: str = "-"  # Source column label (Internal/Internal+OSM/Nominatim/Google (Mist UI)/Cache/-).
 
 
 @dataclass
@@ -111,6 +111,8 @@ class UIGeocoderConfig:
     per_lookup_timeout_s: float = 20.0  # Hard per-lookup ceiling (UI_GEOCODE_TIMEOUT_SECONDS).
     max_lookups: int = 50  # Per-run cap on Tier-3 lookups (UI_GEOCODE_MAX_LOOKUPS).
     politeness_delay_s: float = 1.0  # >=1 req/sec politeness toward Google Places.
+    min_key_delay_s: float = 0.06  # Lower bound of the randomized per-keystroke delay (anti-bot jitter).
+    max_key_delay_s: float = 0.19  # Upper bound of the randomized per-keystroke delay (anti-bot jitter).
 
 
 @dataclass

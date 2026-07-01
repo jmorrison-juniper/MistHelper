@@ -3,7 +3,7 @@
 ``AddressAuditEngine`` is the single menu entry point. It loads the customer CSV,
 matches each row to a Mist site (serial golden key, fuzzy fallback), enriches with
 SNMP location, resolves/validates the address through the free tiers, classifies
-each row into one of nine states, renders the comparison table, and offers to save
+each row into one of eleven states, renders the comparison table, and offers to save
 the results to CSV. The audit itself is read-only; afterwards the operator may
 opt in to push corrected addresses back to Mist via ``AddressCorrector``, gated by
 a batch confirmation and a per-site ``[y/N]`` before/after review.
@@ -20,6 +20,7 @@ import logging  # Action logging before/after every operation (project NON-NEGOT
 import os  # Path handling and environment access.
 import re  # Address normalization / suite extraction in classification.
 import sys  # Detect a non-interactive stdout to suppress the progress bar.
+from contextlib import contextmanager  # Scope the console-log suppression to one run.
 from typing import Any  # Loose typing for Mist API records.
 
 import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
@@ -69,8 +70,27 @@ _DIRECTIONALS = {  # Street-name directional tokens, normalized to their abbrevi
 }
 
 
+class _AddressAuditConsoleFilter(logging.Filter):
+    """Console filter that drops log records emitted from the address_audit package.
+
+    The address audit talks to the operator through ``print`` (the comparison
+    table, the post-table prompts, the write-back confirmations); every
+    ``logging.*`` call it makes is a diagnostic trail destined for
+    ``data/script.log``. Attached to the root logger's CONSOLE handlers (and only
+    for the duration of a run), this filter keeps that diagnostic noise -- e.g. the
+    Nominatim "no result" warnings -- out of the terminal, where it would corrupt
+    the tqdm progress bar. File handlers never receive this filter, so the full log
+    trail is preserved.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Return False (drop from console) for records whose source is in address_audit."""
+        path = (record.pathname or "").replace("\\", "/")  # Normalize separators for a portable check.
+        return "/address_audit/" not in path  # Keep every record except this package's own logs.
+
+
 class AddressAuditEngine:
-    """Orchestrate the read-only CSV address audit and render the comparison."""
+    """Orchestrate the CSV address audit, render the comparison, and optionally write back."""
 
     def __init__(
         self,
@@ -86,14 +106,21 @@ class AddressAuditEngine:
         self._reporter = reporter or AddressAuditReporter()  # CSV report writer.
 
     def run(self, apisession: Any, org_id: str) -> None:
-        """Menu entry point: drive the full read-only audit pipeline end-to-end.
+        """Menu entry point: drive the full audit pipeline end-to-end.
 
         The Mist site address, the SNMP location variable, and the customer CSV
         are all treated as *hints* -- none is authoritative. The resolver fuses
         them into one best-guess query and prefers an external verifier
         (OpenStreetMap, plus Tier-3 browser geocoding when a debuggable browser
-        is reachable) to deduce the true, shippable address.
+        is reachable) to deduce the true, shippable address. The whole run is
+        wrapped so this feature's diagnostic logging goes to ``data/script.log``
+        only, never the terminal (keeps the progress bar clean).
         """
+        with self._console_logs_to_file_only():  # Address-audit logs -> file only; console stays clean.
+            self._run_pipeline(apisession, org_id)  # Drive the actual audit pipeline.
+
+    def _run_pipeline(self, apisession: Any, org_id: str) -> None:
+        """Run the audit pipeline: select CSV, audit, render, and offer write-back."""
         ui_geocode = self._ui_geocode_enabled()  # Tier-3 web geocoding: env-gated, default auto, no CLI flag.
         logging.info("Starting site address audit (tier3_geocode=%s)", ui_geocode)  # Action-log start.
         csv_path = self._select_csv_file()  # Pick the customer CSV from data/.
@@ -108,6 +135,31 @@ class AddressAuditEngine:
         results = self._audit_rows(apisession, org_id, rows, business, ui_geocode)  # Core pipeline.
         self._renderer.render(results)  # Render the comparison table.
         self._finish(results, apisession)  # Post-table save/quit prompt + optional write-back.
+
+    @contextmanager
+    def _console_logs_to_file_only(self) -> Any:
+        """Suppress this feature's logging on CONSOLE handlers for the duration of a run.
+
+        Attaches an ``_AddressAuditConsoleFilter`` to every console (stream)
+        handler on the root logger, then removes it afterwards. The file handler is
+        never touched, so ``data/script.log`` still captures everything -- the
+        operator sees only the table, prompts, and progress bar on screen, with the
+        Nominatim "no result" warnings and other diagnostics confined to the file.
+        """
+        root = logging.getLogger()  # Root logger carries both file and console handlers.
+        console = [  # Console handlers are StreamHandlers that are not FileHandlers.
+            handler
+            for handler in root.handlers
+            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler)
+        ]
+        log_filter = _AddressAuditConsoleFilter()  # Drops only address_audit records from console.
+        for handler in console:  # Attach the filter to each console handler.
+            handler.addFilter(log_filter)
+        try:
+            yield  # Run the audit with console diagnostics suppressed.
+        finally:
+            for handler in console:  # Always detach, even when the run raises.
+                handler.removeFilter(log_filter)
 
     def _audit_rows(
         self,
@@ -285,6 +337,18 @@ class AddressAuditEngine:
             "UI_GEOCODE_TIMEOUT_SECONDS", config.per_lookup_timeout_s
         )
         config.max_lookups = int(AddressAuditEngine._env_float("UI_GEOCODE_MAX_LOOKUPS", config.max_lookups))  # Cap.
+        config.min_key_delay_s = (
+            AddressAuditEngine._env_float(  # Lower bound of the typing jitter (ms -> s).
+                "UI_GEOCODE_MIN_KEY_DELAY_MS", config.min_key_delay_s * 1000.0
+            )
+            / 1000.0
+        )
+        config.max_key_delay_s = (
+            AddressAuditEngine._env_float(  # Upper bound of the typing jitter (ms -> s).
+                "UI_GEOCODE_MAX_KEY_DELAY_MS", config.max_key_delay_s * 1000.0
+            )
+            / 1000.0
+        )
         return config  # Hand back the env-merged config.
 
     @staticmethod
@@ -317,7 +381,56 @@ class AddressAuditEngine:
         for row, site in self._progress(list(zip(rows, matched, strict=False)), len(rows)):  # Iterate w/ progress.
             results.append(self._build_audit_result(row, site, resolver, business, ui_geocode))  # One result.
         logging.debug("Classified %d audit rows", len(results))  # Action-log completion.
+        self._flag_duplicate_addresses(results)  # Cross-row safety: flag one address shared by 2+ sites.
         return results  # Hand back all results.
+
+    @staticmethod
+    def _flag_duplicate_addresses(results: list[AuditResult]) -> None:
+        """Flag any final address shared by two or more distinct sites as DUPLICATE_ADDRESS.
+
+        After correction each site should carry a unique, shippable address. When
+        two *different* sites resolve to the *identical* full address (same suite,
+        or both lacking one) they are indistinguishable for shipping -- a
+        data-integrity problem the operator must resolve, so the row is made
+        review-only and excluded from write-back. Sites that share only a base
+        street but carry *different* suites are the normal strip-mall case: their
+        full addresses differ, so they land in different buckets and are untouched.
+        Rows already flagged CONFLICTING_HINTS keep that (more specific) reason.
+        """
+        buckets: dict[str, list[AuditResult]] = {}  # Normalized full address -> rows sharing it.
+        for result in results:  # Bucket every row by the address that will identify its site.
+            if result.issue_type in ("UNMATCHED", "CONFLICTING_HINTS"):  # No trusted/unique address to compare.
+                continue  # Leave these rows as-is.
+            final = result.suggested_address or AddressAuditEngine._mist_address_str(result)  # Post-audit address.
+            key = AddressAuditEngine._address_key(final)  # Normalize for an apples-to-apples comparison.
+            if key:  # Only bucket rows that actually have an address.
+                buckets.setdefault(key, []).append(result)  # Group rows by identical normalized address.
+        for rows in buckets.values():  # Inspect each address bucket for a cross-site collision.
+            sites = {r.matched_site.site_id for r in rows if r.matched_site.site_id}  # Distinct sites here.
+            if len(sites) < 2:  # One site (or repeats of the same site) -> not a collision.
+                continue  # Nothing to flag.
+            for result in rows:  # Two or more different sites share this exact address -> flag them all.
+                logging.info(
+                    "Duplicate address across %d sites (e.g. %s): not unique, flagging for review",
+                    len(sites),
+                    result.matched_site.site_name,
+                )  # Action-log the collision so script.log explains the flag.
+                result.issue_type = "DUPLICATE_ADDRESS"  # Review-only: excluded from the correctable/push set.
+                result.suggested_address = ""  # Never recommend pushing a non-unique address.
+                result.source = "-"  # No trustworthy single source for a colliding address.
+
+    @staticmethod
+    def _mist_address_str(result: AuditResult) -> str:
+        """Return the row's current Mist address as one comparable string (or '')."""
+        addr = result.matched_site.mist_address  # Mist address payload (full string lives under 'address').
+        return (addr.get("address") or "") if isinstance(addr, dict) else ""  # Street string or empty.
+
+    @staticmethod
+    def _address_key(text: str) -> str:
+        """Normalize a full address into a collision key (country-stripped, lowercased, alnum-collapsed)."""
+        no_country = re.sub(r",?\s*(?:USA|United States)\s*$", "", text, flags=re.IGNORECASE)  # Drop trailing country.
+        alnum = re.sub(r"[^a-z0-9]+", " ", no_country.lower())  # Collapse punctuation/case to single spaces.
+        return " ".join(alnum.split())  # Collapse whitespace -> a stable comparison key.
 
     def _build_audit_result(
         self,
@@ -337,6 +450,15 @@ class AddressAuditEngine:
             business_name=business,  # Optional query prefix.
             ui_geocode=ui_geocode,  # Whether Tier 3 is permitted.
         )
+        if resolver.has_conflicting_hints(candidates):  # Hints disagree on the building with no majority.
+            logging.info("Conflicting address hints for site %s; flagging CONFLICTING_HINTS", site.site_name)
+            return AuditResult(  # Review-only: the tool refuses to auto-pick among divergent stores.
+                address_row=row,  # Original CSV row.
+                matched_site=site,  # Keep the three hint columns visible for manual review.
+                issue_type="CONFLICTING_HINTS",  # Never enters the correctable/push set.
+                source="-",  # No single trustworthy source to credit.
+                suggested_address="",  # Decline to recommend; operator compares Mist/CSV/SNMP by hand.
+            )
         resolver_result = resolver.resolve(candidates)  # Run the tier cascade (fail-soft).
         issue = self._classify(site.mist_address, self._csv_to_dict(row), site.snmp_location, resolver_result)
         return AuditResult(  # Compose the per-row result.
@@ -355,7 +477,8 @@ class AddressAuditEngine:
         snmp_loc: str | None,
         resolver_result: Any,
     ) -> str:
-        """Return exactly one of the nine classification states for a resolved row."""
+        """Return one of the resolved classification states for a row (excludes the
+        out-of-band UNMATCHED / CONFLICTING_HINTS / DUPLICATE_ADDRESS states)."""
         if resolver_result is None or resolver_result.canonical_address is None:  # No external result.
             return self._classify_internal(mist_addr, csv_addr, snmp_loc)  # Fall back to internal signals.
         if resolver_result.ambiguous:  # Multiple plausible candidates (mall scenario).
@@ -495,7 +618,7 @@ class AddressAuditEngine:
         labels = {  # Source-code -> display label.
             "internal": "Internal",  # Tier 1 internal comparison.
             "nominatim": "Nominatim",  # Tier 2 OSM validation.
-            "mist_ui": "Mist UI",  # Tier 3 dashboard automation.
+            "mist_ui": "Google (Mist UI)",  # Tier 3: Google Places autocomplete via the Mist portal address box.
             "cache": "Cache",  # Served from the SQLite cache.
         }
         if resolver_result is None or resolver_result.canonical_address is None:  # No suggestion.

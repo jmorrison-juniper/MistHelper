@@ -7,8 +7,6 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
-## [Unreleased]
-
 ### Mist API Coverage Audit
 
 - **OpenAPI GET endpoint catalog + diff**: Added `tools/openapi_endpoint_catalog.py`
@@ -26,6 +24,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   `speckit.plan` / `speckit.tasks` / `speckit.implement`.
 
 ### Added
+
+- **Address audit now flags rows it cannot safely auto-correct, as review-only
+  (menu 195)**: two new classification states protect against pushing a wrong or
+  non-unique address to Mist, and both are **excluded from write-back** (they are
+  never offered for push, and they show a blank Suggested Address so the operator
+  decides by hand from the Mist/CSV/SNMP columns):
+  - **`CONFLICTING_HINTS`** -- the Mist address, the customer CSV, and the SNMP
+    location disagree on the **house number with no majority** (every hint names a
+    different number, or only two hints have numbers and they differ). A 2-vs-1
+    split still has a clear majority and is left alone (the lone dissenter is the
+    outlier); a suite on a dissenting hint does not rescue it, because a suite is
+    only meaningful on the agreed-upon street number. This stops the tool from
+    silently picking one of several *different valid stores* for a single site --
+    e.g. a real T-Mobile site whose SNMP location was stale ``1520 Route 38 ...
+    Hainesport NJ`` while Mist and the CSV pointed at a Hawaii address.
+  - **`DUPLICATE_ADDRESS`** -- two or more *different* sites resolve to the
+    **identical** full address (same suite, or both lacking one), which would make
+    them indistinguishable for shipping. Sites that share only a base street but
+    carry *different* suites are the normal strip-mall case and are left untouched
+    because their full addresses differ.
 
 - **Address audit can now push corrected addresses back to Mist (menu 195)**: the
   audit was read-only; you reviewed the comparison and fixed addresses by hand.
@@ -45,6 +63,35 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   Mist-better rows are never touched.
 
 ### Changed
+
+- **Address audit Source column now names Google explicitly (menu 195)**: the
+  Tier-3 web authority is Google Places autocomplete, accessed by driving the Mist
+  portal's address box, but the Source column labelled it only `Mist UI` -- which
+  does not make it obvious that Google deduced the suggested address. It now reads
+  `Google (Mist UI)` so it is unmistakable when Google found, filled in, or
+  confirmed an address (the Issue Type column still says *what* changed:
+  `MISSING_SUITE`/`MISSING_NUMBER`/`WRONG_STREET` mean Google corrected a blank,
+  `ADDRESS_MATCH` means Google confirmed the existing value).
+
+- **Address audit diagnostic logging no longer prints to the terminal (menu
+  195)**: the audit's `logging.*` calls (e.g. the Nominatim "no result" warnings)
+  were written to both `data/script.log` AND the console, where they interleaved
+  with and corrupted the tqdm progress bar. The feature speaks to the operator
+  exclusively through `print` (the comparison table, the prompts, the write-back
+  confirmations), so its logging is purely a diagnostic trail. For the duration of
+  a run a filter is attached to the root logger's CONSOLE handlers that drops only
+  this package's records; the file handler is untouched, so `script.log` still
+  captures everything while the terminal shows just the table, prompts, and a
+  clean progress bar.
+
+- **Address audit types into Google's box with a human-like, randomized cadence
+  (menu 195)**: the Tier-3 geocoder previously typed each query at a fixed 40 ms
+  cadence, which is robotic and risks Google's autocomplete throttling / bot
+  heuristics. It now types one character at a time with a randomized
+  inter-keystroke delay (default 60-190 ms, from an unpredictable `SystemRandom`
+  source) plus an occasional longer "thinking" pause, so the input rhythm
+  resembles a person. The bounds are tunable via `UI_GEOCODE_MIN_KEY_DELAY_MS` /
+  `UI_GEOCODE_MAX_KEY_DELAY_MS`.
 
 - **Address audit now flags incomplete Mist addresses (missing house number)
   (menu 195)**: a Mist site whose street had no house number (`S Federal Hwy`)
@@ -100,6 +147,32 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   web to deduce the true, shippable address.
 
 ### Fixed
+
+- **Logging and on-screen output crashed on non-Western characters (all menus)**:
+  running any operation against data containing characters outside the Windows
+  console's default `cp1252` codec raised `UnicodeEncodeError` and dumped a
+  `--- Logging error ---` traceback. This surfaced in the address audit (menu 195)
+  with a real Hawaii dataset -- an address such as `315 East Makaʻala Street,
+  Hawaiʻi County` contains the Hawaiian ʻokina (`U+02BB`), which crashed the
+  `data/script.log` file handler and corrupted the progress bar. Both log file
+  handlers are now opened with `encoding="utf-8"`, and `stdout`/`stderr` are
+  reconfigured to UTF-8 with a `backslashreplace` fallback at startup, so the
+  comparison table and any other `print` of international addresses are safe too.
+  The fix is global (the logging setup lives in the root module) and fail-soft:
+  if a stream cannot be reconfigured the worst case is the prior behavior, with no
+  new failure introduced.
+
+- **Address audit Nominatim suggestion leaked raw OpenStreetMap formatting (menu
+  195)**: when a row was validated by Tier-2 (OpenStreetMap) rather than Tier-3,
+  the "Suggested Address" showed OSM's verbose `display_name` -- e.g.
+  `T-Mobile, 1200, Northwest 87th Avenue, Doral, Miami-Dade County, Florida,
+  33172, United States` -- complete with the business name, county, and country.
+  OSM only validates the *street*, so the suggestion is now Mist's own
+  already-formatted address with the trailing country dropped
+  (`1200 NW 87th Ave #1st, Doral, FL 33172`), consistent with the Tier-1/Tier-3
+  outputs and never losing an existing suite. (Side effect: a row where Mist's
+  address already matches now reads ADDRESS_MATCH instead of the misleading
+  MIST_BETTER.)
 
 - **Address audit MISSING_NUMBER never fired on real data (menu 195)**: the
   missing-house-number check (added in the prior release) tested the whole Mist
