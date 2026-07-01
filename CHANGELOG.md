@@ -148,6 +148,18 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Fixed
 
+- **Address audit suggestion glued the business name to Hawaii hyphenated house
+  numbers (menu 195)**: the Tier-3 (Google-via-Mist) suggestion cleaner strips the
+  establishment name that Google glues to the address (``T-Mobile931 US Highway
+  ...`` -> ``931 US Highway ...``) by anchoring on the ``<house-number> <street>``
+  start. Its anchor required the house number to be followed by a space, but
+  Hawaii's grid addresses use a hyphenated house number (``74-5450``), so the
+  anchor never matched and the business name survived in the output (real run:
+  ``T-Mobile74-5450 Makala Blvd #107`` for site HIS00364). The anchor now accepts
+  an optional ``-<digits>`` run in the house number, so the prefix is stripped
+  (``74-5450 Makala Blvd #107``) while every non-hyphenated address and suite dash
+  (``Sute A-103``) is unaffected.
+
 - **Logging and on-screen output crashed on non-Western characters (all menus)**:
   running any operation against data containing characters outside the Windows
   console's default `cp1252` codec raised `UnicodeEncodeError` and dumped a

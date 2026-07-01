@@ -283,6 +283,16 @@ class TestCleanAddress:
         raw = "1015 A1A Beach Blvd Unit 4, St. Augustine Beach, FL 32080"
         assert MistUIGeocoder._clean_address(raw) == "1015 A1A Beach Blvd Unit 4, St. Augustine Beach, FL 32080"
 
+    def test_hyphenated_house_number_strips_business_prefix(self):
+        """A Hawaii hyphenated house number (74-5450) still sheds the glued business name."""
+        raw = "T-Mobile74-5450 Makala Blvd #107, Kailua-Kona, HI 96740, USA"  # Business name glued to 74-5450.
+        assert MistUIGeocoder._clean_address(raw) == "74-5450 Makala Blvd #107, Kailua-Kona, HI 96740"
+
+    def test_hyphenated_house_number_without_prefix_preserved(self):
+        """A hyphenated house number with no business prefix is returned intact."""
+        raw = "46-047 Kamehameha Hwy Suite E5, Kaneohe, HI 96744, USA"  # Leading 46-047 is the house number.
+        assert MistUIGeocoder._clean_address(raw) == "46-047 Kamehameha Hwy Suite E5, Kaneohe, HI 96744"
+
 
 class TestAutoConnect:
     """The default 'auto' mode: take over an existing browser, else spawn one."""
