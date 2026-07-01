@@ -11985,7 +11985,7 @@ class LicenseExportUtils:  # Hold custom license exporters.
         logging.info("Flattening async-claim summary for org %s", org_id_value)  # Log before summary flatten.
         completed_items = payload.get("completed") or []  # Normalize completed list for safe counting.
         incompleted_items = payload.get("incompleted") or []  # Normalize incompleted list for safe counting.
-        polled_at_utc = datetime.utcnow().isoformat() + "Z"  # Capture local poll timestamp.
+        polled_at_utc = datetime.now(UTC).isoformat()  # Capture UTC poll timestamp (timezone-aware).
         summary_row = {  # Build normalized row for DataExporter.
             "org_id": org_id_value,  # Inject org id for composite key use.
             "scheduled_at": payload.get("scheduled_at"),  # Keep stable job id from Mist.
@@ -12008,7 +12008,7 @@ class LicenseExportUtils:  # Hold custom license exporters.
         logging.info("Flattening async-claim details for org %s", org_id_value)  # Log before detail flatten.
         detail_items = payload.get("details") or []  # Normalize details list for safe iteration.
         scheduled_at_value = payload.get("scheduled_at")  # Capture parent job key for joins.
-        polled_at_utc = datetime.utcnow().isoformat() + "Z"  # Capture local poll timestamp.
+        polled_at_utc = datetime.now(UTC).isoformat()  # Capture UTC poll timestamp (timezone-aware).
         detail_rows = [  # Build one row per detail object.
             {
                 "org_id": org_id_value,  # Inject org id for composite key use.
@@ -12027,13 +12027,8 @@ class LicenseExportUtils:  # Hold custom license exporters.
     @staticmethod
     def export_org_license_async_claim_status(org_id: str | None = None, include_detail: bool | None = None) -> None:
         """Fetch and export async claim status summary plus optional details."""
-        default_org_id = os.environ.get("MIST_ORG_ID", "")  # Read optional org default from env.
-        logging.info("Prompting for org_id for async-claim export")  # Log before org-id prompt.
-        resolved_org_id = org_id or InputUtils.safe_input(  # Use explicit arg or interactive prompt.
-            "Org ID (UUID): ",  # Prompt user for required org identifier.
-            context="org_license_claim_status:org_id",  # Tag prompt context for EOF handling.
-            default_value=default_org_id,  # Provide .env default for convenience.
-        )
+        logging.info("Resolving org_id for async-claim export")  # Log before org resolution.
+        resolved_org_id = org_id or ConfigUtils.get_cached_or_prompted_org_id()  # Explicit arg else standard resolver.
         logging.debug("Resolved async-claim org_id=%s", resolved_org_id)  # Log resolved org id.
         if not LicenseExportUtils._is_valid_uuid(resolved_org_id):  # Validate input before any API call.
             logging.warning("Invalid org_id %s for async-claim export", resolved_org_id)  # Warn on invalid input.
