@@ -228,6 +228,94 @@ class TestStaleGuard:
         page.query_selector_all.return_value = [stale]
         assert geo._read_fresh_suggestions(page, "9999", 0) == []  # Zero budget -> immediate timeout.
 
+    def test_read_fresh_waits_for_lagging_suite(self):
+        """When a suite is expected, a suite-bearing row that arrives late is preferred."""
+        geo = MistUIGeocoder()
+        page = MagicMock()
+        base = MagicMock()  # First poll: correct house number but no unit yet (suite lag).
+        base.inner_text.return_value = "5550 North Military Trail, Boca Raton, FL 33431"
+        withunit = MagicMock()  # Second poll: the unit has landed.
+        withunit.inner_text.return_value = "5550 North Military Trail #200, Boca Raton, FL 33431"
+        page.query_selector_all.side_effect = [[base], [withunit]]  # Suite appears on the 2nd poll.
+        out = geo._read_fresh_suggestions(page, "5550", 5000, expected_suite="200")
+        assert out[0].endswith("#200, Boca Raton, FL 33431")  # Captured the suite-bearing row.
+        assert page.query_selector_all.call_count == 2  # Waited one extra poll for the suite.
+
+    def test_read_fresh_accepts_base_after_suite_grace(self, monkeypatch):
+        """If the suite never appears within the grace, the base street is accepted (not hung)."""
+        monkeypatch.setattr(ui_mod, "_SUITE_GRACE_S", 0.0)  # Collapse the grace so the test is instant.
+        geo = MistUIGeocoder()
+        page = MagicMock()
+        base = MagicMock()  # House number matches, unit never shows.
+        base.inner_text.return_value = "5550 North Military Trail, Boca Raton, FL 33431"
+        page.query_selector_all.return_value = [base]  # Always the suite-less base street.
+        out = geo._read_fresh_suggestions(page, "5550", 5000, expected_suite="200")
+        assert out and out[0].startswith("5550 North Military Trail")  # Falls back to the base street.
+
+    def test_read_fresh_no_suite_returns_immediately(self):
+        """With no expected suite the first house-number-fresh row returns at once (unchanged)."""
+        geo = MistUIGeocoder()
+        page = MagicMock()
+        item = MagicMock()
+        item.inner_text.return_value = "5550 North Military Trail, Boca Raton, FL 33431"
+        page.query_selector_all.return_value = [item]
+        out = geo._read_fresh_suggestions(page, "5550", 5000)  # No expected_suite.
+        assert out and page.query_selector_all.call_count == 1  # No extra suite wait.
+
+
+class TestSuitePreservation:
+    """Tier-3 keeps a customer-supplied unit that Google's autocomplete drops."""
+
+    def test_suite_id_and_phrase_extraction(self):
+        """Keyword and hash unit forms are extracted from a full query string."""
+        g = MistUIGeocoder()
+        assert g._suite_phrase("5550 N Military Traill Unit 200 Boca Raton FL 33431") == "Unit 200"
+        assert g._suite_id("5550 N Military Traill Unit 200 Boca Raton FL 33431") == "200"
+        assert g._suite_phrase("940 S Military Trail #3 West Palm Beach FL 33415") == "#3"
+        assert g._suite_id("940 S Military Trail #3 West Palm Beach FL 33415") == "3"
+        assert g._suite_phrase("1200 NW 87th Ave Doral FL 33172") == ""  # No unit present.
+
+    def test_reflects_suite_excludes_leading_house_number(self):
+        """A unit id equal to the house number is not falsely 'reflected' by the base street."""
+        assert MistUIGeocoder._reflects_suite("100 Main St, Town, FL 33000", "100") is False
+        assert MistUIGeocoder._reflects_suite("100 Main St Suite 100, Town, FL", "100") is True
+        assert MistUIGeocoder._reflects_suite("5550 N Military Trl #200, Boca, FL", "200") is True
+
+    def test_preserves_dropped_unit_from_query(self):
+        """Google returned the bare street; the unit we typed is restored to it."""
+        g = MistUIGeocoder()
+        query = "T-Mobile 5550 N Military Traill Unit 200 Boca Raton FL 33431"
+        sugg = "5550 North Military Trail, Boca Raton, FL 33431"
+        assert g._preserve_query_suite(query, sugg) == "5550 North Military Trail Unit 200, Boca Raton, FL 33431"
+
+    def test_build_result_preserves_dropped_unit(self):
+        """End-to-end: _build_result restores the dropped unit into the canonical address."""
+        g = MistUIGeocoder()
+        query = "T-Mobile 6798 Bird Rd Suite 98 Miami FL 33155"
+        result = g._build_result(query, ["6798 Bird Road, Miami, FL 33155, USA"])
+        assert result.canonical_address == "6798 Bird Road Suite 98, Miami, FL 33155"
+
+    def test_keeps_googles_different_unit(self):
+        """A DIFFERENT unit from Google is authoritative -- our unit is not grafted on."""
+        g = MistUIGeocoder()
+        query = "T-Mobile 4200 Conroy Rd #204 Orlando FL 32839"
+        sugg = "4200 Conroy Rd Suite H200, Orlando, FL 32839"
+        assert g._preserve_query_suite(query, sugg) == sugg  # Google's H200 wins.
+
+    def test_never_grafts_across_buildings(self):
+        """A different house number means a different building -- never move the unit."""
+        g = MistUIGeocoder()
+        query = "T-Mobile 901 W Indiantown Rd Suite 101 Jupiter FL 33458"
+        sugg = "903 W Indiantown Rd, Jupiter, FL 33458"
+        assert g._preserve_query_suite(query, sugg) == sugg  # 901 != 903 -> untouched.
+
+    def test_no_unit_typed_is_noop(self):
+        """When we typed no unit there is nothing to preserve."""
+        g = MistUIGeocoder()
+        assert g._preserve_query_suite("1200 NW 87th Ave Doral FL", "1200 NW 87th Ave, Doral, FL") == (
+            "1200 NW 87th Ave, Doral, FL"
+        )
+
 
 class TestCleanAddress:
     """The captured Google suggestion is reduced to a clean shippable street line."""
