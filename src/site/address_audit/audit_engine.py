@@ -37,8 +37,12 @@ from src.site.address_audit.models import (  # Shared dataclasses.
     ResolveCandidates,
     UIGeocoderConfig,
 )
+from src.site.address_audit.perf import PhaseTimer  # Per-phase timing to expose slow stages.
 from src.site.address_audit.site_matcher import SiteMatchingEngine  # Serial/fuzzy matcher.
 from src.site.address_audit.snmp_enricher import SNMPLocationEnricher  # SNMP enrichment.
+from src.site.address_audit.suite_patterns import (
+    SUITE_PATTERN_CAPTURE as _SUITE_PATTERN,
+)  # Shared suite detector (capturing).
 from src.utils.input_utils import InputUtils  # EOF-safe operator prompts.
 
 try:  # Optional dependency: tqdm renders the per-row progress bar.
@@ -47,9 +51,6 @@ except ImportError:  # pragma: no cover -- exercised only when tqdm is absent.
     tqdm = None  # type: ignore[assignment]  # Sentinel; _progress degrades to a plain iterator.
 
 _DATA_DIR = "data"  # Directory scanned for the customer CSV.
-_SUITE_PATTERN = (  # Suite token with a capture group for the unit id (state-safe).
-    r"\b(?:ste|suite|unit|apt|apartment|bldg|building|space|spc|rm|room|lot)\b\.?\s*#?\s*([\w-]+)" r"|#\s*(\d[\w-]*)"
-)
 _DIRECTIONALS = {  # Street-name directional tokens, normalized to their abbreviation.
     "n": "N",
     "s": "S",
@@ -174,8 +175,12 @@ class AddressAuditEngine:
         matcher = SiteMatchingEngine(inventory_by_serial, sites_by_id, self._fuzzy_threshold())  # In-memory matcher.
         matched = self._match_sites(rows, matcher, sites_list)  # Serial -> fuzzy fallback per row.
         self._enrich_sites(apisession, matched)  # Fill SNMP location on matched sites.
-        resolver = self._build_resolver(ui_geocode)  # Tiered resolver (+ optional Tier 3).
-        return self._resolve_and_classify(rows, matched, resolver, business, ui_geocode)  # Build results.
+        perf = PhaseTimer()  # One timer shared by the resolver + geocoder for this run.
+        resolver = self._build_resolver(ui_geocode, perf)  # Tiered resolver (+ optional Tier 3).
+        results = self._resolve_and_classify(rows, matched, resolver, business, ui_geocode)  # Build results.
+        if not perf.is_empty():  # Emit the per-phase timing breakdown so slow stages are visible.
+            logging.info("Address audit phase timing (slowest first):\n%s", perf.summary())  # Diagnostic summary.
+        return results  # Hand the classified results back to the pipeline.
 
     def _select_csv_file(self) -> str | None:
         """Find CSV/TSV files in data/; auto-pick one, prompt when several, else None."""
@@ -266,13 +271,13 @@ class AddressAuditEngine:
         cache[site_id] = record  # Memoize for any repeat site_id.
         return record  # Hand back the settings record.
 
-    def _build_resolver(self, ui_geocode: bool) -> AddressResolver:
+    def _build_resolver(self, ui_geocode: bool, perf: PhaseTimer) -> AddressResolver:
         """Construct the tiered resolver, wiring the Tier-3 UI geocoder when enabled."""
         ui_geocoder = None  # Default: Tier 3 disabled.
         if ui_geocode:  # Tier 3 permitted (env default auto) -> try to attach a browser.
-            ui_geocoder = self._make_ui_geocoder()  # Build and connect the browser geocoder (fail-soft).
+            ui_geocoder = self._make_ui_geocoder(perf)  # Build and connect the browser geocoder (fail-soft).
         skip_ssl = self._skip_ssl_verify()  # Skip cert checks behind corporate SSL inspection (Zscaler).
-        return AddressResolver(skip_ssl_verify=skip_ssl, ui_geocoder=ui_geocoder)  # Resolver with optional Tier 3.
+        return AddressResolver(skip_ssl_verify=skip_ssl, ui_geocoder=ui_geocoder, perf=perf)  # Resolver + Tier 3.
 
     @staticmethod
     def _geocode_mode() -> str:
@@ -313,11 +318,11 @@ class AddressAuditEngine:
         return raw not in ("false", "0", "no", "off")  # Any falsey token re-enables verification.
 
     @staticmethod
-    def _make_ui_geocoder() -> Any:
+    def _make_ui_geocoder(perf: PhaseTimer) -> Any:
         """Build and connect a ``MistUIGeocoder`` from env config; ``None`` if unavailable."""
         from src.site.address_audit.ui_geocoder import MistUIGeocoder  # Lazy: optional Playwright.
 
-        geocoder = MistUIGeocoder(AddressAuditEngine._ui_config())  # Env-driven auto/attach/launch config.
+        geocoder = MistUIGeocoder(AddressAuditEngine._ui_config(), perf=perf)  # Env-driven config + shared timer.
         if not geocoder.connect():  # Establish the browser session (fail-soft).
             logging.info(  # No browser is the normal case; degrade quietly to Tier 1/2.
                 "Tier-3 web geocoder not available; using internal + OpenStreetMap hints only. "
