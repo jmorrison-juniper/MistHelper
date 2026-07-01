@@ -89,6 +89,7 @@ class ResolveCandidates:
 
     mist_address: dict[str, Any] = field(default_factory=dict)  # Current Mist site address dict.
     csv_address: dict[str, Any] = field(default_factory=dict)  # Customer CSV address dict.
+    authoritative_address: dict[str, Any] = field(default_factory=dict)  # Optional business-authoritative address dict.
     snmp_location: str | None = None  # SNMP location string (extra reference), if any.
     business_name: str = ""  # Optional business-name prefix for queries.
     ui_geocode: bool = False  # Whether Tier-3 UI geocoding is permitted for this row.
