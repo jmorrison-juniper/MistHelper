@@ -1,5 +1,6 @@
 # Environment files - never include credentials
 .env
+.env*
 .env.local
 .env.production
 .env.staging
@@ -63,11 +64,14 @@ env/
 .coverage
 htmlcov/
 .tox/
+coverage/
 
 # Git
 .git/
 .gitignore
 .gitattributes
+Dockerfile*
+.dockerignore
 
 # Documentation (not needed in container)
 documentation/

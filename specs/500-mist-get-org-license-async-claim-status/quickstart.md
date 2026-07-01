@@ -55,10 +55,10 @@ Files land under `data/` (the directory is enforced at runtime; create it with
 python MistHelper.py
 ```
 
-Interactive transcript (proposed menu number 95 -- final number confirmed at task time):
+Interactive transcript (implemented as menu number 196):
 
 ```
-Select menu option: 95
+Select menu option: 196
 Org ID (UUID) [press Enter for default from .env]:
 Include per-device detail? (y/N): y
 [INFO] Fetching async claim status for org 0a1b2c3d-...
@@ -74,13 +74,13 @@ Include per-device detail? (y/N): y
 Non-interactive smoke test:
 
 ```powershell
-python MistHelper.py --menu 95
+python MistHelper.py --menu 196
 ```
 
 Pipe-friendly variant (uses defaults from `.env` for org and answers `N` for detail):
 
 ```powershell
-echo "" | python MistHelper.py --menu 95
+echo "" | python MistHelper.py --menu 196
 ```
 
 ## Skeleton of the new method
@@ -94,7 +94,7 @@ every meaningful action is bracketed by `logging.info()` / `logging.debug()` cal
 ```python
 class LicenseExportUtils:                                                           # existing class, no new wrapper
 
-    def export_org_license_async_claim_status(self, org_id=None, include_detail=False):  # menu 95 entrypoint
+    def export_org_license_async_claim_status(self, org_id=None, include_detail=False):  # menu 196 entrypoint
         logging.info("Prompting for org_id for async claim status menu item")       # before-prompt action log
         org_id = org_id or safe_input(                                              # honor caller override else prompt user
             "Org ID (UUID): ",                                                      # human-readable prompt text
@@ -102,7 +102,7 @@ class LicenseExportUtils:                                                       
             default=os.environ.get("MIST_ORG_ID", ""),                              # fall back to .env default
         )
         if not is_valid_uuid(org_id):                                               # validate before any API call
-            logging.warning("Invalid org_id %s -- aborting menu 95", org_id)        # log validation failure (no traceback)
+            logging.warning("Invalid org_id %s -- aborting menu 196", org_id)       # log validation failure (no traceback)
             return                                                                  # early return per safety-first principle
 
         logging.info("Prompting for detail flag")                                   # before-prompt action log
@@ -157,7 +157,7 @@ Run these from the repository root with the venv active:
 python -m py_compile MistHelper.py        # 1. Syntax check (zero output = pass)
 python -m ruff check MistHelper.py        # 2. Lint (zero violations = pass)
 python -m black --check MistHelper.py     # 3. Format (zero diffs = pass; rerun without --check to auto-fix)
-python MistHelper.py --test               # 4. Functional smoke test (menu 95 included)
+python MistHelper.py --test               # 4. Functional smoke test (menu 196 included)
 ```
 
 The `--test` sweep automatically skips heavy/destructive operations (14, 18, 63-65,
@@ -170,7 +170,7 @@ After all four quality gates pass:
 
 ```powershell
 git add MistHelper.py README.md CHANGELOG.md
-git commit -m "version YY.MM.DD.HH.MM - add menu 95 GetOrgLicenseAsyncClaimStatus"
+git commit -m "version YY.MM.DD.HH.MM - add menu 196 GetOrgLicenseAsyncClaimStatus"
 git push origin main
 gh run list --workflow=container-build.yml --limit 1
 gh run watch <run-id>

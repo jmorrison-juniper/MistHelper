@@ -57,6 +57,7 @@ from concurrent.futures import (
 from dataclasses import dataclass, field  # Import dataclass decorators for configuration objects and entity classes
 from datetime import datetime  # Import datetime for timestamping logs and events
 from typing import TYPE_CHECKING, Any, Literal, cast  # Import type hints for static analysis without runtime overhead
+from uuid import UUID  # Import UUID parser for strict org-id validation before API calls
 
 # Type stubs for dynamically imported modules
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
@@ -3743,6 +3744,22 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": ["org_id", "sku", "type"],
         "unique_constraints": [],
         "description": "License summary data (aggregated, no stable primary key)",
+    },
+    "getOrgLicenseAsyncClaimStatus": {  # Register composite key strategy for claim-status summary snapshots.
+        "type": "composite_pk",  # Use composite primary key because org_id + scheduled_at uniquely identifies one job.
+        "primary_key": ["org_id", "scheduled_at"],  # Keep one row per org/job across repeated polls.
+        "indexes": ["status"],  # Index status to accelerate prepared/ongoing/done filtering.
+        "unique_constraints": [],  # Composite PK already enforces uniqueness without extra constraints.
+        "table": "org_claim_status_summary",  # Persist summary rows to explicit SQLite table name.
+        "description": "Async org claim job summary keyed by org and scheduled timestamp",  # Document storage intent.
+    },
+    "getOrgLicenseAsyncClaimStatusDetails": {  # Register detail-row strategy for per-device claim status records.
+        "type": "composite_pk",  # Use composite key to avoid duplicate device rows per job.
+        "primary_key": ["org_id", "scheduled_at", "mac"],  # Scope device status by org + job + device MAC.
+        "indexes": ["mac"],  # Index MAC for fast per-device lookup queries.
+        "unique_constraints": [],  # Composite PK provides uniqueness guarantee.
+        "table": "org_claim_status_details",  # Persist detail rows to dedicated detail table.
+        "description": "Async org claim detail rows keyed by org/job/mac",  # Describe per-device table purpose.
     },
     "listOrgLicenses": {
         "type": "auto_increment_with_unique",
@@ -11948,6 +11965,149 @@ class OrgAdminExporter:  # Org admin/token exporters.
         ).execute()
         logging.info(" License usage data exported to OrgUsage")  # Log completion.
         print(" License usage data exported to OrgUsage")  # Tell the user.
+
+
+class LicenseExportUtils:  # Hold custom license exporters.
+    """Custom exporters for license payloads that need manual flattening."""
+
+    @staticmethod
+    def _is_valid_uuid(candidate: str) -> bool:
+        """Validate that candidate looks like a UUID string."""
+        try:  # Guard parse failure to keep caller flow simple.
+            UUID(candidate)  # Parse the candidate as a UUID object.
+            return True  # Signal valid UUID format.
+        except (ValueError, AttributeError, TypeError):  # Handle malformed or missing values.
+            return False  # Signal invalid UUID format.
+
+    @staticmethod
+    def _flatten_org_license_async_claim_status_summary(org_id_value: str, payload: dict) -> dict:
+        """Flatten one async-claim payload into a summary row."""
+        logging.info("Flattening async-claim summary for org %s", org_id_value)  # Log before summary flatten.
+        completed_items = payload.get("completed") or []  # Normalize completed list for safe counting.
+        incompleted_items = payload.get("incompleted") or []  # Normalize incompleted list for safe counting.
+        polled_at_utc = datetime.utcnow().isoformat() + "Z"  # Capture local poll timestamp.
+        summary_row = {  # Build normalized row for DataExporter.
+            "org_id": org_id_value,  # Inject org id for composite key use.
+            "scheduled_at": payload.get("scheduled_at"),  # Keep stable job id from Mist.
+            "status": payload.get("status"),  # Keep lifecycle state for status dashboards.
+            "total": payload.get("total"),  # Keep total devices for progress math.
+            "processed": payload.get("processed"),  # Keep processed counter for progress math.
+            "succeed": payload.get("succeed"),  # Keep success counter for outcome reporting.
+            "failed": payload.get("failed"),  # Keep failure counter for troubleshooting.
+            "completed_count": len(completed_items),  # Store completed list size.
+            "incompleted_count": len(incompleted_items),  # Store incompleted list size.
+            "timestamp": payload.get("timestamp"),  # Keep Mist response timestamp.
+            "polled_at_utc": polled_at_utc,  # Keep local poll timestamp.
+        }
+        logging.debug("Flattened summary scheduled_at=%s", summary_row.get("scheduled_at"))  # Log summary result.
+        return summary_row  # Return normalized summary row.
+
+    @staticmethod
+    def _flatten_org_license_async_claim_status_details(org_id_value: str, payload: dict) -> list[dict]:
+        """Flatten details[] payload into one row per device."""
+        logging.info("Flattening async-claim details for org %s", org_id_value)  # Log before detail flatten.
+        detail_items = payload.get("details") or []  # Normalize details list for safe iteration.
+        scheduled_at_value = payload.get("scheduled_at")  # Capture parent job key for joins.
+        polled_at_utc = datetime.utcnow().isoformat() + "Z"  # Capture local poll timestamp.
+        detail_rows = [  # Build one row per detail object.
+            {
+                "org_id": org_id_value,  # Inject org id for composite key use.
+                "scheduled_at": scheduled_at_value,  # Preserve summary linkage key.
+                "mac": detail_item.get("mac"),  # Keep device MAC from detail payload.
+                "device_status": detail_item.get("status"),  # Map detail status field.
+                "device_timestamp": detail_item.get("timestamp"),  # Map detail timestamp field.
+                "polled_at_utc": polled_at_utc,  # Keep local poll timestamp.
+            }
+            for detail_item in detail_items  # Iterate all detail entries.
+            if isinstance(detail_item, dict)  # Ignore malformed entries safely.
+        ]
+        logging.debug("Flattened %d detail rows for org %s", len(detail_rows), org_id_value)  # Log detail count.
+        return detail_rows  # Return normalized detail rows.
+
+    @staticmethod
+    def export_org_license_async_claim_status(org_id: str | None = None, include_detail: bool | None = None) -> None:
+        """Fetch and export async claim status summary plus optional details."""
+        default_org_id = os.environ.get("MIST_ORG_ID", "")  # Read optional org default from env.
+        logging.info("Prompting for org_id for async-claim export")  # Log before org-id prompt.
+        resolved_org_id = org_id or InputUtils.safe_input(  # Use explicit arg or interactive prompt.
+            "Org ID (UUID): ",  # Prompt user for required org identifier.
+            context="org_license_claim_status:org_id",  # Tag prompt context for EOF handling.
+            default=default_org_id,  # Provide .env default for convenience.
+        )
+        logging.debug("Resolved async-claim org_id=%s", resolved_org_id)  # Log resolved org id.
+        if not LicenseExportUtils._is_valid_uuid(resolved_org_id):  # Validate input before any API call.
+            logging.warning("Invalid org_id %s for async-claim export", resolved_org_id)  # Warn on invalid input.
+            return  # Stop early when input is invalid.
+        if include_detail is None:  # Ask for detail mode only when caller omitted it.
+            logging.info("Prompting for include_detail in async-claim export")  # Log before detail prompt.
+            detail_answer = InputUtils.safe_input(  # Collect detail preference from user.
+                "Include per-device detail? (y/N): ",  # Prompt text with safe default.
+                context="org_license_claim_status:detail",  # Tag prompt context for EOF handling.
+                default="N",  # Default to summary-only mode.
+            )
+            include_detail = detail_answer.strip().lower() in {"y", "yes"}  # Parse yes/no to boolean.
+            logging.debug("Resolved include_detail=%s", include_detail)  # Log parsed detail value.
+        detail_query_value = True if include_detail else None  # Omit query param when detail is false.
+        logging.info("Calling async-claim API for org %s", resolved_org_id)  # Log before SDK call.
+        response = mistapi.api.v1.orgs.claim.status.getOrgLicenseAsyncClaimStatus(  # Call SDK endpoint.
+            apisession,  # Reuse global authenticated API session.
+            resolved_org_id,  # Pass validated org id to API call.
+            detail=detail_query_value,  # Pass optional detail query flag.
+        )
+        status_code = getattr(response, "status_code", 200)  # Read status code when SDK provides it.
+        payload = getattr(response, "data", None) or {}  # Normalize body to dict when missing.
+        logging.debug("Async-claim API status=%s", status_code)  # Log status code after API call.
+        if status_code == 401:  # Handle auth failures explicitly.
+            logging.error("Mist 401 for async-claim org %s; check token", resolved_org_id)  # Provide auth guidance.
+            return  # Stop to avoid misleading empty export.
+        if status_code == 403:  # Handle permission failures explicitly.
+            logging.error(  # Provide access guidance.
+                "Mist 403 for async-claim org %s; check org access", resolved_org_id
+            )
+            return  # Stop because caller lacks required permission.
+        if status_code == 400:  # Handle invalid request inputs gracefully.
+            logging.warning("Mist 400 for async-claim org %s; check org_id", resolved_org_id)  # Provide input guidance.
+            return  # Stop so user can retry with corrected input.
+        if status_code == 404:  # Handle no-active-job response as empty export.
+            logging.warning(  # Explain empty output.
+                "No async claim job for org %s; exporting empty rows", resolved_org_id
+            )
+            payload = {}  # Force empty payload for deterministic writes.
+        logging.info("Preparing summary rows for org %s", resolved_org_id)  # Log before summary transform.
+        summary_rows = (  # Build summary rows list from payload.
+            [  # Hold one flattened summary row.
+                LicenseExportUtils._flatten_org_license_async_claim_status_summary(resolved_org_id, payload)
+            ]
+            if isinstance(payload, dict) and payload  # Only flatten when payload has data.
+            else []  # Keep empty list for no-data cases.
+        )
+        logging.debug("Prepared %d summary rows", len(summary_rows))  # Log summary count.
+        summary_filename = f"org_{resolved_org_id[:8]}_claim_status_summary"  # Build summary filename stem.
+        logging.info("Writing async-claim summary for org %s", resolved_org_id)  # Log before summary write.
+        DataExporter.write_with_format_selection(  # Write summary rows to selected backend.
+            summary_rows,  # Pass summary rows or empty list.
+            summary_filename,  # Use deterministic summary filename stem.
+            api_function_name="getOrgLicenseAsyncClaimStatus",  # Route via summary PK strategy.
+        )
+        logging.debug("Completed summary write for org %s", resolved_org_id)  # Log summary write completion.
+        if include_detail:  # Write details only when user requested them.
+            logging.info("Preparing detail rows for org %s", resolved_org_id)  # Log before detail transform.
+            detail_rows = (  # Build detail rows list from payload.
+                LicenseExportUtils._flatten_org_license_async_claim_status_details(  # Flatten details.
+                    resolved_org_id, payload
+                )
+                if isinstance(payload, dict) and payload  # Only flatten when payload has data.
+                else []  # Keep empty list for no-data cases.
+            )
+            logging.debug("Prepared %d detail rows", len(detail_rows))  # Log detail count.
+            detail_filename = f"org_{resolved_org_id[:8]}_claim_status_details"  # Build detail filename stem.
+            logging.info("Writing async-claim details for org %s", resolved_org_id)  # Log before detail write.
+            DataExporter.write_with_format_selection(  # Write detail rows to selected backend.
+                detail_rows,  # Pass detail rows or empty list.
+                detail_filename,  # Use deterministic detail filename stem.
+                api_function_name="getOrgLicenseAsyncClaimStatusDetails",  # Route via detail PK strategy.
+            )
+            logging.debug("Completed detail write for org %s", resolved_org_id)  # Log detail write completion.
 
 
 class SelfExportUtils:  # Self/account exporters.
@@ -21830,6 +21990,10 @@ menu_actions = {
     "30": (OrgClientSecurityExporter.rogue_aps, "Export rogue AP detections for the organization"),
     # Configuration & Management (Read-Only)
     "42": (OrgAdminExporter.licenses, "Export license information for the organization"),
+    "196": (
+        LicenseExportUtils.export_org_license_async_claim_status,
+        "Export async organization license-claim status summary (and optional per-device details)",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
@@ -23022,6 +23186,7 @@ class OperationRegistry:
         "72": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "88": {"category": "interactive_safe", "skip_reason": "Requires AP model selection"},
         "25": {"category": "safe"},
+        "196": {"category": "safe"},
         "186": {"category": "destructive", "skip_reason": "DANGEROUS: Deletes all generated cache CSV files"},
         "58": {"category": "safe"},
         "187": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},
