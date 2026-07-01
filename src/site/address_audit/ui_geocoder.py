@@ -51,6 +51,8 @@ import time  # Politeness delay between Google Places lookups.
 from typing import Any  # Loose typing for Playwright handles (kept import-light).
 
 from src.site.address_audit.models import ResolverResult, UIGeocoderConfig  # Shared dataclasses.
+from src.site.address_audit.perf import PhaseTimer  # Per-phase timing to expose slow sub-steps.
+from src.site.address_audit.suite_patterns import HASH_UNIT_PATTERN, SUITE_PHRASE_PATTERN  # Shared suite regexes.
 from src.utils.input_utils import InputUtils  # EOF-safe operator prompts.
 
 try:  # Optional dependency: Playwright may not be installed in every environment.
@@ -60,6 +62,7 @@ except ImportError:  # pragma: no cover -- exercised only on hosts without Playw
 
 _KEY_JITTER = secrets.SystemRandom()  # Per-keystroke delay source; unpredictable cadence dodges bot heuristics.
 _THINKING_PAUSE_EVERY = 7  # Add an occasional longer "thinking" pause every N characters while typing.
+_SUITE_GRACE_S = 2.0  # Extra seconds (after the house number matches) to let a typed suite/unit land in the dropdown.
 
 # --- Selector constants (captured 2026-06-29; re-verify if the Mist dashboard UI changes) ---
 # Google Places Autocomplete attaches ``pac-target-input`` to the bound input and
@@ -81,9 +84,10 @@ class MistUIGeocoder:
     lookup never aborts the surrounding audit loop (fail-soft, OQ-002).
     """
 
-    def __init__(self, config: UIGeocoderConfig | None = None) -> None:
+    def __init__(self, config: UIGeocoderConfig | None = None, perf: PhaseTimer | None = None) -> None:
         """Store configuration and initialize all browser-handle state."""
         self._config = config or UIGeocoderConfig()  # Caller config or Zscaler-safe defaults.
+        self._perf = perf or PhaseTimer()  # Timing sink (own no-op timer when the caller passes none).
         self._playwright: Any = None  # Playwright driver handle (set on connect()).
         self._browser: Any = None  # Browser or CDP-attached browser handle.
         self._context: Any = None  # Active browser context (operator session or fresh).
@@ -240,7 +244,8 @@ class MistUIGeocoder:
             if page is None:  # No context/page -> cannot proceed.
                 return None  # Fail soft.
             suggestions = self._perform_lookup(page, query)  # Type the query and read suggestions.
-            time.sleep(self._config.politeness_delay_s)  # >=1 req/sec politeness toward Google.
+            with self._perf.phase("ui.politeness"):  # Time the fixed >=1 req/sec courtesy delay.
+                time.sleep(self._config.politeness_delay_s)  # >=1 req/sec politeness toward Google.
             return self._build_result(query, suggestions)  # Convert suggestions to a ResolverResult.
         except Exception as exc:  # noqa: BLE001 -- fail soft per OQ-002.
             logging.warning("UI geocode failed for query '%s': %s", query, exc)  # Log and continue.
@@ -259,10 +264,14 @@ class MistUIGeocoder:
     def _perform_lookup(self, page: Any, query: str) -> list[str]:
         """Type ``query``, then read ONLY the suggestion list that belongs to it (stale-safe)."""
         timeout_ms = int(self._config.per_lookup_timeout_s * 1000)  # Playwright uses milliseconds.
-        field = self._locate_input(page, timeout_ms)  # Find the autocomplete input element.
-        self._enter_query(page, field, query)  # Focus, clear the stale dropdown, type the new query.
+        with self._perf.phase("ui.locate_input"):  # Time finding the autocomplete field.
+            field = self._locate_input(page, timeout_ms)  # Find the autocomplete input element.
+        with self._perf.phase("ui.type_query"):  # Time the human-like typing (usually the biggest cost).
+            self._enter_query(page, field, query)  # Focus, clear the stale dropdown, type the new query.
         expected = self._house_number(query)  # House number anchors the fresh-result wait.
-        texts = self._read_fresh_suggestions(page, expected, timeout_ms)  # Wait for THIS query's suggestions.
+        expected_suite = self._suite_id(query)  # Unit id we typed (e.g. "200"); "" when none -> suite wait is a no-op.
+        with self._perf.phase("ui.read_suggestions"):  # Time the fresh-result poll incl. the suite grace.
+            texts = self._read_fresh_suggestions(page, expected, timeout_ms, expected_suite)  # Wait for THIS query.
         logging.debug("UI autocomplete returned %d fresh suggestion(s)", len(texts))  # Action-log count.
         return texts  # May be empty -> NO_RESULT (never a stale, wrong answer).
 
@@ -294,7 +303,7 @@ class MistUIGeocoder:
             delay += _KEY_JITTER.uniform(low, high)  # Occasional human "thinking" gap.
         return delay  # Seconds to sleep before the next keystroke.
 
-    def _read_fresh_suggestions(self, page: Any, expected: str, timeout_ms: int) -> list[str]:
+    def _read_fresh_suggestions(self, page: Any, expected: str, timeout_ms: int, expected_suite: str = "") -> list[str]:
         """Poll until the TOP suggestion matches ``expected`` (this query's house number).
 
         Google leaves the PREVIOUS query's suggestions in the DOM until the new
@@ -303,13 +312,34 @@ class MistUIGeocoder:
         query's house number; on timeout we return [] (NO_RESULT) rather than risk
         a stale, wrong address. Queries without a house number cannot be anchored,
         so they read the first stable list (rare for retail addresses).
+
+        The suite lags too: the unit is typed LAST, so the house number is already
+        present in the dropdown before the suite-bearing request returns, and a
+        house-number-only wait would accept the base street without the unit. When
+        ``expected_suite`` is set we therefore keep polling for a short, bounded
+        grace (``_SUITE_GRACE_S``) for the top row to also reflect that unit; if it
+        lands we use it, and if the grace expires we accept the base street (the
+        builder then re-appends the unit we typed). Google usually catches up, so
+        this recovers the unit without stalling rows where Google has no unit.
         """
         deadline = time.monotonic() + max(0.0, timeout_ms / 1000.0)  # Absolute wait deadline.
+        grace = min(_SUITE_GRACE_S, max(0.0, timeout_ms / 1000.0))  # Bounded extra window for a lagging suite.
+        house_ok_at: float | None = None  # Monotonic time the house number first matched (starts the suite grace).
+        fresh_fallback: list[str] = []  # Best house-number-fresh list seen (may lack the suite) for a timeout return.
         while time.monotonic() < deadline:  # Poll until fresh or timed out.
             texts = self._current_suggestions(page)  # Snapshot the current dropdown rows.
             if texts and (not expected or self._matches_house_number(texts[0], expected)):  # Fresh top row.
-                return texts  # The top suggestion belongs to THIS query.
+                fresh_fallback = texts  # Remember it: the street/number belongs to THIS query.
+                if not expected_suite or self._reflects_suite(texts[0], expected_suite):  # Suite present (or none).
+                    return texts  # The top suggestion fully belongs to THIS query.
+                if house_ok_at is None:  # House number just became fresh; start the suite grace clock.
+                    house_ok_at = time.monotonic()  # Give the lagging suite a moment to appear.
+                elif time.monotonic() - house_ok_at >= grace:  # Suite never showed within the grace window.
+                    logging.info("Suite '%s' not shown within grace; using base street", expected_suite)  # Note.
+                    return texts  # Accept the base street; _build_result re-appends the unit we typed.
             self._settle(page, 200)  # Brief pause before re-polling.
+        if fresh_fallback:  # Timed out mid-grace but we did see this query's street/number.
+            return fresh_fallback  # Prefer the fresh street over NO_RESULT.
         logging.info("No fresh suggestion for house number '%s' within timeout; skipping (stale-guard)", expected)
         return []  # Fail-soft to NO_RESULT.
 
@@ -337,6 +367,45 @@ class MistUIGeocoder:
         """Return True when ``expected`` is one of the digit-runs in ``text`` (glue-safe)."""
         return expected in re.findall(r"\d+", text)  # Compare extracted numbers, not a raw substring.
 
+    @staticmethod
+    def _suite_phrase(text: str) -> str:
+        """Return the full suite/unit phrase from an address/query (e.g. 'Unit 200', '#3'), or ''.
+
+        Matches an explicit keyword form (``Suite/Ste/Unit/Space/Bldg/Rm/Apt <id>``)
+        first, then a bare ``#<id>`` hash form. The id may be alphanumeric with an
+        internal hyphen (``A2``, ``1515B``, ``H0004``). Returns the raw matched token
+        (whitespace-collapsed) so it can be re-appended verbatim to a suggestion.
+        """
+        keyword = re.search(
+            SUITE_PHRASE_PATTERN, text
+        )  # Shared keyword+id form (e.g. 'Suite 100', 'Ste A2', 'Sute A-103').
+        if keyword:  # Prefer the explicit keyword form.
+            return re.sub(r"\s+", " ", keyword.group(0)).strip()  # Collapse internal whitespace.
+        hashed = re.search(HASH_UNIT_PATTERN, text)  # Bare hash form (e.g. '#3', '#1515b').
+        return hashed.group(0).replace(" ", "") if hashed else ""  # '#<id>' with no gap, or empty.
+
+    @staticmethod
+    def _suite_id(text: str) -> str:
+        """Return just the bare unit identifier from a suite phrase (e.g. '200', 'A2', '3'), or ''."""
+        phrase = MistUIGeocoder._suite_phrase(text)  # Full phrase such as 'Unit 200' or '#3'.
+        if not phrase:  # No suite present.
+            return ""  # Nothing to compare/preserve.
+        return phrase.split()[-1].lstrip("#")  # Trailing token; '#3' -> '3', 'Unit 200' -> '200'.
+
+    @staticmethod
+    def _reflects_suite(text: str, suite: str) -> bool:
+        """Return True when ``suite`` appears in ``text`` beyond the leading house number (glue-safe).
+
+        The leading house number is removed first so a unit id that equals the house
+        number (``100 Main St Suite 100``) is not falsely considered 'reflected' by
+        the base street ``100 Main St``.
+        """
+        if not suite:  # No suite to look for -> treat as satisfied.
+            return True  # Caller wants no suite constraint.
+        body = re.sub(r"^\D*\d+(?:-\d+)?", "", text, count=1)  # Drop the leading (possibly hyphenated) house number.
+        tokens = [token.lower() for token in re.findall(r"[A-Za-z0-9]+", body)]  # Remaining alnum tokens, lowered.
+        return suite.lower() in tokens  # The unit id must appear somewhere after the house number.
+
     def _locate_input(self, page: Any, timeout_ms: int) -> Any:
         """Probe candidate selectors and return the first matching input element."""
         per_try = max(1000, timeout_ms // max(1, len(INPUT_SELECTORS)))  # Split budget across candidates.
@@ -362,6 +431,7 @@ class MistUIGeocoder:
             logging.debug("No UI suggestions for query: %s", query)  # Trace the empty result.
             return ResolverResult(query=query, canonical_address=None, source="mist_ui", confidence=0.0)
         top = self._clean_address(suggestions[0])  # Strip the glued business name + trailing country.
+        top = self._preserve_query_suite(query, top)  # Keep the unit we typed if Google returned the bare street.
         ambiguous = len(suggestions) > 1  # Multiple hits => mall/strip-center ambiguity.
         confidence = 0.6 if ambiguous else 0.9  # Lower confidence when several candidates exist.
         logging.info("UI geocode top suggestion: %s (ambiguous=%s)", top, ambiguous)  # Action-log result.
@@ -372,6 +442,41 @@ class MistUIGeocoder:
             confidence=confidence,  # Heuristic confidence.
             raw_response={"suggestions": suggestions, "ambiguous": ambiguous},  # Full payload for cache.
         )
+
+    def _preserve_query_suite(self, query: str, suggestion: str) -> str:
+        """Re-append the unit we typed when Google returned the SAME building without one.
+
+        Google Places autocomplete often resolves to the street/establishment and
+        drops an arbitrary unit typed at the end of the query -- so a suite the CSV
+        (and often the SNMP location) confirmed can vanish from the suggestion,
+        silently losing shipping-critical data and even reading as ADDRESS_MATCH.
+        We restore it, but only when it is safe: we typed a unit, the suggestion
+        does not already reflect that unit, the suggestion carries NO other unit
+        (a DIFFERENT unit means Google is the authority -- leave it), and the house
+        numbers agree (never graft a unit onto a different building).
+        """
+        suite_id = self._suite_id(query)  # The unit id we typed (e.g. "200"); "" when none.
+        if not suite_id:  # We never asked about a unit.
+            return suggestion  # Nothing to preserve.
+        if self._reflects_suite(suggestion, suite_id):  # Google already shows our unit.
+            return suggestion  # Already complete.
+        if self._suite_phrase(suggestion):  # Google returned a DIFFERENT unit -> it is the authority.
+            return suggestion  # Trust Google's unit over ours.
+        query_house = self._house_number(query)  # House number we asked about.
+        sugg_house = self._house_number(suggestion)  # House number Google returned.
+        if query_house and sugg_house and query_house != sugg_house:  # Different building.
+            return suggestion  # Never graft a unit across buildings.
+        phrase = self._suite_phrase(query)  # The full 'Unit 200' / '#3' token to restore.
+        restored = self._insert_suite(suggestion, phrase)  # Append it to the street segment.
+        logging.info("Preserved typed unit '%s' Google omitted: %s", phrase, restored)  # Action-log the restore.
+        return restored  # Street from Google, unit preserved from the customer data.
+
+    @staticmethod
+    def _insert_suite(address: str, phrase: str) -> str:
+        """Append ``phrase`` to the street segment (before the first comma) of ``address``."""
+        head, sep, tail = address.partition(",")  # Split off the street line (before the first comma).
+        joined = f"{head.rstrip()} {phrase}".strip()  # Street + unit, single-spaced.
+        return f"{joined}{sep}{tail}"  # Reattach the city/state/zip remainder unchanged.
 
     # Street-type suffixes (abbreviated and spelled out) used to split a street glued to a city.
     _STREET_SUFFIXES = (
@@ -392,13 +497,16 @@ class MistUIGeocoder:
         <street>`` start -- yielding the clean shippable street line. A real
         camel-cased city (``DeFuniak``) is preserved because only street suffixes
         and digits trigger a split, never a generic lowercase->uppercase boundary.
+        The leading house number may be hyphenated (Hawaii's ``74-5450`` grid
+        addresses), so the anchor accepts an optional ``-<digits>`` run before the
+        street; without this the glued business name survives (``T-Mobile74-5450``).
         """
         s = text.strip()  # Normalize surrounding whitespace.
         s = re.sub(r",?\s*(?:USA|United States)\s*$", "", s, flags=re.IGNORECASE).strip()  # Drop trailing country.
         s = re.sub(r"\b(US|NE|NW|SE|SW|N|S|E|W)([A-Z][a-z])", r"\1 \2", s)  # Split directional glue (NLive).
         s = re.sub(rf"\b({MistUIGeocoder._STREET_SUFFIXES})([A-Z][a-z])", r"\1 \2", s)  # Split street->city (HwyFort).
         s = re.sub(r"(\d)([A-Z][a-z]{2,})", r"\1 \2", s)  # Split a number glued to a city word (330Brandon).
-        match = re.match(r"^\D*?(\d+\s+\S.*)$", s)  # "<house-number> <street>..." after any name prefix.
+        match = re.match(r"^\D*?(\d+(?:-\d+)?\s+\S.*)$", s)  # "<house-number> <street>" (house# may be hyphenated).
         cleaned = match.group(1) if match else s  # Use the address tail when a real street start is present.
         return cleaned.strip().strip(",").strip() or text.strip()  # Never return empty.
 

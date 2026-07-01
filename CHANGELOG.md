@@ -26,6 +26,18 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 ### Added
 
 - Added menu `196` for `GetOrgLicenseAsyncClaimStatus` so operators can export org-level async claim-job summary data and optional per-device detail rows through `DataExporter` with composite upsert keys for SQLite/Redis/Arango backends.
+- **Address audit now logs a per-phase timing breakdown (menu 195)**: a Tier-3 run
+  spends 12-20 seconds per site and it was not obvious where that time went. A tiny
+  always-on ``PhaseTimer`` now accumulates wall-clock time per stage (SQLite cache
+  read, Tier-1 internal, Tier-2 Nominatim incl. its rate-limit sleep, Tier-3 browser
+  total, and the Tier-3 sub-steps: locating the input, the human-like typing, the
+  fresh-result poll incl. the suite grace, and the politeness delay). At the end of
+  the run the audit logs the breakdown sorted slowest-first to ``data/script.log``,
+  turning "it feels slow" into a measurement. Live data shows the human-like typing
+  (``ui.type_query``) dominates -- tune it with ``UI_GEOCODE_MIN_KEY_DELAY_MS`` /
+  ``UI_GEOCODE_MAX_KEY_DELAY_MS`` (faster typing trades against Google's bot
+  heuristics), or lower the ``UI_GEOCODE`` politeness/timeout knobs.
+
 - **Address audit now flags rows it cannot safely auto-correct, as review-only
   (menu 195)**: two new classification states protect against pushing a wrong or
   non-unique address to Mist, and both are **excluded from write-back** (they are
@@ -64,6 +76,17 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   Mist-better rows are never touched.
 
 ### Changed
+
+- **Address audit suite/unit detection is consolidated and typo-tolerant (menu
+  195)**: three modules (``address_resolver``, ``audit_engine``, ``ui_geocoder``)
+  each defined their own suite/unit keyword regex, which drifted out of sync -- a
+  real customer file spelled it ``Sute A-103`` and only some detectors recognized
+  it, so that unit was dropped from the suggested address (cosmetic, but sloppy).
+  All three now derive from a single ``SUITE_KEYWORDS`` constant in a shared
+  ``suite_patterns`` module, so a spelling is added in exactly one place. The common
+  misspelling ``sute`` is now recognized everywhere (``ste``/``Ste.`` were already
+  covered); ``suit`` is deliberately excluded to avoid matching ``lawsuit`` /
+  ``pursuit``. Detection/classification behavior is otherwise unchanged.
 
 - **Address audit Source column now names Google explicitly (menu 195)**: the
   Tier-3 web authority is Google Places autocomplete, accessed by driving the Mist
@@ -148,6 +171,36 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   web to deduce the true, shippable address.
 
 ### Fixed
+
+- **Address audit silently dropped a customer-supplied unit when Google omitted it
+  (menu 195)**: Tier-3 types ``{business} {address}`` (including the suite) into the
+  Mist dashboard's Google Places box, but Google's autocomplete often resolves to
+  the street/establishment and drops a unit typed at the end -- and the freshness
+  guard only waited for the *house number*, so it accepted the bare street without
+  the unit. The unit then vanished from the suggestion, and because Mist also
+  lacked it the row even read ``ADDRESS_MATCH`` ("no change needed"). A real run
+  lost the unit on four sites whose CSV **and** SNMP location both confirmed it
+  (FLSS2SJB ``Unit 200``, FLS01302 ``Suite 100``, FLS01501 ``Suite 98``, FLSE8677
+  ``Unit 8``). Two changes fix this: (1) when a unit was typed, the freshness guard
+  now waits a short bounded grace (``_SUITE_GRACE_S``) for the unit to also appear
+  in the top suggestion before accepting it (Google usually catches up); and (2) if
+  the unit still never appears, the unit we typed is re-appended to Google's street
+  -- but only when it is safe (the suggestion carries no *other* unit, and the house
+  numbers agree, so a different unit or a different building is never overwritten).
+  Restored rows now correctly read ``MISSING_SUITE`` instead of a false
+  ``ADDRESS_MATCH``, so the operator can add the unit.
+
+- **Address audit suggestion glued the business name to Hawaii hyphenated house
+  numbers (menu 195)**: the Tier-3 (Google-via-Mist) suggestion cleaner strips the
+  establishment name that Google glues to the address (``T-Mobile931 US Highway
+  ...`` -> ``931 US Highway ...``) by anchoring on the ``<house-number> <street>``
+  start. Its anchor required the house number to be followed by a space, but
+  Hawaii's grid addresses use a hyphenated house number (``74-5450``), so the
+  anchor never matched and the business name survived in the output (real run:
+  ``T-Mobile74-5450 Makala Blvd #107`` for site HIS00364). The anchor now accepts
+  an optional ``-<digits>`` run in the house number, so the prefix is stripped
+  (``74-5450 Makala Blvd #107``) while every non-hyphenated address and suite dash
+  (``Sute A-103``) is unaffected.
 
 - **Logging and on-screen output crashed on non-Western characters (all menus)**:
   running any operation against data containing characters outside the Windows
