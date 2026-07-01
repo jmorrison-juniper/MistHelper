@@ -392,13 +392,16 @@ class MistUIGeocoder:
         <street>`` start -- yielding the clean shippable street line. A real
         camel-cased city (``DeFuniak``) is preserved because only street suffixes
         and digits trigger a split, never a generic lowercase->uppercase boundary.
+        The leading house number may be hyphenated (Hawaii's ``74-5450`` grid
+        addresses), so the anchor accepts an optional ``-<digits>`` run before the
+        street; without this the glued business name survives (``T-Mobile74-5450``).
         """
         s = text.strip()  # Normalize surrounding whitespace.
         s = re.sub(r",?\s*(?:USA|United States)\s*$", "", s, flags=re.IGNORECASE).strip()  # Drop trailing country.
         s = re.sub(r"\b(US|NE|NW|SE|SW|N|S|E|W)([A-Z][a-z])", r"\1 \2", s)  # Split directional glue (NLive).
         s = re.sub(rf"\b({MistUIGeocoder._STREET_SUFFIXES})([A-Z][a-z])", r"\1 \2", s)  # Split street->city (HwyFort).
         s = re.sub(r"(\d)([A-Z][a-z]{2,})", r"\1 \2", s)  # Split a number glued to a city word (330Brandon).
-        match = re.match(r"^\D*?(\d+\s+\S.*)$", s)  # "<house-number> <street>..." after any name prefix.
+        match = re.match(r"^\D*?(\d+(?:-\d+)?\s+\S.*)$", s)  # "<house-number> <street>" (house# may be hyphenated).
         cleaned = match.group(1) if match else s  # Use the address tail when a real street start is present.
         return cleaned.strip().strip(",").strip() or text.strip()  # Never return empty.
 
