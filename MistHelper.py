@@ -12032,7 +12032,7 @@ class LicenseExportUtils:  # Hold custom license exporters.
         resolved_org_id = org_id or InputUtils.safe_input(  # Use explicit arg or interactive prompt.
             "Org ID (UUID): ",  # Prompt user for required org identifier.
             context="org_license_claim_status:org_id",  # Tag prompt context for EOF handling.
-            default=default_org_id,  # Provide .env default for convenience.
+            default_value=default_org_id,  # Provide .env default for convenience.
         )
         logging.debug("Resolved async-claim org_id=%s", resolved_org_id)  # Log resolved org id.
         if not LicenseExportUtils._is_valid_uuid(resolved_org_id):  # Validate input before any API call.
@@ -12043,7 +12043,7 @@ class LicenseExportUtils:  # Hold custom license exporters.
             detail_answer = InputUtils.safe_input(  # Collect detail preference from user.
                 "Include per-device detail? (y/N): ",  # Prompt text with safe default.
                 context="org_license_claim_status:detail",  # Tag prompt context for EOF handling.
-                default="N",  # Default to summary-only mode.
+                default_value="N",  # Default to summary-only mode.
             )
             include_detail = detail_answer.strip().lower() in {"y", "yes"}  # Parse yes/no to boolean.
             logging.debug("Resolved include_detail=%s", include_detail)  # Log parsed detail value.
