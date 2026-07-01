@@ -77,6 +77,17 @@ class TestCleanSuggestion:
         result = res._compare_internal(cand)
         assert result.canonical_address == "3101 PGA Boulevard Space P239, Palm Beach Gardens, FL 33410"
 
+    def test_prefers_authoritative_suite_over_csv(self):
+        """When business-authoritative suite differs, Tier 1 prefers authoritative over CSV."""
+        res = AddressResolver()
+        mist = {"address": "4200 Conroy Rd", "city": "Orlando", "state": "FL", "zip": "32839"}
+        csv = {"address": "4200 Conroy Rd Suite H200", "city": "Orlando", "state": "FL", "zip": "32839"}
+        authority = {"address": "4200 Conroy Rd #204", "city": "Orlando", "state": "FL", "zip": "32839"}
+        cand = ResolveCandidates(mist_address=mist, csv_address=csv, authoritative_address=authority)
+        result = res._compare_internal(cand)
+        assert result is not None
+        assert result.canonical_address == "4200 Conroy Rd #204, Orlando, FL 32839"
+
     def test_no_suite_anywhere_defers(self):
         """With no suite in CSV or SNMP, Tier 1 returns None (defers to OSM)."""
         res = AddressResolver()
@@ -255,14 +266,19 @@ class TestTier3Gating:
         """The Tier-3 gate: run on missing or conflicting suites, skip on a match."""
         res = AddressResolver()
 
-        def gate(mist, csv):
-            cand = ResolveCandidates(mist_address={"address": mist}, csv_address={"address": csv})
+        def gate(mist, csv, authority=""):
+            cand = ResolveCandidates(
+                mist_address={"address": mist},
+                csv_address={"address": csv},
+                authoritative_address={"address": authority},
+            )
             return res._should_consult_ui(cand)
 
         assert gate("100 Main St", "100 Main St Suite 5") is True  # Mist missing -> discover.
         assert gate("100 Main St #204", "100 Main St Suite H200") is True  # Conflict -> adjudicate.
         assert gate("100 Main St Suite 100", "100 Main St Ste 100") is False  # Same unit -> skip.
         assert gate("100 Main St #1st", "100 Main St") is False  # CSV claims no unit -> skip.
+        assert gate("100 Main St #204", "100 Main St #204", "100 Main St Suite H200") is True  # Authority conflict.
 
     def test_internal_used_when_ui_returns_none(self, tmp_path, monkeypatch):
         """When Tier 3 returns None, the internal suite suggestion is used (no worse than before)."""
@@ -329,6 +345,17 @@ class TestConsensusQuery:
         mist = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
         csv = {"address": "100 Main St Suite 7", "city": "Town", "state": "FL", "zip": "33000"}
         assert "Suite 7" in res._consensus_address(ResolveCandidates(mist_address=mist, csv_address=csv))
+
+    def test_consensus_prefers_authority_when_house_number_ties(self):
+        """Authority hint outranks CSV when both agree on house number and carry suites."""
+        res = AddressResolver()
+        mist = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
+        csv = {"address": "100 Main St Suite 7", "city": "Town", "state": "FL", "zip": "33000"}
+        authority = {"address": "100 Main St #204", "city": "Town", "state": "FL", "zip": "33000"}
+        query = res._consensus_address(
+            ResolveCandidates(mist_address=mist, csv_address=csv, authoritative_address=authority)
+        )
+        assert "#204" in query
 
 
 class TestUiBusinessFallback:

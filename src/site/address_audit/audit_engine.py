@@ -28,6 +28,9 @@ import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelp
 from src.site.address_audit.address_corrector import AddressCorrector  # Optional Mist write-back.
 from src.site.address_audit.address_resolver import AddressResolver  # Tiered resolver.
 from src.site.address_audit.audit_reporter import AddressAuditReporter  # CSV writer.
+from src.site.address_audit.business_authority_ingester import (  # Business-authoritative CSV parser + matcher.
+    BusinessAuthorityIngester,
+)
 from src.site.address_audit.comparison_display import ComparisonTableRenderer  # Table + prompt.
 from src.site.address_audit.csv_ingester import CSVAddressIngester  # CSV parser.
 from src.site.address_audit.models import (  # Shared dataclasses.
@@ -96,12 +99,16 @@ class AddressAuditEngine:
     def __init__(
         self,
         ingester: CSVAddressIngester | None = None,
+        authority_ingester: BusinessAuthorityIngester | None = None,
         enricher: SNMPLocationEnricher | None = None,
         renderer: ComparisonTableRenderer | None = None,
         reporter: AddressAuditReporter | None = None,
     ) -> None:
         """Store collaborators (injectable for tests; sensible defaults otherwise)."""
         self._ingester = ingester or CSVAddressIngester()  # CSV parser.
+        self._authority_ingester = (
+            authority_ingester or BusinessAuthorityIngester()
+        )  # Business-authoritative CSV parser.
         self._enricher = enricher or SNMPLocationEnricher()  # SNMP enrichment.
         self._renderer = renderer or ComparisonTableRenderer()  # Table + prompt.
         self._reporter = reporter or AddressAuditReporter()  # CSV report writer.
@@ -132,8 +139,17 @@ class AddressAuditEngine:
         if not rows:  # Every row was malformed/empty-serial.
             print(f"No valid rows parsed from {csv_path} ({failures} skipped).")  # Inform operator.
             return  # Nothing further to do.
+        business_csv_path = self._select_business_csv_file(csv_path)  # Optional second prompt for authoritative CSV.
+        authoritative_index = self._load_business_authority_index(business_csv_path)  # Pre-index authoritative data.
         business = self._resolve_business_name()  # Business-name prefix (env or prompt).
-        results = self._audit_rows(apisession, org_id, rows, business, ui_geocode)  # Core pipeline.
+        results = self._audit_rows(  # Core pipeline.
+            apisession,  # Mist session.
+            org_id,  # Organization id.
+            rows,  # Primary customer CSV rows.
+            business,  # Optional business-name prefix.
+            ui_geocode,  # Tier-3 enablement.
+            authoritative_index,  # Optional business-authoritative lookup index.
+        )
         self._renderer.render(results)  # Render the comparison table.
         self._finish(results, apisession)  # Post-table save/quit prompt + optional write-back.
 
@@ -169,6 +185,7 @@ class AddressAuditEngine:
         rows: list[AddressRow],
         business: str,
         ui_geocode: bool,
+        authoritative_index: dict[str, dict[str, list[Any]]],
     ) -> list[AuditResult]:
         """Load Mist data, match/enrich/resolve every row, and classify the outcomes."""
         inventory_by_serial, sites_by_id, sites_list = self._load_mist_data(apisession, org_id)  # One read.
@@ -177,7 +194,14 @@ class AddressAuditEngine:
         self._enrich_sites(apisession, matched)  # Fill SNMP location on matched sites.
         perf = PhaseTimer()  # One timer shared by the resolver + geocoder for this run.
         resolver = self._build_resolver(ui_geocode, perf)  # Tiered resolver (+ optional Tier 3).
-        results = self._resolve_and_classify(rows, matched, resolver, business, ui_geocode)  # Build results.
+        results = self._resolve_and_classify(  # Build results.
+            rows,  # Input CSV rows.
+            matched,  # Matched/enriched site rows.
+            resolver,  # Resolver instance.
+            business,  # Optional business-name prefix.
+            ui_geocode,  # Tier-3 enablement.
+            authoritative_index,  # Optional business-authoritative lookup.
+        )
         if not perf.is_empty():  # Emit the per-phase timing breakdown so slow stages are visible.
             logging.info("Address audit phase timing (slowest first):\n%s", perf.summary())  # Diagnostic summary.
         return results  # Hand the classified results back to the pipeline.
@@ -203,6 +227,51 @@ class AddressAuditEngine:
             if raw.isdigit() and 1 <= int(raw) <= len(candidates):  # Valid in-range integer.
                 return candidates[int(raw) - 1]  # Return the chosen path.
             print(f"Invalid selection. Please enter a number between 1 and {len(candidates)}: ")  # Re-prompt.
+
+    def _select_business_csv_file(self, primary_csv_path: str) -> str | None:
+        """Prompt for an optional business-authoritative CSV from data/ (second selector)."""
+        candidates = sorted(glob.glob(os.path.join(_DATA_DIR, "*.csv")) + glob.glob(os.path.join(_DATA_DIR, "*.tsv")))
+        if not candidates:  # No second-file candidates available.
+            logging.debug("No candidate business-authoritative CSV files found in %s", _DATA_DIR)  # Trace skip.
+            return None  # Continue without authority data.
+        return self._prompt_business_csv_choice(candidates, primary_csv_path)  # Prompt operator from indexed list.
+
+    def _prompt_business_csv_choice(self, candidates: list[str], primary_csv_path: str) -> str | None:
+        """Prompt for a business-authoritative CSV file index, or skip with ``q``."""
+        print("\nOptional: select business-authoritative CSV file in data/ (or q to skip):")  # Second prompt header.
+        for index, path in enumerate(candidates, start=1):  # Enumerate options 1..N.
+            marker = " (primary file)" if path == primary_csv_path else ""  # Guard hint when selecting same file.
+            print(f"  [{index}] {os.path.basename(path)}{marker}")  # Show indexed filename choice.
+        while True:  # Re-prompt until valid selection or explicit skip.
+            raw = (
+                InputUtils.safe_input(
+                    "Select business file number (or q to skip): ", context="address_audit_business_csv_pick"
+                )
+                .strip()
+                .lower()
+            )
+            if raw == "q":  # Operator explicitly skips the authority dataset for this run.
+                logging.info("Business-authoritative CSV selection skipped by operator")  # Action-log skip.
+                return None  # Proceed without authority data.
+            if raw.isdigit() and 1 <= int(raw) <= len(candidates):  # Valid in-range index.
+                picked = candidates[int(raw) - 1]  # Resolve selected path from the menu index.
+                logging.info("Selected business-authoritative CSV: %s", picked)  # Action-log selected file.
+                return picked  # Use the selected authority file.
+            print(f"Invalid selection. Enter 1-{len(candidates)} or q to skip.")  # One-line validation message.
+
+    def _load_business_authority_index(
+        self,
+        business_csv_path: str | None,
+    ) -> dict[str, dict[str, list[Any]]]:
+        """Load + index the optional business-authoritative CSV (fail-soft to empty index)."""
+        if not business_csv_path:  # No authority file selected this run.
+            return {"by_name": {}, "by_full": {}, "by_no_suite": {}}  # Empty index keeps flow unchanged.
+        try:
+            rows = self._authority_ingester.load(business_csv_path)  # Parse authoritative rows from selected file.
+            return self._authority_ingester.build_index(rows)  # Pre-index for O(1) per-row lookup.
+        except Exception as exc:  # noqa: BLE001 -- authority file is additive, never run-blocking.
+            logging.warning("Business-authoritative CSV load failed (%s); continuing without it", exc)  # Fail-soft log.
+            return {"by_name": {}, "by_full": {}, "by_no_suite": {}}  # Degrade to empty authority index.
 
     @staticmethod
     def _resolve_business_name() -> str:
@@ -380,11 +449,21 @@ class AddressAuditEngine:
         resolver: AddressResolver,
         business: str,
         ui_geocode: bool,
+        authoritative_index: dict[str, dict[str, list[Any]]],
     ) -> list[AuditResult]:
         """Resolve + classify every row, returning one ``AuditResult`` per CSV row."""
         results: list[AuditResult] = []  # Accumulator (100% row accountability).
         for row, site in self._progress(list(zip(rows, matched, strict=False)), len(rows)):  # Iterate w/ progress.
-            results.append(self._build_audit_result(row, site, resolver, business, ui_geocode))  # One result.
+            results.append(  # One result.
+                self._build_audit_result(
+                    row,  # Input CSV row.
+                    site,  # Matched site data.
+                    resolver,  # Resolver instance.
+                    business,  # Optional business-name prefix.
+                    ui_geocode,  # Tier-3 enablement.
+                    authoritative_index,  # Optional authority lookup.
+                )
+            )
         logging.debug("Classified %d audit rows", len(results))  # Action-log completion.
         self._flag_duplicate_addresses(results)  # Cross-row safety: flag one address shared by 2+ sites.
         return results  # Hand back all results.
@@ -444,13 +523,16 @@ class AddressAuditEngine:
         resolver: AddressResolver,
         business: str,
         ui_geocode: bool,
+        authoritative_index: dict[str, dict[str, list[Any]]],
     ) -> AuditResult:
         """Resolve one row's address and wrap it in a classified ``AuditResult``."""
         if site.match_strategy == "unmatched":  # No site -> no resolution attempted.
             return AuditResult(address_row=row, matched_site=site, issue_type="UNMATCHED", source="-")
+        authoritative_addr = self._authority_ingester.match(row, site, authoritative_index)  # Optional authority hint.
         candidates = ResolveCandidates(  # Bundle the inputs for the resolver.
             mist_address=site.mist_address,  # Current Mist address.
             csv_address=self._csv_to_dict(row),  # Customer CSV address.
+            authoritative_address=authoritative_addr,  # Business-authoritative address when uniquely matched.
             snmp_location=site.snmp_location,  # SNMP reference (may be None).
             business_name=business,  # Optional query prefix.
             ui_geocode=ui_geocode,  # Whether Tier 3 is permitted.
@@ -465,7 +547,13 @@ class AddressAuditEngine:
                 suggested_address="",  # Decline to recommend; operator compares Mist/CSV/SNMP by hand.
             )
         resolver_result = resolver.resolve(candidates)  # Run the tier cascade (fail-soft).
-        issue = self._classify(site.mist_address, self._csv_to_dict(row), site.snmp_location, resolver_result)
+        issue = self._classify(  # Classify with all available hints, including optional authority data.
+            site.mist_address,  # Mist address.
+            self._csv_to_dict(row),  # Customer CSV address.
+            site.snmp_location,  # SNMP location.
+            resolver_result,  # Resolver outcome.
+            authoritative_addr,  # Optional authoritative business hint.
+        )
         return AuditResult(  # Compose the per-row result.
             address_row=row,  # Original CSV row.
             matched_site=site,  # Match outcome.
@@ -481,11 +569,12 @@ class AddressAuditEngine:
         csv_addr: dict[str, Any],
         snmp_loc: str | None,
         resolver_result: Any,
+        authoritative_addr: dict[str, Any] | None = None,
     ) -> str:
         """Return one of the resolved classification states for a row (excludes the
         out-of-band UNMATCHED / CONFLICTING_HINTS / DUPLICATE_ADDRESS states)."""
         if resolver_result is None or resolver_result.canonical_address is None:  # No external result.
-            return self._classify_internal(mist_addr, csv_addr, snmp_loc)  # Fall back to internal signals.
+            return self._classify_internal(mist_addr, csv_addr, snmp_loc, authoritative_addr or {})  # Internal signals.
         if resolver_result.ambiguous:  # Multiple plausible candidates (mall scenario).
             return "AMBIGUOUS"  # Needs manual disambiguation.
         mist_street = mist_addr.get("address", "")  # Mist street line is the stable anchor.
@@ -512,10 +601,19 @@ class AddressAuditEngine:
         cand_lead = re.match(r"\s*\d", candidate.split(",", 1)[0])  # Leading digit of the candidate street.
         return bool(cand_lead) and not bool(mist_lead)  # Missing only when the candidate has one and Mist does not.
 
-    def _classify_internal(self, mist_addr: dict[str, Any], csv_addr: dict[str, Any], snmp_loc: str | None) -> str:
+    def _classify_internal(
+        self,
+        mist_addr: dict[str, Any],
+        csv_addr: dict[str, Any],
+        snmp_loc: str | None,
+        authoritative_addr: dict[str, Any] | None = None,
+    ) -> str:
         """Classify on internal CSV/SNMP signals alone when no external result exists."""
         mist_street = mist_addr.get("address", "")  # Mist street anchor.
-        candidate = snmp_loc or csv_addr.get("address", "")  # Best internal candidate (SNMP preferred).
+        authority_street = (authoritative_addr or {}).get("address", "")  # Optional business-authoritative street hint.
+        candidate = (
+            authority_street or snmp_loc or csv_addr.get("address", "")
+        )  # Authority > SNMP > CSV fallback order.
         if candidate and self._has_suite_discrepancy(mist_street, candidate):  # Internal adds a missing suite.
             return "MISSING_SUITE"  # The common strip-mall case, caught without any external call.
         return "NO_RESULT"  # Internal inconclusive and nothing external resolved.

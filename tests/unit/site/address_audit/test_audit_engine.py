@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 from src.site.address_audit import audit_engine as eng_mod
 from src.site.address_audit.audit_engine import AddressAuditEngine
+from src.site.address_audit.business_authority_ingester import BusinessAuthorityRow
 from src.site.address_audit.models import AddressRow, AuditResult, MatchedSite, ResolverResult
 
 _MIST_NO_SUITE = {"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"}
@@ -253,9 +254,100 @@ class TestBuildAuditResult:
             def resolve(self, *_):
                 raise AssertionError("resolver must not be called for unmatched rows")
 
-        result = engine._build_audit_result(row, site, _Boom(), "", False)
+        result = engine._build_audit_result(
+            row, site, _Boom(), "", False, {"by_name": {}, "by_full": {}, "by_no_suite": {}}
+        )
         assert result.issue_type == "UNMATCHED"
         assert result.source == "-"
+
+
+class TestBusinessAuthorityPrompt:
+    """Second CSV prompt for optional business-authoritative data."""
+
+    def test_prompt_business_csv_skip(self, monkeypatch):
+        """Entering 'q' skips authoritative CSV selection cleanly."""
+        engine = AddressAuditEngine()  # Real engine; prompt path is pure input logic.
+        monkeypatch.setattr(
+            eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: "q")
+        )  # Simulate operator skip.
+        picked = engine._prompt_business_csv_choice(["data\\Book1.csv", "data\\T-Builder.csv"], "data\\Book1.csv")
+        assert picked is None  # Skip returns None so pipeline remains backward-compatible.
+
+    def test_prompt_business_csv_selects_index(self, monkeypatch):
+        """A valid index returns the selected business CSV path."""
+        engine = AddressAuditEngine()  # Real engine; prompt path is pure input logic.
+        monkeypatch.setattr(
+            eng_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: "2")
+        )  # Simulate index selection.
+        picked = engine._prompt_business_csv_choice(["data\\Book1.csv", "data\\T-Builder.csv"], "data\\Book1.csv")
+        assert picked == "data\\T-Builder.csv"  # Selected index maps to the expected candidate path.
+
+
+class TestBusinessAuthorityIntegration:
+    """Business-authoritative rows are fed into ResolveCandidates when uniquely matched."""
+
+    def test_build_audit_result_passes_authoritative_address(self):
+        """A unique authoritative match is forwarded to the resolver candidates payload."""
+        engine = AddressAuditEngine()  # Real engine with injectable resolver stub below.
+        row = AddressRow(  # Primary row from the customer CSV.
+            serial="1234567890",
+            model="SSR130",
+            address="100 Main St Suite 9",
+            city="Town",
+            state="FL",
+            zip_code="33000",
+        )
+        site = MatchedSite(  # Matched site required for resolution path.
+            site_id="site-1",
+            site_name="Store A",
+            mist_address={"address": "100 Main St", "city": "Town", "state": "FL", "zip": "33000"},
+            match_strategy="serial",
+        )
+
+        class _ResolverStub:
+            """Capture resolver candidates so test can assert authoritative wiring."""
+
+            captured = None  # Last resolve() candidates argument.
+
+            def has_conflicting_hints(self, *_):
+                return False  # Keep flow on the normal resolve path.
+
+            def resolve(self, candidates):
+                _ResolverStub.captured = candidates  # Capture payload for assertion.
+                return ResolverResult(
+                    query="q", canonical_address="100 Main St Suite 9, Town, FL 33000", source="internal"
+                )
+
+        authoritative_index = {  # Minimal index with one unique address match.
+            "by_name": {},
+            "by_full": {
+                "100 main st suite 9 town fl 33000": [
+                    BusinessAuthorityRow(  # Simulate one parsed authoritative row.
+                        site_name="Store A",
+                        address="100 Main St Suite 9",
+                        city="Town",
+                        state="FL",
+                        zip_code="33000",
+                    )
+                ]
+            },
+            "by_no_suite": {},
+        }
+        result = engine._build_audit_result(
+            row, site, _ResolverStub(), "", False, authoritative_index
+        )  # Build one row.
+        assert result.issue_type in {
+            "ADDRESS_MATCH",
+            "MISSING_SUITE",
+            "CSV_BETTER",
+            "MIST_BETTER",
+            "NO_RESULT",
+            "WRONG_STREET",
+        }  # Flow completed.
+        assert _ResolverStub.captured is not None  # Resolver was invoked.
+        assert (
+            _ResolverStub.captured.authoritative_address.get("address") == "100 Main St Suite 9"
+        )  # Authority address wired in.
 
 
 class TestResolveAndClassify:
@@ -264,7 +356,10 @@ class TestResolveAndClassify:
     def test_zero_rows_yields_empty(self):
         """An empty input produces an empty result list (no exception)."""
         engine = AddressAuditEngine()
-        assert engine._resolve_and_classify([], [], None, "", False) == []
+        assert (
+            engine._resolve_and_classify([], [], None, "", False, {"by_name": {}, "by_full": {}, "by_no_suite": {}})
+            == []
+        )
 
 
 class TestEnvConfig:
@@ -395,7 +490,14 @@ class TestConflictingHints:
             def resolve(self, *_):
                 raise AssertionError("resolver must not run on a conflict row")  # Must be skipped.
 
-        result = engine._build_audit_result(row, site, _Guard(), "", False)  # Drive the short-circuit.
+        result = engine._build_audit_result(  # Drive the short-circuit.
+            row,  # CSV row.
+            site,  # Matched site.
+            _Guard(),  # Resolver guard stub.
+            "",  # No business prefix.
+            False,  # Tier-3 disabled for this test.
+            {"by_name": {}, "by_full": {}, "by_no_suite": {}},  # No authority index for this test.
+        )
         assert result.issue_type == "CONFLICTING_HINTS"  # Flagged review-only.
         assert result.suggested_address == ""  # No recommendation offered.
         assert result.source == "-"  # No single trustworthy source.

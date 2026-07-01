@@ -117,17 +117,20 @@ class AddressResolver:
     def _compare_internal(self, candidates: ResolveCandidates) -> ResolverResult | None:
         """Tier 1: build a clean Mist-base + suite suggestion when Mist is missing a suite.
 
-        The suite is taken preferentially from the customer CSV (their authoritative
-        corrected data), then the SNMP location. The suggestion is rebuilt from
-        Mist's own clean street/city/state/zip so SNMP store-number prefixes and
+        The suite is taken preferentially from the business-authoritative CSV,
+        then the customer CSV, then the SNMP location. The suggestion is rebuilt
+        from Mist's own clean street/city/state/zip so store-number prefixes and
         stale ZIPs never leak into the output.
         """
         mist_street = candidates.mist_address.get("address", "")  # Mist street line (the clean base).
         if re.search(_SUITE_PATTERN, mist_street, flags=re.IGNORECASE):  # Mist already carries a suite.
             return None  # No discrepancy to surface; defer to Tier 2.
-        csv_suite = self._extract_suite(candidates.csv_address.get("address", ""))  # CSV suite (authoritative).
+        authority_suite = self._extract_suite(
+            candidates.authoritative_address.get("address", "")
+        )  # Business authority.
+        csv_suite = self._extract_suite(candidates.csv_address.get("address", ""))  # Customer CSV suite.
         snmp_suite = self._extract_suite(candidates.snmp_location or "")  # SNMP suite (fallback).
-        suite = csv_suite or snmp_suite  # Prefer the CSV's suite over the SNMP one.
+        suite = authority_suite or csv_suite or snmp_suite  # Prefer authority > CSV > SNMP for Tier-1 suggestion.
         if not suite:  # Neither internal source supplies a suite Mist lacks.
             return None  # Nothing to add; defer to Tier 2.
         clean = self._build_clean_suggestion(candidates.mist_address, suite)  # Mist base + suite, no pollution.
@@ -247,13 +250,21 @@ class AddressResolver:
         """Run Tier 3 when Mist lacks a suite, or when the CSV claims a different one.
 
         The goal is the true shippable unit. Tier 3 runs when Mist has no suite
-        (discover it) or when the CSV's unit disagrees with Mist's (adjudicate the
-        conflict via the web). It is skipped only when Mist already carries a suite
-        that matches the CSV, sparing a browser lookup.
+        (discover it) or when the business-authoritative/CSV unit disagrees with
+        Mist's (adjudicate the conflict via the web). It is skipped only when Mist
+        already carries the same unit, sparing a browser lookup.
         """
         mist_unit = self._suite_unit(candidates.mist_address.get("address", ""))  # Mist's unit id (or '').
         if not mist_unit:  # Mist has no suite at all.
             return True  # Discover the missing suite.
+        authority_unit = self._suite_unit(candidates.authoritative_address.get("address", ""))  # Authority unit id.
+        if authority_unit and authority_unit != mist_unit:  # Business authority claims a different suite.
+            logging.info(  # Action-log conflict source for the operator/debug log.
+                "Mist unit %r conflicts with business-authority unit %r; adjudicating via Tier 3",
+                mist_unit,
+                authority_unit,
+            )
+            return True  # Resolve the authority conflict against the web.
         csv_unit = self._suite_unit(candidates.csv_address.get("address", ""))  # CSV's unit id (or '').
         if csv_unit and csv_unit != mist_unit:  # CSV claims a different unit.
             logging.info("Mist unit %r conflicts with CSV unit %r; adjudicating via Tier 3", mist_unit, csv_unit)
@@ -286,12 +297,10 @@ class AddressResolver:
     def _consensus_address(self, candidates: ResolveCandidates) -> str:
         """Pick the hint whose house number the most sources agree on (suite-preferring).
 
-        The Mist address, the SNMP location, and the customer CSV are all hints,
-        and any single one can be wrong -- Mist may lack a house number, the SNMP
-        location may point at a different site (even a different state), and the
-        CSV was rejected by the shipping system. Voting on the house number means
-        one bad hint cannot hijack the geocoding query; the agreed-upon, cleanest,
-        suite-bearing source wins.
+        The Mist address, SNMP location, customer CSV, and optional business
+        authority CSV are all hints, and any single one can be wrong. Voting on
+        house number means one bad hint cannot hijack the geocoding query; the
+        agreed-upon, cleanest, suite-bearing source wins.
         """
         hints = self._gather_hints(candidates)  # [(label, text, house_no, has_suite), ...].
         if not hints:  # No usable hint at all.
@@ -303,14 +312,10 @@ class AddressResolver:
     def has_conflicting_hints(self, candidates: ResolveCandidates) -> bool:
         """Return True when the hints disagree on the house number with no majority.
 
-        The Mist address, the customer CSV, and the SNMP location are independent
-        hints. A 2-vs-1 split still has a clear majority (the lone dissenter is the
-        outlier and is intentionally trusted away), but when every hint that has a
-        house number names a *different* one -- or only two hints have numbers and
-        they differ -- there is no majority to break the tie. Silently picking one
-        could push a different real store's address onto the site, so such rows are
-        surfaced for manual review instead of auto-corrected. A suite on a hint does
-        not rescue it: a suite is only meaningful on the agreed-upon street number.
+        The Mist address, customer CSV, SNMP location, and optional business
+        authority are independent hints. A split with a clear leader is still
+        accepted, but when top votes tie there is no majority to break the tie.
+        Such rows are surfaced for manual review instead of auto-corrected.
         """
         hints = self._gather_hints(candidates)  # [(label, text, house_no, has_suite), ...].
         numbers = [house for _, _, house, _ in hints if house]  # Non-empty leading house numbers only.
@@ -327,7 +332,8 @@ class AddressResolver:
 
     def _gather_hints(self, candidates: ResolveCandidates) -> list[tuple[str, str, str, bool]]:
         """Normalize each hint into (label, text, house_number, has_suite); drop empties."""
-        raw = [  # Source label -> raw text (CSV/Mist first so ties prefer the customer data).
+        raw = [  # Source label -> raw text (authority/CSV first so ties prefer customer-provided business data).
+            ("authority", self._format_address(candidates.authoritative_address)),
             ("csv", self._format_address(candidates.csv_address)),
             ("mist", self._format_address(candidates.mist_address)),
             ("snmp", candidates.snmp_location or ""),
@@ -370,8 +376,8 @@ class AddressResolver:
 
     @staticmethod
     def _prefer_hint(group: list[tuple[str, str, str, bool]]) -> tuple[str, str, str, bool]:
-        """Pick the best hint in a group: suite-bearing first, then CSV > Mist > SNMP."""
-        rank = {"csv": 0, "mist": 1, "snmp": 2}  # Source preference for ties.
+        """Pick the best hint in a group: suite-bearing first, then Authority > CSV > Mist > SNMP."""
+        rank = {"authority": 0, "csv": 1, "mist": 2, "snmp": 3}  # Source preference for ties.
         return sorted(group, key=lambda hint: (not hint[3], rank.get(hint[0], 9)))[0]  # Suite, then source.
 
     @staticmethod
