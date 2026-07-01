@@ -172,7 +172,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Fixed
 
-- **Address audit silently dropped a customer-supplied unit when Google omitted it
+- **Menu 196 prompted for `Org ID (UUID)` instead of using the configured org**:
+  the async license-claim exporter
+  (`LicenseExportUtils.export_org_license_async_claim_status`) was written to read a
+  non-existent env var `MIST_ORG_ID` and then call `InputUtils.safe_input(...,
+  default_value=...)`. `safe_input` always prompts -- `default_value` only supplies
+  the fallback on empty ENTER -- so with no `MIST_ORG_ID` key set anywhere it always
+  fell through to an interactive `Org ID (UUID):` prompt, ignoring the operator's
+  configured org. It now uses the standard resolver
+  `ConfigUtils.get_cached_or_prompted_org_id()` like every other menu operation
+  (precedence: cached global -> `org_id`/`ORG_ID` env -> `.env` file -> interactive
+  org picker only as a last resort). The same helpers also stopped using the
+  deprecated naive `datetime.utcnow()` for their `polled_at_utc` column and now use
+  timezone-aware `datetime.now(UTC)` to match the rest of the codebase. Unit tests
+  updated to stub the resolver. (#576)
+
   (menu 195)**: Tier-3 types ``{business} {address}`` (including the suite) into the
   Mist dashboard's Google Places box, but Google's autocomplete often resolves to
   the street/establishment and drops a unit typed at the end -- and the freshness

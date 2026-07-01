@@ -20,10 +20,11 @@ def test_prompt_parsing_api_call_and_dual_export_writes(monkeypatch):
     api_calls: list[dict] = []
     writes: list[dict] = []
 
+    def org_id_stub():
+        return "123e4567-e89b-12d3-a456-426614174000"
+
     def safe_input_stub(prompt, context=None, default="", default_value=""):
         prompts_seen.append((prompt, context, default_value or default))
-        if context == "org_license_claim_status:org_id":
-            return "123e4567-e89b-12d3-a456-426614174000"
         return "yes"
 
     def api_stub(_session, org_id, detail=None):
@@ -48,14 +49,14 @@ def test_prompt_parsing_api_call_and_dual_export_writes(monkeypatch):
         writes.append({"data": data, "filename": filename, "api_function_name": api_function_name})
         return True
 
+    monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", org_id_stub)
     monkeypatch.setattr(MistHelper.InputUtils, "safe_input", safe_input_stub)
     monkeypatch.setattr(MistHelper.mistapi.api.v1.orgs.claim, "GetOrgLicenseAsyncClaimStatus", api_stub)
     monkeypatch.setattr(MistHelper.DataExporter, "write_with_format_selection", write_stub)
 
     MistHelper.LicenseExportUtils.export_org_license_async_claim_status()
 
-    assert prompts_seen[0][1] == "org_license_claim_status:org_id"
-    assert prompts_seen[1][1] == "org_license_claim_status:detail"
+    assert prompts_seen[0][1] == "org_license_claim_status:detail"
     assert api_calls == [{"org_id": "123e4567-e89b-12d3-a456-426614174000", "detail": True}]
     assert writes[0]["api_function_name"] == "getOrgLicenseAsyncClaimStatus"
     assert writes[0]["filename"] == "org_123e4567_claim_status_summary"
@@ -69,10 +70,8 @@ def test_invalid_uuid_aborts_before_api_call(monkeypatch):
     sdk_called = {"value": False}
     write_called = {"value": False}
 
-    def safe_input_stub(_prompt, context=None, default="", default_value=""):
-        if context == "org_license_claim_status:org_id":
-            return "not-a-uuid"
-        return default_value or default
+    def org_id_stub():
+        return "not-a-uuid"
 
     def api_stub(*_args, **_kwargs):
         sdk_called["value"] = True
@@ -82,7 +81,7 @@ def test_invalid_uuid_aborts_before_api_call(monkeypatch):
         write_called["value"] = True
         return True
 
-    monkeypatch.setattr(MistHelper.InputUtils, "safe_input", safe_input_stub)
+    monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", org_id_stub)
     monkeypatch.setattr(MistHelper.mistapi.api.v1.orgs.claim, "GetOrgLicenseAsyncClaimStatus", api_stub)
     monkeypatch.setattr(MistHelper.DataExporter, "write_with_format_selection", write_stub)
 
