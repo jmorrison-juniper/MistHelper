@@ -25,6 +25,7 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Added
 
+- Added menu `196` for `GetOrgLicenseAsyncClaimStatus` so operators can export org-level async claim-job summary data and optional per-device detail rows through `DataExporter` with composite upsert keys for SQLite/Redis/Arango backends.
 - **Address audit now logs a per-phase timing breakdown (menu 195)**: a Tier-3 run
   spends 12-20 seconds per site and it was not obvious where that time went. A tiny
   always-on ``PhaseTimer`` now accumulates wall-clock time per stage (SQLite cache
@@ -1848,4 +1849,3 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
-

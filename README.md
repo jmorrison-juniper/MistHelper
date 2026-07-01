@@ -104,8 +104,8 @@ flowchart LR
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 mindmap
-   root((MistHelper<br/>194 Operations))
-    Safe Org Exports (59)
+   root((MistHelper<br/>195 Operations))
+    Safe Org Exports (60)
       Sites and Analysis 1-7
       Device Inventory 8-14
       Device Stats 15-19
@@ -425,6 +425,8 @@ This README is intentionally lean. The full, up-to-date menu reference (each opt
 - GitHub Wiki mirror: https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-Reference
 
 For quick category guidance, see the Wiki Menu Reference page linked above.
+
+- New in this branch: Menu `196` exports org async license-claim status summary and optional per-device detail rows.
 ## Security & Safety
 
 | Area | Practice |
