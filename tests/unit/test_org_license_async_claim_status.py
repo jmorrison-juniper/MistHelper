@@ -20,8 +20,8 @@ def test_prompt_parsing_api_call_and_dual_export_writes(monkeypatch):
     api_calls: list[dict] = []
     writes: list[dict] = []
 
-    def safe_input_stub(prompt, context=None, default=""):
-        prompts_seen.append((prompt, context, default))
+    def safe_input_stub(prompt, context=None, default="", default_value=""):
+        prompts_seen.append((prompt, context, default_value or default))
         if context == "org_license_claim_status:org_id":
             return "123e4567-e89b-12d3-a456-426614174000"
         return "yes"
@@ -69,10 +69,10 @@ def test_invalid_uuid_aborts_before_api_call(monkeypatch):
     sdk_called = {"value": False}
     write_called = {"value": False}
 
-    def safe_input_stub(_prompt, context=None, default=""):
+    def safe_input_stub(_prompt, context=None, default="", default_value=""):
         if context == "org_license_claim_status:org_id":
             return "not-a-uuid"
-        return default
+        return default_value or default
 
     def api_stub(*_args, **_kwargs):
         sdk_called["value"] = True
