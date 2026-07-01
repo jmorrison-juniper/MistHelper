@@ -148,6 +148,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Fixed
 
+- **Address audit silently dropped a customer-supplied unit when Google omitted it
+  (menu 195)**: Tier-3 types ``{business} {address}`` (including the suite) into the
+  Mist dashboard's Google Places box, but Google's autocomplete often resolves to
+  the street/establishment and drops a unit typed at the end -- and the freshness
+  guard only waited for the *house number*, so it accepted the bare street without
+  the unit. The unit then vanished from the suggestion, and because Mist also
+  lacked it the row even read ``ADDRESS_MATCH`` ("no change needed"). A real run
+  lost the unit on four sites whose CSV **and** SNMP location both confirmed it
+  (FLSS2SJB ``Unit 200``, FLS01302 ``Suite 100``, FLS01501 ``Suite 98``, FLSE8677
+  ``Unit 8``). Two changes fix this: (1) when a unit was typed, the freshness guard
+  now waits a short bounded grace (``_SUITE_GRACE_S``) for the unit to also appear
+  in the top suggestion before accepting it (Google usually catches up); and (2) if
+  the unit still never appears, the unit we typed is re-appended to Google's street
+  -- but only when it is safe (the suggestion carries no *other* unit, and the house
+  numbers agree, so a different unit or a different building is never overwritten).
+  Restored rows now correctly read ``MISSING_SUITE`` instead of a false
+  ``ADDRESS_MATCH``, so the operator can add the unit.
+
 - **Address audit suggestion glued the business name to Hawaii hyphenated house
   numbers (menu 195)**: the Tier-3 (Google-via-Mist) suggestion cleaner strips the
   establishment name that Google glues to the address (``T-Mobile931 US Highway
