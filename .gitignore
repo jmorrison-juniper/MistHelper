@@ -265,5 +265,5 @@ specs/*-audit-menu-*/
 
 
 # Throwaway evidence snapshots from spec decomposition runs (CodeQL false positives)
-specs/**/evidence/.tmp_head_tree/
+specs/**/evidence/.tmp_*
 
