@@ -24,13 +24,12 @@ Version: 26.01.09.18.00
 # IMPORTS
 # ============================================================================
 
-import csv
-import importlib.util
-import logging
-import os
-import sys
-from math import cos, pi, radians, sin
-from typing import Any
+import importlib.util  # Runtime probe for optional visualization deps (plotly/dash/matplotlib)
+import logging  # Module-level logger for MapsManager operations
+import os  # Path utilities and environment variable access
+import sys  # exit() calls in standalone entry point
+from math import cos, pi, radians, sin  # Geometry helpers for map coordinate math
+from typing import Any  # Type hints on payload dicts
 
 from src.dataclasses.map_clone_deps import MapCloneSummary, ZoneCloneResult  # Issue #433 Phase C T3: clone helpers.
 from src.dataclasses.map_marker_deps import DeviceMarkerStyle, MarkerPosition  # Issue #433 Phase C T3: marker helpers.
@@ -52,52 +51,64 @@ from src.dataclasses.map_wizard_deps import (  # Issue #433 Phase C T3: replacem
     MapWizardPreviewContext,
     MapWizardSummaryContext,
 )
-from src.maps.launcher import MapViewerCallbacks, MapViewerState  # Wave-A callback extraction
-from src.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer
-from src.maps.plotly_map_callback_manager import PlotlyMapCallbackManager
-from src.maps.plotly_map_figure_builder import PlotlyMapFigureBuilder
-from src.maps.plotly_map_serializer import PlotlyMapDataSerializer
-from src.maps.plotly_map_templates import DashTemplateManager
+from src.maps._container_detection import (
+    is_running_in_container,
+)  # Detects Docker/container runtimes to gate GUI viewer launches.
+from src.maps._flask_viewer import launch_flask_viewer  # Flask-based fallback viewer for containerized/headless envs.
+from src.maps._plotly_viewer import launch_plotly_viewer  # Dash/Plotly interactive viewer for desktop use.
+from src.maps._maps_utils import (  # Shared helpers: dict flattening, filename sanitization, CSV/JSON exports.
+    flatten_dict_recursively,
+    sanitize_filename,
+    write_data_with_format_selection,
+)
+from src.maps.launcher import MapViewerCallbacks, MapViewerState  # Wave-A: extracted Dash callback wiring + state.
+from src.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer  # RF coverage heatmap trace generator.
+from src.maps.plotly_map_callback_manager import (
+    PlotlyMapCallbackManager,
+)  # Registers Dash callbacks for the interactive viewer.
+from src.maps.plotly_map_figure_builder import PlotlyMapFigureBuilder  # Builds go.Figure objects with map overlays.
+from src.maps.plotly_map_serializer import PlotlyMapDataSerializer  # Serializes map data for browser/Dash rendering.
+from src.maps.plotly_map_templates import DashTemplateManager  # Provides HTML layout templates for the viewer.
 from src.utils.input_utils import InputUtils  # Issue #433 Phase C: EOF-safe input wrapper for interactive prompts.
 
 # Optional visualization imports — use find_spec for availability checks
-PLOTLY_AVAILABLE = importlib.util.find_spec("plotly") is not None
-DASH_AVAILABLE = importlib.util.find_spec("dash") is not None
-PIL_AVAILABLE = importlib.util.find_spec("PIL") is not None
+PLOTLY_AVAILABLE = importlib.util.find_spec("plotly") is not None  # Cached truthy flag: plotly package available.
+DASH_AVAILABLE = importlib.util.find_spec("dash") is not None  # Cached truthy flag: dash package available.
+PIL_AVAILABLE = importlib.util.find_spec("PIL") is not None  # Cached truthy flag: Pillow imaging installed.
 
-if PLOTLY_AVAILABLE:
-    import plotly.graph_objects as go
+if PLOTLY_AVAILABLE:  # Only import heavy plotly module when available at runtime.
+    import plotly.graph_objects as go  # Bound at module level so downstream figure builders can reference it.
 else:
-    go = None
+    go = None  # Fallback sentinel so attribute checks don't NameError.
 
 # Dash symbols (Input, Output, State, etc.) are imported locally
 # in methods that need them, since they require dash to be installed.
-Dash = None
-html = None
-dcc = None
+Dash = None  # Placeholder; real Dash class imported lazily inside launcher methods.
+html = None  # Placeholder for dash.html; imported lazily where needed.
+dcc = None  # Placeholder for dash.dcc; imported lazily where needed.
 
 try:
-    import requests
-except ImportError:
-    requests = None
+    import requests  # Used to download map images from Mist-signed URLs.
+except ImportError:  # WHY: handle expected error
+    requests = None  # Fallback sentinel so image-download paths can degrade gracefully.
 
 try:
-    from tqdm import tqdm
-except ImportError:
+    from tqdm import tqdm  # Progress bar for bulk download/export loops.
+except ImportError:  # WHY: handle expected error
 
-    def tqdm(iterable, **_kwargs):
+    def tqdm(iterable, **_kwargs):  # WHY: declare public method tqdm
         """No-op fallback for tqdm progress bar."""
-        return iterable
+        return iterable  # WHY: return computed result
 
 
 # Mist API import
 try:
-    import mistapi  # type: ignore[import-untyped]
-except ImportError:
-    mistapi = None  # type: ignore[assignment]
+    import mistapi  # type: ignore[import-untyped]  # Optional dependency; required for real API calls.
+except ImportError:  # WHY: handle expected error
+    mistapi = None  # type: ignore[assignment]  # Sentinel so tests can run without the SDK.
 
 # Configure module logger
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # Module-scoped logger for MapsManager operations.
 
 # ============================================================================
 # UTILITY FUNCTIONS
@@ -105,183 +116,15 @@ logger = logging.getLogger(__name__)
 
 # Page limit configuration
 try:
-    _raw_page_limit_env = os.environ.get("MIST_PAGE_LIMIT", "1000").strip()
-    _parsed_limit = int(_raw_page_limit_env)
-except Exception:
-    _parsed_limit = 1000
+    _raw_page_limit_env = os.environ.get("MIST_PAGE_LIMIT", "1000").strip()  # Read override from env, default "1000".
+    _parsed_limit = int(_raw_page_limit_env)  # Parse to int; may raise ValueError caught below.
+except Exception:  # WHY: handle expected error
+    _parsed_limit = 1000  # Fall back to safe default on any parse failure.
 
-DEFAULT_API_PAGE_LIMIT = max(1, min(_parsed_limit, 1000))
-
-
-def flatten_dict_recursively(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
-    """Recursively flatten a nested dictionary structure."""
-    items = []
-    for k, v in d.items():
-        new_key = f"{parent_key}{sep}{k}" if parent_key else k
-        if isinstance(v, dict):
-            items.extend(flatten_dict_recursively(v, new_key, sep=sep).items())
-        elif isinstance(v, list):
-            if len(v) > 0 and isinstance(v[0], dict):
-                for idx, item in enumerate(v):
-                    items.extend(flatten_dict_recursively(item, f"{new_key}{sep}{idx}", sep=sep).items())
-            else:
-                items.append((new_key, str(v)))
-        else:
-            items.append((new_key, v))
-    return dict(items)
+DEFAULT_API_PAGE_LIMIT = max(1, min(_parsed_limit, 1000))  # Clamp to [1, 1000] per Mist API constraints.
 
 
-def sanitize_filename(filename: str) -> str:
-    """Sanitize a string for use as a filename."""
-    if not filename:
-        return "unnamed"
-    invalid_chars = '<>:"/\\|?*'
-    for char in invalid_chars:
-        filename = filename.replace(char, "_")
-    filename = filename.strip(" .")
-    return filename[:100] if filename else "unnamed"
-
-
-def _check_env_override() -> bool:
-    """Check explicit container override environment variables."""
-    true_values = {"1", "true", "yes", "on"}
-    for explicit_var in ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER"):
-        value = os.environ.get(explicit_var, "").strip().lower()
-        if value in true_values:
-            logging.debug("Container detection: override via %s=%s", explicit_var, value)
-            return True
-    return False
-
-
-def _check_sentinel_files() -> bool:
-    """Check for container sentinel files."""
-    if os.path.exists("/.dockerenv"):
-        logging.debug("Container detection: /.dockerenv present")
-        return True
-    return False
-
-
-def _check_container_env_vars() -> bool:
-    """Check well-known container environment variables."""
-    container_env_vars = [
-        "CONTAINER",
-        "DOCKER_CONTAINER",
-        "PODMAN_CONTAINER",
-        "KUBERNETES_SERVICE_HOST",
-        "CONTAINERD_NAMESPACE",
-    ]
-    for env_var in container_env_vars:
-        if os.environ.get(env_var):
-            logging.debug("Container detection: environment variable %s present", env_var)
-            return True
-    return False
-
-
-def _check_cgroup_markers() -> bool:
-    """Check cgroup content for container indicators."""
-    try:
-        with open("/proc/1/cgroup", encoding="utf-8", errors="ignore") as cgroup_file:
-            cgroup_content = cgroup_file.read().lower()
-            for indicator in ("docker", "containerd", "podman", "lxc"):
-                if indicator in cgroup_content:
-                    logging.debug("Container detection: cgroup indicator '%s' found", indicator)
-                    return True
-    except (FileNotFoundError, PermissionError):
-        pass
-    return False
-
-
-def _check_runtime_user() -> bool:
-    """Check if running as container user 'misthelper'."""
-    try:
-        import pwd  # Unix only
-
-        current_user_name = pwd.getpwuid(os.getuid()).pw_name  # type: ignore[attr-defined]
-        if current_user_name == "misthelper":
-            logging.debug("Container detection: running as user 'misthelper'")
-            return True
-    except Exception:
-        logging.debug("Container detection: user lookup failed (non-Unix or unavailable)")
-    return False
-
-
-def _check_app_path() -> bool:
-    """Check for canonical container path /app with sshd presence."""
-    try:
-        this_file_dir = os.path.abspath(os.path.dirname(__file__))
-        if this_file_dir.startswith("/app") and os.path.exists("/app/MistHelper.py"):
-            if os.path.exists("/usr/sbin/sshd"):
-                logging.debug("Container detection: /app path with MistHelper.py and sshd present")
-                return True
-    except Exception:
-        logging.debug("Container detection: path heuristic check failed")
-    return False
-
-
-def is_running_in_container() -> bool:
-    """Determine if execution appears to be inside a container.
-
-    Detection strategy is deliberately multi-factor and conservative. A positive
-    result enables continuous interactive looping behavior.
-
-    SECURITY: Only boolean enabling of loop behavior; no privileged actions.
-    """
-    checks = [
-        _check_env_override,
-        _check_sentinel_files,
-        _check_container_env_vars,
-        _check_cgroup_markers,
-        _check_runtime_user,
-        _check_app_path,
-    ]
-    try:
-        for check in checks:
-            if check():
-                return True
-    except Exception as container_detection_error:
-        logging.debug("Container detection failed with exception: %s", container_detection_error)
-
-    logging.debug("Container detection: no container indicators found - running in direct mode")
-    return False
-
-
-def write_data_with_format_selection(
-    data: list[dict[str, Any]],
-    filename: str,
-    _format_override: str | None = None,
-    _api_function_name: str | None = None,
-) -> bool:
-    """Write data to CSV format (standalone mode)."""
-    if not data:
-        logger.warning("write_data_with_format_selection: No data to write")
-        return False
-
-    data_dir = os.path.join(os.getcwd(), "data")
-    os.makedirs(data_dir, exist_ok=True)
-
-    safe_filename = sanitize_filename(filename)
-    filepath = os.path.join(data_dir, f"{safe_filename}.csv")
-
-    try:
-        all_keys = set()
-        for row in data:
-            all_keys.update(row.keys())
-        fieldnames = sorted(all_keys)
-
-        with open(filepath, "w", newline="", encoding="utf-8") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            writer.writerows(data)
-
-        logger.info("Data written to %s (%s rows)", filepath, len(data))
-        print(f"   Data saved to: {filepath}")
-        return True
-    except Exception as e:
-        logger.error("Error writing CSV: %s", e)
-        return False
-
-
-class MapsManager:
+class MapsManager:  # WHY: declare MapsManager class
     """Comprehensive Maps Management System for Mist Sites.
 
     Provides interactive management of site floor plans and maps including:
@@ -292,993 +135,724 @@ class MapsManager:
     - Analytics and reporting
     """
 
-    def __init__(self, api_session, organization_id):
+    def __init__(self, api_session, organization_id):  # WHY: declare private helper __init__
         """Initialize MapsManager with API session and org context."""
-        self.apisession = api_session
-        self.org_id = organization_id
-        self.current_site_id = None
-        self.current_site_name = None
-        logging.info("MapsManager initialized for organization: %s", self.org_id)
+        self.apisession = api_session  # WHY: init/update apisession attribute
+        self.org_id = organization_id  # WHY: init/update org_id attribute
+        self.current_site_id = None  # WHY: init/update current_site_id attribute
+        self.current_site_name = None  # WHY: init/update current_site_name attribute
+        logging.info("MapsManager initialized for organization: %s", self.org_id)  # WHY: action-log before operation
 
-    def _fetch_sites(self):
+    def _fetch_sites(self):  # WHY: declare private helper _fetch_sites
         """Fetch all sites using instance API session (not global)."""
         try:
             resp = mistapi.api.v1.orgs.sites.listOrgSites(  # type: ignore[union-attr]
                 self.apisession, self.org_id, limit=DEFAULT_API_PAGE_LIMIT
             )
             return mistapi.get_all(response=resp, mist_session=self.apisession)  # type: ignore[union-attr]
-        except Exception as e:
-            logging.error("MapsManager._fetch_sites error: %s", e)
-            return []
+        except Exception as e:  # WHY: handle expected error
+            logging.error("MapsManager._fetch_sites error: %s", e)  # WHY: surface fatal issue
+            return []  # WHY: return computed result
 
-    def select_site(self):
-        """Prompt user to select a site and cache the selection."""
-        # Use instance method to fetch sites (works in standalone mode)
-        sites = self._fetch_sites()
-        if not sites:
-            print("\n! No sites found in organization")
-            return False
+    @staticmethod
+    def _render_sites_menu(sites_sorted: list) -> None:  # WHY: declare private helper _render_sites_menu
+        """Print numbered site menu."""
+        print("\nAvailable Sites:")  # WHY: surface user-facing message
+        print("-" * 60)  # WHY: surface user-facing message
+        for idx, site in enumerate(sites_sorted):  # WHY: iterate collection
+            print(f"  [{idx}] {site.get('name', 'Unnamed')}")  # WHY: surface user-facing message
+        print("-" * 60)  # WHY: surface user-facing message
 
-        # Sort sites by name for easier selection
-        sites_sorted = sorted(sites, key=lambda x: x.get("name", "").lower())
-
-        print("\nAvailable Sites:")
-        print("-" * 60)
-        for idx, site in enumerate(sites_sorted):
-            print(f"  [{idx}] {site.get('name', 'Unnamed')}")
-        print("-" * 60)
-
+    @staticmethod
+    def _match_site_by_index(
+        sites_sorted: list, selection: str
+    ) -> "dict | None":  # WHY: declare private helper _match_site_by_index
+        """Resolve a numeric selection to a site, or None if invalid."""
         try:
-            selection = InputUtils.safe_input("Enter site index or name: ", context="select_site").strip()
+            site_idx = int(selection)  # WHY: compute site_idx
+        except ValueError:  # WHY: handle expected error
+            return None  # WHY: return computed result
+        if 0 <= site_idx < len(sites_sorted):  # WHY: branch on condition
+            return sites_sorted[site_idx]  # WHY: return computed result
+        print("\n! Invalid index")  # WHY: surface user-facing message
+        return None  # WHY: return computed result
 
-            # Try as index first
-            try:
-                site_idx = int(selection)
-                if 0 <= site_idx < len(sites_sorted):
-                    selected_site = sites_sorted[site_idx]
-                    site_id = selected_site.get("id")
-                    site_name = selected_site.get("name", "Unknown")
-                else:
-                    print("\n! Invalid index")
-                    return False
-            except ValueError:
-                # Try as name match
-                matches = [s for s in sites_sorted if selection.lower() in s.get("name", "").lower()]
-                if len(matches) == 1:
-                    selected_site = matches[0]
-                    site_id = selected_site.get("id")
-                    site_name = selected_site.get("name", "Unknown")
-                elif len(matches) > 1:
-                    print(f"\n! Multiple matches found ({len(matches)}). Please be more specific.")
-                    return False
-                else:
-                    print("\n! No matching site found")
-                    return False
+    @staticmethod
+    def _match_site_by_name(
+        sites_sorted: list, selection: str
+    ) -> "dict | None":  # WHY: declare private helper _match_site_by_name
+        """Substring-match against site names; None if no unique hit."""
+        matches = [s for s in sites_sorted if selection.lower() in s.get("name", "").lower()]  # WHY: compute matches
+        if len(matches) == 1:  # WHY: branch on condition
+            return matches[0]  # WHY: return computed result
+        if len(matches) > 1:  # WHY: branch on condition
+            print(
+                f"\n! Multiple matches found ({len(matches)}). Please be more specific."
+            )  # WHY: surface user-facing message
+            return None  # WHY: return computed result
+        print("\n! No matching site found")  # WHY: surface user-facing message
+        return None  # WHY: return computed result
 
-            self.current_site_id = site_id
-            self.current_site_name = site_name
-            print(f"\n   Site selected: {site_name}")
-            logging.info("MapsManager site selection: %s (%s)", site_name, site_id)
-            return True
+    def _resolve_site_selection(
+        self, sites_sorted: list, selection: str
+    ) -> "dict | None":  # WHY: declare private helper _resolve_site_selection
+        """Try index resolution first, fall back to name substring match."""
+        by_index = self._match_site_by_index(sites_sorted, selection)  # WHY: compute by_index
+        if by_index is not None:  # WHY: branch on condition
+            return by_index  # WHY: return computed result
+        try:
+            int(selection)  # WHY: advance computation
+        except ValueError:  # WHY: handle expected error
+            return self._match_site_by_name(sites_sorted, selection)  # WHY: return computed result
+        return None  # WHY: return computed result
 
-        except EOFError:
-            logging.info("EOF detected during site selection")
-            return False
+    def _commit_selected_site(self, selected_site: dict) -> None:  # WHY: declare private helper _commit_selected_site
+        """Persist the chosen site on the instance and surface confirmation."""
+        self.current_site_id = selected_site.get("id")  # WHY: init/update current_site_id attribute
+        self.current_site_name = selected_site.get("name", "Unknown")  # WHY: init/update current_site_name attribute
+        print(f"\n   Site selected: {self.current_site_name}")  # WHY: surface user-facing message
+        logging.info(
+            "MapsManager site selection: %s (%s)", self.current_site_name, self.current_site_id
+        )  # WHY: action-log before operation
 
-    def get_current_site(self):
+    def select_site(self):  # WHY: declare public method select_site
+        """Prompt user to select a site and cache the selection."""
+        sites = self._fetch_sites()  # WHY: compute sites
+        if not sites:  # WHY: guard against missing precondition
+            print("\n! No sites found in organization")  # WHY: surface user-facing message
+            return False  # WHY: return computed result
+        sites_sorted = sorted(sites, key=lambda x: x.get("name", "").lower())  # WHY: compute sites_sorted
+        self._render_sites_menu(sites_sorted)  # WHY: advance computation
+        try:
+            selection = InputUtils.safe_input(
+                "Enter site index or name: ", context="select_site"
+            ).strip()  # WHY: compute selection
+            selected_site = self._resolve_site_selection(sites_sorted, selection)  # WHY: compute selected_site
+            if selected_site is None:  # WHY: branch on condition
+                return False  # WHY: return computed result
+            self._commit_selected_site(selected_site)  # WHY: advance computation
+            return True  # WHY: return computed result
+        except EOFError:  # WHY: handle expected error
+            logging.info("EOF detected during site selection")  # WHY: action-log before operation
+            return False  # WHY: return computed result
+
+    def get_current_site(self):  # WHY: declare public method get_current_site
         """Get current site selection, prompting if not set."""
-        if not self.current_site_id:
-            print("\n! No site currently selected. Please select a site first.")
-            if not self.select_site():
-                return None, None
-        return self.current_site_id, self.current_site_name
+        if not self.current_site_id:  # WHY: guard against missing precondition
+            print("\n! No site currently selected. Please select a site first.")  # WHY: surface user-facing message
+            if not self.select_site():  # WHY: guard against missing precondition
+                return None, None  # WHY: return computed result
+        return self.current_site_id, self.current_site_name  # WHY: return computed result
 
-    def _prompt_map_choice(self, maps: list, site_name: str) -> "str | None":
+    @staticmethod
+    def _print_map_selection_list(
+        maps: list, site_name: str
+    ) -> None:  # WHY: declare private helper _print_map_selection_list
+        """Print the numbered list of maps available for a site."""
+        print(f"\nMaps for site: {site_name}")  # Header
+        print(f"{'-' * 80}")  # Separator rule
+        for idx, map_item in enumerate(maps, 1):  # Enumerate with 1-based index for humans
+            map_name = map_item.get("name", "Unnamed")  # Map display name
+            map_type = map_item.get("type", "N/A")  # Map type (image, geojson, etc.)
+            has_image = "with image" if "url" in map_item else "no image"  # Image availability tag
+            print(f"  {idx}. {map_name} ({map_type}) - {has_image}")  # Numbered row
+        print(f"{'-' * 80}")  # Closing rule
+
+    @staticmethod
+    def _parse_map_selection(
+        selection: str, maps: list
+    ) -> "str | None":  # WHY: declare private helper _parse_map_selection
+        """Parse the user's numeric selection and return the chosen map_id or None."""
+        map_idx = int(selection) - 1  # Convert to 0-based index (raises ValueError on bad input)
+        if map_idx < 0:  # Zero or negative means cancel
+            return None  # User cancelled the selection
+        if map_idx >= len(maps):  # Out-of-range selection
+            print("\n! Invalid selection")  # Inform the user
+            return None  # No map chosen
+        return maps[map_idx].get("id")  # Return the selected map's id
+
+    def _prompt_map_choice(
+        self, maps: list, site_name: str
+    ) -> "str | None":  # WHY: declare private helper _prompt_map_choice
         """Display map list and prompt user to pick one. Returns map_id or None."""
-        print(f"\nMaps for site: {site_name}")
-        print(f"{'-' * 80}")
-        for idx, map_item in enumerate(maps, 1):
-            map_name = map_item.get("name", "Unnamed")
-            map_type = map_item.get("type", "N/A")
-            has_image = "with image" if "url" in map_item else "no image"
-            print(f"  {idx}. {map_name} ({map_type}) - {has_image}")
-        print(f"{'-' * 80}")
+        self._print_map_selection_list(maps, site_name)  # Show the selectable options
         try:
             selection = InputUtils.safe_input(
                 "\nSelect map number (or 0 to cancel): ", context="_prompt_map_choice"
-            ).strip()
-            map_idx = int(selection) - 1
-            if map_idx < 0:
-                return None
-            if map_idx >= len(maps):
-                print("\n! Invalid selection")
-                return None
-            return maps[map_idx].get("id")
-        except ValueError:
-            print("\n! Invalid input - please enter a number")
-            return None
+            ).strip()  # Read raw selection
+            return self._parse_map_selection(selection, maps)  # Convert to a map id
+        except ValueError:  # WHY: handle expected error
+            print("\n! Invalid input - please enter a number")  # Guard against non-numeric input
+            return None  # WHY: return computed result
 
-    def _select_map_with_list(self, site_id: str, site_name: str) -> "tuple[str | None, list]":
+    def _fetch_site_maps_or_none(
+        self, site_id: str, site_name: str
+    ) -> "list | None":  # WHY: declare private helper _fetch_site_maps_or_none
+        """Fetch maps for a site, printing errors and returning None on failure/empty."""
+        resp = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)  # API call
+        if resp.status_code != 200:  # HTTP failure guard
+            print(f"\n! Failed to fetch maps: HTTP {resp.status_code}")  # Surface status
+            return None  # Signal failure
+        if not resp.data:  # Empty catalog guard
+            print(f"\n! No maps found for site: {site_name}")  # Inform the operator
+            return None  # Nothing to select
+        return resp.data  # Return the list of maps
+
+    def _select_map_with_list(
+        self, site_id: str, site_name: str
+    ) -> "tuple[str | None, list]":  # WHY: declare private helper _select_map_with_list
         """Fetch site maps and prompt for selection. Returns (map_id, maps_list)."""
         try:
-            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
-            if maps_response.status_code != 200:
-                print(f"\n! Failed to fetch maps: HTTP {maps_response.status_code}")
-                return None, []
-            maps = maps_response.data
-            if not maps:
-                print(f"\n! No maps found for site: {site_name}")
-                return None, []
-            if len(maps) == 1:
-                map_name = maps[0].get("name", "Unnamed")
-                print(f"\nAuto-selecting only available map: {map_name}")
-                return maps[0].get("id"), maps
-            return self._prompt_map_choice(maps, site_name), maps
-        except EOFError:
-            logging.info("EOF detected during map selection")
-            return None, []
-        except Exception as e:
-            logging.exception("Error selecting map: %s", e)
-            print(f"\n! Error selecting map: {e}")
-            return None, []
+            maps = self._fetch_site_maps_or_none(site_id, site_name)  # Try to load the catalog
+            if not maps:  # Fetch failed or empty
+                return None, []  # Nothing to select
+            if len(maps) == 1:  # Auto-select when only one map exists
+                print(f"\nAuto-selecting only available map: {maps[0].get('name', 'Unnamed')}")  # Notify
+                return maps[0].get("id"), maps  # Return sole map
+            return self._prompt_map_choice(maps, site_name), maps  # Interactive selection path
+        except EOFError:  # WHY: handle expected error
+            logging.info("EOF detected during map selection")  # Non-interactive shutdown
+            return None, []  # No selection possible
+        except Exception as e:  # WHY: handle expected error
+            logging.exception("Error selecting map: %s", e)  # Log for diagnosis
+            print(f"\n! Error selecting map: {e}")  # Surface to operator
+            return None, []  # WHY: return computed result
 
-    def _select_map_from_site(self, site_id, site_name, return_all_maps=False):
+    def _select_map_from_site(
+        self, site_id, site_name, return_all_maps=False
+    ):  # WHY: declare private helper _select_map_from_site
         """Select a map from a site.
 
         Returns map_id or None, optionally returns (map_id, maps_list).
         """
-        map_id, maps = self._select_map_with_list(site_id, site_name)
-        return (map_id, maps) if return_all_maps else map_id
+        map_id, maps = self._select_map_with_list(site_id, site_name)  # WHY: compute map_id
+        return (map_id, maps) if return_all_maps else map_id  # WHY: return computed result
 
-    def _backup_download_image(self, map_data, map_name, backup_reason):
-        """Download map image for backup. Returns (filename, content) or (None, None)."""
-        from datetime import datetime
+    def _backup_map_geometry(
+        self, api_session, site_id, map_id, map_name, backup_reason="manual"
+    ):  # WHY: declare private helper _backup_map_geometry
+        """Delegating wrapper: backup lives in src.maps._maps_backup."""
+        # Wrapper kept so viewer_callbacks.maps_manager_ref._backup_map_geometry
+        # still resolves and tests can continue to stub the method on MapsManager.
+        from src.maps._maps_backup import backup_map_geometry  # WHY: import required module
 
-        import requests
+        return backup_map_geometry(  # WHY: return computed result
+            self, api_session, site_id, map_id, map_name, backup_reason
+        )
 
-        image_url = map_data.get("url")
-        if not image_url:
-            return None, None
+    def run_systematic_test(self) -> bool:  # WHY: declare public method run_systematic_test
+        """Delegating wrapper: testing lives in src.maps._maps_testing."""
+        # Wrapper kept so launch_viewer_standalone can still call
+        # maps_manager.run_systematic_test() by name.
+        from src.maps._maps_testing import run_systematic_test  # WHY: import required module
 
-        try:
-            file_ext = ".png"
-            if "." in image_url:
-                url_ext = image_url.rsplit(".", 1)[-1].split("?")[0].lower()
-                if url_ext in ["png", "jpg", "jpeg", "gif", "svg", "webp"]:
-                    file_ext = f".{url_ext}"
+        return run_systematic_test(self)  # WHY: return computed result
 
-            safe_map_name = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in map_name)
-            safe_map_name = safe_map_name.strip().replace(" ", "_")[:50]
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            image_filename = f"map_backup_{safe_map_name}_{backup_reason}_{timestamp}{file_ext}"
-
-            data_dir = os.path.join(os.getcwd(), "data")
-            os.makedirs(data_dir, exist_ok=True)
-
-            response = requests.get(image_url, timeout=60)
-            if response.status_code == 200:
-                image_path = os.path.join(data_dir, image_filename)
-                with open(image_path, "wb") as img_file:
-                    img_file.write(response.content)
-                image_size_kb = len(response.content) / 1024
-                logging.info("Map image backed up: %s (%.1f KB)", image_filename, image_size_kb)
-                return image_filename, (safe_map_name, timestamp)
-            logging.warning("Could not download map image: HTTP %s", response.status_code)
-        except Exception as img_err:
-            logging.warning("Image backup failed: %s", img_err)
-        return None, None
-
-    def _backup_fetch_items(self, api_session, site_id, map_id, api_call, item_name):
-        """Fetch items from API and filter to map. Returns list of matching items."""
-        try:
-            response = api_call(api_session, site_id=site_id)
-            if response.status_code == 200:
-                all_items = response.data if isinstance(response.data, list) else []
-                map_items = [item for item in all_items if item.get("map_id") == map_id]
-                logging.debug("Backup includes %s %s for map %s", len(map_items), item_name, map_id)
-                return map_items
-            logging.warning("Could not fetch %s for backup: HTTP %s", item_name, response.status_code)
-        except Exception as err:
-            logging.debug("%s backup skipped: %s", item_name, err)
-        return []
-
-    def _backup_fetch_device_placements(self, api_session, site_id, map_id):
-        """Fetch device placements on a specific map."""
-        try:
-            devices_response = mistapi.api.v1.sites.devices.listSiteDevices(api_session, site_id=site_id, type="all")
-            if devices_response.status_code == 200:
-                all_devices = devices_response.data if isinstance(devices_response.data, list) else []
-                placements = []
-                for device in all_devices:
-                    if device.get("map_id") == map_id and ("x" in device or "y" in device):
-                        placements.append(
-                            {
-                                "id": device.get("id"),
-                                "name": device.get("name"),
-                                "mac": device.get("mac"),
-                                "type": device.get("type"),
-                                "model": device.get("model"),
-                                "map_id": device.get("map_id"),
-                                "x": device.get("x"),
-                                "y": device.get("y"),
-                                "orientation": device.get("orientation"),
-                                "height": device.get("height"),
-                            }
-                        )
-                logging.debug("Backup includes %s device placements for map %s", len(placements), map_id)
-                return placements
-            logging.warning("Could not fetch devices for backup: HTTP %s", devices_response.status_code)
-        except Exception as device_err:
-            logging.warning("Device placement backup failed: %s", device_err)
-        return []
-
-    def _backup_write_file(self, geometry_backup, map_name, backup_reason, name_timestamp=None):
-        """Write backup data to JSON file. Returns file path."""
-        import json
-        from datetime import datetime
-
-        if name_timestamp:
-            safe_map_name, timestamp = name_timestamp
-        else:
-            safe_map_name = "".join(c if c.isalnum() or c in (" ", "-", "_") else "_" for c in map_name)
-            safe_map_name = safe_map_name.strip().replace(" ", "_")[:50]
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        backup_filename = f"map_backup_{safe_map_name}_{backup_reason}_{timestamp}.json"
-        data_dir = os.path.join(os.getcwd(), "data")
-        os.makedirs(data_dir, exist_ok=True)
-        backup_path = os.path.join(data_dir, backup_filename)
-
-        with open(backup_path, "w", encoding="utf-8") as backup_file:
-            json.dump(geometry_backup, backup_file, indent=2, ensure_ascii=False)
-        return backup_path, backup_filename
-
-    def _count_geometry_path_nodes(self, geometry_backup: dict, path_key: str) -> "int | None":
-        """Count nodes in a geometry path. Returns count or None if empty."""
-        geometry = geometry_backup.get("geometry") or {}
-        nodes = geometry.get(path_key, {}).get("nodes", [])
-        count = len(nodes)
-        return count if count > 0 else None
-
-    def _count_backup_list(self, geometry_backup: dict, key: str) -> "int | None":
-        """Count items in a top-level backup list. Returns count or None if empty."""
-        count = len(geometry_backup.get(key, []))
-        return count if count > 0 else None
-
-    def _backup_print_summary(self, backup_filename, image_filename, geometry_backup):
-        """Print backup summary to console."""
-        counts = [
-            ("Image", "Yes" if image_filename else None),
-            ("Walls", self._count_geometry_path_nodes(geometry_backup, "wall_path")),
-            ("Wayfinding", self._count_geometry_path_nodes(geometry_backup, "wayfinding_path")),
-            ("Zones", self._count_backup_list(geometry_backup, "zones")),
-            ("Devices", self._count_backup_list(geometry_backup, "device_placements")),
-            ("Beacons", self._count_backup_list(geometry_backup, "beacons")),
-            ("VBeacons", self._count_backup_list(geometry_backup, "vbeacons")),
-        ]
-        summary = ", ".join(f"{k}: {v}" for k, v in counts if v) or "Empty map"
-        logging.info("Map backup saved: %s (%s)", backup_filename, summary)
-        print(f"\n   [*] Map backup saved: {backup_filename}")
-        if image_filename:
-            print(f"       Image: {image_filename}")
-        print(f"       {summary}")
-
-    def _backup_map_geometry(self, api_session, site_id, map_id, map_name, backup_reason="manual"):
-        """Backup map geometry data (walls, zones, wayfinding paths) to JSON file.
-
-        Called automatically before destructive operations (delete) and during cloning
-        to preserve geometry data that would otherwise be lost.
-
-        Returns:
-            str: Path to backup file if successful, None if failed.
-        """
-        from datetime import datetime
-
-        try:
-            logging.info("Map geometry backup initiated - map: %s (%s), reason: %s", map_name, map_id, backup_reason)
-
-            map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
-            if map_response.status_code != 200:
-                logging.error("Map backup failed: Could not fetch map data - HTTP %s", map_response.status_code)
-                return None
-
-            map_data = map_response.data
-
-            geometry_backup = {
-                "backup_info": {
-                    "timestamp": datetime.now().isoformat(),
-                    "reason": backup_reason,
-                    "map_id": map_id,
-                    "map_name": map_name,
-                    "site_id": site_id,
-                },
-                "map_properties": {
-                    key: map_data.get(key)
-                    for key in [
-                        "name",
-                        "type",
-                        "width",
-                        "height",
-                        "width_m",
-                        "height_m",
-                        "ppm",
-                        "orientation",
-                        "origin_x",
-                        "origin_y",
-                        "latlng",
-                        "latlng_tl",
-                        "latlng_br",
-                        "locked",
-                        "view",
-                        "occupancy_limit",
-                        "flags",
-                        "url",
-                        "thumbnail_url",
-                    ]
-                },
-                "geometry": {
-                    "wall_path": map_data.get("wall_path"),
-                    "wayfinding_path": map_data.get("wayfinding_path"),
-                    "wayfinding": map_data.get("wayfinding"),
-                    "sitesurvey_path": map_data.get("sitesurvey_path"),
-                },
-            }
-
-            # Download image
-            image_filename, name_timestamp = self._backup_download_image(map_data, map_name, backup_reason)
-            if image_filename:
-                geometry_backup["backup_info"]["image_file"] = image_filename
-
-            # Fetch related entities
-            geometry_backup["device_placements"] = self._backup_fetch_device_placements(api_session, site_id, map_id)
-            geometry_backup["zones"] = self._backup_fetch_items(
-                api_session, site_id, map_id, mistapi.api.v1.sites.zones.listSiteZones, "zones"
-            )
-            geometry_backup["beacons"] = self._backup_fetch_items(
-                api_session, site_id, map_id, mistapi.api.v1.sites.beacons.listSiteBeacons, "beacons"
-            )
-            geometry_backup["vbeacons"] = self._backup_fetch_items(
-                api_session, site_id, map_id, mistapi.api.v1.sites.vbeacons.listSiteVBeacons, "vbeacons"
-            )
-
-            # Write and summarize
-            backup_path, backup_filename = self._backup_write_file(
-                geometry_backup, map_name, backup_reason, name_timestamp
-            )
-            self._backup_print_summary(backup_filename, image_filename, geometry_backup)
-
-            return backup_path
-
-        except Exception as backup_error:
-            logging.exception("Map geometry backup failed: %s", backup_error)
-            print(f"\n   [!] Warning: Could not backup map geometry: {backup_error}")
-            return None
-
-    def run_systematic_test(self) -> bool:
-        """Run systematic test of safe, non-destructive Maps Manager operations.
-
-        Tests read-only operations that don't require user input:
-        - Fetching sites
-        - Listing all org maps
-        - Exporting maps data
-        - Analytics operations
-
-        Returns:
-            bool: True if all tests passed, False if any failed
-        """
-        import time
-
-        start_time = time.time()
-
-        print("\n" + "=" * 80)
-        print("MAPS MANAGER - Systematic Test Mode")
-        print("=" * 80)
-        print("Testing safe, non-destructive operations (GET only, no modifications)")
-        print(f"Test started at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        print("=" * 80)
-
-        # Define safe tests (read-only operations that don't need site selection input)
-        safe_tests = [
-            ("Fetch sites list", self._test_fetch_sites),
-            ("List all org maps", self._test_list_all_org_maps),
-            ("Export all site maps", self._test_export_all_site_maps),
-            ("Maps without images report", self._test_maps_without_images),
-        ]
-
-        # Skip tests that require interactive site selection or are destructive
-        skipped_tests = [
-            "List site maps (requires site selection)",
-            "View map details (requires site selection)",
-            "Create site map (DESTRUCTIVE)",
-            "Update map properties (DESTRUCTIVE)",
-            "Delete site map (DESTRUCTIVE)",
-            "Upload map image (DESTRUCTIVE)",
-            "Auto-place APs (DESTRUCTIVE)",
-            "Auto-orient APs (DESTRUCTIVE)",
-            "Set device location (DESTRUCTIVE)",
-            "Clone map (DESTRUCTIVE)",
-            "Map replacement wizard (DESTRUCTIVE/Interactive)",
-            "Interactive map viewer (requires Dash server)",
-            "Bulk download images (resource intensive)",
-            "Backup all maps (resource intensive)",
-        ]
-
-        print(f"\n! {len(safe_tests)} safe operations will be tested")
-        print(f"! {len(skipped_tests)} operations skipped (interactive/destructive/resource intensive)")
-
-        print("\n Skipping unsafe operations:")
-        for skip in skipped_tests:
-            print(f"   - {skip}")
-
-        print("\n Testing safe operations:")
-
-        results = {"passed": 0, "failed": 0, "errors": []}
-
-        for idx, (test_name, test_func) in enumerate(safe_tests, 1):
-            print(f"\n   [{idx}/{len(safe_tests)}] Testing: {test_name}...")
-            try:
-                success = test_func()
-                if success:
-                    print(f"   [SUCCESS] {test_name} completed successfully")
-                    results["passed"] += 1
-                else:
-                    print(f"   [FAILED] {test_name} returned failure")
-                    results["failed"] += 1
-                    results["errors"].append(f"{test_name}: returned False")
-            except Exception as test_error:
-                print(f"   [ERROR] {test_name} raised exception: {test_error}")
-                results["failed"] += 1
-                results["errors"].append(f"{test_name}: {type(test_error).__name__}: {test_error}")
-                logging.exception("Test '%s' failed with exception", test_name)
-
-        # Summary
-        elapsed = time.time() - start_time
-        print("\n" + "=" * 80)
-        print("TEST SUMMARY")
-        print("=" * 80)
-        print(f"Total tests: {len(safe_tests)}")
-        print(f"Passed: {results['passed']}")
-        print(f"Failed: {results['failed']}")
-        print(f"Elapsed time: {elapsed:.2f} seconds")
-
-        if results["errors"]:
-            print("\nErrors encountered:")
-            for error in results["errors"]:
-                print(f"   - {error}")
-
-        all_passed = results["failed"] == 0
-        if all_passed:
-            print("\n[OK] All tests passed!")
-        else:
-            print(f"\n[FAIL] {results['failed']} test(s) failed")
-
-        print("=" * 80)
-        return all_passed
-
-    def _test_fetch_sites(self) -> bool:
-        """Test fetching sites list."""
-        sites = self._fetch_sites()
-        if sites is None:
-            return False
-        print(f"       Found {len(sites)} sites in organization")
-        return True
-
-    def _test_list_all_org_maps(self) -> bool:
-        """Test listing all org maps (non-interactive version)."""
-        try:
-            sites = self._fetch_sites()
-            if not sites:
-                print("       No sites found - skipping map listing")
-                return True  # Not a failure, just no data
-
-            total_maps = 0
-            sites_with_maps = 0
-
-            # Only check first 10 sites to avoid long test times
-            test_sites = sites[:10] if len(sites) > 10 else sites
-            print(f"       Checking maps for {len(test_sites)} sites (of {len(sites)} total)...")
-
-            for site in test_sites:
-                site_id = site.get("id")
-                try:
-                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
-                    if maps_response.status_code == 200 and maps_response.data:
-                        map_count = len(maps_response.data)
-                        total_maps += map_count
-                        sites_with_maps += 1
-                except Exception as site_error:
-                    logging.debug("Skipping site during map sampling: %s", site_error)
-
-            print(f"       Found {total_maps} maps across {sites_with_maps} sites (sampled)")
-            return True
-        except Exception as e:
-            logging.error("_test_list_all_org_maps failed: %s", e)
-            return False
-
-    def _test_export_all_site_maps(self) -> bool:
-        """Test export all site maps functionality (collect data without writing)."""
-        try:
-            sites = self._fetch_sites()
-            if not sites:
-                print("       No sites found - skipping export test")
-                return True
-
-            # Just verify we can collect the data structure
-            export_data = []
-            test_sites = sites[:5] if len(sites) > 5 else sites  # Limit to first 5 for speed
-
-            for site in test_sites:
-                site_id = site.get("id")
-                site_name = site.get("name", "Unknown")
-                try:
-                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
-                    if maps_response.status_code == 200 and maps_response.data:
-                        for map_data in maps_response.data:
-                            export_data.append(
-                                {
-                                    "site_id": site_id,
-                                    "site_name": site_name,
-                                    "map_id": map_data.get("id"),
-                                    "map_name": map_data.get("name"),
-                                }
-                            )
-                except Exception as site_error:
-                    logging.debug("Skipping site during export validation: %s", site_error)
-
-            print(f"       Export data structure validated: {len(export_data)} map records")
-            return True
-        except Exception as e:
-            logging.error("_test_export_all_site_maps failed: %s", e)
-            return False
-
-    def _test_maps_without_images(self) -> bool:
-        """Test maps without images report (data collection only)."""
-        try:
-            sites = self._fetch_sites()
-            if not sites:
-                print("       No sites found - skipping report test")
-                return True
-
-            maps_without_images = 0
-            maps_with_images = 0
-            test_sites = sites[:5] if len(sites) > 5 else sites
-
-            for site in test_sites:
-                site_id = site.get("id")
-                try:
-                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
-                    if maps_response.status_code == 200 and maps_response.data:
-                        for map_data in maps_response.data:
-                            if map_data.get("url"):
-                                maps_with_images += 1
-                            else:
-                                maps_without_images += 1
-                except Exception as site_error:
-                    logging.debug("Skipping site during image analysis: %s", site_error)
-
-            print(f"       Image analysis: {maps_with_images} with images, {maps_without_images} without (sampled)")
-            return True
-        except Exception as e:
-            logging.error("_test_maps_without_images failed: %s", e)
-            return False
-
-    def _build_menu_dispatch(self) -> dict:
+    def _build_menu_dispatch(self) -> dict:  # WHY: declare private helper _build_menu_dispatch
         """Build menu choice to handler mapping."""
+        table: dict = {"S": self.select_site}  # Site selection is the shared entry action.
+        table.update(self._menu_dispatch_maps_section())  # Map inventory + edit + placement handlers.
+        table.update(self._menu_dispatch_bulk_section())  # Org-wide bulk export/backup handlers.
+        table.update(self._menu_dispatch_analytics_section())  # Analytics + viewer handlers.
+        return table  # Combined dispatch table used by run_interactive_menu.
+
+    def _menu_dispatch_maps_section(self) -> dict:  # WHY: declare private helper _menu_dispatch_maps_section
+        """Return the map inventory/edit/placement portion of the dispatch table."""
         return {
-            "S": self.select_site,
-            "1": self.list_site_maps,
-            "2": self.export_site_maps,
-            "3": self.view_map_details,
-            "4": self.create_site_map,
-            "5": self.update_map_properties,
-            "6": self.delete_site_map,
-            "7": self.upload_map_image,
-            "8": self.view_devices_on_map,
-            "9": self.auto_place_aps,
-            "10": self.auto_orient_aps,
-            "11": self.set_device_location,
-            "12": self.clone_map,
-            "13": self.intelligent_map_replacement_wizard,
-            "20": self.list_all_org_maps,
-            "21": self.export_all_site_maps,
-            "22": self.export_maps_with_images,
-            "23": self.bulk_download_org_images,
-            "24": self.backup_all_maps,
-            "25": self.maps_without_images_report,
-            "30": self.map_coverage_analytics,
-            "31": self.device_density_analytics,
-            "32": self.map_usage_statistics,
-            "40": self.interactive_map_viewer,
+            "1": self.list_site_maps,  # List maps for the current site.
+            "2": self.export_site_maps,  # Export site maps to CSV/SQLite.
+            "3": self.view_map_details,  # Detailed map view.
+            "4": self.create_site_map,  # Create a new site map.
+            "5": self.update_map_properties,  # Rename/resize an existing map.
+            "6": self.delete_site_map,  # Delete a map.
+            "7": self.upload_map_image,  # Upload/replace the map image.
+            "8": self.view_devices_on_map,  # Show devices placed on a map.
+            "9": self.auto_place_aps,  # Auto-place APs (placeholder).
+            "10": self.auto_orient_aps,  # Auto-orient APs (placeholder).
+            "11": self.set_device_location,  # Manually set an AP location.
+            "12": self.clone_map,  # Duplicate a map.
+            "13": self.intelligent_map_replacement_wizard,  # Guided replacement flow.
         }
 
-    def _print_menu(self) -> None:
+    def _menu_dispatch_bulk_section(self) -> dict:  # WHY: declare private helper _menu_dispatch_bulk_section
+        """Return the org-wide bulk export/backup handlers."""
+        return {
+            "20": self.list_all_org_maps,  # Org-wide map listing.
+            "21": self.export_all_site_maps,  # Export every site's maps.
+            "22": self.export_maps_with_images,  # Export maps plus images.
+            "23": self.bulk_download_org_images,  # Bulk image download.
+            "24": self.backup_all_maps,  # Full org backup.
+            "25": self.maps_without_images_report,  # Report maps missing images.
+        }
+
+    def _menu_dispatch_analytics_section(self) -> dict:  # WHY: declare private helper _menu_dispatch_analytics_section
+        """Return the analytics + interactive viewer handlers."""
+        return {
+            "30": self.map_coverage_analytics,  # Coverage analytics.
+            "31": self.device_density_analytics,  # Device density analytics.
+            "32": self.map_usage_statistics,  # Usage/statistics report.
+            "40": self.interactive_map_viewer,  # Launch the interactive viewer.
+        }
+
+    @staticmethod
+    def _print_menu_inventory_section() -> None:  # WHY: declare private helper _print_menu_inventory_section
+        """Inventory + creation + placement sections of the menu."""
+        print("\nSite Selection:")  # WHY: surface user-facing message
+        print("  S. Select different site")  # WHY: surface user-facing message
+        print("\nMap Inventory & Export:")  # WHY: surface user-facing message
+        print("  1. List maps for current site")  # WHY: surface user-facing message
+        print("  2. Export maps for current site to CSV/SQLite")  # WHY: surface user-facing message
+        print("  3. View detailed map information")  # WHY: surface user-facing message
+        print("\nMap Creation & Modification:")  # WHY: surface user-facing message
+        print("  4. Create new site map")  # WHY: surface user-facing message
+        print("  5. Update map properties")  # WHY: surface user-facing message
+        print("  6. Delete site map")  # WHY: surface user-facing message
+        print("  7. Upload/replace map image")  # WHY: surface user-facing message
+        print("  12. Clone/duplicate map")  # WHY: surface user-facing message
+        print("  13. Intelligent map replacement wizard")  # WHY: surface user-facing message
+        print("\nDevice Placement:")  # WHY: surface user-facing message
+        print("  8. View devices on map")  # WHY: surface user-facing message
+        print("  9. Auto-place APs on map")  # WHY: surface user-facing message
+        print("  10. Auto-orient APs on map")  # WHY: surface user-facing message
+        print("  11. Set AP/device location manually")  # WHY: surface user-facing message
+
+    @staticmethod
+    def _print_menu_bulk_and_analytics_section() -> (
+        None
+    ):  # WHY: declare private helper _print_menu_bulk_and_analytics_section
+        """Bulk + analytics + visualization sections of the menu."""
+        print("\nBulk Operations (All Sites):")  # WHY: surface user-facing message
+        print("  20. List all site maps across organization")  # WHY: surface user-facing message
+        print("  21. Export all site maps to CSV/SQLite")  # WHY: surface user-facing message
+        print("  22. Export maps with image metadata")  # WHY: surface user-facing message
+        print("  23. Download all org map images")  # WHY: surface user-facing message
+        print("  24. Backup all maps (metadata + images)")  # WHY: surface user-facing message
+        print("  25. Maps without images report")  # WHY: surface user-facing message
+        print("\nAnalytics & Reporting:")  # WHY: surface user-facing message
+        print("  30. Map coverage analytics")  # WHY: surface user-facing message
+        print("  31. Device density by map")  # WHY: surface user-facing message
+        print("  32. Map usage statistics")  # WHY: surface user-facing message
+        print("\nVisualization & Editing:")  # WHY: surface user-facing message
+        print("  40. Interactive map viewer (view/edit devices, walls, zones)")  # WHY: surface user-facing message
+        print("\n  0. Return to main menu")  # WHY: surface user-facing message
+        print("=" * 80)  # WHY: surface user-facing message
+
+    def _print_menu(self) -> None:  # WHY: declare private helper _print_menu
         """Display the Maps Manager menu."""
-        print("\n" + "=" * 80)
-        print("MAPS MANAGER - Site Floorplan & Map Operations")
-        if self.current_site_name:
-            print(f"Current Site: {self.current_site_name}")
-        print("=" * 80)
-        print("\nSite Selection:")
-        print("  S. Select different site")
-        print("\nMap Inventory & Export:")
-        print("  1. List maps for current site")
-        print("  2. Export maps for current site to CSV/SQLite")
-        print("  3. View detailed map information")
-        print("\nMap Creation & Modification:")
-        print("  4. Create new site map")
-        print("  5. Update map properties")
-        print("  6. Delete site map")
-        print("  7. Upload/replace map image")
-        print("  12. Clone/duplicate map")
-        print("  13. Intelligent map replacement wizard")
-        print("\nDevice Placement:")
-        print("  8. View devices on map")
-        print("  9. Auto-place APs on map")
-        print("  10. Auto-orient APs on map")
-        print("  11. Set AP/device location manually")
-        print("\nBulk Operations (All Sites):")
-        print("  20. List all site maps across organization")
-        print("  21. Export all site maps to CSV/SQLite")
-        print("  22. Export maps with image metadata")
-        print("  23. Download all org map images")
-        print("  24. Backup all maps (metadata + images)")
-        print("  25. Maps without images report")
-        print("\nAnalytics & Reporting:")
-        print("  30. Map coverage analytics")
-        print("  31. Device density by map")
-        print("  32. Map usage statistics")
-        print("\nVisualization & Editing:")
-        print("  40. Interactive map viewer (view/edit devices, walls, zones)")
-        print("\n  0. Return to main menu")
-        print("=" * 80)
+        print("\n" + "=" * 80)  # WHY: surface user-facing message
+        print("MAPS MANAGER - Site Floorplan & Map Operations")  # WHY: surface user-facing message
+        if self.current_site_name:  # WHY: branch on condition
+            print(f"Current Site: {self.current_site_name}")  # WHY: surface user-facing message
+        print("=" * 80)  # WHY: surface user-facing message
+        self._print_menu_inventory_section()  # WHY: advance computation
+        self._print_menu_bulk_and_analytics_section()  # WHY: advance computation
 
-    def run_interactive_menu(self):
+    def _read_menu_choice(self) -> "str | None":  # WHY: declare private helper _read_menu_choice
+        """Prompt for a menu selection; return None on EOF."""
+        try:
+            return (  # WHY: return computed result
+                InputUtils.safe_input("\nEnter your selection number now: ", context="run_interactive_menu")
+                .strip()
+                .upper()
+            )
+        except EOFError:  # WHY: handle expected error
+            logging.info("EOF detected in MapsManager menu - session disconnected")  # WHY: action-log before operation
+            return None  # WHY: return computed result
+
+    @staticmethod
+    def _print_maps_manager_banner() -> None:  # WHY: declare private helper _print_maps_manager_banner
+        """Print the Maps Manager header banner before initial site selection."""
+        print("\n" + "=" * 80)  # Top rule
+        print("MAPS MANAGER - Initial Site Selection")  # Screen title
+        print("=" * 80)  # Bottom rule
+        print("\nPlease select a site to work with:")  # Instruction line
+
+    def _dispatch_menu_choice(
+        self, choice: "str | None", dispatch: dict
+    ) -> bool:  # WHY: declare private helper _dispatch_menu_choice
+        """Handle one menu choice; return True to keep looping, False to exit."""
+        if choice is None or choice == "0":  # Sentinel or explicit quit
+            if choice == "0":  # Only log the deliberate exit
+                logging.info("Exiting Maps Manager")  # Note the exit reason
+            return False  # Signal the caller to break the loop
+        handler = dispatch.get(choice)  # Look up the handler for this choice
+        if handler:  # Recognised choice
+            handler()  # Invoke the associated action
+        else:
+            print(f"\n! Invalid selection: '{choice}'. Please enter a valid option.")  # Feedback
+            logging.warning("Invalid Maps Manager menu selection: %s", choice)  # Audit trail
+        return True  # Continue the menu loop
+
+    def run_interactive_menu(self):  # WHY: declare public method run_interactive_menu
         """Main interactive menu loop for Maps Manager."""
-        print("\n" + "=" * 80)
-        print("MAPS MANAGER - Initial Site Selection")
-        print("=" * 80)
-        print("\nPlease select a site to work with:")
-        if not self.select_site():
-            print("\n! Site selection required. Returning to main menu.")
-            return
+        self._print_maps_manager_banner()  # Show entry banner
+        if not self.select_site():  # Site is required before any action
+            print("\n! Site selection required. Returning to main menu.")  # Explain the exit
+            return  # Bail out of the menu entirely
+        dispatch = self._build_menu_dispatch()  # Build the choice -> callable table once
+        while True:  # Menu loop until the user quits
+            self._print_menu()  # Render the current menu screen
+            if not self._dispatch_menu_choice(self._read_menu_choice(), dispatch):  # Handle one action
+                return  # Exit sentinel returned
 
-        dispatch = self._build_menu_dispatch()
+    def _fetch_maps_for_site(self, site_id: str):  # WHY: declare private helper _fetch_maps_for_site
+        """Fetch maps for a site; return list or None on non-200 / error."""
+        try:
+            resp = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)  # WHY: compute resp
+        except Exception as e:  # WHY: handle expected error
+            logging.exception("Error listing site maps: %s", e)  # WHY: capture exception with traceback
+            print(f"\n! Error listing maps: {e}")  # WHY: surface user-facing message
+            return None  # WHY: return computed result
+        if resp.status_code != 200:  # WHY: branch on condition
+            print(f"\n! Failed to fetch maps: HTTP {resp.status_code}")  # WHY: surface user-facing message
+            return None  # WHY: return computed result
+        return resp.data  # WHY: return computed result
 
-        while True:
-            self._print_menu()
+    @staticmethod
+    def _format_site_maps_row(map_item: dict) -> str:  # WHY: declare private helper _format_site_maps_row
+        """Format a single map into the site-list table row."""
+        map_name = map_item.get("name", "Unnamed")[:34]  # WHY: compute map_name
+        map_type = map_item.get("type", "N/A")[:14]  # WHY: compute map_type
+        width = map_item.get("width", 0)  # WHY: compute width
+        height = map_item.get("height", 0)  # WHY: compute height
+        dimensions = f"{width}x{height}" if width and height else "N/A"  # WHY: compute dimensions
+        has_image = "Yes" if "url" in map_item else "No"  # WHY: compute has_image
+        return f"{map_name:<35} {map_type:<15} {dimensions:<20} {has_image:<8}"  # WHY: return computed result
 
-            try:
-                choice = (
-                    InputUtils.safe_input("\nEnter your selection number now: ", context="run_interactive_menu")
-                    .strip()
-                    .upper()
-                )
-            except EOFError:
-                logging.info("EOF detected in MapsManager menu - session disconnected")
-                return
+    @staticmethod
+    def _render_site_maps_table(
+        site_name: str, maps: list
+    ) -> None:  # WHY: declare private helper _render_site_maps_table
+        """Print the header + all rows for the site-map summary table."""
+        print(f"\n{'-' * 80}")  # WHY: surface user-facing message
+        print(f"Total Maps Found: {len(maps)}")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
+        print(f"{'Map Name':<35} {'Type':<15} {'Dimensions':<20} {'Image':<8}")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
+        for map_item in maps:  # WHY: iterate collection
+            print(MapsManager._format_site_maps_row(map_item))  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
 
-            if choice == "0":
-                logging.info("Exiting Maps Manager")
-                return
-
-            handler = dispatch.get(choice)
-            if handler:
-                handler()
-            else:
-                print(f"\n! Invalid selection: '{choice}'. Please enter a valid option.")
-                logging.warning("Invalid Maps Manager menu selection: %s", choice)
-
-    def list_site_maps(self):
+    def list_site_maps(self):  # WHY: declare public method list_site_maps
         """Display list of maps for currently selected site."""
-        print("\n" + "-" * 80)
-        print("LIST SITE MAPS - Current Site")
-        print("-" * 80)
+        print("\n" + "-" * 80)  # WHY: surface user-facing message
+        print("LIST SITE MAPS - Current Site")  # WHY: surface user-facing message
+        print("-" * 80)  # WHY: surface user-facing message
+        site_id, site_name = self.get_current_site()  # WHY: compute site_id
+        if not site_id:  # WHY: guard against missing precondition
+            return  # WHY: return early
+        print(f"\nFetching maps for site: {site_name}")  # WHY: surface user-facing message
+        maps = self._fetch_maps_for_site(site_id)  # WHY: compute maps
+        if maps is None:  # WHY: branch on condition
+            return  # WHY: return early
+        if not maps:  # WHY: guard against missing precondition
+            print(f"\n! No maps found for site: {site_name}")  # WHY: surface user-facing message
+            return  # WHY: return early
+        self._render_site_maps_table(site_name, maps)  # WHY: advance computation
+        logging.info("Listed %s maps for site %s", len(maps), site_name)  # WHY: action-log before operation
 
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            return
+    @staticmethod
+    def _build_org_map_row(site: dict, map_item: dict) -> dict:  # WHY: declare private helper _build_org_map_row
+        """Flatten a (site, map) pair into the org-wide summary row shape."""
+        return {  # WHY: return computed result
+            "site_id": site["id"],
+            "site_name": site.get("name", "Unknown"),
+            "map_id": map_item.get("id", "N/A"),
+            "map_name": map_item.get("name", "Unnamed"),
+            "type": map_item.get("type", "N/A"),
+            "width": map_item.get("width", 0),
+            "height": map_item.get("height", 0),
+            "has_image": "url" in map_item,
+        }
 
-        try:
-            print(f"\nFetching maps for site: {site_name}")
-            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
+    def _collect_all_org_map_rows(self, sites: list) -> list:  # WHY: declare private helper _collect_all_org_map_rows
+        """Iterate sites; return the flattened summary rows for every map."""
+        all_maps: list = []  # WHY: assign computed value
+        for site in tqdm(sites, desc="Scanning sites", unit="site"):  # WHY: iterate collection
+            try:
+                resp = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site["id"])  # WHY: compute resp
+                if resp.status_code != 200:  # WHY: branch on condition
+                    continue  # WHY: skip to next iteration
+                for map_item in resp.data:  # WHY: iterate collection
+                    all_maps.append(self._build_org_map_row(site, map_item))  # WHY: advance computation
+            except Exception as e:  # WHY: handle expected error
+                # Skip sites whose listSiteMaps failed; keep scanning the rest.
+                logging.debug("Error fetching maps for site %s: %s", site["id"], e)  # WHY: action-log after operation
+                continue  # WHY: skip to next iteration
+        return all_maps  # WHY: return computed result
 
-            if maps_response.status_code != 200:
-                print(f"\n! Failed to fetch maps: HTTP {maps_response.status_code}")
-                return
+    @staticmethod
+    def _render_org_maps_table(rows: list) -> None:  # WHY: declare private helper _render_org_maps_table
+        """Print the (site, map, type, image?) table for the org-wide listing."""
+        print(f"\n{'-' * 80}")  # WHY: surface user-facing message
+        print(f"Total Maps Found: {len(rows)}")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
+        print(f"{'Site Name':<30} {'Map Name':<25} {'Type':<15} {'Image':<8}")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
+        for map_item in rows:  # WHY: iterate collection
+            site_name = map_item["site_name"][:29]  # WHY: compute site_name
+            map_name = map_item["map_name"][:24]  # WHY: compute map_name
+            map_type = map_item["type"][:14]  # WHY: compute map_type
+            has_image = "Yes" if map_item["has_image"] else "No"  # WHY: compute has_image
+            print(f"{site_name:<30} {map_name:<25} {map_type:<15} {has_image:<8}")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
 
-            maps = maps_response.data
-            if not maps:
-                print(f"\n! No maps found for site: {site_name}")
-                return
-
-            # Display summary
-            print(f"\n{'-' * 80}")
-            print(f"Total Maps Found: {len(maps)}")
-            print(f"{'-' * 80}")
-            print(f"{'Map Name':<35} {'Type':<15} {'Dimensions':<20} {'Image':<8}")
-            print(f"{'-' * 80}")
-
-            for map_item in maps:
-                map_name = map_item.get("name", "Unnamed")[:34]
-                map_type = map_item.get("type", "N/A")[:14]
-                width = map_item.get("width", 0)
-                height = map_item.get("height", 0)
-                dimensions = f"{width}x{height}" if width and height else "N/A"
-                has_image = "Yes" if "url" in map_item else "No"
-                print(f"{map_name:<35} {map_type:<15} {dimensions:<20} {has_image:<8}")
-
-            print(f"{'-' * 80}")
-            logging.info("Listed %s maps for site %s", len(maps), site_name)
-
-        except Exception as e:
-            logging.exception("Error listing site maps: %s", e)
-            print(f"\n! Error listing maps: {e}")
-
-    def list_all_org_maps(self):
+    def list_all_org_maps(self):  # WHY: declare public method list_all_org_maps
         """Display summary list of all maps across organization sites."""
-        print("\n" + "-" * 80)
-        print("LIST ALL ORGANIZATION MAPS - All Sites")
-        print("-" * 80)
-
+        print("\n" + "-" * 80)  # WHY: surface user-facing message
+        print("LIST ALL ORGANIZATION MAPS - All Sites")  # WHY: surface user-facing message
+        print("-" * 80)  # WHY: surface user-facing message
         try:
-            # Fetch all sites
-            sites = self._fetch_sites()
-            if not sites:
-                print("\n! No sites found in organization")
-                return
+            sites = self._fetch_sites()  # WHY: compute sites
+            if not sites:  # WHY: guard against missing precondition
+                print("\n! No sites found in organization")  # WHY: surface user-facing message
+                return  # WHY: return early
+            print(f"\nFetching maps from {len(sites)} sites...")  # WHY: surface user-facing message
+            all_maps = self._collect_all_org_map_rows(sites)  # WHY: compute all_maps
+            if not all_maps:  # WHY: guard against missing precondition
+                print("\n! No maps found across all sites")  # WHY: surface user-facing message
+                return  # WHY: return early
+            self._render_org_maps_table(all_maps)  # WHY: advance computation
+            logging.info("Listed %s maps from %s sites", len(all_maps), len(sites))  # WHY: action-log before operation
+        except Exception as e:  # WHY: handle expected error
+            logging.exception("Error listing site maps: %s", e)  # WHY: capture exception with traceback
+            print(f"\n! Error listing maps: {e}")  # WHY: surface user-facing message
 
-            print(f"\nFetching maps from {len(sites)} sites...")
-            all_maps = []
-
-            for site in tqdm(sites, desc="Scanning sites", unit="site"):
-                try:
-                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site["id"])
-
-                    if maps_response.status_code == 200:
-                        maps = maps_response.data
-                        for map_item in maps:
-                            all_maps.append(
-                                {
-                                    "site_id": site["id"],
-                                    "site_name": site.get("name", "Unknown"),
-                                    "map_id": map_item.get("id", "N/A"),
-                                    "map_name": map_item.get("name", "Unnamed"),
-                                    "type": map_item.get("type", "N/A"),
-                                    "width": map_item.get("width", 0),
-                                    "height": map_item.get("height", 0),
-                                    "has_image": "url" in map_item,
-                                }
-                            )
-                except Exception as e:
-                    logging.debug("Error fetching maps for site %s: %s", site["id"], e)
-                    continue
-
-            if not all_maps:
-                print("\n! No maps found across all sites")
-                return
-
-            # Display summary
-            print(f"\n{'-' * 80}")
-            print(f"Total Maps Found: {len(all_maps)}")
-            print(f"{'-' * 80}")
-            print(f"{'Site Name':<30} {'Map Name':<25} {'Type':<15} {'Image':<8}")
-            print(f"{'-' * 80}")
-
-            for map_item in all_maps:
-                site_name = map_item["site_name"][:29]
-                map_name = map_item["map_name"][:24]
-                map_type = map_item["type"][:14]
-                has_image = "Yes" if map_item["has_image"] else "No"
-                print(f"{site_name:<30} {map_name:<25} {map_type:<15} {has_image:<8}")
-
-            print(f"{'-' * 80}")
-            logging.info("Listed %s maps from %s sites", len(all_maps), len(sites))
-
-        except Exception as e:
-            logging.exception("Error listing site maps: %s", e)
-            print(f"\n! Error listing maps: {e}")
-
-    def export_site_maps(self):
+    def export_site_maps(self):  # WHY: declare public method export_site_maps
         """Export maps for currently selected site to CSV/SQLite."""
-        print("\n" + "-" * 80)
-        print("EXPORT SITE MAPS - Current Site")
-        print("-" * 80)
-
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            return
-
+        self._print_export_site_maps_header()  # Section banner for the export flow.
+        site_id, site_name = self.get_current_site()  # Resolve currently-selected site context.
+        if not site_id:  # Guard clause: no site chosen, nothing to export.
+            return  # WHY: return early
         try:
-            print(f"\nExporting maps for site: {site_name}")
-            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
+            self._run_export_site_maps(site_id, site_name)  # Delegate the fetch+write body to a helper.
+        except Exception as e:  # WHY: handle expected error
+            logging.exception("Error exporting site maps: %s", e)  # Full stack for post-mortem debugging.
+            print(f"\n! Error during export: {e}")  # User-facing summary.
 
-            if maps_response.status_code != 200:
-                print(f"\n! Failed to fetch maps: HTTP {maps_response.status_code}")
-                return
+    @staticmethod
+    def _print_export_site_maps_header() -> None:  # WHY: declare private helper _print_export_site_maps_header
+        """Print the banner for the export_site_maps flow."""
+        print("\n" + "-" * 80)  # Visual break before the section.
+        print("EXPORT SITE MAPS - Current Site")  # Section title.
+        print("-" * 80)  # Trailing divider.
 
-            maps = maps_response.data
-            if not maps:
-                print(f"\n! No maps found for site: {site_name}")
-                return
+    def _run_export_site_maps(
+        self, site_id: str, site_name: str
+    ) -> None:  # WHY: declare private helper _run_export_site_maps
+        """Fetch, flatten, and persist maps for a single site."""
+        print(f"\nExporting maps for site: {site_name}")  # Progress line for the user.
+        maps = self._fetch_maps_for_site(site_id)  # Retrieve map list via API.
+        if not maps:  # Guard clause: empty or None result.
+            if maps is not None:  # Distinguish "API OK, empty list" from "API error".
+                print(f"\n! No maps found for site: {site_name}")  # Inform the user of the empty result.
+            return  # WHY: return early
+        site_stub = {"id": site_id, "name": site_name}  # Minimal site payload used by the flattener.
+        maps_data = [self._flatten_map_for_export(site_stub, m) for m in maps]  # Flatten each map for export.
+        filename = f"SiteMaps_{sanitize_filename(site_name or 'unknown_site')}"  # Sanitize name for filesystem.
+        write_data_with_format_selection(maps_data, filename, api_function_name="listSiteMaps")  # Prompt+write.
+        self._print_export_completion(len(maps_data))  # Confirm success and count.
+        logging.info("Exported %s maps from site %s", len(maps_data), site_name)  # Audit trail entry.
 
-            # Flatten and prepare data
-            maps_data = []
-            for map_item in maps:
-                flattened = flatten_dict_recursively(map_item)
-                flattened["site_id"] = site_id
-                flattened["site_name"] = site_name
-                flattened["org_id"] = self.org_id
-                maps_data.append(flattened)
+    @staticmethod
+    def _print_export_completion(count: int) -> None:  # WHY: declare private helper _print_export_completion
+        """Print the export completion banner."""
+        print(f"\n{'-' * 80}")  # Divider before summary.
+        print(f"Export completed: {count} maps exported")  # Count of maps exported.
+        print(f"{'-' * 80}")  # Divider after summary.
 
-            # Write to dual output format
-            safe_site_name = sanitize_filename(site_name or "unknown_site")
-            filename = f"SiteMaps_{safe_site_name}"
-            write_data_with_format_selection(maps_data, filename, api_function_name="listSiteMaps")
+    def _flatten_map_for_export(
+        self, site: dict, map_item: dict
+    ) -> dict:  # WHY: declare private helper _flatten_map_for_export
+        """Flatten nested map + inject site/org identifiers for tabular export."""
+        flattened = flatten_dict_recursively(map_item)  # WHY: compute flattened
+        flattened["site_id"] = site["id"]  # WHY: assign computed value
+        flattened["site_name"] = site.get("name", "Unknown")  # WHY: assign computed value
+        flattened["org_id"] = self.org_id  # WHY: assign computed value
+        return flattened  # WHY: return computed result
 
-            print(f"\n{'-' * 80}")
-            print(f"Export completed: {len(maps_data)} maps exported")
-            print(f"{'-' * 80}")
-            logging.info("Exported %s maps from site %s", len(maps_data), site_name)
+    def _fetch_site_maps_safe(
+        self, site_id: str, err_context: str
+    ) -> list:  # WHY: declare private helper _fetch_site_maps_safe
+        """Fetch maps for a site; swallow + log per-site failures so the outer loop continues."""
+        try:
+            resp = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)  # WHY: compute resp
+            if resp.status_code == 200:  # WHY: branch on condition
+                return resp.data or []  # WHY: return computed result
+        except Exception as e:  # WHY: handle expected error
+            logging.debug("Error %s site %s: %s", err_context, site_id, e)  # WHY: action-log after operation
+        return []  # WHY: return computed result
 
-        except Exception as e:
-            logging.exception("Error exporting site maps: %s", e)
-            print(f"\n! Error during export: {e}")
+    def _collect_flat_map_rows(
+        self, sites: list, desc: str
+    ) -> list:  # WHY: declare private helper _collect_flat_map_rows
+        """Fetch + flatten every map across sites; progress-bar labelled `desc`."""
+        rows: list = []  # WHY: assign computed value
+        for site in tqdm(sites, desc=desc, unit="site"):  # WHY: iterate collection
+            for map_item in self._fetch_site_maps_safe(site["id"], "exporting maps for"):  # WHY: iterate collection
+                rows.append(self._flatten_map_for_export(site, map_item))  # WHY: advance computation
+        return rows  # WHY: return computed result
 
-    def export_all_site_maps(self):
+    def _collect_maps_with_images(self, sites: list) -> list:  # WHY: declare private helper _collect_maps_with_images
+        """Fetch + flatten only maps that carry a `url` or `thumbnail_url`."""
+        rows: list = []  # WHY: assign computed value
+        for site in tqdm(sites, desc="Scanning for images", unit="site"):  # WHY: iterate collection
+            for map_item in self._fetch_site_maps_safe(site["id"], "scanning"):  # WHY: iterate collection
+                if "url" in map_item or "thumbnail_url" in map_item:  # WHY: branch on condition
+                    rows.append(self._flatten_map_for_export(site, map_item))  # WHY: advance computation
+        return rows  # WHY: return computed result
+
+    def _print_maps_export_summary(
+        self, exported_count: int, sites_count: int
+    ) -> None:  # WHY: declare private helper _print_maps_export_summary
+        """Print and log the finalization banner for a bulk map export."""
+        print(f"\n{'-' * 80}")  # WHY: surface user-facing message
+        print(f"Export completed: {exported_count} maps exported")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
+        logging.info("Exported %s maps from %s sites", exported_count, sites_count)  # WHY: action-log before operation
+
+    def export_all_site_maps(self):  # WHY: declare public method export_all_site_maps
         """Export all site maps across organization to CSV/SQLite with full metadata."""
-        print("\n" + "-" * 80)
-        print("EXPORT ALL ORGANIZATION MAPS - All Sites")
-        print("-" * 80)
-
+        print("\n" + "-" * 80)  # WHY: surface user-facing message
+        print("EXPORT ALL ORGANIZATION MAPS - All Sites")  # WHY: surface user-facing message
+        print("-" * 80)  # WHY: surface user-facing message
         try:
-            sites = self._fetch_sites()
-            if not sites:
-                print("\n! No sites found in organization")
-                return
+            sites = self._fetch_sites()  # WHY: compute sites
+            if not sites:  # WHY: guard against missing precondition
+                print("\n! No sites found in organization")  # WHY: surface user-facing message
+                return  # WHY: return early
+            print(f"\nExporting maps from {len(sites)} sites...")  # WHY: surface user-facing message
+            all_maps_data = self._collect_flat_map_rows(sites, "Exporting maps")  # WHY: compute all_maps_data
+            if not all_maps_data:  # WHY: guard against missing precondition
+                print("\n! No maps found to export")  # WHY: surface user-facing message
+                return  # WHY: return early
+            write_data_with_format_selection(
+                all_maps_data, "SiteMaps_Export", api_function_name="listSiteMaps"
+            )  # WHY: assign computed value
+            self._print_maps_export_summary(len(all_maps_data), len(sites))  # WHY: advance computation
+        except Exception as e:  # WHY: handle expected error
+            logging.exception("Error exporting site maps: %s", e)  # WHY: capture exception with traceback
+            print(f"\n! Error during export: {e}")  # WHY: surface user-facing message
 
-            print(f"\nExporting maps from {len(sites)} sites...")
-            all_maps_data = []
-
-            for site in tqdm(sites, desc="Exporting maps", unit="site"):
-                try:
-                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site["id"])
-
-                    if maps_response.status_code == 200:
-                        maps = maps_response.data
-                        for map_item in maps:
-                            # Flatten nested structures
-                            flattened = flatten_dict_recursively(map_item)
-                            flattened["site_id"] = site["id"]
-                            flattened["site_name"] = site.get("name", "Unknown")
-                            flattened["org_id"] = self.org_id
-                            all_maps_data.append(flattened)
-                except Exception as e:
-                    logging.debug("Error exporting maps for site %s: %s", site["id"], e)
-                    continue
-
-            if not all_maps_data:
-                print("\n! No maps found to export")
-                return
-
-            # Write to dual output format
-            filename = "SiteMaps_Export"
-            write_data_with_format_selection(all_maps_data, filename, api_function_name="listSiteMaps")
-
-            print(f"\n{'-' * 80}")
-            print(f"Export completed: {len(all_maps_data)} maps exported")
-            print(f"{'-' * 80}")
-            logging.info("Exported %s maps from %s sites", len(all_maps_data), len(sites))
-
-        except Exception as e:
-            logging.exception("Error exporting site maps: %s", e)
-            print(f"\n! Error during export: {e}")
-
-    def export_maps_with_images(self):
+    def export_maps_with_images(self):  # WHY: declare public method export_maps_with_images
         """Export maps metadata focusing on image information."""
-        print("\n" + "-" * 80)
-        print("EXPORT MAPS WITH IMAGE METADATA")
-        print("-" * 80)
-
+        print("\n" + "-" * 80)  # WHY: surface user-facing message
+        print("EXPORT MAPS WITH IMAGE METADATA")  # WHY: surface user-facing message
+        print("-" * 80)  # WHY: surface user-facing message
         try:
-            sites = self._fetch_sites()
-            if not sites:
-                print("\n! No sites found in organization")
-                return
+            sites = self._fetch_sites()  # WHY: compute sites
+            if not sites:  # WHY: guard against missing precondition
+                print("\n! No sites found in organization")  # WHY: surface user-facing message
+                return  # WHY: return early
+            print(f"\nScanning {len(sites)} sites for maps with images...")  # WHY: surface user-facing message
+            maps_with_images = self._collect_maps_with_images(sites)  # WHY: compute maps_with_images
+            if not maps_with_images:  # WHY: guard against missing precondition
+                print("\n! No maps with images found")  # WHY: surface user-facing message
+                return  # WHY: return early
+            write_data_with_format_selection(
+                maps_with_images, "SiteMaps_WithImages", api_function_name="listSiteMaps"
+            )  # WHY: assign computed value
+            print(f"\n{'-' * 80}")  # WHY: surface user-facing message
+            print(f"Export completed: {len(maps_with_images)} maps with images")  # WHY: surface user-facing message
+            print(f"{'-' * 80}")  # WHY: surface user-facing message
+            logging.info("Exported %s maps with images", len(maps_with_images))  # WHY: action-log before operation
+        except Exception as e:  # WHY: handle expected error
+            logging.exception("Error exporting maps with images: %s", e)  # WHY: capture exception with traceback
+            print(f"\n! Error during export: {e}")  # WHY: surface user-facing message
 
-            print(f"\nScanning {len(sites)} sites for maps with images...")
-            maps_with_images = []
-
-            for site in tqdm(sites, desc="Scanning for images", unit="site"):
-                try:
-                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site["id"])
-
-                    if maps_response.status_code == 200:
-                        maps = maps_response.data
-                        for map_item in maps:
-                            if "url" in map_item or "thumbnail_url" in map_item:
-                                flattened = flatten_dict_recursively(map_item)
-                                flattened["site_id"] = site["id"]
-                                flattened["site_name"] = site.get("name", "Unknown")
-                                flattened["org_id"] = self.org_id
-                                maps_with_images.append(flattened)
-                except Exception as e:
-                    logging.debug("Error scanning site %s: %s", site["id"], e)
-                    continue
-
-            if not maps_with_images:
-                print("\n! No maps with images found")
-                return
-
-            filename = "SiteMaps_WithImages"
-            write_data_with_format_selection(maps_with_images, filename, api_function_name="listSiteMaps")
-
-            print(f"\n{'-' * 80}")
-            print(f"Export completed: {len(maps_with_images)} maps with images")
-            print(f"{'-' * 80}")
-            logging.info("Exported %s maps with images", len(maps_with_images))
-
-        except Exception as e:
-            logging.exception("Error exporting maps with images: %s", e)
-            print(f"\n! Error during export: {e}")
-
-    def _determine_image_extension(self, image_url: str) -> str:
+    def _determine_image_extension(
+        self, image_url: str
+    ) -> str:  # WHY: declare private helper _determine_image_extension
         """Determine file extension from image URL. Returns '.png' if unknown."""
-        if "." not in image_url:
-            return ".png"
-        url_ext = image_url.rsplit(".", 1)[-1].split("?")[0].lower()
-        if url_ext in ["png", "jpg", "jpeg", "gif", "svg"]:
-            return f".{url_ext}"
-        return ".png"
+        if "." not in image_url:  # WHY: branch on condition
+            return ".png"  # WHY: return computed result
+        url_ext = image_url.rsplit(".", 1)[-1].split("?")[0].lower()  # WHY: compute url_ext
+        if url_ext in ["png", "jpg", "jpeg", "gif", "svg"]:  # WHY: branch on condition
+            return f".{url_ext}"  # WHY: return computed result
+        return ".png"  # WHY: return computed result
 
-    def _download_single_map_image(self, map_item: dict, download_dir: str) -> bool:
+    def _resolve_map_download_target(
+        self, map_item: dict, download_dir: str
+    ) -> "tuple[str, str] | None":  # WHY: declare private helper _resolve_map_download_target
+        """Return (image_url, filepath) for the map image, or None when URL missing."""
+        import os  # WHY: import required module
+
+        image_url = map_item.get("url")  # WHY: compute image_url
+        if not image_url:  # WHY: guard against missing precondition
+            return None  # WHY: return computed result
+        map_name = map_item.get("name", "unnamed")  # WHY: compute map_name
+        map_id = map_item.get("id", "unknown")  # WHY: compute map_id
+        file_ext = self._determine_image_extension(image_url)  # WHY: compute file_ext
+        filename = f"{sanitize_filename(map_name)}_{map_id[:8]}{file_ext}"  # WHY: compute filename
+        filepath = os.path.join(download_dir, filename)  # WHY: compute filepath
+        return image_url, filepath  # WHY: return computed result
+
+    def _download_single_map_image(
+        self, map_item: dict, download_dir: str
+    ) -> bool:  # WHY: declare private helper _download_single_map_image
         """Download one map image to download_dir. Returns True on success."""
-        import os
+        import requests  # WHY: import required module
 
-        import requests
-
-        image_url = map_item.get("url")
-        if not image_url:
-            return False
-        map_name = map_item.get("name", "unnamed")
-        map_id = map_item.get("id", "unknown")
-        file_ext = self._determine_image_extension(image_url)
-        filename = f"{sanitize_filename(map_name)}_{map_id[:8]}{file_ext}"
-        filepath = os.path.join(download_dir, filename)
+        target = self._resolve_map_download_target(map_item, download_dir)  # WHY: compute target
+        if target is None:  # WHY: guard against missing precondition
+            return False  # WHY: return computed result
+        image_url, filepath = target  # WHY: compute image_url
+        map_name = map_item.get("name", "unnamed")  # WHY: compute map_name
         try:
-            response = requests.get(image_url, timeout=30)
-            if response.status_code == 200:
-                with open(filepath, "wb") as f:
-                    f.write(response.content)
-                return True
-            logging.warning("Failed to download %s: HTTP %s", map_name, response.status_code)
-        except Exception as e:
-            logging.error("Error downloading map image %s: %s", map_item.get("id"), e)
-        return False
+            response = requests.get(image_url, timeout=30)  # WHY: compute response
+            if response.status_code == 200:  # WHY: branch on condition
+                with open(filepath, "wb") as f:  # WHY: manage scoped resource
+                    f.write(response.content)  # WHY: advance computation
+                return True  # WHY: return computed result
+            logging.warning(
+                "Failed to download %s: HTTP %s", map_name, response.status_code
+            )  # WHY: surface non-fatal issue
+        except Exception as e:  # WHY: handle expected error
+            logging.error("Error downloading map image %s: %s", map_item.get("id"), e)  # WHY: surface fatal issue
+        return False  # WHY: return computed result
 
-    def _resolve_site_maps_for_download(self, site_id: str) -> tuple[str, list] | None:
-        """Resolve site name and fetch list of maps with downloadable images. Returns None on failure."""
-        logging.info("Resolving site name for download target site_id=%s", site_id)  # Log resolution start
+    def _lookup_site_name(self, site_id: str) -> str:  # WHY: declare private helper _lookup_site_name
+        """Return the site's display name from the site catalog, or 'Unknown'."""
         sites = self._fetch_sites()  # Fetch site catalog for name lookup
-        # Find matching site name (default 'Unknown' if site_id not in catalog)
-        site_name = next((s.get("name", "Unknown") for s in sites if s["id"] == site_id), "Unknown")
-        logging.debug("Resolved site_name=%s", site_name)  # Log resolved name
-        print(f"\nFetching maps for site: {site_name}")  # User-visible status
+        return next((s.get("name", "Unknown") for s in sites if s["id"] == site_id), "Unknown")  # Match by id
+
+    def _fetch_maps_with_images(
+        self, site_id: str, site_name: str
+    ) -> "list | None":  # WHY: declare private helper _fetch_maps_with_images
+        """Fetch site maps and return those with downloadable images (or None)."""
         logging.info("Calling listSiteMaps for site_id=%s", site_id)  # Log API call start
-        maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)  # Fetch all maps
+        maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)  # Fetch maps
         logging.debug("listSiteMaps returned status=%s", maps_response.status_code)  # Log API result
         if maps_response.status_code != 200:  # API call failed
             print(f"\n! Failed to fetch maps: {maps_response.status_code}")  # User-visible failure
             return None  # Signal failure to orchestrator
-        maps_with_images = [m for m in maps_response.data if "url" in m]  # Filter to maps that have downloadable images
-        if not maps_with_images:  # No images available
+        maps_with_images = [m for m in maps_response.data if "url" in m]  # Only maps that carry an image URL
+        if not maps_with_images:  # No images available for this site
             print(f"\n! No maps with images found for site: {site_name}")  # User-visible no-data message
             return None  # Signal nothing to download
+        return maps_with_images  # Return the filtered list
+
+    def _resolve_site_maps_for_download(
+        self, site_id: str
+    ) -> tuple[str, list] | None:  # WHY: declare private helper _resolve_site_maps_for_download
+        """Resolve site name and fetch list of maps with downloadable images. Returns None on failure."""
+        logging.info("Resolving site name for download target site_id=%s", site_id)  # Log resolution start
+        site_name = self._lookup_site_name(site_id)  # Resolve human-readable site name
+        logging.debug("Resolved site_name=%s", site_name)  # Log resolved name
+        print(f"\nFetching maps for site: {site_name}")  # User-visible status
+        maps_with_images = self._fetch_maps_with_images(site_id, site_name)  # Filtered map list
+        if not maps_with_images:  # Fetch failed or nothing downloadable
+            return None  # Propagate the failure sentinel
         return site_name, maps_with_images  # Return resolved name and maps for download loop
 
-    def _download_maps_batch(self, maps_with_images: list, download_dir: str) -> int:
+    def _download_maps_batch(
+        self, maps_with_images: list, download_dir: str
+    ) -> int:  # WHY: declare private helper _download_maps_batch
         """Download a batch of map images to the target directory, returning the success count."""
         # Log batch start with count and target dir
-        logging.info("Starting batch download of %d map images to %s", len(maps_with_images), download_dir)
+        logging.info(
+            "Starting batch download of %d map images to %s", len(maps_with_images), download_dir
+        )  # WHY: action-log before operation
         downloaded = sum(  # Count successful downloads
             1  # Each successful download contributes 1
             for map_item in tqdm(maps_with_images, desc="Downloading", unit="image")  # Iterate with progress bar
@@ -1287,1593 +861,971 @@ class MapsManager:
         logging.debug("Batch download finished with %d successes", downloaded)  # Log batch outcome
         return downloaded  # Return count for summary
 
-    def download_site_map_images(self):
+    @staticmethod
+    def _print_download_images_header() -> None:  # WHY: declare private helper _print_download_images_header
+        """Print the banner for the download-site-map-images flow."""
+        print("\n" + "-" * 80)  # User-visible banner top border.
+        print("DOWNLOAD SITE MAP IMAGES")  # User-visible operation title.
+        print("-" * 80)  # User-visible banner bottom border.
+
+    @staticmethod
+    def _print_download_images_summary(
+        downloaded: int, total: int, download_dir: str
+    ) -> None:  # WHY: declare private helper _print_download_images_summary
+        """Print the final tally after a batch image download."""
+        print(f"\n{'-' * 80}")  # User-visible summary top border.
+        print(f"Downloaded {downloaded} of {total} images")  # User-visible success count.
+        print(f"Location: {download_dir}")  # User-visible target path.
+        print(f"{'-' * 80}")  # User-visible summary bottom border.
+
+    def _run_download_site_map_images(
+        self, site_id: str
+    ) -> None:  # WHY: declare private helper _run_download_site_map_images
+        """Resolve the current site's maps and download all with images."""
+        resolved = self._resolve_site_maps_for_download(site_id)  # Resolve name + maps with images.
+        if resolved is None:  # Helper signalled failure or no images.
+            return  # Stop -- user already informed.
+        site_name, maps_with_images = resolved  # Unpack resolved tuple.
+        print(f"\nFound {len(maps_with_images)} maps with images")  # User-visible count.
+        import os  # Standard path utilities -- imported lazily to match prior behavior.
+
+        download_dir = os.path.join("data", "map_images", sanitize_filename(site_name))  # Per-site output dir.
+        os.makedirs(download_dir, exist_ok=True)  # Ensure directory exists.
+        print(f"Downloading to: {download_dir}")  # User-visible target path.
+        downloaded = self._download_maps_batch(maps_with_images, download_dir)  # Run batch download loop.
+        self._print_download_images_summary(downloaded, len(maps_with_images), download_dir)  # Final tally.
+        logging.info("Downloaded %s map images to %s", downloaded, download_dir)  # Log final outcome.
+
+    def download_site_map_images(self):  # WHY: declare public method download_site_map_images
         """Download map images to local disk."""
-        print("\n" + "-" * 80)  # User-visible banner top border
-        print("DOWNLOAD SITE MAP IMAGES")  # User-visible operation title
-        print("-" * 80)  # User-visible banner bottom border
-        try:  # Wrap entire orchestrator to log any unexpected error to user
-            site_id, _ = self.get_current_site()  # Resolve currently selected site from session state
-            if not site_id:  # No site selected by user
-                print("\n! No site selected")  # User-visible no-site message
-                return  # Nothing to download
-            resolved = self._resolve_site_maps_for_download(site_id)  # Resolve name + maps with images
-            if resolved is None:  # Helper signaled failure or no images
-                return  # Stop -- user already informed
-            site_name, maps_with_images = resolved  # Unpack resolved tuple
-            print(f"\nFound {len(maps_with_images)} maps with images")  # User-visible count
-            import os  # Standard path utilities -- imported lazily to match prior behavior
+        self._print_download_images_header()  # Section banner.
+        try:  # Wrap orchestrator to log any unexpected error to user.
+            site_id, _ = self.get_current_site()  # Resolve currently selected site.
+            if not site_id:  # No site selected by user.
+                print("\n! No site selected")  # User-visible no-site message.
+                return  # Nothing to download.
+            self._run_download_site_map_images(site_id)  # Delegate the flow to helper.
+        except Exception as e:  # Catch-all for unexpected runtime errors.
+            logging.exception("Error downloading map images: %s", e)  # Log full traceback.
+            print(f"\n! Error downloading images: {e}")  # User-visible error message.
 
-            download_dir = os.path.join("data", "map_images", sanitize_filename(site_name))  # Build per-site output dir
-            os.makedirs(download_dir, exist_ok=True)  # Ensure directory exists
-            print(f"Downloading to: {download_dir}")  # User-visible target path
-            downloaded = self._download_maps_batch(maps_with_images, download_dir)  # Run batch download loop
-            print(f"\n{'-' * 80}")  # User-visible summary top border
-            print(f"Downloaded {downloaded} of {len(maps_with_images)} images")  # User-visible count
-            print(f"Location: {download_dir}")  # User-visible target path
-            print(f"{'-' * 80}")  # User-visible summary bottom border
-            logging.info("Downloaded %s map images to %s", downloaded, download_dir)  # Log final outcome
-        except Exception as e:  # Catch-all for unexpected runtime errors
-            logging.exception("Error downloading map images: %s", e)  # Log full traceback
-            print(f"\n! Error downloading images: {e}")  # User-visible error message
-
-    def _print_map_optional_fields(self, map_details: dict) -> None:
+    def _print_map_optional_fields(
+        self, map_details: dict
+    ) -> None:  # WHY: declare private helper _print_map_optional_fields
         """Print optional detail fields for a map (URL, coordinates, wayfinding)."""
-        if "url" in map_details:
-            print(f"Image URL: {map_details['url'][:80]}...")
-        if "latlng" in map_details:
-            latlng = map_details["latlng"]
-            print(f"Coordinates: {latlng.get('lat')}, {latlng.get('lng')}")
-        if "wayfinding" in map_details:
-            print("Wayfinding Enabled: Yes")
+        if "url" in map_details:  # WHY: branch on condition
+            print(f"Image URL: {map_details['url'][:80]}...")  # WHY: surface user-facing message
+        if "latlng" in map_details:  # WHY: branch on condition
+            latlng = map_details["latlng"]  # WHY: compute latlng
+            print(f"Coordinates: {latlng.get('lat')}, {latlng.get('lng')}")  # WHY: surface user-facing message
+        if "wayfinding" in map_details:  # WHY: branch on condition
+            print("Wayfinding Enabled: Yes")  # WHY: surface user-facing message
 
-    def view_map_details(self):
+    @staticmethod
+    def _print_view_map_details_header() -> None:  # WHY: declare private helper _print_view_map_details_header
+        """Print the banner for the view-map-details flow."""
+        print("\n" + "-" * 80)  # Top rule of the section banner.
+        print("VIEW MAP DETAILS")  # Human-readable title.
+        print("-" * 80)  # Bottom rule of the section banner.
+
+    def _fetch_map_detail(
+        self, site_id: str, map_id: str
+    ) -> dict | None:  # WHY: declare private helper _fetch_map_detail
+        """Fetch a single map detail record; return None and print on failure."""
+        detail_response = mistapi.api.v1.sites.maps.getSiteMap(
+            self.apisession, site_id=site_id, map_id=map_id
+        )  # API call for map details.
+        if detail_response.status_code != 200:  # Any non-200 is a failure to fetch.
+            print(f"\n! Failed to fetch map details: {detail_response.status_code}")  # Surface HTTP error.
+            return None  # Signal failure to caller.
+        return detail_response.data  # Parsed map payload.
+
+    def _print_map_detail_body(self, map_details: dict) -> None:  # WHY: declare private helper _print_map_detail_body
+        """Print the formatted map-detail body block."""
+        print(f"\n{'-' * 80}")  # Leading rule.
+        print(f"MAP DETAILS: {map_details.get('name', 'Unnamed')}")  # Section title with map name.
+        print(f"{'-' * 80}")  # Rule beneath title.
+        print(f"Map ID: {map_details.get('id', 'N/A')}")  # Map identifier.
+        print(f"Type: {map_details.get('type', 'N/A')}")  # Map type (image/google/baidu).
+        print(f"Width: {map_details.get('width', 0)} pixels")  # Width in pixels.
+        print(f"Height: {map_details.get('height', 0)} pixels")  # Height in pixels.
+        print(f"PPM (Pixels per meter): {map_details.get('ppm', 'N/A')}")  # Scale in pixels per meter.
+        print(f"Orientation: {map_details.get('orientation', 0)} degrees")  # Rotation orientation.
+        print(f"Has Image: {'Yes' if 'url' in map_details else 'No'}")  # Whether a background image is set.
+        self._print_map_optional_fields(map_details)  # Optional URL/coords/wayfinding fields.
+        print(f"{'-' * 80}")  # Trailing rule.
+
+    def _run_view_map_details(
+        self, site_id: str, site_name: str
+    ) -> None:  # WHY: declare private helper _run_view_map_details
+        """Execute the interactive view-map-details flow for a site."""
+        map_id, _ = self._select_map_with_list(site_id, site_name)  # Prompt user to pick a map.
+        if not map_id:  # User cancelled selection.
+            return  # Nothing to display.
+        map_details = self._fetch_map_detail(site_id, map_id)  # Load the map record.
+        if map_details is None:  # API call failed and already printed reason.
+            return  # Nothing to display.
+        self._print_map_detail_body(map_details)  # Emit the formatted body.
+        logging.info("Viewed details for map %s", map_id)  # Audit log of the view.
+
+    def view_map_details(self):  # WHY: declare public method view_map_details
         """View detailed information for a specific map."""
-        print("\n" + "-" * 80)
-        print("VIEW MAP DETAILS")
-        print("-" * 80)
-
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            return
-
+        self._print_view_map_details_header()  # Section banner.
+        site_id, site_name = self.get_current_site()  # Resolve currently selected site.
+        if not site_id:  # No site selected -> nothing to do.
+            return  # WHY: return early
         try:
-            map_id, _ = self._select_map_with_list(site_id, site_name)
-            if not map_id:
-                return
+            self._run_view_map_details(site_id, site_name)  # Delegate the flow to the helper.
+        except Exception as e:  # Catch-all so the menu keeps running.
+            logging.exception("Error viewing map details: %s", e)  # Log full trace for triage.
+            print(f"\n! Error viewing map details: {e}")  # Surface error to the operator.
 
-            detail_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map_id)
-            if detail_response.status_code != 200:
-                print(f"\n! Failed to fetch map details: {detail_response.status_code}")
-                return
-
-            map_details = detail_response.data
-
-            print(f"\n{'-' * 80}")
-            print(f"MAP DETAILS: {map_details.get('name', 'Unnamed')}")
-            print(f"{'-' * 80}")
-            print(f"Map ID: {map_details.get('id', 'N/A')}")
-            print(f"Type: {map_details.get('type', 'N/A')}")
-            print(f"Width: {map_details.get('width', 0)} pixels")
-            print(f"Height: {map_details.get('height', 0)} pixels")
-            print(f"PPM (Pixels per meter): {map_details.get('ppm', 'N/A')}")
-            print(f"Orientation: {map_details.get('orientation', 0)} degrees")
-            print(f"Has Image: {'Yes' if 'url' in map_details else 'No'}")
-            self._print_map_optional_fields(map_details)
-            print(f"{'-' * 80}")
-            logging.info("Viewed details for map %s", map_id)
-
-        except Exception as e:
-            logging.exception("Error viewing map details: %s", e)
-            print(f"\n! Error viewing map details: {e}")
-
-    def _prompt_map_name(self) -> str | None:
+    def _prompt_map_name(self) -> str | None:  # WHY: declare private helper _prompt_map_name
         """Prompt user for a map name; return None if empty or EOF."""
         try:
-            map_name = InputUtils.safe_input("Enter map name: ", context="_prompt_map_name").strip()
-        except EOFError:
-            logging.info("EOF detected during map name input")
-            return None
-        if not map_name:
-            print("\n! Map name is required")
-            return None
-        return map_name
+            map_name = InputUtils.safe_input(
+                "Enter map name: ", context="_prompt_map_name"
+            ).strip()  # WHY: compute map_name
+        except EOFError:  # WHY: handle expected error
+            logging.info("EOF detected during map name input")  # WHY: action-log before operation
+            return None  # WHY: return computed result
+        if not map_name:  # WHY: guard against missing precondition
+            print("\n! Map name is required")  # WHY: surface user-facing message
+            return None  # WHY: return computed result
+        return map_name  # WHY: return computed result
 
-    def _prompt_map_type(self) -> str:
+    def _prompt_map_type(self) -> str:  # WHY: declare private helper _prompt_map_type
         """Display map type options and return the selected type string."""
-        print("\nMap type options:")
-        print("  1. image (standard floor plan)")
-        print("  2. google (Google Maps integration)")
-        print("  3. baidu (Baidu Maps integration)")
-        type_choice = InputUtils.safe_input("Select type (1-3, default=1): ", context="_prompt_map_type").strip() or "1"
-        type_map = {"1": "image", "2": "google", "3": "baidu"}
-        return type_map.get(type_choice, "image")
+        print("\nMap type options:")  # WHY: surface user-facing message
+        print("  1. image (standard floor plan)")  # WHY: surface user-facing message
+        print("  2. google (Google Maps integration)")  # WHY: surface user-facing message
+        print("  3. baidu (Baidu Maps integration)")  # WHY: surface user-facing message
+        type_choice = (
+            InputUtils.safe_input("Select type (1-3, default=1): ", context="_prompt_map_type").strip() or "1"
+        )  # WHY: compute type_choice
+        type_map = {"1": "image", "2": "google", "3": "baidu"}  # WHY: compute type_map
+        return type_map.get(type_choice, "image")  # WHY: return computed result
 
-    def _prompt_image_dimensions(self) -> tuple[int, int, float]:
+    def _prompt_image_dimensions(
+        self,
+    ) -> tuple[int, int, float]:  # WHY: declare private helper _prompt_image_dimensions
         """Prompt for image map dimensions; return (width, height, ppm) with defaults."""
-        width_input = InputUtils.safe_input(
+        width_input = InputUtils.safe_input(  # WHY: compute width_input
             "Enter width in pixels (default=1024): ", context="_prompt_image_dimensions"
         ).strip()
-        height_input = InputUtils.safe_input(
+        height_input = InputUtils.safe_input(  # WHY: compute height_input
             "Enter height in pixels (default=768): ", context="_prompt_image_dimensions"
         ).strip()
-        ppm_input = InputUtils.safe_input(
+        ppm_input = InputUtils.safe_input(  # WHY: compute ppm_input
             "Enter pixels per meter (default=10): ", context="_prompt_image_dimensions"
         ).strip()
-        width = int(width_input) if width_input else 1024
-        height = int(height_input) if height_input else 768
-        ppm = float(ppm_input) if ppm_input else 10.0
-        return width, height, ppm
+        width = int(width_input) if width_input else 1024  # WHY: compute width
+        height = int(height_input) if height_input else 768  # WHY: compute height
+        ppm = float(ppm_input) if ppm_input else 10.0  # WHY: compute ppm
+        return width, height, ppm  # WHY: return computed result
 
-    def _build_and_create_map(self, site_id: str, map_name: str, map_type: str) -> None:
+    def _print_map_creation_success(
+        self, created_map: dict, site_id: str
+    ) -> None:  # WHY: declare private helper _print_map_creation_success
+        """Print the success banner and log the created map identifier."""
+        print(f"\n{'-' * 80}")  # WHY: surface user-facing message
+        print("Map created successfully!")  # WHY: surface user-facing message
+        print(f"Map ID: {created_map.get('id')}")  # WHY: surface user-facing message
+        print(f"Name: {created_map.get('name')}")  # WHY: surface user-facing message
+        print(f"Type: {created_map.get('type')}")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
+        logging.info("Created map %s for site %s", created_map.get("id"), site_id)  # WHY: action-log before operation
+
+    def _build_and_create_map(
+        self, site_id: str, map_name: str, map_type: str
+    ) -> None:  # WHY: declare private helper _build_and_create_map
         """Build map payload, call API, and print the result."""
         try:
-            map_payload: dict[str, Any] = {"name": map_name, "type": map_type}
-            if map_type == "image":
-                width, height, ppm = self._prompt_image_dimensions()
-                map_payload.update({"width": width, "height": height, "ppm": ppm})
-            print(f"\nCreating map '{map_name}'...")
-            response = mistapi.api.v1.sites.maps.createSiteMap(self.apisession, site_id=site_id, body=map_payload)
-            if response.status_code in [200, 201]:
-                created_map = response.data
-                print(f"\n{'-' * 80}")
-                print("Map created successfully!")
-                print(f"Map ID: {created_map.get('id')}")
-                print(f"Name: {created_map.get('name')}")
-                print(f"Type: {created_map.get('type')}")
-                print(f"{'-' * 80}")
-                logging.info("Created map %s for site %s", created_map.get("id"), site_id)
+            map_payload: dict[str, Any] = {"name": map_name, "type": map_type}  # WHY: assign computed value
+            if map_type == "image":  # WHY: branch on condition
+                width, height, ppm = self._prompt_image_dimensions()  # WHY: compute width
+                map_payload.update({"width": width, "height": height, "ppm": ppm})  # WHY: advance computation
+            print(f"\nCreating map '{map_name}'...")  # WHY: surface user-facing message
+            response = mistapi.api.v1.sites.maps.createSiteMap(
+                self.apisession, site_id=site_id, body=map_payload
+            )  # WHY: compute response
+            if response.status_code in [200, 201]:  # WHY: branch on condition
+                self._print_map_creation_success(response.data, site_id)  # WHY: advance computation
             else:
-                print(f"\n! Failed to create map: HTTP {response.status_code}")
-                logging.error("Map creation failed: %s - %s", response.status_code, response.data)
-        except ValueError as ve:
-            print(f"\n! Invalid input: {ve}")
+                print(f"\n! Failed to create map: HTTP {response.status_code}")  # WHY: surface user-facing message
+                logging.error(
+                    "Map creation failed: %s - %s", response.status_code, response.data
+                )  # WHY: surface fatal issue
+        except ValueError as ve:  # WHY: handle expected error
+            print(f"\n! Invalid input: {ve}")  # WHY: surface user-facing message
 
-    def create_site_map(self):
+    def create_site_map(self):  # WHY: declare public method create_site_map
         """Create a new site map with basic configuration."""
-        print("\n" + "-" * 80)
-        print("CREATE NEW SITE MAP")
-        print("-" * 80)
-        print("\n! Note: This creates a map placeholder. Upload image separately (Menu 7)")
+        print("\n" + "-" * 80)  # WHY: surface user-facing message
+        print("CREATE NEW SITE MAP")  # WHY: surface user-facing message
+        print("-" * 80)  # WHY: surface user-facing message
+        print(
+            "\n! Note: This creates a map placeholder. Upload image separately (Menu 7)"
+        )  # WHY: surface user-facing message
 
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            return
+        site_id, site_name = self.get_current_site()  # WHY: compute site_id
+        if not site_id:  # WHY: guard against missing precondition
+            return  # WHY: return early
 
         try:
-            print(f"\nCreating map for site: {site_name}")
-            print(f"{'-' * 80}")
-            map_name = self._prompt_map_name()
-            if not map_name:
-                return
-            map_type = self._prompt_map_type()
-            self._build_and_create_map(site_id, map_name, map_type)
-        except Exception as e:
-            logging.exception("Error creating site map: %s", e)
-            print(f"\n! Error creating map: {e}")
+            print(f"\nCreating map for site: {site_name}")  # WHY: surface user-facing message
+            print(f"{'-' * 80}")  # WHY: surface user-facing message
+            map_name = self._prompt_map_name()  # WHY: compute map_name
+            if not map_name:  # WHY: guard against missing precondition
+                return  # WHY: return early
+            map_type = self._prompt_map_type()  # WHY: compute map_type
+            self._build_and_create_map(site_id, map_name, map_type)  # WHY: advance computation
+        except Exception as e:  # WHY: handle expected error
+            logging.exception("Error creating site map: %s", e)  # WHY: capture exception with traceback
+            print(f"\n! Error creating map: {e}")  # WHY: surface user-facing message
 
-    def _fetch_source_map_with_display(self, site_id: str, source_map_id: str) -> dict | None:
-        """Fetch source map from API and display its key attributes; return None on failure."""
-        logging.debug("Calling getSiteMap API - site_id: %s, map_id: %s", site_id, source_map_id)
-        print("\nFetching source map details...")
-        response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=source_map_id)
-        if response.status_code != 200:
-            logging.error("Failed to fetch source map - HTTP %s", response.status_code)
-            print(f"\n! Failed to fetch source map: HTTP {response.status_code}")
-            return None
-        source_map = response.data
-        print(f"\n{'-' * 80}")
-        print(f"Source Map: {source_map.get('name', 'Unnamed')}")
-        print(f"Type: {source_map.get('type', 'N/A')}")
-        print(f"Dimensions: {source_map.get('width', 'N/A')}x{source_map.get('height', 'N/A')}")
-        print(f"PPM: {source_map.get('ppm', 'N/A')}")
-        print(f"Has Image: {'Yes' if 'url' in source_map else 'No'}")
-        print(f"Has Walls: {'Yes' if 'wall_path' in source_map else 'No'}")
-        print(f"Has Wayfinding: {'Yes' if 'wayfinding_path' in source_map else 'No'}")
-        print(f"{'-' * 80}")
-        return source_map
+    def clone_map(self):  # WHY: declare public method clone_map
+        """Delegating wrapper: clone lives in src.maps._maps_clone."""
+        # Wrapper kept so run_interactive_menu's dispatch table -
+        # which references self.clone_map - continues to resolve
+        # without touching the menu builder.
+        from src.maps._maps_clone import clone_map  # WHY: import required module
 
-    def _prompt_clone_name(self, source_map: dict) -> str | None:
-        """Prompt for a clone name using the source map name as default; return None on EOF."""
-        default_name = f"{source_map.get('name', 'Map')} (Copy)"
-        try:
-            new_name = InputUtils.safe_input(
-                f"\nEnter name for cloned map [{default_name}]: ", context="_prompt_clone_name"
-            ).strip()
-        except EOFError:
-            logging.info("EOF detected during clone name prompt")
-            return None
-        return new_name or default_name
+        return clone_map(self)  # WHY: return computed result
 
-    def _build_clone_payload(self, source_map: dict, new_name: str) -> dict:
-        """Build a clone payload dict by copying all cloneable fields from the source map."""
-        payload: dict[str, Any] = {"name": new_name, "type": source_map.get("type", "image")}
-        cloneable_fields = [
-            "width",
-            "height",
-            "height_m",
-            "ppm",
-            "orientation",
-            "latlng",
-            "latlng_br",
-            "origin_x",
-            "origin_y",
-            "wayfinding",
-            "wayfinding_path",
-            "wall_path",
-            "sitesurvey_path",
-            "occupancy_limit",
-            "locked",
-            "view",
-        ]
-        for field in cloneable_fields:
-            if field in source_map:
-                payload[field] = source_map[field]
-        return payload
+    def intelligent_map_replacement_wizard(self):  # WHY: declare public method intelligent_map_replacement_wizard
+        """Menu entry point: delegate to the extracted wizard module."""
+        # Wrapper kept so run_interactive_menu's dispatch table -
+        # which references self.intelligent_map_replacement_wizard -
+        # continues to resolve without touching the menu builder.
+        from src.maps._maps_wizard import run_wizard  # WHY: import required module
 
-    def _fetch_source_zone_count(self, site_id: str, source_map_id: str) -> int:
-        """Count zones belonging to the source map; return 0 if fetch fails."""
-        try:
-            zones_check = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
-            if zones_check.status_code == 200:
-                return len([z for z in zones_check.data if z.get("map_id") == source_map_id])
-        except Exception as zone_error:
-            logging.debug("Could not fetch zone count for clone plan: %s", zone_error)
-        return 0
+        return run_wizard(self)  # WHY: return computed result
 
-    def _confirm_clone(self, source_map: dict, new_name: str, source_zones_count: int, clone_payload: dict) -> bool:
-        """Display the clone plan and prompt user to confirm; return True to proceed."""
-        print(f"\n{'-' * 80}")
-        print("Clone Plan:")
-        print(f"  New name: {new_name}")
-        print("  Will copy: dimensions, orientation, location data, wayfinding, walls")
-        print(f"  Image: {'Yes - will download and re-upload' if 'url' in source_map else 'No image to copy'}")
-        zone_msg = (
-            f"  Zones: {source_zones_count} zone(s) will be cloned"
-            if source_zones_count > 0
-            else "  Zones: None found on source map"
-        )
-        print(zone_msg)
-        print(f"{'-' * 80}")
-        confirm = (
-            InputUtils.safe_input("\nProceed with full clone? (yes/no): ", context="_confirm_clone").strip().lower()
-        )
-        if confirm not in ["yes", "y"]:
-            print("\n! Clone cancelled")
-            return False
-        return True
-
-    def _download_clone_image(self, source_map: dict) -> str | None:
-        """Download the source map image to a temp file; return the temp path or None."""
-        import tempfile
-
-        if "url" not in source_map:
-            return None
-        image_temp_path = None
-        try:
-            print("\nDownloading map image...")
-            image_url = source_map["url"]
-            file_ext = self._determine_image_extension(image_url)
-            temp_fd, image_temp_path = tempfile.mkstemp(suffix=file_ext)
-            os.close(temp_fd)
-            response = requests.get(image_url, timeout=60)
-            if response.status_code == 200:
-                with open(image_temp_path, "wb") as f:
-                    f.write(response.content)
-                print(f"Downloaded image ({len(response.content) / 1024:.1f} KB)")
-                return image_temp_path
-            print(f"! Warning: Failed to download image (HTTP {response.status_code})")
-        except Exception as download_error:
-            logging.error("Error downloading map image: %s", download_error)
-            print(f"! Warning: Could not download image: {download_error}")
-        if image_temp_path and os.path.exists(image_temp_path):
-            os.remove(image_temp_path)
-        return None
-
-    def _create_cloned_map_entry(self, site_id: str, clone_payload: dict, image_temp_path: str | None) -> str | None:
-        """Call createSiteMap API and return the new map ID; cleans up temp on failure."""
-        print("\nCreating cloned map...")
-        clone_response = mistapi.api.v1.sites.maps.createSiteMap(self.apisession, site_id=site_id, body=clone_payload)
-        if clone_response.status_code not in [200, 201]:
-            print(f"\n! Failed to clone map: HTTP {clone_response.status_code}")
-            logging.error("Map clone failed: %s - %s", clone_response.status_code, clone_response.data)
-            if image_temp_path and os.path.exists(image_temp_path):
-                os.remove(image_temp_path)
-            return None
-        cloned_map = clone_response.data
-        cloned_map_id = cloned_map.get("id")
-        if not cloned_map_id:
-            print("\n! Error: Cloned map has no ID")
-            logging.error("Cloned map missing ID in response")
-            return None
-        print(f"\n{'-' * 80}")
-        print("Map structure cloned successfully!")
-        print(f"Cloned Map ID: {cloned_map_id}")
-        print(f"Name: {cloned_map.get('name')}")
-        print(f"{'-' * 80}")
-        return cloned_map_id
-
-    def _upload_clone_image(self, site_id: str, cloned_map_id: str, image_temp_path: str) -> None:
-        """Upload image from temp path to cloned map and clean up the temp file."""
-        try:
-            print("\nUploading image to cloned map...")
-            upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(  # type: ignore[union-attr]
-                self.apisession, site_id=site_id, map_id=str(cloned_map_id), file=image_temp_path
-            )
-            if upload_response.status_code in [200, 201]:
-                print("Image uploaded successfully!")
-                logging.info("Image uploaded to cloned map %s", cloned_map_id)
-            else:
-                print(f"! Warning: Failed to upload image: HTTP {upload_response.status_code}")
-                logging.error("Image upload to cloned map failed: %s", upload_response.status_code)
-        except Exception as upload_error:
-            logging.error("Error uploading image to cloned map: %s", upload_error)
-            print(f"! Warning: Could not upload image to cloned map: {upload_error}")
-        finally:
-            if os.path.exists(image_temp_path):
-                os.remove(image_temp_path)
-
-    def _clone_single_zone(self, site_id: str, cloned_map_id: str, zone: dict) -> bool:
-        """Clone a single zone to the new map; return True on success."""
-        try:
-            zone_payload: dict[str, Any] = {
-                "name": zone.get("name", "Unnamed Zone"),
-                "map_id": cloned_map_id,
-                "vertices": zone.get("vertices", []),
-            }
-            if "type" in zone:
-                zone_payload["type"] = zone["type"]
-            if "z" in zone:
-                zone_payload["z"] = zone["z"]
-            zone_response = mistapi.api.v1.sites.zones.createSiteZone(
-                self.apisession, site_id=site_id, body=zone_payload
-            )
-            if zone_response.status_code in [200, 201]:
-                logging.debug("Cloned zone '%s' to new map", zone.get("name"))
-                return True
-            logging.warning("Failed to clone zone '%s': HTTP %s", zone.get("name"), zone_response.status_code)
-        except Exception as zone_error:
-            logging.error("Error cloning zone '%s': %s", zone.get("name"), zone_error)
-        return False
-
-    def _clone_zones(self, site_id: str, source_map_id: str, cloned_map_id: str) -> tuple[int, int]:
-        """Clone all zones from source map to cloned map; return (cloned, failed)."""
-        print("\nCloning zones...")
-        try:
-            zones_response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
-            if zones_response.status_code != 200:
-                print("! Warning: Could not fetch zones for cloning")
-                return 0, 0
-            source_zones = [z for z in zones_response.data if z.get("map_id") == source_map_id]
-            if not source_zones:
-                print("No zones found on source map to clone")
-                return 0, 0
-            results = [self._clone_single_zone(site_id, cloned_map_id, zone) for zone in source_zones]
-            cloned = sum(results)
-            failed = len(results) - cloned
-            print(f"Zones cloned: {cloned} (failed: {failed})")
-            return cloned, failed
-        except Exception as zones_error:
-            logging.exception("Error during zone cloning: %s", zones_error)
-            print(f"! Warning: Zone cloning failed: {zones_error}")
-            return 0, 0
-
-    def _print_clone_summary(self, summary: MapCloneSummary, zone_result: ZoneCloneResult) -> None:
-        """Print the final clone completion summary."""
-        source_map = summary.source_map  # Unpack original-map record from the bundle.
-        new_name = summary.new_name  # Unpack the user-chosen clone name from the bundle.
-        cloned_map_id = summary.cloned_map_id  # Unpack the new map's UUID from the bundle.
-        clone_payload = summary.clone_payload  # Unpack the body posted to Mist from the bundle.
-        had_image = summary.had_image  # Unpack the image-uploaded flag from the bundle.
-        zones_cloned = zone_result.cloned  # Unpack successful-zone count for the summary line.
-        zones_failed = zone_result.failed  # Unpack failed-zone count for the summary line.
-        print(f"\n{'-' * 80}")
-        print("CLONE COMPLETE")
-        print(f"{'-' * 80}")
-        print(f"Original Map: {source_map.get('name')}")
-        print(f"Cloned Map: {new_name}")
-        print(f"Cloned Map ID: {cloned_map_id}")
-        print("\nCloned elements:")
-        print(f"  -> Dimensions: {clone_payload.get('width', 'N/A')}x{clone_payload.get('height', 'N/A')}")
-        print(f"  -> PPM: {clone_payload.get('ppm', 'N/A')}")
-        print(f"  -> Walls: {'Yes' if 'wall_path' in clone_payload else 'No'}")
-        print(f"  -> Wayfinding: {'Yes' if 'wayfinding_path' in clone_payload else 'No'}")
-        print(f"  -> Image: {'Yes' if had_image else 'No'}")
-        zone_text = f"{zones_cloned} cloned" + (f" ({zones_failed} failed)" if zones_failed > 0 else "")
-        print(f"  -> Zones: {zone_text}")
-        print(f"{'-' * 80}")
-
-    def clone_map(self):
-        """Clone/duplicate an existing map at the current site including image, walls, paths, and zones."""
-        logging.info("clone_map operation initiated")
-        print("\n" + "-" * 80)
-        print("CLONE/DUPLICATE MAP")
-        print("-" * 80)
-        print("! This will clone ALL map data: image, walls, paths, zones, wayfinding, etc.")
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            logging.warning("clone_map aborted: No site selected")
-            return
-        logging.debug("clone_map - Site: %s (ID: %s)", site_name, site_id)
-        try:
-            print("\nSelect the map to clone:")
-            source_map_id = self._select_map_from_site(site_id, site_name)
-            if not source_map_id:
-                logging.info("clone_map aborted: No source map selected")
-                return
-            source_map = self._fetch_source_map_with_display(site_id, source_map_id)
-            if source_map is None:
-                return
-            new_name = self._prompt_clone_name(source_map)
-            if not new_name:
-                return
-            clone_payload = self._build_clone_payload(source_map, new_name)
-            source_zones_count = self._fetch_source_zone_count(site_id, source_map_id)
-            if not self._confirm_clone(source_map, new_name, source_zones_count, clone_payload):
-                return
-            image_temp_path = self._download_clone_image(source_map)
-            cloned_map_id = self._create_cloned_map_entry(site_id, clone_payload, image_temp_path)
-            if not cloned_map_id:
-                return
-            if image_temp_path:
-                self._upload_clone_image(site_id, cloned_map_id, image_temp_path)
-            zones_cloned, zones_failed = self._clone_zones(site_id, source_map_id, cloned_map_id)
-            self._print_clone_summary(
-                MapCloneSummary(
-                    source_map=source_map,
-                    new_name=new_name,
-                    cloned_map_id=cloned_map_id,
-                    clone_payload=clone_payload,
-                    had_image=bool(image_temp_path),
-                ),
-                ZoneCloneResult(cloned=zones_cloned, failed=zones_failed),
-            )
-            logging.info(
-                "Successfully cloned map %s to %s at site %s (zones: %s)",
-                source_map_id,
-                cloned_map_id,
-                site_id,
-                zones_cloned,
-            )
-        except EOFError:
-            logging.info("EOF detected during map clone")
-        except Exception as e:
-            logging.exception("Error cloning map: %s", e)
-            print(f"\n! Error cloning map: {e}")
-
-    def _wizard_fetch_devices(self, site_id: str, map_id: str) -> list:
-        """Fetch all devices placed on the given map."""
-        try:
-            resp = mistapi.api.v1.sites.devices.listSiteDevices(self.apisession, site_id=site_id, type="all")
-            if resp.status_code == 200:
-                all_devices = resp.data if isinstance(resp.data, list) else []
-                return [d for d in all_devices if d.get("map_id") == map_id]
-        except Exception as err:
-            logging.debug("Could not fetch devices for wizard: %s", err)
-        return []
-
-    def _wizard_fetch_zones(self, site_id: str, map_id: str) -> list:
-        """Fetch all zones placed on the given map."""
-        try:
-            resp = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
-            if resp.status_code == 200:
-                return [z for z in resp.data if z.get("map_id") == map_id]
-        except Exception as err:
-            logging.debug("Could not fetch zones for wizard: %s", err)
-        return []
-
-    def _wizard_fetch_beacons(self, site_id: str, map_id: str) -> tuple[list, list]:
-        """Fetch BLE beacons and virtual beacons on the given map. Returns (beacons, vbeacons)."""
-        beacons: list = []
-        vbeacons: list = []
-        try:
-            b_resp = mistapi.api.v1.sites.beacons.listSiteBeacons(self.apisession, site_id=site_id)
-            if b_resp.status_code == 200:
-                beacons = [b for b in b_resp.data if b.get("map_id") == map_id]
-            v_resp = mistapi.api.v1.sites.vbeacons.listSiteVBeacons(self.apisession, site_id=site_id)
-            if v_resp.status_code == 200:
-                vbeacons = [v for v in v_resp.data if v.get("map_id") == map_id]
-        except Exception as err:
-            logging.debug("Could not fetch beacons for wizard: %s", err)
-        return beacons, vbeacons
-
-    def _wizard_fetch_assets(self, site_id: str, map_id: str) -> dict:
-        """Fetch all map assets: devices, zones, beacons, vbeacons.
-
-        Returns dict with keys devices, zones, beacons, vbeacons (all lists).
-        """
-        beacons, vbeacons = self._wizard_fetch_beacons(site_id, map_id)
-        return {
-            "devices": self._wizard_fetch_devices(site_id, map_id),
-            "zones": self._wizard_fetch_zones(site_id, map_id),
-            "beacons": beacons,
-            "vbeacons": vbeacons,
+    @staticmethod
+    def _build_map_without_image_record(
+        site: dict, map_item: dict, org_id: str
+    ) -> dict:  # WHY: declare private helper _build_map_without_image_record
+        """Flatten a (site, map) pair lacking a url field into a report row."""
+        return {  # WHY: return computed result
+            "site_id": site["id"],
+            "site_name": site.get("name", "Unknown"),
+            "map_id": map_item.get("id"),
+            "map_name": map_item.get("name", "Unnamed"),
+            "type": map_item.get("type", "N/A"),
+            "width": map_item.get("width", 0),
+            "height": map_item.get("height", 0),
+            "org_id": org_id,
         }
 
-    def _wizard_get_new_image(self) -> tuple[str, int, int] | None:
-        """Prompt for the replacement image file path and return (path, width, height).
-
-        Returns None if input is cancelled or invalid.
-        """
-        import os
-
-        from PIL import Image
-
-        print(f"\n{'-' * 80}")
-        print("STEP 2: Select New Floor Plan Image")
-        print("-" * 80)
-        print("\nEnter the path to the new floor plan image:")
-        print("Supported formats: PNG, JPG, JPEG, GIF")
-
+    def _scan_site_missing_image_maps(
+        self, site: dict
+    ) -> tuple[list, int]:  # WHY: declare private helper _scan_site_missing_image_maps
+        """Return (rows without url, total scanned) for a single site."""
         try:
-            file_path = InputUtils.safe_input("File path: ", context="_wizard_get_new_image").strip()
-        except EOFError:
-            logging.info("EOF detected during file path input")
-            return None
+            resp = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site["id"])  # API
+        except Exception as e:  # WHY: handle expected error
+            logging.debug("Error scanning site %s: %s", site["id"], e)  # Skip failed sites but log
+            return [], 0  # Contribute nothing on failure
+        if resp.status_code != 200:  # Non-success HTTP
+            return [], 0  # Skip this site but keep scanning
+        maps = resp.data  # Full map list for the site
+        rows = [
+            self._build_map_without_image_record(site, m, self.org_id) for m in maps if "url" not in m
+        ]  # WHY: compute rows
+        return rows, len(maps)  # Rows for maps missing images + total map count
 
-        file_path = file_path.strip('"').strip("'")
+    def _collect_maps_missing_images(
+        self, sites: list
+    ) -> tuple[list, int]:  # WHY: declare private helper _collect_maps_missing_images
+        """Scan every site's maps; return (rows without url, total scanned)."""
+        rows: list = []  # Accumulated rows across all sites
+        total = 0  # Running total of maps scanned
+        for site in tqdm(sites, desc="Scanning sites", unit="site"):  # Progress-visible iteration
+            site_rows, site_total = self._scan_site_missing_image_maps(site)  # Per-site delegation
+            rows.extend(site_rows)  # Accumulate rows
+            total += site_total  # Accumulate scanned count
+        return rows, total  # WHY: return computed result
 
-        if not file_path:
-            print("\n! No file path provided")
-            return None
+    @staticmethod
+    def _render_maps_without_images_table(
+        rows: list,
+    ) -> None:  # WHY: declare private helper _render_maps_without_images_table
+        """Print the (site, map, type) table for the report."""
+        print(f"\n{'-' * 80}")  # WHY: surface user-facing message
+        print(f"MAPS WITHOUT IMAGES: {len(rows)} found")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
+        print(f"{'Site Name':<30} {'Map Name':<30} {'Type':<15}")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
+        for map_item in rows:  # WHY: iterate collection
+            site_name = map_item["site_name"][:29]  # WHY: compute site_name
+            map_name = map_item["map_name"][:29]  # WHY: compute map_name
+            map_type = map_item["type"][:14]  # WHY: compute map_type
+            print(f"{site_name:<30} {map_name:<30} {map_type:<15}")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
 
-        if not os.path.exists(file_path) or not os.path.isfile(file_path):
-            print(f"\n! File not found or not a file: {file_path}")
-            return None
+    def _print_all_maps_have_images(
+        self, total: int
+    ) -> None:  # WHY: declare private helper _print_all_maps_have_images
+        """Emit the banner shown when every scanned map already has an image."""
+        print("\n" + "-" * 80)  # WHY: surface user-facing message
+        print(f"All {total} maps have images uploaded!")  # WHY: surface user-facing message
+        print("-" * 80)  # WHY: surface user-facing message
 
-        valid_extensions = [".png", ".jpg", ".jpeg", ".gif"]
-        file_ext = os.path.splitext(file_path)[1].lower()
-        if file_ext not in valid_extensions:
-            print(f"\n! Invalid file type: {file_ext}. Supported: {', '.join(valid_extensions)}")
-            return None
-
-        try:
-            with Image.open(file_path) as img:
-                new_width_px, new_height_px = img.size
-                print(f"\nNew image dimensions: {new_width_px} x {new_height_px} pixels")
-        except Exception as img_err:
-            print(f"\n! Failed to read image dimensions: {img_err}")
-            return None
-
-        return file_path, new_width_px, new_height_px
-
-    def _wizard_determine_scaling(
-        self,
-        original: OriginalMapMetrics,
-        new_dimensions: tuple[int, int],
-    ) -> tuple[str, float, float, float] | None:
-        """Prompt user for scaling mode and return (scaling_mode, scale_x, scale_y, new_ppm).
-
-        Returns None if the user cancels.
-        """
-        new_width_px, new_height_px = new_dimensions  # Unpack new image pixel size for clarity.
-        print(f"\n{'-' * 80}")
-        print("STEP 3: Configure Scaling")
-        print("-" * 80)
-
-        same_dimensions = new_width_px == original.width_px and new_height_px == original.height_px
-        if same_dimensions:
-            print("\nImage dimensions match exactly - no coordinate translation needed.")
-            return "none", 1.0, 1.0, original.ppm
-
-        width_ratio = new_width_px / original.width_px if original.width_px > 0 else 1.0
-        height_ratio = new_height_px / original.height_px if original.height_px > 0 else 1.0
-
-        print(f"\n  Original: {original.width_px} x {original.height_px} px")
-        print(f"  New:      {new_width_px} x {new_height_px} px")
-        w_sign = "+" if width_ratio > 1 else ""
-        h_sign = "+" if height_ratio > 1 else ""
-        print(f"  Width ratio:  {width_ratio:.4f}x ({w_sign}{((width_ratio - 1) * 100):.1f}%)")
-        print(f"  Height ratio: {height_ratio:.4f}x ({h_sign}{((height_ratio - 1) * 100):.1f}%)")
-
-        aspect_diff = abs(width_ratio - height_ratio)
-        if aspect_diff >= 0.01:
-            print(f"\n  WARNING: Aspect ratio differs by {aspect_diff:.2%} - placements may appear distorted.")
-
-        print("\nScaling options:")
-        print("  1. Proportional - Scale all coordinates by image ratio (recommended)")
-        print("  2. Preserve Physical - Keep real-world positions, update PPM only")
-        print("  3. Manual PPM - Enter new pixels-per-meter value manually")
-        print("  4. No Scaling - Replace image only, keep all coordinates unchanged")
-
-        try:
-            scale_choice = (
-                InputUtils.safe_input("\nSelect scaling mode [1]: ", context="_wizard_determine_scaling").strip() or "1"
-            )
-        except EOFError:
-            logging.info("EOF detected during scale mode selection")
-            return None
-
-        return self._apply_scale_choice(
-            scale_choice,
-            ScaleChoiceContext(
-                width_ratio=width_ratio,
-                height_ratio=height_ratio,
-                original_ppm=original.ppm,
-                original_width_m=original.width_m,
-                new_width_px=new_width_px,
-            ),
-        )
-
-    def _apply_scale_choice(
-        self,
-        scale_choice: str,
-        ctx: ScaleChoiceContext,
-    ) -> tuple[str, float, float, float]:
-        """Map a scaling menu choice to (scaling_mode, scale_x, scale_y, new_ppm)."""
-        if scale_choice == "2":
-            if ctx.original_width_m and ctx.original_width_m > 0:
-                new_ppm = ctx.new_width_px / ctx.original_width_m
-            else:
-                new_ppm = ctx.new_width_px / (ctx.new_width_px / ctx.original_ppm) if ctx.original_ppm else 1.0
-            print(f"\nPreserving physical positions. New PPM: {new_ppm:.2f}")
-            return "preserve_physical", 1.0, 1.0, new_ppm
-
-        if scale_choice == "3":
-            try:
-                new_ppm_input = InputUtils.safe_input(
-                    f"Enter new PPM (current: {ctx.original_ppm:.2f}): ", context="_apply_scale_choice"
-                ).strip()
-                new_ppm = float(new_ppm_input) if new_ppm_input else ctx.original_ppm
-            except (ValueError, EOFError):
-                print("Invalid PPM value, using original")
-                new_ppm = ctx.original_ppm
-            print(f"\nUsing manual PPM: {new_ppm:.2f}, scaling: x={ctx.width_ratio:.4f}, y={ctx.height_ratio:.4f}")
-            return "manual_ppm", ctx.width_ratio, ctx.height_ratio, new_ppm
-
-        if scale_choice == "4":
-            print("\nNo coordinate scaling - image replacement only")
-            return "none", 1.0, 1.0, ctx.original_ppm
-
-        # Default: proportional (choice "1" or anything else)
-        print(f"\nUsing proportional scaling: x={ctx.width_ratio:.4f}, y={ctx.height_ratio:.4f}")
-        return "proportional", ctx.width_ratio, ctx.height_ratio, ctx.original_ppm
-
-    def _wizard_scale_path_nodes(self, nodes: list, scale_x: float, scale_y: float) -> list:
-        """Return a copy of path nodes with x/y coordinates scaled."""
-        scaled = []
-        for node in nodes:
-            scaled_node = dict(node)
-            if isinstance(scaled_node.get("x"), (int, float)):
-                scaled_node["x"] = scaled_node["x"] * scale_x
-            if isinstance(scaled_node.get("y"), (int, float)):
-                scaled_node["y"] = scaled_node["y"] * scale_y
-            scaled.append(scaled_node)
-        return scaled
-
-    def _wizard_scale_geometry(self, current_map: dict, factors: MapScalingFactors, dims: MapDimensions) -> dict:
-        """Build the map-update body: dimensions, PPM, and scaled wall/wayfinding paths."""
-        scale_x = factors.x_factor  # Unpack x-axis scale factor for readability.
-        scale_y = factors.y_factor  # Unpack y-axis scale factor for readability.
-        new_width_px = dims.width_px  # Unpack new pixel width for the update body.
-        new_height_px = dims.height_px  # Unpack new pixel height for the update body.
-        new_ppm = dims.ppm  # Unpack new PPM so width_m/height_m can be recomputed.
-        map_update: dict = {"width": new_width_px, "height": new_height_px, "ppm": new_ppm}
-        if new_ppm and new_ppm > 0:
-            map_update["width_m"] = new_width_px / new_ppm
-            map_update["height_m"] = new_height_px / new_ppm
-
-        if scale_x == 1.0 and scale_y == 1.0:
-            return map_update
-
-        for path_key in ("wall_path", "wayfinding_path"):
-            nodes = current_map.get(path_key, {}).get("nodes")
-            if not nodes:
-                continue
-            scaled_nodes = self._wizard_scale_path_nodes(nodes, scale_x, scale_y)
-            map_update[path_key] = {"nodes": scaled_nodes}
-            logging.debug("Scaled %d %s nodes", len(scaled_nodes), path_key)
-
-        return map_update
-
-    def _wizard_scale_devices(self, site_id: str, devices: list, scale_x: float, scale_y: float, errors: list) -> None:
-        """Scale device x/y positions and update each device via the API."""
-        print(f"  Updating {len(devices)} device positions...")
-        updated, failed = 0, 0
-        for device in devices:
-            try:
-                resp = mistapi.api.v1.sites.devices.updateSiteDevice(
-                    self.apisession,
-                    site_id=site_id,
-                    device_id=device.get("id"),
-                    body={"x": device.get("x", 0) * scale_x, "y": device.get("y", 0) * scale_y},
-                )
-                if resp.status_code == 200:
-                    updated += 1
-                else:
-                    failed += 1
-                    logging.warning("Device update failed for %s: HTTP %d", device.get("id"), resp.status_code)
-            except Exception as err:
-                failed += 1
-                logging.error("Device update error for %s: %s", device.get("id"), err)
-        print(f"    Devices updated: {updated}, failed: {failed}")
-        if failed:
-            errors.append(f"{failed} device updates failed")
-
-    def _wizard_scale_zones(self, site_id: str, zones: list, scale_x: float, scale_y: float, errors: list) -> None:
-        """Scale zone vertex coordinates and update each zone via the API."""
-        print(f"  Updating {len(zones)} zone positions...")
-        updated, failed = 0, 0
-        for zone in zones:
-            try:
-                vertices = zone.get("vertices", [])
-                if not vertices:
-                    updated += 1
-                    continue
-                scaled_vertices = [{"x": v.get("x", 0) * scale_x, "y": v.get("y", 0) * scale_y} for v in vertices]
-                resp = mistapi.api.v1.sites.zones.updateSiteZone(
-                    self.apisession, site_id=site_id, zone_id=zone.get("id"), body={"vertices": scaled_vertices}
-                )
-                if resp.status_code == 200:
-                    updated += 1
-                else:
-                    failed += 1
-                    logging.warning("Zone update failed for %s: HTTP %d", zone.get("id"), resp.status_code)
-            except Exception as err:
-                failed += 1
-                logging.error("Zone update error for %s: %s", zone.get("id"), err)
-        print(f"    Zones updated: {updated}, failed: {failed}")
-        if failed:
-            errors.append(f"{failed} zone updates failed")
-
-    def _wizard_scale_beacons(self, site_id: str, beacons: list, scale_x: float, scale_y: float, errors: list) -> None:
-        """Scale beacon positions and update each beacon via the API."""
-        print(f"  Updating {len(beacons)} beacon positions...")
-        updated, failed = 0, 0
-        for beacon in beacons:
-            try:
-                resp = mistapi.api.v1.sites.beacons.updateSiteBeacon(
-                    self.apisession,
-                    site_id=site_id,
-                    beacon_id=beacon.get("id"),
-                    body={"x": beacon.get("x", 0) * scale_x, "y": beacon.get("y", 0) * scale_y},
-                )
-                if resp.status_code == 200:
-                    updated += 1
-                else:
-                    failed += 1
-            except Exception as err:
-                failed += 1
-                logging.error("Beacon update error: %s", err)
-        print(f"    Beacons updated: {updated}, failed: {failed}")
-        if failed:
-            errors.append(f"{failed} beacon updates failed")
-
-    def _wizard_scale_vbeacons(
-        self, site_id: str, vbeacons: list, scale_x: float, scale_y: float, errors: list
-    ) -> None:
-        """Scale virtual beacon positions and update each vbeacon via the API."""
-        print(f"  Updating {len(vbeacons)} virtual beacon positions...")
-        updated, failed = 0, 0
-        for vbeacon in vbeacons:
-            try:
-                resp = mistapi.api.v1.sites.vbeacons.updateSiteVBeacon(
-                    self.apisession,
-                    site_id=site_id,
-                    vbeacon_id=vbeacon.get("id"),
-                    body={"x": vbeacon.get("x", 0) * scale_x, "y": vbeacon.get("y", 0) * scale_y},
-                )
-                if resp.status_code == 200:
-                    updated += 1
-                else:
-                    failed += 1
-            except Exception as err:
-                failed += 1
-                logging.error("Virtual beacon update error: %s", err)
-        print(f"    Virtual beacons updated: {updated}, failed: {failed}")
-        if failed:
-            errors.append(f"{failed} virtual beacon updates failed")
-
-    def _wizard_run(self, site_id: str, site_name: str) -> None:
-        """Execute the core wizard steps after site selection."""
-        map_id = self._wizard_select_and_display_map(site_id, site_name)
-        if not map_id:
-            return
-
-        current_map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map_id)
-        if current_map_response.status_code != 200:
-            print(f"\n! Failed to fetch map details: HTTP {current_map_response.status_code}")
-            return
-
-        current_map = current_map_response.data
-        map_name = current_map.get("name", "Unnamed")
-        assets = self._wizard_fetch_assets(site_id, map_id)
-        self._wizard_print_map_summary(current_map, map_name, assets)
-
-        image_result = self._wizard_get_new_image()
-        if not image_result:
-            return
-        file_path, new_width_px, new_height_px = image_result
-
-        scaling_result = self._wizard_determine_scaling(
-            OriginalMapMetrics(
-                width_px=current_map.get("width", 0),
-                height_px=current_map.get("height", 0),
-                ppm=current_map.get("ppm", 1.0),
-                width_m=current_map.get("width_m", 0),
-            ),
-            (new_width_px, new_height_px),
-        )
-        if scaling_result is None:
-            return
-        scaling_mode, scale_x, scale_y, new_ppm = scaling_result
-        # Issue #433 Phase C T3: pre-build the two shared bundles so all three
-        # wizard helpers (preview/apply/summary) get matching scaling state.
-        new_dims = MapDimensions(width_px=new_width_px, height_px=new_height_px, ppm=new_ppm)
-        new_factors = MapScalingFactors(mode=scaling_mode, x_factor=scale_x, y_factor=scale_y)
-
-        backup_file = self._wizard_create_backup(site_id, map_id, map_name)
-        if backup_file is None:
-            return
-
-        self._wizard_preview(
-            MapWizardPreviewContext(current_map=current_map, map_name=map_name, assets=assets),
-            new_dims,
-            new_factors,
-        )
-        if not self._wizard_confirm():
-            return
-
-        errors: list = []
-        self._wizard_apply(
-            MapWizardApplyTarget(site_id=site_id, map_id=map_id, file_path=file_path),
-            MapWizardApplyContext(current_map=current_map, assets=assets, errors=errors),
-            new_dims,
-            new_factors,
-        )
-        self._wizard_print_summary(
-            MapWizardSummaryContext(map_name=map_name, backup_file=backup_file, errors=errors),
-            new_dims,
-            new_factors,
-        )
-        logging.info("wizard completed for %s: mode=%s errors=%d", map_id, scaling_mode, len(errors))
-
-    def intelligent_map_replacement_wizard(self):
-        """Intelligent Map Replacement Wizard.
-
-        Replaces a floor plan image while intelligently preserving and translating:
-        - Device placements (APs, switches, gateways) with coordinate scaling
-        - Zones with vertex coordinate translation
-        - Walls and wayfinding paths
-        - Beacons and virtual beacons
-
-        Supports different scale/dimension scenarios:
-        1. Same dimensions - direct replacement
-        2. Different dimensions, same scale - coordinate translation
-        3. Different dimensions, different scale - intelligent scaling with preview
-        """
-        logging.info("intelligent_map_replacement_wizard initiated")
-        print("\n" + "=" * 80)
-        print("INTELLIGENT MAP REPLACEMENT WIZARD")
-        print("=" * 80)
-
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            logging.warning("Map replacement wizard aborted: No site selected")
-            return
-
-        try:
-            self._wizard_run(site_id, site_name)
-        except EOFError:
-            logging.info("EOF detected in map replacement wizard")
-        except ImportError as import_err:
-            print(f"\n! Missing required dependency: {import_err}")
-            print("Install with: pip install Pillow")
-            logging.error("Map replacement wizard import error: %s", import_err)
-        except Exception as err:
-            logging.exception("Error in map replacement wizard: %s", err)
-            print(f"\n! Error: {err}")
-
-    def _wizard_select_and_display_map(self, site_id: str, site_name: str) -> str | None:
-        """Select map and display current map info header. Returns map_id or None."""
-        print("\nThis wizard helps you replace a floor plan image while preserving")
-        print("device placements, zones, walls, and other map data.")
-        print("=" * 80)
-        print("\n" + "-" * 80)
-        print("STEP 1: Select Map to Replace")
-        print("-" * 80)
-        map_id = self._select_map_from_site(site_id, site_name)
-        if not map_id:
-            logging.info("Map replacement wizard aborted: No map selected")
-        return map_id
-
-    def _wizard_print_map_summary(self, current_map: dict, map_name: str, assets: dict) -> None:
-        """Print current map properties and asset counts to the console."""
-        print(f"\n{'-' * 80}")
-        print(f"Current Map: {map_name}")
-        print(f"{'-' * 80}")
-        print(f"  Dimensions: {current_map.get('width', 'N/A')} x {current_map.get('height', 'N/A')} px")
-        print(f"  PPM: {current_map.get('ppm', 'N/A')}")
-        print(f"  Has Image: {'Yes' if 'url' in current_map else 'No'}")
-        wall_nodes = len(current_map.get("wall_path", {}).get("nodes", []))
-        wayfinding_nodes = len(current_map.get("wayfinding_path", {}).get("nodes", []))
-        print("\nAssets on this map:")
-        print(f"  Devices: {len(assets['devices'])}")
-        print(f"  Zones: {len(assets['zones'])}")
-        print(f"  BLE Beacons: {len(assets['beacons'])}")
-        print(f"  Virtual Beacons: {len(assets['vbeacons'])}")
-        print(f"  Wall Nodes: {wall_nodes}")
-        print(f"  Wayfinding Nodes: {wayfinding_nodes}")
-
-    def _wizard_create_backup(self, site_id: str, map_id: str, map_name: str) -> str | None:
-        """Create a backup of current map geometry. Returns backup_file path or None on cancel."""
-        print(f"\n{'-' * 80}")
-        print("STEP 4: Creating Backup")
-        print("-" * 80)
-        backup_file = self._backup_map_geometry(
-            api_session=self.apisession,
-            site_id=site_id,
-            map_id=map_id,
-            map_name=map_name,
-            backup_reason="pre_replacement",
-        )
-        if backup_file:
-            print(f"Backup saved: {backup_file}")
-            return backup_file
-
-        print("! Warning: Backup may not have completed fully")
-        try:
-            proceed = (
-                InputUtils.safe_input("Continue anyway? (yes/no): ", context="_wizard_create_backup").strip().lower()
-            )
-        except EOFError:
-            return None
-        if proceed not in ("yes", "y"):
-            print("\n! Operation cancelled")
-            return None
-        return ""
-
-    def _wizard_preview(
-        self,
-        context: MapWizardPreviewContext,
-        dims: MapDimensions,
-        factors: MapScalingFactors,
-    ) -> None:
-        """Print step-5 preview of what will change."""
-        current_map = context.current_map  # Unpack current map record for original-dim lookup.
-        map_name = context.map_name  # Unpack human-readable map name for the heading.
-        assets = context.assets  # Unpack asset bundle for the coord-translation sample.
-        new_width_px = dims.width_px  # Unpack new pixel width for the preview line.
-        new_height_px = dims.height_px  # Unpack new pixel height for the preview line.
-        new_ppm = dims.ppm  # Unpack new PPM for the preview line.
-        scaling_mode = factors.mode  # Unpack scaling mode for the preview line.
-        scale_x = factors.x_factor  # Unpack x-axis factor for the translation sample.
-        scale_y = factors.y_factor  # Unpack y-axis factor for the translation sample.
-        print(f"\n{'-' * 80}")
-        print("STEP 5: Preview Changes")
-        print("-" * 80)
-        print(f"\nMap: {map_name}")
-        orig_w, orig_h = current_map.get("width", 0), current_map.get("height", 0)
-        orig_ppm = current_map.get("ppm", 0)
-        print(f"  Dimensions: {orig_w}x{orig_h} -> {new_width_px}x{new_height_px} px")
-        print(f"  PPM: {orig_ppm:.2f} -> {new_ppm:.2f}  Mode: {scaling_mode}")
-
-        if scaling_mode == "none" or (scale_x == 1.0 and scale_y == 1.0):
-            print("\n  No coordinate changes required")
-            return
-
-        print(f"\nCoordinate Translation (scale_x={scale_x:.4f}, scale_y={scale_y:.4f}):")
-        for device in assets["devices"][:5]:
-            old_x, old_y = device.get("x", 0), device.get("y", 0)
-            name = device.get("name", device.get("mac", "Unknown"))
-            print(f"    {name}: ({old_x:.1f}, {old_y:.1f}) -> ({old_x * scale_x:.1f}, {old_y * scale_y:.1f})")
-        if len(assets["devices"]) > 5:
-            print(f"    ... and {len(assets['devices']) - 5} more devices")
-        for zone in assets["zones"][:3]:
-            print(f"    Zone {zone.get('name', 'Unnamed')}: {len(zone.get('vertices', []))} vertices will be scaled")
-        if len(assets["zones"]) > 3:
-            print(f"    ... and {len(assets['zones']) - 3} more zones")
-
-    def _wizard_confirm(self) -> bool:
-        """Prompt for REPLACE confirmation. Returns True if confirmed."""
-        print(f"\n{'-' * 80}")
-        print("STEP 6: Confirm and Apply")
-        print("-" * 80)
-        print("\n! WARNING: This will modify the map and update all device/zone positions.")
-        try:
-            confirm = InputUtils.safe_input("\nType 'REPLACE' to proceed: ", context="_wizard_confirm").strip()
-        except EOFError:
-            logging.info("EOF detected during confirmation")
-            return False
-        if confirm != "REPLACE":
-            print("\n! Operation cancelled")
-            return False
-        return True
-
-    def _wizard_apply(
-        self,
-        target: MapWizardApplyTarget,
-        context: MapWizardApplyContext,
-        dims: MapDimensions,
-        factors: MapScalingFactors,
-    ) -> None:
-        """Apply all wizard changes: map update, image upload, and coordinate scaling."""
-        site_id = target.site_id  # Unpack site UUID for the API calls below.
-        map_id = target.map_id  # Unpack map UUID for the API calls below.
-        file_path = target.file_path  # Unpack path to the new image file being uploaded.
-        current_map = context.current_map  # Unpack pre-change map record for path scaling.
-        assets = context.assets  # Unpack asset bundle so each subtype helper can scale in place.
-        errors = context.errors  # Unpack the out-list helpers append failure descriptions to.
-        scale_x = factors.x_factor  # Unpack x-axis factor so the geometry helper builds the body.
-        scale_y = factors.y_factor  # Unpack y-axis factor so the geometry helper builds the body.
-        scaling_mode = factors.mode  # Unpack scaling mode to gate the asset-scaling block.
-        print("\nApplying changes...")
-        print("  Updating map properties...")
-        map_update = self._wizard_scale_geometry(current_map, factors, dims)
-        try:
-            resp = mistapi.api.v1.sites.maps.updateSiteMap(
-                self.apisession, site_id=site_id, map_id=map_id, body=map_update
-            )
-            if resp.status_code == 200:
-                print("    Map properties updated successfully")
-            else:
-                errors.append(f"Map update failed: HTTP {resp.status_code}")
-                print(f"    ! Failed to update map: HTTP {resp.status_code}")
-        except Exception as map_err:
-            errors.append(f"Map update error: {map_err}")
-            print(f"    ! Error updating map: {map_err}")
-
-        print("  Uploading new image...")
-        try:
-            upload_resp = mistapi.api.v1.sites.maps.addSiteMapImageFile(
-                self.apisession, site_id=site_id, map_id=map_id, file=file_path
-            )
-            if upload_resp.status_code in (200, 201):
-                print("    Image uploaded successfully")
-            else:
-                errors.append(f"Image upload failed: HTTP {upload_resp.status_code}")
-                print(f"    ! Failed to upload image: HTTP {upload_resp.status_code}")
-        except Exception as img_err:
-            errors.append(f"Image upload error: {img_err}")
-            print(f"    ! Error uploading image: {img_err}")
-
-        if scaling_mode == "proportional" and (scale_x != 1.0 or scale_y != 1.0):
-            self._wizard_scale_devices(site_id, assets["devices"], scale_x, scale_y, errors)
-            self._wizard_scale_zones(site_id, assets["zones"], scale_x, scale_y, errors)
-            self._wizard_scale_beacons(site_id, assets["beacons"], scale_x, scale_y, errors)
-            self._wizard_scale_vbeacons(site_id, assets["vbeacons"], scale_x, scale_y, errors)
-
-    def _wizard_print_summary(
-        self,
-        context: MapWizardSummaryContext,
-        dims: MapDimensions,
-        factors: MapScalingFactors,
-    ) -> None:
-        """Print the completion summary."""
-        map_name = context.map_name  # Unpack human-readable map name for the heading.
-        backup_file = context.backup_file  # Unpack pre-change backup path for the failure footer.
-        errors = context.errors  # Unpack accumulated apply errors for the optional warning block.
-        new_width_px = dims.width_px  # Unpack new pixel width for the summary line.
-        new_height_px = dims.height_px  # Unpack new pixel height for the summary line.
-        new_ppm = dims.ppm  # Unpack new PPM for the summary line.
-        scaling_mode = factors.mode  # Unpack scaling mode for the summary line.
-        print(f"\n{'=' * 80}")
-        print("MAP REPLACEMENT COMPLETE")
-        print("=" * 80)
-        print(f"\nMap: {map_name}  New: {new_width_px}x{new_height_px} px  PPM: {new_ppm:.2f}  Mode: {scaling_mode}")
-        if errors:
-            print(f"\n! Completed with {len(errors)} warning(s):")
-            for err in errors:
-                print(f"  - {err}")
-            print(f"\nBackup file: {backup_file}")
-        else:
-            print("\nAll changes applied successfully!")
-            print(f"Backup file: {backup_file}")
-
-    def maps_without_images_report(self):
+    def maps_without_images_report(self):  # WHY: declare public method maps_without_images_report
         """Generate report of maps that don't have uploaded images."""
-        print("\n" + "-" * 80)
-        print("MAPS WITHOUT IMAGES REPORT")
-        print("-" * 80)
-
+        print("\n" + "-" * 80)  # WHY: surface user-facing message
+        print("MAPS WITHOUT IMAGES REPORT")  # WHY: surface user-facing message
+        print("-" * 80)  # WHY: surface user-facing message
         try:
-            sites = self._fetch_sites()
-            if not sites:
-                print("\n! No sites found in organization")
-                return
-
-            print(f"\nScanning {len(sites)} sites for maps without images...")
-            maps_without_images = []
-            total_maps_scanned = 0
-
-            for site in tqdm(sites, desc="Scanning sites", unit="site"):
-                try:
-                    maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site["id"])
-
-                    if maps_response.status_code == 200:
-                        maps = maps_response.data
-                        total_maps_scanned += len(maps)
-                        for map_item in maps:
-                            if "url" not in map_item:
-                                maps_without_images.append(
-                                    {
-                                        "site_id": site["id"],
-                                        "site_name": site.get("name", "Unknown"),
-                                        "map_id": map_item.get("id"),
-                                        "map_name": map_item.get("name", "Unnamed"),
-                                        "type": map_item.get("type", "N/A"),
-                                        "width": map_item.get("width", 0),
-                                        "height": map_item.get("height", 0),
-                                        "org_id": self.org_id,
-                                    }
-                                )
-                except Exception as e:
-                    logging.debug("Error scanning site %s: %s", site["id"], e)
-                    continue
-
-            print(f"\nTotal maps scanned: {total_maps_scanned}")
-
-            if not maps_without_images:
-                print("\n" + "-" * 80)
-                print(f"All {total_maps_scanned} maps have images uploaded!")
-                print("-" * 80)
-                return
-
-            # Display report
-            print(f"\n{'-' * 80}")
-            print(f"MAPS WITHOUT IMAGES: {len(maps_without_images)} found")
-            print(f"{'-' * 80}")
-            print(f"{'Site Name':<30} {'Map Name':<30} {'Type':<15}")
-            print(f"{'-' * 80}")
-
-            for map_item in maps_without_images:
-                site_name = map_item["site_name"][:29]
-                map_name = map_item["map_name"][:29]
-                map_type = map_item["type"][:14]
-                print(f"{site_name:<30} {map_name:<30} {map_type:<15}")
-
-            print(f"{'-' * 80}")
-
-            # Export to CSV/SQLite
-            filename = "MapsWithoutImages_Report"
-            write_data_with_format_selection(maps_without_images, filename, api_function_name="listSiteMaps")
-
-            logging.info("Generated report: %s maps without images", len(maps_without_images))
-
-        except Exception as e:
-            logging.exception("Error generating maps report: %s", e)
-            print(f"\n! Error generating report: {e}")
+            sites = self._fetch_sites()  # WHY: compute sites
+            if not sites:  # WHY: guard against missing precondition
+                print("\n! No sites found in organization")  # WHY: surface user-facing message
+                return  # WHY: return early
+            print(f"\nScanning {len(sites)} sites for maps without images...")  # WHY: surface user-facing message
+            rows, total = self._collect_maps_missing_images(sites)  # WHY: compute rows
+            print(f"\nTotal maps scanned: {total}")  # WHY: surface user-facing message
+            if not rows:  # WHY: guard against missing precondition
+                self._print_all_maps_have_images(total)  # WHY: advance computation
+                return  # WHY: return early
+            self._render_maps_without_images_table(rows)  # WHY: advance computation
+            write_data_with_format_selection(
+                rows, "MapsWithoutImages_Report", api_function_name="listSiteMaps"
+            )  # WHY: assign computed value
+            logging.info("Generated report: %s maps without images", len(rows))  # WHY: action-log before operation
+        except Exception as e:  # WHY: handle expected error
+            logging.exception("Error generating maps report: %s", e)  # WHY: capture exception with traceback
+            print(f"\n! Error generating report: {e}")  # WHY: surface user-facing message
 
     # Placeholder methods for future implementation
-    def _collect_property_input(self, prompt, current_value, value_type=str):
+    def _collect_property_input(
+        self, prompt, current_value, value_type=str
+    ):  # WHY: declare private helper _collect_property_input
         """Collect a single property update from user with type validation."""
-        raw = InputUtils.safe_input(f"{prompt} [{current_value}]: ", context="_collect_property_input").strip()
-        if not raw:
-            return None
-        if value_type is str:
-            return raw
+        raw = InputUtils.safe_input(
+            f"{prompt} [{current_value}]: ", context="_collect_property_input"
+        ).strip()  # WHY: compute raw
+        if not raw:  # WHY: guard against missing precondition
+            return None  # WHY: return computed result
+        if value_type is str:  # WHY: branch on condition
+            return raw  # WHY: return computed result
         try:
-            return value_type(raw)
-        except ValueError:
-            print("! Invalid value, skipping")
-            return None
+            return value_type(raw)  # WHY: return computed result
+        except ValueError:  # WHY: handle expected error
+            print("! Invalid value, skipping")  # WHY: surface user-facing message
+            return None  # WHY: return computed result
 
-    def _collect_map_updates(self, current_map):
+    def _collect_map_updates(self, current_map):  # WHY: declare private helper _collect_map_updates
         """Collect all map property updates from user input."""
-        print("\nEnter new values (press Enter to keep current value):")
-        fields = [
+        print("\nEnter new values (press Enter to keep current value):")  # WHY: surface user-facing message
+        fields = [  # WHY: compute fields
             ("name", "Map name", current_map.get("name", ""), str),
             ("width", "Width in pixels", current_map.get("width", ""), int),
             ("height", "Height in pixels", current_map.get("height", ""), int),
             ("ppm", "Pixels per meter", current_map.get("ppm", ""), float),
             ("orientation", "Orientation in degrees", current_map.get("orientation", 0), int),
         ]
-        payload = {}
-        for key, label, current, vtype in fields:
-            value = self._collect_property_input(label, current, vtype)
-            if value is not None:
-                payload[key] = value
-        return payload
+        payload = {}  # WHY: compute payload
+        for key, label, current, vtype in fields:  # WHY: iterate collection
+            value = self._collect_property_input(label, current, vtype)  # WHY: compute value
+            if value is not None:  # WHY: branch on condition
+                payload[key] = value  # WHY: compute payload
+        return payload  # WHY: return computed result
 
-    def _confirm_and_apply_map_update(self, site_id: str, map_id: str, update_payload: dict) -> None:
+    @staticmethod
+    def _print_map_update_preview(
+        update_payload: dict,
+    ) -> None:  # WHY: declare private helper _print_map_update_preview
+        """Print the preview block listing pending map property changes."""
+        print(f"\n{'-' * 80}")  # Preview banner top.
+        print("Changes to apply:")  # Section label.
+        for key, value in update_payload.items():  # Show each changed key.
+            print(f"  {key}: {value}")  # Indented key/value pair.
+        print(f"{'-' * 80}")  # Preview banner bottom.
+
+    def _apply_map_update(
+        self, site_id: str, map_id: str, update_payload: dict
+    ) -> None:  # WHY: declare private helper _apply_map_update
+        """Invoke the update API and print the outcome."""
+        print("\nApplying changes...")  # User-visible progress note.
+        update_response = mistapi.api.v1.sites.maps.updateSiteMap(
+            self.apisession, site_id=site_id, map_id=map_id, body=update_payload
+        )  # PUT the update payload.
+        if update_response.status_code in [200, 201]:  # HTTP success codes.
+            print(f"\n{'-' * 80}")  # Success banner top.
+            print("Map updated successfully!")  # User-visible confirmation.
+            print(f"{'-' * 80}")  # Success banner bottom.
+            logging.info("Updated map %s for site %s", map_id, site_id)  # Audit log.
+            return  # Success path complete.
+        print(f"\n! Failed to update map: HTTP {update_response.status_code}")  # Report failure.
+        logging.error("Map update failed: %s", update_response.status_code)  # Log HTTP error.
+
+    def _confirm_and_apply_map_update(
+        self, site_id: str, map_id: str, update_payload: dict
+    ) -> None:  # WHY: declare private helper _confirm_and_apply_map_update
         """Prompt user to confirm and then apply the map property update via API."""
-        print(f"\n{'-' * 80}")
-        print("Changes to apply:")
-        for key, value in update_payload.items():
-            print(f"  {key}: {value}")
-        print(f"{'-' * 80}")
+        self._print_map_update_preview(update_payload)  # Show pending change preview.
         confirm = (
             InputUtils.safe_input("\nApply these changes? (yes/no): ", context="_confirm_and_apply_map_update")
             .strip()
             .lower()
-        )
-        if confirm not in ["yes", "y"]:
-            print("\n! Update cancelled")
-            return
-        print("\nApplying changes...")
-        update_response = mistapi.api.v1.sites.maps.updateSiteMap(
-            self.apisession, site_id=site_id, map_id=map_id, body=update_payload
-        )
-        if update_response.status_code in [200, 201]:
-            print(f"\n{'-' * 80}")
-            print("Map updated successfully!")
-            print(f"{'-' * 80}")
-            logging.info("Updated map %s for site %s", map_id, site_id)
-        else:
-            print(f"\n! Failed to update map: HTTP {update_response.status_code}")
-            logging.error("Map update failed: %s", update_response.status_code)
+        )  # Explicit yes/no confirmation.
+        if confirm not in ["yes", "y"]:  # User declined.
+            print("\n! Update cancelled")  # Note cancellation.
+            return  # Do not call the API.
+        self._apply_map_update(site_id, map_id, update_payload)  # Perform the update.
 
-    def update_map_properties(self):
+    @staticmethod
+    def _render_current_map_properties(
+        current_map: dict,
+    ) -> None:  # WHY: declare private helper _render_current_map_properties
+        """Print the current-map properties block used by the update flow."""
+        print("\nCurrent Map Properties:")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
+        for label, key in [("Name", "name"), ("Type", "type")]:  # WHY: iterate collection
+            print(f"{label}: {current_map.get(key, 'N/A')}")  # WHY: surface user-facing message
+        print(f"Width: {current_map.get('width', 'N/A')} pixels")  # WHY: surface user-facing message
+        print(f"Height: {current_map.get('height', 'N/A')} pixels")  # WHY: surface user-facing message
+        print(f"PPM (Pixels per meter): {current_map.get('ppm', 'N/A')}")  # WHY: surface user-facing message
+        print(f"Orientation: {current_map.get('orientation', 0)} degrees")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
+
+    def _load_map_for_update(
+        self, site_id: str, site_name: str
+    ) -> "tuple[str, dict] | None":  # WHY: declare private helper _load_map_for_update
+        """Pick a map and fetch its current state; None if user cancels or fetch fails."""
+        map_id = self._select_map_from_site(site_id, site_name)  # WHY: compute map_id
+        if not map_id:  # WHY: guard against missing precondition
+            return None  # WHY: return computed result
+        resp = mistapi.api.v1.sites.maps.getSiteMap(
+            self.apisession, site_id=site_id, map_id=map_id
+        )  # WHY: compute resp
+        if resp.status_code != 200:  # WHY: branch on condition
+            print(f"\n! Failed to fetch map details: HTTP {resp.status_code}")  # WHY: surface user-facing message
+            return None  # WHY: return computed result
+        return map_id, resp.data  # WHY: return computed result
+
+    @staticmethod
+    def _print_update_map_properties_header() -> (
+        None
+    ):  # WHY: declare private helper _print_update_map_properties_header
+        """Print the banner shown by the update-map-properties action."""
+        print("\n" + "-" * 80)  # Top rule
+        print("UPDATE MAP PROPERTIES")  # Title
+        print("-" * 80)  # Bottom rule
+
+    def _run_update_map_properties(
+        self, site_id: str, site_name: str
+    ) -> None:  # WHY: declare private helper _run_update_map_properties
+        """Execute the update flow after site selection and header."""
+        loaded = self._load_map_for_update(site_id, site_name)  # Pick a map and fetch its current state
+        if loaded is None:  # User cancelled or fetch failed
+            return  # Nothing further to do
+        map_id, current_map = loaded  # Unpack the selected map
+        self._render_current_map_properties(current_map)  # Show existing values
+        update_payload = self._collect_map_updates(current_map)  # Prompt for changes
+        if not update_payload:  # No fields were modified
+            print("\n! No changes specified")  # Inform the operator
+            return  # Skip the no-op update
+        self._confirm_and_apply_map_update(site_id, map_id, update_payload)  # Confirm + PUT
+
+    def update_map_properties(self):  # WHY: declare public method update_map_properties
         """Update existing map properties (name, dimensions, orientation, etc.)."""
-        print("\n" + "-" * 80)
-        print("UPDATE MAP PROPERTIES")
-        print("-" * 80)
-
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            return
-
+        self._print_update_map_properties_header()  # Banner
+        site_id, site_name = self.get_current_site()  # Require a selected site
+        if not site_id:  # Site prompt cancelled
+            return  # WHY: return early
         try:
-            map_id = self._select_map_from_site(site_id, site_name)
-            if not map_id:
-                return
+            self._run_update_map_properties(site_id, site_name)  # Execute the update flow
+        except EOFError:  # WHY: handle expected error
+            logging.info("EOF detected during map update")  # Non-interactive shutdown
+            return  # WHY: return early
+        except Exception as e:  # WHY: handle expected error
+            logging.exception("Error updating map properties: %s", e)  # Log for diagnosis
+            print(f"\n! Error updating map: {e}")  # Surface to operator
 
-            map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map_id)
-            if map_response.status_code != 200:
-                print(f"\n! Failed to fetch map details: HTTP {map_response.status_code}")
-                return
+    def _fetch_map_for_delete(
+        self, site_id: str, map_id: str
+    ) -> dict | None:  # WHY: declare private helper _fetch_map_for_delete
+        """Fetch current map or print HTTP error and return None on failure."""
+        resp = mistapi.api.v1.sites.maps.getSiteMap(
+            self.apisession, site_id=site_id, map_id=map_id
+        )  # WHY: compute resp
+        if resp.status_code != 200:  # WHY: branch on condition
+            print(f"\n! Failed to fetch map details: HTTP {resp.status_code}")  # WHY: surface user-facing message
+            return None  # WHY: return computed result
+        return resp.data  # WHY: return computed result
 
-            current_map = map_response.data
+    @staticmethod
+    def _render_map_delete_preview(
+        current_map: dict, map_id: str
+    ) -> None:  # WHY: declare private helper _render_map_delete_preview
+        """Print the (name, type, id) preview shown before delete confirmation."""
+        print(f"\n{'-' * 80}")  # WHY: surface user-facing message
+        print("Map to be deleted:")  # WHY: surface user-facing message
+        print(f"  Name: {current_map.get('name', 'N/A')}")  # WHY: surface user-facing message
+        print(f"  Type: {current_map.get('type', 'N/A')}")  # WHY: surface user-facing message
+        print(f"  ID: {map_id}")  # WHY: surface user-facing message
+        print(f"{'-' * 80}")  # WHY: surface user-facing message
 
-            print("\nCurrent Map Properties:")
-            print(f"{'-' * 80}")
-            for label, key in [("Name", "name"), ("Type", "type")]:
-                print(f"{label}: {current_map.get(key, 'N/A')}")
-            print(f"Width: {current_map.get('width', 'N/A')} pixels")
-            print(f"Height: {current_map.get('height', 'N/A')} pixels")
-            print(f"PPM (Pixels per meter): {current_map.get('ppm', 'N/A')}")
-            print(f"Orientation: {current_map.get('orientation', 0)} degrees")
-            print(f"{'-' * 80}")
+    @staticmethod
+    def _confirm_map_delete(map_id: str) -> bool:  # WHY: declare private helper _confirm_map_delete
+        """Require user to type DELETE in uppercase; True iff they confirmed."""
+        print("\nType 'DELETE' in uppercase to confirm deletion:")  # WHY: surface user-facing message
+        confirmation = InputUtils.safe_input(
+            "Confirmation: ", context="delete_site_map"
+        ).strip()  # WHY: compute confirmation
+        if confirmation != "DELETE":  # WHY: branch on condition
+            print("\n! Deletion cancelled")  # WHY: surface user-facing message
+            logging.info("Map deletion cancelled by user for map %s", map_id)  # WHY: action-log before operation
+            return False  # WHY: return computed result
+        return True  # WHY: return computed result
 
-            update_payload = self._collect_map_updates(current_map)
-            if not update_payload:
-                print("\n! No changes specified")
-                return
+    def _perform_map_delete(self, site_id: str, map_id: str) -> None:  # WHY: declare private helper _perform_map_delete
+        """Call deleteSiteMap and report success/failure to the user."""
+        print("\nDeleting map...")  # WHY: surface user-facing message
+        resp = mistapi.api.v1.sites.maps.deleteSiteMap(
+            self.apisession, site_id=site_id, map_id=map_id
+        )  # WHY: compute resp
+        if resp.status_code in [200, 204]:  # WHY: branch on condition
+            print(f"\n{'-' * 80}")  # WHY: surface user-facing message
+            print("Map deleted successfully!")  # WHY: surface user-facing message
+            print(f"{'-' * 80}")  # WHY: surface user-facing message
+            logging.info("Deleted map %s from site %s", map_id, site_id)  # WHY: action-log before operation
+        else:
+            print(f"\n! Failed to delete map: HTTP {resp.status_code}")  # WHY: surface user-facing message
+            logging.error("Map deletion failed: %s - %s", resp.status_code, resp.data)  # WHY: surface fatal issue
 
-            self._confirm_and_apply_map_update(site_id, map_id, update_payload)
+    @staticmethod
+    def _print_delete_site_map_header() -> None:  # WHY: declare private helper _print_delete_site_map_header
+        """Print the banner and warning for the delete-site-map flow."""
+        print("\n" + "-" * 80)  # Section banner top rule.
+        print("DELETE SITE MAP")  # Section title.
+        print("-" * 80)  # Section banner bottom rule.
+        print("\n! WARNING: This action cannot be undone!")  # Destructive-action warning.
 
-        except EOFError:
-            logging.info("EOF detected during map update")
-            return
-        except Exception as e:
-            logging.exception("Error updating map properties: %s", e)
-            print(f"\n! Error updating map: {e}")
+    def _run_delete_site_map(
+        self, site_id: str, site_name: str
+    ) -> None:  # WHY: declare private helper _run_delete_site_map
+        """Execute the interactive delete flow for the currently selected site."""
+        map_id = self._select_map_from_site(site_id, site_name)  # Prompt for map to delete.
+        if not map_id:  # User cancelled selection.
+            return  # Nothing to delete.
+        current_map = self._fetch_map_for_delete(site_id, map_id)  # Load current record.
+        if current_map is None:  # Fetch failed and already printed reason.
+            return  # Abort.
+        self._render_map_delete_preview(current_map, map_id)  # Show what will be deleted.
+        if not self._confirm_map_delete(map_id):  # Explicit confirmation prompt.
+            return  # User declined.
+        self._perform_map_delete(site_id, map_id)  # Perform DELETE call.
 
-    def delete_site_map(self):
+    def delete_site_map(self):  # WHY: declare public method delete_site_map
         """Delete a site map with confirmation."""
-        print("\n" + "-" * 80)
-        print("DELETE SITE MAP")
-        print("-" * 80)
-        print("\n! WARNING: This action cannot be undone!")
-
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            return
-
+        self._print_delete_site_map_header()  # Section banner + warning.
+        site_id, site_name = self.get_current_site()  # Resolve currently selected site.
+        if not site_id:  # No site selected -> nothing to do.
+            return  # WHY: return early
         try:
-            # Get map selection
-            map_id = self._select_map_from_site(site_id, site_name)
-            if not map_id:
-                return
+            self._run_delete_site_map(site_id, site_name)  # Delegate the flow.
+        except EOFError:  # User hit Ctrl-D at a prompt.
+            logging.info("EOF detected during map deletion")  # Log soft abort.
+            return  # Return to caller.
+        except Exception as e:  # Catch-all so the menu keeps running.
+            logging.exception("Error deleting site map: %s", e)  # Log full traceback.
+            print(f"\n! Error deleting map: {e}")  # Surface error to operator.
 
-            # Fetch current map details for display
-            map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map_id)
-
-            if map_response.status_code != 200:
-                print(f"\n! Failed to fetch map details: HTTP {map_response.status_code}")
-                return
-
-            current_map = map_response.data
-
-            # Display map details before deletion
-            print(f"\n{'-' * 80}")
-            print("Map to be deleted:")
-            print(f"  Name: {current_map.get('name', 'N/A')}")
-            print(f"  Type: {current_map.get('type', 'N/A')}")
-            print(f"  ID: {map_id}")
-            print(f"{'-' * 80}")
-
-            # Safety confirmation
-            print("\nType 'DELETE' in uppercase to confirm deletion:")
-            confirmation = InputUtils.safe_input("Confirmation: ", context="delete_site_map").strip()
-
-            if confirmation != "DELETE":
-                print("\n! Deletion cancelled")
-                logging.info("Map deletion cancelled by user for map %s", map_id)
-                return
-
-            # Perform deletion
-            print("\nDeleting map...")
-            delete_response = mistapi.api.v1.sites.maps.deleteSiteMap(self.apisession, site_id=site_id, map_id=map_id)
-
-            if delete_response.status_code in [200, 204]:
-                print(f"\n{'-' * 80}")
-                print("Map deleted successfully!")
-                print(f"{'-' * 80}")
-                logging.info("Deleted map %s from site %s", map_id, site_id)
-            else:
-                print(f"\n! Failed to delete map: HTTP {delete_response.status_code}")
-                logging.error("Map deletion failed: %s - %s", delete_response.status_code, delete_response.data)
-
-        except EOFError:
-            logging.info("EOF detected during map deletion")
-            return
-        except Exception as e:
-            logging.exception("Error deleting site map: %s", e)
-            print(f"\n! Error deleting map: {e}")
-
-    def _prompt_and_validate_image_path(self) -> str | None:
-        """Prompt user for image file path and validate it; return path or None if invalid."""
-        print("\nEnter the path to the image file:")
-        print("Supported formats: PNG, JPG, JPEG, GIF, SVG")
-        file_path = (
+    @staticmethod
+    def _read_image_path_input() -> str:  # WHY: declare private helper _read_image_path_input
+        """Prompt the user for an image file path and normalize the raw value."""
+        print("\nEnter the path to the image file:")  # User-visible prompt header.
+        print("Supported formats: PNG, JPG, JPEG, GIF, SVG")  # Show supported extensions.
+        return (
             InputUtils.safe_input("File path: ", context="_prompt_and_validate_image_path")
             .strip()
             .strip('"')
             .strip("'")
-        )
-        if not file_path:
-            print("\n! No file path provided")
-            return None
-        if not os.path.exists(file_path):
-            print(f"\n! File not found: {file_path}")
-            return None
-        if not os.path.isfile(file_path):
-            print(f"\n! Path is not a file: {file_path}")
-            return None
-        valid_extensions = [".png", ".jpg", ".jpeg", ".gif", ".svg"]
-        file_ext = os.path.splitext(file_path)[1].lower()
-        if file_ext not in valid_extensions:
-            print(f"\n! Invalid file type: {file_ext}")
-            print(f"Supported types: {', '.join(valid_extensions)}")
-            return None
-        return file_path
+        )  # Strip whitespace + surrounding quotes from pasted paths.
 
-    def _confirm_image_upload(self, site_id: str, map_id: str, file_path: str) -> None:
-        """Warn on large files, confirm upload, and perform the multipart upload."""
-        file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
-        if file_size_mb > 10:
-            print(f"\n! Warning: File size is {file_size_mb:.2f}MB")
-            if InputUtils.safe_input(
-                "Continue with upload? (yes/no): ", context="_confirm_image_upload"
-            ).strip().lower() not in ["yes", "y"]:
-                print("\n! Upload cancelled")
-                return
-        print(f"\nFile: {os.path.basename(file_path)}")
-        print(f"Size: {file_size_mb:.2f}MB")
-        if InputUtils.safe_input(
-            "\nUpload this image to the selected map? (yes/no): ", context="_confirm_image_upload"
-        ).strip().lower() not in ["yes", "y"]:
-            print("\n! Upload cancelled")
-            return
-        print("\nUploading image...")
-        with open(file_path, "rb"):
+    @staticmethod
+    def _validate_image_file_path(
+        file_path: str,
+    ) -> str | None:  # WHY: declare private helper _validate_image_file_path
+        """Validate a filesystem path points at a supported image; return path or None."""
+        if not file_path:  # Empty input -> nothing to validate.
+            print("\n! No file path provided")  # Report empty input.
+            return None  # WHY: return computed result
+        if not os.path.exists(file_path):  # File must actually exist.
+            print(f"\n! File not found: {file_path}")  # Report missing path.
+            return None  # WHY: return computed result
+        if not os.path.isfile(file_path):  # Directories and specials are not accepted.
+            print(f"\n! Path is not a file: {file_path}")  # Report wrong kind.
+            return None  # WHY: return computed result
+        valid_extensions = [".png", ".jpg", ".jpeg", ".gif", ".svg"]  # Allowed image extensions.
+        file_ext = os.path.splitext(file_path)[1].lower()  # Extract extension case-insensitively.
+        if file_ext not in valid_extensions:  # Reject unsupported types.
+            print(f"\n! Invalid file type: {file_ext}")  # Report bad extension.
+            print(f"Supported types: {', '.join(valid_extensions)}")  # Restate accepted list.
+            return None  # WHY: return computed result
+        return file_path  # Path is valid.
+
+    def _prompt_and_validate_image_path(
+        self,
+    ) -> str | None:  # WHY: declare private helper _prompt_and_validate_image_path
+        """Prompt user for image file path and validate it; return path or None if invalid."""
+        return self._validate_image_file_path(self._read_image_path_input())  # Compose read + validate.
+
+    @staticmethod
+    def _prompt_yes_no(prompt: str, context: str) -> bool:  # WHY: declare private helper _prompt_yes_no
+        """Return True when the user answers yes/y (case-insensitive) at the prompt."""
+        return InputUtils.safe_input(prompt, context=context).strip().lower() in [
+            "yes",
+            "y",
+        ]  # WHY: return computed result
+
+    def _check_upload_size(
+        self, file_path: str
+    ) -> tuple[float, bool]:  # WHY: declare private helper _check_upload_size
+        """Compute file size MB and confirm large uploads; return (size_mb, proceed)."""
+        file_size_mb = os.path.getsize(file_path) / (1024 * 1024)  # Bytes to megabytes.
+        if file_size_mb <= 10:  # Small file -> no extra confirm needed.
+            return file_size_mb, True  # WHY: return computed result
+        print(f"\n! Warning: File size is {file_size_mb:.2f}MB")  # Alert about large upload.
+        proceed = self._prompt_yes_no("Continue with upload? (yes/no): ", "_confirm_image_upload")  # Confirm.
+        if not proceed:  # Operator declined.
+            print("\n! Upload cancelled")  # Note cancellation.
+        return file_size_mb, proceed  # WHY: return computed result
+
+    def _perform_image_upload(
+        self, site_id: str, map_id: str, file_path: str
+    ) -> None:  # WHY: declare private helper _perform_image_upload
+        """Call the addSiteMapImageFile endpoint and print the outcome."""
+        print("\nUploading image...")  # Progress note before HTTP call.
+        with open(file_path, "rb"):  # Ensure file is readable; API takes path itself.
             upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
                 self.apisession, site_id=site_id, map_id=map_id, file=file_path
-            )
-        if upload_response.status_code in [200, 201]:
-            print(f"\n{'-' * 80}")
-            print("Image uploaded successfully!")
-            print(f"{'-' * 80}")
-            logging.info("Uploaded image to map %s for site %s", map_id, site_id)
-        else:
-            print(f"\n! Failed to upload image: HTTP {upload_response.status_code}")
-            logging.error("Image upload failed: %s - %s", upload_response.status_code, upload_response.data)
+            )  # Multipart upload of the image asset.
+        if upload_response.status_code in [200, 201]:  # HTTP success codes.
+            print(f"\n{'-' * 80}")  # Success banner top.
+            print("Image uploaded successfully!")  # User-visible confirmation.
+            print(f"{'-' * 80}")  # Success banner bottom.
+            logging.info("Uploaded image to map %s for site %s", map_id, site_id)  # Audit log.
+            return  # Success path complete.
+        print(f"\n! Failed to upload image: HTTP {upload_response.status_code}")  # Failure banner.
+        logging.error("Image upload failed: %s - %s", upload_response.status_code, upload_response.data)  # Log.
 
-    def upload_map_image(self):
+    def _confirm_image_upload(
+        self, site_id: str, map_id: str, file_path: str
+    ) -> None:  # WHY: declare private helper _confirm_image_upload
+        """Warn on large files, confirm upload, and perform the multipart upload."""
+        file_size_mb, proceed = self._check_upload_size(file_path)  # Size warning + confirm.
+        if not proceed:  # Operator aborted at the size warning.
+            return  # WHY: return early
+        print(f"\nFile: {os.path.basename(file_path)}")  # Show the basename.
+        print(f"Size: {file_size_mb:.2f}MB")  # Show the size.
+        if not self._prompt_yes_no(
+            "\nUpload this image to the selected map? (yes/no): ", "_confirm_image_upload"
+        ):  # Final go/no-go confirmation.
+            print("\n! Upload cancelled")  # Note cancellation.
+            return  # WHY: return early
+        self._perform_image_upload(site_id, map_id, file_path)  # Execute the HTTP upload.
+
+    @staticmethod
+    def _print_upload_image_header() -> None:  # WHY: declare private helper _print_upload_image_header
+        """Print the banner shown by the upload/replace map image action."""
+        print("\n" + "-" * 80)  # Top rule
+        print("UPLOAD/REPLACE MAP IMAGE")  # Title
+        print("-" * 80)  # Bottom rule
+
+    def _run_upload_map_image(
+        self, site_id: str, site_name: str
+    ) -> None:  # WHY: declare private helper _run_upload_map_image
+        """Execute the upload flow after site selection and header."""
+        map_id = self._select_map_from_site(site_id, site_name)  # Prompt for target map
+        if not map_id:  # User cancelled the map selection
+            return  # WHY: return early
+        file_path = self._prompt_and_validate_image_path()  # Prompt for a valid image path
+        if not file_path:  # Cancelled or invalid path
+            return  # WHY: return early
+        self._confirm_image_upload(site_id, map_id, file_path)  # Confirm + POST the multipart upload
+
+    def upload_map_image(self):  # WHY: declare public method upload_map_image
         """Upload or replace map image file (multipart upload)."""
-        logging.info("upload_map_image operation initiated")
-        print("\n" + "-" * 80)
-        print("UPLOAD/REPLACE MAP IMAGE")
-        print("-" * 80)
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            logging.warning("upload_map_image aborted: No site selected")
-            return
-        logging.debug("upload_map_image - Site: %s (ID: %s)", site_name, site_id)
+        logging.info("upload_map_image operation initiated")  # Audit trail
+        self._print_upload_image_header()  # Banner
+        site_id, site_name = self.get_current_site()  # Require a selected site
+        if not site_id:  # Site prompt cancelled
+            logging.warning("upload_map_image aborted: No site selected")  # Note the abort
+            return  # WHY: return early
+        logging.debug("upload_map_image - Site: %s (ID: %s)", site_name, site_id)  # Trace context
         try:
-            map_id = self._select_map_from_site(site_id, site_name)
-            if not map_id:
-                return
-            file_path = self._prompt_and_validate_image_path()
-            if not file_path:
-                return
-            self._confirm_image_upload(site_id, map_id, file_path)
-        except EOFError:
-            logging.info("EOF detected during image upload")
-            return
-        except Exception as e:
-            logging.exception("Error uploading map image: %s", e)
-            print(f"\n! Error uploading image: {e}")
+            self._run_upload_map_image(site_id, site_name)  # Execute the upload flow
+        except EOFError:  # WHY: handle expected error
+            logging.info("EOF detected during image upload")  # Non-interactive shutdown
+            return  # WHY: return early
+        except Exception as e:  # WHY: handle expected error
+            logging.exception("Error uploading map image: %s", e)  # Log for diagnosis
+            print(f"\n! Error uploading image: {e}")  # Surface to operator
 
-    def _get_devices_on_map(self, site_id: str, map_id: str) -> list | None:
+    def _get_devices_on_map(
+        self, site_id: str, map_id: str
+    ) -> list | None:  # WHY: declare private helper _get_devices_on_map
         """Fetch all site devices and return those placed on the specified map; None on failure."""
-        print("\nFetching devices for site...")
-        devices_response = mistapi.api.v1.sites.devices.listSiteDevices(self.apisession, site_id=site_id, type="all")
-        if devices_response.status_code != 200:
-            print(f"\n! Failed to fetch devices: HTTP {devices_response.status_code}")
-            return None
-        devices_on_map = [d for d in devices_response.data if d.get("map_id") == map_id]
-        if not devices_on_map:
-            print("\n! No devices placed on this map")
-            return None
-        return devices_on_map
+        print("\nFetching devices for site...")  # WHY: surface user-facing message
+        devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
+            self.apisession, site_id=site_id, type="all"
+        )  # WHY: compute devices_response
+        if devices_response.status_code != 200:  # WHY: branch on condition
+            print(
+                f"\n! Failed to fetch devices: HTTP {devices_response.status_code}"
+            )  # WHY: surface user-facing message
+            return None  # WHY: return computed result
+        devices_on_map = [d for d in devices_response.data if d.get("map_id") == map_id]  # WHY: compute devices_on_map
+        if not devices_on_map:  # WHY: guard against missing precondition
+            print("\n! No devices placed on this map")  # WHY: surface user-facing message
+            return None  # WHY: return computed result
+        return devices_on_map  # WHY: return computed result
 
-    def _export_map_devices_csv(self, devices: list, site_id: str, site_name: str) -> None:
+    def _export_map_devices_csv(
+        self, devices: list, site_id: str, site_name: str
+    ) -> None:  # WHY: declare private helper _export_map_devices_csv
         """Flatten and export the given device list to CSV/data output."""
-        devices_data = []
-        for device in devices:
-            flattened = flatten_dict_recursively(device)
-            flattened["site_id"] = site_id
-            flattened["site_name"] = site_name
-            devices_data.append(flattened)
-        filename = f"MapDevices_{sanitize_filename(site_name or 'unknown_site')}"
-        write_data_with_format_selection(devices_data, filename, api_function_name="listSiteDevices")
-        print(f"\n   Exported {len(devices_data)} devices")
+        devices_data = []  # WHY: compute devices_data
+        for device in devices:  # WHY: iterate collection
+            flattened = flatten_dict_recursively(device)  # WHY: compute flattened
+            flattened["site_id"] = site_id  # WHY: assign computed value
+            flattened["site_name"] = site_name  # WHY: assign computed value
+            devices_data.append(flattened)  # WHY: advance computation
+        filename = f"MapDevices_{sanitize_filename(site_name or 'unknown_site')}"  # WHY: compute filename
+        write_data_with_format_selection(
+            devices_data, filename, api_function_name="listSiteDevices"
+        )  # WHY: assign computed value
+        print(f"\n   Exported {len(devices_data)} devices")  # WHY: surface user-facing message
 
-    def view_devices_on_map(self):
+    def view_devices_on_map(self):  # WHY: declare public method view_devices_on_map
         """Display all devices placed on a specific map."""
-        print("\n" + "-" * 80)
-        print("VIEW DEVICES ON MAP")
-        print("-" * 80)
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            return
+        self._print_view_devices_header()  # Uniform banner for the interactive section.
+        site_id, site_name = self.get_current_site()  # Resolve currently-selected site context.
+        if not site_id:  # Guard clause: no site chosen, nothing to display.
+            return  # WHY: return early
         try:
-            map_id = self._select_map_from_site(site_id, site_name)
-            if not map_id:
-                return
-            devices_on_map = self._get_devices_on_map(site_id, map_id)
-            if not devices_on_map:
-                return
-            print(f"\n{'-' * 80}")
-            print(f"Devices on Map: {len(devices_on_map)} found")
-            print(f"{'-' * 80}")
-            print(f"{'Device Name':<30} {'Type':<10} {'Model':<20} {'X,Y Coordinates':<20}")
-            print(f"{'-' * 80}")
-            for device in devices_on_map:
-                device_name = device.get("name", "Unnamed")[:29]
-                device_type = device.get("type", "N/A")[:9]
-                device_model = device.get("model", "N/A")[:19]
-                coordinates = f"{device.get('x', 'N/A')},{device.get('y', 'N/A')}"
-                print(f"{device_name:<30} {device_type:<10} {device_model:<20} {coordinates:<20}")
-            print(f"{'-' * 80}")
-            if InputUtils.safe_input("\nExport to CSV? (yes/no): ", context="view_devices_on_map").strip().lower() in [
-                "yes",
-                "y",
-            ]:
-                self._export_map_devices_csv(devices_on_map, site_id, site_name)
-            logging.info("Viewed %s devices on map %s", len(devices_on_map), map_id)
-        except EOFError:
-            logging.info("EOF detected during view devices")
-            return
-        except Exception as e:
-            logging.exception("Error viewing devices on map: %s", e)
-            print(f"\n! Error viewing devices: {e}")
+            self._run_view_devices_flow(site_id, site_name)  # Delegate the interactive body to a helper.
+        except EOFError:  # WHY: handle expected error
+            logging.info("EOF detected during view devices")  # Silent EOF exit for scripted sessions.
+        except Exception as e:  # WHY: handle expected error
+            logging.exception("Error viewing devices on map: %s", e)  # Full stack for post-mortem debugging.
+            print(f"\n! Error viewing devices: {e}")  # User-facing summary of the failure.
 
-    def auto_place_aps(self):
+    @staticmethod
+    def _print_view_devices_header() -> None:  # WHY: declare private helper _print_view_devices_header
+        """Print the section banner for view_devices_on_map."""
+        print("\n" + "-" * 80)  # Visual break before the section.
+        print("VIEW DEVICES ON MAP")  # Section title.
+        print("-" * 80)  # Trailing divider.
+
+    def _run_view_devices_flow(
+        self, site_id: str, site_name: str
+    ) -> None:  # WHY: declare private helper _run_view_devices_flow
+        """Interactive body of view_devices_on_map after site is resolved."""
+        map_id = self._select_map_from_site(site_id, site_name)  # Prompt user to pick a map from the site.
+        if not map_id:  # Guard clause: cancelled or no maps available.
+            return  # WHY: return early
+        devices_on_map = self._get_devices_on_map(site_id, map_id)  # Fetch placed devices for the map.
+        if not devices_on_map:  # Guard clause: no devices, nothing to show.
+            return  # WHY: return early
+        self._print_devices_table(devices_on_map)  # Render the tabular device listing.
+        self._maybe_export_map_devices(devices_on_map, site_id, site_name)  # Optional CSV export step.
+        logging.info("Viewed %s devices on map %s", len(devices_on_map), map_id)  # Audit trail entry.
+
+    @staticmethod
+    def _print_devices_table(devices_on_map: list) -> None:  # WHY: declare private helper _print_devices_table
+        """Render the devices-on-map table body."""
+        print(f"\n{'-' * 80}")  # Divider before the table.
+        print(f"Devices on Map: {len(devices_on_map)} found")  # Row-count summary line.
+        print(f"{'-' * 80}")  # Divider between summary and header row.
+        print(f"{'Device Name':<30} {'Type':<10} {'Model':<20} {'X,Y Coordinates':<20}")  # Column header.
+        print(f"{'-' * 80}")  # Divider under header.
+        for device in devices_on_map:  # Emit one padded row per device.
+            device_name = device.get("name", "Unnamed")[:29]  # Truncate name to fit column width.
+            device_type = device.get("type", "N/A")[:9]  # Truncate type to fit column width.
+            device_model = device.get("model", "N/A")[:19]  # Truncate model to fit column width.
+            coordinates = f"{device.get('x', 'N/A')},{device.get('y', 'N/A')}"  # Compact X,Y coord string.
+            print(f"{device_name:<30} {device_type:<10} {device_model:<20} {coordinates:<20}")  # Padded row.
+        print(f"{'-' * 80}")  # Divider closing the table.
+
+    def _maybe_export_map_devices(
+        self, devices_on_map: list, site_id: str, site_name: str
+    ) -> None:  # WHY: declare private helper _maybe_export_map_devices
+        """Prompt for and optionally perform CSV export of the device listing."""
+        answer = (
+            InputUtils.safe_input(
+                "\nExport to CSV? (yes/no): ",
+                context="view_devices_on_map",
+            )
+            .strip()
+            .lower()
+        )  # Normalize the user's reply for comparison.
+        if answer in ("yes", "y"):  # Only export on affirmative reply.
+            self._export_map_devices_csv(devices_on_map, site_id, site_name)  # Delegate CSV writing.
+
+    def auto_place_aps(self):  # WHY: declare public method auto_place_aps
         """Automatically place APs on map using Mist auto-placement."""
-        print("\n! Feature coming soon: Auto-place APs")
-        logging.info("auto_place_aps called (placeholder)")
+        print("\n! Feature coming soon: Auto-place APs")  # WHY: surface user-facing message
+        logging.info("auto_place_aps called (placeholder)")  # WHY: action-log before operation
 
-    def auto_orient_aps(self):
+    def auto_orient_aps(self):  # WHY: declare public method auto_orient_aps
         """Automatically orient APs on map."""
-        print("\n! Feature coming soon: Auto-orient APs")
-        logging.info("auto_orient_aps called (placeholder)")
+        print("\n! Feature coming soon: Auto-orient APs")  # WHY: surface user-facing message
+        logging.info("auto_orient_aps called (placeholder)")  # WHY: action-log before operation
 
-    def set_device_location(self):
+    def set_device_location(self):  # WHY: declare public method set_device_location
         """Manually set AP/device coordinates on map."""
-        print("\n! Feature coming soon: Set device location")
-        logging.info("set_device_location called (placeholder)")
+        print("\n! Feature coming soon: Set device location")  # WHY: surface user-facing message
+        logging.info("set_device_location called (placeholder)")  # WHY: action-log before operation
 
-    def _download_all_site_map_images(self, site: dict, base_dir: str) -> tuple[int, int]:
+    def _fetch_site_maps_with_images(
+        self, site_id: str
+    ) -> "list | None":  # WHY: declare private helper _fetch_site_maps_with_images
+        """Return the site's maps that have an image URL, or None on HTTP failure."""
+        resp = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)  # API list
+        if resp.status_code != 200:  # HTTP failure
+            return None  # Signal failure
+        return [m for m in resp.data if "url" in m]  # Filter to maps that carry an image
+
+    def _download_all_site_map_images(
+        self, site: dict, base_dir: str
+    ) -> tuple[int, int]:  # WHY: declare private helper _download_all_site_map_images
         """Download all map images for a single site; return (downloaded, total_with_images)."""
-        site_id = site["id"]
-        site_name = site.get("name", "Unknown")
+        site_id = site["id"]  # Site identifier
+        site_name = site.get("name", "Unknown")  # Human-friendly folder name
         try:
-            maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
-            if maps_response.status_code != 200:
-                return 0, 0
-            maps_with_images = [m for m in maps_response.data if "url" in m]
-            if not maps_with_images:
-                return 0, 0
-            site_dir = os.path.join(base_dir, sanitize_filename(site_name))
-            os.makedirs(site_dir, exist_ok=True)
-            downloaded = sum(1 for m in maps_with_images if self._download_single_map_image(m, site_dir))
-            return downloaded, len(maps_with_images)
-        except Exception as error:
-            logging.debug("Error processing site %s: %s", site_id, error)
-            return 0, 0
+            maps_with_images = self._fetch_site_maps_with_images(site_id)  # Fetch downloadable maps
+            if not maps_with_images:  # None on HTTP failure or empty list
+                return 0, 0  # No downloads recorded
+            site_dir = os.path.join(base_dir, sanitize_filename(site_name))  # Per-site output folder
+            os.makedirs(site_dir, exist_ok=True)  # Ensure destination exists
+            downloaded = sum(
+                1 for m in maps_with_images if self._download_single_map_image(m, site_dir)
+            )  # WHY: compute downloaded
+            return downloaded, len(maps_with_images)  # Counts for the summary
+        except Exception as error:  # WHY: handle expected error
+            logging.debug("Error processing site %s: %s", site_id, error)  # Log and continue outer loop
+            return 0, 0  # Site contributed no downloads
 
-    def bulk_download_org_images(self):
+    @staticmethod
+    def _print_bulk_download_header() -> None:  # WHY: declare private helper _print_bulk_download_header
+        """Print the banner for the bulk-download-org-images flow."""
+        print("\n" + "-" * 80)  # Section banner top rule.
+        print("BULK DOWNLOAD ORG MAP IMAGES")  # Section title.
+        print("-" * 80)  # Section banner bottom rule.
+
+    @staticmethod
+    def _print_bulk_download_summary(
+        total_downloaded: int, total_maps: int, base_dir: str
+    ) -> None:  # WHY: declare private helper _print_bulk_download_summary
+        """Print the tally at the end of a bulk-download run."""
+        print(f"\n{'-' * 80}")  # Summary banner top.
+        print("Download completed!")  # Completion note.
+        print(f"Total maps found: {total_maps}")  # Total maps scanned across sites.
+        print(f"Successfully downloaded: {total_downloaded}")  # Downloaded count.
+        print(f"Location: {base_dir}")  # Target directory used.
+        print(f"{'-' * 80}")  # Summary banner bottom.
+
+    def _run_bulk_download_org_images(self) -> None:  # WHY: declare private helper _run_bulk_download_org_images
+        """Scan all sites and download every map image found."""
+        sites = self._fetch_sites()  # Load org sites.
+        if not sites:  # Nothing to scan.
+            print("\n! No sites found in organization")  # User-visible empty message.
+            return  # WHY: return early
+        print(f"\nScanning {len(sites)} sites for maps with images...")  # Progress note.
+        base_dir = os.path.join("data", "map_images_org_backup")  # Root output dir.
+        os.makedirs(base_dir, exist_ok=True)  # Ensure directory exists.
+        total_maps = 0  # Running count of maps scanned.
+        total_downloaded = 0  # Running count of successful downloads.
+        for site in tqdm(sites, desc="Processing sites", unit="site"):  # Progress bar over sites.
+            downloaded, found = self._download_all_site_map_images(site, base_dir)  # Per-site work.
+            total_downloaded += downloaded  # Accumulate downloaded count.
+            total_maps += found  # Accumulate found count.
+        self._print_bulk_download_summary(total_downloaded, total_maps, base_dir)  # Print tally.
+        logging.info(
+            "Bulk downloaded %s of %s map images to %s", total_downloaded, total_maps, base_dir
+        )  # Audit log of the batch.
+
+    def bulk_download_org_images(self):  # WHY: declare public method bulk_download_org_images
         """Download all map images across entire organization."""
-        print("\n" + "-" * 80)
-        print("BULK DOWNLOAD ORG MAP IMAGES")
-        print("-" * 80)
+        self._print_bulk_download_header()  # Section banner.
         try:
-            sites = self._fetch_sites()
-            if not sites:
-                print("\n! No sites found in organization")
-                return
-            print(f"\nScanning {len(sites)} sites for maps with images...")
-            base_dir = os.path.join("data", "map_images_org_backup")
-            os.makedirs(base_dir, exist_ok=True)
-            total_maps = 0
-            total_downloaded = 0
-            for site in tqdm(sites, desc="Processing sites", unit="site"):
-                downloaded, found = self._download_all_site_map_images(site, base_dir)
-                total_downloaded += downloaded
-                total_maps += found
-            print(f"\n{'-' * 80}")
-            print("Download completed!")
-            print(f"Total maps found: {total_maps}")
-            print(f"Successfully downloaded: {total_downloaded}")
-            print(f"Location: {base_dir}")
-            print(f"{'-' * 80}")
-            logging.info("Bulk downloaded %s of %s map images to %s", total_downloaded, total_maps, base_dir)
-        except Exception as e:
-            logging.exception("Error bulk downloading map images: %s", e)
-            print(f"\n! Error during bulk download: {e}")
+            self._run_bulk_download_org_images()  # Delegate the flow.
+        except Exception as e:  # Catch-all so menu keeps running.
+            logging.exception("Error bulk downloading map images: %s", e)  # Log full traceback.
+            print(f"\n! Error during bulk download: {e}")  # Surface error to operator.
 
-    def backup_all_maps(self):
+    def backup_all_maps(self):  # WHY: declare public method backup_all_maps
         """Complete backup of all maps (metadata + images)."""
-        print("\n! Feature coming soon: Backup all maps")
-        logging.info("backup_all_maps called (placeholder)")
+        print("\n! Feature coming soon: Backup all maps")  # WHY: surface user-facing message
+        logging.info("backup_all_maps called (placeholder)")  # WHY: action-log before operation
 
-    def map_coverage_analytics(self):
+    def map_coverage_analytics(self):  # WHY: declare public method map_coverage_analytics
         """Analyze RF coverage patterns by map."""
-        print("\n! Feature coming soon: Map coverage analytics")
-        logging.info("map_coverage_analytics called (placeholder)")
+        print("\n! Feature coming soon: Map coverage analytics")  # WHY: surface user-facing message
+        logging.info("map_coverage_analytics called (placeholder)")  # WHY: action-log before operation
 
-    def device_density_analytics(self):
+    def device_density_analytics(self):  # WHY: declare public method device_density_analytics
         """Analyze device density and distribution by map."""
-        print("\n! Feature coming soon: Device density analytics")
-        logging.info("device_density_analytics called (placeholder)")
+        print("\n! Feature coming soon: Device density analytics")  # WHY: surface user-facing message
+        logging.info("device_density_analytics called (placeholder)")  # WHY: action-log before operation
 
-    def map_usage_statistics(self):
+    def map_usage_statistics(self):  # WHY: declare public method map_usage_statistics
         """Generate usage statistics for maps."""
-        print("\n! Feature coming soon: Map usage statistics")
-        logging.info("map_usage_statistics called (placeholder)")
+        print("\n! Feature coming soon: Map usage statistics")  # WHY: surface user-facing message
+        logging.info("map_usage_statistics called (placeholder)")  # WHY: action-log before operation
 
-    def _install_visualization_packages(self) -> None:
-        """Attempt to install plotly, dash, kaleido, and matplotlib via the global import_manager."""
-        _import_manager = globals().get("import_manager")
-        if _import_manager is None:
-            logging.debug("import_manager not available (standalone mode) - skipping package installation checks")
-            return
-        required = {"plotly": "plotly>=5.14.0", "dash": "dash>=2.9.0"}
-        optional = {"kaleido": "kaleido>=0.2.1", "matplotlib": "matplotlib>=3.5.0"}
-        for package_name, package_spec in required.items():
-            logging.debug("Checking required package: %s (%s)", package_name, package_spec)
-            _import_manager.import_module_safely(
+    def _install_required_visualization_packages(
+        self, import_mgr, required: dict
+    ) -> None:  # WHY: declare private helper _install_required_visualization_packages
+        """Probe/install each required visualization package via the import manager."""
+        for package_name, package_spec in required.items():  # WHY: iterate collection
+            logging.debug(
+                "Checking required package: %s (%s)", package_name, package_spec
+            )  # WHY: action-log after operation
+            import_mgr.import_module_safely(  # WHY: advance computation
                 package_name, package_spec=package_spec, required=False, skip_deps=False, skip_upgrade=True
             )
-            logging.debug("Package %s check completed", package_name)
-        for package_name, package_spec in optional.items():
+            logging.debug("Package %s check completed", package_name)  # WHY: action-log after operation
+
+    def _install_optional_visualization_packages(
+        self, import_mgr, optional: dict
+    ) -> None:  # WHY: declare private helper _install_optional_visualization_packages
+        """Probe/install optional visualization packages, swallowing individual failures."""
+        for package_name, package_spec in optional.items():  # WHY: iterate collection
             try:
-                logging.debug("Checking optional package: %s (%s)", package_name, package_spec)
-                _import_manager.import_module_safely(
+                logging.debug(
+                    "Checking optional package: %s (%s)", package_name, package_spec
+                )  # WHY: action-log after operation
+                import_mgr.import_module_safely(  # WHY: advance computation
                     package_name, package_spec=package_spec, required=False, skip_deps=False, skip_upgrade=True
                 )
-                logging.debug("Optional package %s installed/verified", package_name)
-            except Exception as pkg_error:
-                logging.debug("Optional package %s unavailable: %s", package_name, pkg_error)
+                logging.debug("Optional package %s installed/verified", package_name)  # WHY: action-log after operation
+            except Exception as pkg_error:  # WHY: handle expected error
+                logging.debug(
+                    "Optional package %s unavailable: %s", package_name, pkg_error
+                )  # WHY: action-log after operation
 
-    def _check_visualization_packages(self) -> "bool | None":
-        """Check available visualization packages and prompt user if plotly is unavailable.
+    def _install_visualization_packages(self) -> None:  # WHY: declare private helper _install_visualization_packages
+        """Attempt to install plotly, dash, kaleido, and matplotlib via the global import_manager."""
+        _import_manager = globals().get("import_manager")  # WHY: compute _import_manager
+        if _import_manager is None:  # WHY: branch on condition
+            logging.debug(
+                "import_manager not available (standalone mode) - skipping package installation checks"
+            )  # WHY: action-log after operation
+            return  # WHY: return early
+        required = {"plotly": "plotly>=5.14.0", "dash": "dash>=2.9.0"}  # WHY: compute required
+        optional = {"kaleido": "kaleido>=0.2.1", "matplotlib": "matplotlib>=3.5.0"}  # WHY: compute optional
+        self._install_required_visualization_packages(_import_manager, required)  # WHY: advance computation
+        self._install_optional_visualization_packages(_import_manager, optional)  # WHY: advance computation
 
-        Returns True if plotly/Dash is available, False for matplotlib fallback, or None to abort.
-        """
-        print("\nChecking visualization dependencies...")
-        logging.info("Starting visualization dependency check")
-        self._install_visualization_packages()
-        if importlib.util.find_spec("plotly"):
-            logging.info("Successfully imported plotly modules")
-            logging.debug("Using Plotly/Dash mode for interactive viewer")
-            return True
-        logging.error("plotly not available")
-        print("\n! Missing required package: plotly")
-        print("! Install with: pip install plotly dash")
+    @staticmethod
+    def _prompt_matplotlib_fallback() -> bool:  # WHY: declare private helper _prompt_matplotlib_fallback
+        """Prompt user to fall back to matplotlib mode; return True if user consented."""
         confirm = (
             InputUtils.safe_input(
                 "\nWould you like to continue without interactive features? (yes/no): ",
@@ -2881,174 +1833,379 @@ class MapsManager:
             )
             .strip()
             .lower()
-        )
-        if confirm not in ["yes", "y"]:
-            logging.info("User declined matplotlib fallback")
-            return None
-        if not importlib.util.find_spec("matplotlib"):
-            logging.error("matplotlib fallback also not available")
-            print("\n! No visualization libraries available")
-            print("! Install plotly: pip install plotly dash")
-            print("! Or matplotlib: pip install matplotlib")
-            return None
-        print("\n! Using matplotlib fallback (view-only mode)")
-        logging.info("Successfully imported matplotlib for fallback mode")
-        return False
+        )  # Case-insensitive yes/y confirmation.
+        return confirm in ["yes", "y"]  # Only proceed if user affirmed.
 
-    def _fetch_map_details(self, site_id: str, map_id: str) -> "dict | None":
-        """Fetch map metadata from the API; warn if PPM is unset.
+    @staticmethod
+    def _resolve_matplotlib_fallback() -> "bool | None":  # WHY: declare private helper _resolve_matplotlib_fallback
+        """Return False when matplotlib is available, None otherwise (with a message)."""
+        if importlib.util.find_spec("matplotlib"):  # matplotlib import spec present.
+            print("\n! Using matplotlib fallback (view-only mode)")  # Note view-only mode.
+            logging.info("Successfully imported matplotlib for fallback mode")  # Audit log.
+            return False  # False -> caller uses matplotlib path.
+        logging.error("matplotlib fallback also not available")  # Both libraries missing.
+        print("\n! No visualization libraries available")  # User-visible missing-libs message.
+        print("! Install plotly: pip install plotly dash")  # Suggest plotly install.
+        print("! Or matplotlib: pip install matplotlib")  # Suggest matplotlib install.
+        return None  # Signal abort to caller.
 
-        Returns the map data dict on success, or None on API failure.
+    def _check_visualization_packages(
+        self,
+    ) -> "bool | None":  # WHY: declare private helper _check_visualization_packages
+        """Check available visualization packages and prompt user if plotly is unavailable.
+
+        Returns True if plotly/Dash is available, False for matplotlib fallback, or None to abort.
         """
-        print("\nLoading map data...")
-        logging.info("Fetching map details - site_id: %s, map_id: %s", site_id, map_id)
-        map_response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=map_id)
-        logging.debug("getSiteMap API response: HTTP %s", map_response.status_code)
-        if map_response.status_code != 200:
-            logging.error(
-                "Failed to fetch map details - HTTP %s, Response: %s",
-                map_response.status_code,
-                map_response.data if hasattr(map_response, "data") else "No data",
-            )
-            print(f"\n! Failed to fetch map: HTTP {map_response.status_code}")
-            return None
-        map_data = map_response.data
-        map_name = map_data.get("name", "Unnamed")
-        map_ppm = map_data.get("ppm", 0)
-        logging.info("Map loaded: %s (ID: %s)", map_name, map_id)
-        logging.debug(
+        print("\nChecking visualization dependencies...")  # Progress note.
+        logging.info("Starting visualization dependency check")  # Audit log.
+        self._install_visualization_packages()  # Attempt on-demand install.
+        if importlib.util.find_spec("plotly"):  # plotly import spec present.
+            logging.info("Successfully imported plotly modules")  # Audit log.
+            logging.debug("Using Plotly/Dash mode for interactive viewer")  # Detail log.
+            return True  # True -> caller uses full interactive mode.
+        logging.error("plotly not available")  # Report missing plotly.
+        print("\n! Missing required package: plotly")  # User-visible message.
+        print("! Install with: pip install plotly dash")  # Install hint.
+        if not self._prompt_matplotlib_fallback():  # Confirm fallback path.
+            logging.info("User declined matplotlib fallback")  # Audit log of decline.
+            return None  # None -> caller aborts.
+        return self._resolve_matplotlib_fallback()  # Try matplotlib backend.
+
+    @staticmethod
+    def _log_and_print_map_summary(
+        map_data: dict, map_id: str
+    ) -> None:  # WHY: declare private helper _log_and_print_map_summary
+        """Log detailed map dimensions/features and print the summary line."""
+        map_name = map_data.get("name", "Unnamed")  # WHY: compute map_name
+        logging.info("Map loaded: %s (ID: %s)", map_name, map_id)  # WHY: action-log before operation
+        logging.debug(  # WHY: action-log after operation
             "Map dimensions: %sx%spx, PPM: %s, Orientation: %s",
             map_data.get("width", 1000),
             map_data.get("height", 1000),
-            map_ppm,
+            map_data.get("ppm", 0),
             map_data.get("orientation", 0),
         )
-        logging.debug(
+        logging.debug(  # WHY: action-log after operation
             "Map has image: %s, Has walls: %s, Has wayfinding: %s",
             "url" in map_data,
             "wall_path" in map_data,
             "wayfinding_path" in map_data,
         )
-        print(f"\nMap: {map_name}")
-        print(f"Dimensions: {map_data.get('width', 1000)}x{map_data.get('height', 1000)} pixels")
-        if not map_ppm or map_ppm == 0:
-            logging.warning("MAP NOT SCALED: Map '%s' has PPM=0 - image has not been scaled in Mist Portal", map_name)
-            print("\n" + "!" * 60)
-            print("! WARNING: This map image has NOT been scaled!")
-            print("! RF coverage heatmap and location features will not work correctly.")
-            print("! Please scale this map in Mist Portal: Location > Set Scale")
-            print("!" * 60 + "\n")
-        return map_data
+        print(f"\nMap: {map_name}")  # WHY: surface user-facing message
+        print(
+            f"Dimensions: {map_data.get('width', 1000)}x{map_data.get('height', 1000)} pixels"
+        )  # WHY: surface user-facing message
 
-    def _fetch_devices_on_map(self, site_id: str, map_id: str) -> list:
+    @staticmethod
+    def _warn_if_map_unscaled(map_data: dict) -> None:  # WHY: declare private helper _warn_if_map_unscaled
+        """Emit a scaling warning if PPM is 0 or missing."""
+        map_ppm = map_data.get("ppm", 0)  # WHY: compute map_ppm
+        if map_ppm:  # WHY: branch on condition
+            return  # WHY: return early
+        map_name = map_data.get("name", "Unnamed")  # WHY: compute map_name
+        logging.warning(
+            "MAP NOT SCALED: Map '%s' has PPM=0 - image has not been scaled in Mist Portal", map_name
+        )  # WHY: surface non-fatal issue
+        print("\n" + "!" * 60)  # WHY: surface user-facing message
+        print("! WARNING: This map image has NOT been scaled!")  # WHY: surface user-facing message
+        print(
+            "! RF coverage heatmap and location features will not work correctly."
+        )  # WHY: surface user-facing message
+        print("! Please scale this map in Mist Portal: Location > Set Scale")  # WHY: surface user-facing message
+        print("!" * 60 + "\n")  # WHY: surface user-facing message
+
+    def _log_map_fetch_failure(self, map_response) -> None:  # WHY: declare private helper _log_map_fetch_failure
+        """Log details of a failed getSiteMap response and surface a user message."""
+        logging.error(  # WHY: surface fatal issue
+            "Failed to fetch map details - HTTP %s, Response: %s",
+            map_response.status_code,
+            map_response.data if hasattr(map_response, "data") else "No data",
+        )
+        print(f"\n! Failed to fetch map: HTTP {map_response.status_code}")  # WHY: surface user-facing message
+
+    def _fetch_map_details(
+        self, site_id: str, map_id: str
+    ) -> "dict | None":  # WHY: declare private helper _fetch_map_details
+        """Fetch map metadata from the API; warn if PPM is unset.
+
+        Returns the map data dict on success, or None on API failure.
+        """
+        print("\nLoading map data...")  # WHY: surface user-facing message
+        logging.info(
+            "Fetching map details - site_id: %s, map_id: %s", site_id, map_id
+        )  # WHY: action-log before operation
+        map_response = mistapi.api.v1.sites.maps.getSiteMap(
+            self.apisession, site_id=site_id, map_id=map_id
+        )  # WHY: compute map_response
+        logging.debug("getSiteMap API response: HTTP %s", map_response.status_code)  # WHY: action-log after operation
+        if map_response.status_code != 200:  # WHY: branch on condition
+            self._log_map_fetch_failure(map_response)  # WHY: advance computation
+            return None  # WHY: return computed result
+        map_data = map_response.data  # WHY: compute map_data
+        self._log_and_print_map_summary(map_data, map_id)  # WHY: advance computation
+        self._warn_if_map_unscaled(map_data)  # WHY: advance computation
+        return map_data  # WHY: return computed result
+
+    def _log_device_type_breakdown(
+        self, devices_on_map: list
+    ) -> None:  # WHY: declare private helper _log_device_type_breakdown
+        """Tally device types on the current map and emit a debug breakdown."""
+        device_type_counts: dict[str, int] = {}  # WHY: assign computed value
+        for device in devices_on_map:  # WHY: iterate collection
+            dtype = device.get("type", "unknown")  # WHY: compute dtype
+            device_type_counts[dtype] = device_type_counts.get(dtype, 0) + 1  # WHY: compute device_type_counts
+        logging.debug("Device breakdown on map: %s", device_type_counts)  # WHY: action-log after operation
+
+    def _fetch_devices_on_map(
+        self, site_id: str, map_id: str
+    ) -> list:  # WHY: declare private helper _fetch_devices_on_map
         """Fetch device stats for the site and filter to the given map_id."""
-        logging.info("Fetching device stats for site %s (type=all)", site_id)
-        devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(self.apisession, site_id=site_id, limit=1000)
-        logging.debug("listSiteDevicesStats API response: HTTP %s", devices_response.status_code)
-        if devices_response.status_code != 200:
-            logging.error("Failed to fetch devices - HTTP %s", devices_response.status_code)
-            print(f"\n! Failed to fetch devices: HTTP {devices_response.status_code}")
-            return []
-        all_devices = devices_response.data
-        logging.debug("Total devices at site: %s", len(all_devices))
-        devices_on_map = [d for d in all_devices if d.get("map_id") == map_id]
-        logging.info("Devices on selected map: %s", len(devices_on_map))
-        device_type_counts: dict[str, int] = {}
-        for device in devices_on_map:
-            dtype = device.get("type", "unknown")
-            device_type_counts[dtype] = device_type_counts.get(dtype, 0) + 1
-        logging.debug("Device breakdown on map: %s", device_type_counts)
-        return devices_on_map
+        logging.info("Fetching device stats for site %s (type=all)", site_id)  # WHY: action-log before operation
+        devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+            self.apisession, site_id=site_id, limit=1000
+        )  # WHY: compute devices_response
+        logging.debug(
+            "listSiteDevicesStats API response: HTTP %s", devices_response.status_code
+        )  # WHY: action-log after operation
+        if devices_response.status_code != 200:  # WHY: branch on condition
+            logging.error("Failed to fetch devices - HTTP %s", devices_response.status_code)  # WHY: surface fatal issue
+            print(
+                f"\n! Failed to fetch devices: HTTP {devices_response.status_code}"
+            )  # WHY: surface user-facing message
+            return []  # WHY: return computed result
+        all_devices = devices_response.data  # WHY: compute all_devices
+        logging.debug("Total devices at site: %s", len(all_devices))  # WHY: action-log after operation
+        devices_on_map = [d for d in all_devices if d.get("map_id") == map_id]  # WHY: compute devices_on_map
+        logging.info("Devices on selected map: %s", len(devices_on_map))  # WHY: action-log before operation
+        self._log_device_type_breakdown(devices_on_map)  # WHY: advance computation
+        return devices_on_map  # WHY: return computed result
 
-    def _fetch_zones_on_map(self, site_id: str, map_id: str) -> list:
+    def _fetch_zones_on_map(self, site_id: str, map_id: str) -> list:  # WHY: declare private helper _fetch_zones_on_map
         """Fetch site zones and filter to the given map_id."""
-        logging.info("Fetching zones for site %s", site_id)
+        logging.info("Fetching zones for site %s", site_id)  # WHY: action-log before operation
         try:
-            zones_response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)
-            if zones_response.status_code == 200:
-                all_zones = zones_response.data
-                zones_on_map = [z for z in all_zones if z.get("map_id") == map_id]
-                logging.info("Total zones at site: %s, Zones on this map: %s", len(all_zones), len(zones_on_map))
-                logging.debug("Zones on map: %s", zones_on_map)
-                return zones_on_map
-            logging.warning("Failed to fetch zones - HTTP %s", zones_response.status_code)
-            return []
-        except Exception as zone_error:
-            logging.exception("Error fetching zones: %s", zone_error)
-            return []
+            zones_response = mistapi.api.v1.sites.zones.listSiteZones(
+                self.apisession, site_id=site_id
+            )  # WHY: compute zones_response
+            if zones_response.status_code == 200:  # WHY: branch on condition
+                all_zones = zones_response.data  # WHY: compute all_zones
+                zones_on_map = [z for z in all_zones if z.get("map_id") == map_id]  # WHY: compute zones_on_map
+                logging.info(
+                    "Total zones at site: %s, Zones on this map: %s", len(all_zones), len(zones_on_map)
+                )  # WHY: action-log before operation
+                logging.debug("Zones on map: %s", zones_on_map)  # WHY: action-log after operation
+                return zones_on_map  # WHY: return computed result
+            logging.warning(
+                "Failed to fetch zones - HTTP %s", zones_response.status_code
+            )  # WHY: surface non-fatal issue
+            return []  # WHY: return computed result
+        except Exception as zone_error:  # WHY: handle expected error
+            logging.exception("Error fetching zones: %s", zone_error)  # WHY: capture exception with traceback
+            return []  # WHY: return computed result
 
-    def _filter_clients_for_map(self, all_clients: list, map_id: str) -> list:
+    def _filter_clients_for_map(
+        self, all_clients: list, map_id: str
+    ) -> list:  # WHY: declare private helper _filter_clients_for_map
         """Return clients whose map_id matches and who have valid x/y coordinates."""
-        return [
+        return [  # WHY: return computed result
             c for c in all_clients if c.get("map_id") == map_id and c.get("x") is not None and c.get("y") is not None
         ]
 
-    def _fetch_clients_on_map(self, site_id: str, map_id: str) -> list:
+    def _fetch_all_wireless_clients(
+        self, site_id: str
+    ) -> "list | None":  # WHY: declare private helper _fetch_all_wireless_clients
+        """Fetch every wireless client stat for a site with pagination, or None on failure."""
+        logging.info("Fetching connected wireless client stats for site %s", site_id)  # Trace API call
+        resp = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
+            self.apisession, site_id=site_id, limit=1000
+        )  # Fetch first page
+        if resp.status_code != 200:  # HTTP failure guard
+            logging.warning("Failed to fetch client stats - HTTP %s", resp.status_code)  # Note the failure
+            return None  # Signal failure
+        return mistapi.get_all(response=resp, mist_session=self.apisession)  # Paginate to end
+
+    @staticmethod
+    def _log_client_map_diagnostics(
+        all_clients: list, clients_on_map: list, map_id: str
+    ) -> None:  # WHY: declare private helper _log_client_map_diagnostics
+        """Emit diagnostic logs after filtering clients to a specific map."""
+        client_map_ids = {c.get("map_id") for c in all_clients if c.get("map_id")}  # Distinct map ids seen
+        logging.info("Client map_ids found: %s", client_map_ids)  # Trace the id set
+        logging.info("Looking for map_id: %s", map_id)  # Trace the filter target
+        logging.info("Clients on this map (after filtering): %s", len(clients_on_map))  # Filtered count
+        if clients_on_map:  # Show a sample for the matched case
+            logging.info("Sample client data: %s", clients_on_map[0])  # Trace sample match
+        elif all_clients:  # Show a sample for the empty-match case
+            logging.warning("No clients matched map_id %s. Sample: %s", map_id, all_clients[0])  # Diagnose
+
+    def _fetch_clients_on_map(
+        self, site_id: str, map_id: str
+    ) -> list:  # WHY: declare private helper _fetch_clients_on_map
         """Fetch wireless client stats with pagination and filter to map_id with valid x/y coordinates."""
         try:
-            logging.info("Fetching connected wireless client stats for site %s", site_id)
-            clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
-                self.apisession, site_id=site_id, limit=1000
-            )
-            if clients_response.status_code != 200:
-                logging.warning("Failed to fetch client stats - HTTP %s", clients_response.status_code)
-                return []
-            all_clients = mistapi.get_all(response=clients_response, mist_session=self.apisession)
-            logging.info("Total wireless clients retrieved: %s", len(all_clients))
-            client_map_ids = {c.get("map_id") for c in all_clients if c.get("map_id")}
-            logging.info("Client map_ids found: %s", client_map_ids)
-            logging.info("Looking for map_id: %s", map_id)
-            clients_on_map = self._filter_clients_for_map(all_clients, map_id)
-            logging.info("Clients on this map (after filtering): %s", len(clients_on_map))
-            if clients_on_map:
-                logging.info("Sample client data: %s", clients_on_map[0])
-            elif all_clients:
-                logging.warning("No clients matched map_id %s. Sample: %s", map_id, all_clients[0])
-            return clients_on_map
-        except Exception as client_error:
-            logging.exception("Error fetching client stats: %s", client_error)
-            return []
+            all_clients = self._fetch_all_wireless_clients(site_id)  # Paginated client fetch
+            if all_clients is None:  # Fetch failed
+                return []  # No clients to plot
+            logging.info("Total wireless clients retrieved: %s", len(all_clients))  # Trace totals
+            clients_on_map = self._filter_clients_for_map(all_clients, map_id)  # Filter by map placement
+            self._log_client_map_diagnostics(all_clients, clients_on_map, map_id)  # Diagnostics
+            return clients_on_map  # Filtered set for the caller
+        except Exception as client_error:  # WHY: handle expected error
+            logging.exception("Error fetching client stats: %s", client_error)  # Log for diagnosis
+            return []  # Fail closed with empty list
 
-    def _handle_coverage_exception(self, coverage_data: dict) -> None:
+    def _handle_coverage_exception(
+        self, coverage_data: dict
+    ) -> None:  # WHY: declare private helper _handle_coverage_exception
         """Log and report an error-structure response from the RF coverage API."""
-        exception_str = str(coverage_data.get("exception", ""))
-        if "psycopg2" in exception_str or "database" in exception_str.lower():
-            logging.warning("RF Coverage temporarily unavailable: Mist backend database connectivity issue")
-            logging.debug("Coverage API backend error: %s", exception_str)
+        exception_str = str(coverage_data.get("exception", ""))  # WHY: compute exception_str
+        if "psycopg2" in exception_str or "database" in exception_str.lower():  # WHY: branch on condition
+            logging.warning(
+                "RF Coverage temporarily unavailable: Mist backend database connectivity issue"
+            )  # WHY: surface non-fatal issue
+            logging.debug("Coverage API backend error: %s", exception_str)  # WHY: action-log after operation
         else:
-            logging.error("Coverage API returned error response (first 500 chars): %s", exception_str[:500])
-            logging.debug("Coverage API full error response: %s", exception_str)
-            logging.debug("Error details - Query: %s, URI: %s", coverage_data.get("query"), coverage_data.get("uri"))
-        print("  Note: RF Coverage heatmap unavailable (Mist backend issue) - continuing without it")
+            logging.error(
+                "Coverage API returned error response (first 500 chars): %s", exception_str[:500]
+            )  # WHY: surface fatal issue
+            logging.debug("Coverage API full error response: %s", exception_str)  # WHY: action-log after operation
+            logging.debug(
+                "Error details - Query: %s, URI: %s", coverage_data.get("query"), coverage_data.get("uri")
+            )  # WHY: action-log after operation
+        print(
+            "  Note: RF Coverage heatmap unavailable (Mist backend issue) - continuing without it"
+        )  # WHY: surface user-facing message
 
-    def _fetch_map_coverage(self, site_id: str, map_id: str) -> "dict | None":
+    def _request_map_coverage(self, site_id: str, map_id: str):  # WHY: declare private helper _request_map_coverage
+        """Call the location coverage endpoint and return the raw response object."""
+        coverage_url = f"/api/v1/sites/{site_id}/location/coverage"  # Site-scoped coverage endpoint.
+        coverage_params = {
+            "resolution": "fine",  # Fine grid resolution.
+            "duration": "1d",  # Last 24h window.
+            "map_id": map_id,  # Restrict to a single map.
+            "type": "client",  # Client-based coverage samples.
+            "from_apollo": "true",  # Undocumented: forces Apollo backend instead of PostgreSQL.
+        }  # Query parameters for the coverage call.
+        return self.apisession.mist_get(coverage_url, query=coverage_params)  # HTTP GET.
+
+    def _parse_map_coverage_response(
+        self, coverage_response
+    ) -> "dict | None":  # WHY: declare private helper _parse_map_coverage_response
+        """Extract coverage payload or handle known exception envelopes."""
+        if coverage_response.status_code != 200:  # Non-200 -> failure.
+            logging.warning(
+                "Failed to fetch RF coverage data - HTTP %s", coverage_response.status_code
+            )  # WHY: surface non-fatal issue
+            return None  # WHY: return computed result
+        coverage_data = coverage_response.data  # Parsed body.
+        if isinstance(coverage_data, dict) and "exception" in coverage_data:  # Server error envelope.
+            self._handle_coverage_exception(coverage_data)  # Log/print the exception details.
+            return None  # WHY: return computed result
+        result_count = len(coverage_data.get("results", [])) if coverage_data else 0  # Grid-point count.
+        logging.info("RF coverage data retrieved: %s grid points", result_count)  # Audit log.
+        return coverage_data  # Return the parsed payload.
+
+    def _fetch_map_coverage(
+        self, site_id: str, map_id: str
+    ) -> "dict | None":  # WHY: declare private helper _fetch_map_coverage
         """Fetch RF coverage heatmap data for the given map from the Mist location API."""
         try:
-            logging.info("Fetching RF coverage data for map %s", map_id)
-            coverage_url = f"/api/v1/sites/{site_id}/location/coverage"
-            coverage_params = {
-                "resolution": "fine",
-                "duration": "1d",
-                "map_id": map_id,
-                "type": "client",
-                "from_apollo": "true",  # Undocumented: forces Apollo backend instead of PostgreSQL
-            }
-            coverage_response = self.apisession.mist_get(coverage_url, query=coverage_params)
-            if coverage_response.status_code != 200:
-                logging.warning("Failed to fetch RF coverage data - HTTP %s", coverage_response.status_code)
-                return None
-            coverage_data = coverage_response.data
-            if isinstance(coverage_data, dict) and "exception" in coverage_data:
-                self._handle_coverage_exception(coverage_data)
-                return None
-            result_count = len(coverage_data.get("results", [])) if coverage_data else 0
-            logging.info("RF coverage data retrieved: %s grid points", result_count)
-            return coverage_data
-        except Exception as coverage_error:
-            logging.exception("Error fetching RF coverage data: %s", coverage_error)
-            return None
+            logging.info("Fetching RF coverage data for map %s", map_id)  # Audit log of the fetch.
+            return self._parse_map_coverage_response(
+                self._request_map_coverage(site_id, map_id)
+            )  # WHY: return computed result
+        except Exception as coverage_error:  # Network/parse errors return None.
+            logging.exception("Error fetching RF coverage data: %s", coverage_error)  # Log full trace.
+            return None  # WHY: return computed result
 
-    def interactive_map_viewer(self) -> None:
+    def _fetch_map_entities(
+        self, site_id: str, map_id: str
+    ) -> "tuple[list, list, list]":  # WHY: declare private helper _fetch_map_entities
+        """Fetch devices, zones, and clients on the map and echo their counts."""
+        print("Loading devices...")  # WHY: surface user-facing message
+        devices_on_map = self._fetch_devices_on_map(site_id, map_id)  # WHY: compute devices_on_map
+        print(f"Devices on map: {len(devices_on_map)}")  # WHY: surface user-facing message
+        zones_on_map = self._fetch_zones_on_map(site_id, map_id)  # WHY: compute zones_on_map
+        print(f"Zones on map: {len(zones_on_map)}")  # WHY: surface user-facing message
+        clients_on_map = self._fetch_clients_on_map(site_id, map_id)  # WHY: compute clients_on_map
+        print(f"Connected clients on map: {len(clients_on_map)}")  # WHY: surface user-facing message
+        return devices_on_map, zones_on_map, clients_on_map  # WHY: return computed result
+
+    def _load_map_viewer_bundle(
+        self, site_id: str, map_id: str
+    ) -> tuple[dict, list, list, list, object, list] | None:  # WHY: declare private helper _load_map_viewer_bundle
+        """Fetch all viewer inputs; return (map_data, devices, zones, clients, coverage, all_sites) or None on missing map."""
+        map_data = self._fetch_map_details(site_id, map_id)  # WHY: compute map_data
+        if map_data is None:  # WHY: branch on condition
+            return None  # WHY: return computed result
+        devices_on_map, zones_on_map, clients_on_map = self._fetch_map_entities(
+            site_id, map_id
+        )  # WHY: compute devices_on_map
+        coverage_data = self._fetch_map_coverage(site_id, map_id)  # WHY: compute coverage_data
+        print("Loading organization sites...")  # WHY: surface user-facing message
+        all_sites = self._fetch_sites()  # WHY: compute all_sites
+        logging.info("Fetched %s sites for site selector dropdown", len(all_sites))  # WHY: action-log before operation
+        return (
+            map_data,
+            devices_on_map,
+            zones_on_map,
+            clients_on_map,
+            coverage_data,
+            all_sites,
+        )  # WHY: return computed result
+
+    def _dispatch_map_viewer(  # WHY: declare private helper _dispatch_map_viewer
+        self,
+        use_plotly: bool,
+        scope: "MapViewerScope",
+        data: "MapViewerData",
+        optional: "MapViewerOptional",
+    ) -> None:
+        """Launch either the Plotly/Dash viewer or the matplotlib fallback."""
+        map_name = data.map_data.get("name", "Unnamed")  # WHY: compute map_name
+        if use_plotly:  # WHY: branch on condition
+            logging.info("Launching Plotly/Dash viewer for map %s", map_name)  # WHY: action-log before operation
+            launch_plotly_viewer(self, scope, data, optional)  # WHY: advance computation
+        else:
+            logging.info(
+                "Launching matplotlib fallback viewer for map %s", map_name
+            )  # WHY: action-log before operation
+            self._launch_matplotlib_viewer(data.map_data, data.devices)  # WHY: advance computation
+
+    def _run_map_viewer_flow(
+        self, site_id: str, site_name: str
+    ) -> None:  # WHY: declare private helper _run_map_viewer_flow
+        """Body of interactive_map_viewer, split out to keep the entry method thin."""
+        use_plotly = self._check_visualization_packages()  # WHY: compute use_plotly
+        if use_plotly is None:  # WHY: branch on condition
+            return  # WHY: return early
+        logging.debug("Prompting user to select map from site %s", site_name)  # nosec B608 — not SQL, just logging
+        map_id, all_maps = self._select_map_from_site(site_id, site_name, return_all_maps=True)  # WHY: compute map_id
+        if not map_id:  # WHY: guard against missing precondition
+            logging.info("Map viewer aborted: No map selected")  # WHY: action-log before operation
+            return  # WHY: return early
+        logging.debug(
+            "Selected map_id: %s, Total maps available: %s", map_id, len(all_maps)
+        )  # WHY: action-log after operation
+        bundle = self._load_map_viewer_bundle(site_id, map_id)  # WHY: compute bundle
+        if bundle is None:  # WHY: branch on condition
+            return  # WHY: return early
+        map_data, devices, zones, clients, coverage_data, all_sites = bundle  # WHY: compute map_data
+        scope = MapViewerScope(site_id=site_id, site_name=site_name, map_id=map_id)  # WHY: compute scope
+        data = MapViewerData(map_data=map_data, devices=devices, zones=zones, clients=clients)  # WHY: compute data
+        optional = MapViewerOptional(
+            coverage_data=coverage_data, all_maps=all_maps, all_sites=all_sites
+        )  # WHY: compute optional
+        self._dispatch_map_viewer(use_plotly, scope, data, optional)  # WHY: advance computation
+
+    @staticmethod
+    def _print_interactive_viewer_header() -> None:  # WHY: declare private helper _print_interactive_viewer_header
+        """Print the banner for the interactive-map-viewer flow."""
+        print("\n" + "-" * 80)  # Section banner top rule.
+        print("INTERACTIVE MAP VIEWER")  # Section title.
+        print("-" * 80)  # Section banner bottom rule.
+
+    def interactive_map_viewer(self) -> None:  # WHY: declare public method interactive_map_viewer
         """Interactive map viewer with Plotly/Dash for viewing and editing.
 
         Supports:
@@ -3058,196 +2215,215 @@ class MapsManager:
         - Click-to-edit device locations
         - Save changes back to Mist Cloud
         """
-        logging.info("Interactive map viewer initiated")
-        print("\n" + "-" * 80)
-        print("INTERACTIVE MAP VIEWER")
-        print("-" * 80)
-        site_id, site_name = self.get_current_site()
-        if not site_id:
-            logging.warning("Interactive map viewer aborted: No site selected")
-            return
-        logging.debug("Interactive map viewer - Site: %s (ID: %s)", site_name, site_id)
+        logging.info("Interactive map viewer initiated")  # Audit log at entry.
+        self._print_interactive_viewer_header()  # Section banner.
+        site_id, site_name = self.get_current_site()  # Resolve current site.
+        if not site_id:  # No site selected -> nothing to view.
+            logging.warning("Interactive map viewer aborted: No site selected")  # Log soft abort.
+            return  # WHY: return early
+        logging.debug("Interactive map viewer - Site: %s (ID: %s)", site_name, site_id)  # Detail log.
         try:
-            use_plotly = self._check_visualization_packages()
-            if use_plotly is None:
-                return
-            logging.debug("Prompting user to select map from site %s", site_name)  # nosec B608 — not SQL, just logging
-            map_id, all_maps = self._select_map_from_site(site_id, site_name, return_all_maps=True)
-            if not map_id:
-                logging.info("Map viewer aborted: No map selected")
-                return
-            logging.debug("Selected map_id: %s, Total maps available: %s", map_id, len(all_maps))
-            map_data = self._fetch_map_details(site_id, map_id)
-            if map_data is None:
-                return
-            print("Loading devices...")
-            devices_on_map = self._fetch_devices_on_map(site_id, map_id)
-            print(f"Devices on map: {len(devices_on_map)}")
-            zones_on_map = self._fetch_zones_on_map(site_id, map_id)
-            print(f"Zones on map: {len(zones_on_map)}")
-            clients_on_map = self._fetch_clients_on_map(site_id, map_id)
-            print(f"Connected clients on map: {len(clients_on_map)}")
-            coverage_data = self._fetch_map_coverage(site_id, map_id)
-            print("Loading organization sites...")
-            all_sites = self._fetch_sites()
-            logging.info("Fetched %s sites for site selector dropdown", len(all_sites))
-            map_name = map_data.get("name", "Unnamed")
-            if use_plotly:
-                logging.info("Launching Plotly/Dash viewer for map %s", map_name)
-                self._launch_plotly_viewer(
-                    MapViewerScope(site_id=site_id, site_name=site_name, map_id=map_id),
-                    MapViewerData(
-                        map_data=map_data,
-                        devices=devices_on_map,
-                        zones=zones_on_map,
-                        clients=clients_on_map,
-                    ),
-                    MapViewerOptional(
-                        coverage_data=coverage_data,
-                        all_maps=all_maps,
-                        all_sites=all_sites,
-                    ),
-                )
-            else:
-                logging.info("Launching matplotlib fallback viewer for map %s", map_name)
-                self._launch_matplotlib_viewer(map_data, devices_on_map)
-        except EOFError:
-            logging.info("EOF detected during interactive map viewer")
-            return
-        except Exception as e:
-            logging.exception("Error in interactive map viewer: %s", e)
-            print(f"\n! Error launching map viewer: {e}")
+            self._run_map_viewer_flow(site_id, site_name)  # Delegate to flow method.
+        except EOFError:  # User hit Ctrl-D.
+            logging.info("EOF detected during interactive map viewer")  # Log soft abort.
+            return  # WHY: return early
+        except Exception as e:  # Catch-all so menu keeps running.
+            logging.exception("Error in interactive map viewer: %s", e)  # Log full trace.
+            print(f"\n! Error launching map viewer: {e}")  # Surface error to operator.
 
-    def _collect_ppm_samples(self, clients: list) -> list[float]:
+    @staticmethod
+    def _axis_ppm(pixels, meters) -> float | None:  # WHY: declare private helper _axis_ppm
+        """Return pixels/meters when both values are truthy and meters > 0, else None."""
+        if pixels and meters and meters > 0:  # Both values required and meters must be positive.
+            return pixels / meters  # Ratio yields pixels-per-meter for this axis.
+        return None  # Signal caller to skip this axis.
+
+    def _client_ppm_samples(self, client: dict) -> list[float]:  # WHY: declare private helper _client_ppm_samples
+        """Return the x/y PPM samples derivable from a single client record."""
+        samples: list[float] = []  # Accumulate the up-to-two axis samples.
+        for pixels_key, meters_key in (("x", "x_m"), ("y", "y_m")):  # One entry per axis.
+            ratio = self._axis_ppm(client.get(pixels_key), client.get(meters_key))  # Compute or skip.
+            if ratio is not None:  # Only keep valid samples.
+                samples.append(ratio)  # Record for averaging.
+        return samples  # Hand back the per-client samples.
+
+    def _collect_ppm_samples(self, clients: list) -> list[float]:  # WHY: declare private helper _collect_ppm_samples
         """Walk the first 10 clients and collect PPM ratio samples from x/y pixel-vs-meter pairs."""
-        logging.debug("Collecting PPM samples from up to 10 clients")  # Log sample collection start
-        ppm_samples: list[float] = []  # Accumulate computed PPM values
-        for client in clients[:10]:  # Check first 10 clients only -- sufficient for validation
-            x_px = client.get("x")  # Client x in pixels
-            x_m = client.get("x_m")  # Client x in meters
-            y_px = client.get("y")  # Client y in pixels
-            y_m = client.get("y_m")  # Client y in meters
-            if x_px and x_m and x_m > 0:  # Both pixel and meter values required for ratio
-                ppm_samples.append(x_px / x_m)  # Calculate PPM from x coordinates
-            if y_px and y_m and y_m > 0:  # Both pixel and meter values required for ratio
-                ppm_samples.append(y_px / y_m)  # Calculate PPM from y coordinates
-        logging.debug("Collected %d PPM samples", len(ppm_samples))  # Log result count
-        return ppm_samples  # Hand back samples for averaging
+        logging.debug("Collecting PPM samples from up to 10 clients")  # Log sample collection start.
+        ppm_samples: list[float] = []  # Accumulate computed PPM values.
+        for client in clients[:10]:  # Check first 10 clients only -- sufficient for validation.
+            ppm_samples.extend(self._client_ppm_samples(client))  # Merge per-client samples.
+        logging.debug("Collected %d PPM samples", len(ppm_samples))  # Log result count.
+        return ppm_samples  # Hand back samples for averaging.
 
-    def _validate_ppm(self, clients: list, ppm: float) -> float:
+    @staticmethod
+    def _log_ppm_mismatch(
+        ppm: float, calculated_ppm: float, ppm_ratio: float
+    ) -> None:  # WHY: declare private helper _log_ppm_mismatch
+        """Emit two warning logs describing a detected PPM calibration mismatch."""
+        logging.warning(
+            "PPM MISMATCH DETECTED! Map PPM=%s, Calculated from clients=%s (ratio: %sx)",
+            ppm,
+            f"{calculated_ppm:.1f}",
+            f"{ppm_ratio:.2f}",
+        )  # Warn operator about calibration issue.
+        logging.warning(
+            "Map may not be scaled correctly. Using calculated PPM for coverage heatmap."
+        )  # Explain correction to operator.
+
+    def _validate_ppm(self, clients: list, ppm: float) -> float:  # WHY: declare private helper _validate_ppm
         """Validate pixels-per-meter ratio using client coordinate data and return corrected value."""
-        if not clients or len(clients) == 0:  # No clients to validate against -- return map PPM unchanged
-            return ppm  # Return the map's stored PPM value as-is
-        ppm_samples = self._collect_ppm_samples(clients)  # Gather PPM samples from client coordinates
-        if not ppm_samples:  # No valid samples found -- cannot validate
-            return ppm  # Return original PPM unchanged
-        calculated_ppm = sum(ppm_samples) / len(ppm_samples)  # Average all samples for accuracy
-        ppm_ratio = calculated_ppm / ppm if ppm > 0 else 0  # Compare map PPM to calculated PPM
-        if abs(ppm_ratio - 1.0) > 0.1:  # More than 10% difference indicates mismatch
+        if not clients:  # No clients to validate against -- return map PPM unchanged.
+            return ppm  # Return the map's stored PPM value as-is.
+        ppm_samples = self._collect_ppm_samples(clients)  # Gather PPM samples from client coordinates.
+        if not ppm_samples:  # No valid samples found -- cannot validate.
+            return ppm  # Return original PPM unchanged.
+        calculated_ppm = sum(ppm_samples) / len(ppm_samples)  # Average all samples for accuracy.
+        ppm_ratio = (calculated_ppm / ppm) if ppm > 0 else 0  # Compare map PPM to calculated PPM.
+        if abs(ppm_ratio - 1.0) > 0.1:  # More than 10% difference indicates mismatch.
+            self._log_ppm_mismatch(ppm, calculated_ppm, ppm_ratio)  # Emit calibration warnings.
+            return calculated_ppm  # Use client-derived PPM for better accuracy.
+        logging.debug("PPM validation passed: map=%s, calculated=%s", ppm, f"{calculated_ppm:.1f}")  # OK.
+        return ppm  # Return original PPM when within acceptable range.
+
+    @staticmethod
+    def _survey_path_scatter(
+        path_name: str, path_x: list, path_y: list, point_count: int
+    ):  # WHY: declare private helper _survey_path_scatter
+        """Build the go.Scatter trace for a survey path."""
+        return go.Scatter(
+            x=path_x,
+            y=path_y,
+            mode="lines+markers",
+            name=f"Validation: {path_name}",
+            line=dict(color="#ff00ff", width=3, dash="dot"),  # Magenta dashed line for visibility.
+            marker=dict(size=10, color="#ff00ff", symbol="diamond", line=dict(color="white", width=2)),
+            visible=True,
+            showlegend=True,
+            hovertext=f"Validation Path: {path_name}<br>{point_count} points",
+            hoverinfo="text",
+        )  # Draw the path as a connected line with diamond markers.
+
+    @staticmethod
+    def _survey_path_annotation(
+        path_name: str, path_x: list, path_y: list
+    ) -> dict:  # WHY: declare private helper _survey_path_annotation
+        """Build the annotation dict labeling the start of a survey path."""
+        return dict(
+            x=path_x[0],
+            y=path_y[0] - 20,
+            text=f"<b>{path_name}</b>",
+            showarrow=False,
+            font=dict(size=11, color="white", family="Arial Black"),
+            bgcolor="rgba(255,0,255,0.9)",
+            bordercolor="white",
+            borderwidth=2,
+            borderpad=3,
+            xanchor="center",
+            yanchor="bottom",
+        )  # Label the start point of the path for identification.
+
+    @staticmethod
+    def _add_survey_path_trace(
+        fig, path_name: str, path_x: list, path_y: list, point_count: int
+    ) -> None:  # WHY: declare private helper _add_survey_path_trace
+        """Draw one survey path as a magenta dashed line with a start-point label."""
+        fig.add_trace(
+            MapsManager._survey_path_scatter(path_name, path_x, path_y, point_count)
+        )  # Add the connected-line trace for the path.
+        fig.add_annotation(
+            **MapsManager._survey_path_annotation(path_name, path_x, path_y)
+        )  # Add the identifying label at the start of the path.
+
+    def _add_single_survey_path(
+        self, fig, path: dict, path_idx: int
+    ) -> None:  # WHY: declare private helper _add_single_survey_path
+        """Add one validation path to the figure, skipping if it lacks enough points."""
+        path_name = path.get("name", f"Path {path_idx + 1}")  # Use name or generate fallback label.
+        path_coords = path.get("coordinate", [])  # List of {x, y} coordinate dicts.
+        if not path_coords or len(path_coords) < 2:  # Need at least 2 points to draw a line.
             logging.warning(
-                "PPM MISMATCH DETECTED! Map PPM=%s, Calculated from clients=%s (ratio: %sx)",
-                ppm,
-                f"{calculated_ppm:.1f}",
-                f"{ppm_ratio:.2f}",
-            )  # Warn operator about calibration issue
-            logging.warning(  # Explain correction to operator
-                "Map may not be scaled correctly. Using calculated PPM for coverage heatmap."
-            )
-            return calculated_ppm  # Use client-derived PPM for better accuracy
-        logging.debug("PPM validation passed: map=%s, calculated=%s", ppm, f"{calculated_ppm:.1f}")  # Validation OK
-        return ppm  # Return original PPM when within acceptable range
+                "Validation path '%s' has insufficient coordinates: %d", path_name, len(path_coords)
+            )  # WHY: surface non-fatal issue
+            return  # Skip this path -- cannot draw a line with fewer than 2 points.
+        path_x = [coord.get("x", 0) for coord in path_coords]  # Extract x coordinates.
+        path_y = [coord.get("y", 0) for coord in path_coords]  # Extract y coordinates.
+        self._add_survey_path_trace(fig, path_name, path_x, path_y, len(path_coords))  # Draw + label.
+        logging.debug("Added validation path '%s' with %d points", path_name, len(path_coords))  # Trace.
 
-    def _add_site_survey_paths(self, fig, map_data: dict) -> None:
+    def _add_site_survey_paths(self, fig, map_data: dict) -> None:  # WHY: declare private helper _add_site_survey_paths
         """Add site survey (validation) paths to the Plotly figure as dashed magenta lines."""
-        if not map_data.get("sitesurvey_path"):  # No validation paths on this map -- skip
-            logging.info("No validation paths found on this map")  # Informational for operator
-            return  # Nothing to draw
-        sitesurvey_paths = map_data["sitesurvey_path"]  # List of survey path objects from Mist API
-        logging.info("Processing %d validation paths", len(sitesurvey_paths))  # Log path count
-        for path_idx, path in enumerate(sitesurvey_paths):  # Iterate all paths
-            path_name = path.get("name", f"Path {path_idx + 1}")  # Use name or generate fallback label
-            path_coords = path.get("coordinate", [])  # List of {x, y} coordinate dicts
-            if not path_coords or len(path_coords) < 2:  # Need at least 2 points to draw a line
-                logging.warning("Validation path '%s' has insufficient coordinates: %d", path_name, len(path_coords))
-                continue  # Skip this path -- can't draw a line with fewer than 2 points
-            path_x = [coord.get("x", 0) for coord in path_coords]  # Extract x coordinates
-            path_y = [coord.get("y", 0) for coord in path_coords]  # Extract y coordinates
-            fig.add_trace(
-                go.Scatter(
-                    x=path_x,
-                    y=path_y,
-                    mode="lines+markers",
-                    name=f"Validation: {path_name}",
-                    line=dict(color="#ff00ff", width=3, dash="dot"),  # Magenta dashed line for visibility
-                    marker=dict(size=10, color="#ff00ff", symbol="diamond", line=dict(color="white", width=2)),
-                    visible=True,
-                    showlegend=True,
-                    hovertext=f"Validation Path: {path_name}<br>{len(path_coords)} points",
-                    hoverinfo="text",
-                )
-            )  # Draw the path as a connected line with diamond markers
-            fig.add_annotation(
-                x=path_x[0],
-                y=path_y[0] - 20,
-                text=f"<b>{path_name}</b>",
-                showarrow=False,
-                font=dict(size=11, color="white", family="Arial Black"),
-                bgcolor="rgba(255,0,255,0.9)",
-                bordercolor="white",
-                borderwidth=2,
-                borderpad=3,
-                xanchor="center",
-                yanchor="bottom",
-            )  # Label the start point of the path for identification
-            logging.debug("Added validation path '%s' with %d points", path_name, len(path_coords))
+        if not map_data.get("sitesurvey_path"):  # No validation paths on this map -- skip.
+            logging.info("No validation paths found on this map")  # Informational for operator.
+            return  # Nothing to draw.
+        sitesurvey_paths = map_data["sitesurvey_path"]  # List of survey path objects from Mist API.
+        logging.info("Processing %d validation paths", len(sitesurvey_paths))  # Log path count.
+        for path_idx, path in enumerate(sitesurvey_paths):  # Iterate all paths.
+            self._add_single_survey_path(fig, path, path_idx)  # Delegate per-path handling.
 
-    def _add_clients_to_figure(self, fig, clients: list, map_id: str) -> None:
-        """Add connected wireless client markers and labels to the Plotly figure."""
-        if not clients or len(clients) == 0:  # No clients on this map -- skip rendering
-            logging.info("No connected clients found on this map")  # Informational for operator
-            return  # Nothing to add
-        logging.info("Processing %d connected clients on this map", len(clients))  # Log client count
-        logging.debug("Client sample data: %s", clients[0] if clients else "None")  # Debug first record
-        client_x: list = []  # Client x pixel coordinates
-        client_y: list = []  # Client y pixel coordinates
-        client_hover: list = []  # HTML hover tooltip strings
-        client_names: list = []  # Display labels (hostname or short MAC)
+    @staticmethod
+    def _build_client_hover(client: dict, x, y) -> str:  # WHY: declare private helper _build_client_hover
+        """Assemble the rich HTML hover tooltip for a single client marker."""
+        hover = "<b>Client</b><br>"  # Tooltip header
+        hover += f"MAC: {client.get('mac', 'N/A')}<br>"  # MAC line
+        hover += f"Hostname: {client.get('hostname', 'N/A')}<br>"  # Hostname line
+        hover += f"SSID: {client.get('ssid', 'N/A')}<br>"  # SSID line
+        hover += f"AP: {client.get('ap_name', 'N/A')}<br>"  # Associated AP
+        hover += f"Band: {client.get('band', 'N/A')}<br>"  # Radio band
+        hover += f"Signal: {client.get('rssi', 'N/A')} dBm<br>"  # Signal strength
+        hover += f"Position: ({x}, {y})"  # Pixel coordinates on map
+        return hover  # WHY: return computed result
+
+    @staticmethod
+    def _extract_client_point(
+        client: dict, map_id: str
+    ) -> tuple | None:  # WHY: declare private helper _extract_client_point
+        """Return (x, y, hover, label) for one placed client, or None to skip."""
+        x = client.get("x")  # Client x pixel coordinate
+        y = client.get("y")  # Client y pixel coordinate
+        client_mac = client.get("mac", "unknown")  # MAC for logging + fallback label
+        logging.debug(
+            "Client %s: x=%s, y=%s, map_id=%s (looking for map_id=%s)",
+            client_mac,
+            x,
+            y,
+            client.get("map_id", "none"),
+            map_id,
+        )  # Trace each client's raw coords
+        if x is None or y is None:  # Skip clients without coordinates
+            return None  # Not placed on map -- cannot render
+        hostname = client.get("hostname", "")  # Prefer hostname label
+        label = hostname if hostname else client_mac[-8:]  # Fall back to short MAC
+        return x, y, MapsManager._build_client_hover(client, x, y), label  # WHY: return computed result
+
+    @staticmethod
+    def _collect_client_points(
+        clients: list, map_id: str
+    ) -> tuple[list, list, list, list]:  # WHY: declare private helper _collect_client_points
+        """Return (x, y, hover, label) lists for clients with valid coordinates."""
+        xs: list = []  # x pixel coordinates
+        ys: list = []  # y pixel coordinates
+        hovers: list = []  # HTML hover tooltip strings
+        names: list = []  # Display labels for annotations
         for client in clients:  # Iterate all clients on the map
-            x = client.get("x")  # Client x pixel coordinate
-            y = client.get("y")  # Client y pixel coordinate
-            client_mac = client.get("mac", "unknown")  # MAC address for identification
-            client_map_id = client.get("map_id", "none")  # Map ID to verify placement
-            logging.debug(
-                "Client %s: x=%s, y=%s, map_id=%s (looking for map_id=%s)",
-                client_mac,
-                x,
-                y,
-                client_map_id,
-                map_id,
-            )  # Debug each client's coordinates
-            if x is None or y is None:  # Skip clients with no position data
-                continue  # Client has no coordinates -- not placed on map
-            client_x.append(x)  # Store valid x coordinate
-            client_y.append(y)  # Store valid y coordinate
-            hostname = client.get("hostname", "")  # Prefer hostname for label
-            label = hostname if hostname else client_mac[-8:]  # Fall back to last 8 chars of MAC
-            client_names.append(label)  # Add label for annotation rendering
-            hover = "<b>Client</b><br>"  # Build rich hover tooltip
-            hover += f"MAC: {client.get('mac', 'N/A')}<br>"  # MAC address line
-            hover += f"Hostname: {client.get('hostname', 'N/A')}<br>"  # Hostname line
-            hover += f"SSID: {client.get('ssid', 'N/A')}<br>"  # SSID line
-            hover += f"AP: {client.get('ap_name', 'N/A')}<br>"  # Associated AP
-            hover += f"Band: {client.get('band', 'N/A')}<br>"  # Radio band
-            hover += f"Signal: {client.get('rssi', 'N/A')} dBm<br>"  # Signal strength
-            hover += f"Position: ({x}, {y})"  # Pixel coordinates on map
-            client_hover.append(hover)  # Append completed hover text
-        if not client_x:  # No clients had valid coordinates
-            logging.warning("Found %d clients but none have x,y coordinates", len(clients))
-            return  # Nothing to render
+            point = MapsManager._extract_client_point(client, map_id)  # Normalize the entry
+            if point is None:  # Skip unplaced clients
+                continue  # Move to next client
+            xs.append(point[0])  # Store valid x
+            ys.append(point[1])  # Store valid y
+            hovers.append(point[2])  # Store rich hover
+            names.append(point[3])  # Store label
+        return xs, ys, hovers, names  # WHY: return computed result
+
+    @staticmethod
+    def _add_client_marker_trace(
+        fig, xs: list, ys: list, hovers: list
+    ) -> None:  # WHY: declare private helper _add_client_marker_trace
+        """Add the single Plotly Scatter trace holding all client markers."""
         fig.add_trace(
             go.Scatter(
-                x=client_x,
-                y=client_y,
+                x=xs,
+                y=ys,
                 mode="markers",
                 name="Clients",
                 marker=dict(
@@ -3257,13 +2433,19 @@ class MapsManager:
                     line=dict(color="white", width=2),
                     opacity=0.9,
                 ),
-                hovertext=client_hover,
+                hovertext=hovers,
                 hoverinfo="text",
                 visible=True,
                 showlegend=True,
             )
-        )  # Add client dot markers as a single trace for efficiency
-        for _, (x, y, name) in enumerate(zip(client_x, client_y, client_names, strict=True)):  # Add per-client labels
+        )  # Single trace keeps legend + rendering efficient
+
+    @staticmethod
+    def _add_client_label_annotations(
+        fig, xs: list, ys: list, names: list
+    ) -> None:  # WHY: declare private helper _add_client_label_annotations
+        """Add one label annotation per client, positioned below the marker."""
+        for x, y, name in zip(xs, ys, names, strict=True):  # Per-client label loop
             fig.add_annotation(
                 x=x,
                 y=y - 10,
@@ -3277,3826 +2459,153 @@ class MapsManager:
                 xanchor="center",
                 yanchor="bottom",
                 name="Clients Label",
-            )  # Annotation positioned below the marker for readability
-        logging.info(
+            )  # Below-marker placement keeps map imagery visible
+
+    def _add_clients_to_figure(
+        self, fig, clients: list, map_id: str
+    ) -> None:  # WHY: declare private helper _add_clients_to_figure
+        """Add connected wireless client markers and labels to the Plotly figure."""
+        if not clients:  # No clients on this map -- skip rendering
+            logging.info("No connected clients found on this map")  # WHY: action-log before operation
+            return  # WHY: return early
+        logging.info("Processing %d connected clients on this map", len(clients))  # WHY: action-log before operation
+        logging.debug("Client sample data: %s", clients[0])  # First-record sample
+        xs, ys, hovers, names = self._collect_client_points(clients, map_id)  # Filter to placed clients
+        if not xs:  # No clients had valid coordinates
+            logging.warning(
+                "Found %d clients but none have x,y coordinates", len(clients)
+            )  # WHY: surface non-fatal issue
+            return  # WHY: return early
+        self._add_client_marker_trace(fig, xs, ys, hovers)  # Marker layer
+        self._add_client_label_annotations(fig, xs, ys, names)  # Text label layer
+        logging.info(  # WHY: action-log before operation
             "Added %d clients to map visualization (out of %d total clients)",
-            len(client_x),
+            len(xs),
             len(clients),
-        )  # Log how many clients were rendered
-
-    def _get_device_status(self, device: dict) -> str:
-        """Determine display status string for a device based on its API fields."""
-        if device.get("upgrade_status") or device.get("fwupdate", {}).get("progress") is not None:
-            return "upgrading"  # Firmware update in progress takes priority over connected/disconnected
-        status = device.get("status", "disconnected")  # API field: 'connected' or 'disconnected'
-        if status == "connected":  # Device is reachable and connected
-            return "connected"  # Standard connected state
-        return "disconnected"  # Default to disconnected for any other status value
-
-    def _build_device_hover_text(self, device: dict, device_status: str) -> str:
-        """Build rich HTML hover tooltip text for a device marker."""
-        text = f"<b>{device.get('name', 'Unnamed')}</b><br>"  # Device name as bold header
-        text += f"Type: {device.get('type', 'N/A')}<br>"  # Device type (ap/switch/gateway)
-        text += f"Model: {device.get('model', 'N/A')}<br>"  # Hardware model number
-        text += f"MAC: {device.get('mac', 'N/A')}<br>"  # MAC address for identification
-        text += f"Status: <b>{device_status.upper()}</b><br>"  # Status in bold uppercase for visibility
-        if device_status == "upgrading":  # Only show progress for upgrading devices
-            progress = device.get("fwupdate", {}).get("progress", "N/A")  # Firmware update progress
-            text += f"Upgrade Progress: {progress}%<br>" if progress != "N/A" else ""  # Percentage if available
-        text += f"Position: ({device.get('x', 'N/A')}, {device.get('y', 'N/A')})<br>"  # Pixel coordinates
-        text += f"Orientation: {device.get('orientation', 0)}deg"  # Device orientation in degrees
-        return text  # Return completed hover tooltip HTML string
-
-    def _add_mesh_links(self, fig, type_devices: list) -> None:
-        """Add dashed mesh link lines between APs that have mesh uplink relationships."""
-        mesh_links_added = 0  # Track how many links were drawn for logging
-        for _, device in enumerate(type_devices):  # Check each AP for mesh uplink info
-            mesh_uplink = device.get("mesh_uplink")  # MAC of the uplink AP in mesh topology
-            if not mesh_uplink:  # This AP has no mesh uplink -- skip
-                continue  # Not a mesh AP
-            for uplink_device in type_devices:  # Find the uplink AP by MAC
-                if uplink_device.get("mac") == mesh_uplink:  # Found the uplink device
-                    fig.add_trace(
-                        go.Scatter(
-                            x=[device["x"], uplink_device["x"]],  # Line from this AP to its uplink
-                            y=[device["y"], uplink_device["y"]],
-                            mode="lines",
-                            line=dict(color="rgba(255,0,255,0.4)", width=2, dash="dash"),  # Transparent magenta dashes
-                            name="Mesh Link",
-                            showlegend=(mesh_links_added == 0),  # Only show once in legend
-                            hoverinfo="skip",  # No hover -- cosmetic line only
-                        )
-                    )  # Draw mesh link between AP pair
-                    mesh_links_added += 1  # Increment drawn link count
-                    break  # Found the uplink -- move to next device
-        if mesh_links_added > 0:  # Only log if any links were drawn
-            logging.info("Added %d mesh links between APs", mesh_links_added)  # Inform operator of topology
-
-    def _add_device_orientation_markers(
-        self,
-        fig,
-        position: MarkerPosition,
-        style: DeviceMarkerStyle,
-    ) -> None:
-        """Add a Mist-style crosshair and directional dot to show device orientation on the map."""
-        x = position.x  # Unpack device x pixel coord for the marker math below.
-        y = position.y  # Unpack device y pixel coord for the marker math below.
-        angle = style.angle  # Unpack Mist-degree orientation for math-angle conversion.
-        device_color = style.device_color  # Unpack status-driven color for the crosshair arms.
-        type_cfg = style.type_cfg  # Unpack per-type config (legend grouping, etc).
-        crosshair_size = 40  # Crosshair arm length in pixels -- increased from 25 for visibility
-        fig.add_trace(
-            go.Scatter(
-                x=[x - crosshair_size, x + crosshair_size],
-                y=[y, y],
-                mode="lines",
-                line=dict(color=device_color, width=3),  # Status-based color for horizontal arm
-                name=f"{type_cfg['name']} Orientation",  # Group name enables layer toggle
-                showlegend=False,  # Don't clutter legend with individual crosshair lines
-                hoverinfo="skip",  # No hover needed -- orientation marker only
-            )
-        )  # Horizontal crosshair arm
-        fig.add_trace(
-            go.Scatter(
-                x=[x, x],
-                y=[y - crosshair_size, y + crosshair_size],
-                mode="lines",
-                line=dict(color=device_color, width=3),  # Status-based color for vertical arm
-                name=f"{type_cfg['name']} Orientation",  # Same group name for toggle
-                showlegend=False,  # Keep legend clean
-                hoverinfo="skip",  # Cosmetic only
-            )
-        )  # Vertical crosshair arm
-        dot_distance = 50  # Distance from device center to orientation dot -- increased from 35
-        math_angle = 90 - angle  # Convert Mist orientation (0=up) to math angle (0=right)
-        dot_x = x + dot_distance * cos(radians(math_angle))  # X position of directional dot
-        dot_y = y - dot_distance * sin(radians(math_angle))  # Y position -- subtract because Y increases downward
-        fig.add_trace(
-            go.Scatter(
-                x=[dot_x],
-                y=[dot_y],
-                mode="markers",
-                marker=dict(
-                    size=16,  # Larger dot for visibility -- increased from 10
-                    color=device_color,  # Status-based color matches device icon
-                    line=dict(color="white", width=2),  # White outline for contrast
-                ),
-                name=f"{type_cfg['name']} Orientation",  # Same group name for toggle
-                showlegend=False,  # Keep legend clean
-                hovertext=f"Orientation: {angle} deg",  # Show orientation angle on hover
-                hoverinfo="text",
-            )
-        )  # Directional dot indicating which way the device faces
-
-    def _collect_vbeacon_markers(self, vbeacons: list) -> tuple[list, list, list, list]:
-        """Return parallel arrays of (xs, ys, hovertexts, names) for placeable virtual beacons."""
-        logging.debug("Collecting marker data for %d virtual beacons", len(vbeacons))  # Log collection start
-        beacon_x: list = []  # Beacon x pixel coordinates
-        beacon_y: list = []  # Beacon y pixel coordinates
-        beacon_hover: list = []  # HTML hover tooltip strings
-        beacon_names: list = []  # Display name labels
-        for beacon in vbeacons:  # Iterate all virtual beacons
-            x = beacon.get("x")  # Beacon x pixel coordinate
-            y = beacon.get("y")  # Beacon y pixel coordinate
-            if x is None or y is None:  # Skip beacons without position data
-                continue  # Can't place beacon without coordinates
-            beacon_x.append(x)  # Store valid x coordinate
-            beacon_y.append(y)  # Store valid y coordinate
-            name = beacon.get("name", "Unnamed Beacon")  # Beacon display name
-            beacon_names.append(name)  # Store name for annotation
-            hover = f"<b>Virtual Beacon: {name}</b><br>"  # Bold header for hover tooltip
-            hover += f"UUID: {beacon.get('uuid', 'N/A')}<br>"  # Beacon UUID for iBeacon identification
-            hover += f"Major: {beacon.get('major', 'N/A')}<br>"  # iBeacon major value
-            hover += f"Minor: {beacon.get('minor', 'N/A')}<br>"  # iBeacon minor value
-            hover += f"Power: {beacon.get('power', 'N/A')}<br>"  # Transmit power in dBm
-            hover += f"Position: ({x}, {y})"  # Pixel coordinates on map
-            beacon_hover.append(hover)  # Append completed hover text
-        logging.debug("Collected %d placeable virtual beacons", len(beacon_x))  # Log result count
-        return beacon_x, beacon_y, beacon_hover, beacon_names  # Return parallel arrays for plotting
-
-    def _add_vbeacon_markers_trace(self, fig, beacon_x: list, beacon_y: list, beacon_hover: list) -> None:
-        """Add a single Scatter trace containing all virtual beacon marker points."""
-        logging.debug("Adding virtual beacon Scatter trace with %d points", len(beacon_x))  # Log trace add
-        fig.add_trace(
-            go.Scatter(
-                x=beacon_x,
-                y=beacon_y,
-                mode="markers",
-                name="Virtual Beacons",
-                marker=dict(
-                    symbol="circle",
-                    size=14,
-                    color="#00ff00",  # Green for virtual beacons -- distinguishes from BLE (cyan)
-                    line=dict(color="white", width=2),
-                    opacity=0.9,
-                ),
-                hovertext=beacon_hover,
-                hoverinfo="text",
-                visible=True,
-                showlegend=True,
-            )
-        )  # Add all virtual beacon markers as a single trace
-
-    def _add_vbeacon_label_annotations(self, fig, beacon_x: list, beacon_y: list, beacon_names: list) -> None:
-        """Add per-beacon text annotations below each marker."""
-        logging.debug("Adding %d virtual beacon label annotations", len(beacon_x))  # Log annotation add
-        for _, (x, y, name) in enumerate(zip(beacon_x, beacon_y, beacon_names, strict=True)):  # Add per-beacon labels
-            fig.add_annotation(
-                x=x,
-                y=y - 12,
-                text=f"<b>{name}</b>",
-                showarrow=False,
-                font=dict(size=9, color="white", family="Arial"),
-                bgcolor="rgba(0,200,0,0.9)",
-                bordercolor="white",
-                borderwidth=1,
-                borderpad=2,
-                xanchor="center",
-                yanchor="bottom",
-                name="Virtual Beacons Label",
-            )  # Label positioned below marker
-
-    def _add_vbeacon_coverage_circles(self, fig, vbeacons: list) -> None:
-        """Add a translucent dashed coverage ring around each virtual beacon, sized by transmit power."""
-        logging.debug("Adding coverage circles for %d virtual beacons", len(vbeacons))  # Log circle add
-        for beacon in vbeacons:  # Add power-based coverage circles for each beacon
-            x = beacon.get("x")  # Beacon center x
-            y = beacon.get("y")  # Beacon center y
-            power = beacon.get("power", 0)  # Transmit power in dBm (typical: -12 to +4)
-            if x is None or y is None:  # Skip beacons without coordinates
-                continue  # Can't draw circle without center point
-            base_radius = 50  # Base coverage radius in pixels
-            power_factor = (power + 12) / 16  # Normalize -12..+4 dBm range to 0..1
-            radius = base_radius + (power_factor * 100)  # Scale coverage radius by power
-            theta = [i * 2 * pi / 50 for i in range(51)]  # 50 points for smooth circle
-            circle_x = [x + radius * cos(t) for t in theta]  # X coordinates of circle
-            circle_y = [y + radius * sin(t) for t in theta]  # Y coordinates of circle
-            fig.add_trace(
-                go.Scatter(
-                    x=circle_x,
-                    y=circle_y,
-                    mode="lines",
-                    line=dict(color="rgba(0,255,0,0.3)", width=1, dash="dash"),  # Transparent green dashed ring
-                    fill="toself",
-                    fillcolor="rgba(0,255,0,0.05)",  # Very light fill for coverage area visualization
-                    name="vBeacon Coverage",
-                    showlegend=False,  # Don't add each circle to legend -- too many entries
-                    hoverinfo="skip",  # No hover needed -- visual indicator only
-                )
-            )  # Draw power-proportional coverage circle
-
-    def _add_vbeacons_to_figure(self, fig, map_data: dict) -> None:
-        """Add virtual beacon markers, labels, and coverage circles to the Plotly figure."""
-        if not map_data.get("vbeacons"):  # No virtual beacons on this map -- skip
-            logging.info("No virtual beacons found on this map")  # Informational for operator
-            return  # Nothing to add
-        vbeacons = map_data["vbeacons"]  # List of virtual beacon objects from Mist API
-        logging.info("Processing %d virtual beacons", len(vbeacons))  # Log beacon count
-        # Build parallel arrays of valid beacon coordinates and hover text
-        beacon_x, beacon_y, beacon_hover, beacon_names = self._collect_vbeacon_markers(vbeacons)
-        if not beacon_x:  # No beacons had valid coordinates
-            return  # Nothing to render
-        self._add_vbeacon_markers_trace(fig, beacon_x, beacon_y, beacon_hover)  # Single Scatter trace for all markers
-        self._add_vbeacon_label_annotations(fig, beacon_x, beacon_y, beacon_names)  # Per-beacon text labels
-        self._add_vbeacon_coverage_circles(fig, vbeacons)  # Power-proportional coverage rings
-        logging.info("Added %d virtual beacons to map", len(beacon_x))  # Log final count
-
-    def _add_ble_beacons_to_figure(self, fig, map_data: dict) -> None:
-        """Add BLE beacon markers and labels to the Plotly figure."""
-        if not map_data.get("beacons"):  # No BLE beacons on this map -- skip
-            logging.info("No BLE beacons found on this map")  # Informational for operator
-            return  # Nothing to add
-        ble_beacons = map_data["beacons"]  # List of BLE beacon objects from Mist API
-        logging.info("Processing %d BLE beacons", len(ble_beacons))  # Log beacon count
-        ble_x: list = []  # BLE beacon x pixel coordinates
-        ble_y: list = []  # BLE beacon y pixel coordinates
-        ble_hover: list = []  # HTML hover tooltip strings
-        ble_names: list = []  # Display name labels
-        for beacon in ble_beacons:  # Iterate all BLE beacons
-            x = beacon.get("x")  # Beacon x pixel coordinate
-            y = beacon.get("y")  # Beacon y pixel coordinate
-            if x is None or y is None:  # Skip beacons without position data
-                continue  # Can't place beacon without coordinates
-            ble_x.append(x)  # Store valid x coordinate
-            ble_y.append(y)  # Store valid y coordinate
-            name = beacon.get("name", beacon.get("mac", "Unnamed"))  # Prefer name; fall back to MAC
-            ble_names.append(name)  # Store name for annotation
-            hover = f"<b>BLE Beacon: {name}</b><br>"  # Bold header for hover tooltip
-            hover += f"MAC: {beacon.get('mac', 'N/A')}<br>"  # Hardware MAC address
-            hover += f"Type: {beacon.get('type', 'N/A')}<br>"  # Beacon type (iBeacon, Eddystone, etc.)
-            hover += f"Power: {beacon.get('power', 'N/A')}<br>"  # Transmit power in dBm
-            hover += f"Position: ({x}, {y})"  # Pixel coordinates on map
-            ble_hover.append(hover)  # Append completed hover text
-        if not ble_x:  # No BLE beacons had valid coordinates
-            return  # Nothing to render
-        fig.add_trace(
-            go.Scatter(
-                x=ble_x,
-                y=ble_y,
-                mode="markers",
-                name="BLE Beacons",
-                marker=dict(
-                    symbol="circle",
-                    size=14,
-                    color="#00bfff",  # Cyan for BLE beacons -- distinguishes from virtual beacons (green)
-                    line=dict(color="white", width=2),
-                    opacity=0.9,
-                ),
-                hovertext=ble_hover,
-                hoverinfo="text",
-                visible=True,
-                showlegend=True,
-            )
-        )  # Add all BLE beacon markers as a single trace
-        for _, (x, y, name) in enumerate(zip(ble_x, ble_y, ble_names, strict=True)):  # Add per-beacon labels
-            fig.add_annotation(
-                x=x,
-                y=y - 12,
-                text=f"<b>{name}</b>",
-                showarrow=False,
-                font=dict(size=9, color="white", family="Arial"),
-                bgcolor="rgba(0,191,255,0.9)",
-                bordercolor="white",
-                borderwidth=1,
-                borderpad=2,
-                xanchor="center",
-                yanchor="bottom",
-                name="BLE Beacons Label",
-            )  # Label positioned below marker for readability
-        logging.info("Added %d BLE beacons to map", len(ble_x))  # Log final count
-
-    def _launch_plotly_viewer(
-        self,
-        scope: MapViewerScope,
-        data: MapViewerData,
-        optional: MapViewerOptional,
-    ):
-        """Launch interactive Plotly/Dash map viewer with edit capabilities, client display, and RF coverage heatmap."""
-        site_id = scope.site_id  # Unpack scope so the inner code paths stay readable.
-        site_name = scope.site_name  # Unpack the human-readable site name for the viewer title.
-        map_id = scope.map_id  # Unpack the map UUID needed by Dash callbacks downstream.
-        map_data = data.map_data  # Unpack the full map record (dimensions, walls, beacons, etc).
-        devices = data.devices  # Unpack the device list used to seed the placement layer.
-        zones = data.zones  # Unpack the zone list used to seed the zone polygon layer.
-        clients = data.clients  # Unpack the client list used to seed the connected-clients overlay.
-        coverage_data = optional.coverage_data  # Unpack the coverage payload (None disables heatmap).
-        all_maps = optional.all_maps  # Unpack the other-maps list (powers map-switcher dropdown).
-        all_sites = optional.all_sites  # Unpack the other-sites list (powers site-switcher dropdown).
-        coverage_count = self._resolve_coverage_count(coverage_data)  # Helper extracts the ternary
-        all_maps, all_sites = self._normalize_optional_lists(all_maps, all_sites)  # Drops 2 BoolOps from parent CC
-        logging.info(  # Issue #433 Phase C: split long log template across two lines for E501 compliance.
-            "_launch_plotly_viewer called - site: %s (%s), map_id: %s, "
-            "devices: %s, zones: %s, clients: %s, coverage: %s, "
-            "available_maps: %s, available_sites: %s",
-            site_name,
-            site_id,
-            map_id,
-            len(devices),
-            len(zones),
-            len(clients),
-            coverage_count,
-            len(all_maps),
-            len(all_sites),
-        )
-        import os  # Used by getenv for DASH_PORT lookup
-
-        import plotly.graph_objects as go
-
-        # Wave E2: dash import + ImportError fallback extracted to helper to drop CC.
-        dash_modules = self._try_import_dash_modules(map_data, devices)
-        if dash_modules is None:  # Helper already invoked the static-fallback path
-            return
-        dash, Dash, Input, Output, State, dcc, html, no_update = dash_modules
-        # Wave E2: viewer banner extracted to helper (purely print statements, no CC).
-        self._print_viewer_intro_banner()
-
-        # Create Dash app with dark theme
-        # update_title="" prevents "Updating..." flash in browser tab during callbacks
-        # suppress_callback_exceptions=True is required for allow_duplicate=True on callback outputs
-        logging.debug("Creating Dash application instance")
-
-        # Initialize template manager for CSS/HTML/metadata
-        callback_manager = PlotlyMapCallbackManager()
-        # Wave A+B+C MapViewerState construction is deferred to after
-        # ppm is finalized via _validate_ppm() below (ppm is a state
-        # field consumed by update_shape_labels in wave C).
-        template_mgr = DashTemplateManager(org_id=self.org_id)
-        figure_builder = PlotlyMapFigureBuilder(logger=logging.getLogger(__name__))
-        heatmap_renderer = PlotlyCoverageHeatmapRenderer(logger=logging.getLogger(__name__))
-        serializer = PlotlyMapDataSerializer()
-        app_meta = template_mgr.get_app_meta()
-
-        app = Dash(
-            __name__,
-            update_title=app_meta["update_title"],
-            title=app_meta["title"],
-            suppress_callback_exceptions=app_meta["suppress_callback_exceptions"],
-        )
-
-        # Set app template and CSS from template manager
-        app.index_string = template_mgr.get_html_template()
-
-        # Build figure
-        logging.debug("Building Plotly figure")
-        fig = go.Figure()
-
-        # Set map dimensions and get PPM for unit conversions
-        map_width = map_data.get("width", 1000)
-        map_height = map_data.get("height", 1000)
-        ppm = map_data.get("ppm", 10)  # pixels per meter, default to 10 if not set
-        logging.debug("Map canvas dimensions: %sx%s, PPM from map: %s", map_width, map_height, ppm)
-
-        # Validate PPM using client coordinates to detect calibration mismatches
-        ppm = self._validate_ppm(clients, ppm)  # Returns corrected PPM if mismatch > 10%
-
-        # Waves A+B+C: now that ppm is finalized, build the shared
-        # MapViewerState and the MapViewerCallbacks handler that
-        # register_with(app) will wire below.
-        viewer_state = MapViewerState(  # Shared state container
-            callback_manager=callback_manager,  # Wave A: layer/click delegation
-            zones=zones,  # Wave B/C: zone toggle + zone-action callbacks
-            map_id=map_id,  # Wave B/C: logging + fallback for delete/utilities
-            site_id=site_id,  # Wave C: site_id for delete/zone API calls
-            api_session_ref=self.apisession,  # Wave C: live mistapi session
-            ppm=ppm,  # Wave C: pixels-per-meter fallback in update_shape_labels
-            mistapi_ref=mistapi,  # Wave C: module reference for deleteSiteMap/Zone
-            maps_manager_ref=self,  # Wave C: enables _backup_map_geometry callback
-            serializer=serializer,  # Wave E2: dropdown option/store builder
-            all_sites=all_sites,  # Wave E2: URL/site-switch site list
-            all_maps=all_maps,  # Wave E2: URL/site-switch map list
-            available_sites=all_sites,  # Wave E2: same data as all_sites for parity
-            figure_builder=figure_builder,  # Wave E2: shared walls/wayfinding/zones builder
-            heatmap_renderer=heatmap_renderer,  # Wave E2: RF coverage heatmap renderer
-        )
-        viewer_callbacks = MapViewerCallbacks(state=viewer_state)  # Extracted callback handlers
-
-        # Wave E2: background image add extracted to helper (gates the URL check internally).
-        self._add_background_image_to_figure(fig, map_data, map_width, map_height)
-
-        figure_builder.add_walls(fig, map_data)
-        figure_builder.add_wayfinding(fig, map_data)
-        figure_builder.add_zones(fig, zones)
-
-        # Add validation paths (site survey paths) if present
-        self._add_site_survey_paths(fig, map_data)  # Draw any site survey paths on the map
-
-        # Add connected clients if present
-        self._add_clients_to_figure(fig, clients, map_id)  # Draw connected client dots on the map
-
-        # Add devices by type with LARGER, more visible markers
-        # Wave E2: device categorization extracted to helper to drop parent CC (for + if + 2 BoolOp).
-        device_types = self._categorize_devices_by_type(devices)
-
-        # Enhanced colors and symbols for device types - with status-based coloring
-        # Status colors: connected (green), disconnected (red), upgrading (orange/amber)
-        type_config = {
-            "ap": {
-                "symbol": "triangle-up",
-                "name": "Access Points",
-                "size": 20,
-                "colors": {
-                    "connected": "#00ff00",  # Bright green
-                    "disconnected": "#ff0000",  # Bright red
-                    "upgrading": "#ff8800",  # Orange/amber
-                },
-            },
-            "switch": {
-                "symbol": "square",
-                "name": "Switches",
-                "size": 18,
-                "colors": {
-                    "connected": "#00ccff",  # Cyan
-                    "disconnected": "#ff0000",  # Bright red
-                    "upgrading": "#ff8800",  # Orange/amber
-                },
-            },
-            "gateway": {
-                "symbol": "diamond",
-                "name": "Gateways",
-                "size": 20,
-                "colors": {
-                    "connected": "#ff00ff",  # Magenta
-                    "disconnected": "#ff0000",  # Bright red
-                    "upgrading": "#ff8800",  # Orange/amber
-                },
-            },
-        }
-
-        # Wave E2: keep parent CC <= 10 by handling per-type rendering in a helper.
-        for device_type, type_cfg in type_config.items():  # One iteration per device type
-            self._render_device_type_on_figure(fig, device_types[device_type], type_cfg, device_type)
-
-        # Add virtual beacons (vBeacons) if present in map data
-        self._add_vbeacons_to_figure(fig, map_data)  # Draw virtual beacon markers and power circles
-
-        # Add BLE beacons if present in map data
-        self._add_ble_beacons_to_figure(fig, map_data)  # Draw BLE beacon markers on the map
-
-        # Wave E2: heatmap conditional moved inside helper to drop parent if-check.
-        self._maybe_add_heatmap_trace(
-            HeatmapRenderCtx(fig=fig, heatmap_renderer=heatmap_renderer, coverage_data=coverage_data),
-            MapDimensions(width_px=map_width, height_px=map_height, ppm=ppm),
-        )
-
-        # Wave E2: origin marker extracted to helper (drops 1 BoolOp + add_trace).
-        self._add_origin_marker_trace(fig, map_data, go)
-
-        # Update layout with dark theme and responsive sizing
-        fig.update_layout(
-            title={"text": f"Map: {map_data.get('name', 'Unnamed')}", "font": {"size": 20, "color": "#e0e0e0"}},
-            xaxis=dict(
-                range=[-50, map_width + 50],  # Add margins to show full map
-                visible=True,
-                title="X (pixels)",
-                gridcolor="#444",
-                zerolinecolor="#666",
-                color="#b0b0b0",
-                constrain="domain",  # Keep zoom within bounds
-            ),
-            yaxis=dict(
-                range=[map_height + 50, -50],  # Inverted range with margins: Mist uses top-left origin
-                visible=True,
-                title="Y (pixels)",
-                scaleanchor="x",
-                scaleratio=1,
-                gridcolor="#444",
-                zerolinecolor="#666",
-                color="#b0b0b0",
-                constrain="domain",  # Keep zoom within bounds
-            ),
-            autosize=True,
-            hovermode="closest",
-            showlegend=True,
-            uirevision="constant",  # Prevent auto-ranging to data - maintain user's view
-            legend=dict(
-                x=0.02,
-                y=0.98,
-                bgcolor="rgba(45,45,45,0.9)",
-                bordercolor="#667eea",
-                borderwidth=2,
-                font=dict(color="#e0e0e0", size=12),
-            ),
-            plot_bgcolor="#1a1a1a",
-            paper_bgcolor="#1a1a1a",
-            margin=dict(l=50, r=50, t=80, b=50),
-            dragmode="zoom",  # Default to zoom, users can select drawing tools
-            newshape=dict(line=dict(color="cyan", width=3), fillcolor="rgba(0,255,255,0.2)", opacity=0.8),
-            # Store PPM for unit conversions in annotations
-            meta={"ppm": ppm, "origin_x": map_data.get("origin_x", 0), "origin_y": map_data.get("origin_y", 0)},
-        )
-
-        # Wave E2: origin crosshair extracted to helper (3 fig.add_trace calls, 0 decisions but keeps method short).
-        self._add_origin_crosshair(fig, map_data)
-
-        # Wave E2: dropdown option building extracted to helper to drop comprehensions + lambda from parent CC.
-        map_dropdown_options, site_dropdown_options = self._build_selector_options(all_maps, all_sites)
-
-        # Create responsive Dash layout with dark theme
-        app.layout = html.Div(
-            [
-                # Header with title and utilities buttons
-                html.Div(
-                    [
-                        # Site selector dropdown
-                        html.Div(
-                            [
-                                html.Span("Site: ", style={"fontSize": "14px", "color": "#888", "marginRight": "5px"}),
-                                dcc.Dropdown(
-                                    id="site-selector-dropdown",
-                                    options=site_dropdown_options,
-                                    value=site_id,
-                                    clearable=False,
-                                    searchable=True,
-                                    style={"width": "250px", "display": "inline-block", "verticalAlign": "middle"},
-                                    className="dark-dropdown",
-                                ),
-                            ],
-                            style={"display": "inline-block", "marginRight": "20px", "verticalAlign": "middle"},
-                        ),
-                        # Map selector dropdown
-                        html.Div(
-                            [
-                                html.Span("Map: ", style={"fontSize": "14px", "color": "#888", "marginRight": "5px"}),
-                                dcc.Dropdown(
-                                    id="map-selector-dropdown",
-                                    options=map_dropdown_options,
-                                    value=map_id,
-                                    clearable=False,
-                                    searchable=False,
-                                    style={"width": "200px", "display": "inline-block", "verticalAlign": "middle"},
-                                    className="dark-dropdown",
-                                ),
-                            ],
-                            style={"display": "inline-block", "marginRight": "30px", "verticalAlign": "middle"},
-                        ),
-                        html.Div(
-                            [
-                                # Live Data Refresh Controls - moved to header
-                                html.Div(
-                                    [
-                                        dcc.Checklist(
-                                            id="auto-refresh-toggle",
-                                            options=[{"label": " Auto-Refresh", "value": "enabled"}],
-                                            value=["enabled"],  # Enabled by default
-                                            labelStyle={
-                                                "display": "inline-block",
-                                                "fontSize": "12px",
-                                                "color": "#e0e0e0",
-                                            },
-                                            style={"display": "inline-block", "marginRight": "10px"},
-                                        ),
-                                        html.Button(
-                                            "Refresh",
-                                            id="manual-refresh-btn",
-                                            n_clicks=0,
-                                            style={
-                                                "marginRight": "15px",
-                                                "padding": "6px 12px",
-                                                "backgroundColor": "#3d3d3d",
-                                                "color": "#00ff00",
-                                                "border": "1px solid #00ff00",
-                                                "borderRadius": "4px",
-                                                "cursor": "pointer",
-                                                "fontSize": "12px",
-                                                "verticalAlign": "middle",
-                                            },
-                                        ),
-                                        html.Span(
-                                            id="countdown-display",
-                                            children="Clients: 30s | RF: 5m",
-                                            style={
-                                                "fontSize": "11px",
-                                                "color": "#667eea",
-                                                "marginRight": "15px",
-                                                "verticalAlign": "middle",
-                                            },
-                                        ),
-                                    ],
-                                    style={
-                                        "display": "inline-block",
-                                        "marginRight": "20px",
-                                        "padding": "5px 10px",
-                                        "backgroundColor": "#1a1a1a",
-                                        "borderRadius": "4px",
-                                        "border": "1px solid #444",
-                                    },
-                                ),
-                                html.Button(
-                                    "[AUTO] Auto-Zone",
-                                    id="auto-zone-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "marginRight": "10px",
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#667eea",
-                                        "color": "white",
-                                        "border": "none",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                        "fontWeight": "bold",
-                                    },
-                                ),
-                                html.Button(
-                                    "[PIN] Add vBeacon",
-                                    id="add-vbeacon-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "marginRight": "10px",
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#3d3d3d",
-                                        "color": "#00ff00",
-                                        "border": "1px solid #00ff00",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                    },
-                                ),
-                                html.Button(
-                                    "[ANT] Add Beacon",
-                                    id="add-beacon-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "marginRight": "10px",
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#3d3d3d",
-                                        "color": "#00bfff",
-                                        "border": "1px solid #00bfff",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                    },
-                                ),
-                                html.Button(
-                                    "[IMG] Change Image",
-                                    id="change-image-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "marginRight": "10px",
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#3d3d3d",
-                                        "color": "#e0e0e0",
-                                        "border": "1px solid #667eea",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                    },
-                                ),
-                                html.Button(
-                                    "[DEL] Remove Image",
-                                    id="remove-image-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "marginRight": "10px",
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#3d3d3d",
-                                        "color": "#e0e0e0",
-                                        "border": "1px solid #667eea",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                    },
-                                ),
-                                html.Button(
-                                    "[EDIT] Rename",
-                                    id="rename-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "marginRight": "10px",
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#3d3d3d",
-                                        "color": "#e0e0e0",
-                                        "border": "1px solid #667eea",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                    },
-                                ),
-                                html.Button(
-                                    "[X] Delete",
-                                    id="delete-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "marginRight": "10px",
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#3d3d3d",
-                                        "color": "#ff4444",
-                                        "border": "1px solid #ff4444",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                    },
-                                ),
-                                html.Button(
-                                    "[+] Clone",
-                                    id="clone-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#3d3d3d",
-                                        "color": "#00ff88",
-                                        "border": "1px solid #00ff88",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                        "fontWeight": "bold",
-                                    },
-                                ),
-                                html.Div(
-                                    id="utilities-status",
-                                    style={
-                                        "display": "inline-block",
-                                        "marginLeft": "20px",
-                                        "color": "#a0a0ff",
-                                        "fontSize": "13px",
-                                    },
-                                ),
-                            ],
-                            style={"display": "inline-block", "float": "right"},
-                        ),
-                    ],
-                    style={"padding": "15px 20px", "borderBottom": "2px solid #667eea", "backgroundColor": "#2a2a2a"},
-                ),
-                # Clone map input panel (hidden by default)
-                html.Div(
-                    id="clone-panel",
-                    children=[
-                        html.Div(
-                            [
-                                html.Span(
-                                    "[+] Clone Map: ",
-                                    style={"color": "#00ff88", "fontWeight": "bold", "marginRight": "10px"},
-                                ),
-                                dcc.Input(
-                                    id="clone-name-input",
-                                    type="text",
-                                    placeholder=f"{map_data.get('name', 'Map')} (Copy)",
-                                    value=f"{map_data.get('name', 'Map')} (Copy)",
-                                    style={
-                                        "width": "300px",
-                                        "padding": "8px 12px",
-                                        "backgroundColor": "#2a2a2a",
-                                        "color": "#e0e0e0",
-                                        "border": "1px solid #00ff88",
-                                        "borderRadius": "4px",
-                                        "marginRight": "10px",
-                                    },
-                                ),
-                                html.Button(
-                                    "Execute Clone",
-                                    id="execute-clone-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#00ff88",
-                                        "color": "#1a1a1a",
-                                        "border": "none",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                        "fontWeight": "bold",
-                                        "marginRight": "10px",
-                                    },
-                                ),
-                                html.Button(
-                                    "Cancel",
-                                    id="cancel-clone-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#3d3d3d",
-                                        "color": "#ff4444",
-                                        "border": "1px solid #ff4444",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                    },
-                                ),
-                                html.Span(
-                                    id="clone-status",
-                                    style={"marginLeft": "15px", "color": "#e0e0e0", "fontSize": "13px"},
-                                ),
-                            ],
-                            style={"display": "flex", "alignItems": "center", "justifyContent": "center"},
-                        )
-                    ],
-                    style={
-                        "display": "none",
-                        "padding": "12px 20px",
-                        "backgroundColor": "#1a1a1a",
-                        "borderBottom": "1px solid #00ff88",
-                    },
-                ),
-                # Delete map confirmation panel (hidden by default)
-                html.Div(
-                    id="delete-panel",
-                    children=[
-                        html.Div(
-                            [
-                                html.Span(
-                                    "X DESTRUCTIVE: Delete this floorplan? ",
-                                    style={"color": "#ff4444", "fontWeight": "bold", "marginRight": "10px"},
-                                ),
-                                html.Span(
-                                    id="delete-map-name-display",
-                                    children=f"Map: {map_data.get('name', 'Unknown')}",
-                                    style={"color": "#ffaa00", "marginRight": "20px"},
-                                ),
-                                html.Button(
-                                    "YES - DELETE MAP",
-                                    id="confirm-delete-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#ff4444",
-                                        "color": "white",
-                                        "border": "none",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                        "fontWeight": "bold",
-                                        "marginRight": "10px",
-                                    },
-                                ),
-                                html.Button(
-                                    "Cancel",
-                                    id="cancel-delete-btn",
-                                    n_clicks=0,
-                                    style={
-                                        "padding": "8px 15px",
-                                        "backgroundColor": "#3d3d3d",
-                                        "color": "#00ff88",
-                                        "border": "1px solid #00ff88",
-                                        "borderRadius": "4px",
-                                        "cursor": "pointer",
-                                    },
-                                ),
-                                html.Span(
-                                    id="delete-status",
-                                    style={"marginLeft": "15px", "color": "#e0e0e0", "fontSize": "13px"},
-                                ),
-                            ],
-                            style={"display": "flex", "alignItems": "center", "justifyContent": "center"},
-                        )
-                    ],
-                    style={
-                        "display": "none",
-                        "padding": "12px 20px",
-                        "backgroundColor": "#330000",
-                        "borderBottom": "2px solid #ff4444",
-                    },
-                ),
-                html.Div(
-                    [
-                        # Map container - responsive
-                        html.Div(
-                            [
-                                dcc.Graph(
-                                    id="map-display",
-                                    figure=fig,
-                                    config={
-                                        "displayModeBar": True,
-                                        "displaylogo": False,
-                                        "modeBarButtonsToAdd": [
-                                            "drawline",
-                                            "drawopenpath",
-                                            "drawclosedpath",
-                                            "drawcircle",
-                                            "drawrect",
-                                            "eraseshape",
-                                        ],
-                                        "scrollZoom": True,
-                                        "editable": True,
-                                        "edits": {"shapePosition": True, "annotationPosition": True},
-                                        "toImageButtonOptions": {
-                                            "format": "png",
-                                            "filename": f"map_{map_data.get('name', 'export')}",
-                                            "height": 1080,
-                                            "width": 1920,
-                                            "scale": 2,
-                                        },
-                                    },
-                                    style={"height": "100%", "width": "100%"},
-                                )
-                            ],
-                            className="map-container",
-                        ),
-                        # Sidebar
-                        html.Div(
-                            [
-                                html.H3("Layer Controls"),
-                                html.H4(
-                                    "Infrastructure",
-                                    style={
-                                        "fontSize": "13px",
-                                        "color": "#667eea",
-                                        "marginTop": "10px",
-                                        "marginBottom": "5px",
-                                    },
-                                ),
-                                dcc.Checklist(
-                                    id="layer-toggle",
-                                    options=[
-                                        {"label": " [W] Walls", "value": "walls"},
-                                        {"label": " [M] Wayfinding", "value": "wayfinding"},
-                                        {"label": " [Z] Location Zones", "value": "zones"},
-                                        {"label": " [P] Proximity Zones", "value": "proximity_zones"},
-                                        {"label": " [V] Validation Paths", "value": "validation"},
-                                        {"label": " [R] RF Diagnostics Heatmap", "value": "rf_heatmap"},
-                                        {"label": " [O] Map Origin", "value": "origin"},
-                                    ],
-                                    value=["walls", "wayfinding", "zones", "validation"],
-                                    labelStyle={"display": "block", "margin": "8px 0", "fontSize": "13px"},
-                                    style={"marginBottom": "10px"},
-                                ),
-                                html.H4(
-                                    "Beacons & Positioning",
-                                    style={"fontSize": "13px", "color": "#667eea", "marginBottom": "5px"},
-                                ),
-                                dcc.Checklist(
-                                    id="beacon-toggle",
-                                    options=[
-                                        {"label": " [vB] Virtual Beacons", "value": "vbeacons"},
-                                        {"label": " [C] vBeacon Coverage", "value": "vbeacon_coverage"},
-                                        {"label": " [3P] 3rd Party Beacons", "value": "ble_beacons"},
-                                    ],
-                                    value=["vbeacons", "ble_beacons"],
-                                    labelStyle={"display": "block", "margin": "8px 0", "fontSize": "13px"},
-                                    style={"marginBottom": "10px"},
-                                ),
-                                html.H4(
-                                    "Clients", style={"fontSize": "13px", "color": "#667eea", "marginBottom": "5px"}
-                                ),
-                                dcc.Checklist(
-                                    id="client-toggle",
-                                    options=[
-                                        {"label": " [Wi] WiFi Clients", "value": "wifi_clients"},
-                                        {"label": " [Wr] Wired Clients", "value": "wired_clients"},
-                                        {"label": " [Ex] Excluded Clients", "value": "excluded_clients"},
-                                        {"label": " [AP] Show Associated AP", "value": "show_client_ap"},
-                                    ],
-                                    value=["wifi_clients", "wired_clients", "show_client_ap"],
-                                    labelStyle={"display": "block", "margin": "8px 0", "fontSize": "13px"},
-                                    style={"marginBottom": "10px"},
-                                ),
-                                html.H4(
-                                    "Devices", style={"fontSize": "13px", "color": "#667eea", "marginBottom": "5px"}
-                                ),
-                                dcc.Checklist(
-                                    id="device-toggle",
-                                    options=[
-                                        {"label": " [AP] Access Points", "value": "aps"},
-                                        {"label": " [SW] Switches", "value": "switches"},
-                                        {"label": " [GW] Gateways", "value": "gateways"},
-                                        {"label": " [MS] Mesh Associations", "value": "mesh_links"},
-                                    ],
-                                    value=["aps", "switches", "gateways"],
-                                    labelStyle={"display": "block", "margin": "8px 0", "fontSize": "13px"},
-                                    style={"marginBottom": "10px"},
-                                ),
-                                html.H4(
-                                    "Filters", style={"fontSize": "13px", "color": "#667eea", "marginBottom": "5px"}
-                                ),
-                                dcc.Checklist(
-                                    id="filter-toggle",
-                                    options=[
-                                        {"label": " [HI] Hide Inactive Items", "value": "hide_inactive"},
-                                    ],
-                                    value=[],
-                                    labelStyle={"display": "block", "margin": "8px 0", "fontSize": "13px"},
-                                    style={"marginBottom": "10px"},
-                                ),
-                                html.Hr(),
-                                html.H3("Drawing Tools"),
-                                html.Details(
-                                    [
-                                        html.Summary(
-                                            "How to use",
-                                            style={
-                                                "fontSize": "12px",
-                                                "color": "#00bfff",
-                                                "cursor": "pointer",
-                                                "marginBottom": "8px",
-                                            },
-                                        ),
-                                        html.Div(
-                                            [
-                                                html.P(
-                                                    "1. Select a Drawing Mode below",
-                                                    style={
-                                                        "fontSize": "11px",
-                                                        "color": "#aaa",
-                                                        "margin": "4px 0 4px 10px",
-                                                    },
-                                                ),
-                                                html.P(
-                                                    "2. Use toolbar above map to draw shape",
-                                                    style={
-                                                        "fontSize": "11px",
-                                                        "color": "#aaa",
-                                                        "margin": "4px 0 4px 10px",
-                                                    },
-                                                ),
-                                                html.P(
-                                                    "3. Click 'Save Last Shape to Mist'",
-                                                    style={
-                                                        "fontSize": "11px",
-                                                        "color": "#aaa",
-                                                        "margin": "4px 0 4px 10px",
-                                                    },
-                                                ),
-                                                html.P(
-                                                    "Zones: Draw rectangle for coverage areas",
-                                                    style={
-                                                        "fontSize": "11px",
-                                                        "color": "#00bfff",
-                                                        "margin": "4px 0 4px 10px",
-                                                    },
-                                                ),
-                                                html.P(
-                                                    "Walls: Draw line for RF attenuation",
-                                                    style={
-                                                        "fontSize": "11px",
-                                                        "color": "#ffa500",
-                                                        "margin": "4px 0 4px 10px",
-                                                    },
-                                                ),
-                                                html.P(
-                                                    "Paths: Draw line for validation routes",
-                                                    style={
-                                                        "fontSize": "11px",
-                                                        "color": "#ff00ff",
-                                                        "margin": "4px 0 8px 10px",
-                                                    },
-                                                ),
-                                            ],
-                                            style={
-                                                "backgroundColor": "#2a2a2a",
-                                                "padding": "8px",
-                                                "borderRadius": "4px",
-                                                "marginBottom": "10px",
-                                            },
-                                        ),
-                                    ],
-                                    open=False,
-                                ),
-                                # Drawing mode selector
-                                html.Div(
-                                    [
-                                        html.Label(
-                                            "Drawing Mode:",
-                                            style={"fontSize": "12px", "color": "#888", "marginBottom": "4px"},
-                                        ),
-                                        dcc.Dropdown(
-                                            id="drawing-mode-dropdown",
-                                            options=[
-                                                {"label": "Validation Path (magenta)", "value": "path"},
-                                                {"label": "Zone Rectangle (cyan)", "value": "zone"},
-                                                {"label": "Wall Segment (orange)", "value": "wall"},
-                                                {"label": "Measurement Only", "value": "measure"},
-                                            ],
-                                            value="measure",
-                                            clearable=False,
-                                            style={"marginBottom": "10px", "color": "#e0e0e0"},
-                                            className="dark-dropdown",
-                                        ),
-                                    ],
-                                    style={"marginBottom": "10px"},
-                                ),
-                                # Zone name input (shown when zone mode selected)
-                                html.Div(
-                                    [
-                                        dcc.Input(
-                                            id="zone-name-input",
-                                            type="text",
-                                            placeholder="Zone name (required)",
-                                            style={
-                                                "width": "100%",
-                                                "padding": "8px",
-                                                "marginBottom": "8px",
-                                                "backgroundColor": "#3d3d3d",
-                                                "color": "#e0e0e0",
-                                                "border": "1px solid #00bfff",
-                                                "borderRadius": "4px",
-                                            },
-                                        ),
-                                    ],
-                                    id="zone-name-container",
-                                    style={"display": "none"},
-                                ),
-                                # Action buttons
-                                html.Div(
-                                    [
-                                        html.Button(
-                                            "[SAVE] Save Last Shape to Mist",
-                                            id="save-shape-btn",
-                                            n_clicks=0,
-                                            style={
-                                                "width": "100%",
-                                                "marginBottom": "8px",
-                                                "padding": "10px",
-                                                "backgroundColor": "#28a745",
-                                                "color": "white",
-                                                "border": "none",
-                                                "borderRadius": "4px",
-                                                "cursor": "pointer",
-                                                "fontSize": "13px",
-                                                "fontWeight": "bold",
-                                            },
-                                        ),
-                                        html.Button(
-                                            "[CLR] Clear All Drawings",
-                                            id="clear-drawings-btn",
-                                            n_clicks=0,
-                                            style={
-                                                "width": "100%",
-                                                "marginBottom": "8px",
-                                                "padding": "8px",
-                                                "backgroundColor": "#3d3d3d",
-                                                "color": "#ffc107",
-                                                "border": "1px solid #ffc107",
-                                                "borderRadius": "4px",
-                                                "cursor": "pointer",
-                                                "fontSize": "13px",
-                                            },
-                                        ),
-                                    ]
-                                ),
-                                html.Hr(style={"margin": "10px 0"}),
-                                # Delete from Mist section
-                                html.P(
-                                    "Delete from Mist API:",
-                                    style={"fontSize": "12px", "color": "#ff6666", "marginBottom": "8px"},
-                                ),
-                                html.Div(
-                                    [
-                                        html.Button(
-                                            "Delete Validation Paths",
-                                            id="delete-paths-btn",
-                                            n_clicks=0,
-                                            style={
-                                                "width": "100%",
-                                                "marginBottom": "6px",
-                                                "padding": "6px",
-                                                "backgroundColor": "#3d3d3d",
-                                                "color": "#ff4444",
-                                                "border": "1px solid #ff4444",
-                                                "borderRadius": "4px",
-                                                "cursor": "pointer",
-                                                "fontSize": "11px",
-                                            },
-                                        ),
-                                        html.Button(
-                                            "Delete Wayfinding Paths",
-                                            id="delete-wayfinding-btn",
-                                            n_clicks=0,
-                                            style={
-                                                "width": "100%",
-                                                "marginBottom": "6px",
-                                                "padding": "6px",
-                                                "backgroundColor": "#3d3d3d",
-                                                "color": "#ff8844",
-                                                "border": "1px solid #ff8844",
-                                                "borderRadius": "4px",
-                                                "cursor": "pointer",
-                                                "fontSize": "11px",
-                                            },
-                                        ),
-                                        html.Button(
-                                            "Delete All Walls",
-                                            id="delete-walls-btn",
-                                            n_clicks=0,
-                                            style={
-                                                "width": "100%",
-                                                "marginBottom": "6px",
-                                                "padding": "6px",
-                                                "backgroundColor": "#3d3d3d",
-                                                "color": "#ff4444",
-                                                "border": "1px solid #ff4444",
-                                                "borderRadius": "4px",
-                                                "cursor": "pointer",
-                                                "fontSize": "11px",
-                                            },
-                                        ),
-                                        html.Button(
-                                            "Delete All Zones",
-                                            id="delete-zones-btn",
-                                            n_clicks=0,
-                                            style={
-                                                "width": "100%",
-                                                "marginBottom": "6px",
-                                                "padding": "6px",
-                                                "backgroundColor": "#3d3d3d",
-                                                "color": "#ff66ff",
-                                                "border": "1px solid #ff66ff",
-                                                "borderRadius": "4px",
-                                                "cursor": "pointer",
-                                                "fontSize": "11px",
-                                            },
-                                        ),
-                                    ]
-                                ),
-                                html.Div(
-                                    id="drawing-tool-status",
-                                    style={
-                                        "fontSize": "11px",
-                                        "color": "#a0a0ff",
-                                        "marginTop": "8px",
-                                        "minHeight": "40px",
-                                    },
-                                ),
-                                html.Hr(),
-                                html.H3("Measurement Tools"),
-                                html.P("Use the toolbar above the map:", style={"fontSize": "12px", "color": "#888"}),
-                                html.P(
-                                    "- Draw Line - Measure distances",
-                                    style={"fontSize": "11px", "marginLeft": "10px", "color": "#999"},
-                                ),
-                                html.P(
-                                    "- Draw Path - Create routes",
-                                    style={"fontSize": "11px", "marginLeft": "10px", "color": "#999"},
-                                ),
-                                html.P(
-                                    "- Draw Circle - Mark areas",
-                                    style={"fontSize": "11px", "marginLeft": "10px", "color": "#999"},
-                                ),
-                                html.P(
-                                    "- Erase - Remove drawings",
-                                    style={"fontSize": "11px", "marginLeft": "10px", "color": "#999"},
-                                ),
-                                html.Hr(),
-                                html.H3("Set Scale"),
-                                html.P("1. Draw a line of known length", style={"fontSize": "11px", "color": "#888"}),
-                                html.P("2. Enter actual length below", style={"fontSize": "11px", "color": "#888"}),
-                                html.Div(
-                                    [
-                                        dcc.Input(
-                                            id="scale-length-input",
-                                            type="number",
-                                            placeholder="Length in meters",
-                                            style={
-                                                "width": "100%",
-                                                "padding": "8px",
-                                                "marginBottom": "8px",
-                                                "backgroundColor": "#3d3d3d",
-                                                "color": "#e0e0e0",
-                                                "border": "1px solid #667eea",
-                                                "borderRadius": "4px",
-                                            },
-                                        ),
-                                        html.Button(
-                                            "Set Scale from Last Line",
-                                            id="set-scale-button",
-                                            style={
-                                                "width": "100%",
-                                                "padding": "8px",
-                                                "backgroundColor": "#667eea",
-                                                "color": "white",
-                                                "border": "none",
-                                                "borderRadius": "4px",
-                                                "cursor": "pointer",
-                                                "fontWeight": "bold",
-                                            },
-                                        ),
-                                        html.Div(
-                                            id="scale-status",
-                                            style={"marginTop": "8px", "fontSize": "11px", "color": "#a0a0ff"},
-                                        ),
-                                    ]
-                                ),
-                                html.Hr(),
-                                html.H3("Set Origin"),
-                                html.P(
-                                    "Click map to set coordinate origin", style={"fontSize": "11px", "color": "#888"}
-                                ),
-                                html.Div(
-                                    [
-                                        html.Button(
-                                            "Enable Origin Setting Mode",
-                                            id="origin-mode-button",
-                                            n_clicks=0,
-                                            style={
-                                                "width": "100%",
-                                                "padding": "8px",
-                                                "marginBottom": "8px",
-                                                "backgroundColor": "#3d3d3d",
-                                                "color": "white",
-                                                "border": "1px solid #667eea",
-                                                "borderRadius": "4px",
-                                                "cursor": "pointer",
-                                                "fontWeight": "bold",
-                                            },
-                                        ),
-                                        html.Div(
-                                            id="origin-status",
-                                            children=[
-                                                html.P(
-                                                    f"Current: ({map_data.get('origin_x', 0)}, "
-                                                    f"{map_data.get('origin_y', 0)})",
-                                                    style={"fontSize": "11px", "color": "#888", "margin": "4px 0"},
-                                                )
-                                            ],
-                                        ),
-                                    ]
-                                ),
-                                html.Hr(),
-                                html.H3("Location Zones"),
-                                html.Div(
-                                    [
-                                        self._build_zone_toggle_widget(zones, dcc, html),
-                                        html.Div(
-                                            id="selected-zone-info",
-                                            children=[
-                                                html.P(
-                                                    "Click a zone for details",
-                                                    style={"fontSize": "11px", "color": "#888", "fontStyle": "italic"},
-                                                )
-                                            ],
-                                            style={
-                                                "padding": "10px",
-                                                "backgroundColor": "#3d3d3d",
-                                                "borderRadius": "4px",
-                                                "marginTop": "10px",
-                                            },
-                                        ),
-                                        (
-                                            html.Div(
-                                                [
-                                                    html.Button(
-                                                        "[EDIT] Edit Zone",
-                                                        id="edit-zone-btn",
-                                                        n_clicks=0,
-                                                        style={
-                                                            "width": "48%",
-                                                            "marginRight": "4%",
-                                                            "padding": "6px",
-                                                            "backgroundColor": "#667eea",
-                                                            "color": "white",
-                                                            "border": "none",
-                                                            "borderRadius": "4px",
-                                                            "cursor": "pointer",
-                                                            "fontSize": "12px",
-                                                        },
-                                                    ),
-                                                    html.Button(
-                                                        "[DEL] Remove Zone",
-                                                        id="remove-zone-btn",
-                                                        n_clicks=0,
-                                                        style={
-                                                            "width": "48%",
-                                                            "padding": "6px",
-                                                            "backgroundColor": "#ff4444",
-                                                            "color": "white",
-                                                            "border": "none",
-                                                            "borderRadius": "4px",
-                                                            "cursor": "pointer",
-                                                            "fontSize": "12px",
-                                                        },
-                                                    ),
-                                                ],
-                                                style={"marginTop": "10px", "display": "flex"},
-                                            )
-                                            if zones
-                                            else None
-                                        ),
-                                    ]
-                                ),
-                                html.Hr(),
-                                html.H3("Map Info"),
-                                html.Div(
-                                    id="map-info",
-                                    children=[
-                                        html.P(
-                                            [
-                                                html.Span("Dimensions: ", className="info-badge"),
-                                                f"{map_width} x {map_height} px",
-                                            ]
-                                        ),
-                                        html.P(
-                                            [
-                                                html.Span("PPM: ", className="info-badge"),
-                                                f"{map_data.get('ppm', 'N/A')}",
-                                            ]
-                                        ),
-                                        html.P(
-                                            [
-                                                html.Span("Orientation: ", className="info-badge"),
-                                                f"{map_data.get('orientation', 0)} deg",
-                                            ]
-                                        ),
-                                        html.P([html.Span("Devices: ", className="info-badge"), f"{len(devices)}"]),
-                                        html.P([html.Span("Clients: ", className="info-badge"), f"{len(clients)}"]),
-                                        html.P([html.Span("Zones: ", className="info-badge"), f"{len(zones)}"]),
-                                        html.P(
-                                            [
-                                                html.Span("vBeacons: ", className="info-badge"),
-                                                f"{len(map_data.get('vbeacons', []))}",
-                                            ]
-                                        ),
-                                        html.P(
-                                            [
-                                                html.Span("BLE Beacons: ", className="info-badge"),
-                                                f"{len(map_data.get('beacons', []))}",
-                                            ]
-                                        ),
-                                        html.P(
-                                            [
-                                                html.Span("Validation Paths: ", className="info-badge"),
-                                                f"{len(map_data.get('sitesurvey_path', []))}",
-                                            ]
-                                        ),
-                                    ],
-                                ),
-                                html.Hr(),
-                                html.Div(
-                                    id="click-data",
-                                    children=[
-                                        html.H3("Device Info"),
-                                        html.P(
-                                            "Click a device for details", style={"color": "#888", "fontStyle": "italic"}
-                                        ),
-                                    ],
-                                ),
-                            ],
-                            className="sidebar",
-                        ),
-                    ],
-                    className="main-container",
-                ),
-                # Hidden stores for state management
-                dcc.Store(
-                    id="map-config-store",
-                    data=serializer.build_map_config(
-                        site_id=site_id,
-                        site_name=site_name,
-                        map_id=map_id,
-                        map_name=map_data.get("name", "Unknown"),
-                        ppm=ppm,
-                        map_width=map_width,
-                        map_height=map_height,
-                    ),
-                ),
-                # Store for available maps list (for dropdown)
-                dcc.Store(
-                    id="available-maps-store",
-                    data=serializer.build_named_items(all_maps, default_name="Unnamed"),
-                ),
-                # Store for available sites list (for dropdown)
-                dcc.Store(
-                    id="available-sites-store",
-                    data=serializer.build_named_items(all_sites, default_name="Unnamed Site"),
-                ),
-                # Store for tracking selected zone ID
-                dcc.Store(id="selected-zone-store", data=serializer.build_selected_zone_store()),
-                # Store for tracking last refresh times
-                dcc.Store(id="refresh-times-store", data=serializer.build_refresh_times_store()),
-                # Store to trigger map list refresh (cache bust) after clone/delete operations
-                dcc.Store(id="cache-bust-store", data=serializer.build_cache_bust_store()),
-                # Interval components for live refresh (enabled by default since auto-refresh is on)
-                dcc.Interval(
-                    id="client-refresh-interval",
-                    interval=30 * 1000,  # 30 seconds in milliseconds
-                    n_intervals=0,
-                    disabled=False,  # Enabled by default with auto-refresh
-                ),
-                dcc.Interval(
-                    id="coverage-refresh-interval",
-                    interval=5 * 60 * 1000,  # 5 minutes in milliseconds
-                    n_intervals=0,
-                    disabled=False,  # Enabled by default with auto-refresh
-                ),
-                # Fast interval for countdown display (1 second)
-                dcc.Interval(
-                    id="countdown-tick-interval",
-                    interval=1000,  # 1 second
-                    n_intervals=0,
-                    disabled=False,  # Enabled by default with auto-refresh
-                ),
-                # Location component for URL-based map switching
-                dcc.Location(id="url-location", refresh=True),
-                # Hidden div for map switch trigger
-                html.Div(id="map-switch-trigger", style={"display": "none"}),
-            ],
-            style={"height": "100vh", "display": "flex", "flexDirection": "column"},
-        )
-
-        # Clientside callback for map switching - triggers page reload with new map_id in URL
-        app.clientside_callback(
-            """
-            function(selected_map_id, config) {
-                var current_map_id = config ? config.map_id : null;
-                if (!selected_map_id || selected_map_id === current_map_id) {
-                    return window.dash_clientside.no_update;
-                }
-
-                // Check if URL already has this map_id - if so, don't redirect (prevents loop)
-                var urlParams = new URLSearchParams(window.location.search);
-                var url_map_id = urlParams.get('map_id');
-                if (url_map_id === selected_map_id) {
-                    console.log('Map switch: URL already has map_id=' + selected_map_id + ', skipping redirect');
-                    return window.dash_clientside.no_update;
-                }
-
-                // Redirect to URL with map_id parameter (preserve site_id if present)
-                var site_id = urlParams.get('site_id') || (config ? config.site_id : null);
-                var new_url = '/?map_id=' + selected_map_id;
-                if (site_id) {
-                    new_url += '&site_id=' + site_id;
-                }
-                console.log('Map switch: redirecting to map_id=' + selected_map_id);
-                window.location.href = new_url;
-                return '';
-            }
-            """,
-            Output("map-switch-trigger", "children"),
-            [Input("map-selector-dropdown", "value")],
-            [State("map-config-store", "data")],
-            prevent_initial_call=True,
-        )
-
-        # Clientside callback to reload page after clone/delete to get fresh map data
-        app.clientside_callback(
-            """
-            function(cache_bust_data) {
-                if (!cache_bust_data || !cache_bust_data.trigger) {
-                    return window.dash_clientside.no_update;
-                }
-                // Check if this trigger was already processed (stored in sessionStorage)
-                var lastTrigger = parseInt(sessionStorage.getItem('lastCacheBustTrigger') || '0');
-                var currentTrigger = cache_bust_data.trigger;
-
-                // Only reload if trigger is NEW (greater than last processed)
-                if (currentTrigger > lastTrigger) {
-                    console.log('Cache bust: Reloading page to refresh map data '
-                        + '(trigger=' + currentTrigger + ', last=' + lastTrigger + ')');
-                    // Store this trigger as processed before reloading
-                    sessionStorage.setItem('lastCacheBustTrigger', currentTrigger.toString());
-                    // Small delay to allow status message to display briefly
-                    setTimeout(function() {
-                        window.location.reload();
-                    }, 1500);
-                }
-                return window.dash_clientside.no_update;
-            }
-            """,
-            Output("map-switch-trigger", "children", allow_duplicate=True),
-            [Input("cache-bust-store", "data")],
-            prevent_initial_call=True,
-        )
-
-        # Wave E2: handle_site_switch_from_dropdown, handle_site_from_url, sync_dropdown_with_url,
-        # and handle_url_map_switch now live in MapViewerCallbacks (registered below via
-        # viewer_callbacks.register_with(app)).
-        # Wave-A: register the 5 trivial UI-toggle callbacks via the
-        # extracted MapViewerCallbacks. This replaces the nested defs
-        # for apply_layer_toggles and display_click_data (and three more below).
-        # Waves B+C extend MapViewerCallbacks with 8 more callbacks
-        # (zone/panel toggles, origin click, delete map, label updates,
-        # zone actions). register_with(app) wires all 13 at once.
-        viewer_callbacks.register_with(app)  # Wires 13 callbacks (waves A+B+C)
-
-        # Wave C: update_shape_labels now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave E2: set_scale now lives in MapViewerCallbacks (registered below via
-        # viewer_callbacks.register_with(app)).
-        # Wave E2: api_session_ref closure removed; refresh callback now uses self._state.api_session_ref.
-
-        # Wave E1: execute_clone_operation now lives in MapViewerCallbacks
-        # (registered above via viewer_callbacks.register_with(app)).
-
-        # Wave E2: refresh_map_dropdown now lives in MapViewerCallbacks (registered below via
-        # viewer_callbacks.register_with(app)).
-        # Wave D: refresh_client_positions (now update_clients_traces) and refresh_rf_coverage
-        # (now update_coverage_heatmap) live in MapViewerCallbacks and are registered above
-        # via viewer_callbacks.register_with(app).
-
-        # Wave E2: dash binding + server boot extracted into helpers to drop parent CC.
-        dash_host, dash_port = self._resolve_dash_binding(os)  # Network binding + port
-        self._print_dash_startup_banner(dash_host, dash_port)  # User-facing banner
-        self._schedule_browser_open(dash_port)  # Background browser open (no-op in containers)
-        self._run_dash_server(app, dash_host, dash_port)  # Runs server + handles KeyboardInterrupt/Exception
-
-    @staticmethod
-    def _open_browser_after_delay(dash_port: int) -> None:
-        """Wait for the Dash server to start, then open the system browser to the viewer URL."""
-        import time  # Local import keeps top-of-file imports minimal
-        import webbrowser  # Stdlib browser launcher
-
-        logging.info("Browser auto-open: scheduling open to http://127.0.0.1:%s", dash_port)  # Trace start
-        time.sleep(1.5)  # Wait for Dash server to initialize (matches original delay)
-        webbrowser.open(f"http://127.0.0.1:{dash_port}")  # Launch system browser
-        logging.debug("Browser opened to http://127.0.0.1:%s", dash_port)  # Mirror original log
-
-    # ------------------------------------------------------------------
-    # Wave E2 helpers extracted from _launch_plotly_viewer to drive CC <= 10
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _resolve_coverage_count(coverage_data: dict | None) -> int:
-        """Return the number of grid results in ``coverage_data`` (0 if missing)."""
-        if not coverage_data:  # Original used a ternary; explicit guard preserves behavior
-            return 0
-        return len(coverage_data.get("results", []))
-
-    @staticmethod
-    def _normalize_optional_lists(all_maps: list | None, all_sites: list | None) -> tuple[list, list]:
-        """Coalesce optional list args to empty lists (drops two BoolOps from parent CC)."""
-        return all_maps if all_maps else [], all_sites if all_sites else []
-
-    def _try_import_dash_modules(self, map_data: dict, devices: list) -> tuple | None:
-        """Import dash + companions; on ImportError run the static fallback and return ``None``."""
-        logging.info("_try_import_dash_modules: attempting to import dash")  # Trace start
-        try:
-            logging.debug("Importing Dash modules for interactive viewer")  # Mirror original log
-            import dash  # Heavy module; local import keeps top-of-file imports minimal
-            from dash import Dash, Input, Output, State, dcc, html, no_update  # Names used in layout/callbacks
-
-            logging.info("Dash version: %s", dash.__version__)  # Mirror original log
-            return dash, Dash, Input, Output, State, dcc, html, no_update
-        except ImportError as e:  # Fallback path (mirrors original except block)
-            logging.exception("Failed to import Dash, falling back to static view: %s", e)
-            print("\n! Dash not available - using static Plotly view only")
-            print("! Install with: pip install dash")
-            self._create_static_plotly_map(map_data, devices)  # Render static figure instead
-            return None
-
-    @staticmethod
-    def _print_viewer_intro_banner() -> None:
-        """Print the user-facing 'LAUNCHING INTERACTIVE MAP VIEWER' banner (no decisions)."""
-        print("\n" + "-" * 80)
-        print("LAUNCHING INTERACTIVE MAP VIEWER")
-        print("-" * 80)
-        print("! Opening web browser with interactive map...")
-        print("! Features:")
-        print("!   - Toggle layers (walls, zones, wayfinding, devices, clients)")
-        print("!   - Live data refresh (clients update every 30s, RF every 5min)")
-        print("!   - Ruler tool - Draw lines to measure distances")
-        print("!   - Connected client visualization (green dots)")
-        print("!   - Click devices/clients to see details")
-        print("!   - Drag devices to new positions (future: save to cloud)")
-        print("!   - Pan and zoom")
-        print("! Press Ctrl+C in terminal to stop server")
-        print("-" * 80)
-
-    @staticmethod
-    def _add_background_image_to_figure(fig: object, map_data: dict, map_width: int, map_height: int) -> None:
-        """Add the map background image to the figure (gates the URL check internally)."""
-        if "url" not in map_data:  # Mirror original else-branch behavior
-            logging.warning("Map has no background image URL")
-            return
-        logging.debug("Adding map background image: %s...", str(map_data.get("url"))[:100])  # Mirror log
-        fig.add_layout_image(  # Plotly background-image API
-            source=map_data["url"],
-            x=0,
-            y=0,
-            sizex=map_width,
-            sizey=map_height,
-            xref="x",
-            yref="y",
-            sizing="stretch",
-            layer="below",
         )
 
     @staticmethod
-    def _categorize_devices_by_type(devices: list[dict]) -> dict[str, list[dict]]:
-        """Bucket devices by type filtered to those with both x and y coordinates."""
-        buckets: dict[str, list[dict]] = {"ap": [], "switch": [], "gateway": []}  # Mirror original keys
-        for device in devices:  # One pass; ignores devices without coords or unknown type
-            device_type = device.get("type", "unknown")
-            if device_type not in buckets:  # Skip unknown device types
-                continue
-            if "x" not in device or "y" not in device:  # Skip un-placed devices
-                continue
-            buckets[device_type].append(device)
-        return buckets
-
-    def _render_device_type_on_figure(
-        self,
-        fig: object,
-        type_devices: list[dict],
-        type_cfg: dict,
-        device_type: str,
-    ) -> None:
-        """Render markers + labels + mesh links + orientation markers for one device type."""
-        if not type_devices:  # Nothing to render for this type
-            return
-        coords = self._extract_device_coords(type_devices)  # x/y/names/orientations arrays
-        colors, hover_text = self._compute_device_visuals(type_devices, type_cfg)  # Per-device color + hover
-        self._log_device_orientations(type_devices)  # Debug log (mirror original)
-        self._add_device_marker_trace(fig, coords, type_cfg, colors, hover_text)  # Trace
-        self._add_device_name_labels(fig, coords, type_cfg, colors)  # Per-device label annotations
-        if device_type == "ap":  # Mirror original "ap" mesh-links branch
-            self._add_mesh_links(fig, type_devices)
-        self._add_orientation_markers_for_devices(fig, coords, colors, type_cfg)  # Crosshair + dot
-
-    @staticmethod
-    def _extract_device_coords(type_devices: list[dict]) -> dict[str, list]:
-        """Pull parallel x/y/names/orientations arrays from a list of device dicts."""
-        return {
-            "x_coords": [d["x"] for d in type_devices],
-            "y_coords": [d["y"] for d in type_devices],
-            "names": [d.get("name", d.get("mac", "Unknown")) for d in type_devices],
-            "orientations": [d.get("orientation", 0) for d in type_devices],
-        }
-
-    def _compute_device_visuals(self, type_devices: list[dict], type_cfg: dict) -> tuple[list[str], list[str]]:
-        """Compute per-device color array + per-device hover-text array."""
-        statuses = [self._get_device_status(device) for device in type_devices]  # Per-device status
-        colors = [type_cfg["colors"][status] for status in statuses]  # Status -> color
-        hover_text = [
-            self._build_device_hover_text(device, status) for device, status in zip(type_devices, statuses, strict=True)
-        ]
-        return colors, hover_text
-
-    @staticmethod
-    def _log_device_orientations(type_devices: list[dict]) -> None:
-        """Debug-log each device's orientation (mirrors original loop verbatim)."""
-        for device in type_devices:  # One log line per device
-            device_name = device.get("name", "Unnamed")
-            device_orientation = device.get("orientation", 0)
-            logging.debug("Device '%s': orientation=%s", device_name, device_orientation)
-
-    @staticmethod
-    def _add_device_marker_trace(
-        fig: object,
-        coords: dict[str, list],
-        type_cfg: dict,
-        colors: list[str],
-        hover_text: list[str],
-    ) -> None:
-        """Add the per-type marker Scatter trace (preserves original styling exactly)."""
-        import plotly.graph_objects as go  # Local import keeps top-level light
-
-        fig.add_trace(
-            go.Scatter(
-                x=coords["x_coords"],
-                y=coords["y_coords"],
-                mode="markers",
-                name=type_cfg["name"],
-                marker=dict(
-                    symbol=type_cfg["symbol"],
-                    size=type_cfg["size"],
-                    color=colors,
-                    line=dict(color="white", width=2),
-                    opacity=0.9,
-                ),
-                hovertext=hover_text,
-                hoverinfo="text",
-                visible=True,
-                showlegend=True,
-            )
-        )
-
-    @staticmethod
-    def _add_device_name_labels(
-        fig: object,
-        coords: dict[str, list],
-        type_cfg: dict,
-        colors: list[str],
-    ) -> None:
-        """Add per-device name labels as annotations (preserves original styling)."""
-        for _, (x, y, name, device_color) in enumerate(
-            zip(coords["x_coords"], coords["y_coords"], coords["names"], colors, strict=True)
-        ):
-            fig.add_annotation(
-                x=x,
-                y=y - 15,  # Position above marker
-                text=f"<b>{name}</b>",
-                showarrow=False,
-                font=dict(size=11, color="white", family="Arial Black"),
-                bgcolor="rgba(0,0,0,0.85)",
-                bordercolor=device_color,
-                borderwidth=2,
-                borderpad=3,
-                xanchor="center",
-                yanchor="bottom",
-                name=f"{type_cfg['name']} Label",
-            )
-
-    def _add_orientation_markers_for_devices(
-        self,
-        fig: object,
-        coords: dict[str, list],
-        colors: list[str],
-        type_cfg: dict,
-    ) -> None:
-        """Add Mist-style orientation crosshair + directional dot for each device."""
-        for x, y, angle, device_color in zip(
-            coords["x_coords"], coords["y_coords"], coords["orientations"], colors, strict=True
-        ):
-            self._add_device_orientation_markers(
-                fig,
-                MarkerPosition(x=x, y=y),
-                DeviceMarkerStyle(angle=angle, device_color=device_color, type_cfg=type_cfg),
-            )
-
-    @staticmethod
-    def _maybe_add_heatmap_trace(
-        ctx: HeatmapRenderCtx,
-        dims: MapDimensions,
-    ) -> None:
-        """Build the RF coverage heatmap trace and add it to ``fig`` when non-None."""
-        fig = ctx.fig  # Unpack Plotly figure handle the heatmap trace appends to.
-        heatmap_renderer = ctx.heatmap_renderer  # Unpack renderer that converts coverage data to a trace.
-        coverage_data = ctx.coverage_data  # Unpack coverage payload (None skips the heatmap entirely).
-        ppm = dims.ppm  # Unpack pixels-per-meter ratio so the renderer scales the heatmap correctly.
-        map_width = dims.width_px  # Unpack map pixel width for the renderer bounds.
-        map_height = dims.height_px  # Unpack map pixel height for the renderer bounds.
-        heatmap_trace = heatmap_renderer.build_heatmap_trace(
-            coverage_data=coverage_data, ppm=ppm, map_width=map_width, map_height=map_height
-        )
-        if heatmap_trace is None:  # Mirror original guard
-            return
-        fig.add_trace(heatmap_trace)
-
-    @staticmethod
-    def _add_origin_marker_trace(fig: object, map_data: dict, go: object) -> None:
-        """Add the map-origin marker trace (hidden by default; mirrors original)."""
-        origin = map_data.get("origin") or {}  # Drop ``or {}`` BoolOp from parent
-        origin_x = origin.get("x", 0)
-        origin_y = origin.get("y", 0)
-        fig.add_trace(
-            go.Scatter(
-                x=[origin_x],
-                y=[origin_y],
-                mode="markers+text",
-                name="Map Origin",
-                marker=dict(symbol="x", size=20, color="yellow", line=dict(width=3, color="black")),
-                text=["Origin (0,0)"],
-                textposition="top center",
-                textfont=dict(size=12, color="yellow"),
-                visible=False,
-                showlegend=True,
-            )
-        )
-
-    @staticmethod
-    def _add_origin_crosshair(fig: object, map_data: dict) -> None:
-        """Add a blue crosshair (horizontal line + vertical line + center dot) at the origin point."""
-        import plotly.graph_objects as go  # Local import keeps top-level light
-
-        origin_x = map_data.get("origin_x", 0)  # Pixel-space origin x
-        origin_y = map_data.get("origin_y", 0)  # Pixel-space origin y
-        crosshair_size = 40  # Match original size
-        fig.add_trace(  # Horizontal line
-            go.Scatter(
-                x=[origin_x - crosshair_size, origin_x + crosshair_size],
-                y=[origin_y, origin_y],
-                mode="lines",
-                line=dict(color="#00bfff", width=3),
-                name="Origin",
-                showlegend=True,
-                hovertext=f"Origin: ({origin_x}, {origin_y})",
-                hoverinfo="text",
-            )
-        )
-        fig.add_trace(  # Vertical line
-            go.Scatter(
-                x=[origin_x, origin_x],
-                y=[origin_y - crosshair_size, origin_y + crosshair_size],
-                mode="lines",
-                line=dict(color="#00bfff", width=3),
-                showlegend=False,
-                hovertext=f"Origin: ({origin_x}, {origin_y})",
-                hoverinfo="text",
-            )
-        )
-        fig.add_trace(  # Center dot
-            go.Scatter(
-                x=[origin_x],
-                y=[origin_y],
-                mode="markers",
-                marker=dict(size=12, color="#00bfff", line=dict(color="white", width=2)),
-                name="Origin Point",
-                showlegend=False,
-                hovertext=f"Origin: ({origin_x}, {origin_y})",
-                hoverinfo="text",
-            )
-        )
-
-    @staticmethod
-    def _build_selector_options(all_maps: list[dict], all_sites: list[dict]) -> tuple[list[dict], list[dict]]:
-        """Build (map_dropdown_options, site_dropdown_options) for the selectors."""
-        map_options = [{"label": m.get("name", "Unnamed"), "value": m.get("id")} for m in all_maps]
-        sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())  # Sort by name
-        site_options = [{"label": s.get("name", "Unnamed Site"), "value": s.get("id")} for s in sites_sorted]
-        return map_options, site_options
-
-    @staticmethod
-    def _build_zone_toggle_widget(zones: list[dict], dcc: object, html: object) -> object:
-        """Build either a zone-toggle Checklist or a 'no zones' placeholder paragraph."""
-        if not zones:  # Mirror original else-branch
-            return html.P(
-                "No zones on this map",
-                style={"color": "#888", "fontSize": "12px", "fontStyle": "italic"},
-            )
-        return dcc.Checklist(  # Mirror original Checklist construction byte-for-byte
-            id="zone-toggle",
-            options=[
-                {
-                    "label": f" {zone.get('name', f'Zone {i + 1}')}",
-                    "value": zone.get("id", f"zone_{i}"),
-                }
-                for i, zone in enumerate(zones)
-            ],
-            value=[zone.get("id", f"zone_{i}") for i, zone in enumerate(zones)],
-            labelStyle={
-                "display": "block",
-                "margin": "8px 0",
-                "fontSize": "13px",
-                "color": "#e0e0e0",
-            },
-            style={"marginBottom": "15px"},
-        )
-
-    @staticmethod
-    def _resolve_dash_binding(os_mod: object) -> tuple[str, int]:
-        """Resolve Dash server bind host + port (container-aware, ``DASH_PORT`` override)."""
-        dash_host = "127.0.0.1"  # Default to loopback for safety
-        if is_running_in_container():  # In container -> bind all interfaces
-            dash_host = "0.0.0.0"  # nosec B104 — container must bind all interfaces
-        dash_port = int(os_mod.getenv("DASH_PORT", "8050"))  # Use port 8050 by default
-        return dash_host, dash_port
-
-    @staticmethod
-    def _print_dash_startup_banner(dash_host: str, dash_port: int) -> None:
-        """Print the user-facing 'Starting Dash server...' banner."""
-        print("\nStarting Dash server...")
-        if is_running_in_container():  # Container-specific lines
-            print(f"! Map viewer available at http://<container-ip>:{dash_port}")
-            print(f"! Access from host: http://localhost:{dash_port} (if port is mapped)")
-        else:
-            print("! Map viewer will open in your default browser")
-        print("! Press Ctrl+C to stop the server\n")
-        logging.info("Starting Dash server on http://%s:%s", dash_host, dash_port)  # Mirror original log
-
-    def _schedule_browser_open(self, dash_port: int) -> None:
-        """Start a daemon thread that opens the browser shortly after server boots (skip in container)."""
-        if is_running_in_container():  # No display in container; skip browser
-            return
-        import threading  # Local import keeps top-of-file lean
-
-        threading.Thread(  # Background thread -> _open_browser_after_delay
-            target=self._open_browser_after_delay, args=(dash_port,), daemon=True
-        ).start()
-
-    @staticmethod
-    def _run_dash_server(app: object, dash_host: str, dash_port: int) -> None:
-        """Run the Dash server with the project's standard kwargs, handling Ctrl+C + errors."""
-        try:
-            debug_mode = getattr(globals().get("args"), "debug", False)  # CLI --debug flag if present
-            logging.info("Starting Dash server with debug_mode=%s", debug_mode)  # Mirror original log
-            app.run(  # Dash 3.x uses app.run() instead of app.run_server()
-                host=dash_host,
-                port=dash_port,
-                debug=debug_mode,
-                use_reloader=False,  # Disable reloader to prevent double-execution
-                threaded=True,
-            )
-        except KeyboardInterrupt:  # Mirror original user-cancel path
-            print("\n\nMap viewer stopped by user")
-            logging.info("Interactive map viewer stopped by user (Ctrl+C)")
-        except Exception as e:  # Mirror original catch-all
-            logging.exception("Error running Dash server: %s", e)
-            print(f"\n! Error running map viewer: {e}")
-
-    @staticmethod
-    def _resolve_site_name(all_sites: list[dict], site_id: str) -> str:
+    def _resolve_site_name(
+        all_sites: list[dict], site_id: str
+    ) -> str:  # WHY: declare private helper _resolve_site_name
         """Look up a site's display name from the cached site list, or 'Unknown'."""
-        for site in all_sites:
-            if site.get("id") == site_id:
-                return site.get("name", "Unknown")
-        return "Unknown"
+        for site in all_sites:  # WHY: iterate collection
+            if site.get("id") == site_id:  # WHY: branch on condition
+                return site.get("name", "Unknown")  # WHY: return computed result
+        return "Unknown"  # WHY: return computed result
 
     @staticmethod
-    def _extract_graph_segments(graph_data: dict) -> list[dict]:
+    def _extract_graph_segments(graph_data: dict) -> list[dict]:  # WHY: declare private helper _extract_graph_segments
         """Convert a Mist graph payload (nodes + edges) into x1/y1/x2/y2 line segments."""
-        if not graph_data:
-            return []
-        nodes = graph_data.get("nodes", [])
-        if not nodes:
-            return []
-        node_lookup = MapsManager._build_node_position_lookup(nodes)
-        return MapsManager._edges_to_segments(nodes, node_lookup)
+        if not graph_data:  # WHY: guard against missing precondition
+            return []  # WHY: return computed result
+        nodes = graph_data.get("nodes", [])  # WHY: compute nodes
+        if not nodes:  # WHY: guard against missing precondition
+            return []  # WHY: return computed result
+        node_lookup = MapsManager._build_node_position_lookup(nodes)  # WHY: compute node_lookup
+        return MapsManager._edges_to_segments(nodes, node_lookup)  # WHY: return computed result
 
     @staticmethod
-    def _build_node_position_lookup(nodes: list[dict]) -> dict[str, dict[str, float]]:
+    def _build_node_position_lookup(
+        nodes: list[dict],
+    ) -> dict[str, dict[str, float]]:  # WHY: declare private helper _build_node_position_lookup
         """Map node name -> {x, y} for any node that has a position."""
-        lookup: dict[str, dict[str, float]] = {}
-        for node in nodes:
-            position = node.get("position", {})
-            if position:
-                lookup[node.get("name", "")] = {
+        lookup: dict[str, dict[str, float]] = {}  # WHY: assign computed value
+        for node in nodes:  # WHY: iterate collection
+            position = node.get("position", {})  # WHY: compute position
+            if position:  # WHY: branch on condition
+                lookup[node.get("name", "")] = {  # WHY: assign computed value
                     "x": position.get("x", 0),
                     "y": position.get("y", 0),
                 }
-        return lookup
+        return lookup  # WHY: return computed result
 
     @staticmethod
-    def _edges_to_segments(nodes: list[dict], node_lookup: dict[str, dict[str, float]]) -> list[dict]:
-        """Walk every (node, edge) pair and emit a connecting segment when both ends are known."""
-        segments: list[dict] = []
-        for node in nodes:
-            position = node.get("position", {})
-            edges = node.get("edges", {})
-            if not (position and edges):
-                continue
-            start_x = position.get("x", 0)
-            start_y = position.get("y", 0)
-            for edge_name in edges.keys():
-                end = node_lookup.get(edge_name)
-                if end is None:
-                    continue
-                segments.append({"x1": start_x, "y1": start_y, "x2": end["x"], "y2": end["y"]})
-        return segments
+    def _node_edge_segments(
+        node: dict, node_lookup: dict[str, dict[str, float]]
+    ) -> list[dict]:  # WHY: declare private helper _node_edge_segments
+        """Return every segment connecting one node's edges to their target positions."""
+        position = node.get("position", {})  # Origin coordinates for this node.
+        edges = node.get("edges", {})  # Mapping of edge name -> target metadata.
+        if not (position and edges):  # Node must have both a position and outgoing edges.
+            return []  # Nothing to emit for isolated / positionless nodes.
+        start_x = position.get("x", 0)  # Origin x pixel coordinate.
+        start_y = position.get("y", 0)  # Origin y pixel coordinate.
+        segments: list[dict] = []  # Accumulate the segments from this node.
+        for edge_name in edges.keys():  # Iterate every outgoing edge by target name.
+            end = node_lookup.get(edge_name)  # Look up destination position by name.
+            if end is None:  # Skip edges whose destination we cannot locate.
+                continue  # Ignore orphan edge entries.
+            segments.append({"x1": start_x, "y1": start_y, "x2": end["x"], "y2": end["y"]})  # Line seg.
+        return segments  # Hand back the per-node segments.
 
-    def _extract_walls(self, map_data: dict) -> list[dict]:
+    @staticmethod
+    def _edges_to_segments(
+        nodes: list[dict], node_lookup: dict[str, dict[str, float]]
+    ) -> list[dict]:  # WHY: declare private helper _edges_to_segments
+        """Walk every (node, edge) pair and emit a connecting segment when both ends are known."""
+        segments: list[dict] = []  # Accumulate segments across all nodes.
+        for node in nodes:  # Iterate the graph nodes in order.
+            segments.extend(MapsManager._node_edge_segments(node, node_lookup))  # Merge per-node output.
+        return segments  # Hand back the complete segment list.
+
+    def _extract_walls(self, map_data: dict) -> list[dict]:  # WHY: declare private helper _extract_walls
         """Pull wall segments from the map's wall_path graph, log the count, return segments."""
-        wall_data = map_data.get("wall_path", {})
-        if wall_data:
-            logging.debug("[Flask API] Raw wall_path data: %s", wall_data)
-        walls = self._extract_graph_segments(wall_data)
-        if walls:
-            logging.info(
+        wall_data = map_data.get("wall_path", {})  # WHY: compute wall_data
+        if wall_data:  # WHY: branch on condition
+            logging.debug("[Flask API] Raw wall_path data: %s", wall_data)  # WHY: action-log after operation
+        walls = self._extract_graph_segments(wall_data)  # WHY: compute walls
+        if walls:  # WHY: branch on condition
+            logging.info(  # WHY: action-log before operation
                 "[Flask API] Extracted %s wall segments from %s nodes",
                 len(walls),
                 len(wall_data.get("nodes", [])),
             )
-        return walls
+        return walls  # WHY: return computed result
 
-    def _extract_wayfinding(self, map_data: dict) -> list[dict]:
+    def _extract_wayfinding(self, map_data: dict) -> list[dict]:  # WHY: declare private helper _extract_wayfinding
         """Pull wayfinding segments from the map's wayfinding_path graph."""
-        wayfinding_data = map_data.get("wayfinding_path", {})
-        if wayfinding_data:
-            logging.debug("[Flask API] Raw wayfinding_path data: %s", wayfinding_data)
-        wayfinding = self._extract_graph_segments(wayfinding_data)
-        if wayfinding:
-            logging.info(
+        wayfinding_data = map_data.get("wayfinding_path", {})  # WHY: compute wayfinding_data
+        if wayfinding_data:  # WHY: branch on condition
+            logging.debug(
+                "[Flask API] Raw wayfinding_path data: %s", wayfinding_data
+            )  # WHY: action-log after operation
+        wayfinding = self._extract_graph_segments(wayfinding_data)  # WHY: compute wayfinding
+        if wayfinding:  # WHY: branch on condition
+            logging.info(  # WHY: action-log before operation
                 "[Flask API] Extracted %s wayfinding segments from %s nodes",
                 len(wayfinding),
                 len(wayfinding_data.get("nodes", [])),
             )
-        return wayfinding
-
-    @staticmethod
-    def _map_device_record(device: dict) -> dict:
-        """Project a Mist device-stats record down to the viewer's display fields."""
-        return {
-            "x": device.get("x"),
-            "y": device.get("y"),
-            "name": device.get("name", device.get("mac", "Unknown")),
-            "type": device.get("type", "ap"),
-            "status": device.get("status", "unknown"),
-            "mac": device.get("mac", ""),
-            "orientation": device.get("orientation", 0),
-        }
-
-    def _fetch_map_devices(self, api_session, site_id: str, map_id: str) -> list[dict]:
-        """Fetch site devices and return only those located on this map."""
-        try:
-            response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
-                api_session, site_id=site_id, type="all", limit=1000
-            )
-            if response.status_code != 200 or not response.data:
-                return []
-            return [
-                self._map_device_record(d)
-                for d in response.data
-                if d.get("map_id") == map_id and d.get("x") is not None
-            ]
-        except Exception as e:
-            logging.warning("Error fetching devices: %s", e)
-            return []
-
-    def _fetch_map_zones(self, api_session, site_id: str, map_id: str) -> list[dict]:
-        """Fetch zones for this site and filter to those bound to the requested map."""
-        try:
-            response = mistapi.api.v1.sites.zones.listSiteZones(api_session, site_id=site_id)
-            if response.status_code != 200 or not response.data:
-                return []
-            return [
-                {"name": z.get("name", "Zone"), "vertices": z.get("vertices", [])}
-                for z in response.data
-                if z.get("map_id") == map_id
-            ]
-        except Exception as e:
-            logging.warning("Error fetching zones: %s", e)
-            return []
-
-    @staticmethod
-    def _map_wifi_client_record(client: dict) -> dict:
-        """Project a wireless-client stats record down to the viewer's display fields."""
-        return {
-            "x": client.get("x"),
-            "y": client.get("y"),
-            "mac": client.get("mac", "Unknown"),
-            "ssid": client.get("ssid", "-"),
-            "name": client.get("hostname", "") or client.get("name", ""),
-        }
-
-    def _fetch_map_wifi_clients(self, api_session, site_id: str, map_id: str) -> list[dict]:
-        """Fetch connected WiFi clients on this map."""
-        try:
-            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(api_session, site_id=site_id)
-            if response.status_code != 200 or not response.data:
-                return []
-            return [
-                self._map_wifi_client_record(c)
-                for c in response.data
-                if c.get("map_id") == map_id and c.get("x") is not None
-            ]
-        except Exception as e:
-            logging.warning("Error fetching WiFi clients: %s: %s", type(e).__name__, str(e))
-            return []
-
-    def _fetch_map_unconnected_clients(self, api_session, site_id: str, map_id: str) -> list[dict]:
-        """Fetch unconnected WiFi client stats for this map."""
-        try:
-            response = mistapi.api.v1.sites.stats.listSiteUnconnectedClientStats(
-                api_session, site_id=site_id, map_id=map_id
-            )
-            if response.status_code != 200 or not response.data:
-                return []
-            return [
-                {
-                    "x": c.get("x"),
-                    "y": c.get("y"),
-                    "mac": c.get("mac", "Unknown"),
-                    "manufacture": c.get("manufacture", "-"),
-                }
-                for c in response.data
-                if c.get("x") is not None
-            ]
-        except Exception as e:
-            logging.warning("Error fetching unconnected clients: %s: %s", type(e).__name__, str(e))
-            return []
-
-    def _fetch_map_ble_devices(self, api_session, site_id: str, map_id: str) -> list[dict]:
-        """Fetch BLE-discovered assets bound to this map."""
-        try:
-            response = mistapi.api.v1.sites.stats.listSiteDiscoveredAssets(api_session, site_id=site_id)
-            if response.status_code != 200 or not response.data:
-                return []
-            return [
-                {"x": d.get("x"), "y": d.get("y"), "mac": d.get("mac", "Unknown")}
-                for d in response.data
-                if d.get("map_id") == map_id and d.get("x") is not None
-            ]
-        except Exception as e:
-            logging.warning("Error fetching BLE devices: %s", e)
-            return []
-
-    def _fetch_map_assets(self, api_session, site_id: str, map_id: str) -> list[dict]:
-        """Fetch named assets bound to this map."""
-        try:
-            response = mistapi.api.v1.sites.stats.listSiteAssetsStats(api_session, site_id=site_id)
-            if response.status_code != 200 or not response.data:
-                return []
-            return [
-                {
-                    "x": a.get("x"),
-                    "y": a.get("y"),
-                    "name": a.get("name", "Asset"),
-                    "mac": a.get("mac", "-"),
-                }
-                for a in response.data
-                if a.get("map_id") == map_id and a.get("x") is not None
-            ]
-        except Exception as e:
-            logging.warning("Error fetching assets: %s: %s", type(e).__name__, str(e))
-            return []
-
-    def _fetch_map_sdk_clients(self, api_session, site_id: str, map_id: str) -> list[dict]:
-        """Fetch SDK/Marvis indoor-location clients for this map."""
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteSdkStatsByMap(api_session, site_id=site_id, map_id=map_id)
-            if response.status_code != 200 or not response.data:
-                return []
-            return [
-                {
-                    "x": c.get("x"),
-                    "y": c.get("y"),
-                    "name": c.get("name", ""),
-                    "uuid": c.get("uuid", "-"),
-                }
-                for c in response.data
-                if c.get("x") is not None
-            ]
-        except Exception as e:
-            logging.warning("Error fetching SDK clients: %s", e)
-            return []
-
-    @staticmethod
-    def _resolve_coverage_indices(result_def: list[str]) -> tuple[int, int, int]:
-        """Return (x_idx, y_idx, rssi_idx) into a coverage row, with a -1 RSSI sentinel."""
-        try:
-            x_idx = result_def.index("x")
-            y_idx = result_def.index("y")
-            if "max_rssi" in result_def:
-                rssi_idx = result_def.index("max_rssi")
-            elif "avg_rssi" in result_def:
-                rssi_idx = result_def.index("avg_rssi")
-            else:
-                rssi_idx = -1
-            return x_idx, y_idx, rssi_idx
-        except ValueError:
-            return 0, 1, 4
-
-    @staticmethod
-    def _coverage_row_to_point(item: list, indices: tuple[int, int, int], ppm_value: float) -> dict | None:
-        """Convert a coverage result row to a {x, y, rssi} point in pixel space."""
-        x_idx, y_idx, rssi_idx = indices
-        if len(item) <= max(x_idx, y_idx, rssi_idx):
-            return None
-        x_m = item[x_idx]
-        y_m = item[y_idx]
-        rssi = item[rssi_idx] if rssi_idx >= 0 else -80
-        if x_m is None or y_m is None or rssi is None:
-            return None
-        return {"x": x_m * ppm_value, "y": y_m * ppm_value, "rssi": rssi}
-
-    def _fetch_coverage_layer(
-        self,
-        api_session,
-        site_id: str,
-        map_id: str,
-        coverage_type: str,
-        ppm_value: float,
-    ) -> list[dict] | None:
-        """Fetch one coverage layer (client/asset/sdkclient) and convert meters to pixels."""
-        try:
-            coverage_url = f"/api/v1/sites/{site_id}/location/coverage"
-            params = {
-                "resolution": "fine",
-                "duration": "1d",
-                "map_id": map_id,
-                "type": coverage_type,
-                "from_apollo": "true",
-            }
-            logging.info("[Flask API] Fetching %s coverage for map %s", coverage_type, map_id)
-            response = api_session.mist_get(coverage_url, query=params)
-            if response.status_code != 200:
-                return None
-            return self._coverage_response_to_grid(response.data, ppm_value, coverage_type)
-        except Exception as e:
-            logging.warning("Error fetching %s coverage: %s", coverage_type, e)
-            return None
-
-    def _coverage_response_to_grid(self, coverage_data, ppm_value: float, coverage_type: str) -> list[dict] | None:
-        """Parse a coverage API payload into a list of grid points, or None on error."""
-        if isinstance(coverage_data, dict) and "exception" in coverage_data:
-            logging.warning("[Flask API] %s coverage API error", coverage_type)
-            return None
-        results = coverage_data.get("results", [])
-        result_def = coverage_data.get("result_def", [])
-        if not (results and result_def):
-            return None
-        indices = self._resolve_coverage_indices(result_def)
-        grid_points = [
-            point
-            for point in (self._coverage_row_to_point(r, indices, ppm_value) for r in results)
-            if point is not None
-        ]
-        logging.info(
-            "[Flask API] %s coverage: %s grid points (ppm=%s)",
-            coverage_type,
-            len(grid_points),
-            ppm_value,
-        )
-        return grid_points
-
-    def _fetch_all_coverage(self, api_session, site_id: str, map_id: str, ppm: float) -> tuple[list, list, list]:
-        """Fetch WiFi + BLE + App coverage layers (each one is None-safe)."""
-        if not ppm:
-            return [], [], []
-        wifi = self._fetch_coverage_layer(api_session, site_id, map_id, "client", ppm) or []
-        ble = self._fetch_coverage_layer(api_session, site_id, map_id, "asset", ppm) or []
-        app = self._fetch_coverage_layer(api_session, site_id, map_id, "sdkclient", ppm) or []
-        return wifi, ble, app
-
-    @staticmethod
-    def _count_devices_by_type(devices: list[dict]) -> tuple[int, int, int]:
-        """Return (ap_count, switch_count, gateway_count) by walking the device list once."""
-        ap_count = sum(1 for d in devices if d.get("type") == "ap" or not d.get("type"))
-        switch_count = sum(1 for d in devices if d.get("type") == "switch")
-        gateway_count = sum(1 for d in devices if d.get("type") == "gateway")
-        return ap_count, switch_count, gateway_count
+        return wayfinding  # WHY: return computed result
 
     def _collect_map_payload(
-        self, api_session, all_sites: list[dict], site_id: str, map_id: str
-    ) -> tuple[dict | None, tuple]:
-        """Gather every layer needed to render this map.
-
-        Returns ``(map_data, layers_tuple)`` or ``(None, ())`` on missing map.
-        """
-        site_name = self._resolve_site_name(all_sites, site_id)
-        map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
-        if map_response.status_code != 200:
-            return None, ()
-        map_data = map_response.data
-        ppm = map_data.get("ppm", 1.0)
-        walls = self._extract_walls(map_data)
-        wayfinding = self._extract_wayfinding(map_data)
-        devices = self._fetch_map_devices(api_session, site_id, map_id)
-        zones = self._fetch_map_zones(api_session, site_id, map_id)
-        wifi_clients = self._fetch_map_wifi_clients(api_session, site_id, map_id)
-        unconnected = self._fetch_map_unconnected_clients(api_session, site_id, map_id)
-        ble_devices = self._fetch_map_ble_devices(api_session, site_id, map_id)
-        assets = self._fetch_map_assets(api_session, site_id, map_id)
-        sdk_clients = self._fetch_map_sdk_clients(api_session, site_id, map_id)
-        wifi_cov, ble_cov, app_cov = self._fetch_all_coverage(api_session, site_id, map_id, ppm)
-        layers = (
-            site_name,
-            walls,
-            wayfinding,
-            devices,
-            zones,
-            wifi_clients,
-            unconnected,
-            ble_devices,
-            assets,
-            sdk_clients,
-            wifi_cov,
-            ble_cov,
-            app_cov,
-        )
-        return map_data, layers
-
-    def _build_map_data_response(self, site_id: str, map_id: str, map_data: dict, layers: tuple) -> dict:
-        """Assemble the final JSON dict returned by the /api/map endpoint."""
-        (
-            site_name,
-            walls,
-            wayfinding,
-            devices,
-            zones,
-            wifi_clients,
-            unconnected,
-            ble_devices,
-            assets,
-            sdk_clients,
-            wifi_cov,
-            ble_cov,
-            app_cov,
-        ) = layers
-        ap_count, switch_count, gateway_count = self._count_devices_by_type(devices)
-        original_url = map_data.get("url", "")
-        image_url = f"/api/map-image/{site_id}/{map_id}" if original_url else ""
-        return {
-            "site_id": site_id,
-            "site_name": site_name,
-            "map_id": map_id,
-            "map_name": map_data.get("name", "Unnamed"),
-            "width": map_data.get("width", 1000),
-            "height": map_data.get("height", 1000),
-            "image_url": image_url,
-            "ppm": map_data.get("ppm", 1.0),
-            "devices": devices,
-            "device_count": len(devices),
-            "ap_count": ap_count,
-            "switch_count": switch_count,
-            "gateway_count": gateway_count,
-            "zones": zones,
-            "zone_count": len(zones),
-            "wifi_clients": wifi_clients,
-            "wifi_client_count": len(wifi_clients),
-            "unconnected_clients": unconnected,
-            "unconnected_client_count": len(unconnected),
-            "ble_devices": ble_devices,
-            "ble_device_count": len(ble_devices),
-            "assets": assets,
-            "asset_count": len(assets),
-            "sdk_clients": sdk_clients,
-            "sdk_client_count": len(sdk_clients),
-            "walls": walls,
-            "wall_count": len(walls),
-            "wayfinding": wayfinding,
-            "wayfinding_count": len(wayfinding),
-            "wifi_coverage": wifi_cov,
-            "ble_coverage": ble_cov,
-            "app_coverage": app_cov,
-        }
-
-    def _handle_map_data_request(self, api_session, all_sites: list[dict], site_id: str, map_id: str):
-        """Top-level orchestrator for the Flask /api/map endpoint. Returns a Flask Response."""
-        from flask import jsonify
-
-        logging.info("[Flask API] Fetching map data for site %s, map %s", site_id, map_id)
-        try:
-            map_data, layers = self._collect_map_payload(api_session, all_sites, site_id, map_id)
-            if map_data is None:
-                return jsonify({"error": "Map not found"}), 404
-            payload = self._build_map_data_response(site_id, map_id, map_data, layers)
-            return jsonify(payload)
-        except Exception as e:
-            logging.exception("Error fetching map data: %s", e)
-            return jsonify({"error": "Failed to fetch map data. Check server logs for details."}), 500
-
-    @staticmethod
-    def _render_viewer_page(
-        html_template: str,
-        json_module,
-        render_template_string,
-        initial_site_id: str,
-        initial_map_id: str,
-        all_sites: list[dict],
-        all_maps: list[dict],
-    ):
-        """Render the Flask root page; injects sorted-sites + maps JSON into the HTML template."""
-        sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())
-        sites_json = json_module.dumps([{"id": s.get("id"), "name": s.get("name", "Unnamed")} for s in sites_sorted])
-        maps_json = json_module.dumps([{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in all_maps])
-        return render_template_string(
-            html_template,
-            initial_site_id=initial_site_id,
-            initial_map_id=initial_map_id,
-            all_sites_json=sites_json,
-            all_maps_json=maps_json,
-        )
-
-    @staticmethod
-    def _handle_site_maps_request(api_session, jsonify, site_id: str):
-        """Flask /api/site/<id>/maps handler -- returns the site's maps list as JSON."""
-        logging.info("[Flask API] Fetching maps for site %s", site_id)
-        try:
-            response = mistapi.api.v1.sites.maps.listSiteMaps(api_session, site_id=site_id)
-            if response.status_code != 200 or not response.data:
-                return jsonify({"maps": []})
-            maps = [{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in response.data]
-            return jsonify({"maps": maps})
-        except Exception as e:
-            logging.exception("Error fetching maps: %s", e)
-            return (
-                jsonify({"error": "Failed to fetch maps. Check server logs for details.", "maps": []}),
-                500,
-            )
-
-    @staticmethod
-    def _fetch_map_image_bytes(api_session, site_id: str, map_id: str):
-        """Look up the map record, fetch its image bytes with auth. Returns (response, error_tuple)."""
-        import requests as req_lib
-
-        map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
-        if map_response.status_code != 200:
-            return None, ("Map not found", 404)
-        image_url = map_response.data.get("url", "")
-        if not image_url:
-            return None, ("No image URL", 404)
-        token = getattr(api_session, "_api_token", "")
-        headers = {"Authorization": f"Token {token}"} if token else {}
-        image_response = req_lib.get(image_url, headers=headers, timeout=30)
-        return image_response, None
-
-    @classmethod
-    def _handle_map_image_request(cls, api_session, site_id: str, map_id: str):
-        """Flask /api/map-image/<site>/<map> handler -- proxies the authenticated image fetch."""
-        from flask import Response
-
-        logging.info("[Flask API] Fetching map image for site %s, map %s", site_id, map_id)
-        try:
-            image_response, error = cls._fetch_map_image_bytes(api_session, site_id, map_id)
-            if error is not None:
-                return error
-            if image_response.status_code != 200:
-                logging.warning("Failed to fetch image: %s", image_response.status_code)
-                return f"Image fetch failed: {image_response.status_code}", 404
-            content_type = image_response.headers.get("Content-Type", "image/png")
-            return Response(image_response.content, mimetype=content_type)
-        except Exception as e:
-            logging.exception("Error fetching map image: %s", e)
-            return "Failed to fetch map image. Check server logs for details.", 500
-
-    @staticmethod
-    def _resolve_flask_bind_address() -> tuple[str, int]:
-        """Return ``(host, port)`` for the Flask server, binding all interfaces in a container."""
-        port = 8050
-        if is_running_in_container():
-            logging.debug("Container detected: binding Flask to 0.0.0.0")
-            return "0.0.0.0", port  # nosec B104 - container must bind all interfaces
-        return "127.0.0.1", port
-
-    @staticmethod
-    def _print_flask_viewer_banner(host: str, port: int) -> None:
-        """Print the pre-launch ASCII banner that lists URL + key features."""
-        print("\n" + "-" * 80)
-        print("LAUNCHING FLASK MAP VIEWER")
-        print("-" * 80)
-        print(f"! Server URL: http://{host}:{port}")
-        print("! Features:")
-        print("!   - Site and map switching via dropdowns")
-        print("!   - Device, zone, and client visualization")
-        print("!   - Pan and zoom controls")
-        print("!   - Refresh button for live data")
-        print("! Press Ctrl+C to stop server")
-        print("-" * 80)
-
-    @staticmethod
-    def _maybe_open_browser(port: int) -> None:
-        """Spawn a daemon thread to open the browser after a short delay, unless in a container."""
-        import threading
-        import webbrowser
-
-        if is_running_in_container():
-            return  # Containerized -- caller will open the browser externally
-
-        def open_browser() -> None:
-            """Wait briefly then point the default browser at the local Flask server."""
-            import time
-
-            time.sleep(1.5)
-            webbrowser.open(f"http://127.0.0.1:{port}")
-
-        threading.Thread(target=open_browser, daemon=True).start()
-
-    @staticmethod
-    def _run_flask_server(flask_app, host: str, port: int) -> None:
-        """Run the Flask server until interrupted; mirror the original KeyboardInterrupt path."""
-        try:
-            logging.info("Starting Flask server on http://%s:%s", host, port)
-            flask_app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)
-        except KeyboardInterrupt:
-            print("\n\nFlask map viewer stopped by user")
-            logging.info("Flask map viewer stopped by user (Ctrl+C)")
-        except Exception as e:
-            logging.exception("Error running Flask server: %s", e)
-            print(f"\n! Error running map viewer: {e}")
-
-    def _launch_flask_viewer(
-        self, initial_site_id: str, initial_map_id: str, all_sites: list[dict], all_maps: list[dict]
-    ):
-        """Launch interactive Flask-based map viewer (simpler alternative to Dash).
-
-        This viewer uses Flask for server-side rendering and Plotly.js for client-side
-        map display. Site/map switching is handled via JavaScript fetch() calls to
-        Flask API endpoints, which is more reliable than Dash callbacks.
-
-        Args:
-            initial_site_id: Site ID to load initially
-            initial_map_id: Map ID to load initially
-            all_sites: List of all sites in the organization
-            all_maps: List of maps for the initial site
-        """
-        import json as json_module
-
-        from flask import Flask, jsonify, render_template_string
-
-        logging.info("_launch_flask_viewer: Starting Flask viewer for site %s, map %s", initial_site_id, initial_map_id)
-
-        flask_app = Flask(__name__)
-        flask_app.config["JSON_SORT_KEYS"] = False
-
-        # Store reference to API session for use in routes
-        api_session = self.apisession
-
-        # HTML template with embedded Plotly.js
-        HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MistHelper Map Viewer</title>
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-            background-color: #1a1a1a;
-            color: #e0e0e0;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .header {
-            padding: 15px 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-        .header h1 {
-            font-size: 20px;
-            font-weight: 600;
-            margin-right: 30px;
-        }
-        .dropdown-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .dropdown-group label {
-            font-size: 14px;
-            color: rgba(255,255,255,0.8);
-        }
-        select {
-            padding: 8px 12px;
-            font-size: 14px;
-            border: none;
-            border-radius: 4px;
-            background-color: rgba(255,255,255,0.9);
-            color: #333;
-            min-width: 200px;
-            cursor: pointer;
-        }
-        select:focus { outline: 2px solid #667eea; }
-        .status {
-            margin-left: auto;
-            font-size: 13px;
-            color: rgba(255,255,255,0.7);
-        }
-        .loading {
-            color: #ffd700;
-            font-weight: bold;
-        }
-        .main-content {
-            flex: 1;
-            display: flex;
-            overflow: hidden;
-        }
-        #map-container {
-            flex: 1;
-            padding: 10px;
-        }
-        #map-display {
-            width: 100%;
-            height: 100%;
-            background-color: #2d2d2d;
-            border-radius: 8px;
-        }
-        .sidebar {
-            width: 280px;
-            background-color: #2d2d2d;
-            padding: 20px;
-            overflow-y: auto;
-            border-left: 1px solid #444;
-        }
-        .sidebar h3 {
-            color: #a0a0ff;
-            font-size: 14px;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #444;
-        }
-        .info-item {
-            margin: 8px 0;
-            font-size: 13px;
-            color: #b0b0b0;
-        }
-        .info-item strong { color: #e0e0e0; }
-        .layer-toggle {
-            margin: 6px 0;
-        }
-        .layer-toggle label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            padding: 4px 0;
-        }
-        .layer-toggle input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-        }
-        .refresh-btn {
-            margin-top: 15px;
-            width: 100%;
-            padding: 10px;
-            background-color: #667eea;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: bold;
-        }
-        .refresh-btn:hover { background-color: #5a6fd6; }
-        .refresh-btn:disabled { background-color: #555; cursor: not-allowed; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>MistHelper Map Viewer</h1>
-        <div class="dropdown-group">
-            <label for="site-select">Site:</label>
-            <select id="site-select"></select>
-        </div>
-        <div class="dropdown-group">
-            <label for="map-select">Map:</label>
-            <select id="map-select"></select>
-        </div>
-        <div class="status" id="status-display">Ready</div>
-    </div>
-
-    <div class="main-content">
-        <div id="map-container">
-            <div id="map-display"></div>
-        </div>
-        <div class="sidebar">
-            <h3>Map Information</h3>
-            <div id="map-info">
-                <div class="info-item"><strong>Site:</strong> <span id="info-site">-</span></div>
-                <div class="info-item"><strong>Map:</strong> <span id="info-map">-</span></div>
-                <div class="info-item"><strong>Dimensions:</strong> <span id="info-dims">-</span></div>
-                <div class="info-item"><strong>Access Points:</strong> <span id="info-aps">-</span></div>
-                <div class="info-item"><strong>Switches:</strong> <span id="info-switches">-</span></div>
-                <div class="info-item"><strong>Gateways:</strong> <span id="info-gateways">-</span></div>
-                <div class="info-item"><strong>Zones:</strong> <span id="info-zones">-</span></div>
-                <div class="info-item"><strong>WiFi Clients:</strong> <span id="info-wifi-clients">-</span></div>
-                <div class="info-item"><strong>Unconnected:</strong> <span id="info-unconnected">-</span></div>
-                <div class="info-item"><strong>App Clients:</strong> <span id="info-sdk">-</span></div>
-                <div class="info-item"><strong>BLE Devices:</strong> <span id="info-ble">-</span></div>
-                <div class="info-item"><strong>Assets:</strong> <span id="info-assets">-</span></div>
-            </div>
-
-            <h3 style="margin-top: 20px;">Layer Controls</h3>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-aps" checked> Access Points</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-switches" checked> Switches</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-gateways" checked> Gateways</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-zones" checked> Zones</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-wifi-clients" checked> WiFi Clients (Connected)</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-unconnected-clients" checked>
-                    WiFi Clients (Unconnected)</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-ble-devices" checked> Bluetooth Devices</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-assets" checked> Assets</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-sdk-clients" checked> App Clients (Marvis)</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-walls" checked> Walls</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-wayfinding" checked> Wayfinding Paths</label>
-            </div>
-
-            <h3 style="margin-top: 20px;">Coverage Heatmaps</h3>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-wifi-coverage"> WiFi RF Coverage</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-ble-coverage"> BLE Coverage</label>
-            </div>
-            <div class="layer-toggle">
-                <label><input type="checkbox" id="toggle-app-coverage"> App Coverage</label>
-            </div>
-
-            <h3 style="margin-top: 20px;">Legend</h3>
-            <div class="legend-item" style="margin: 6px 0; font-size: 12px;">
-                <span style="display: inline-block; width: 0; height: 0;
-                    border-left: 8px solid transparent;
-                    border-right: 8px solid transparent;
-                    border-bottom: 14px solid #00cc00;
-                    margin-right: 8px;"></span>
-                Device (Connected)
-            </div>
-            <div class="legend-item" style="margin: 6px 0; font-size: 12px;">
-                <span style="display: inline-block; width: 0; height: 0;
-                    border-left: 8px solid transparent;
-                    border-right: 8px solid transparent;
-                    border-bottom: 14px solid #ff8c00;
-                    margin-right: 8px;"></span>
-                Device (Transitional)
-            </div>
-            <div class="legend-item" style="margin: 6px 0; font-size: 12px;">
-                <span style="display: inline-block; width: 0; height: 0;
-                    border-left: 8px solid transparent;
-                    border-right: 8px solid transparent;
-                    border-bottom: 14px solid #ff4444;
-                    margin-right: 8px;"></span>
-                Device (Offline)
-            </div>
-            <div class="legend-item" style="margin: 6px 0; font-size: 12px;">
-                <span style="display: inline-block; width: 12px; height: 12px;
-                    background-color: #9966ff; border-radius: 50%;
-                    margin-right: 8px;"></span>
-                WiFi Client (Connected)
-            </div>
-            <div class="legend-item" style="margin: 6px 0; font-size: 12px;">
-                <span style="display: inline-block; width: 12px; height: 12px;
-                    background-color: #888888; border-radius: 50%;
-                    margin-right: 8px;"></span>
-                WiFi Client (Unconnected)
-            </div>
-            <div class="legend-item" style="margin: 6px 0; font-size: 12px;">
-                <span style="display: inline-block; width: 12px; height: 12px;
-                    background-color: #66ccff; border-radius: 50%;
-                    margin-right: 8px;"></span>
-                App Client (Marvis)
-            </div>
-            <div class="legend-item" style="margin: 6px 0; font-size: 12px;">
-                <span style="display: inline-block; width: 12px; height: 12px;
-                    background-color: #003366; border-radius: 50%;
-                    margin-right: 8px;"></span>
-                Bluetooth Device
-            </div>
-            <div class="legend-item" style="margin: 6px 0; font-size: 12px;">
-                <span style="display: inline-block; width: 12px; height: 12px;
-                    background-color: #00cc00; border-radius: 50%;
-                    margin-right: 8px;"></span>
-                Asset
-            </div>
-            <div class="legend-item" style="margin: 6px 0; font-size: 12px;">
-                <span style="display: inline-block; width: 16px; height: 3px;
-                    background-color: #ff0000;
-                    margin-right: 8px;"></span>
-                Wall
-            </div>
-            <div class="legend-item" style="margin: 6px 0; font-size: 12px;">
-                <span style="display: inline-block; width: 16px; height: 3px;
-                    background-color: #00bfff; border-style: dashed;
-                    margin-right: 8px;"></span>
-                Wayfinding
-            </div>
-            <div class="legend-item" style="margin: 6px 0; font-size: 12px;">
-                <span style="display: inline-block; width: 16px; height: 12px;
-                    background-color: rgba(255,165,0,0.5);
-                    border: 2px dashed orange;
-                    margin-right: 8px;"></span>
-                Zone
-            </div>
-
-            <button class="refresh-btn" id="refresh-btn" onclick="refreshCurrentMap()">
-                Refresh Data
-            </button>
-        </div>
-    </div>
-
-    <script>
-        // State
-        let currentSiteId = '{{ initial_site_id }}';
-        let currentMapId = '{{ initial_map_id }}';
-        let allSites = {{ all_sites_json | safe }};
-        let currentMaps = {{ all_maps_json | safe }};
-        let currentFigure = null;
-        let currentMapData = null;  // Store current map data for re-rendering
-
-        // Layer visibility state
-        let layerVisibility = {
-            aps: true,
-            switches: true,
-            gateways: true,
-            zones: true,
-            wifiClients: true,
-            unconnectedClients: true,
-            bleDevices: true,
-            assets: true,
-            sdkClients: true,
-            walls: true,
-            wayfinding: true,
-            wifiCoverage: false,
-            bleCoverage: false,
-            appCoverage: false
-        };
-
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            populateSiteDropdown();
-            populateMapDropdown();
-            loadMapData(currentSiteId, currentMapId);
-
-            // Event listeners
-            document.getElementById('site-select').addEventListener('change', handleSiteChange);
-            document.getElementById('map-select').addEventListener('change', handleMapChange);
-
-            // Layer toggle listeners
-            document.getElementById('toggle-aps').addEventListener('change', function() {
-                layerVisibility.aps = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-switches').addEventListener('change', function() {
-                layerVisibility.switches = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-gateways').addEventListener('change', function() {
-                layerVisibility.gateways = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-zones').addEventListener('change', function() {
-                layerVisibility.zones = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-wifi-clients').addEventListener('change', function() {
-                layerVisibility.wifiClients = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-unconnected-clients').addEventListener('change', function() {
-                layerVisibility.unconnectedClients = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-ble-devices').addEventListener('change', function() {
-                layerVisibility.bleDevices = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-assets').addEventListener('change', function() {
-                layerVisibility.assets = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-sdk-clients').addEventListener('change', function() {
-                layerVisibility.sdkClients = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-walls').addEventListener('change', function() {
-                layerVisibility.walls = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-wayfinding').addEventListener('change', function() {
-                layerVisibility.wayfinding = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-wifi-coverage').addEventListener('change', function() {
-                layerVisibility.wifiCoverage = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-ble-coverage').addEventListener('change', function() {
-                layerVisibility.bleCoverage = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-            document.getElementById('toggle-app-coverage').addEventListener('change', function() {
-                layerVisibility.appCoverage = this.checked;
-                if (currentMapData) renderMap(currentMapData);
-            });
-        });
-
-        function setStatus(message, isLoading = false) {
-            const statusEl = document.getElementById('status-display');
-            statusEl.textContent = message;
-            statusEl.className = isLoading ? 'status loading' : 'status';
-        }
-
-        function populateSiteDropdown() {
-            const select = document.getElementById('site-select');
-            select.innerHTML = '';
-            allSites.forEach(site => {
-                const option = document.createElement('option');
-                option.value = site.id;
-                option.textContent = site.name;
-                if (site.id === currentSiteId) option.selected = true;
-                select.appendChild(option);
-            });
-        }
-
-        function populateMapDropdown() {
-            const select = document.getElementById('map-select');
-            select.innerHTML = '';
-            currentMaps.forEach(map => {
-                const option = document.createElement('option');
-                option.value = map.id;
-                option.textContent = map.name;
-                if (map.id === currentMapId) option.selected = true;
-                select.appendChild(option);
-            });
-        }
-
-        async function handleSiteChange(event) {
-            const newSiteId = event.target.value;
-            if (newSiteId === currentSiteId) return;
-
-            setStatus('Loading site...', true);
-            console.log('[Site Change] Switching to site:', newSiteId);
-
-            try {
-                // Fetch maps for new site
-                const response = await fetch('/api/site/' + newSiteId + '/maps');
-                if (!response.ok) throw new Error('Failed to fetch maps');
-
-                const data = await response.json();
-                currentSiteId = newSiteId;
-                currentMaps = data.maps;
-
-                // Update map dropdown
-                populateMapDropdown();
-
-                // Load first map if available
-                if (currentMaps.length > 0) {
-                    currentMapId = currentMaps[0].id;
-                    document.getElementById('map-select').value = currentMapId;
-                    await loadMapData(currentSiteId, currentMapId);
-                } else {
-                    currentMapId = null;
-                    showEmptyMap('No maps found for this site');
-                }
-
-                setStatus('Ready');
-            } catch (error) {
-                console.error('Error switching site:', error);
-                setStatus('Error: ' + error.message);
-            }
-        }
-
-        async function handleMapChange(event) {
-            const newMapId = event.target.value;
-            if (newMapId === currentMapId) return;
-
-            currentMapId = newMapId;
-            await loadMapData(currentSiteId, currentMapId);
-        }
-
-        async function loadMapData(siteId, mapId) {
-            if (!siteId || !mapId) {
-                showEmptyMap('No map selected');
-                return;
-            }
-
-            setStatus('Loading map...', true);
-            console.log('[Load Map] Fetching data for site:', siteId, 'map:', mapId);
-
-            try {
-                const response = await fetch('/api/map/' + siteId + '/' + mapId);
-                if (!response.ok) throw new Error('Failed to fetch map data');
-
-                const data = await response.json();
-                console.log('[Load Map] Received data:', data);
-
-                // Update info panel
-                updateInfoPanel(data);
-
-                // Render Plotly figure
-                renderMap(data);
-
-                setStatus('Ready');
-            } catch (error) {
-                console.error('Error loading map:', error);
-                setStatus('Error: ' + error.message);
-                showEmptyMap('Error loading map');
-            }
-        }
-
-        function updateInfoPanel(data) {
-            document.getElementById('info-site').textContent = data.site_name || '-';
-            document.getElementById('info-map').textContent = data.map_name || '-';
-            document.getElementById('info-dims').textContent = data.width + ' x ' + data.height + ' px';
-            document.getElementById('info-aps').textContent = data.ap_count || 0;
-            document.getElementById('info-switches').textContent = data.switch_count || 0;
-            document.getElementById('info-gateways').textContent = data.gateway_count || 0;
-            document.getElementById('info-zones').textContent = data.zone_count || 0;
-            document.getElementById('info-wifi-clients').textContent = data.wifi_client_count || 0;
-            document.getElementById('info-unconnected').textContent = data.unconnected_client_count || 0;
-            document.getElementById('info-sdk').textContent = data.sdk_client_count || 0;
-            document.getElementById('info-ble').textContent = data.ble_device_count || 0;
-            document.getElementById('info-assets').textContent = data.asset_count || 0;
-        }
-
-        function renderMap(data) {
-            // Store data for re-rendering when toggling layers
-            currentMapData = data;
-
-            const traces = [];
-
-            // Add walls traces (render first so they're behind other elements)
-            // Walls are line segments: each has x1,y1 -> x2,y2
-            if (layerVisibility.walls && data.walls && data.walls.length > 0) {
-                console.log('Rendering ' + data.walls.length + ' wall segments');
-                let wallX = [];
-                let wallY = [];
-                for (let i = 0; i < data.walls.length; i++) {
-                    const segment = data.walls[i];
-                    // Add line segment with null separator
-                    wallX.push(segment.x1, segment.x2, null);
-                    wallY.push(segment.y1, segment.y2, null);
-                }
-                if (wallX.length > 0) {
-                    traces.push({
-                        x: wallX,
-                        y: wallY,
-                        mode: 'lines',
-                        type: 'scatter',
-                        name: 'Walls',
-                        line: { color: '#ff8c00', width: 6 },
-                        hoverinfo: 'name'
-                    });
-                }
-            }
-
-            // Add wayfinding paths - line segments with x1,y1 -> x2,y2
-            if (layerVisibility.wayfinding && data.wayfinding && data.wayfinding.length > 0) {
-                console.log('Rendering ' + data.wayfinding.length + ' wayfinding segments');
-                let pathX = [];
-                let pathY = [];
-                for (let i = 0; i < data.wayfinding.length; i++) {
-                    const segment = data.wayfinding[i];
-                    // Add line segment with null separator
-                    pathX.push(segment.x1, segment.x2, null);
-                    pathY.push(segment.y1, segment.y2, null);
-                }
-                if (pathX.length > 0) {
-                    traces.push({
-                        x: pathX,
-                        y: pathY,
-                        mode: 'lines',
-                        type: 'scatter',
-                        name: 'Wayfinding',
-                        line: { color: '#0066ff', width: 5, dash: 'dash' },
-                        hoverinfo: 'name'
-                    });
-                }
-            }
-
-            // Add zones (with labels) - dynamic rainbow colors based on zone count
-            if (layerVisibility.zones && data.zones && data.zones.length > 0) {
-                // Generate unique colors by evenly subdividing the rainbow (HSL hue 0-360)
-                function hslToRgba(h, s, l, a) {
-                    const c = (1 - Math.abs(2 * l - 1)) * s;
-                    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
-                    const m = l - c / 2;
-                    let r, g, b;
-                    if (h < 60) { r = c; g = x; b = 0; }
-                    else if (h < 120) { r = x; g = c; b = 0; }
-                    else if (h < 180) { r = 0; g = c; b = x; }
-                    else if (h < 240) { r = 0; g = x; b = c; }
-                    else if (h < 300) { r = x; g = 0; b = c; }
-                    else { r = c; g = 0; b = x; }
-                    return `rgba(${Math.round((r + m) * 255)},` +
-                        `${Math.round((g + m) * 255)},` +
-                        `${Math.round((b + m) * 255)},${a})`;
-                }
-
-                const zoneCount = data.zones.length;
-                // Golden angle (137.508 degrees) ensures maximum color separation between adjacent zones
-                const goldenAngle = 137.508;
-
-                data.zones.forEach((zone, idx) => {
-                    if (zone.vertices && zone.vertices.length >= 3) {
-                        const zoneX = zone.vertices.map(v => v.x);
-                        const zoneY = zone.vertices.map(v => v.y);
-                        zoneX.push(zoneX[0]);  // Close polygon
-                        zoneY.push(zoneY[0]);
-
-                        // Use golden angle for maximum color separation between sequential zones
-                        const hue = (idx * goldenAngle) % 360;
-                        const fillColor = hslToRgba(hue, 0.7, 0.6, 0.25);
-                        const lineColor = hslToRgba(hue, 0.9, 0.4, 1.0);
-
-                        // Add solid border first (underneath) for overlap visibility
-                        traces.push({
-                            x: zoneX,
-                            y: zoneY,
-                            mode: 'lines',
-                            type: 'scatter',
-                            name: '',
-                            showlegend: false,
-                            line: { color: lineColor, width: 5 },
-                            hoverinfo: 'skip'
-                        });
-
-                        // Add filled zone with thinner dashed border on top
-                        traces.push({
-                            x: zoneX,
-                            y: zoneY,
-                            mode: 'lines',
-                            type: 'scatter',
-                            name: zone.name || 'Zone ' + (idx + 1),
-                            fill: 'toself',
-                            fillcolor: fillColor,
-                            line: { color: 'rgba(255,255,255,0.8)', width: 2, dash: 'dot' },
-                            hovertemplate: '<b>' + (zone.name || 'Zone') + '</b><extra></extra>'
-                        });
-
-                        // Add zone label at centroid
-                        const centroidX = zoneX.slice(0, -1).reduce((a, b) => a + b, 0) / (zoneX.length - 1);
-                        const centroidY = zoneY.slice(0, -1).reduce((a, b) => a + b, 0) / (zoneY.length - 1);
-
-                        traces.push({
-                            x: [centroidX],
-                            y: [centroidY],
-                            mode: 'markers+text',
-                            type: 'scatter',
-                            text: [zone.name || 'Zone'],
-                            textfont: { size: 16, color: '#1a1a1a', family: 'Arial Black' },
-                            textposition: 'middle center',
-                            marker: { size: 40, color: 'rgba(255,255,255,0.85)', symbol: 'square' },
-                            showlegend: false,
-                            hoverinfo: 'skip'
-                        });
-                    }
-                });
-            }
-
-            // Helper function for device status-based coloring
-            function getDeviceColor(status, connectedColor) {
-                const transitionalStatuses = ['restart', 'upgrading', 'reboot_required', 'provisioning'];
-                const offlineStatuses = ['disconnected', 'offline'];
-                const statusLower = (status || '').toLowerCase();
-                if (transitionalStatuses.includes(statusLower)) return '#ff8c00';  // Orange
-                if (offlineStatuses.includes(statusLower)) return '#ff4444';  // Red
-                return connectedColor;
-            }
-
-            // Add Access Points trace (green triangles)
-            if (layerVisibility.aps && data.devices && data.devices.length > 0) {
-                const aps = data.devices.filter(d => d.type === 'ap' || !d.type);
-                if (aps.length > 0) {
-                    const apTrace = {
-                        x: aps.map(d => d.x),
-                        y: aps.map(d => d.y),
-                        mode: 'markers+text',
-                        type: 'scatter',
-                        name: 'Access Points',
-                        text: aps.map(d => d.name),
-                        textposition: 'top center',
-                        textfont: { size: 14, color: '#1a1a1a', family: 'Arial Bold' },
-                        marker: {
-                            size: 22,
-                            color: aps.map(d => getDeviceColor(d.status, '#00cc00')),
-                            symbol: 'triangle-up',
-                            angle: aps.map(d => d.orientation || 0),
-                            line: { color: '#000000', width: 2 }
-                        },
-                        hovertemplate: '<b>%{text}</b><br>Type: AP<br>'
-                            + 'Status: %{customdata[0]}<br>MAC: %{customdata[1]}<br>'
-                            + 'Orientation: %{customdata[2]}deg<extra></extra>',
-                        customdata: aps.map(d => [d.status, d.mac, d.orientation || 0])
-                    };
-                    traces.push(apTrace);
-                }
-            }
-
-            // Add Switches trace (cyan squares)
-            if (layerVisibility.switches && data.devices && data.devices.length > 0) {
-                const switches = data.devices.filter(d => d.type === 'switch');
-                if (switches.length > 0) {
-                    const switchTrace = {
-                        x: switches.map(d => d.x),
-                        y: switches.map(d => d.y),
-                        mode: 'markers+text',
-                        type: 'scatter',
-                        name: 'Switches',
-                        text: switches.map(d => d.name),
-                        textposition: 'top center',
-                        textfont: { size: 14, color: '#1a1a1a', family: 'Arial Bold' },
-                        marker: {
-                            size: 22,
-                            color: switches.map(d => getDeviceColor(d.status, '#00ccff')),
-                            symbol: 'square',
-                            line: { color: '#000000', width: 2 }
-                        },
-                        hovertemplate: '<b>%{text}</b><br>Type: Switch<br>'
-                            + 'Status: %{customdata[0]}<br>MAC: %{customdata[1]}'
-                            + '<extra></extra>',
-                        customdata: switches.map(d => [d.status, d.mac])
-                    };
-                    traces.push(switchTrace);
-                }
-            }
-
-            // Add Gateways trace (purple diamonds)
-            if (layerVisibility.gateways && data.devices && data.devices.length > 0) {
-                const gateways = data.devices.filter(d => d.type === 'gateway');
-                if (gateways.length > 0) {
-                    const gatewayTrace = {
-                        x: gateways.map(d => d.x),
-                        y: gateways.map(d => d.y),
-                        mode: 'markers+text',
-                        type: 'scatter',
-                        name: 'Gateways',
-                        text: gateways.map(d => d.name),
-                        textposition: 'top center',
-                        textfont: { size: 14, color: '#1a1a1a', family: 'Arial Bold' },
-                        marker: {
-                            size: 22,
-                            color: gateways.map(d => getDeviceColor(d.status, '#cc66ff')),
-                            symbol: 'diamond',
-                            line: { color: '#000000', width: 2 }
-                        },
-                        hovertemplate: '<b>%{text}</b><br>Type: Gateway<br>'
-                            + 'Status: %{customdata[0]}<br>MAC: %{customdata[1]}'
-                            + '<extra></extra>',
-                        customdata: gateways.map(d => [d.status, d.mac])
-                    };
-                    traces.push(gatewayTrace);
-                }
-            }
-
-            // Add WiFi clients trace (connected - purple)
-            if (layerVisibility.wifiClients && data.wifi_clients && data.wifi_clients.length > 0) {
-                const wifiClientTrace = {
-                    x: data.wifi_clients.map(c => c.x),
-                    y: data.wifi_clients.map(c => c.y),
-                    mode: 'markers+text',
-                    type: 'scatter',
-                    name: 'WiFi Clients',
-                    text: data.wifi_clients.map(c => c.name || ''),
-                    textposition: 'top center',
-                    textfont: { size: 11, color: '#1a1a1a', family: 'Arial' },
-                    marker: {
-                        size: 14,
-                        color: '#9966ff',
-                        symbol: 'circle',
-                        line: { color: '#4400aa', width: 1 }
-                    },
-                    hovertemplate: '<b>WiFi Client</b><br>'
-                        + 'Name: %{customdata[0]}<br>MAC: %{customdata[1]}<br>'
-                        + 'SSID: %{customdata[2]}<extra></extra>',
-                    customdata: data.wifi_clients.map(c => [c.name || '-', c.mac || 'Unknown', c.ssid || '-'])
-                };
-                traces.push(wifiClientTrace);
-            }
-
-            // Add unconnected WiFi clients trace (grey)
-            if (layerVisibility.unconnectedClients && data.unconnected_clients && data.unconnected_clients.length > 0) {
-                const unconnectedTrace = {
-                    x: data.unconnected_clients.map(c => c.x),
-                    y: data.unconnected_clients.map(c => c.y),
-                    mode: 'markers',
-                    type: 'scatter',
-                    name: 'Unconnected Clients',
-                    marker: {
-                        size: 8,
-                        color: '#888888',
-                        symbol: 'circle',
-                        line: { color: '#444444', width: 1 }
-                    },
-                    hovertemplate: '<b>Unconnected Client</b><br>'
-                        + 'MAC: %{customdata[0]}<br>'
-                        + 'Manufacturer: %{customdata[1]}<extra></extra>',
-                    customdata: data.unconnected_clients.map(c => [c.mac || 'Unknown', c.manufacture || '-'])
-                };
-                traces.push(unconnectedTrace);
-            }
-
-            // Add BLE/Bluetooth devices trace (dark blue)
-            if (layerVisibility.bleDevices && data.ble_devices && data.ble_devices.length > 0) {
-                const bleTrace = {
-                    x: data.ble_devices.map(d => d.x),
-                    y: data.ble_devices.map(d => d.y),
-                    mode: 'markers',
-                    type: 'scatter',
-                    name: 'Bluetooth Devices',
-                    marker: {
-                        size: 10,
-                        color: '#003366',
-                        symbol: 'circle',
-                        line: { color: '#001a33', width: 1 }
-                    },
-                    hovertemplate: '<b>BLE Device</b><br>MAC: %{customdata[0]}<extra></extra>',
-                    customdata: data.ble_devices.map(d => [d.mac || 'Unknown'])
-                };
-                traces.push(bleTrace);
-            }
-
-            // Add assets trace (green) with name labels
-            if (layerVisibility.assets && data.assets && data.assets.length > 0) {
-                const assetTrace = {
-                    x: data.assets.map(a => a.x),
-                    y: data.assets.map(a => a.y),
-                    mode: 'markers+text',
-                    type: 'scatter',
-                    name: 'Assets',
-                    text: data.assets.map(a => a.name || ''),
-                    textposition: 'top center',
-                    textfont: { size: 12, color: '#1a1a1a', family: 'Arial Bold' },
-                    marker: {
-                        size: 12,
-                        color: '#00cc00',
-                        symbol: 'diamond',
-                        line: { color: '#006600', width: 1 }
-                    },
-                    hovertemplate: '<b>Asset</b><br>Name: %{customdata[0]}<br>MAC: %{customdata[1]}<extra></extra>',
-                    customdata: data.assets.map(a => [a.name || 'Unknown', a.mac || '-'])
-                };
-                traces.push(assetTrace);
-            }
-
-            // Add SDK/Marvis clients trace (light blue)
-            if (layerVisibility.sdkClients && data.sdk_clients && data.sdk_clients.length > 0) {
-                const sdkClientTrace = {
-                    x: data.sdk_clients.map(c => c.x),
-                    y: data.sdk_clients.map(c => c.y),
-                    mode: 'markers+text',
-                    type: 'scatter',
-                    name: 'App Clients',
-                    text: data.sdk_clients.map(c => c.name || ''),
-                    textposition: 'top center',
-                    textfont: { size: 11, color: '#1a1a1a', family: 'Arial' },
-                    marker: {
-                        size: 14,
-                        color: '#66ccff',
-                        symbol: 'circle',
-                        line: { color: '#0077cc', width: 1 }
-                    },
-                    hovertemplate: '<b>App Client</b><br>'
-                        + 'Name: %{customdata[0]}<br>'
-                        + 'UUID: %{customdata[1]}<extra></extra>',
-                    customdata: data.sdk_clients.map(c => [c.name || '-', c.uuid || '-'])
-                };
-                traces.push(sdkClientTrace);
-            }
-
-            // Coverage heatmap traces (rendered below device markers for visibility)
-            // Helper function to create coverage heatmap trace
-            function createCoverageHeatmap(coverageData, layerName, colorscale) {
-                if (!coverageData || coverageData.length === 0) return null;
-
-                // Group coverage data into a grid for heatmap visualization
-                const x_values = coverageData.map(p => p.x);
-                const y_values = coverageData.map(p => p.y);
-                const rssi_values = coverageData.map(p => p.rssi);
-
-                // Create scatter plot with color-coded markers for coverage visualization
-                // Using scatter instead of heatmap for better performance with sparse data
-                return {
-                    x: x_values,
-                    y: y_values,
-                    mode: 'markers',
-                    type: 'scatter',
-                    name: layerName,
-                    marker: {
-                        size: 8,
-                        color: rssi_values,
-                        colorscale: colorscale,
-                        cmin: -90,
-                        cmax: -30,
-                        opacity: 0.6,
-                        showscale: false
-                    },
-                    hovertemplate: '<b>' + layerName + '</b><br>'
-                        + 'RSSI: %{marker.color:.0f} dBm<br>'
-                        + 'X: %{x:.1f}<br>Y: %{y:.1f}<extra></extra>',
-                    visible: true
-                };
-            }
-
-            // WiFi coverage heatmap
-            if (layerVisibility.wifiCoverage && data.wifi_coverage && data.wifi_coverage.length > 0) {
-                const wifiHeatmap = createCoverageHeatmap(
-                    data.wifi_coverage,
-                    'WiFi Coverage',
-                    [[0, '#0000ff'], [0.25, '#00ffff'], [0.5, '#00ff00'], [0.75, '#ffff00'], [1, '#ff0000']]
-                );
-                if (wifiHeatmap) {
-                    traces.unshift(wifiHeatmap);  // Add at beginning so it renders below other elements
-                }
-            }
-
-            // BLE coverage heatmap
-            if (layerVisibility.bleCoverage && data.ble_coverage && data.ble_coverage.length > 0) {
-                const bleHeatmap = createCoverageHeatmap(
-                    data.ble_coverage,
-                    'BLE Coverage',
-                    [[0, '#4b0082'], [0.25, '#8a2be2'], [0.5, '#ba55d3'], [0.75, '#da70d6'], [1, '#ff69b4']]
-                );
-                if (bleHeatmap) {
-                    traces.unshift(bleHeatmap);
-                }
-            }
-
-            // App coverage heatmap
-            if (layerVisibility.appCoverage && data.app_coverage && data.app_coverage.length > 0) {
-                const appHeatmap = createCoverageHeatmap(
-                    data.app_coverage,
-                    'App Coverage',
-                    [[0, '#006400'], [0.25, '#228b22'], [0.5, '#32cd32'], [0.75, '#7cfc00'], [1, '#adff2f']]
-                );
-                if (appHeatmap) {
-                    traces.unshift(appHeatmap);
-                }
-            }
-
-            const layout = {
-                title: {
-                    text: data.map_name || 'Map',
-                    font: { color: '#e0e0e0', size: 16 }
-                },
-                images: data.image_url ? [{
-                    source: data.image_url,
-                    xref: 'x',
-                    yref: 'y',
-                    x: 0,
-                    y: 0,
-                    sizex: data.width,
-                    sizey: data.height,
-                    sizing: 'stretch',
-                    layer: 'below'
-                }] : [],
-                xaxis: {
-                    range: [-20, data.width + 20],
-                    showgrid: false,
-                    zeroline: false,
-                    color: '#888'
-                },
-                yaxis: {
-                    range: [data.height + 20, -20],  // Inverted for top-left origin
-                    showgrid: false,
-                    zeroline: false,
-                    scaleanchor: 'x',
-                    scaleratio: 1,
-                    color: '#888'
-                },
-                paper_bgcolor: '#1e1e1e',
-                plot_bgcolor: '#2d2d2d',
-                showlegend: true,
-                legend: {
-                    x: 0.02,
-                    y: 0.98,
-                    bgcolor: 'rgba(45,45,45,0.9)',
-                    bordercolor: '#667eea',
-                    font: { color: '#e0e0e0' }
-                },
-                margin: { l: 50, r: 20, t: 50, b: 30 },
-                dragmode: 'pan'
-            };
-
-            const config = {
-                displayModeBar: true,
-                displaylogo: false,
-                scrollZoom: true,
-                modeBarButtonsToAdd: ['drawline', 'eraseshape'],
-                toImageButtonOptions: { format: 'png', filename: 'map_export' }
-            };
-
-            Plotly.react('map-display', traces, layout, config);
-            currentFigure = { traces, layout };
-        }
-
-        function showEmptyMap(message) {
-            const layout = {
-                title: { text: message, font: { color: '#888', size: 16 } },
-                paper_bgcolor: '#1e1e1e',
-                plot_bgcolor: '#2d2d2d',
-                xaxis: { visible: false },
-                yaxis: { visible: false }
-            };
-            Plotly.react('map-display', [], layout, {});
-        }
-
-        async function refreshCurrentMap() {
-            const btn = document.getElementById('refresh-btn');
-            btn.disabled = true;
-            btn.textContent = 'Refreshing...';
-
-            await loadMapData(currentSiteId, currentMapId);
-
-            btn.disabled = false;
-            btn.textContent = 'Refresh Data';
-        }
-    </script>
-</body>
-</html>
-        """
-
-        @flask_app.route("/")
-        def index():
-            """Serve the main viewer page."""
-            return self._render_viewer_page(
-                HTML_TEMPLATE,
-                json_module,
-                render_template_string,
-                initial_site_id,
-                initial_map_id,
-                all_sites,
-                all_maps,
-            )
-
-        @flask_app.route("/api/site/<site_id>/maps")
-        def get_site_maps(site_id):
-            """API endpoint -- proxies to _handle_site_maps_request."""
-            return self._handle_site_maps_request(api_session, jsonify, site_id)
-
-        @flask_app.route("/api/map-image/<site_id>/<map_id>")
-        def get_map_image(site_id, map_id):
-            """Proxy endpoint -- delegates to _handle_map_image_request."""
-            return self._handle_map_image_request(api_session, site_id, map_id)
-
-        @flask_app.route("/api/map/<site_id>/<map_id>")
-        def get_map_data(site_id, map_id):
-            """Delegate to MapsManager._handle_map_data_request -- routes Flask request to the orchestrator."""
-            return self._handle_map_data_request(api_session, all_sites, site_id, map_id)
-
-        flask_host, flask_port = self._resolve_flask_bind_address()
-        self._print_flask_viewer_banner(flask_host, flask_port)
-        self._maybe_open_browser(flask_port)
-        self._run_flask_server(flask_app, flask_host, flask_port)
-
-    def _create_static_plotly_map(self, map_data, devices):
-        """Create static Plotly HTML map when Dash is not available."""
-        import os
-        import tempfile
-        import webbrowser
-
-        import plotly.graph_objects as go
-
-        print("\n! Creating static HTML map...")
-
-        # Similar to _launch_plotly_viewer but save to HTML file
-        fig = go.Figure()
-
-        map_width = map_data.get("width", 1000)
-        map_height = map_data.get("height", 1000)
-
-        if "url" in map_data:
-            fig.add_layout_image(
-                source=map_data["url"],
-                x=0,
-                y=map_height,
-                sizex=map_width,
-                sizey=map_height,
-                xref="x",
-                yref="y",
-                sizing="stretch",
-                layer="below",
-            )
-
-        # Add devices (simplified version)
-        if devices:
-            x_coords = [d.get("x", 0) for d in devices if "x" in d]
-            y_coords = [map_height - d.get("y", 0) for d in devices if "y" in d]
-            names = [d.get("name", d.get("mac", "Unknown")) for d in devices if "x" in d]
-
-            fig.add_trace(
-                go.Scatter(
-                    x=x_coords,
-                    y=y_coords,
-                    mode="markers+text",
-                    name="Devices",
-                    marker=dict(size=10, color="green"),
-                    text=names,
-                    textposition="top center",
-                )
-            )
-
-        fig.update_layout(
-            title=f"Map: {map_data.get('name', 'Unnamed')}",
-            xaxis=dict(range=[0, map_width]),
-            yaxis=dict(range=[0, map_height], scaleanchor="x", scaleratio=1),
-            height=800,
-        )
-
-        # Save to temp HTML file
-        temp_html = os.path.join(tempfile.gettempdir(), f"mist_map_{map_data.get('id', 'unknown')[:8]}.html")
-        logging.debug("Saving static map to: %s", temp_html)
-        fig.write_html(temp_html)
-
-        print(f"\n! Map saved to: {temp_html}")
-        print("! Opening in browser...")
-        logging.info("Static HTML map created: %s", temp_html)
-        webbrowser.open(f"file://{temp_html}")
-        logging.debug("Browser launched with static map")
-
-    def _launch_matplotlib_viewer(self, map_data, devices):
-        """Fallback matplotlib viewer (view-only)."""
-        logging.info("_launch_matplotlib_viewer called - basic fallback mode")
-        from math import cos, radians, sin
-
-        import matplotlib.pyplot as plt
-
-        print("\n! Using matplotlib viewer (view-only, no interactivity)")
-        logging.debug("Creating matplotlib figure for basic visualization")
-
-        fig, ax = plt.subplots(figsize=(12, 10))
-
-        map_width = map_data.get("width", 1000)
-        map_height = map_data.get("height", 1000)
-
-        ax.set_xlim(0, map_width)
-        ax.set_ylim(0, map_height)
-        ax.set_aspect("equal")
-        ax.set_title(f"Map: {map_data.get('name', 'Unnamed')}")
-        ax.set_xlabel("X (pixels)")
-        ax.set_ylabel("Y (pixels)")
-
-        # Plot devices
-        for device in devices:
-            if "x" not in device or "y" not in device:
-                continue
-
-            x, y = device["x"], device["y"]
-            device_type = device.get("type", "unknown")
-            name = device.get("name", device.get("mac", "Unknown"))
-            orientation = device.get("orientation", 0)
-
-            # Color by type
-            color = {"ap": "green", "switch": "orange", "gateway": "purple"}.get(device_type, "gray")
-
-            # Plot device
-            ax.plot(
-                x,
-                y,
-                marker="o",
-                markersize=10,
-                color=color,
-                label=device_type if device_type not in ax.get_legend_handles_labels()[1] else "",
-            )
-            ax.text(x, y + 20, name, fontsize=8, ha="center")
-
-            # Add orientation arrow
-            if orientation != 0:
-                arrow_length = 30
-                dx = arrow_length * cos(radians(orientation))
-                dy = arrow_length * sin(radians(orientation))
-                ax.arrow(x, y, dx, dy, head_width=10, head_length=10, fc=color, ec=color, alpha=0.7)
-
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-
-        print("\n! Displaying map... Close window to return to menu")
-        logging.info("Displaying matplotlib figure (blocking until window closed)")
-        plt.show()
-        logging.info("Matplotlib map viewer closed by user")
-
-    def _resolve_initial_site(self, sites_sorted: list, requested_site_id: str | None) -> tuple[str, str]:
-        """Resolve the initial site for standalone viewer from requested or default."""
-        maps_by_id = {s.get("id"): s for s in sites_sorted}
-        if requested_site_id and requested_site_id in maps_by_id:
-            site = maps_by_id[requested_site_id]
-            return site.get("id"), site.get("name", "Unknown")
-        default_site = next((s for s in sites_sorted if s.get("name", "") == "CAS0123G"), None)
-        site = default_site or sites_sorted[0]
-        return site.get("id"), site.get("name", "Unknown")
-
-    def _resolve_initial_map(self, all_maps: list, requested_map_id: str | None) -> tuple[str, dict]:
-        """Resolve the initial map from requested or first available."""
-        maps_by_id = {m.get("id"): m for m in all_maps}
-        if requested_map_id and requested_map_id in maps_by_id:
-            return requested_map_id, maps_by_id[requested_map_id]
-        return all_maps[0].get("id"), all_maps[0]
-
-    def _fetch_entities_on_map(self, api_fn, site_id: str, map_id: str, **kwargs) -> list:
-        """Call api_fn for site_id, return entities filtered to map_id."""
-        try:
-            resp = api_fn(self.apisession, site_id=site_id, **kwargs)
-            if resp.status_code == 200:
-                return [entity for entity in (resp.data or []) if entity.get("map_id") == map_id]
-        except Exception:
-            pass
-        return []
-
-    def _fetch_site_maps(self, site_id: str) -> list:
-        """Fetch maps for a site; return empty list on failure."""
-        try:
-            resp = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)
-            if resp.status_code == 200 and resp.data:
-                return resp.data
-        except Exception as error:
-            logging.error("Error fetching maps for site %s: %s", site_id, error)
-        return []
-
-    def launch_viewer_standalone(self, requested_site_id: str = None, requested_map_id: str = None):
-        """Launch the interactive map viewer directly without CLI site selection.
-
-        This method is designed for standalone usage (e.g., maps_manager.py --viewer)
-        where the user wants to skip the CLI menu and select sites/maps directly
-        in the web browser interface via searchable dropdowns.
-
-        Uses the full-featured viewer with all layers, controls, and sidebar.
-        Site/map selection is handled in-browser via URL parameters.
-
-        Args:
-            requested_site_id: Optional site ID to load initially (from URL parameter)
-            requested_map_id: Optional map ID to load initially (from URL parameter)
-        """
-        logging.info("launch_viewer_standalone: Starting web-first viewer mode")
-        print("\n" + "=" * 70)
-        print("  MAPS MANAGER - Standalone Web Viewer")
-        print("  Select a site and map from the browser interface")
-        print("=" * 70)
-        print("\n  Loading sites...")
-
-        all_sites = self._fetch_sites()
-        if not all_sites:
-            print("\n  [!] No sites found in organization")
-            return
-
-        sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())
-        print(f"  Found {len(sites_sorted)} sites")
-
-        target_site_id, target_site_name = self._resolve_initial_site(sites_sorted, requested_site_id)
-        print(f"  Loading maps for site: {target_site_name}...")
-
-        all_maps = self._fetch_site_maps(target_site_id)
-
-        devices: list = []
-        zones: list = []
-        clients: list = []
-        map_id: str | None = None
-
-        if not all_maps:
-            print(f"\n  [!] No maps found for site {target_site_name}")
-            print("  Launching viewer anyway - select a different site in browser")
-        else:
-            map_id, target_map = self._resolve_initial_map(all_maps, requested_map_id)
-            print(f"  Loading map: {target_map.get('name', 'Unnamed')}...")
-            devices = self._fetch_entities_on_map(
-                mistapi.api.v1.sites.stats.listSiteDevicesStats,
-                target_site_id,
-                map_id,
-                type="all",
-                limit=1000,
-            )
-            zones = self._fetch_entities_on_map(mistapi.api.v1.sites.zones.listSiteZones, target_site_id, map_id)
-            clients = self._fetch_entities_on_map(
-                mistapi.api.v1.sites.stats.listSiteWirelessClientsStats, target_site_id, map_id
-            )
-            print(f"  Found {len(devices)} devices, {len(zones)} zones, {len(clients)} clients")
-
-        self._launch_flask_viewer(
-            initial_site_id=target_site_id, initial_map_id=map_id, all_sites=sites_sorted, all_maps=all_maps
-        )
+        self, api_session, all_sites, site_id, map_id
+    ):  # WHY: declare private helper _collect_map_payload
+        """Delegating wrapper: payload assembly lives in src.maps._maps_coverage."""
+        # Wrapper kept so launch_viewer_standalone can still pass
+        # self._collect_map_payload as a bound callable to launch_flask_viewer.
+        from src.maps._maps_coverage import collect_map_payload  # WHY: import required module
+
+        return collect_map_payload(self, api_session, all_sites, site_id, map_id)  # WHY: return computed result
+
+    def _build_map_data_response(
+        self, site_id, map_id, map_data, layers
+    ):  # WHY: declare private helper _build_map_data_response
+        """Delegating wrapper: response assembly lives in src.maps._maps_coverage."""
+        # Wrapper kept so launch_viewer_standalone can still pass
+        # self._build_map_data_response as a bound callable to launch_flask_viewer.
+        from src.maps._maps_coverage import build_map_data_response  # WHY: import required module
+
+        return build_map_data_response(self, site_id, map_id, map_data, layers)  # WHY: return computed result
+
+    def launch_viewer_standalone(self):  # WHY: declare public method launch_viewer_standalone
+        """Delegating wrapper: matplotlib viewer + launcher live in src.maps._maps_matplotlib."""
+        # Wrapper kept so main() in this same file can still call
+        # maps_manager.launch_viewer_standalone() as an instance method.
+        from src.maps._maps_matplotlib import launch_viewer_standalone  # WHY: import required module
+
+        return launch_viewer_standalone(self)  # WHY: return computed result
 
 
 # ============================================================================
@@ -7104,22 +2613,22 @@ class MapsManager:
 # ============================================================================
 
 
-def _check_dependencies() -> None:
+def _check_dependencies() -> None:  # WHY: declare private helper _check_dependencies
     """Verify required dependencies are available; exit with error if not."""
-    if not DASH_AVAILABLE or not PLOTLY_AVAILABLE:
-        print("ERROR: This module requires dash and plotly packages.")
-        print("Install with: pip install dash plotly")
-        sys.exit(1)
-    if not mistapi:
-        print("ERROR: This module requires the mistapi package.")
-        print("Install with: pip install mistapi")
-        sys.exit(1)
+    if not DASH_AVAILABLE or not PLOTLY_AVAILABLE:  # WHY: guard against missing precondition
+        print("ERROR: This module requires dash and plotly packages.")  # WHY: surface user-facing message
+        print("Install with: pip install dash plotly")  # WHY: surface user-facing message
+        sys.exit(1)  # WHY: advance computation
+    if not mistapi:  # WHY: guard against missing precondition
+        print("ERROR: This module requires the mistapi package.")  # WHY: surface user-facing message
+        print("Install with: pip install mistapi")  # WHY: surface user-facing message
+        sys.exit(1)  # WHY: advance computation
 
 
-def _configure_logging(debug: bool) -> None:
+def _configure_logging(debug: bool) -> None:  # WHY: declare private helper _configure_logging
     """Configure logging level and handlers."""
-    log_level = logging.DEBUG if debug else logging.INFO
-    logging.basicConfig(
+    log_level = logging.DEBUG if debug else logging.INFO  # WHY: compute log_level
+    logging.basicConfig(  # WHY: advance computation
         level=log_level,
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[
@@ -7129,75 +2638,88 @@ def _configure_logging(debug: bool) -> None:
     )
 
 
-def _setup_api_session(env_file: str):
+def _setup_api_session(env_file: str):  # WHY: declare private helper _setup_api_session
     """Initialize and return a Mist API session; exit on failure."""
     try:
-        if os.path.exists(env_file):
-            apisession = mistapi.APISession(env_file=env_file)
+        if os.path.exists(env_file):  # WHY: branch on condition
+            apisession = mistapi.APISession(env_file=env_file)  # WHY: compute apisession
         else:
-            print("No .env file found. Please provide Mist API credentials.")
-            host = (
+            print("No .env file found. Please provide Mist API credentials.")  # WHY: surface user-facing message
+            host = (  # WHY: compute host
                 InputUtils.safe_input("Mist API Host [api.mist.com]: ", context="_setup_api_session").strip()
                 or "api.mist.com"
             )
-            token = InputUtils.safe_input("API Token: ", context="_setup_api_session").strip()
-            apisession = mistapi.APISession(host=host, token=token)
-        apisession.login()
-        return apisession
-    except Exception as e:
-        print(f"ERROR: Failed to initialize API session: {e}")
-        sys.exit(1)
+            token = InputUtils.safe_input("API Token: ", context="_setup_api_session").strip()  # WHY: compute token
+            apisession = mistapi.APISession(host=host, token=token)  # WHY: compute apisession
+        apisession.login()  # WHY: advance computation
+        return apisession  # WHY: return computed result
+    except Exception as e:  # WHY: handle expected error
+        print(f"ERROR: Failed to initialize API session: {e}")  # WHY: surface user-facing message
+        sys.exit(1)  # WHY: advance computation
 
 
-def _prompt_org_selection(orgs: list) -> str:
+def _prompt_org_selection(orgs: list) -> str:  # WHY: declare private helper _prompt_org_selection
     """Display org choices and return the selected org_id; exit on invalid input."""
-    print("\nAvailable Organizations:")
-    for idx, oid in enumerate(orgs, 1):
-        print(f"  {idx}. {oid}")
+    print("\nAvailable Organizations:")  # WHY: surface user-facing message
+    for idx, oid in enumerate(orgs, 1):  # WHY: iterate collection
+        print(f"  {idx}. {oid}")  # WHY: surface user-facing message
     try:
-        choice = InputUtils.safe_input("Select organization number: ", context="_prompt_org_selection").strip()
-        return orgs[int(choice) - 1]
-    except (ValueError, IndexError):
-        print("Invalid selection")
-        sys.exit(1)
+        choice = InputUtils.safe_input(
+            "Select organization number: ", context="_prompt_org_selection"
+        ).strip()  # WHY: compute choice
+        return orgs[int(choice) - 1]  # WHY: return computed result
+    except (ValueError, IndexError):  # WHY: handle expected error
+        print("Invalid selection")  # WHY: surface user-facing message
+        sys.exit(1)  # WHY: advance computation
 
 
-def _filter_org_privileges(privileges: list) -> list:
+def _filter_org_privileges(privileges: list) -> list:  # WHY: declare private helper _filter_org_privileges
     """Extract org-scoped org_ids from session privileges."""
-    return [p["org_id"] for p in privileges if p.get("scope") == "org" and p.get("org_id")]
+    return [
+        p["org_id"] for p in privileges if p.get("scope") == "org" and p.get("org_id")
+    ]  # WHY: return computed result
 
 
-def _detect_org_from_session(apisession, test_mode: bool) -> str | None:
+def _pick_org_from_privileges(
+    orgs: list[str], test_mode: bool
+) -> str | None:  # WHY: declare private helper _pick_org_from_privileges
+    """Return the org_id to use given the filtered privilege list and test-mode flag."""
+    if len(orgs) == 1:  # Single-org account -- no ambiguity.
+        return orgs[0]  # Auto-select the sole org.
+    if orgs and test_mode:  # Multi-org but running non-interactively.
+        print(f"Test mode: Using first available org: {orgs[0]}")  # Announce the automatic pick.
+        return orgs[0]  # Deterministic first-org choice for test runs.
+    return _prompt_org_selection(orgs) if orgs else None  # Prompt only when there is something to pick.
+
+
+def _detect_org_from_session(
+    apisession, test_mode: bool
+) -> str | None:  # WHY: declare private helper _detect_org_from_session
     """Detect org_id from the API session privileges; return None if not found."""
     try:
-        self_info = mistapi.api.v1.self.self.getSelf(apisession)
-        if not (hasattr(self_info, "data") and self_info.data):
-            return None
-        orgs = _filter_org_privileges(self_info.data.get("privileges", []))
-        if len(orgs) == 1:
-            return orgs[0]
-        if orgs and test_mode:
-            print(f"Test mode: Using first available org: {orgs[0]}")
-            return orgs[0]
-        return _prompt_org_selection(orgs) if orgs else None
-    except Exception as e:
-        logging.warning("Could not auto-detect org_id: %s", e)
-        return None
+        self_info = mistapi.api.v1.self.self.getSelf(apisession)  # Fetch the authenticated user info.
+        if not (hasattr(self_info, "data") and self_info.data):  # Guard against empty API responses.
+            return None  # Cannot detect anything without a data payload.
+        orgs = _filter_org_privileges(self_info.data.get("privileges", []))  # Keep only org privileges.
+        return _pick_org_from_privileges(orgs, test_mode)  # Delegate the selection policy.
+    except Exception as e:  # Any API/network failure just means "no auto-detected org".
+        logging.warning("Could not auto-detect org_id: %s", e)  # Log the reason for diagnostics.
+        return None  # Signal caller to fall back to prompting or defaults.
 
 
-def _resolve_org_id(apisession, args) -> str | None:
+def _resolve_org_id(apisession, args) -> str | None:  # WHY: declare private helper _resolve_org_id
     """Resolve org_id from CLI args, environment variables, or API session."""
-    org_id = args.org or os.getenv("org_id") or os.getenv("ORG_ID") or os.getenv("MIST_ORG_ID")
-    if org_id:
-        return org_id
-    return _detect_org_from_session(apisession, args.test)
+    org_id = args.org or os.getenv("org_id") or os.getenv("ORG_ID") or os.getenv("MIST_ORG_ID")  # WHY: compute org_id
+    if org_id:  # WHY: branch on condition
+        return org_id  # WHY: return computed result
+    return _detect_org_from_session(apisession, args.test)  # WHY: return computed result
 
 
-def main():
-    """Main entry point for standalone execution."""
-    import argparse
+def _build_arg_parser():  # WHY: declare private helper _build_arg_parser
+    """Build the argparse parser for standalone execution."""
+    import argparse  # WHY: import required module
 
-    parser = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(  # WHY: compute parser
         description="MapsManager - Interactive Map Viewer for Mist Networks",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -7207,37 +2729,56 @@ Examples:
     python maps_manager.py --org <ORG_ID>     # Use specific org ID
         """,
     )
-    parser.add_argument("--menu", action="store_true", help="Show operations menu instead of launching viewer directly")
-    parser.add_argument("--org", type=str, default=None, help="Organization ID to use (optional)")
-    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
-    parser.add_argument("--test", action="store_true", help="Run systematic test of safe, non-destructive operations")
-
-    args = parser.parse_args()
-    _check_dependencies()
-    _configure_logging(args.debug)
-    apisession = _setup_api_session(".env")
-    org_id = _resolve_org_id(apisession, args)
-
-    if not org_id:
-        if args.test:
-            print("ERROR: Organization ID required for test mode. Set org_id in .env or use --org flag")
-            sys.exit(1)
-        org_id = InputUtils.safe_input("Organization ID: ", context="main").strip()
-
-    if not org_id:
-        print("ERROR: Organization ID is required")
-        sys.exit(1)
-
-    maps_manager = MapsManager(apisession, org_id)
-
-    if args.test:
-        success = maps_manager.run_systematic_test()
-        sys.exit(0 if success else 1)
-    elif args.menu:
-        maps_manager.run_interactive_menu()
-    else:
-        maps_manager.launch_viewer_standalone()
+    parser.add_argument(
+        "--menu", action="store_true", help="Show operations menu instead of launching viewer directly"
+    )  # WHY: assign computed value
+    parser.add_argument(
+        "--org", type=str, default=None, help="Organization ID to use (optional)"
+    )  # WHY: assign computed value
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")  # WHY: assign computed value
+    parser.add_argument(
+        "--test", action="store_true", help="Run systematic test of safe, non-destructive operations"
+    )  # WHY: assign computed value
+    return parser  # WHY: return computed result
 
 
-if __name__ == "__main__":
-    main()
+def _require_org_id(apisession, args) -> str:  # WHY: declare private helper _require_org_id
+    """Resolve org_id or prompt/exit if missing."""
+    org_id = _resolve_org_id(apisession, args)  # WHY: compute org_id
+    if not org_id:  # WHY: guard against missing precondition
+        if args.test:  # WHY: branch on condition
+            print(
+                "ERROR: Organization ID required for test mode. Set org_id in .env or use --org flag"
+            )  # WHY: surface user-facing message
+            sys.exit(1)  # WHY: advance computation
+        org_id = InputUtils.safe_input("Organization ID: ", context="main").strip()  # WHY: compute org_id
+    if not org_id:  # WHY: guard against missing precondition
+        print("ERROR: Organization ID is required")  # WHY: surface user-facing message
+        sys.exit(1)  # WHY: advance computation
+    return org_id  # WHY: return computed result
+
+
+def _dispatch_maps_manager(maps_manager, args) -> None:  # WHY: declare private helper _dispatch_maps_manager
+    """Dispatch to test / menu / viewer based on CLI flags."""
+    if args.test:  # WHY: branch on condition
+        success = maps_manager.run_systematic_test()  # WHY: compute success
+        sys.exit(0 if success else 1)  # WHY: advance computation
+    if args.menu:  # WHY: branch on condition
+        maps_manager.run_interactive_menu()  # WHY: advance computation
+        return  # WHY: return early
+    maps_manager.launch_viewer_standalone()  # WHY: advance computation
+
+
+def main():  # WHY: declare public method main
+    """Main entry point for standalone execution."""
+    args = _build_arg_parser().parse_args()  # WHY: compute args
+    _check_dependencies()  # WHY: advance computation
+    _configure_logging(args.debug)  # WHY: advance computation
+    apisession = _setup_api_session(".env")  # WHY: compute apisession
+    org_id = _require_org_id(apisession, args)  # WHY: compute org_id
+    maps_manager = MapsManager(apisession, org_id)  # WHY: compute maps_manager
+    _dispatch_maps_manager(maps_manager, args)  # WHY: advance computation
+
+
+if __name__ == "__main__":  # WHY: branch on condition
+    main()  # WHY: advance computation
