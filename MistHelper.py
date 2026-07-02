@@ -63,10 +63,8 @@ from uuid import UUID  # Import UUID parser for strict org-id validation before 
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
 # Pylance uses these unconditionally; runtime try/except blocks below handle actual loading.
 if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, mypy), not at runtime
-    import numpy as np  # Type stub for numpy (used in optional analytics)
     import pyte  # Type stub for pyte (terminal emulator for WebSocket output parsing)
     import requests  # Type stub for requests (HTTP library used by mistapi)
-    import urllib3  # Type stub for urllib3 (connection pooling via requests)
     from prettytable import PrettyTable  # Type stub for prettytable (ASCII table formatting)
 
     import websocket  # Type stub for websocket (WebSocket client for device diagnostics)
@@ -312,10 +310,12 @@ _early_file_level = int(
 # 'okina in addresses like "Maka'ala Street"). Without this, printing the comparison table
 # or logging such strings raises UnicodeEncodeError under the default Windows console codec.
 for _std_stream in (sys.stdout, sys.stderr):  # Harden both standard streams (best-effort).
-    try:
-        _std_stream.reconfigure(encoding="utf-8", errors="backslashreplace")  # UTF-8 + never-crash fallback
-    except (AttributeError, ValueError):  # Stream lacks reconfigure (already wrapped/redirected) -> skip safely
-        pass  # Degradation is acceptable: worst case is the original behavior, no new failure introduced
+    _reconfigure = getattr(_std_stream, "reconfigure", None)  # TextIOWrapper has this; plain TextIO does not.
+    if callable(_reconfigure):  # Only proceed when the stream supports reconfiguration.
+        try:
+            _reconfigure(encoding="utf-8", errors="backslashreplace")  # UTF-8 + never-crash fallback
+        except ValueError:  # Stream already closed or codec rejected -> skip safely
+            pass  # Degradation is acceptable: worst case is the original behavior, no new failure introduced
 
 # Create handlers with appropriate levels
 _early_console_handler = logging.StreamHandler()  # Create handler for console output (stdout/stderr)
@@ -717,11 +717,8 @@ except ImportError as _pt_err:  # Required dependency is missing
 
 try:  # numpy is optional (only some analytics need it)
     import numpy as np  # Numerical arrays for analytics calculations
-
-    _has_numpy = True  # Flag that numpy-backed features are available
 except ImportError:  # numpy not installed
     np = None  # type: ignore[assignment]  # Optional - analytics features limited  # None lets runtime guards detect absence
-    _has_numpy = False  # Flag that numpy-backed features are unavailable
 
 try:  # websocket-client is required for live device diagnostics
     import websocket  # WebSocket client for streaming device CLI commands
@@ -756,11 +753,8 @@ except ImportError as _req_err:  # Required dependency is missing
 
 try:  # urllib3 is optional (used to suppress noisy SSL warnings)
     import urllib3  # Low-level HTTP library underlying requests
-
-    _has_urllib3 = True  # Flag that urllib3-based features are available
 except ImportError:  # urllib3 not installed
     urllib3 = None  # type: ignore[assignment]  # Optional - SSL warning suppression  # None lets guards detect absence
-    _has_urllib3 = False  # Flag that urllib3-based features are unavailable
 
 try:  # pyte is optional (terminal emulation for parsing WebSocket output)
     import pyte  # In-memory terminal emulator to render device CLI screens
@@ -1338,7 +1332,9 @@ class GlobalImportManager:
             self.fromtimestamp = datetime.fromtimestamp  # Expose epoch->datetime conversion
             self.fromisoformat = datetime.fromisoformat  # Expose ISO-8601 string parsing
             self.strptime = datetime.strptime  # Expose format-string parsing
-            self.utcnow = datetime.utcnow  # Expose UTC now() helper
+            # Preserve legacy naive-UTC behavior without calling the deprecated datetime.utcnow.
+            # Expose UTC now() helper as naive UTC (legacy contract).
+            self.utcnow = lambda: datetime.now(UTC).replace(tzinfo=None)
             self.datetime = datetime  # Allow handler.datetime to reach the real class
             self.timezone = timezone  # Provide timezone for tz-aware construction
             self.timedelta = timedelta  # Provide timedelta for date arithmetic
@@ -2222,6 +2218,7 @@ def _msp_fetch_user_data() -> dict | None:  # type: ignore[type-arg]
     """Call getSelf and return the validated user-data dict, or None when unavailable or malformed."""
     import mistapi.api.v1.self.self as self_api  # Import the "self" endpoint module lazily.
 
+    assert apisession is not None  # Caller guarantees session is initialized before MSP detection.
     response = self_api.getSelf(apisession)  # Ask the API who the authenticated user is.
     if not response or not hasattr(response, "data"):  # No usable payload came back.
         logging.warning("getSelf returned no data - cannot detect MSP privileges")  # Warn we can't determine access.
@@ -5479,7 +5476,7 @@ class CacheUtils:
     def _write_data_rows_to_csv(writer: csv.DictWriter, data: dict[str, list[dict[str, Any]]]) -> int:
         """Write every row from every section through writer; return total row count."""
         row_count = 0  # Tally rows actually written so the caller can log the total
-        for _section_name, section in data.items():  # Iterate sections in insertion order
+        for section in data.values():  # Iterate sections in insertion order; keys are unused here
             for row in section:  # Write each row through the DictWriter
                 writer.writerow(row)  # csv handles encoding/escaping for us
                 row_count += 1  # Increment after a successful write
@@ -5996,6 +5993,7 @@ class FilePathUtils:
         filename: str, headers: list[str] | None = None, sample_data: list[list[str]] | None = None
     ) -> str:  # Create an empty CSV placeholder with optional headers.
         """Create an empty CSV under data/ with optional header row; sample_data is intentionally ignored."""
+        del sample_data  # Kept in signature for API compatibility; explicitly discard so linters do not flag it.
         file_path = FilePathUtils.get_csv_path(filename)  # Normalize the destination under data/.
         try:
             with open(file_path, "w", newline="", encoding="utf-8") as f:  # Truncate/create the file.
@@ -6434,6 +6432,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
     @staticmethod
     def all_site_settings(apisession, org_id, limit=1000):  # Fetch settings for every site.
         """Fetch per-site settings for every site in the org; limit param is unused (kept for back-compat)."""
+        del limit  # Kept in signature for back-compat; explicitly discard so linters do not flag it.
         logging.info("Fetching all site settings...")  # Log before fetching sites
         sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites first
         all_configs = []  # Collect per-site settings
@@ -6508,7 +6507,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
     @staticmethod
     def _gw_retry_one_item(apisession, failed_work_item, connection_semaphore, max_retries):
         """Retry one failed gateway config fetch up to max_retries with backoff; return the config or None."""
-        _site_id, failed_device_id, _site_name = failed_work_item  # Device id is the only field needed for logging.
+        _, failed_device_id, _ = failed_work_item  # Only the device id is needed here (for logging).
         for attempt in range(max_retries + 1):  # Bounded retry loop (initial try plus retries).
             result = APIFetchUtils._gw_fetch_one_config(apisession, failed_work_item, connection_semaphore)  # Try.
             if result is not None:  # Retry succeeded.
@@ -6544,7 +6543,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
     @staticmethod
     def _gw_collect_fast(apisession, work_items):
         """Fetch gateway configs concurrently through the connection pool with retry; return the successes."""
-        successful_results, _failed_items = execute_with_connection_pool_management(  # Pooled concurrent fetch.
+        successful_results, _ = execute_with_connection_pool_management(  # Pooled concurrent fetch; discard failures.
             work_items=work_items,
             worker_function=functools.partial(APIFetchUtils._gw_fetch_one_config, apisession),  # Bind apisession.
             batch_description="gateway device configs",
@@ -6572,6 +6571,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         of site-tagged device configuration dicts (empty when the inventory fetch fails).
         ``max_workers`` is accepted for call-site compatibility.
         """
+        del max_workers  # Kept in signature for call-site compatibility; explicitly discard so linters do not flag it.
         inventory = APIFetchUtils._gw_load_inventory(apisession, org_id)  # Fetch the org inventory (None on failure).
         if inventory is None:  # The inventory fetch failed outright.
             return []  # Degrade to an empty list.
@@ -7291,6 +7291,9 @@ class DataExporter:  # Multi-backend export facade.
     def _build_polyglot_router(cls) -> None:
         """Construct DatabaseRouter from env (called only when the polyglot layer is available)."""
         try:  # Router construction reads env and opens connections — guard against any startup failure
+            assert configure_db_logging is not None  # Guarded by _polyglot_db_layer_available
+            assert DatabaseConfig is not None  # Guarded by _polyglot_db_layer_available
+            assert DatabaseRouter is not None  # Guarded by _polyglot_db_layer_available
             configure_db_logging()  # Route DB layer's logger into MistHelper logging before first use
             config = DatabaseConfig.from_env()  # Build connection settings from .env so secrets stay out of code
             cls._router = DatabaseRouter(  # Cache the shared router on the class for every later export call
@@ -7387,6 +7390,7 @@ class DataExporter:  # Multi-backend export facade.
     def _perform_polyglot_write(payload: list[dict[str, Any]], api_function_name: str) -> None:
         """Issue the actual router write call, logging result; never raises (logs warning on failure)."""
         try:
+            assert DataExporter._router is not None  # Caller checks _should_skip_polyglot first
             result = DataExporter._router.write(payload, api_function_name)  # Write to polyglot DB
             logging.info(  # Log the polyglot result
                 "Polyglot write: backend=%s, written=%s, failed=%s",
@@ -7407,6 +7411,7 @@ class DataExporter:  # Multi-backend export facade.
         if DataExporter._should_skip_polyglot(api_function_name):  # Combined eligibility check
             return
         polyglot_data = raw_data or data  # Prefer raw payload when caller supplied it
+        assert api_function_name is not None  # _should_skip_polyglot returns True for None
         DataExporter._perform_polyglot_write(polyglot_data, api_function_name)  # Issue write (catches errors)
 
     @classmethod
@@ -8291,6 +8296,7 @@ class PromptClientUtils:  # Client selection prompt helpers.
             return None  # Signal out-of-range
         return idx  # Validated index in range
 
+    @staticmethod
     def select_client(site_id: str | None = None) -> tuple[str | None, str | None, str | None]:
         """Prompt user to select a wireless/wired client; returns (mac, type, site_id) or (None,None,None)."""
         print("\n  Client Selection")  # Print selection heading.
@@ -8440,6 +8446,7 @@ class PromptUtils:  # General prompt helpers.
         logging.error(" Device not found by name or index.")  # Log not-found.
         return None  # Abort.
 
+    @staticmethod
     def select_site_id_from_csv(csv_file: str = "SiteList.csv") -> str | None:  # Prompt site id from CSV.
         """Prompt user to select a site by index or name from csv_file; returns the site ID or None."""
         CacheUtils.check_and_generate_csv(csv_file, OrgSiteExporter.sites)  # Ensure site CSV exists/fresh.
@@ -8666,7 +8673,8 @@ class PromptUtils:  # General prompt helpers.
         """Build an empty PrettyTable with the client-selection columns, alignment, and per-column max widths."""
         table = PrettyTable()  # Build client display table.
         table.field_names = ["#", "Hostname", "MAC Address", "Type", "IP Address", "SSID/VLAN", "Site", "Status"]
-        for column, alignment in (  # Per-column alignment map.
+        # Typed so PrettyTable AlignType is preserved through the tuple literal.
+        column_alignments: tuple[tuple[str, Literal["l", "c", "r"]], ...] = (
             ("#", "r"),
             ("Hostname", "l"),
             ("MAC Address", "l"),
@@ -8675,7 +8683,8 @@ class PromptUtils:  # General prompt helpers.
             ("SSID/VLAN", "l"),
             ("Site", "l"),
             ("Status", "c"),
-        ):
+        )
+        for column, alignment in column_alignments:
             table.align[column] = alignment  # Apply column alignment.
         for column, width in (("Hostname", 20), ("IP Address", 16), ("SSID/VLAN", 15), ("Site", 15)):
             table.max_width[column] = width  # Cap column width.
@@ -11821,14 +11830,14 @@ class WiredClientManufacturerReportGenerator:  # Wired client manufacturer repor
     @staticmethod
     def _prompt_selection(summary: list[tuple[str, int]]) -> str | None:  # Prompt manufacturer selection.
         """Display manufacturer list with counts and prompt user to select one."""
-        GlobalWiredClientReportGenerator._print_manufacturer_table(summary)  # Render the picker table.
+        WiredClientManufacturerReportGenerator._print_manufacturer_table(summary)  # Render the picker table.
         choice = InputUtils.safe_input(  # Read the choice.
             "\n  Enter manufacturer number for filtered report (Enter to skip): ",
             default_value="",
             allow_empty=True,
             context="manufacturer_report_selection",
         )
-        return GlobalWiredClientReportGenerator._parse_manufacturer_choice(choice, summary)  # Map input → choice.
+        return WiredClientManufacturerReportGenerator._parse_manufacturer_choice(choice, summary)  # Map input → choice.
 
     @staticmethod
     def _filter_by_manufacturer(records: list[dict[str, Any]], manufacturer: str) -> list[dict[str, Any]]:
@@ -11936,7 +11945,7 @@ class OrgAdminExporter:  # Org admin/token exporters.
         filename = "OrgLicenses.csv"  # Build the CSV name.
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         try:
-            raw_items = OrgConfigExporter._fetch_license_records(current_org_id)  # Fetch rows via wrapper/fallback.
+            raw_items = OrgAdminExporter._fetch_license_records(current_org_id)  # Fetch rows via wrapper/fallback.
             if not raw_items:  # No records.
                 logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
                 DataExporter.write_with_format_selection([], filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
@@ -12025,6 +12034,96 @@ class LicenseExportUtils:  # Hold custom license exporters.
         return detail_rows  # Return normalized detail rows.
 
     @staticmethod
+    def _prompt_async_claim_include_detail() -> bool:
+        """Prompt user for per-device detail preference; returns parsed boolean."""
+        logging.info("Prompting for include_detail in async-claim export")  # Log before detail prompt.
+        detail_answer = InputUtils.safe_input(  # Collect detail preference from user.
+            "Include per-device detail? (y/N): ",  # Prompt text with safe default.
+            context="org_license_claim_status:detail",  # Tag prompt context for EOF handling.
+            default_value="N",  # Default to summary-only mode.
+        )
+        include_detail = detail_answer.strip().lower() in {"y", "yes"}  # Parse yes/no to boolean.
+        logging.debug("Resolved include_detail=%s", include_detail)  # Log parsed detail value.
+        return include_detail  # Return parsed preference.
+
+    @staticmethod
+    def _call_async_claim_api(org_id: str, include_detail: bool) -> tuple[int, dict]:
+        """Invoke the async-claim SDK endpoint and return (status_code, payload)."""
+        detail_query_value = True if include_detail else None  # Omit query param when detail is false.
+        logging.info("Calling async-claim API for org %s", org_id)  # Log before SDK call.
+        response = mistapi.api.v1.orgs.claim.GetOrgLicenseAsyncClaimStatus(  # Call SDK endpoint.
+            apisession,  # Reuse global authenticated API session.
+            org_id,  # Pass validated org id to API call.
+            detail=detail_query_value,  # Pass optional detail query flag.
+        )
+        status_code = getattr(response, "status_code", 200)  # Read status code when SDK provides it.
+        payload = getattr(response, "data", None) or {}  # Normalize body to dict when missing.
+        logging.debug("Async-claim API status=%s", status_code)  # Log status code after API call.
+        return status_code, payload  # Return raw response tuple for status routing.
+
+    @staticmethod
+    def _handle_async_claim_status(status_code: int, org_id: str, payload: dict) -> dict | None:
+        """Route status code to bail-out (None) or normalized payload for downstream writes."""
+        if status_code == 401:  # Handle auth failures explicitly.
+            logging.error("Mist 401 for async-claim org %s; check token", org_id)  # Provide auth guidance.
+            return None  # Signal bail-out to caller.
+        if status_code == 403:  # Handle permission failures explicitly.
+            logging.error("Mist 403 for async-claim org %s; check org access", org_id)  # Provide access guidance.
+            return None  # Signal bail-out because caller lacks required permission.
+        if status_code == 400:  # Handle invalid request inputs gracefully.
+            logging.warning("Mist 400 for async-claim org %s; check org_id", org_id)  # Provide input guidance.
+            return None  # Signal bail-out so user can retry with corrected input.
+        if status_code == 404:  # Handle no-active-job response as empty export.
+            logging.warning("No async claim job for org %s; exporting empty rows", org_id)  # Explain empty output.
+            return {}  # Force empty payload for deterministic writes.
+        return payload  # Pass through non-error payload for normal export flow.
+
+    @staticmethod
+    def _write_async_claim_summary(org_id: str, payload: dict) -> None:
+        """Flatten and persist the single-row async-claim summary for the org."""
+        logging.info("Preparing summary rows for org %s", org_id)  # Log before summary transform.
+        summary_rows = (  # Build summary rows list from payload.
+            [LicenseExportUtils._flatten_org_license_async_claim_status_summary(org_id, payload)]  # Wrap flattened row.
+            if isinstance(payload, dict) and payload  # Only flatten when payload has data.
+            else []  # Keep empty list for no-data cases.
+        )
+        logging.debug("Prepared %d summary rows", len(summary_rows))  # Log summary count.
+        summary_filename = f"org_{org_id[:8]}_claim_status_summary"  # Build summary filename stem.
+        logging.info("Writing async-claim summary for org %s", org_id)  # Log before summary write.
+        DataExporter.write_with_format_selection(  # Write summary rows to selected backend.
+            summary_rows,  # Pass summary rows or empty list.
+            summary_filename,  # Use deterministic summary filename stem.
+            api_function_name="getOrgLicenseAsyncClaimStatus",  # Route via summary PK strategy.
+        )
+        logging.debug("Completed summary write for org %s", org_id)  # Log summary write completion.
+
+    @staticmethod
+    def _write_async_claim_details(org_id: str, payload: dict) -> None:
+        """Flatten and persist per-device async-claim detail rows for the org."""
+        logging.info("Preparing detail rows for org %s", org_id)  # Log before detail transform.
+        detail_rows = (  # Build detail rows list from payload.
+            LicenseExportUtils._flatten_org_license_async_claim_status_details(org_id, payload)  # Flatten details.
+            if isinstance(payload, dict) and payload  # Only flatten when payload has data.
+            else []  # Keep empty list for no-data cases.
+        )
+        logging.debug("Prepared %d detail rows", len(detail_rows))  # Log detail count.
+        detail_filename = f"org_{org_id[:8]}_claim_status_details"  # Build detail filename stem.
+        logging.info("Writing async-claim details for org %s", org_id)  # Log before detail write.
+        DataExporter.write_with_format_selection(  # Write detail rows to selected backend.
+            detail_rows,  # Pass detail rows or empty list.
+            detail_filename,  # Use deterministic detail filename stem.
+            api_function_name="getOrgLicenseAsyncClaimStatusDetails",  # Route via detail PK strategy.
+        )
+        logging.debug("Completed detail write for org %s", org_id)  # Log detail write completion.
+
+    @staticmethod
+    def _resolve_async_claim_include_detail(include_detail: bool | None) -> bool:
+        """Return caller-supplied detail flag, or prompt when the caller passed None."""
+        if include_detail is None:  # No explicit preference — go interactive.
+            return LicenseExportUtils._prompt_async_claim_include_detail()  # Delegate prompt to helper.
+        return bool(include_detail)  # Normalize truthy/falsy values to real bool.
+
+    @staticmethod
     def export_org_license_async_claim_status(org_id: str | None = None, include_detail: bool | None = None) -> None:
         """Fetch and export async claim status summary plus optional details."""
         logging.info("Resolving org_id for async-claim export")  # Log before org resolution.
@@ -12033,76 +12132,18 @@ class LicenseExportUtils:  # Hold custom license exporters.
         if not LicenseExportUtils._is_valid_uuid(resolved_org_id):  # Validate input before any API call.
             logging.warning("Invalid org_id %s for async-claim export", resolved_org_id)  # Warn on invalid input.
             return  # Stop early when input is invalid.
-        if include_detail is None:  # Ask for detail mode only when caller omitted it.
-            logging.info("Prompting for include_detail in async-claim export")  # Log before detail prompt.
-            detail_answer = InputUtils.safe_input(  # Collect detail preference from user.
-                "Include per-device detail? (y/N): ",  # Prompt text with safe default.
-                context="org_license_claim_status:detail",  # Tag prompt context for EOF handling.
-                default_value="N",  # Default to summary-only mode.
-            )
-            include_detail = detail_answer.strip().lower() in {"y", "yes"}  # Parse yes/no to boolean.
-            logging.debug("Resolved include_detail=%s", include_detail)  # Log parsed detail value.
-        detail_query_value = True if include_detail else None  # Omit query param when detail is false.
-        logging.info("Calling async-claim API for org %s", resolved_org_id)  # Log before SDK call.
-        response = mistapi.api.v1.orgs.claim.GetOrgLicenseAsyncClaimStatus(  # Call SDK endpoint.
-            apisession,  # Reuse global authenticated API session.
-            resolved_org_id,  # Pass validated org id to API call.
-            detail=detail_query_value,  # Pass optional detail query flag.
+        detail = LicenseExportUtils._resolve_async_claim_include_detail(include_detail)  # Normalize detail flag.
+        status_code, raw_payload = LicenseExportUtils._call_async_claim_api(  # SDK call for async-claim status.
+            resolved_org_id, detail
         )
-        status_code = getattr(response, "status_code", 200)  # Read status code when SDK provides it.
-        payload = getattr(response, "data", None) or {}  # Normalize body to dict when missing.
-        logging.debug("Async-claim API status=%s", status_code)  # Log status code after API call.
-        if status_code == 401:  # Handle auth failures explicitly.
-            logging.error("Mist 401 for async-claim org %s; check token", resolved_org_id)  # Provide auth guidance.
-            return  # Stop to avoid misleading empty export.
-        if status_code == 403:  # Handle permission failures explicitly.
-            logging.error(  # Provide access guidance.
-                "Mist 403 for async-claim org %s; check org access", resolved_org_id
-            )
-            return  # Stop because caller lacks required permission.
-        if status_code == 400:  # Handle invalid request inputs gracefully.
-            logging.warning("Mist 400 for async-claim org %s; check org_id", resolved_org_id)  # Provide input guidance.
-            return  # Stop so user can retry with corrected input.
-        if status_code == 404:  # Handle no-active-job response as empty export.
-            logging.warning(  # Explain empty output.
-                "No async claim job for org %s; exporting empty rows", resolved_org_id
-            )
-            payload = {}  # Force empty payload for deterministic writes.
-        logging.info("Preparing summary rows for org %s", resolved_org_id)  # Log before summary transform.
-        summary_rows = (  # Build summary rows list from payload.
-            [  # Hold one flattened summary row.
-                LicenseExportUtils._flatten_org_license_async_claim_status_summary(resolved_org_id, payload)
-            ]
-            if isinstance(payload, dict) and payload  # Only flatten when payload has data.
-            else []  # Keep empty list for no-data cases.
+        payload = LicenseExportUtils._handle_async_claim_status(  # Route status code to bail-out or payload.
+            status_code, resolved_org_id, raw_payload
         )
-        logging.debug("Prepared %d summary rows", len(summary_rows))  # Log summary count.
-        summary_filename = f"org_{resolved_org_id[:8]}_claim_status_summary"  # Build summary filename stem.
-        logging.info("Writing async-claim summary for org %s", resolved_org_id)  # Log before summary write.
-        DataExporter.write_with_format_selection(  # Write summary rows to selected backend.
-            summary_rows,  # Pass summary rows or empty list.
-            summary_filename,  # Use deterministic summary filename stem.
-            api_function_name="getOrgLicenseAsyncClaimStatus",  # Route via summary PK strategy.
-        )
-        logging.debug("Completed summary write for org %s", resolved_org_id)  # Log summary write completion.
-        if include_detail:  # Write details only when user requested them.
-            logging.info("Preparing detail rows for org %s", resolved_org_id)  # Log before detail transform.
-            detail_rows = (  # Build detail rows list from payload.
-                LicenseExportUtils._flatten_org_license_async_claim_status_details(  # Flatten details.
-                    resolved_org_id, payload
-                )
-                if isinstance(payload, dict) and payload  # Only flatten when payload has data.
-                else []  # Keep empty list for no-data cases.
-            )
-            logging.debug("Prepared %d detail rows", len(detail_rows))  # Log detail count.
-            detail_filename = f"org_{resolved_org_id[:8]}_claim_status_details"  # Build detail filename stem.
-            logging.info("Writing async-claim details for org %s", resolved_org_id)  # Log before detail write.
-            DataExporter.write_with_format_selection(  # Write detail rows to selected backend.
-                detail_rows,  # Pass detail rows or empty list.
-                detail_filename,  # Use deterministic detail filename stem.
-                api_function_name="getOrgLicenseAsyncClaimStatusDetails",  # Route via detail PK strategy.
-            )
-            logging.debug("Completed detail write for org %s", resolved_org_id)  # Log detail write completion.
+        if payload is None:  # Helper signalled bail-out via None sentinel.
+            return  # Stop so user sees the specific error path in logs.
+        LicenseExportUtils._write_async_claim_summary(resolved_org_id, payload)  # Always write summary rows.
+        if detail:  # Write details only when user requested them.
+            LicenseExportUtils._write_async_claim_details(resolved_org_id, payload)  # Delegate detail write to helper.
 
 
 class SelfExportUtils:  # Self/account exporters.
@@ -13076,7 +13117,7 @@ class SiteDeviceExporter:  # Site device exporters.
         try:
             response = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type="all", limit=1000)
             rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows
-            SiteExportUtils._persist_site_device_stats(rawdata, site_name)  # Persist or tell user empty
+            SiteDeviceExporter._persist_site_device_stats(rawdata, site_name)  # Persist or tell user empty
         except Exception as e:  # Fetch failed
             logging.error("Error fetching device stats for site %s: %s", site_name, e)  # Log the error
             print(f"! Error fetching device statistics: {e}")  # Tell the user
@@ -13176,7 +13217,7 @@ class SiteDeviceExporter:  # Site device exporters.
         try:
             response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
             rawdata = getattr(response, "data", [])  # Unwrap data; default empty
-            SiteExportUtils._persist_site_devices(rawdata, site_name)  # Persist or tell user empty
+            SiteDeviceExporter._persist_site_devices(rawdata, site_name)  # Persist or tell user empty
         except Exception as e:  # Fetch failed
             logging.error("Error fetching devices for site %s: %s", site_name, e)  # Log the error
             print(f"! Error fetching device data: {e}")  # Tell the user
@@ -13679,7 +13720,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             print("! No site selected. Exiting.")  # Tell the user.
             return None  # Abort.
         site_name = SiteAnomalyExporter._anomaly_resolve_site_name(site_id)  # Resolve site name for the filename.
-        client_mac, client_type, selected_site_id = PromptClientUtils.select_client(site_id)  # Select a client.
+        client_mac, _, _ = PromptClientUtils.select_client(site_id)  # Select a client (only MAC is used).
         if not client_mac:  # No client selected.
             print("! No client selected. Exiting.")  # Tell the user.
             return None  # Abort.
@@ -14539,7 +14580,9 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         print("! Dynamically discovering const endpoints from mistapi library...")  # Tell the user.
         logging.info("Starting dynamic discovery of const endpoints")  # Log start.
 
-        for _importer, modname, ispkg in pkgutil.iter_modules(const_package.__path__, const_package.__name__ + "."):
+        # Walk every non-package module under mistapi.api.v1.const for inspection.
+        const_prefix = const_package.__name__ + "."
+        for modname, ispkg in ((m.name, m.ispkg) for m in pkgutil.iter_modules(const_package.__path__, const_prefix)):
             if ispkg:  # Skip subpackages.
                 continue  # Next module.
             self._inspect_module(modname)  # Inspect the module.
@@ -14713,7 +14756,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
 
     def _process_all_endpoints(self) -> None:  # Process all endpoints.
         """Process each discovered endpoint."""
-        for _endpoint_name, config in self.discovered_endpoints.items():  # Walk endpoints.
+        for config in self.discovered_endpoints.values():  # Walk endpoints; keys are unused here.
             self._process_single_endpoint(config)  # Process each.
 
     def _process_single_endpoint(self, config: EndpointConfig) -> None:  # Process one endpoint.
@@ -15719,7 +15762,7 @@ class DataCollectionManager:  # Continuous data collector.
         """Generate support package for each site with alarms or events."""
         site_data = data_sources["site_data"]  # Read the site data.
 
-        for site_id, _site_info in site_data.items():  # Walk sites.
+        for site_id in site_data:  # Walk sites; values are looked up per-site as needed.
             # Skip sites without alarms or events
             has_alarms = bool(data_sources["alarms_data"].get(site_id))  # Has alarms?
             has_events = bool(data_sources["events_data"].get(site_id))  # Has events?
@@ -15883,7 +15926,7 @@ class GatewayTestExporter:  # Gateway synthetic test exporter.
         max_retries, retry_delay = GatewayTestExporter._resolve_retry_defaults(
             max_retries, retry_delay
         )  # Defaults via helper
-        site_id, device_id, _device_name, _site_name = device_info  # Unpack for backoff/error logs only.
+        site_id, device_id, _, _ = device_info  # Unpack for backoff/error logs only (names unused here).
         for attempt in range(max_retries + 1):  # Bounded retry loop.
             stats = GatewayTestExporter._try_synthetic_fetch_attempt(
                 device_info, attempt, connection_semaphore
@@ -15903,7 +15946,7 @@ class GatewayTestExporter:  # Gateway synthetic test exporter.
     @staticmethod
     def _try_synthetic_fetch_attempt(device_info, attempt, connection_semaphore):
         """Single attempt: validate inputs, call API, tag stats, log success. Return stats or None."""
-        site_id, device_id, device_name, site_name = device_info  # Unpack for the call + logging.
+        site_id, device_id, _, _ = device_info  # Unpack for the call + logging (names unused directly here).
         try:
             ValidationUtils.validate_site_id(site_id, "synthetic_tests")  # Validate the site id.
             ValidationUtils.validate_device_id(device_id, "synthetic_tests")  # Validate the device id.
@@ -16061,6 +16104,7 @@ class GatewayTestExporter:  # Gateway synthetic test exporter.
             len(gateway_devices),
         )
 
+    @staticmethod
     def test_results_by_site(fast: bool = False) -> None:  # Export tests by site.
         """Delegator: all logic lives in src/refactors/serial_cc/test_results_by_site.py."""
         from src.refactors.serial_cc.test_results_by_site import GatewayTestResultsService  # noqa: PLC0415
@@ -16652,7 +16696,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         if not site_id or not device_id:  # Still missing — abort
             return
         mist_host, mist_apitoken = ARPCommandManager._resolve_mist_ws_credentials()  # Resolve creds
-        if not mist_host:  # Missing creds (host falsy implies token also missing per resolver)
+        if not mist_host or not mist_apitoken:  # Missing creds — abort
             print(" Mist host or API token not found in session or environment.")  # User-facing notice
             return
         print(" Subscribing to WebSocket stream...")  # User progress
@@ -16702,14 +16746,17 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         """Return on_message/on_close/on_error/on_open callbacks closed over a mutable state dict."""
 
         def on_message(ws, message):  # WebSocket message handler.
+            del ws  # The websocket client passes itself; unused here but required by the callback signature.
             state["last_message_time"], state["buffer"] = ARPCommandManager._handle_message(  # type: ignore[no-untyped-call]
                 message, target.session_id, state["buffer"], output_lines, debug
             )
 
         def on_close(ws, *args):  # WebSocket close handler.
+            del ws, args  # Signature required by websocket-client; parameters unused here.
             ARPCommandManager._handle_close(output_lines, debug)  # type: ignore[no-untyped-call]
 
         def on_error(ws, error):  # WebSocket error handler.
+            del ws  # Signature required by websocket-client; ws unused here.
             logging.error("! WebSocket error: %s", error)  # Log the error.
 
         def on_open(ws):  # WebSocket open handler.
@@ -17519,7 +17566,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         """Remap network and VPN IDs in gateway template config."""
         networks = obj.get("networks", {})  # Gateway template networks section
         if isinstance(networks, dict):  # Verify expected dict structure
-            for _net_name, net_config in networks.items():  # Iterate each network reference
+            for net_config in networks.values():  # Iterate each network reference; keys unused here
                 if isinstance(net_config, dict) and "id" in net_config:  # Has remappable ID
                     old_id = net_config["id"]  # Capture source org's ID
                     net_config["id"] = self._remap_table.get(old_id, old_id)  # Swap to dest ID
@@ -18005,6 +18052,7 @@ class WANProbeConfigManager:  # WAN probe config manager.
 
     def _show_preview(self, templates_with_changes: list[dict[str, Any]], dry_run: bool) -> None:
         """Display preview of changes to be made."""
+        del dry_run  # Kept in signature for API-compat with sibling _apply_changes; not used in preview.
         total_interfaces = sum(len(t["wan_interfaces"]) for t in templates_with_changes)  # Sum across all
         total_sites = sum(t["site_count"] for t in templates_with_changes)  # Sum site reach
         print("\n  Preview of Changes:")  # Section header
@@ -19061,6 +19109,7 @@ class FirmwareUpgradeStatusChecker:
 
     def _update_summary_counters(self, device_info: dict[str, Any], fw_info: dict[str, Any]) -> None:
         """Update summary counters for version, model, and type."""
+        del fw_info  # Kept in signature for symmetry with sibling _maybe_add_to_results; only device_info is used.
         version = device_info["device_version"]
         model = device_info["device_model"]
         device_type = device_info["device_type"]
@@ -20616,7 +20665,8 @@ class WLANRadiusTimerManager:
         applies = wlan_template.get("applies", {})  # The template's assignment scope rules
         if not isinstance(applies, dict):  # Malformed/absent scope object — not applicable
             return False
-        if type(self)._template_matches_org_or_site(applies, self.site_id):  # Org-wide or explicit site
+        # Org-wide or explicit site scope wins immediately without checking group/tag rules.
+        if self.site_id and type(self)._template_matches_org_or_site(applies, self.site_id):
             return True
         site_groups = self.site_info.get("sitegroup_ids", [])  # Site groups this site belongs to
         site_tags = self.site_info.get("wxtag_ids", [])  # Wx tags applied to this site
@@ -21125,6 +21175,9 @@ class WLANRadiusTimerManager:
         print("\n[*] Updating site template-level WLAN...")
         template_id = wlan.get("_template_id")  # The template that owns this WLAN
         wlan_id = wlan.get("id")  # The WLAN's unique ID within the template
+        if not template_id or not wlan_id:  # Both are required for a template-level update
+            logging.error("Missing template_id or wlan_id for site template WLAN update")
+            return
         logging.info("Updating site template WLAN %s in template %s", wlan_id, template_id)
         template_data = self._fetch_site_template_for_update(template_id)  # Load + validate
         if template_data is None:  # Fetch or shape-check failed (already reported by helper)
@@ -24096,7 +24149,7 @@ def _resolve_cli_org_id(args: argparse.Namespace) -> str:
 def _build_site_name_to_id_map(sites: list[dict[str, Any]]) -> dict[str, str]:
     """Build a {name: id} lookup map from a list of site dicts, skipping entries missing either field."""
     return {
-        site.get("name"): site.get("id") for site in sites if site.get("name") and site.get("id")
+        str(site["name"]): str(site["id"]) for site in sites if site.get("name") and site.get("id")
     }  # Build name->id map; drop sites missing name or id
 
 
