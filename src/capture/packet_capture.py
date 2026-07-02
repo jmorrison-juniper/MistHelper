@@ -4,17 +4,15 @@ from __future__ import annotations  # WHY: enable postponed annotation evaluatio
 
 import logging  # WHY: structured audit trail for capture lifecycle events
 import re  # WHY: MAC address validation and normalization regex patterns
-import time  # WHY: capture-completion polling and timeout deadlines
 from collections.abc import Callable  # WHY: type hints for callbacks passed to helpers
-from typing import TYPE_CHECKING, Any  # WHY: type-only guard plus generic mistapi payload shapes
+from typing import TYPE_CHECKING, Any, cast  # WHY: type-only guard plus generic mistapi payload shapes
 
-from src.capture.org_capture_workflow import OrgCaptureWorkflow  # WHY: reusable org-scope workflow helper
-from src.capture.packet_capture_download import PacketCaptureDownloadManager  # WHY: pcap download side-effect owner
-from src.capture.site_capture_loop import SiteCaptureLoopRunner  # WHY: shared loop-runner for site captures
 from src.capture._packet_capture_exec import PacketCaptureExec  # WHY: extracted exec/monitor/download cluster
 from src.capture._packet_capture_org import PacketCaptureOrg  # WHY: extracted org/mxedge capture cluster
 from src.capture._packet_capture_prompts import PacketCapturePrompts  # WHY: extracted prompts/summary cluster
 from src.capture._packet_capture_tcpdump import PacketCaptureTcpdump  # WHY: extracted tcpdump menu cluster
+from src.capture.org_capture_workflow import OrgCaptureWorkflow  # WHY: reusable org-scope workflow helper
+from src.capture.packet_capture_download import PacketCaptureDownloadManager  # WHY: pcap download side-effect owner
 
 if TYPE_CHECKING:  # WHY: guard type-only imports to avoid runtime overhead
     pass  # WHY: reserved for future TYPE_CHECKING-only imports
@@ -371,7 +369,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             return  # WHY: exit menu handler
         print("\n! Invalid choice")  # WHY: fallthrough for unknown input
 
-    def _wireless_client_gather_params(self, site_id: str) -> "dict[str, Any] | None":
+    def _wireless_client_gather_params(self, site_id: str) -> dict[str, Any] | None:
         """Prompt the user for wireless-client capture parameters.
 
         Returns:
@@ -391,7 +389,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         )
         return core  # WHY: fully assembled params for downstream payload builder
 
-    def _wireless_client_gather_core(self, site_id: str) -> "dict[str, Any] | None":
+    def _wireless_client_gather_core(self, site_id: str) -> dict[str, Any] | None:
         """Prompt for the required wireless-client capture params only."""
         client_mac = self._prompt_client_mac(site_id)  # WHY: pick target client MAC first
         if not client_mac:  # WHY: user cancelled at client selection
@@ -415,7 +413,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         }
 
     @staticmethod
-    def _wireless_client_build_payload(params: "dict[str, Any]") -> "dict[str, Any]":
+    def _wireless_client_build_payload(params: dict[str, Any]) -> dict[str, Any]:
         """Assemble the wireless-client capture payload from prompt results."""
         payload: dict[str, Any] = {  # WHY: base keys mirror Mist API contract
             "type": "client",  # WHY: capture-type discriminator
@@ -464,7 +462,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             "Note: To capture new connection attempts (auth/assoc handshakes), use New Association Capture instead."
         )  # WHY: point to alternate flow
 
-    def _wired_client_gather_params(self, site_id: str) -> "dict[str, Any] | None":
+    def _wired_client_gather_params(self, site_id: str) -> dict[str, Any] | None:
         """Prompt the user for wired-client capture parameters.
 
         Returns:
@@ -490,7 +488,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         }
 
     @staticmethod
-    def _wired_client_build_payload(params: "dict[str, Any]") -> "dict[str, Any]":
+    def _wired_client_build_payload(params: dict[str, Any]) -> dict[str, Any]:
         """Assemble the wired-client capture payload."""
         payload: dict[str, Any] = {  # WHY: base keys mirror Mist API contract
             "type": "client",  # WHY: capture-type discriminator
@@ -522,7 +520,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         )  # WHY: confirm before launch
         self._run_site_capture(site_id, payload, params["enable_loop"])  # WHY: launch via shared runner
 
-    def _gateway_select_device_and_ports(self, site_id: str) -> "tuple[str, list] | None":
+    def _gateway_select_device_and_ports(self, site_id: str) -> tuple[str, list[str]] | None:
         """Prompt user for a gateway and port selection at ``site_id``.
 
         Returns:
@@ -547,7 +545,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         port_list, _available_ports = validated  # WHY: unpack ports; ignore available list here
         return gateway_mac, port_list  # WHY: hand consolidated selection back to orchestrator
 
-    def _gateway_build_payload(self, gateway_mac: str, port_list: list, params: "dict[str, Any]") -> "dict[str, Any]":
+    def _gateway_build_payload(self, gateway_mac: str, port_list: list[str], params: dict[str, Any]) -> dict[str, Any]:
         """Build gateway-capture API payload from selection + params."""
         payload: dict[str, Any] = {  # WHY: base keys mirror API contract
             "type": "gateway",  # WHY: capture-type discriminator
@@ -590,7 +588,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         print(" GATEWAY CAPTURE CONFIGURATION")  # WHY: flow-identifying header
         print("-" * 80)  # WHY: banner end
 
-    def _switch_select_device_and_ports(self, site_id: str) -> "tuple[str, list] | None":
+    def _switch_select_device_and_ports(self, site_id: str) -> tuple[str, list[str]] | None:
         """Prompt the user for a switch and port selection at ``site_id``.
 
         Returns:
@@ -613,7 +611,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         port_list, _available_ports = validated  # WHY: unpack ports; ignore available list here
         return switch_mac, port_list  # WHY: hand consolidated selection back to orchestrator
 
-    def _switch_pick_and_normalize(self, site_id: str) -> "str | None":
+    def _switch_pick_and_normalize(self, site_id: str) -> str | None:
         """Interactively pick a switch MAC and normalize for API use."""
         logging.debug("Prompting for switch selection from site inventory")  # WHY: preserves debug audit trail
         switch_mac = _get_prompt_network_device_utils().select_switch_mac(site_id)  # WHY: interactive switch chooser
@@ -626,7 +624,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         logging.debug("Selected and normalized switch MAC: %s", switch_mac)  # WHY: audit final MAC value
         return switch_mac  # WHY: hand normalized MAC back to caller
 
-    def _switch_gather_params(self) -> "dict[str, Any] | None":
+    def _switch_gather_params(self) -> dict[str, Any] | None:
         """Prompt the user for switch capture parameters.
 
         Returns:
@@ -651,7 +649,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             "enable_loop": enable_loop,
         }
 
-    def _switch_build_payload(self, switch_mac: str, port_list: list, params: "dict[str, Any]") -> "dict[str, Any]":
+    def _switch_build_payload(self, switch_mac: str, port_list: list[str], params: dict[str, Any]) -> dict[str, Any]:
         """Build the switch-capture API payload from selection + params."""
         payload: dict[str, Any] = {  # WHY: base payload keys mirror API contract
             "type": "switch",  # WHY: capture type discriminator for Mist API
@@ -728,7 +726,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             "Note: To capture ongoing traffic from already-connected clients, use Client Capture (Wireless) instead."
         )  # WHY: pointer to alternate flow
 
-    def _new_assoc_gather_params(self) -> "dict[str, Any] | None":
+    def _new_assoc_gather_params(self) -> dict[str, Any] | None:
         """Prompt user for new-association capture parameters."""
         ssid = _get_input_utils().safe_input(  # WHY: SSID is optional; user may press Enter
             "\nEnter SSID to monitor (optional, press Enter for all): ",
@@ -748,7 +746,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         }
 
     @staticmethod
-    def _new_assoc_build_payload(params: "dict[str, Any]") -> "dict[str, Any]":
+    def _new_assoc_build_payload(params: dict[str, Any]) -> dict[str, Any]:
         """Assemble the new-association capture API payload."""
         payload: dict[str, Any] = {  # WHY: base keys match Mist API contract
             "type": "new_assoc",
@@ -760,7 +758,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         return payload  # WHY: hand assembled payload to executor
 
     @staticmethod
-    def _new_assoc_display_summary(params: "dict[str, Any]") -> None:
+    def _new_assoc_display_summary(params: dict[str, Any]) -> None:
         """Render the new-association capture configuration summary."""
         print("\n" + "=" * 80)  # WHY: leading separator
         print(" CAPTURE CONFIGURATION SUMMARY")  # WHY: summary block title
@@ -816,7 +814,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             return None  # WHY: propagate cancel
         return {"duration": duration, "num_packets": num_packets}  # WHY: sub-dict merged upstream
 
-    def _scan_select_ap(self, site_id: str) -> "str | None":
+    def _scan_select_ap(self, site_id: str) -> str | None:
         """Prompt user for the scan-target AP.
 
         Returns:
@@ -830,7 +828,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             logging.warning("No AP selected or AP selection failed - aborting capture")  # WHY: audit cancel
             return None  # WHY: propagate cancel to orchestrator
         if ap_mac == "ALL_APS":  # WHY: sentinel routes to multi-AP flow
-            return ap_mac  # WHY: caller dispatches to _start_site_scan_capture_all_aps
+            return cast(str, ap_mac)  # WHY: caller dispatches to _start_site_scan_capture_all_aps
         ap_mac = self.normalize_mac_address(ap_mac)  # WHY: normalize before payload use
         logging.debug("Selected and normalized AP MAC: %s", ap_mac)  # WHY: audit final MAC value
         return ap_mac  # WHY: hand normalized MAC back
@@ -977,7 +975,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         print(f"\n* Found {len(ap_macs)} APs at site")  # WHY: confirm scope to user
         self._log_existing_site_captures(site_id)  # WHY: warn about conflicts before launching
         print(f"  Preparing to launch {len(ap_macs)} simultaneous captures...")  # WHY: intent preview
-        return ap_macs  # WHY: hand list to the caller for use in prompts + payload
+        return cast(list[str], ap_macs)  # WHY: hand list to the caller for use in prompts + payload
 
     def _multi_ap_confirm_and_launch(self, site_id: str, ap_macs: list[str], params: dict[str, Any]) -> None:
         """Show summary, wait for confirmation, then build+launch multi-AP payload."""
@@ -1064,7 +1062,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         expected_duration: int,
         elapsed: float,
         poll_attempt: int,
-    ) -> "bool | None":
+    ) -> bool | None:
         """Delegate single capture-status poll to the extracted exec cluster."""
         exec_helper = self._exec  # WHY: local alias for delegator pattern
         return exec_helper.poll_capture_once(

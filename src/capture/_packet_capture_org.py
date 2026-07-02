@@ -13,9 +13,9 @@ delegator wrappers for the public method names still called by
 from __future__ import annotations  # WHY: postponed evaluation consistent with parent module
 
 import logging  # WHY: capture-lifecycle audit trail
-from typing import Any  # WHY: manager is treated opaquely to avoid import cycles
+from typing import Any, cast  # WHY: opaque manager plus typed cast for lazy proxy returns
 
-import mistapi  # type: ignore[import-untyped]  # WHY: primary Mist SDK for org/mxedge REST calls
+import mistapi  # WHY: primary Mist SDK for org/mxedge REST calls
 
 
 def _lazy_input_utils() -> Any:
@@ -80,7 +80,7 @@ class PacketCaptureOrg:
             print("\n! No MxEdges found for this organization")  # WHY: preserve legacy user message
             logging.warning("Menu #10: No MxEdges found")  # WHY: keep legacy audit trail
             return None  # WHY: signal empty inventory as None
-        return mxedges  # WHY: hand list back to caller unchanged
+        return cast(list[dict[str, Any]], mxedges)  # WHY: mistapi returns list[dict] via untyped SDK
 
     def _fetch_mxedge_stats_map(self) -> dict[str, Any]:
         """Return an ``{id: stats}`` map, best-effort (empty on error)."""
@@ -241,13 +241,14 @@ class PacketCaptureOrg:
     def _prompt_port_input(port_list: list[str], mxedge_name: str, mxedge_id: str) -> str | None:
         """Safely prompt for a port index string; None on cancel."""
         try:  # WHY: safe_input can raise on EOF/Ctrl-C
-            return (
+            return cast(  # WHY: safe_input->str traverses untyped lazy proxy
+                str,
                 _lazy_input_utils()
                 .safe_input(
                     f"\n  {mxedge_name} - Select a single port index [0-{len(port_list) - 1}]: ",
                     context=f"port_selection_{mxedge_id}",
                 )
-                .strip()
+                .strip(),
             )
         except (EOFError, KeyboardInterrupt):  # WHY: legacy cancel path
             print("\n! Operation cancelled")

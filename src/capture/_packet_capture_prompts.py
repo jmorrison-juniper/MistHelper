@@ -18,7 +18,7 @@ class-level attributes.
 from __future__ import annotations  # WHY: postponed annotation eval for forward refs used below
 
 import logging  # WHY: audit-trail logging for capture prompt lifecycle events
-from typing import Any  # WHY: opaque manager reference avoids import cycles
+from typing import Any, cast  # WHY: opaque manager reference plus typed cast for lazy proxies
 
 try:  # WHY: mistapi runtime-required, but tolerated missing during static analysis
     import mistapi  # WHY: primary Mist SDK used for listSitePacketCaptures / stream helpers
@@ -86,10 +86,13 @@ class PacketCapturePrompts:
         print("\nClient selection:")  # WHY: banner introduces the two-mode selector
         print("  1. Select from connected clients")  # WHY: option 1 uses the list picker
         print("  2. Manually enter MAC address")  # WHY: option 2 accepts free-form MAC entry
-        return _lazy_input_utils().safe_input(  # WHY: safe wrapper trims + logs input
-            "Enter choice (default 1): ",  # WHY: prompt text preserved from legacy UX
-            default_value="1",  # WHY: default to the interactive picker for safety
-            context="client_select",  # WHY: audit tag for input logging
+        return cast(  # WHY: safe_input returns str but lazy proxy erases the annotation
+            str,
+            _lazy_input_utils().safe_input(  # WHY: safe wrapper trims + logs input
+                "Enter choice (default 1): ",  # WHY: prompt text preserved from legacy UX
+                default_value="1",  # WHY: default to the interactive picker for safety
+                context="client_select",  # WHY: audit tag for input logging
+            ),
         )
 
     def _resolve_client_mac_input(self, choice: str, site_id: str) -> str | None:
@@ -99,9 +102,13 @@ class PacketCapturePrompts:
             if not client_mac:  # WHY: picker returns falsy when user cancels
                 print("\n! No client selected")  # WHY: explicit user feedback for cancel
                 return None  # WHY: sentinel telling caller the flow was aborted
-            return client_mac  # WHY: raw MAC surfaced for downstream normalization
-        return _lazy_input_utils().safe_input(  # WHY: option 2 collects manual MAC entry
-            "\nEnter client MAC address: ", context="client_mac"  # WHY: distinct audit tag
+            return cast(str, client_mac)  # WHY: picker returns str MAC via untyped proxy
+        return cast(  # WHY: safe_input returns str through untyped lazy proxy
+            str,
+            _lazy_input_utils().safe_input(  # WHY: option 2 collects manual MAC entry
+                "\nEnter client MAC address: ",
+                context="client_mac",  # WHY: distinct audit tag
+            ),
         )
 
     def prompt_client_mac(self, site_id: str) -> str | None:
@@ -113,7 +120,7 @@ class PacketCapturePrompts:
         if not self._mm.validate_mac_address(client_mac):  # WHY: reject malformed MAC before API use
             print(f"\n! Invalid MAC address format: {client_mac}")  # WHY: explicit feedback to user
             return None  # WHY: sentinel indicating validation failure
-        return self._mm.normalize_mac_address(client_mac)  # WHY: normalize to colon form
+        return cast(str, self._mm.normalize_mac_address(client_mac))  # WHY: normalize to colon form
 
     def _prompt_ap_filter_choice(self) -> str:
         """Prompt for AP filter selection mode and return raw choice string."""
@@ -121,10 +128,13 @@ class PacketCapturePrompts:
         print("  1. Select AP from list")  # WHY: option 1 uses the list picker
         print("  2. Enter MAC manually")  # WHY: option 2 accepts free-form MAC entry
         print("  3. Skip (capture from any AP)")  # WHY: option 3 skips filtering entirely
-        return _lazy_input_utils().safe_input(  # WHY: safe wrapper handles Ctrl-C/EOF cleanly
-            "Enter choice (default 3): ",  # WHY: prompt text preserved from legacy UX
-            default_value="3",  # WHY: default skips filter to preserve backward behavior
-            context="ap_filter",  # WHY: audit tag for input logging
+        return cast(  # WHY: safe_input returns str through untyped lazy proxy
+            str,
+            _lazy_input_utils().safe_input(  # WHY: safe wrapper handles Ctrl-C/EOF cleanly
+                "Enter choice (default 3): ",  # WHY: prompt text preserved from legacy UX
+                default_value="3",  # WHY: default skips filter to preserve backward behavior
+                context="ap_filter",  # WHY: audit tag for input logging
+            ),
         )
 
     def _handle_ap_manual_entry(self) -> str | None:
@@ -133,7 +143,7 @@ class PacketCapturePrompts:
         if not self._mm.validate_mac_address(ap_mac):  # WHY: reject malformed MAC before API use
             print(f"\n! Invalid AP MAC address format: {ap_mac}")  # WHY: user-facing error message
             return None  # WHY: caller treats None as "skip", not "abort"
-        return self._mm.normalize_mac_address(ap_mac)  # WHY: normalize before returning to caller
+        return cast(str, self._mm.normalize_mac_address(ap_mac))  # WHY: normalize before returning to caller
 
     def prompt_ap_mac_filter(self, site_id: str) -> str | None:
         """Prompt user to optionally filter by a specific AP MAC address."""

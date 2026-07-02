@@ -21,9 +21,9 @@ from __future__ import annotations  # WHY: postponed evaluation for consistency 
 import logging  # WHY: audit trail for capture lifecycle events
 import time  # WHY: elapsed-time tracking for polling loops
 from collections.abc import Callable  # WHY: type hint for list-captures callbacks
-from typing import Any  # WHY: manager is treated opaquely to avoid import cycles
+from typing import Any, cast  # WHY: opaque manager plus typed cast for untyped SDK returns
 
-import mistapi  # type: ignore[import-untyped]  # WHY: primary Mist SDK for pcap REST endpoints
+import mistapi  # WHY: primary Mist SDK for pcap REST endpoints
 
 from src.capture.packet_capture_download import PacketCaptureDownloadManager  # WHY: shared parser/downloader
 from src.capture.site_capture_loop import SiteCaptureLoopRunner  # WHY: shared loop-runner
@@ -129,7 +129,10 @@ class PacketCaptureExec:
                 self.mist_session, site_id, duration="1d", limit=100
             )
 
-        return self._download_manager.fetch_completed_pcaps(list_fn, iteration)  # WHY: delegate to shared helper
+        return cast(  # WHY: helper returns list[dict] via untyped SDK path
+            list[dict[str, Any]],
+            self._download_manager.fetch_completed_pcaps(list_fn, iteration),  # WHY: delegate to shared helper
+        )
 
     def attempt_loop_capture(self, site_id: str, payload: dict[str, Any], iteration: int) -> float | None:
         """Attempt to start a new capture and return the capture start time."""
@@ -405,7 +408,7 @@ class PacketCaptureExec:
         if msg.get("channel") != channel:  # WHY: reject other channels
             return False  # WHY: not ours
         data = msg.get("data", {})  # WHY: safe extract inner data
-        return data.get("capture_id") == capture_id  # WHY: match our capture id
+        return bool(data.get("capture_id") == capture_id)  # WHY: match our capture id
 
     @staticmethod
     def _maybe_print_batch_progress(state: dict[str, Any]) -> None:
