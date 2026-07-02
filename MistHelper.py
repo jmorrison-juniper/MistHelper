@@ -1333,7 +1333,8 @@ class GlobalImportManager:
             self.fromisoformat = datetime.fromisoformat  # Expose ISO-8601 string parsing
             self.strptime = datetime.strptime  # Expose format-string parsing
             # Preserve legacy naive-UTC behavior without calling the deprecated datetime.utcnow.
-            self.utcnow = lambda: datetime.now(timezone.utc).replace(tzinfo=None)  # Expose UTC now() helper
+            # Expose UTC now() helper as naive UTC (legacy contract).
+            self.utcnow = lambda: datetime.now(UTC).replace(tzinfo=None)
             self.datetime = datetime  # Allow handler.datetime to reach the real class
             self.timezone = timezone  # Provide timezone for tz-aware construction
             self.timedelta = timedelta  # Provide timedelta for date arithmetic
@@ -8672,7 +8673,8 @@ class PromptUtils:  # General prompt helpers.
         """Build an empty PrettyTable with the client-selection columns, alignment, and per-column max widths."""
         table = PrettyTable()  # Build client display table.
         table.field_names = ["#", "Hostname", "MAC Address", "Type", "IP Address", "SSID/VLAN", "Site", "Status"]
-        column_alignments: tuple[tuple[str, Literal["l", "c", "r"]], ...] = (  # Typed so PrettyTable AlignType is preserved.
+        # Typed so PrettyTable AlignType is preserved through the tuple literal.
+        column_alignments: tuple[tuple[str, Literal["l", "c", "r"]], ...] = (
             ("#", "r"),
             ("Hostname", "l"),
             ("MAC Address", "l"),
@@ -14578,7 +14580,9 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         print("! Dynamically discovering const endpoints from mistapi library...")  # Tell the user.
         logging.info("Starting dynamic discovery of const endpoints")  # Log start.
 
-        for modname, ispkg in ((m.name, m.ispkg) for m in pkgutil.iter_modules(const_package.__path__, const_package.__name__ + ".")):
+        # Walk every non-package module under mistapi.api.v1.const for inspection.
+        const_prefix = const_package.__name__ + "."
+        for modname, ispkg in ((m.name, m.ispkg) for m in pkgutil.iter_modules(const_package.__path__, const_prefix)):
             if ispkg:  # Skip subpackages.
                 continue  # Next module.
             self._inspect_module(modname)  # Inspect the module.
@@ -20661,7 +20665,8 @@ class WLANRadiusTimerManager:
         applies = wlan_template.get("applies", {})  # The template's assignment scope rules
         if not isinstance(applies, dict):  # Malformed/absent scope object — not applicable
             return False
-        if self.site_id and type(self)._template_matches_org_or_site(applies, self.site_id):  # Org-wide or explicit site
+        # Org-wide or explicit site scope wins immediately without checking group/tag rules.
+        if self.site_id and type(self)._template_matches_org_or_site(applies, self.site_id):
             return True
         site_groups = self.site_info.get("sitegroup_ids", [])  # Site groups this site belongs to
         site_tags = self.site_info.get("wxtag_ids", [])  # Wx tags applied to this site
