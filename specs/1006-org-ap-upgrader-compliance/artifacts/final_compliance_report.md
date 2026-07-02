@@ -1,6 +1,6 @@
 # Coding Guideline Compliance Report
 
-- **Generated**: 2026-07-02 10:29:08 UTC
+- **Generated**: 2026-07-02 10:45:11 UTC
 - **Tool**: compliance-analyzer (tools/compliance_analyzer)
 - **Files analyzed**: 1
 
@@ -51,8 +51,8 @@ Plan at the end to drive fixes.
 
 | Metric | Value |
 | - | - |
-| Lines of code | 2803 |
-| Executable code lines | 1717 |
+| Lines of code | 2804 |
+| Executable code lines | 1715 |
 | Functions | 227 |
 | Classes | 2 |
 | Average complexity | 2.6 |

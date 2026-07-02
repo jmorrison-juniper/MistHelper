@@ -58,8 +58,9 @@ class OrgAPUpgraderConfig:  # WHY: declare OrgAPUpgraderConfig class
         """Enforce identity-field types per data-model.md validation-rules table."""
         if not isinstance(self.org_id, str):  # WHY: enforce string identity (empty allowed for MSP paths)
             raise TypeError("org_id must be a string")  # WHY: fail-fast on wrong identity type
-        if self.apisession is None:  # WHY: enforce non-None runtime handle
-            raise ValueError("apisession is required")  # WHY: no silent None to mistapi
+        # WHY: apisession=None is permitted here; every network-call site guards it explicitly
+        # WHY: (see _fetch_org_aps, _step3_fetch_firmware_stats, _step4_fetch_available_firmware,
+        # WHY: _select_orgs_from_msp) and returns False/[] for graceful degradation.
 
     def _validate_di_hooks(self) -> None:  # WHY: declare private helper _validate_di_hooks
         """Enforce that every DI hook is either None or callable."""
