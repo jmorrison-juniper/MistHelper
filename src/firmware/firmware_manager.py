@@ -35,9 +35,12 @@ PROGRESS_EMITTER: Any = None  # WHY: shared progress emitter for menu 196 sub-fl
 
 
 try:
-    import mistapi  # WHY: optional Mist SDK - module may be absent in test env
+    import mistapi as _mistapi_module  # WHY: optional Mist SDK - module may be absent in test env
 except ImportError:  # pragma: no cover
-    mistapi = None  # WHY: null fallback keeps import graph loadable in tests
+    _mistapi_module = None  # WHY: null fallback keeps import graph loadable in tests
+# WHY: Annotate as Any so pyright treats mistapi.<attr> uniformly under both branches;
+# WHY: production callsites remain guarded by mistapi truthiness where relevant.
+mistapi: Any = _mistapi_module
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
