@@ -51,7 +51,7 @@ class BulkAPUpgraderConfig:  # WHY: class definition (see docstring)
     # ------------------------------------------------------------------
     safe_input_fn: Callable[..., str] | None = None  # WHY: injected safe_input wrapper keeps stop-signal support
     check_stop_fn: Callable[[], bool] | None = None  # WHY: polled between long steps to abort on Ctrl+C signals
-    fetch_sites_fn: Callable[[str], list] | None = None  # WHY: seam over APICoreFetchUtils for tests to stub sites
+    fetch_sites_fn: Callable[[str], list[dict[str, Any]]] | None = None  # WHY: seam over APICoreFetchUtils for tests
     get_csv_path_fn: Callable[[str], str] | None = None  # WHY: seam over FilePathUtils for OS-safe results path
     check_firmware_status_fn: Callable[[], None] | None = None  # WHY: seam to launch post-upgrade status viewer
     get_org_id_fn: Callable[[], str] | None = None  # WHY: seam over ConfigUtils.get_cached_or_prompted_org_id
@@ -326,7 +326,10 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         missing: list[str] = []  # WHY: unknown-name accumulator
         for name in site_names:  # WHY: iterate caller-supplied names
             site = site_lookup.get(name.lower())  # WHY: case-insensitive lookup
-            (resolved if site else missing).append(site or name)  # WHY: single branch dispatch by truthiness
+            if site:  # WHY: split by truthiness without relying on a heterogeneous append target
+                resolved.append(site)  # WHY: found-site branch
+            else:
+                missing.append(name)  # WHY: unknown-name branch
         return resolved, missing  # WHY: surface both partitions
 
     def _report_missing_sites(self, missing: list[str]) -> None:  # WHY: helper definition (see docstring)

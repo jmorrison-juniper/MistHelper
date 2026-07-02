@@ -80,7 +80,8 @@ def _make_upgrader(**kwargs):
         "get_org_id_fn": MagicMock(return_value="org-123"),
     }
     defaults.update(kwargs)  # WHY: preserve per-test override semantics before we freeze the config
-    config = BulkAPUpgraderConfig(**defaults)  # WHY: build immutable config from merged dict per contracts/constructor.md
+    # WHY: build immutable config from merged dict per contracts/constructor.md
+    config = BulkAPUpgraderConfig(**defaults)
     return BulkAPFirmwareUpgrader(config)  # WHY: single-arg construction per FR-004 / Constitution I
 
 
