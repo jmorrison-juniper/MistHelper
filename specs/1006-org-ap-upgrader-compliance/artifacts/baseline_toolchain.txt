@@ -1,0 +1,12 @@
+EXIT=0
+--- py_compile ---
+All checks passed!
+ruff EXIT=0
+--- black ---
+All done! \u2728 \U0001f370 \u2728
+1 file would be left unchanged.
+black EXIT=0
+--- mypy ---
+pyproject.toml: note: unused section(s): module = ['MistHelper', 'MistHelper.*', 'dash', 'dash.*', 'maps_manager', 'maps_manager.*', 'mist-ops-platform.*', 'ops-portal.*', 'scripts.*', 'specs.*', 'src.analytics.*', 'src.db', 'src.db.*', 'src.export.*', 'src.gateway.*', 'src.inventory.*', 'src.maps', 'src.maps.*', 'src.site.*', 'src.ssh.ssh_runner', 'src.ssh.ssh_runner_manager', 'src.troubleshooting.*', 'src.websocket.*', 'tests', 'tests.*', 'tests.e2e.*', 'tests.unit.*', 'web_portal.*']
+Success: no issues found in 1 source file
+mypy EXIT=0
