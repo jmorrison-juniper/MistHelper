@@ -581,6 +581,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _call_site_stats_api(self, site_id: str, site_name: str) -> list[dict[str, Any]]:
         """Invoke listSiteDevicesStats via mistapi and return list of stats records."""
         import mistapi  # WHY: lazy import keeps module load cheap
+
         print(f"   Fetching device statistics for APs at '{site_name}'...")  # WHY: user-facing feedback
         stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(  # WHY: paginated call
             self.apisession, site_id, type="ap", limit=1000
@@ -1168,12 +1169,14 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             calls_for_site = num_versions  # WHY: one Mist upgradeSiteDevices call per (site, version) pair
             reason = "single version" if num_versions == 1 else f"{num_versions} versions"  # WHY: display copy
             upgrade_calls += calls_for_site  # WHY: aggregate site's contribution into total
-            breakdown.append({  # WHY: preserve pre-refactor breakdown dict shape
-                "site_name": site_info["name"],  # WHY: identifier column
-                "devices": site_info["device_count"],  # WHY: how many devices this call block covers
-                "calls": calls_for_site,  # WHY: per-site call count
-                "reason": reason,  # WHY: human-readable reason string
-            })
+            breakdown.append(
+                {  # WHY: preserve pre-refactor breakdown dict shape
+                    "site_name": site_info["name"],  # WHY: identifier column
+                    "devices": site_info["device_count"],  # WHY: how many devices this call block covers
+                    "calls": calls_for_site,  # WHY: per-site call count
+                    "reason": reason,  # WHY: human-readable reason string
+                }
+            )
         logging.debug("compute_upgrade_call_breakdown calls=%s rows=%s", upgrade_calls, len(breakdown))  # WHY: FR-007
         return upgrade_calls, breakdown  # WHY: caller assembles the return payload
 
@@ -1213,8 +1216,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         print("\n   Breakdown by site:")  # WHY: FR-017 verbatim breakdown banner preserved
         for item in breakdown[:10]:  # WHY: cap at first 10 rows to match pre-refactor truncation policy
             print(  # WHY: FR-017 verbatim row format preserved
-                f"     - {item['site_name']}: {item['calls']} call(s)"
-                f" ({item['reason']}, {item['devices']} devices)"
+                f"     - {item['site_name']}: {item['calls']} call(s)" f" ({item['reason']}, {item['devices']} devices)"
             )
         if len(breakdown) > 10:  # WHY: summarize hidden rows when truncation occurred
             remaining = len(breakdown) - 10  # WHY: count of sites not individually shown
@@ -1336,6 +1338,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _step8_execute_upgrades(self) -> None:
         """Execute firmware upgrades across all sites (PCPP orchestrator)."""
         import mistapi  # WHY: local import keeps module boot cheap
+
         print("\n  Starting firmware upgrade operations...")  # WHY: user-facing header
         print("=" * 60)  # WHY: visual separator
         sites_with_upgrades = self._prepare_sites_with_upgrades()  # WHY: filtered set + skip messaging
@@ -1523,6 +1526,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         # WHY: FR-007 info-before naming the site + version being posted for audit trail
         logging.info("Invoke upgrade API site=%s version=%s devices=%s", site_id, version, len(devices))  # WHY: info...
         import mistapi  # WHY: lazy import matches other sites in this module and keeps param budget <=5
+
         # WHY: sole mutating call in this path — mistapi endpoint per Mist docs
         resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(self.apisession, site_id, body=body)  # WHY: capture i...
         # WHY: capture upgrade_id when API returns dict payload so status-check step can poll it
@@ -1579,8 +1583,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         """Add canary_phases when download or reboot strategy is canary."""
         # WHY: canary_phases required by API only when a canary strategy is selected
         if (  # WHY: guard on condition
-            self.upgrade_config["download_strategy"] == "canary"
-            or self.upgrade_config["reboot_strategy"] == "canary"
+            self.upgrade_config["download_strategy"] == "canary" or self.upgrade_config["reboot_strategy"] == "canary"
         ):
             body["canary_phases"] = self.upgrade_config["canary_phases"]  # WHY: capture intermediate value
 
@@ -1786,8 +1789,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _prompt_family_selection(self, ap_families: dict[str, list[str]]) -> dict[str, list[str]]:  # WHY: helper def...
         """Compute phase: render family list and parse operator's selection string."""
         print(
-            "\n  AP Model Families (select by family to set ONE version"
-            " for all models in that family):"
+            "\n  AP Model Families (select by family to set ONE version" " for all models in that family):"
         )  # WHY: banner explains that a single choice will apply to all models in each picked family
         print("-" * 60)  # WHY: horizontal rule delimits the family-picker block
         family_list = list(ap_families.items())  # WHY: freeze insertion order so numeric picks are stable
