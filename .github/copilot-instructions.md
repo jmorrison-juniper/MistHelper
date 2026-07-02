@@ -600,7 +600,7 @@ When implementing a Feature Spec, AI agents must follow this protocol:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/1004-bulk-ap-upgrader-compliance/plan.md
+at specs/1005-firmware-manager-compliance/plan.md
 <!-- SPECKIT END -->
 
 <!-- rtk-instructions v2 -->

@@ -18793,9 +18793,10 @@ class FirmwareManager:
         """Build the DI-wired firmware-manager impl so menu callbacks invoke it directly."""
         # Local import keeps firmware deps off the hot startup path
         from src.firmware.firmware_manager import FirmwareManager as _Impl  # noqa: PLC0415
+        from src.firmware.firmware_manager import FirmwareManagerConfig  # noqa: PLC0415
 
         logging.debug("Building firmware manager impl for org %s", org_id)  # Trace factory build
-        return _Impl(  # Inject MistHelper collaborators into the extracted impl
+        config = FirmwareManagerConfig(  # Frozen value-object carries identity + six DI hooks
             apisession=apisession,  # Live Mist API session passed through
             org_id=org_id,  # Target organization identifier
             safe_input_fn=InputUtils.safe_input,  # EOF-safe prompt helper
@@ -18805,6 +18806,7 @@ class FirmwareManager:
             gateway_templates_fn=GatewayExportUtils.templates,  # Fetch gateway templates
             sites_fn=OrgSiteExporter.sites,  # Fetch org site list
         )
+        return _Impl(config)  # Single-positional-arg constructor per FR-014
 
 
 # NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager.create(apisession, org_id).check_firmware_upgrade_status()  # noqa: E501

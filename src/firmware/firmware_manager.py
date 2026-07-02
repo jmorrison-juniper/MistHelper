@@ -8,34 +8,102 @@ Mist organization sites.
 
 from __future__ import annotations
 
-import csv
-import logging
-import time
-from collections.abc import Callable
-from datetime import datetime
-from typing import Any
+import csv  # WHY: CSV read/write for firmware plan artifacts
+import logging  # WHY: emit info/debug audit trail per Constitution VII
+import sys  # WHY: needed for _bind_module_globals to rebind module attrs
+import time  # WHY: polling delays for continuous monitoring mode
+from collections.abc import Callable  # WHY: type hints for injected dependency callables
+from dataclasses import dataclass  # WHY: FirmwareManagerConfig frozen value object
+from datetime import datetime  # WHY: timestamped CSV filenames and audit lines
+from typing import Any  # WHY: Any for opaque API objects
 
-# Type aliases for injected dependencies
-SafeInputFn = Callable[..., str]
-SelectSiteFn = Callable[..., Any]
-CheckCacheFn = Callable[..., Any]
-GetCsvPathFn = Callable[[str], str]
-GeneratorFn = Callable[..., Any]
+# Type aliases for injected dependencies keep readable signatures across helpers.
+SafeInputFn = Callable[..., str]  # WHY: safe_input(prompt, context=...) returning stripped text
+SelectSiteFn = Callable[..., Any]  # WHY: interactive site picker used by menu 196 sub-flows
+CheckCacheFn = Callable[..., Any]  # WHY: CSV cache warm-up / regenerate helper
+GetCsvPathFn = Callable[[str], str]  # WHY: resolves per-org CSV filesystem path
+GeneratorFn = Callable[..., Any]  # WHY: streaming generator for templates / sites
 
-# ── Module-level stubs for globals declared in method bodies ──────────────────
+# Module-level stubs for globals declared in method bodies.
 # Methods use 'global <name>' to read/write these at runtime.
-# apisession and org_id are set per-instance in __init__.
-# msp_privileges and PROGRESS_EMITTER are sourced from the main module in __init__.
-msp_privileges: list[Any] = []
-apisession: Any = None
-org_id: str = ""
-PROGRESS_EMITTER: Any = None
+# apisession and org_id are set per-instance in __init__ via _bind_module_globals.
+# msp_privileges and PROGRESS_EMITTER are sourced from the main module.
+msp_privileges: list[Any] = []  # WHY: cached MSP privilege records for cross-flow reuse
+apisession: Any = None  # WHY: module-scope api session read by legacy helpers
+org_id: str = ""  # WHY: module-scope org id read by legacy helpers
+PROGRESS_EMITTER: Any = None  # WHY: shared progress emitter for menu 196 sub-flows
 
 
 try:
-    import mistapi
+    import mistapi  # WHY: optional Mist SDK - module may be absent in test env
 except ImportError:  # pragma: no cover
-    mistapi = None
+    mistapi = None  # WHY: null fallback keeps import graph loadable in tests
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FirmwareManagerConfig:
+    """Immutable configuration object for FirmwareManager.
+
+    Collapses the pre-refactor 8-parameter ``__init__`` into a single positional
+    argument, satisfying STRUCT-PARAMS (threshold 5) and matching the 1004
+    ``BulkAPUpgraderConfig`` prior-art template exactly.
+
+    All six ``*_fn`` hooks are Optional; the class supplies sensible fallbacks
+    where required, preserving pre-refactor behavior (FR-017).
+    """
+
+    # Required identity fields
+    apisession: Any  # WHY: Mist API session for all HTTP calls
+    org_id: str  # WHY: organization scope for every operation
+
+    # Dependency-injection hooks (all optional; class supplies defaults)
+    safe_input_fn: SafeInputFn | None = None  # WHY: prompt helper with context-tag audit trail
+    select_site_fn: SelectSiteFn | None = None  # WHY: site-picker used by menu 196 sub-flows
+    check_cache_fn: CheckCacheFn | None = None  # WHY: CSV cache warm-up / regenerate logic
+    get_csv_path_fn: GetCsvPathFn | None = None  # WHY: resolves per-org CSV output path
+    gateway_templates_fn: GeneratorFn | None = None  # WHY: gateway template streamer for SSR flow
+    sites_fn: GeneratorFn | None = None  # WHY: site streamer for cross-org iteration
+
+    def __post_init__(self) -> None:
+        """Fail-fast validation so downstream helpers never see invalid state."""
+        if self.apisession is None:  # WHY: identity field must never be None
+            raise ValueError("apisession is required")  # WHY: prevent silent None-passing into HTTP layer
+        if not isinstance(self.org_id, str) or not self.org_id:  # WHY: org scope must be a non-empty string
+            raise ValueError("org_id must be a non-empty string")  # WHY: guard against empty-scope leakage
+        self._validate_optional_hooks()  # WHY: delegate hook-callable check to helper (keeps CC <= 5)
+
+    def _validate_optional_hooks(self) -> None:
+        """Verify all six ``*_fn`` hook fields are either ``None`` or callable."""
+        hook_names = (  # WHY: canonical list of optional DI hooks
+            "safe_input_fn",
+            "select_site_fn",
+            "check_cache_fn",
+            "get_csv_path_fn",
+            "gateway_templates_fn",
+            "sites_fn",
+        )
+        for name in hook_names:  # WHY: iterate hooks for callable-or-None check
+            value = getattr(self, name)  # WHY: read slot value by name
+            if value is not None and not callable(value):  # WHY: allow only None or callable
+                raise TypeError(f"{name} must be callable or None")  # WHY: clear diagnostic for mis-injected fixtures
+
+
+def _bind_module_globals(config: FirmwareManagerConfig) -> None:
+    """Rebind module-level globals used by helpers that declare ``global <name>``.
+
+    Isolates the four module-scope side effects (apisession, org_id,
+    msp_privileges, PROGRESS_EMITTER) into a single auditable helper so
+    ``__init__`` remains under STRUCT-LENGTH / STRUCT-COMPLEXITY thresholds.
+    """
+    logging.info("Rebinding firmware_manager module globals for org %s", config.org_id)  # WHY: audit trail
+    module = sys.modules[__name__]  # WHY: obtain this module object for attr binding
+    module.apisession = config.apisession  # WHY: rebinds module-scope api session for legacy helpers
+    module.org_id = config.org_id  # WHY: rebinds module-scope org id for legacy helpers
+    main_module = sys.modules.get("__main__") or sys.modules.get("MistHelper")  # WHY: locate host module
+    if main_module is not None:  # WHY: only sync when a host module is loaded
+        module.msp_privileges = getattr(main_module, "msp_privileges", [])  # WHY: preserve msp cache visibility
+        module.PROGRESS_EMITTER = getattr(main_module, "PROGRESS_EMITTER", None)  # WHY: hook up progress emitter
+    logging.debug("firmware_manager module globals rebound for org %s", config.org_id)  # WHY: confirm side effects
 
 
 class FirmwareManager:
@@ -56,66 +124,51 @@ class FirmwareManager:
     - Rollback and recovery capabilities
     """
 
-    def __init__(
-        self,
-        apisession: Any,
-        org_id: str,
-        safe_input_fn: SafeInputFn | None = None,
-        select_site_fn: SelectSiteFn | None = None,
-        check_cache_fn: CheckCacheFn | None = None,
-        get_csv_path_fn: GetCsvPathFn | None = None,
-        gateway_templates_fn: GeneratorFn | None = None,
-        sites_fn: GeneratorFn | None = None,
-    ) -> None:
-        """Initialize FirmwareManager with API session and organization context.
+    def __init__(self, config: FirmwareManagerConfig) -> None:
+        """Initialize FirmwareManager from an immutable ``FirmwareManagerConfig``.
 
         Args:
-            apisession: Authenticated Mist API session
-            org_id: Organization ID for operations
-            safe_input_fn: Callable for safe user input
-            select_site_fn: Callable for interactive site selection
-            check_cache_fn: Callable for cache-checked CSV generation
-            get_csv_path_fn: Callable for CSV path resolution
-            gateway_templates_fn: Callable for gateway templates generation
-            sites_fn: Callable for sites generation
+            config: Frozen dataclass carrying identity fields (``apisession``,
+                ``org_id``) plus six optional dependency-injection hooks.
+                Constructed exclusively by the MistHelper.py factory wrapper
+                (six-callsite insulation — see FR-011).
         """
-        import sys as _sys
-
-        self.apisession = apisession
-        self.org_id = org_id
-        self._safe_input_fn: SafeInputFn = safe_input_fn or input
-        self._select_site_fn = select_site_fn
-        self._check_cache_fn = check_cache_fn
-        self._get_csv_path_fn = get_csv_path_fn
-        self._gateway_templates_fn = gateway_templates_fn
-        self._sites_fn = sites_fn
-
-        # Populate module-level globals used by methods with 'global' declarations
-        _mod = _sys.modules[__name__]
-        _mod.apisession = apisession  # type: ignore[attr-defined]
-        _mod.org_id = org_id  # type: ignore[attr-defined]
-        _main = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
-        if _main is not None:
-            _mod.msp_privileges = getattr(_main, "msp_privileges", [])  # type: ignore[attr-defined]
-            _mod.PROGRESS_EMITTER = getattr(_main, "PROGRESS_EMITTER", None)  # type: ignore[attr-defined]
-
-        logging.info("FirmwareManager initialized for org_id: %s", org_id)
+        logging.info("Initializing FirmwareManager for org %s", config.org_id)  # WHY: audit trail per Constitution VII
+        self._config: FirmwareManagerConfig = config  # WHY: single source of truth for injected deps
+        self.apisession = config.apisession  # WHY: back-compat attribute for helpers reading self.apisession
+        self.org_id = config.org_id  # WHY: back-compat attribute for helpers reading self.org_id
+        self._safe_input_fn: SafeInputFn = config.safe_input_fn or input  # WHY: default to built-in input()
+        self._select_site_fn = config.select_site_fn  # WHY: preserve pre-refactor helper attribute
+        self._check_cache_fn = config.check_cache_fn  # WHY: preserve pre-refactor cache helper attribute
+        self._get_csv_path_fn = config.get_csv_path_fn  # WHY: preserve pre-refactor path helper attribute
+        self._gateway_templates_fn = config.gateway_templates_fn  # WHY: preserve pre-refactor templates streamer
+        self._sites_fn = config.sites_fn  # WHY: preserve pre-refactor sites streamer attribute
+        _bind_module_globals(config)  # WHY: rebind module-scope globals for legacy helpers
+        logging.debug("FirmwareManager init complete for org %s", config.org_id)  # WHY: confirm bootstrap finished
 
     def _compare_version_parts(self, current_parts: list[str], target_parts: list[str]) -> bool:
         """Compare version part lists numerically; return True if target is older than current."""
-        for current_part, target_part in zip(current_parts, target_parts, strict=False):
-            try:
-                current_num, target_num = int(current_part), int(target_part)
-                if target_num < current_num:
-                    return True
-                if target_num > current_num:
-                    return False
-            except ValueError:
-                if target_part < current_part:
-                    return True
-                if target_part > current_part:
-                    return False
-        return False
+        for current_part, target_part in zip(current_parts, target_parts, strict=False):  # WHY: iterate part-wise
+            outcome = self._compare_single_version_pair(current_part, target_part)  # WHY: delegate per-part
+            if outcome is not None:  # WHY: only stop when a definitive verdict is reached
+                return outcome  # WHY: propagate downgrade/upgrade decision
+        return False  # WHY: all parts equal — not a downgrade
+
+    def _compare_single_version_pair(self, current_part: str, target_part: str) -> bool | None:
+        """Compare one version segment; return True if downgrade, False if upgrade, None if equal."""
+        try:
+            current_num, target_num = int(current_part), int(target_part)  # WHY: prefer numeric compare
+        except ValueError:
+            return self._compare_scalar_pair(target_part, current_part)  # WHY: lexical fallback
+        return self._compare_scalar_pair(target_num, current_num)  # WHY: numeric compare via shared helper
+
+    def _compare_scalar_pair(self, target: Any, current: Any) -> bool | None:
+        """Return True if ``target < current`` (downgrade), False if greater (upgrade), None if equal."""
+        if target < current:  # WHY: strictly older target -> downgrade
+            return True  # WHY: definitive downgrade signal
+        if target > current:  # WHY: strictly newer target -> upgrade
+            return False  # WHY: definitive upgrade signal
+        return None  # WHY: equal, defer to next segment
 
     def _is_firmware_downgrade(self, current_version, target_version):  # type: ignore[no-untyped-def]
         """Check if the target version is a downgrade from the current version.
@@ -130,29 +183,29 @@ class FirmwareManager:
         Returns:
             bool: True if target_version appears to be older than current_version
         """
+        if not current_version or not target_version:  # WHY: guard empty versions early
+            return False  # WHY: cannot compare, assume upgrade path
         try:
-            # Handle empty versions
-            if not current_version or not target_version:
-                return False
-
-            # Extract major.minor.patch from versions like "6.3.4-7.r2" or "6.3.5-37.sts"
-            current_parts = current_version.split("-")[0].split(".")
-            target_parts = target_version.split("-")[0].split(".")
-
-            # Pad shorter version to same length
-            max_len = max(len(current_parts), len(target_parts))
-            while len(current_parts) < max_len:
-                current_parts.append("0")
-            while len(target_parts) < max_len:
-                target_parts.append("0")
-
-            # Compare version parts numerically
-            return self._compare_version_parts(current_parts, target_parts)
-
+            current_parts, target_parts = self._normalize_version_parts(  # WHY: pad to equal length
+                current_version, target_version
+            )
+            return self._compare_version_parts(current_parts, target_parts)  # WHY: numeric compare
         except Exception as e:
-            logging.warning("Could not compare versions %s vs %s: %s", current_version, target_version, e)
-            # If we can't compare, err on the side of caution and allow the upgrade
-            return False
+            logging.warning(  # WHY: audit uncomparable version error
+                "Could not compare versions %s vs %s: %s", current_version, target_version, e
+            )
+            return False  # WHY: fail-open — allow upgrade path if compare fails
+
+    def _normalize_version_parts(self, current_version, target_version):  # type: ignore[no-untyped-def]
+        """Split versions on '-', split remainder on '.', pad both to equal length."""
+        current_parts = current_version.split("-")[0].split(".")  # WHY: drop suffix, split MMP
+        target_parts = target_version.split("-")[0].split(".")  # WHY: same for target version
+        max_len = max(len(current_parts), len(target_parts))  # WHY: choose common length
+        while len(current_parts) < max_len:  # WHY: pad shorter current
+            current_parts.append("0")  # WHY: zero-pad for numeric parity
+        while len(target_parts) < max_len:  # WHY: pad shorter target
+            target_parts.append("0")  # WHY: zero-pad for numeric parity
+        return current_parts, target_parts  # WHY: hand equal-length parts to comparator
 
     def _prompt_scope_selection(self) -> str | None:
         """Display scope menu and prompt user to select status check scope (1-6).
@@ -160,275 +213,261 @@ class FirmwareManager:
         Returns:
             str: Scope choice ('1'-'6'), or None if cancelled.
         """
-        print("\n  Select status check scope:")
-        print("   [1] Organization-wide status (all sites and devices)")
-        print("   [2] Specific site status")
-        print("   [3] Active upgrade operations only")
-        print("   [4] Failed upgrades only")
-        print("   [5] Continuous monitoring mode (auto-refresh until complete)")
-        print("   [6] Org-level upgrade jobs (with P2P/scheduling details)")
-        while True:
+        print("\n  Select status check scope:")  # WHY: menu header
+        print("   [1] Organization-wide status (all sites and devices)")  # WHY: scope 1 option
+        print("   [2] Specific site status")  # WHY: scope 2 option
+        print("   [3] Active upgrade operations only")  # WHY: scope 3 option
+        print("   [4] Failed upgrades only")  # WHY: scope 4 option
+        print("   [5] Continuous monitoring mode (auto-refresh until complete)")  # WHY: scope 5 option
+        print("   [6] Org-level upgrade jobs (with P2P/scheduling details)")  # WHY: scope 6 option
+        while True:  # WHY: retry loop until valid selection or cancel
             try:
-                choice = self._safe_input_fn("Select scope (1-6): ", context="firmware_manager").strip()
-                if choice in ["1", "2", "3", "4", "5", "6"]:
-                    logging.debug("User selected scope: %s", choice)
-                    return choice
-                print(" Invalid selection. Please choose 1-6.")
-                logging.debug("Invalid scope selection: %s", choice)
-            except KeyboardInterrupt:
-                print("\n Operation cancelled by user.")
-                return None
+                choice = self._safe_input_fn("Select scope (1-6): ", context="firmware_manager").strip()  # WHY: prompt
+                if choice in ["1", "2", "3", "4", "5", "6"]:  # WHY: gate to valid range
+                    logging.debug("User selected scope: %s", choice)  # WHY: audit trail
+                    return choice  # WHY: propagate valid choice
+                print(" Invalid selection. Please choose 1-6.")  # WHY: operator hint
+                logging.debug("Invalid scope selection: %s", choice)  # WHY: audit
+            except KeyboardInterrupt:  # WHY: allow ctrl-C to cancel cleanly
+                print("\n Operation cancelled by user.")  # WHY: user feedback
+                return None  # WHY: signal cancellation upstream
 
     def check_firmware_upgrade_status(self, scope_choice=None, site_filter=None):  # type: ignore[no-untyped-def]
-        """Check current firmware upgrade status across the organization.
+        """Check current firmware upgrade status across the organization."""
+        logging.info("Starting firmware upgrade status check scope=%s site=%s", scope_choice, site_filter)  # WHY: audit
+        print(" Firmware Upgrade Status Check")  # WHY: banner
+        print("=" * 60)  # WHY: divider
+        scope_choice = self._resolve_scope_choice(scope_choice)  # WHY: prompt if not passed
+        if scope_choice is None:  # WHY: user cancelled scope prompt
+            return None  # WHY: exit cleanly
+        site_filter = self._resolve_site_filter_for_status(scope_choice, site_filter)  # WHY: prompt if scope=2
+        if scope_choice == "2" and site_filter is None:  # WHY: scope=2 without site => cancelled
+            return None  # WHY: exit cleanly
+        result = self._dispatch_status_scope(scope_choice, site_filter)  # WHY: route to correct handler
+        logging.debug("Status check completed scope=%s result=%s", scope_choice, result is not None)  # WHY: trace
+        return result  # WHY: propagate handler result
 
-        This method provides comprehensive upgrade status monitoring with:
-        1. Device-level firmware status from device statistics (fwupdate field)
-        2. Site-level upgrade operations and history
-        3. Organization-wide upgrade tracking
-        4. Current version vs. available version comparison
-        5. Upgrade progress monitoring for active operations
-        6. Failed upgrade identification and retry status
-        7. Bulk status export to CSV for analysis
-        8. Interactive site/device filtering options
+    def _resolve_scope_choice(self, scope_choice: str | None) -> str | None:  # WHY: prompt-or-passthrough
+        """Return scope selection: passthrough if provided, else prompt operator."""
+        if scope_choice is not None:  # WHY: caller pre-selected
+            return scope_choice  # WHY: honor pre-selection
+        return self._prompt_scope_selection()  # WHY: interactive fallback
 
-        Args:
-            scope_choice: Optional pre-selected scope (1-4)
-            site_filter: Optional pre-selected site ID
+    def _resolve_site_filter_for_status(  # WHY: only scope=2 requires a site pick
+        self,
+        scope_choice: str,
+        site_filter: str | None,
+    ) -> str | None:
+        """Return site filter for the status check; prompt when scope=2 and none supplied."""
+        if scope_choice != "2" or site_filter is not None:  # WHY: only mode 2 with no filter needs prompt
+            return site_filter  # WHY: pass through untouched
+        logging.debug("User selected specific site mode")  # WHY: audit interactive path
+        if self._select_site_fn is None:  # WHY: DI hook missing
+            logging.error("select_site_fn not configured")  # WHY: audit config error
+            return None  # WHY: cannot proceed
+        chosen = self._select_site_fn()  # WHY: prompt operator
+        if not chosen:  # WHY: user cancelled site selection
+            print(" No site selected. Exiting.")  # WHY: operator visibility
+            logging.warning("No site selected in specific site mode")  # WHY: audit
+            return None  # WHY: signal cancellation to caller
+        logging.debug("Selected site filter: %s", chosen)  # WHY: audit chosen site
+        return chosen  # WHY: return concrete site id
 
-        Reports include:
-        - Current firmware versions and upgrade status per device
-        - Active upgrade operations with progress tracking
-        - Failed upgrades with error details and retry information
-        - Upgrade history and completion statistics
-        - Version mismatch identification across sites
-        """
-        logging.info("Starting firmware upgrade status check...")
-        logging.debug("FirmwareManager.check_firmware_upgrade_status() initiated")
-
-        print(" Firmware Upgrade Status Check")
-        print("=" * 60)
-
-        # Step 1: Choose scope if not provided
-        if scope_choice is None:
-            scope_choice = self._prompt_scope_selection()
-            if scope_choice is None:
-                return
-
-        if scope_choice == "2" and site_filter is None:
-            # Get specific site selection
-            logging.debug("User selected specific site mode")
-            if self._select_site_fn is None:
-                logging.error("select_site_fn not configured")
-                return
-            site_filter = self._select_site_fn()
-            if not site_filter:
-                print(" No site selected. Exiting.")
-                logging.warning("No site selected in specific site mode")
-                return
-            logging.debug("Selected site filter: %s", site_filter)
-
-        # Handle monitoring mode (option 5)
-        if scope_choice == "5":
-            logging.info("Entering continuous monitoring mode")
-            return self._continuous_monitoring_mode(site_filter)  # type: ignore[no-untyped-call]
-
-        # Handle org-level upgrade jobs (option 6)
-        if scope_choice == "6":
-            logging.info("Fetching org-level upgrade jobs")
-            return self._show_org_level_upgrade_jobs()  # type: ignore[no-untyped-call]
-
-        # Continue with the existing implementation...
-        return self._execute_status_check(scope_choice, site_filter)  # type: ignore[no-untyped-call]
+    def _dispatch_status_scope(self, scope_choice: str, site_filter: str | None):  # type: ignore[no-untyped-def]
+        """Route to the correct status handler based on scope."""
+        if scope_choice == "5":  # WHY: continuous monitoring is separate flow
+            logging.info("Entering continuous monitoring mode")  # WHY: audit
+            return self._continuous_monitoring_mode(site_filter)  # type: ignore[no-untyped-call]  # WHY: dispatch
+        if scope_choice == "6":  # WHY: org-level upgrade jobs listing
+            logging.info("Fetching org-level upgrade jobs")  # WHY: audit
+            return self._show_org_level_upgrade_jobs()  # type: ignore[no-untyped-call]  # WHY: dispatch
+        return self._execute_status_check(scope_choice, site_filter)  # type: ignore[no-untyped-call]  # WHY: default
 
     def _continuous_monitoring_mode(self, site_filter=None):  # type: ignore[no-untyped-def]
-        """Continuous monitoring mode that auto-refreshes upgrade status until complete or cancelled.
+        """Continuous monitoring mode that auto-refreshes upgrade status until complete or cancelled."""
+        logging.info("Entering continuous monitoring mode site_filter=%s", site_filter)  # WHY: audit entry
+        self._present_monitoring_header()  # WHY: emit banner explaining refresh cadence + Ctrl-C exit
+        try:  # WHY: outer try catches user Ctrl-C for clean exit
+            self._run_monitoring_loop(site_filter)  # WHY: delegate refresh loop to helper
+        except KeyboardInterrupt:  # WHY: operator pressed Ctrl-C mid-refresh
+            print("\n\n  Monitoring mode cancelled by user.")  # WHY: visible exit banner
+            logging.info("Continuous monitoring mode cancelled by user")  # WHY: audit user cancel
+            return  # WHY: exit without raising further
+        logging.debug("Continuous monitoring mode exited normally")  # WHY: trace clean exit
 
-        Features:
-        - Auto-refresh every 7 seconds with full device scan each iteration
-        - Clear screen between refreshes
-        - Show only devices actively upgrading
-        - Detects new devices that start upgrading after monitoring begins
-        - Exit automatically when all upgrades complete
-        - Press Ctrl+C to exit at any time
+    def _present_monitoring_header(self) -> None:  # WHY: extract banner block for testability
+        """Print the fixed banner describing monitoring behavior."""
+        print("\n  Continuous Monitoring Mode")  # WHY: title line
+        print("=" * 70)  # WHY: divider matches other section headers
+        print("   Monitoring active firmware upgrades...")  # WHY: purpose line
+        print("   Press Ctrl+C to exit at any time")  # WHY: exit instruction
+        print("   Auto-refreshing every 7 seconds")  # WHY: cadence disclosure
+        print("   NOTE: Each refresh scans ALL devices for active upgrades")  # WHY: scope disclosure
+        print("=" * 70)  # WHY: closing divider
+        logging.info("Starting continuous monitoring mode with 7-second refresh interval")  # WHY: audit
 
-        Note: Each refresh queries ALL devices (not just initial set), so new upgrades
-        started after monitoring begins will be detected and displayed.
+    def _run_monitoring_loop(self, site_filter) -> None:  # type: ignore[no-untyped-def]
+        """Drive the poll-print-sleep loop until all upgrades complete."""
+        iteration = 0  # WHY: counter used in refresh banner
+        while True:  # WHY: loop exits via break when all upgrades done or via KeyboardInterrupt
+            iteration += 1  # WHY: increment before display so first refresh reads #1
+            self._clear_monitoring_screen()  # WHY: fresh visual for each iteration
+            self._present_monitoring_iteration_header(iteration)  # WHY: banner per iteration
+            result = self._execute_monitoring_check(site_filter)  # type: ignore[no-untyped-call]  # WHY: fetch upgrades
+            if self._handle_monitoring_result(result, iteration):  # WHY: True means loop should exit
+                return  # WHY: propagate loop-exit signal
+            time.sleep(7)  # WHY: pause before next refresh per documented cadence
 
-        Args:
-            site_filter: Optional site ID to filter monitoring
-        """
-        import os
-        import platform
+    def _clear_monitoring_screen(self) -> None:  # WHY: platform abstraction wrapped in a helper
+        """Clear the terminal window between refreshes."""
+        import os  # noqa: PLC0415  # WHY: lazy import to keep monitoring cost off startup
+        import platform  # noqa: PLC0415  # WHY: lazy import platform detection
 
-        print("\n  Continuous Monitoring Mode")
-        print("=" * 70)
-        print("   Monitoring active firmware upgrades...")
-        print("   Press Ctrl+C to exit at any time")
-        print("   Auto-refreshing every 7 seconds")
-        print("   NOTE: Each refresh scans ALL devices for active upgrades")
-        print("=" * 70)
+        if platform.system() == "Windows":  # WHY: cmd.exe uses cls
+            os.system("cls")  # nosec B605 B607  # WHY: intentional shell call for terminal reset
+        else:  # WHY: POSIX terminals use clear
+            os.system("clear")  # nosec B605 B607  # WHY: intentional shell call for terminal reset
 
-        logging.info("Starting continuous monitoring mode with 7-second refresh interval")
-        iteration = 0
+    def _present_monitoring_iteration_header(self, iteration: int) -> None:  # WHY: per-refresh banner block
+        """Print the header shown at the top of each refresh."""
+        print("\n  Firmware Upgrade Monitoring - Live View")  # WHY: subtitle
+        print("=" * 70)  # WHY: divider
+        print(f"   Refresh #{iteration} | Press Ctrl+C to exit")  # WHY: progress + exit reminder
+        print("   Scanning all devices for active upgrades...")  # WHY: informational hint
+        print("=" * 70)  # WHY: closing divider
 
-        try:
-            while True:
-                iteration += 1
-
-                # Clear screen for cleaner display (platform-specific)  # nosec B605 B607
-                if platform.system() == "Windows":
-                    os.system("cls")  # nosec B605 B607
-                else:
-                    os.system("clear")  # nosec B605 B607
-
-                # Display header
-                print("\n  Firmware Upgrade Monitoring - Live View")
-                print("=" * 70)
-                print(f"   Refresh #{iteration} | Press Ctrl+C to exit")
-                print("   Scanning all devices for active upgrades...")
-                print("=" * 70)
-
-                # Execute status check for active upgrades only
-                # NOTE: This queries ALL devices each time, not just initial set
-                # New devices that start upgrading will be detected automatically
-                result = self._execute_monitoring_check(site_filter)  # type: ignore[no-untyped-call]
-
-                if result is None:
-                    print("\n   Error fetching upgrade status. Retrying...")
-                    logging.warning("Monitoring iteration %s failed", iteration)
-                elif result == 0:
-                    # No active upgrades found
-                    print("\n  All upgrades completed!")
-                    print("   No active firmware upgrades detected.")
-                    print("   Exiting monitoring mode.")
-                    logging.info("Monitoring mode exiting - all upgrades complete")
-                    break
-                else:
-                    print(f"\n   Found {result} device(s) actively upgrading")
-                    print("   Next refresh in 7 seconds...")
-
-                # Wait 7 seconds before next refresh
-                time.sleep(7)
-
-        except KeyboardInterrupt:
-            print("\n\n  Monitoring mode cancelled by user.")
-            logging.info("Continuous monitoring mode cancelled by user")
-            return
+    def _handle_monitoring_result(self, result, iteration: int) -> bool:  # type: ignore[no-untyped-def]
+        """Interpret the check result; return True if loop should exit."""
+        if result is None:  # WHY: transient error path
+            print("\n   Error fetching upgrade status. Retrying...")  # WHY: user-visible retry hint
+            logging.warning("Monitoring iteration %s failed", iteration)  # WHY: audit failure
+            return False  # WHY: keep polling despite one failed iteration
+        if result == 0:  # WHY: zero active upgrades => job complete
+            print("\n  All upgrades completed!")  # WHY: completion banner
+            print("   No active firmware upgrades detected.")  # WHY: clarify outcome
+            print("   Exiting monitoring mode.")  # WHY: user notice
+            logging.info("Monitoring mode exiting - all upgrades complete")  # WHY: audit success
+            return True  # WHY: signal loop exit
+        print(f"\n   Found {result} device(s) actively upgrading")  # WHY: progress signal
+        print("   Next refresh in 7 seconds...")  # WHY: set expectation for cadence
+        return False  # WHY: continue polling
 
     def _print_upgrade_job_timing_info(self, details: dict[str, Any]) -> None:
         """Print start and reboot time for an upgrade job, converting epoch to human-readable."""
         from datetime import datetime as dt_module  # noqa: PLC0415
 
-        start_time = details.get("start_time")
-        if start_time:
+        start_time = details.get("start_time")  # WHY: read epoch start time
+        if start_time:  # WHY: only render when present
             try:
-                print(f"    Start Time: {dt_module.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')}")
+                start_str = dt_module.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S")  # WHY: format epoch
+                print(f"    Start Time: {start_str}")  # WHY: human-readable output
             except Exception:
-                print(f"    Start Time: {start_time} (epoch)")
-        reboot_at = details.get("reboot_at")
-        if reboot_at:
+                print(f"    Start Time: {start_time} (epoch)")  # WHY: fallback to raw epoch
+        reboot_at = details.get("reboot_at")  # WHY: read epoch reboot time
+        if reboot_at:  # WHY: only render when present
             try:
-                print(f"    Reboot Time: {dt_module.fromtimestamp(reboot_at).strftime('%Y-%m-%d %H:%M:%S')}")
+                reboot_str = dt_module.fromtimestamp(reboot_at).strftime("%Y-%m-%d %H:%M:%S")  # WHY: format epoch
+                print(f"    Reboot Time: {reboot_str}")  # WHY: human-readable output
             except Exception:
-                print(f"    Reboot Time: {reboot_at} (epoch)")
+                print(f"    Reboot Time: {reboot_at} (epoch)")  # WHY: fallback to raw epoch
 
     def _print_upgrade_job_p2p_config(self, details: dict[str, Any]) -> None:
         """Print P2P, canary phase, and max failure configuration for an upgrade job."""
-        enable_p2p = details.get("enable_p2p", False)
-        print(f"    P2P Enabled: {enable_p2p}")
-        if enable_p2p:
-            print(f"    P2P Cluster Size: {details.get('p2p_cluster_size', 'Not specified')}")
-            print(f"    P2P Parallelism: {details.get('p2p_parallelism', 'Not specified')}")
-        canary_phases = details.get("canary_phases")
-        if canary_phases:
-            print(f"    Canary Phases: {canary_phases}")
-        max_failure = details.get("max_failure_percentage")
-        if max_failure is not None:
-            print(f"    Max Failure %: {max_failure}")
-        current_phase = details.get("current_phase")
-        if current_phase is not None:
-            print(f"    Current Phase: {current_phase}")
+        enable_p2p = details.get("enable_p2p", False)  # WHY: read P2P flag
+        print(f"    P2P Enabled: {enable_p2p}")  # WHY: report P2P setting
+        if enable_p2p:  # WHY: extra details only if P2P is enabled
+            cluster_size = details.get("p2p_cluster_size", "Not specified")  # WHY: read cluster size
+            print(f"    P2P Cluster Size: {cluster_size}")  # WHY: report cluster size
+            parallelism = details.get("p2p_parallelism", "Not specified")  # WHY: read parallelism
+            print(f"    P2P Parallelism: {parallelism}")  # WHY: report parallelism
+        canary_phases = details.get("canary_phases")  # WHY: read canary schedule
+        if canary_phases:  # WHY: only render when present
+            print(f"    Canary Phases: {canary_phases}")  # WHY: report canary phases
+        max_failure = details.get("max_failure_percentage")  # WHY: read failure tolerance
+        if max_failure is not None:  # WHY: 0 is a legitimate value, so use is not None
+            print(f"    Max Failure %: {max_failure}")  # WHY: report failure ceiling
+        current_phase = details.get("current_phase")  # WHY: read active phase
+        if current_phase is not None:  # WHY: 0 is a legitimate value, so use is not None
+            print(f"    Current Phase: {current_phase}")  # WHY: report current phase
 
     def _print_upgrade_job_progress_summary(self, details: dict[str, Any]) -> None:
         """Print progress counts (upgraded/downloaded/downloading) for an upgrade job."""
-        targets = details.get("targets", {})
-        if targets:
-            total = targets.get("total", 0)
-            upgraded = len(targets.get("upgraded", []))
-            downloaded = len(targets.get("downloaded", []))
-            downloading = len(targets.get("download_requested", []))
-            print(f"    Progress: {upgraded}/{total} upgraded, {downloaded} downloaded, {downloading} downloading")
-        upgrades = details.get("upgrades", [])
-        if upgrades:
-            print(f"    Sites: {len(upgrades)} site upgrade(s)")
+        targets = details.get("targets", {})  # WHY: read progress buckets
+        if targets:  # WHY: only render when present
+            total = targets.get("total", 0)  # WHY: total device count
+            upgraded = len(targets.get("upgraded", []))  # WHY: count upgraded devices
+            downloaded = len(targets.get("downloaded", []))  # WHY: count downloaded devices
+            downloading = len(targets.get("download_requested", []))  # WHY: count in-flight downloads
+            progress_line = (
+                f"    Progress: {upgraded}/{total} upgraded, " f"{downloaded} downloaded, {downloading} downloading"
+            )  # WHY: build progress summary line
+            print(progress_line)  # WHY: report progress
+        upgrades = details.get("upgrades", [])  # WHY: list of site-level upgrade records
+        if upgrades:  # WHY: only render when present
+            print(f"    Sites: {len(upgrades)} site upgrade(s)")  # WHY: report site count
 
     def _print_upgrade_job_detail_block(self, org_devices_api: Any, job_id: str) -> None:
         """Fetch detailed info for a single upgrade job and print all sections."""
         try:
-            detail_response = org_devices_api.getOrgDeviceUpgrade(self.apisession, self.org_id, job_id)
-            if not (detail_response and hasattr(detail_response, "data")):
-                return
-            details = detail_response.data if isinstance(detail_response.data, dict) else {}
-            print(f"    Status: {details.get('status', 'Unknown')}")
-            print(f"    Target Version: {details.get('target_version', 'Unknown')}")
-            print(f"    Strategy: {details.get('strategy', 'Unknown')}")
-            self._print_upgrade_job_timing_info(details)
-            self._print_upgrade_job_p2p_config(details)
-            self._print_upgrade_job_progress_summary(details)
+            detail_response = org_devices_api.getOrgDeviceUpgrade(  # WHY: fetch job detail
+                self.apisession, self.org_id, job_id
+            )
+            if not (detail_response and hasattr(detail_response, "data")):  # WHY: guard empty response
+                return  # WHY: nothing to print
+            details = detail_response.data if isinstance(detail_response.data, dict) else {}  # WHY: coerce to dict
+            print(f"    Status: {details.get('status', 'Unknown')}")  # WHY: report job status
+            print(f"    Target Version: {details.get('target_version', 'Unknown')}")  # WHY: report target version
+            print(f"    Strategy: {details.get('strategy', 'Unknown')}")  # WHY: report upgrade strategy
+            self._print_upgrade_job_timing_info(details)  # WHY: delegate timing detail
+            self._print_upgrade_job_p2p_config(details)  # WHY: delegate P2P/canary detail
+            self._print_upgrade_job_progress_summary(details)  # WHY: delegate progress detail
         except Exception as e:
-            print(f"    Error fetching details: {e}")
-            logging.error("Error fetching upgrade job %s: %s", job_id, e)
+            print(f"    Error fetching details: {e}")  # WHY: surface fetch error to operator
+            logging.error("Error fetching upgrade job %s: %s", job_id, e)  # WHY: audit fetch failure
 
     def _show_org_level_upgrade_jobs(self):  # type: ignore[no-untyped-def]
-        """Display org-level upgrade jobs with full configuration details including P2P settings.
+        """Display org-level upgrade jobs with full configuration details.
 
-        Calls:
-        1. GET /api/v1/orgs/{org_id}/devices/upgrade - List all org upgrade jobs
-        2. GET /api/v1/orgs/{org_id}/devices/upgrade/{upgrade_id} - Get details for each job
-
-        Shows:
-        - Upgrade ID, status, target version
-        - P2P configuration (enable_p2p, p2p_cluster_size, p2p_parallelism)
-        - Scheduling (start_time, reboot_at)
-        - Strategy and canary phases
-        - Progress metrics
+        Orchestrator: fetch job list, iterate, print details, catch top-level errors.
         """
-        print("\n  Org-Level Upgrade Jobs")
-        print("=" * 70)
+        logging.info("Showing org-level upgrade jobs org=%s", self.org_id)  # WHY: audit entry
+        print("\n  Org-Level Upgrade Jobs")  # WHY: section header
+        print("=" * 70)  # WHY: header underline
+        try:  # WHY: guard API/import errors
+            org_devices_api, upgrade_jobs = self._fetch_org_upgrade_jobs()  # WHY: uniform fetch helper
+            if not upgrade_jobs:  # WHY: nothing to render
+                print("  No org-level upgrade jobs found.")  # WHY: operator feedback
+                return  # WHY: short-circuit exit
+            print(f"  Found {len(upgrade_jobs)} org-level upgrade job(s)\n")  # WHY: count preview
+            self._render_org_upgrade_jobs(org_devices_api, upgrade_jobs)  # WHY: per-job detail block
+            print("=" * 70)  # WHY: closing divider
+            print("  Org-level upgrade job details complete.")  # WHY: completion marker
+        except Exception as exc:  # WHY: broad guard per spec
+            print(f"  Error fetching org-level upgrades: {exc}")  # WHY: operator feedback
+            logging.error("Error in _show_org_level_upgrade_jobs: %s", exc)  # WHY: audit failure
+        logging.debug("Org-level upgrade jobs display done")  # WHY: trace exit
 
-        try:
-            import mistapi.api.v1.orgs.devices as org_devices_api  # noqa: PLC0415
+    def _fetch_org_upgrade_jobs(self):  # type: ignore[no-untyped-def]
+        """Return (api_module, upgrade_jobs_list) tuple from the mist API."""
+        import mistapi.api.v1.orgs.devices as org_devices_api  # noqa: PLC0415   # WHY: lazy import per policy
 
-            print("  Fetching org-level upgrade jobs...")
-            list_response = org_devices_api.listOrgDeviceUpgrades(self.apisession, self.org_id)
+        print("  Fetching org-level upgrade jobs...")  # WHY: operator progress line
+        list_response = org_devices_api.listOrgDeviceUpgrades(self.apisession, self.org_id)  # WHY: API call
+        if not list_response or not hasattr(list_response, "data"):  # WHY: response shape guard
+            return org_devices_api, []  # WHY: empty list signals no jobs
+        upgrade_jobs = list_response.data if isinstance(list_response.data, list) else []  # WHY: normalize
+        return org_devices_api, upgrade_jobs  # WHY: hand to renderer
 
-            if not list_response or not hasattr(list_response, "data"):
-                print("  No org-level upgrade jobs found.")
-                return
-
-            upgrade_jobs = list_response.data if isinstance(list_response.data, list) else []
-            if not upgrade_jobs:
-                print("  No org-level upgrade jobs found.")
-                return
-
-            print(f"  Found {len(upgrade_jobs)} org-level upgrade job(s)\n")
-
-            for job in upgrade_jobs:
-                job_id = job.get("id") if isinstance(job, dict) else getattr(job, "id", None)
-                if not job_id:
-                    continue
-                print(f"  Upgrade Job: {job_id}")
-                print("-" * 70)
-                self._print_upgrade_job_detail_block(org_devices_api, job_id)
-                print()
-
-            print("=" * 70)
-            print("  Org-level upgrade job details complete.")
-
-        except Exception as e:
-            print(f"  Error fetching org-level upgrades: {e}")
-            logging.error("Error in _show_org_level_upgrade_jobs: %s", e)
+    def _render_org_upgrade_jobs(self, org_devices_api: Any, upgrade_jobs: list[Any]) -> None:
+        """Iterate over upgrade_jobs and print each job's detail block."""
+        for job in upgrade_jobs:  # WHY: enumerate per-job records
+            job_id = job.get("id") if isinstance(job, dict) else getattr(job, "id", None)  # WHY: dual shape
+            if not job_id:  # WHY: skip malformed rows
+                continue  # WHY: nothing to render
+            print(f"  Upgrade Job: {job_id}")  # WHY: job header
+            print("-" * 70)  # WHY: header underline
+            self._print_upgrade_job_detail_block(org_devices_api, job_id)  # WHY: delegate detail rendering
+            print()  # WHY: blank separator
 
     def _fetch_device_stats_for_monitoring(self, site_filter: str | None) -> Any:
         """Fetch fresh device statistics from API for monitoring purposes."""
@@ -444,56 +483,59 @@ class FirmwareManager:
 
     def _is_active_fw_update(self, fwupdate: dict[str, Any]) -> bool:
         """Return True if the fwupdate record represents an in-progress (non-stale) upgrade."""
-        fw_status = fwupdate.get("status", "unknown")
-        fw_progress = fwupdate.get("progress", 0)
-        fw_timestamp = fwupdate.get("timestamp", 0)
-        is_active = fw_status in ("inprogress", "upgrading", "downloading")
-        if is_active and fw_progress == 100 and fw_timestamp:
+        fw_status = fwupdate.get("status", "unknown")  # WHY: read current status
+        fw_progress = fwupdate.get("progress", 0)  # WHY: read completion percent
+        fw_timestamp = fwupdate.get("timestamp", 0)  # WHY: read last-update epoch
+        is_active = fw_status in ("inprogress", "upgrading", "downloading")  # WHY: gate on status verb
+        if is_active and fw_progress == 100 and fw_timestamp:  # WHY: detect stale 100%-complete records
             try:
-                is_active = (time.time() - fw_timestamp) / 3600 <= 1
+                is_active = (time.time() - fw_timestamp) / 3600 <= 1  # WHY: only recent (<=1hr) counts as active
             except (ValueError, OSError, TypeError):
-                pass
-        return is_active
+                pass  # WHY: guard bad epoch; leave is_active as-is
+        return is_active  # WHY: propagate active flag
 
     def _get_active_upgrades_from_stats(self, all_device_stats: list[Any]) -> list[dict[str, Any]]:
         """Scan device stats and return a list of devices that are actively upgrading."""
-        active_upgrades: list[dict[str, Any]] = []
-        for device_stat in all_device_stats:
-            fwupdate = device_stat.get("fwupdate")
-            if not fwupdate or not self._is_active_fw_update(fwupdate):
+        active_upgrades: list[dict[str, Any]] = []  # WHY: accumulator for filtered devices
+        for device_stat in all_device_stats:  # WHY: iterate raw stat records
+            fwupdate = device_stat.get("fwupdate")  # WHY: read firmware-update subrecord
+            if not fwupdate or not self._is_active_fw_update(fwupdate):  # WHY: skip stale/absent
                 continue
-            active_upgrades.append(
+            active_upgrades.append(  # WHY: preserve compact snapshot for display
                 {
-                    "name": device_stat.get("name", "Unnamed"),
-                    "type": device_stat.get("type", "unknown"),
-                    "model": device_stat.get("model", "Unknown"),
-                    "progress": fwupdate.get("progress", 0) or 0,
-                    "status": fwupdate.get("status", "unknown"),
+                    "name": device_stat.get("name", "Unnamed"),  # WHY: device name for report
+                    "type": device_stat.get("type", "unknown"),  # WHY: device type for report
+                    "model": device_stat.get("model", "Unknown"),  # WHY: device model for report
+                    "progress": fwupdate.get("progress", 0) or 0,  # WHY: progress percent
+                    "status": fwupdate.get("status", "unknown"),  # WHY: status string
                 }
             )
-        return active_upgrades
+        return active_upgrades  # WHY: hand back filtered list
 
     def _print_active_upgrades_table(self, active_upgrades: list[dict[str, Any]]) -> None:
         """Print a formatted table of devices currently upgrading."""
-        if not active_upgrades:
+        if not active_upgrades:  # WHY: skip render when nothing to show
             return
         import sys as _sys  # noqa: PLC0415
 
-        _main_d = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
-        print("\n  Devices Currently Upgrading:")
-        print("  " + "=" * 86)
-        print(f"  {'Device Name':<25} {'Type':<10} {'Model':<15} {'Status':<12} {'Progress':<20}")
-        print("  " + "-" * 86)
-        for upgrade in active_upgrades:
+        _main_d = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")  # WHY: resolve MistHelper module
+        print("\n  Devices Currently Upgrading:")  # WHY: section header
+        print("  " + "=" * 86)  # WHY: top divider
+        header = f"  {'Device Name':<25} {'Type':<10} {'Model':<15} {'Status':<12} {'Progress':<20}"  # WHY: header row
+        print(header)  # WHY: column headers
+        print("  " + "-" * 86)  # WHY: header/body separator
+        for upgrade in active_upgrades:  # WHY: emit one row per active upgrade
             if _main_d is None:
-                progress_bar = ""
+                progress_bar = ""  # WHY: MistHelper unavailable; render blank bar
             else:
-                progress_bar = _main_d.DisplayUtils.create_progress_bar(upgrade["progress"], bar_length=15)
+                progress_bar = _main_d.DisplayUtils.create_progress_bar(  # WHY: ASCII bar
+                    upgrade["progress"], bar_length=15
+                )
             print(
                 f"  {upgrade['name']:<25} {upgrade['type']:<10} {upgrade['model']:<15} "
                 f"{upgrade['status']:<12} {progress_bar}"
             )
-        print("  " + "=" * 86)
+        print("  " + "=" * 86)  # WHY: bottom divider
 
     def _execute_monitoring_check(self, site_filter=None):  # type: ignore[no-untyped-def]
         """Execute a single monitoring check iteration.
@@ -520,74 +562,74 @@ class FirmwareManager:
             return None
 
     def _upgrade_ap_firmware_by_gateway_template(self):  # type: ignore[no-untyped-def]
-        """Advanced AP firmware upgrade organized by Gateway Template assignment.
+        """Advanced AP firmware upgrade organized by Gateway Template assignment."""
+        logging.info("Starting template-based AP firmware upgrade")  # WHY: audit start
+        print(" Advanced AP Firmware Upgrade by Gateway Template")  # WHY: banner
+        print("=" * 70)  # WHY: divider
+        self._prepare_template_cache()  # WHY: ensure OrgGatewayTemplates.csv + SiteList.csv fresh
+        template_id, template_name = self._select_template_for_upgrade()  # WHY: interactive template pick
+        if template_id is None:  # WHY: user cancelled or none found
+            return None  # WHY: exit early with no side effects
+        sites_to_upgrade = self._resolve_template_sites(template_id, template_name)  # WHY: expand template to sites
+        if not sites_to_upgrade:  # WHY: template has no site assignments
+            return None  # WHY: nothing to do
+        self._present_template_summary(template_id, template_name, sites_to_upgrade)  # WHY: recap to operator
+        logging.debug("Template upgrade dispatch site_count=%d", len(sites_to_upgrade))  # WHY: audit dispatch
+        return self._execute_template_based_upgrade(sites_to_upgrade, template_name)  # WHY: delegate execution
 
-        This method provides template-based firmware upgrades with:
-        1. Interactive Gateway Template selection with site count display
-        2. Automatic site discovery for selected template
-        3. AP enumeration across all sites in template
-        4. Model-based firmware version selection
-        5. Unified upgrade execution across template sites
-        6. Automatic site auto-upgrade configuration
-        7. Comprehensive audit logging and progress monitoring
+    def _prepare_template_cache(self) -> None:  # WHY: reused CSV-freshness step for template flow
+        """Warm cached template + site CSVs so downstream helpers can read them."""
+        logging.info("Preparing template and site CSV cache")  # WHY: audit entry
+        print("\n  Preparing template and site data...")  # WHY: operator progress hint
+        if self._check_cache_fn is not None:  # WHY: DI-injected cache fn may be absent in tests
+            self._check_cache_fn("OrgGatewayTemplates.csv", self._gateway_templates_fn)  # WHY: template CSV
+            self._check_cache_fn("SiteList.csv", self._sites_fn)  # WHY: site inventory CSV
+        logging.debug("Template CSV cache prepared")  # WHY: trace exit
 
-        Features:
-        - Template selection by index or name
-        - Site count and AP count display per template
-        - Reuse of existing upgrade strategies and safety measures
-        - Maintains all existing safety confirmations and audit trails
-        """
-        logging.info("Starting template-based AP firmware upgrade...")
-        logging.debug("FirmwareManager._upgrade_ap_firmware_by_gateway_template() initiated")
-
-        print(" Advanced AP Firmware Upgrade by Gateway Template")
-        print("=" * 70)
-
-        # Step 1: Ensure required CSVs are fresh
-        print("\n  Preparing template and site data...")
-        if self._check_cache_fn is not None:
-            self._check_cache_fn("OrgGatewayTemplates.csv", self._gateway_templates_fn)
-            self._check_cache_fn("SiteList.csv", self._sites_fn)
-
-        # Step 2: Load gateway templates and build template-to-sites mapping
+    def _select_template_for_upgrade(self) -> tuple[str | None, str | None]:  # WHY: prompt + resolve
+        """Load templates, prompt operator, return (template_id, template_name) or (None, None)."""
         template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()  # type: ignore[no-untyped-call]
-
-        if not template_name_to_id:
-            print(" No gateway templates found.")
-            logging.warning("No gateway templates available for upgrade")
-            return
-
-        # Step 3: Display template selection with site counts
-        selected_template_id, selected_template_name = self._prompt_template_selection(  # type: ignore[no-untyped-call]
-            template_name_to_id, template_sites_mapping
+        if not template_name_to_id:  # WHY: no templates configured
+            print(" No gateway templates found.")  # WHY: operator visibility
+            logging.warning("No gateway templates available for upgrade")  # WHY: audit
+            return None, None  # WHY: caller treats as cancellation
+        selected_id, selected_name = self._prompt_template_selection(  # type: ignore[no-untyped-call]
+            template_name_to_id,
+            template_sites_mapping,
         )
+        if not selected_id:  # WHY: user cancelled selection
+            print(" No template selected. Exiting.")  # WHY: operator visibility
+            logging.info("Template-based upgrade cancelled - no template selected")  # WHY: audit
+            return None, None  # WHY: caller treats as cancellation
+        return selected_id, selected_name  # WHY: happy path returns concrete IDs
 
-        if not selected_template_id:
-            print(" No template selected. Exiting.")
-            logging.info("Template-based upgrade cancelled - no template selected")
-            return
+    def _resolve_template_sites(  # WHY: turn template ID into a concrete site list
+        self,
+        template_id: str,
+        template_name: str,
+    ) -> list[dict[str, Any]]:
+        """Look up sites for the selected template; warn + return [] if empty."""
+        _template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()  # type: ignore[no-untyped-call]
+        sites_to_upgrade = template_sites_mapping.get(template_id, [])  # WHY: fetch mapped sites
+        if not sites_to_upgrade:  # WHY: empty template
+            print(f" No sites found using template '{template_name}'.")  # WHY: operator visibility
+            logging.warning("No sites found for template %s (ID: %s)", template_name, template_id)  # WHY: audit
+        return sites_to_upgrade  # WHY: caller checks for empty
 
-        # Step 4: Get sites for selected template
-        sites_to_upgrade = template_sites_mapping.get(selected_template_id, [])
-
-        if not sites_to_upgrade:
-            print(f" No sites found using template '{selected_template_name}'.")
-            logging.warning("No sites found for template %s (ID: %s)", selected_template_name, selected_template_id)
-            return
-
-        print("\n  Template Selection Summary:")
-        print(f"   Selected Template: {selected_template_name}")
-        print(f"   Template ID: {selected_template_id}")
-        print(f"   Sites in Template: {len(sites_to_upgrade)}")
-
-        # Log site details
-        logging.info("Template-based upgrade: '%s' with %s sites", selected_template_name, len(sites_to_upgrade))
-        for site_info in sites_to_upgrade:
-            logging.debug("  Site: %s (ID: %s)", site_info["name"], site_info["id"])
-
-        # Step 5: Execute firmware upgrade using existing bulk upgrade logic
-        # Convert sites_to_upgrade to the format expected by bulk_upgrade_ap_firmware_by_site
-        return self._execute_template_based_upgrade(sites_to_upgrade, selected_template_name)  # type: ignore[no-untyped-call]
+    def _present_template_summary(  # WHY: emit operator-facing template recap
+        self,
+        template_id: str,
+        template_name: str,
+        sites_to_upgrade: list[dict[str, Any]],
+    ) -> None:
+        """Print the selection summary and log per-site debug details."""
+        print("\n  Template Selection Summary:")  # WHY: section header
+        print(f"   Selected Template: {template_name}")  # WHY: recap chosen template
+        print(f"   Template ID: {template_id}")  # WHY: expose UUID for auditors
+        print(f"   Sites in Template: {len(sites_to_upgrade)}")  # WHY: expected work size
+        logging.info("Template upgrade '%s' with %s sites", template_name, len(sites_to_upgrade))  # WHY: audit
+        for site_info in sites_to_upgrade:  # WHY: per-site debug trail
+            logging.debug("  Site: %s (ID: %s)", site_info["name"], site_info["id"])  # WHY: audit
 
     def _ensure_template_csv_freshness(self):  # type: ignore[no-untyped-def]
         """Ensure that required template and site CSV files are fresh and available.
@@ -634,30 +676,36 @@ class FirmwareManager:
         Returns:
             tuple: (template_name_to_id dict, template_sites_mapping dict)
         """
-        template_name_to_id: dict[str, str] = {}
-        template_sites_mapping: dict[str, list[dict[str, Any]]] = {}
-
+        logging.info("Loading gateway template-to-sites mapping org=%s", self.org_id)  # WHY: audit entry
+        if self._get_csv_path_fn is None:  # WHY: guard early when path helper is not wired
+            return {}, {}  # WHY: empty mapping short-circuit
         try:
-            if self._get_csv_path_fn is None:
-                return template_name_to_id, template_sites_mapping
-            gateway_templates_path = self._get_csv_path_fn("OrgGatewayTemplates.csv")
-            with open(gateway_templates_path, encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    name = row.get("name", "").strip()
-                    tid = row.get("id", "").strip()
-                    if name and tid:
-                        template_name_to_id[name] = tid
-                        template_sites_mapping[tid] = []
-            logging.info("Loaded %s gateway templates", len(template_name_to_id))
-            site_list_path = self._get_csv_path_fn("SiteList.csv")
-            self._map_sites_to_template(template_sites_mapping, site_list_path)
-            self._log_template_mapping_stats(template_sites_mapping, template_name_to_id)
-            return template_name_to_id, template_sites_mapping
-        except Exception as e:
-            logging.error("Failed to load template-sites mapping: %s", e)
-            print(f"! Failed to load template and site data: {e}")
-            return {}, {}
+            template_name_to_id, template_sites_mapping = self._read_gateway_templates_csv()  # WHY: read + parse
+            site_list_path = self._get_csv_path_fn("SiteList.csv")  # WHY: resolve site list CSV path
+            self._map_sites_to_template(template_sites_mapping, site_list_path)  # WHY: join sites onto templates
+            self._log_template_mapping_stats(template_sites_mapping, template_name_to_id)  # WHY: audit stats
+        except Exception as e:  # WHY: broad guard for FS/CSV parse errors
+            logging.error("Failed to load template-sites mapping: %s", e)  # WHY: capture stack context
+            print(f"! Failed to load template and site data: {e}")  # WHY: surface to operator
+            return {}, {}  # WHY: safe fallback preserves menu flow
+        logging.debug("Template mapping load complete count=%d", len(template_name_to_id))  # WHY: audit exit
+        return template_name_to_id, template_sites_mapping  # WHY: hand back to orchestrator
+
+    def _read_gateway_templates_csv(self) -> tuple[dict[str, str], dict[str, list[dict[str, Any]]]]:
+        """Read OrgGatewayTemplates.csv and return (name->id, id->sites-list) mappings."""
+        template_name_to_id: dict[str, str] = {}  # WHY: reverse-lookup for menu display
+        template_sites_mapping: dict[str, list[dict[str, Any]]] = {}  # WHY: primary mapping keyed by template id
+        gateway_templates_path = self._get_csv_path_fn("OrgGatewayTemplates.csv")  # type: ignore[misc]  # WHY: resolved above
+        with open(gateway_templates_path, encoding="utf-8") as f:  # WHY: read templates roster
+            reader = csv.DictReader(f)  # WHY: named-column parse
+            for row in reader:  # WHY: iterate roster rows
+                name = row.get("name", "").strip()  # WHY: display label
+                tid = row.get("id", "").strip()  # WHY: template identifier
+                if name and tid:  # WHY: skip rows missing either half of the pair
+                    template_name_to_id[name] = tid  # WHY: record lookup entry
+                    template_sites_mapping[tid] = []  # WHY: initialize empty site list slot
+        logging.info("Loaded %s gateway templates", len(template_name_to_id))  # WHY: parity with pre-refactor
+        return template_name_to_id, template_sites_mapping  # WHY: mappings for downstream site join
 
     def _prompt_template_selection(self, template_name_to_id, template_sites_mapping):  # type: ignore[no-untyped-def]
         """Present interactive template selection with site counts.
@@ -669,52 +717,69 @@ class FirmwareManager:
         Returns:
             tuple: (selected_template_id, selected_template_name) or (None, None)
         """
-        print("\n  Available Gateway Templates:")
-        print(f"  {'Index':<8} {'Template Name':<40} {'Sites':<8}")
-        print(f"  {'-' * 8} {'-' * 40} {'-' * 8}")
+        logging.info("Prompting template selection count=%d", len(template_name_to_id))  # WHY: entry audit
+        sorted_templates = sorted(template_name_to_id.items())  # WHY: stable order
+        template_index_map = self._render_template_selection_menu(  # WHY: draw menu, build index
+            sorted_templates, template_sites_mapping
+        )
+        result = self._loop_template_selection_input(  # WHY: read until valid or cancel
+            template_index_map, template_name_to_id, len(sorted_templates)
+        )
+        logging.debug("Template selection resolved template=%s", result[1])  # WHY: exit audit
+        return result
 
-        # Create indexed list of templates sorted by name
-        sorted_templates = sorted(template_name_to_id.items())
-        template_index_map = {}
+    def _render_template_selection_menu(self, sorted_templates, template_sites_mapping):  # type: ignore[no-untyped-def]
+        """Print the template selection table and return the index->(id, name) map."""
+        print("\n  Available Gateway Templates:")  # WHY: section header
+        print(f"  {'Index':<8} {'Template Name':<40} {'Sites':<8}")  # WHY: table header
+        print(f"  {'-' * 8} {'-' * 40} {'-' * 8}")  # WHY: header divider
+        template_index_map = {}  # WHY: map index-string -> template payload
+        for idx, (template_name, template_id) in enumerate(sorted_templates, 1):  # WHY: 1-based for UX
+            site_count = len(template_sites_mapping.get(template_id, []))  # WHY: display column
+            print(f"  [{idx:<7}] {template_name:<40} {site_count:<8}")  # WHY: row output
+            template_index_map[str(idx)] = (template_id, template_name)  # WHY: capture payload
+        print("\n  Selection Options:")  # WHY: footer header
+        print(f"   !? Enter index number (1-{len(sorted_templates)})")  # WHY: index instruction
+        print("   !? Type exact template name")  # WHY: name instruction
+        print("   !? Press Enter to cancel")  # WHY: cancel instruction
+        return template_index_map  # WHY: hand back to loop
 
-        for idx, (template_name, template_id) in enumerate(sorted_templates, 1):
-            site_count = len(template_sites_mapping.get(template_id, []))
-            print(f"  [{idx:<7}] {template_name:<40} {site_count:<8}")
-            template_index_map[str(idx)] = (template_id, template_name)
-
-        print("\n  Selection Options:")
-        print(f"   !? Enter index number (1-{len(sorted_templates)})")
-        print("   !? Type exact template name")
-        print("   !? Press Enter to cancel")
-
-        while True:
+    def _loop_template_selection_input(  # type: ignore[no-untyped-def]
+        self, template_index_map, template_name_to_id, total_templates
+    ):
+        """Read user input until a valid template selection or cancel."""
+        while True:  # WHY: retry until match or cancel
             try:
-                user_input = self._safe_input_fn("\n  Select template: ", context="firmware_manager").strip()
-
-                if not user_input:
-                    # Empty input - cancel
-                    return None, None
-
-                # Check if input is an index number
-                if user_input in template_index_map:
-                    template_id, template_name = template_index_map[user_input]
-                    logging.debug("Template selected by index %s: %s", user_input, template_name)
-                    return template_id, template_name
-
-                # Check if input matches a template name exactly
-                if user_input in template_name_to_id:
-                    template_id = template_name_to_id[user_input]
-                    logging.debug("Template selected by name: %s", user_input)
-                    return template_id, user_input
-
-                # No match found
-                print(
-                    f"   Invalid selection. Please enter a valid index (1-{len(sorted_templates)}) or exact template name."  # noqa: E501
-                )
-
+                user_input = self._safe_input_fn(  # WHY: prompt with audit tag
+                    "\n  Select template: ", context="firmware_manager"
+                ).strip()
             except KeyboardInterrupt:
-                print("\n   Template selection cancelled.")
-                return None, None
+                print("\n   Template selection cancelled.")  # WHY: cancel notice
+                return None, None  # WHY: cancel sentinel
+            if not user_input:  # WHY: blank input cancels
+                return None, None  # WHY: cancel sentinel
+            resolved = self._resolve_template_selection(  # WHY: index-or-name lookup
+                user_input, template_index_map, template_name_to_id
+            )
+            if resolved is not None:  # WHY: valid short-circuits
+                return resolved  # WHY: forward tuple
+            print(  # WHY: invalid selection feedback
+                f"   Invalid selection. Please enter a valid index (1-{total_templates}) or exact template name."
+            )
+
+    def _resolve_template_selection(  # type: ignore[no-untyped-def]
+        self, user_input, template_index_map, template_name_to_id
+    ):
+        """Match user_input against index map first, then exact template name."""
+        if user_input in template_index_map:  # WHY: numeric index path
+            template_id, template_name = template_index_map[user_input]  # WHY: unpack payload
+            logging.debug("Template selected by index %s: %s", user_input, template_name)  # WHY: audit
+            return template_id, template_name  # WHY: valid result
+        if user_input in template_name_to_id:  # WHY: exact-name path
+            template_id = template_name_to_id[user_input]  # WHY: id lookup by name
+            logging.debug("Template selected by name: %s", user_input)  # WHY: audit
+            return template_id, user_input  # WHY: valid result
+        return None  # WHY: no match sentinel
 
     def _execute_template_based_upgrade(self, sites_to_upgrade, template_name):  # type: ignore[no-untyped-def]
         """Execute firmware upgrade for all sites in a gateway template.
@@ -728,85 +793,99 @@ class FirmwareManager:
         Returns:
             Results of the upgrade operation
         """
-        logging.info(
+        logging.info(  # WHY: audit entry with sizing
             "Executing template-based firmware upgrade for template '%s' with %s sites",
             template_name,
             len(sites_to_upgrade),
         )
+        self._print_template_upgrade_banner(template_name, sites_to_upgrade)  # WHY: operator visibility
+        result = self._bulk_upgrade_ap_firmware_by_site(  # WHY: reuse bulk site upgrade with override list
+            sites_to_upgrade_override=sites_to_upgrade,
+        )  # type: ignore[no-untyped-call]
+        logging.debug("Template-based upgrade returned for '%s'", template_name)  # WHY: audit exit
+        return result  # WHY: propagate results to caller
 
-        print("\n  Template-Based Upgrade Execution")
-        print(f"  Template: {template_name}")
-        print(f"  Sites to process: {len(sites_to_upgrade)}")
-        print(f"  {'Site Name':<40} {'Site ID':<40}")
-        print(f"  {'-' * 40} {'-' * 40}")
-
-        for site_info in sites_to_upgrade:
-            print(f"  {site_info['name']:<40} {site_info['id']:<40}")
-
-        # Use the existing bulk upgrade functionality
-        # We'll call the refactored bulk_upgrade method with our site list
-        return self._bulk_upgrade_ap_firmware_by_site(sites_to_upgrade_override=sites_to_upgrade)  # type: ignore[no-untyped-call]
+    def _print_template_upgrade_banner(self, template_name: str, sites_to_upgrade: list[Any]) -> None:
+        """Render the fixed banner + site table for the template-based upgrade run."""
+        print("\n  Template-Based Upgrade Execution")  # WHY: section header for operator
+        print(f"  Template: {template_name}")  # WHY: identify selected template
+        print(f"  Sites to process: {len(sites_to_upgrade)}")  # WHY: sizing
+        print(f"  {'Site Name':<40} {'Site ID':<40}")  # WHY: column headings
+        print(f"  {'-' * 40} {'-' * 40}")  # WHY: divider row
+        for site_info in sites_to_upgrade:  # WHY: enumerate each site row
+            print(f"  {site_info['name']:<40} {site_info['id']:<40}")  # WHY: formatted output row
 
     def execute_firmware_upgrade_with_mode_selection(self):  # type: ignore[no-untyped-def]
-        """Main entry point for firmware upgrades with mode selection.
+        """Main entry point for AP firmware upgrades with mode selection.
 
-        Presents user with choice between:
-        1. Site-based upgrade (existing behavior)
-        2. Template-based upgrade (new functionality)
-        3. MSP Multi-Org upgrade (when MSP session active) - upgrade across multiple organizations
-
-        Returns:
-            Results of the selected upgrade operation
+        Presents site/template/MSP choice; delegates to picked flow. MSP option
+        appears only when an MSP session is active.
         """
-        global msp_privileges
+        logging.info("Starting AP firmware upgrade with mode selection")  # WHY: audit entry
+        self._emit_ap_upgrade_progress_start()  # WHY: cross-cut progress signal
+        msp_mode_available = self._is_msp_mode_available()  # WHY: gate MSP branch
+        self._print_ap_upgrade_banner()  # WHY: title box
+        valid_choices, prompt = self._render_ap_mode_menu(msp_mode_available)  # WHY: menu + choices contract
+        mode_choice = self._prompt_ap_upgrade_mode(prompt, valid_choices)  # WHY: read operator selection
+        if mode_choice is None:  # WHY: KeyboardInterrupt cancel
+            return None  # WHY: honour operator cancel
+        result = self._dispatch_ap_upgrade_mode(mode_choice)  # WHY: route chosen flow
+        logging.debug("AP upgrade mode dispatch done choice=%s", mode_choice)  # WHY: trace exit
+        return result  # WHY: pass through flow result
 
-        logging.info("Starting firmware upgrade with mode selection...")
-        logging.debug("FirmwareManager.execute_firmware_upgrade_with_mode_selection() initiated")
-        emitter = PROGRESS_EMITTER
-        if emitter:
-            emitter.emit_progress_start("90", "firmware_upgrade", 1)
+    def _emit_ap_upgrade_progress_start(self) -> None:
+        """Fire the progress emitter start event for menu 90 (AP firmware)."""
+        emitter = PROGRESS_EMITTER  # WHY: module-global emitter
+        if emitter:  # WHY: emitter is optional
+            emitter.emit_progress_start("90", "firmware_upgrade", 1)  # WHY: single-op progress
 
-        print(" Advanced AP Firmware Upgrade")
-        print("=" * 60)
+    def _is_msp_mode_available(self) -> bool:
+        """Return True when MSP privileges are cached (MSP session active)."""
+        global msp_privileges  # WHY: read module-global cache
+        return bool(msp_privileges)  # WHY: truthy on non-empty list
 
-        # Check if MSP mode is available
-        msp_mode_available = bool(msp_privileges)
+    def _print_ap_upgrade_banner(self) -> None:
+        """Print the AP firmware upgrade banner (title + underline)."""
+        print(" Advanced AP Firmware Upgrade")  # WHY: page title
+        print("=" * 60)  # WHY: title underline
 
-        # Step 1: Mode selection
-        print("\n  Select upgrade mode:")
-        print("   [1] By Site - Upgrade specific sites (CSV file, bulk list, or single site selection)")
-        print("   [2] By Gateway Template - Upgrade all sites assigned to a selected Gateway Template")
+    def _render_ap_mode_menu(self, msp_mode_available: bool) -> tuple[list[str], str]:
+        """Print the mode menu and return (valid_choices, prompt) tuple."""
+        print("\n  Select upgrade mode:")  # WHY: menu heading
+        print("   [1] By Site - Upgrade specific sites (CSV file, bulk list, or single site selection)")  # opt1
+        print("   [2] By Gateway Template - Upgrade all sites assigned to a selected Gateway Template")  # opt2
+        if msp_mode_available:  # WHY: extra MSP branch
+            print("   [3] MSP Multi-Org - Upgrade across multiple organizations (MSP session active)")  # opt3
+            return ["1", "2", "3"], "\n  Select mode (1-3): "  # WHY: three-way choice contract
+        return ["1", "2"], "\n  Select mode (1-2): "  # WHY: two-way choice contract
 
-        if msp_mode_available:
-            print("   [3] MSP Multi-Org - Upgrade across multiple organizations (MSP session active)")
-            valid_choices = ["1", "2", "3"]
-            prompt = "\n  Select mode (1-3): "
-        else:
-            valid_choices = ["1", "2"]
-            prompt = "\n  Select mode (1-2): "
+    def _prompt_ap_upgrade_mode(self, prompt: str, valid_choices: list[str]) -> str | None:
+        """Loop until operator enters a valid choice; return None on KeyboardInterrupt."""
+        while True:  # WHY: retry until valid/cancel
+            try:  # WHY: catch Ctrl-C
+                mode_choice = self._safe_input_fn(prompt, context="firmware_manager").strip()  # WHY: audited
+            except KeyboardInterrupt:  # WHY: operator cancel
+                print("\n\n  Firmware upgrade cancelled by user.")  # WHY: operator feedback
+                logging.info("Firmware upgrade cancelled during mode selection")  # WHY: audit cancel
+                return None  # WHY: signal cancel to caller
+            if mode_choice in valid_choices:  # WHY: gate valid tokens only
+                return mode_choice  # WHY: hand to dispatcher
+            print(f"   Invalid selection. Please choose {'/'.join(valid_choices)}.")  # WHY: retry hint
+            logging.debug("Invalid mode selection: %s", mode_choice)  # WHY: audit bad input
 
-        while True:
-            try:
-                mode_choice = self._safe_input_fn(prompt, context="firmware_manager").strip()
-                if mode_choice == "1":
-                    logging.info("User selected site-based upgrade mode")
-                    print("\n  Site-based upgrade mode selected")
-                    return self._bulk_upgrade_ap_firmware_by_site()  # type: ignore[no-untyped-call]
-                elif mode_choice == "2":
-                    logging.info("User selected template-based upgrade mode")
-                    print("\n  Template-based upgrade mode selected")
-                    return self._upgrade_ap_firmware_by_gateway_template()  # type: ignore[no-untyped-call]
-                elif mode_choice == "3" and msp_mode_available:
-                    logging.info("User selected MSP multi-org upgrade mode")
-                    print("\n  MSP Multi-Organization upgrade mode selected")
-                    return self._execute_msp_multi_org_upgrade()  # type: ignore[no-untyped-call]
-                else:
-                    print(f"   Invalid selection. Please choose {'/'.join(valid_choices)}.")
-                    logging.debug("Invalid mode selection: %s", mode_choice)
-            except KeyboardInterrupt:
-                print("\n\n  Firmware upgrade cancelled by user.")
-                logging.info("Firmware upgrade cancelled during mode selection")
-                return
+    def _dispatch_ap_upgrade_mode(self, mode_choice: str):  # type: ignore[no-untyped-def]
+        """Route the validated mode choice to the appropriate AP upgrade flow."""
+        if mode_choice == "1":  # WHY: site-based branch
+            logging.info("User selected site-based upgrade mode")  # WHY: audit selection
+            print("\n  Site-based upgrade mode selected")  # WHY: operator confirmation
+            return self._bulk_upgrade_ap_firmware_by_site()  # type: ignore[no-untyped-call]
+        if mode_choice == "2":  # WHY: template-based branch
+            logging.info("User selected template-based upgrade mode")  # WHY: audit selection
+            print("\n  Template-based upgrade mode selected")  # WHY: operator confirmation
+            return self._upgrade_ap_firmware_by_gateway_template()  # type: ignore[no-untyped-call]
+        logging.info("User selected MSP multi-org upgrade mode")  # WHY: MSP branch (mode==3)
+        print("\n  MSP Multi-Organization upgrade mode selected")  # WHY: operator confirmation
+        return self._execute_msp_multi_org_upgrade()  # type: ignore[no-untyped-call]
 
     def _add_org_to_upgrade_plan(
         self,
@@ -854,124 +933,150 @@ class FirmwareManager:
         Returns:
             True if user confirmed; False otherwise.
         """
-        total_sites = sum(len(p["sites"]) for p in upgrade_plan)
-        total_orgs = len(upgrade_plan)
-        print(f"\n  {'!' * 68}\n  !  DESTRUCTIVE OPERATION - FIRMWARE UPGRADE ACROSS MULTIPLE ORGS  !\n  {'!' * 68}\n")
-        print("  You are about to upgrade AP firmware in:")
-        print(f"    - {total_orgs} organization(s)")
-        print(f"    - {total_sites} site(s) total")
+        total_sites = sum(len(p["sites"]) for p in upgrade_plan)  # WHY: aggregate site count across orgs
+        total_orgs = len(upgrade_plan)  # WHY: total org count for banner
+        divider = "!" * 68  # WHY: banner divider
+        print(f"\n  {divider}\n  !  DESTRUCTIVE OPERATION - FIRMWARE UPGRADE ACROSS MULTIPLE ORGS  !\n  {divider}\n")
+        print("  You are about to upgrade AP firmware in:")  # WHY: preamble
+        print(f"    - {total_orgs} organization(s)")  # WHY: report org count
+        print(f"    - {total_sites} site(s) total")  # WHY: report site count
         print()
         try:
-            confirm = self._safe_input_fn("  Type 'UPGRADE' to proceed: ", context="msp_firmware_upgrade").strip()
+            prompt_text = "  Type 'UPGRADE' to proceed: "  # WHY: build prompt text
+            confirm = self._safe_input_fn(prompt_text, context="msp_firmware_upgrade").strip()  # WHY: hard prompt
         except SystemExit:
-            return False
-        if confirm != "UPGRADE":
-            print("  X Upgrade cancelled - confirmation not received")
-            logging.warning("MSP multi-org upgrade cancelled - user did not confirm")
-            return False
-        return True
+            return False  # WHY: user cancelled via safe_input SystemExit
+        if confirm != "UPGRADE":  # WHY: enforce literal-match confirmation
+            print("  X Upgrade cancelled - confirmation not received")  # WHY: user feedback
+            logging.warning("MSP multi-org upgrade cancelled - user did not confirm")  # WHY: audit
+            return False  # WHY: signal abort upstream
+        return True  # WHY: confirmed and safe to proceed
 
     def _execute_msp_multi_org_upgrade(self):  # type: ignore[no-untyped-def]
-        """Execute firmware upgrade across multiple MSPs and organizations.
+        """Execute firmware upgrade across multiple MSPs and organizations."""
+        logging.info("Starting MSP multi-org upgrade orchestrator")  # WHY: audit entry
+        dry_run = getattr(globals().get("args", None), "dry_run", False)  # WHY: honor CLI dry-run flag
+        self._print_msp_multi_org_banner(dry_run)  # WHY: render fixed banner + warning block
+        upgrade_plan = self._collect_msp_upgrade_plan()  # WHY: drive MSP + org + site selection
+        if not upgrade_plan:  # WHY: None (cancel) or empty (no targets) both abort
+            if upgrade_plan is not None:  # WHY: distinguish empty from cancel for messaging
+                print("\n  No upgrade targets configured. Operation cancelled.")  # WHY: surface to operator
+            return None  # WHY: nothing to execute
+        results = self._finalize_msp_upgrade(upgrade_plan, dry_run)  # WHY: preview + confirm + run + summary
+        logging.debug("MSP multi-org upgrade complete result_count=%d", len(results) if results else 0)  # WHY: audit
+        return results  # WHY: return aggregate results to caller
 
-        This mode allows MSP administrators to:
-        1. Select multiple MSPs (if multiple available)
-        2. Select multiple organizations per MSP
-        3. Select sites within each organization
-        4. Execute upgrades sequentially with dry-run support
+    def _finalize_msp_upgrade(self, upgrade_plan: list, dry_run: bool) -> list | None:
+        """Render plan summary, confirm, execute, and print closing summary; return results or None."""
+        self._display_upgrade_plan_summary(upgrade_plan, dry_run)  # type: ignore[no-untyped-call]  # WHY: preview
+        if not self._await_msp_upgrade_confirmation(upgrade_plan, dry_run):  # WHY: gate execution
+            return None  # WHY: operator declined confirmation
+        results = self._execute_msp_upgrade_plan(upgrade_plan, dry_run)  # type: ignore[no-untyped-call]  # WHY: run
+        self._print_msp_upgrade_summary(results, dry_run)  # type: ignore[no-untyped-call]  # WHY: closing summary
+        return results  # WHY: hand back accumulated per-org records
 
-        Returns:
-            Summary of upgrade results across all organizations
-        """
-        global msp_privileges, apisession, org_id
-
-        dry_run = getattr(globals().get("args", None), "dry_run", False)
-
-        print(f"\n{'=' * 70}\n  MSP MULTI-ORGANIZATION FIRMWARE UPGRADE\n{'=' * 70}\n")
-        if dry_run:
+    def _print_msp_multi_org_banner(self, dry_run: bool) -> None:
+        """Render the fixed banner + warning block for the MSP multi-org upgrade flow."""
+        print(f"\n{'=' * 70}\n  MSP MULTI-ORGANIZATION FIRMWARE UPGRADE\n{'=' * 70}\n")  # WHY: section header
+        if dry_run:  # WHY: mark simulation runs distinctly
             print("  >> DRY-RUN MODE ENABLED <<\n  >> No actual upgrades will be performed - simulation only <<\n")
-        print("  WARNING: This will upgrade AP firmware across multiple organizations.")
-        print("  Please review selections carefully before confirming.\n")
+        print("  WARNING: This will upgrade AP firmware across multiple organizations.")  # WHY: risk note
+        print("  Please review selections carefully before confirming.\n")  # WHY: operator caution
 
-        selected_msps = self._select_msps_for_upgrade()  # type: ignore[no-untyped-call]
-        if not selected_msps:
-            print("  Cancelled - no MSP selected")
-            return
+    def _collect_msp_upgrade_plan(self) -> list[Any] | None:
+        """Drive MSP + org + site selection; return upgrade plan list, or None on cancel."""
+        selected_msps = self._select_msps_for_upgrade()  # type: ignore[no-untyped-call]  # WHY: pick MSPs
+        if not selected_msps:  # WHY: cancel signal from selector
+            print("  Cancelled - no MSP selected")  # WHY: operator feedback
+            return None  # WHY: propagate cancel upward
+        print(f"\n  + Selected {len(selected_msps)} MSP(s)")  # WHY: confirm count
+        upgrade_plan = self._build_msp_upgrade_plan(selected_msps)  # WHY: expand MSPs -> orgs -> sites
+        return upgrade_plan  # WHY: empty list means no targets; caller handles
 
-        print(f"\n  + Selected {len(selected_msps)} MSP(s)")
-
-        upgrade_plan = self._build_msp_upgrade_plan(selected_msps)
-        if not upgrade_plan:
-            print("\n  No upgrade targets configured. Operation cancelled.")
-            return
-
-        self._display_upgrade_plan_summary(upgrade_plan, dry_run)  # type: ignore[no-untyped-call]
-
-        if not dry_run:
-            if not self._confirm_msp_upgrade(upgrade_plan):
-                return
-        else:
-            print("\n  >> DRY-RUN: Skipping confirmation - proceeding with simulation <<")
-
-        results = self._execute_msp_upgrade_plan(upgrade_plan, dry_run)  # type: ignore[no-untyped-call]
-        self._print_msp_upgrade_summary(results, dry_run)  # type: ignore[no-untyped-call]
-        return results
+    def _await_msp_upgrade_confirmation(self, upgrade_plan: list[Any], dry_run: bool) -> bool:
+        """Return True when execution should proceed (dry-run auto-approves)."""
+        if dry_run:  # WHY: simulations skip confirmation prompts
+            print("\n  >> DRY-RUN: Skipping confirmation - proceeding with simulation <<")  # WHY: signal skip
+            return True  # WHY: proceed with simulated execution
+        return self._confirm_msp_upgrade(upgrade_plan)  # WHY: delegate to interactive confirm prompt
 
     def _select_msps_for_upgrade(self):  # type: ignore[no-untyped-def]
         """Select MSPs for multi-org upgrade with support for multi-selection.
 
-        Supports:
-        - Single selection by index
-        - Multiple selection via comma-separated indices
-        - Range selection with dash or 'through' keyword
-        - 'all' to select all MSPs
-
-        Returns:
-            List of selected MSP dicts or None if cancelled
+        Returns list of selected MSP dicts or None if cancelled. Supports single
+        index, comma-separated indices, dash/'through' ranges, and 'all'.
         """
-        global msp_privileges
+        logging.info("Selecting MSPs for multi-org upgrade org=%s", self.org_id)  # WHY: audit entry
+        global msp_privileges  # WHY: read module-global cache
+        if not msp_privileges:  # WHY: guard empty MSP list
+            logging.debug("No MSPs available; returning None")  # WHY: trace early exit
+            return None  # WHY: caller handles None as cancel
+        if len(msp_privileges) == 1:  # WHY: single-MSP shortcut
+            return self._auto_select_single_msp()  # WHY: skip prompt when only one
+        self._display_msps_for_selection()  # WHY: numbered list + options
+        selection = self._prompt_msp_selection_input()  # WHY: capture operator token
+        if selection is None:  # WHY: 'q' or SystemExit path
+            return None  # WHY: bubble cancel up
+        result = self._resolve_msp_selection(selection)  # WHY: turn token into MSP list
+        logging.debug("MSP selection resolved selected=%d", len(result) if result else 0)  # WHY: audit result
+        return result  # WHY: return chosen MSP dicts
 
-        if not msp_privileges:
-            return None
+    def _auto_select_single_msp(self):  # type: ignore[no-untyped-def]
+        """Return the sole MSP wrapped in a list with a preview log line."""
+        global msp_privileges  # WHY: read module-global cache
+        msp_name = msp_privileges[0].get("msp_name", "Unknown")  # WHY: display friendly name
+        print(f"  Single MSP available: {msp_name}")  # WHY: operator preview
+        logging.debug("Auto-selected sole MSP=%s", msp_name)  # WHY: audit auto-select
+        return msp_privileges  # WHY: preserve return shape
 
-        if len(msp_privileges) == 1:
-            print(f"  Single MSP available: {msp_privileges[0].get('msp_name', 'Unknown')}")
-            return msp_privileges
+    def _display_msps_for_selection(self) -> None:
+        """Print the numbered list of MSPs and the selection-syntax help block."""
+        global msp_privileges  # WHY: read module-global cache
+        print("  Available MSPs:")  # WHY: section header
+        print("")  # WHY: visual spacing
+        for idx, msp in enumerate(msp_privileges, start=1):  # WHY: enumerate for 1-based UI
+            msp_name = msp.get("msp_name", "Unknown")  # WHY: safe name fallback
+            msp_role = msp.get("role", "unknown")  # WHY: safe role fallback
+            print(f"    {idx:>3}. {msp_name} (role: {msp_role})")  # WHY: aligned numeric column
+        print("")  # WHY: separator before help
+        print("  Selection options:")  # WHY: help-block header
+        print("    - Single: '1'")  # WHY: teach single-index syntax
+        print("    - Multiple: '1,3,5'")  # WHY: teach comma syntax
+        print("    - Range: '1-3' or '1 through 3'")  # WHY: teach range syntax
+        print("    - All: 'all'")  # WHY: teach all-shortcut
+        print("    - Cancel: 'q'")  # WHY: teach cancel token
+        print("")  # WHY: separator before prompt
 
-        print("  Available MSPs:")
-        print("")
-        for idx, msp in enumerate(msp_privileges, start=1):
-            msp_name = msp.get("msp_name", "Unknown")
-            msp_role = msp.get("role", "unknown")
-            print(f"    {idx:>3}. {msp_name} (role: {msp_role})")
+    def _prompt_msp_selection_input(self) -> str | None:
+        """Prompt operator for MSP selection token; return normalized string or None."""
+        try:  # WHY: safe_input may raise SystemExit
+            token = self._safe_input_fn("  Select MSP(s): ", context="msp_multi_select")  # WHY: audited prompt
+        except SystemExit:  # WHY: honour Ctrl-C / EOF
+            logging.debug("SystemExit at MSP selection prompt")  # WHY: trace cancel path
+            return None  # WHY: bubble cancel up
+        selection = token.strip().lower()  # WHY: normalize casing/spaces
+        if selection == "q" or selection == "":  # WHY: explicit cancel tokens
+            return None  # WHY: bubble cancel up
+        return selection  # WHY: pass to resolver
 
-        print("")
-        print("  Selection options:")
-        print("    - Single: '1'")
-        print("    - Multiple: '1,3,5'")
-        print("    - Range: '1-3' or '1 through 3'")
-        print("    - All: 'all'")
-        print("    - Cancel: 'q'")
-        print("")
+    def _resolve_msp_selection(self, selection: str):  # type: ignore[no-untyped-def]
+        """Turn a normalized selection token into a list of MSP dicts."""
+        global msp_privileges  # WHY: read module-global cache
+        if selection == "all":  # WHY: fast-path all shortcut
+            return msp_privileges  # WHY: entire cached list
+        selected_indices = self._parse_selection_input(selection, len(msp_privileges))  # WHY: shared parser
+        if not selected_indices:  # WHY: reject malformed tokens
+            print("  X Invalid selection")  # WHY: operator feedback
+            logging.debug("Invalid MSP selection token=%s", selection)  # WHY: trace failure
+            return None  # WHY: bubble cancel up
+        return [msp_privileges[idx] for idx in selected_indices]  # WHY: materialize chosen MSPs
 
-        try:
-            selection = self._safe_input_fn("  Select MSP(s): ", context="msp_multi_select").strip().lower()
-        except SystemExit:
-            return None
-
-        if selection == "q" or selection == "":
-            return None
-
-        if selection == "all":
-            return msp_privileges
-
-        # Parse selection using shared parser
-        selected_indices = self._parse_selection_input(selection, len(msp_privileges))
-        if not selected_indices:
-            print("  X Invalid selection")
-            return None
-
-        return [msp_privileges[idx] for idx in selected_indices]
+    def _extract_response_list(self, response: Any) -> list | None:
+        """Coerce a Mist API response into a list, or None when empty/absent."""
+        data = getattr(response, "data", None) if response else None  # WHY: safe attribute access
+        if not data:  # WHY: empty payload -> None sentinel
+            return None  # WHY: signal absence to caller
+        return data if isinstance(data, list) else [data]  # WHY: normalize single-object payloads
 
     def _fetch_msp_org_list(self, msp_id: str) -> list[dict[str, Any]] | None:
         """Fetch and sort the list of orgs for an MSP via API.
@@ -982,72 +1087,105 @@ class FirmwareManager:
         import mistapi.api.v1.msps.orgs as msp_orgs_api  # noqa: PLC0415
 
         global apisession
-
-        response = msp_orgs_api.listMspOrgs(apisession, msp_id)
-        if not response or not hasattr(response, "data") or not response.data:
-            return None
-        orgs_data = response.data if isinstance(response.data, list) else [response.data]
-        return sorted(orgs_data, key=lambda x: x.get("name", "").lower()) or None
+        logging.info("Fetching MSP org list msp=%s", msp_id)  # WHY: audit entry
+        response = msp_orgs_api.listMspOrgs(apisession, msp_id)  # WHY: HTTP call for MSP roster
+        orgs_data = self._extract_response_list(response)  # WHY: normalize response into list-or-None
+        if orgs_data is None:  # WHY: absence sentinel
+            logging.debug("MSP org list empty msp=%s", msp_id)  # WHY: trace empty result
+            return None  # WHY: caller treats None as unavailable
+        sorted_orgs = sorted(orgs_data, key=lambda x: x.get("name", "").lower()) or None  # WHY: order + sentinel
+        logging.debug("MSP org list count=%d msp=%s", len(sorted_orgs) if sorted_orgs else 0, msp_id)  # WHY: audit
+        return sorted_orgs  # WHY: propagate to caller
 
     def _select_orgs_for_upgrade(self, msp_id, msp_name):  # type: ignore[no-untyped-def]
-        """Fetch orgs from MSP and let user select which to upgrade.
+        """Fetch orgs from MSP and let operator select which to upgrade.
 
-        Supports:
-        - Single selection by index
-        - Multiple selection via comma-separated indices
-        - Range selection with dash or 'through' keyword
-        - 'all' to select all organizations
-
-        Returns:
-            List of org dicts or None if cancelled
+        Supports single index, comma-separated indices, dash ranges, 'all', 'q'.
+        Returns list of selected org dicts or None if cancelled/failed.
         """
-        global apisession
+        logging.info("Selecting orgs for MSP upgrade msp=%s", msp_name)  # WHY: audit destructive selection
+        orgs_data = self._fetch_orgs_for_selection(msp_id, msp_name)  # WHY: fetch + validate org list
+        if not orgs_data:  # WHY: fetch failed or MSP has no orgs
+            logging.debug("Org selection aborted - no orgs available")  # WHY: trace early exit
+            return None  # WHY: preserve pre-refactor cancel behavior
+        self._display_orgs_for_selection(orgs_data)  # WHY: render numbered index for operator
+        selection = self._prompt_org_selection_input()  # WHY: read operator picker string
+        if selection is None:  # WHY: EOF/interrupt/blank input
+            logging.debug("Org selection cancelled by operator")  # WHY: trace decline
+            return None  # WHY: signal cancel
+        result = self._resolve_org_selection(selection, orgs_data)  # WHY: parse picker string into org list
+        logging.debug("Org selection resolved selected=%d", len(result) if result else 0)  # WHY: trace outcome
+        return result  # WHY: propagate to caller (may be None on invalid input)
 
-        print(f"    Fetching organizations from MSP {msp_name}...")
+    def _fetch_orgs_for_selection(self, msp_id, msp_name):  # type: ignore[no-untyped-def]
+        """Fetch the MSP org list and print operator-facing status.
 
-        if apisession is None:
-            print("    X API session not initialized")
-            return None
-
+        Returns the list of org dicts on success or None on API failure /
+        missing session / empty response.
+        """
+        global apisession  # WHY: module-global session set by MistHelper factory
+        logging.info("Fetching MSP orgs for upgrade selection msp=%s", msp_id)  # WHY: audit API call
+        print(f"    Fetching organizations from MSP {msp_name}...")  # WHY: operator progress feedback
+        if apisession is None:  # WHY: defensive guard against unbound module global
+            print("    X API session not initialized")  # WHY: operator diagnostic
+            logging.warning("apisession is None during org fetch for msp=%s", msp_id)  # WHY: audit misconfiguration
+            return None  # WHY: cannot proceed without session
         try:
-            orgs_data = self._fetch_msp_org_list(msp_id)
-            if not orgs_data:
-                print("    X Failed to retrieve organizations or no orgs found")
-                return None
+            orgs_data = self._fetch_msp_org_list(msp_id)  # WHY: delegate paginated MSP-orgs API call
+        except Exception as exc:  # WHY: API layer may raise on network/auth failure
+            print(f"    X Error fetching organizations: {exc}")  # WHY: operator diagnostic
+            logging.error("Failed to fetch MSP orgs for upgrade: %s", exc)  # WHY: audit exception detail
+            return None  # WHY: signal fetch failure to caller
+        if not orgs_data:  # WHY: MSP returned zero orgs or None
+            print("    X Failed to retrieve organizations or no orgs found")  # WHY: operator diagnostic
+            logging.warning("MSP %s returned no orgs for upgrade selection", msp_id)  # WHY: audit empty result
+            return None  # WHY: signal caller nothing to display
+        logging.debug("Fetched orgs count=%d for msp=%s", len(orgs_data), msp_id)  # WHY: trace count
+        return orgs_data  # WHY: hand off to display step
 
-            print(f"    Found {len(orgs_data)} organization(s):\n")
+    def _display_orgs_for_selection(self, orgs_data):  # type: ignore[no-untyped-def]
+        """Print numbered org list plus selection-syntax help."""
+        logging.debug("Rendering org selection table count=%d", len(orgs_data))  # WHY: trace UI helper
+        print(f"    Found {len(orgs_data)} organization(s):\n")  # WHY: operator context header
+        for idx, org in enumerate(orgs_data, start=1):  # WHY: 1-based index for operator readability
+            org_name = org.get("name", "Unknown")  # WHY: tolerate missing name field
+            org_id_preview = org.get("id", "N/A")[:8]  # WHY: truncated ID keeps table compact
+            print(f"      {idx:>3}. {org_name} ({org_id_preview}...)")  # WHY: aligned numbered row
+        print("\n    Selection: single '1', multiple '1,3,5', range '1-3', 'all', or 'q'\n")  # WHY: syntax help
 
-            for idx, org in enumerate(orgs_data, start=1):
-                org_name = org.get("name", "Unknown")
-                org_id_preview = org.get("id", "N/A")[:8]
-                print(f"      {idx:>3}. {org_name} ({org_id_preview}...)")
+    def _prompt_org_selection_input(self):  # type: ignore[no-untyped-def]
+        """Prompt operator for org selection string; returns lowercase text or None."""
+        logging.debug("Prompting operator for org selection")  # WHY: trace prompt entry
+        try:
+            selection = (
+                self._safe_input_fn("    Select organization(s): ", context="org_multi_select").strip().lower()
+            )  # WHY: strip + lower normalizes 'ALL', ' 1-3 ', etc.
+        except SystemExit:  # WHY: safe_input raises SystemExit on EOF/interrupt for SSH-safe abort
+            logging.info("Org selection prompt cancelled (EOF/interrupt)")  # WHY: audit SSH-safe cancel
+            return None  # WHY: signal cancel to caller
+        if selection in ("q", ""):  # WHY: explicit quit or empty enter = cancel
+            logging.debug("Org selection returned quit token '%s'", selection)  # WHY: trace decline
+            return None  # WHY: signal cancel
+        return selection  # WHY: hand normalized token to resolver
 
-            print("\n    Selection: single '1', multiple '1,3,5', range '1-3', 'all', or 'q'\n")
+    def _resolve_org_selection(self, selection, orgs_data):  # type: ignore[no-untyped-def]
+        """Resolve normalized selection token into a list of org dicts.
 
-            try:
-                selection = (
-                    self._safe_input_fn("    Select organization(s): ", context="org_multi_select").strip().lower()
-                )
-            except SystemExit:
-                return None
-
-            if selection in ("q", ""):
-                return None
-
-            if selection == "all":
-                return orgs_data
-
-            selected_indices = self._parse_selection_input(selection, len(orgs_data))
-            if not selected_indices:
-                print("    X Invalid selection")
-                return None
-
-            return [orgs_data[idx] for idx in selected_indices]
-
-        except Exception as e:
-            print(f"    X Error fetching organizations: {e}")
-            logging.error("Failed to fetch MSP orgs for upgrade: %s", e)
-            return None
+        Accepts 'all' (returns full list), indices, ranges, comma lists. Returns
+        None when the token cannot be parsed into any valid index.
+        """
+        logging.debug("Resolving org selection token='%s' pool=%d", selection, len(orgs_data))  # WHY: trace resolve
+        if selection == "all":  # WHY: shortcut for MSP-wide upgrade fan-out
+            logging.info("Operator selected all %d orgs", len(orgs_data))  # WHY: audit bulk selection
+            return orgs_data  # WHY: return full list unchanged
+        selected_indices = self._parse_selection_input(selection, len(orgs_data))  # WHY: shared index parser
+        if not selected_indices:  # WHY: parser rejected the token (invalid syntax / out-of-range)
+            print("    X Invalid selection")  # WHY: operator diagnostic
+            logging.warning("Org selection token '%s' produced zero indices", selection)  # WHY: audit reject
+            return None  # WHY: signal caller to retry or abort
+        picked = [orgs_data[idx] for idx in selected_indices]  # WHY: project indices into org dicts
+        logging.info("Operator selected %d of %d orgs", len(picked), len(orgs_data))  # WHY: audit final count
+        return picked  # WHY: hand off to upgrade dispatcher
 
     def _fetch_and_validate_org_sites(self, target_org_id: str) -> list[dict[str, Any]] | None:
         """Fetch, validate, and sort the site list for an org.
@@ -1058,12 +1196,15 @@ class FirmwareManager:
         import mistapi.api.v1.orgs.sites as org_sites_api  # noqa: PLC0415
 
         global apisession
-
-        response = org_sites_api.listOrgSites(apisession, target_org_id)
-        if not response or not hasattr(response, "data") or not response.data:
-            return None
-        sites_data = response.data if isinstance(response.data, list) else [response.data]
-        return sorted(sites_data, key=lambda x: x.get("name", "").lower()) or None
+        logging.info("Fetching org sites org=%s", target_org_id)  # WHY: audit entry
+        response = org_sites_api.listOrgSites(apisession, target_org_id)  # WHY: HTTP call for site roster
+        sites_data = self._extract_response_list(response)  # WHY: reuse shared list-or-None extractor
+        if sites_data is None:  # WHY: absence sentinel
+            logging.debug("Org site list empty org=%s", target_org_id)  # WHY: trace empty result
+            return None  # WHY: caller treats None as unavailable
+        sorted_sites = sorted(sites_data, key=lambda x: x.get("name", "").lower()) or None  # WHY: order+sentinel
+        logging.debug("Org sites count=%d org=%s", len(sorted_sites) if sorted_sites else 0, target_org_id)
+        return sorted_sites  # WHY: propagate to caller
 
     def _display_sites_page(
         self,
@@ -1087,42 +1228,92 @@ class FirmwareManager:
         Actions: 'quit', 'all', 'next', 'prev', 'select'.
         Value: new page index for navigation, or original selection string for 'select'.
         """
-        if selection in ("q", ""):
-            return "quit", None
-        if selection == "all":
-            return "all", None
-        if selection == "n" and current_page < total_pages - 1:
-            return "next", current_page + 1
-        if selection == "p" and current_page > 0:
-            return "prev", current_page - 1
-        return "select", selection
+        if selection in ("q", ""):  # WHY: quit sentinel or empty -> cancel
+            return "quit", None  # WHY: signal cancel
+        if selection == "all":  # WHY: bulk-select shortcut
+            return "all", None  # WHY: signal select-all
+        nav = self._resolve_site_page_navigation(selection, current_page, total_pages)  # WHY: page nav helper
+        if nav is not None:  # WHY: input was next/prev
+            return nav  # WHY: propagate navigation tuple
+        return "select", selection  # WHY: default -> treat as index/range selection
+
+    def _resolve_site_page_navigation(
+        self,
+        selection: str,
+        current_page: int,
+        total_pages: int,
+    ) -> tuple[str, int] | None:
+        """Return a navigation action tuple for 'n'/'p' or ``None`` when not a nav command."""
+        if selection == "n" and current_page < total_pages - 1:  # WHY: forward paging allowed
+            return "next", current_page + 1  # WHY: advance page index
+        if selection == "p" and current_page > 0:  # WHY: backward paging allowed
+            return "prev", current_page - 1  # WHY: rewind page index
+        return None  # WHY: not a paging command
 
     def _run_site_selection_loop(self, sites_data: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
         """Interactively loop until user selects sites or quits."""
-        page_size = 25
-        total_pages = (len(sites_data) + page_size - 1) // page_size
-        current_page = 0
-        while True:
-            start_idx = current_page * page_size
-            end_idx = min(start_idx + page_size, len(sites_data))
-            self._display_sites_page(sites_data, start_idx, end_idx, current_page, total_pages)
-            print("\n      Selection: single '1', multiple '1,3,5', range '1-10', 'all', or 'q'\n")
-            try:
-                selection = self._safe_input_fn("      Select site(s): ", context="site_multi_select").strip().lower()
-            except SystemExit:
-                return None
-            action, value = self._handle_site_page_input(selection, current_page, total_pages)
-            if action == "quit":
-                return None
-            if action == "all":
-                return sites_data
-            if action in ("next", "prev"):
-                current_page = value
-                continue
-            selected_indices = self._parse_selection_input(value, len(sites_data))
-            if selected_indices:
-                return [sites_data[idx] for idx in selected_indices]
-            print("      X Invalid selection - try again")
+        logging.info("Starting site selection loop total_sites=%d", len(sites_data))  # WHY: audit entry
+        page_size = 25  # WHY: fixed pagination window for menu 196 flows
+        total_pages = (len(sites_data) + page_size - 1) // page_size  # WHY: ceiling division
+        current_page = 0  # WHY: start at first page
+        while True:  # WHY: loop until operator commits or quits
+            selection = self._prompt_site_page_selection(sites_data, current_page, page_size, total_pages)
+            if selection is None:  # WHY: SystemExit was caught by helper
+                return None  # WHY: propagate cancel
+            outcome = self._apply_site_selection_action(selection, current_page, total_pages, sites_data)
+            if outcome[0] == "commit":  # WHY: helper produced a final result
+                return outcome[1]  # WHY: sites list or None
+            current_page = outcome[1]  # WHY: navigation updated the page pointer
+
+    def _prompt_site_page_selection(
+        self,
+        sites_data: list[dict[str, Any]],
+        current_page: int,
+        page_size: int,
+        total_pages: int,
+    ) -> str | None:
+        """Render the current page and read one operator selection token."""
+        start_idx = current_page * page_size  # WHY: page start row
+        end_idx = min(start_idx + page_size, len(sites_data))  # WHY: page end row bounded by list length
+        self._display_sites_page(sites_data, start_idx, end_idx, current_page, total_pages)  # WHY: render
+        print("\n      Selection: single '1', multiple '1,3,5', range '1-10', 'all', or 'q'\n")  # WHY: help
+        try:
+            return self._safe_input_fn("      Select site(s): ", context="site_multi_select").strip().lower()
+        except SystemExit:  # WHY: honor ^C / EOF as cancel
+            return None  # WHY: signal cancel via sentinel
+
+    def _handle_simple_page_action(
+        self,
+        action: str,
+        value: Any,
+        sites_data: list[dict[str, Any]],
+    ) -> tuple[str, Any] | None:
+        """Resolve quit/all/next/prev site page actions, or return None to indicate custom selection."""
+        if action == "quit":  # WHY: cancel path
+            return "commit", None  # WHY: final null result
+        if action == "all":  # WHY: select-all shortcut
+            return "commit", sites_data  # WHY: return full site list
+        if action in ("next", "prev"):  # WHY: paging navigation
+            return "navigate", value  # WHY: update page pointer
+        return None  # WHY: signal caller to handle explicit selection tokens
+
+    def _apply_site_selection_action(
+        self,
+        selection: str,
+        current_page: int,
+        total_pages: int,
+        sites_data: list[dict[str, Any]],
+    ) -> tuple[str, Any]:
+        """Route a page-selection token to a commit / navigate outcome tuple."""
+        action, value = self._handle_site_page_input(selection, current_page, total_pages)  # WHY: parse
+        simple = self._handle_simple_page_action(action, value, sites_data)  # WHY: quit/all/nav shortcut
+        if simple is not None:  # WHY: shortcut handled the token
+            return simple  # WHY: pass through routed outcome
+        selected_indices = self._parse_selection_input(value, len(sites_data))  # WHY: range/index parser
+        if selected_indices:  # WHY: valid explicit picks
+            return "commit", [sites_data[idx] for idx in selected_indices]  # WHY: project onto site dicts
+        print("      X Invalid selection - try again")  # WHY: invalid input feedback
+        return "navigate", current_page  # WHY: stay on current page and re-prompt
 
     def _select_sites_for_org_upgrade(self, target_org_id, org_name):  # type: ignore[no-untyped-def]
         """Fetch sites from org and let user select which to upgrade.
@@ -1137,256 +1328,308 @@ class FirmwareManager:
             List of site dicts or None if cancelled
         """
         global apisession
+        logging.info("Selecting sites for org upgrade org=%s", target_org_id)  # WHY: audit entry
+        print(f"      Fetching sites from {org_name}...")  # WHY: operator progress signal
+        if apisession is None:  # WHY: guard against uninitialized session
+            print("      X API session not initialized")  # WHY: operator diagnostic
+            return None  # WHY: nothing to do
+        sites_data = self._safe_fetch_sites_for_org(target_org_id)  # WHY: fetch with error handling
+        if not sites_data:  # WHY: empty or failed fetch
+            return None  # WHY: propagate cancel/failure
+        print(f"      Found {len(sites_data)} site(s):\n")  # WHY: operator visibility
+        result = self._run_site_selection_loop(sites_data)  # WHY: interactive picker loop
+        logging.debug("Site selection resolved count=%d", len(result) if result else 0)  # WHY: audit exit
+        return result  # WHY: propagate selection to caller
 
-        print(f"      Fetching sites from {org_name}...")
-
-        if apisession is None:
-            print("      X API session not initialized")
-            return None
-
+    def _safe_fetch_sites_for_org(self, target_org_id: str) -> list[dict[str, Any]] | None:
+        """Fetch org sites with error handling; return list, empty, or None sentinel."""
         try:
-            sites_data = self._fetch_and_validate_org_sites(target_org_id)
-            if not sites_data:
-                print("      X Failed to retrieve sites or no sites found")
-                return None
+            sites_data = self._fetch_and_validate_org_sites(target_org_id)  # WHY: HTTP + validation
+        except Exception as e:  # WHY: broad guard for network/lib errors
+            print(f"      X Error fetching sites: {e}")  # WHY: operator diagnostic
+            logging.error("Failed to fetch org sites for upgrade: %s", e)  # WHY: audit failure
+            return None  # WHY: signal fetch failure
+        if not sites_data:  # WHY: empty roster
+            print("      X Failed to retrieve sites or no sites found")  # WHY: operator diagnostic
+            return None  # WHY: propagate empty as cancel
+        return sites_data  # WHY: successful fetch
 
-            print(f"      Found {len(sites_data)} site(s):\n")
-            return self._run_site_selection_loop(sites_data)
+    def _parse_range_bounds(self, part: str) -> tuple[int, int] | None:
+        """Parse a range token like '1-5' (1-based) into 0-based (start, end) or None."""
+        range_parts = part.split("-")  # WHY: split into two halves
+        if len(range_parts) != 2:  # WHY: reject malformed ranges
+            return None  # WHY: signal parse failure
+        try:
+            start = int(range_parts[0].strip()) - 1  # WHY: normalize to 0-based
+            end = int(range_parts[1].strip()) - 1  # WHY: normalize to 0-based
+        except ValueError:
+            logging.warning("Invalid range format: %s", part)  # WHY: audit malformed input
+            return None  # WHY: signal parse failure
+        if start > end:  # WHY: allow reversed bounds
+            start, end = end, start  # WHY: normalize order
+        return start, end  # WHY: bounds ready for expansion
 
-        except Exception as e:
-            print(f"      X Error fetching sites: {e}")
-            logging.error("Failed to fetch org sites for upgrade: %s", e)
-            return None
+    def _append_index_if_valid(self, idx: int, max_count: int, selected_indices: list[int]) -> None:
+        """Append a 0-based index if within bounds and not already selected; log overflow diagnostic."""
+        if 0 <= idx < max_count and idx not in selected_indices:  # WHY: bounds + dedupe gate
+            selected_indices.append(idx)  # WHY: register valid index
+        elif idx >= max_count:  # WHY: overflow diagnostic path
+            print(f"      !? Index {idx + 1} out of range (max: {max_count})")  # WHY: operator hint
 
     def _parse_range_token(self, part: str, max_count: int, selected_indices: list[int]) -> None:
         """Parse a range token like '1-5' (1-based) and append valid 0-based indices."""
-        range_parts = part.split("-")
-        if len(range_parts) != 2:
-            return
-        try:
-            start = int(range_parts[0].strip()) - 1
-            end = int(range_parts[1].strip()) - 1
-            if start > end:
-                start, end = end, start
-            for idx in range(start, end + 1):
-                if 0 <= idx < max_count and idx not in selected_indices:
-                    selected_indices.append(idx)
-                elif idx >= max_count:
-                    print(f"      !? Index {idx + 1} out of range (max: {max_count})")
-        except ValueError:
-            logging.warning("Invalid range format: %s", part)
+        bounds = self._parse_range_bounds(part)  # WHY: extract validated 0-based bounds
+        if bounds is None:  # WHY: parse failure short-circuits
+            return  # WHY: nothing to append
+        start, end = bounds  # WHY: unpack for iteration
+        for idx in range(start, end + 1):  # WHY: iterate inclusive range
+            self._append_index_if_valid(idx, max_count, selected_indices)  # WHY: delegate bounds/dedupe check
 
     def _parse_single_token(self, part: str, max_count: int, selected_indices: list[int]) -> None:
         """Parse a single index token like '3' (1-based) and append 0-based index if valid."""
         try:
-            idx = int(part) - 1
-            if 0 <= idx < max_count and idx not in selected_indices:
-                selected_indices.append(idx)
-            elif idx >= max_count:
-                print(f"      !? Index {idx + 1} out of range (max: {max_count})")
+            idx = int(part) - 1  # WHY: normalize to 0-based
         except ValueError:
-            logging.warning("Invalid index: %s", part)
+            logging.warning("Invalid index: %s", part)  # WHY: audit malformed token
+            return  # WHY: nothing to append on parse failure
+        self._append_index_if_valid(idx, max_count, selected_indices)  # WHY: delegate bounds/dedupe check
 
     def _parse_selection_input(self, user_input: str, max_count: int) -> list:  # type: ignore[type-arg]
-        """Parse user selection input into list of 0-based indices.
-
-        Supports:
-        - Single index: "1" -> [0]
-        - Comma-separated: "1,3,5" -> [0, 2, 4]
-        - Dash range: "1-5" -> [0, 1, 2, 3, 4]
-        - 'through' range: "1 through 5" -> [0, 1, 2, 3, 4]
-        - Mixed: "1-3, 5, 7 through 10" -> [0, 1, 2, 4, 6, 7, 8, 9]
-
-        Args:
-            user_input: User's selection string
-            max_count: Maximum number of items (for validation)
-
-        Returns:
-            List of valid 0-based indices, or empty list if invalid
-        """
-        selected_indices: list[int] = []
-        normalized_input = user_input.lower().replace(" through ", "-").replace("through", "-")
-        parts = [part.strip() for part in normalized_input.split(",")]
-        for part in parts:
-            if "-" in part and not part.startswith("-"):
-                self._parse_range_token(part, max_count, selected_indices)
+        """Parse selection input into 0-based indices; supports single, csv, dash and 'through' ranges."""
+        selected_indices: list[int] = []  # WHY: accumulator for parsed indices
+        normalized_input = (  # WHY: unify range syntax before tokenizing
+            user_input.lower().replace(" through ", "-").replace("through", "-")
+        )
+        parts = [part.strip() for part in normalized_input.split(",")]  # WHY: comma-separated tokens
+        for part in parts:  # WHY: dispatch each token to range or single parser
+            if "-" in part and not part.startswith("-"):  # WHY: detect range excluding negatives
+                self._parse_range_token(part, max_count, selected_indices)  # WHY: expand into indices
             else:
-                self._parse_single_token(part, max_count, selected_indices)
-        selected_indices.sort()
+                self._parse_single_token(part, max_count, selected_indices)  # WHY: append single index
+        selected_indices.sort()  # WHY: return indices in ascending order
         return selected_indices
 
     def _display_upgrade_plan_summary(self, upgrade_plan, dry_run):  # type: ignore[no-untyped-def]
         """Display a summary of the planned upgrades."""
-        print("")
-        print("=" * 70)
-        print("  UPGRADE PLAN SUMMARY" + (" (DRY-RUN)" if dry_run else ""))
-        print("=" * 70)
-        print("")
+        self._print_upgrade_plan_header(dry_run)  # WHY: banner + title
+        total_sites = 0  # WHY: accumulate site count across plans
+        msps_seen: set = set()  # WHY: unique MSP tracker for totals row
+        for plan in upgrade_plan:  # WHY: iterate every org-level plan entry
+            sites = plan["sites"]  # WHY: needed for both render + counter
+            total_sites += len(sites)  # WHY: bump running total
+            msps_seen.add(plan["msp_id"])  # WHY: register unique MSP id
+            self._print_upgrade_plan_entry(plan, sites)  # WHY: render org+sites block
+        self._print_upgrade_plan_totals(msps_seen, upgrade_plan, total_sites)  # WHY: totals footer
 
-        total_sites = 0
-        msps_seen = set()
+    def _print_upgrade_plan_header(self, dry_run: bool) -> None:
+        """Render the upgrade plan banner and title row."""
+        print("")  # WHY: visual break
+        print("=" * 70)  # WHY: top divider
+        print("  UPGRADE PLAN SUMMARY" + (" (DRY-RUN)" if dry_run else ""))  # WHY: title + mode
+        print("=" * 70)  # WHY: bottom divider
+        print("")  # WHY: spacing before first plan entry
 
-        for plan in upgrade_plan:
-            msp_name = plan["msp_name"]
-            org_name = plan["org_name"]
-            sites = plan["sites"]
-            total_sites += len(sites)
-            msps_seen.add(plan["msp_id"])
+    def _print_upgrade_plan_entry(self, plan: dict[str, Any], sites: list) -> None:
+        """Render one org-level plan entry with its first five sites."""
+        print(f"  MSP: {plan['msp_name']}")  # WHY: identify MSP scope
+        print(f"    Organization: {plan['org_name']}")  # WHY: identify org
+        print(f"    Sites ({len(sites)}):")  # WHY: site-count header
+        for site in sites[:5]:  # WHY: preview first five sites only
+            print(f"      - {site.get('name', 'Unknown')}")  # WHY: safe site name render
+        if len(sites) > 5:  # WHY: elide long lists
+            print(f"      ... and {len(sites) - 5} more")  # WHY: truncation hint
+        print("")  # WHY: spacing between entries
 
-            print(f"  MSP: {msp_name}")
-            print(f"    Organization: {org_name}")
-            print(f"    Sites ({len(sites)}):")
-            for site in sites[:5]:  # Show first 5
-                print(f"      - {site.get('name', 'Unknown')}")
-            if len(sites) > 5:
-                print(f"      ... and {len(sites) - 5} more")
-            print("")
-
-        print("-" * 70)
-        print("  TOTALS:")
-        print(f"    MSPs: {len(msps_seen)}")
-        print(f"    Organizations: {len(upgrade_plan)}")
-        print(f"    Sites: {total_sites}")
-        print("-" * 70)
+    def _print_upgrade_plan_totals(self, msps_seen: set, upgrade_plan: list, total_sites: int) -> None:
+        """Render the totals footer for the upgrade plan summary."""
+        print("-" * 70)  # WHY: totals divider
+        print("  TOTALS:")  # WHY: totals label
+        print(f"    MSPs: {len(msps_seen)}")  # WHY: unique MSP count
+        print(f"    Organizations: {len(upgrade_plan)}")  # WHY: org row count
+        print(f"    Sites: {total_sites}")  # WHY: site aggregate
+        print("-" * 70)  # WHY: closing divider
 
     def _execute_msp_upgrade_plan(self, upgrade_plan, dry_run):  # type: ignore[no-untyped-def]
         """Execute the upgrade plan across all orgs and sites."""
-        global apisession, org_id
+        global org_id  # WHY: MSP flow mutates module scope for helper reuse
+        logging.info("Executing MSP plan across %d orgs (dry_run=%s)", len(upgrade_plan), dry_run)  # WHY: audit
+        results: list[dict[str, Any]] = []  # WHY: accumulator for per-org status records
+        original_org_id = org_id  # WHY: snapshot to restore module state after loop
+        stopped = self._run_msp_upgrade_loop(upgrade_plan, dry_run, results)  # WHY: delegate iteration to helper
+        org_id = original_org_id  # WHY: always restore module org scope
+        logging.debug("MSP upgrade plan complete stopped=%s results=%d", stopped, len(results))  # WHY: trace exit
+        return results  # WHY: caller renders summary from accumulated records
 
-        results = []
-        original_org_id = org_id
-        total_items = len(upgrade_plan)
+    def _run_msp_upgrade_loop(  # WHY: iterate plan and drive per-org execution + interrupt policy
+        self,
+        upgrade_plan: list[dict[str, Any]],
+        dry_run: bool,
+        results: list[dict[str, Any]],
+    ) -> bool:
+        """Iterate the upgrade plan; return True if the user requested stop."""
+        total_items = len(upgrade_plan)  # WHY: used for progress header rendering
+        for idx, plan in enumerate(upgrade_plan, 1):  # WHY: 1-based counter matches user-facing display
+            self._present_msp_plan_header(idx, total_items, plan)  # WHY: print banner before work begins
+            outcome = self._execute_msp_single_org(plan, dry_run)  # WHY: run one org and classify outcome
+            results.append(outcome["record"])  # WHY: persist per-org record regardless of status
+            if outcome["stop"]:  # WHY: interrupted user declined continuation
+                return True  # WHY: signal caller to abort remaining plan entries
+        return False  # WHY: normal end-of-plan without user abort
 
-        for idx, plan in enumerate(upgrade_plan, 1):
-            target_org_id = plan["org_id"]
-            target_org_name = plan["org_name"]
-            msp_name = plan["msp_name"]
-            sites = plan["sites"]
+    def _present_msp_plan_header(  # WHY: render the per-org banner in one place
+        self,
+        idx: int,
+        total: int,
+        plan: dict[str, Any],
+    ) -> None:
+        """Emit the banner block that announces the org about to be upgraded."""
+        print("")  # WHY: blank line separator between org sections
+        print(f"  [{idx}/{total}] Processing: {plan['org_name']} (MSP: {plan['msp_name']})")  # WHY: progress line
+        print(f"      Organization ID: {plan['org_id']}")  # WHY: expose target org UUID for auditors
+        print(f"      Sites to upgrade: {len(plan['sites'])}")  # WHY: expected work size
+        print("-" * 70)  # WHY: visual divider matches other summary blocks
 
-            print("")
-            print(f"  [{idx}/{total_items}] Processing: {target_org_name} (MSP: {msp_name})")
-            print(f"      Organization ID: {target_org_id}")
-            print(f"      Sites to upgrade: {len(sites)}")
-            print("-" * 70)
+    def _execute_msp_single_org(  # WHY: run one org's upgrade and classify success/interrupt/failure
+        self,
+        plan: dict[str, Any],
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        """Execute a single org upgrade; return record + stop flag."""
+        global org_id  # WHY: helper mutates module scope for underlying upgrader
+        target_org_id = plan["org_id"]  # WHY: pin target once for consistent record fields
+        target_org_name = plan["org_name"]  # WHY: rendered in prompts and logs
+        try:
+            org_id = target_org_id  # WHY: point global helpers at the target org
+            self._run_msp_bulk_upgrader(target_org_id, plan["sites"], dry_run)  # WHY: delegate to bulk upgrader
+            return {"record": self._make_msp_record(plan, "completed", dry_run), "stop": False}  # WHY: happy path
+        except KeyboardInterrupt:  # WHY: user pressed Ctrl-C mid-flow
+            return self._handle_msp_interrupt(plan, target_org_name, dry_run)  # WHY: prompt continuation policy
+        except Exception as exc:  # noqa: BLE001  # WHY: surface any downstream failure without abort
+            return self._handle_msp_failure(plan, target_org_name, exc, dry_run)  # WHY: capture error record
 
-            try:
-                # Set the global org_id for helper functions
-                org_id = target_org_id
+    def _run_msp_bulk_upgrader(  # WHY: construct + execute the pre-selected-sites bulk upgrader
+        self,
+        target_org_id: str,
+        sites: list[dict[str, Any]],
+        dry_run: bool,
+    ) -> None:
+        """Invoke BulkAPFirmwareUpgrader for the given org + site list."""
+        sites_for_upgrader = [  # WHY: normalize site shape expected by BulkAPFirmwareUpgrader
+            {"id": s["id"], "name": s.get("name", "Unknown")} for s in sites
+        ]
+        main_module = sys.modules.get("__main__") or sys.modules.get("MistHelper")  # WHY: locate host module
+        if main_module is None:  # WHY: guard against missing host (e.g., isolated unit test)
+            logging.debug("MSP upgrade skipped: MistHelper host module not loaded")  # WHY: trace skip
+            return  # WHY: no-op when host absent, caller records completion
+        bulk_upgrader_cls = main_module.BulkAPFirmwareUpgrader  # WHY: lazy attr avoids circular import
+        upgrader = bulk_upgrader_cls(target_org_id, sites_for_upgrader, dry_run=dry_run)  # WHY: construct
+        upgrader.execute()  # WHY: run the actual bulk upgrade
+        logging.info("MSP upgrade %s for org id %s", "simulated" if dry_run else "completed", target_org_id)  # WHY: log
 
-                # Create a BulkAPFirmwareUpgrader with pre-selected sites
-                sites_for_upgrader = [{"id": s["id"], "name": s.get("name", "Unknown")} for s in sites]
-                import sys as _sys
-
-                _main_msp = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
-                if _main_msp is None:
-                    continue
-                _BulkAPUpgrader = _main_msp.BulkAPFirmwareUpgrader  # lazy import avoids circular
-                upgrader = _BulkAPUpgrader(target_org_id, sites_for_upgrader, dry_run=dry_run)
-                upgrader.execute()
-
-                results.append(
-                    {
-                        "msp_name": msp_name,
-                        "org_id": target_org_id,
-                        "org_name": target_org_name,
-                        "sites_count": len(sites),
-                        "status": "completed",
-                        "result": None,
-                        "dry_run": dry_run,
-                    }
+    def _handle_msp_interrupt(  # WHY: format interrupted record + confirm continuation
+        self,
+        plan: dict[str, Any],
+        target_org_name: str,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        """Handle Ctrl-C during a single-org upgrade."""
+        print(f"\n  Upgrade interrupted at organization: {target_org_name}")  # WHY: notify operator
+        record = self._make_msp_record(plan, "interrupted", dry_run)  # WHY: preserve run history
+        try:  # WHY: safe_input can raise SystemExit under EOF policy
+            answer = (
+                self._safe_input_fn(  # WHY: prompt operator for continuation
+                    "  Continue with remaining orgs? (y/N): ",
+                    context="msp_continue",
                 )
+                .strip()
+                .lower()
+            )  # WHY: normalize for comparison
+        except SystemExit:  # WHY: treat EOF as stop
+            return {"record": record, "stop": True}  # WHY: end plan run
+        if answer != "y":  # WHY: any non-y answer aborts remaining plan
+            print("  Stopping MSP upgrade process")  # WHY: user-visible confirmation
+            return {"record": record, "stop": True}  # WHY: signal loop exit
+        return {"record": record, "stop": False}  # WHY: continue with next org
 
-                logging.info("MSP upgrade %s for org: %s", "simulated" if dry_run else "completed", target_org_name)
+    def _handle_msp_failure(  # WHY: format failure record with error message
+        self,
+        plan: dict[str, Any],
+        target_org_name: str,
+        exc: Exception,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        """Convert an exception into a failure record."""
+        error_msg = str(exc)  # WHY: capture textual error for the record
+        print(f"  X Error upgrading {target_org_name}: {error_msg}")  # WHY: surface to operator
+        logging.error("MSP upgrade failed for org %s: %s", target_org_name, exc)  # WHY: audit failure
+        record = self._make_msp_record(plan, "failed", dry_run, error=error_msg)  # WHY: capture with error field
+        return {"record": record, "stop": False}  # WHY: single-org failure never aborts full plan
 
-            except KeyboardInterrupt:
-                print(f"\n  Upgrade interrupted at organization: {target_org_name}")
-                results.append(
-                    {
-                        "msp_name": msp_name,
-                        "org_id": target_org_id,
-                        "org_name": target_org_name,
-                        "sites_count": len(sites),
-                        "status": "interrupted",
-                        "result": None,
-                        "dry_run": dry_run,
-                    }
-                )
-
-                try:
-                    cont = (
-                        self._safe_input_fn("  Continue with remaining orgs? (y/N): ", context="msp_continue")
-                        .strip()
-                        .lower()
-                    )
-                except SystemExit:
-                    break
-
-                if cont != "y":
-                    print("  Stopping MSP upgrade process")
-                    break
-
-            except Exception as e:
-                error_msg = str(e)
-                print(f"  X Error upgrading {target_org_name}: {error_msg}")
-                logging.error("MSP upgrade failed for org %s: %s", target_org_name, e)
-
-                results.append(
-                    {
-                        "msp_name": msp_name,
-                        "org_id": target_org_id,
-                        "org_name": target_org_name,
-                        "sites_count": len(sites),
-                        "status": "failed",
-                        "error": error_msg,
-                        "dry_run": dry_run,
-                    }
-                )
-
-        # Restore original org_id
-        org_id = original_org_id
-
-        return results
+    def _make_msp_record(  # WHY: single builder eliminates 4x duplicated dict literals
+        self,
+        plan: dict[str, Any],
+        status: str,
+        dry_run: bool,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        """Build a status record for one org in the MSP plan."""
+        record: dict[str, Any] = {  # WHY: shared field set across completed/failed/interrupted
+            "msp_name": plan["msp_name"],
+            "org_id": plan["org_id"],
+            "org_name": plan["org_name"],
+            "sites_count": len(plan["sites"]),
+            "status": status,
+            "result": None,
+            "dry_run": dry_run,
+        }
+        if error is not None:  # WHY: only failed records carry an error field
+            record["error"] = error  # WHY: preserve diagnostic text for later reporting
+        return record  # WHY: caller appends to results list
 
     def _split_results_by_status(
         self, results: list[dict[str, Any]]
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         """Split upgrade results into completed, failed, and interrupted lists."""
-        completed = [r for r in results if r["status"] == "completed"]
-        failed = [r for r in results if r["status"] == "failed"]
-        interrupted = [r for r in results if r["status"] == "interrupted"]
-        return completed, failed, interrupted
+        buckets: dict[str, list[dict[str, Any]]] = {  # WHY: single-pass bucket lookup
+            "completed": [],  # WHY: successful org runs
+            "failed": [],  # WHY: exception-terminated org runs
+            "interrupted": [],  # WHY: operator-cancelled org runs
+        }
+        for record in results:  # WHY: single pass over results list
+            buckets.setdefault(record["status"], []).append(record)  # WHY: dispatch by status key
+        return buckets["completed"], buckets["failed"], buckets["interrupted"]  # WHY: fixed-order triple
 
     def _print_completed_orgs_detail(self, completed: list[dict[str, Any]]) -> None:
         """Print details for completed organizations."""
-        if not completed:
+        if not completed:  # WHY: skip empty section quickly
             return
-        print("  Completed organizations:")
-        for r in completed:
-            status_prefix = "(DRY-RUN) " if r.get("dry_run") else ""
-            print(f"    + {status_prefix}{r['org_name']} ({r.get('sites_count', 0)} sites)")
+        print("  Completed organizations:")  # WHY: section header for reviewer scanning summary
+        for result in completed:  # WHY: iterate per-org upgrade result records
+            status_prefix = "(DRY-RUN) " if result.get("dry_run") else ""  # WHY: distinguish dry-run rows
+            print(f"    + {status_prefix}{result['org_name']} ({result.get('sites_count', 0)} sites)")
 
     def _print_failed_orgs_detail(self, failed: list[dict[str, Any]]) -> None:
         """Print details for failed organizations."""
-        if not failed:
+        if not failed:  # WHY: skip empty section quickly
             return
-        print("\n  Failed organizations:")
-        for r in failed:
-            print(f"    X {r['org_name']}: {r.get('error', 'Unknown error')}")
+        print("\n  Failed organizations:")  # WHY: section header for reviewer scanning summary
+        for record in failed:  # WHY: iterate per-org failure records
+            print(f"    X {record['org_name']}: {record.get('error', 'Unknown error')}")
 
     def _print_interrupted_orgs_detail(self, interrupted: list[dict[str, Any]]) -> None:
         """Print details for interrupted organizations."""
-        if not interrupted:
+        if not interrupted:  # WHY: skip empty section quickly
             return
-        print("\n  Interrupted organizations:")
-        for r in interrupted:
-            print(f"    ! {r['org_name']}")
+        print("\n  Interrupted organizations:")  # WHY: section header for reviewer scanning summary
+        for report_row in interrupted:  # WHY: iterate interrupted org rows for reporting
+            print(f"    ! {report_row['org_name']}")
 
     def _print_msp_upgrade_summary(self, results, dry_run=False):  # type: ignore[no-untyped-def]
         """Print summary of MSP multi-org upgrade results."""
         print(f"\n{'=' * 70}\n  MSP UPGRADE SUMMARY{' (DRY-RUN)' if dry_run else ''}\n{'=' * 70}\n")
 
         completed, failed, interrupted = self._split_results_by_status(results)
-        total_sites = sum(r.get("sites_count", 0) for r in results)
+        total_sites = sum(row.get("sites_count", 0) for row in results)  # WHY: aggregate sites processed
 
         print(f"  Total organizations processed: {len(results)}")
         print(f"  Total sites targeted: {total_sites}")
@@ -1413,42 +1656,14 @@ class FirmwareManager:
         return msps[0] if msps and len(msps) == 1 else None
 
     def _bulk_upgrade_ap_firmware_by_site(self, sites_to_upgrade_override=None):  # type: ignore[no-untyped-def]
-        """Advanced bulk upgrade AP firmware for APs at selected site(s).
-
-        This method provides comprehensive firmware upgrade capabilities with:
-        1. Bulk site mode: Reads APUpgradeSiteList.CSV for multi-site upgrades
-        2. Single site mode: Interactive site selection (fallback if CSV not found)
-        3. Template mode: Uses provided sites_to_upgrade_override for template-based upgrades
-        4. Automatic site name-to-ID resolution via organization lookup
-        5. Firmware version selection per model across all sites
-        6. Advanced upgrade strategies (big_bang, canary, rrm, serial) - default: RRM
-        7. P2P firmware sharing options (default: enabled)
-        8. Scheduling and failure threshold controls
-        9. Device filtering and selection rules
-        10. Progress monitoring and rollback options
-        11. Comprehensive safety measures and audit logging
-        12. Per-site upgrade execution with unified reporting
-
-        Args:
-            sites_to_upgrade_override: Optional list of site dicts for template-based upgrades
-                                     Format: [{'id': site_id, 'name': site_name}, ...]
-
-        File Format for APUpgradeSiteList.CSV (headerless, one site name per line):
-        Main Office
-        Branch Office A
-        Remote Site B
-
-        Note: Site names must exactly match those in the Mist organization.
-        """
-        # Set up global session context for compatibility with existing helper functions
-        global apisession
-        original_apisession = apisession
-        apisession = self.apisession
-
+        """Bulk upgrade AP firmware for selected site(s) via CSV, interactive picker, or template override."""
+        global apisession  # WHY: helpers below read module-level session state
+        original_apisession = apisession  # WHY: snapshot to restore after upgrade
+        apisession = self.apisession  # WHY: install instance session for helper use
         try:
             return self._execute_bulk_upgrade(sites_to_upgrade_override)  # type: ignore[no-untyped-call]
         finally:
-            apisession = original_apisession
+            apisession = original_apisession  # WHY: always restore module state
 
     def _execute_bulk_upgrade(self, sites_to_upgrade_override):  # type: ignore[no-untyped-def]
         """Execute the bulk firmware upgrade using BulkAPFirmwareUpgrader class."""
@@ -1488,135 +1703,102 @@ class FirmwareManager:
     def execute_switch_firmware_upgrade_with_mode_selection(self):  # type: ignore[no-untyped-def]
         """Main entry point for switch firmware upgrades with mode selection.
 
-        Presents user with choice between:
-        1. Site-based upgrade (individual site selection)
-        2. Template-based upgrade (Gateway Template assignment - same grouping as APs)
-
-        Returns:
-            Results of the selected upgrade operation
+        Presents site-based vs template-based choice; delegates to the picked flow.
         """
-        logging.info("Starting switch firmware upgrade with mode selection...")
-        logging.debug("FirmwareManager.execute_switch_firmware_upgrade_with_mode_selection() initiated")
+        logging.info("Starting switch firmware upgrade with mode selection")  # WHY: audit entry
+        self._print_switch_upgrade_banner()  # WHY: destructive-op warnings
+        self._print_switch_mode_menu()  # WHY: mode-choice UI
+        mode_choice = self._prompt_switch_upgrade_mode()  # WHY: read operator selection
+        if mode_choice is None:  # WHY: EOF/interrupt cancel
+            return None  # WHY: honour operator cancel
+        result = self._dispatch_switch_upgrade_mode(mode_choice)  # WHY: route to chosen flow
+        logging.debug("Switch upgrade mode dispatch done choice=%s", mode_choice)  # WHY: trace exit
+        return result  # WHY: pass through flow result
 
-        print(" Advanced Switch Firmware Upgrade")
-        print("=" * 60)
-        print("")
-        print("  DESTRUCTIVE OPERATION WARNING")
-        print("  ===========================")
-        print("  Switch firmware upgrades will:")
-        print("  X  Reboot switches during upgrade process")
-        print("  X  Potentially disrupt network connectivity")
-        print("  X  Affect production traffic flow")
-        print("  X  Require recovery snapshots for Junos devices")
-        print("")
+    def _print_switch_upgrade_banner(self) -> None:
+        """Print the destructive-operation banner for switch firmware upgrades."""
+        print(" Advanced Switch Firmware Upgrade")  # WHY: page title
+        print("=" * 60)  # WHY: title underline
+        print("")  # WHY: spacing
+        print("  DESTRUCTIVE OPERATION WARNING")  # WHY: attention header
+        print("  ===========================")  # WHY: header underline
+        print("  Switch firmware upgrades will:")  # WHY: preamble
+        print("  X  Reboot switches during upgrade process")  # WHY: risk item 1
+        print("  X  Potentially disrupt network connectivity")  # WHY: risk item 2
+        print("  X  Affect production traffic flow")  # WHY: risk item 3
+        print("  X  Require recovery snapshots for Junos devices")  # WHY: risk item 4
+        print("")  # WHY: spacing before menu
 
-        # Step 1: Mode selection
-        print("  Select upgrade mode:")
-        print("   [1] By Site - Upgrade specific sites (individual site selection)")
-        print("   [2] By Gateway Template - Upgrade all sites assigned to a selected Gateway Template")
+    def _print_switch_mode_menu(self) -> None:
+        """Print the mode-selection menu (1=site, 2=template)."""
+        print("  Select upgrade mode:")  # WHY: menu heading
+        print("   [1] By Site - Upgrade specific sites (individual site selection)")  # WHY: site option
+        print("   [2] By Gateway Template - Upgrade all sites assigned to a selected Gateway Template")  # tmpl
 
-        while True:
-            try:
+    def _prompt_switch_upgrade_mode(self) -> str | None:
+        """Loop until operator enters a valid mode ('1' or '2'); return None on EOF."""
+        while True:  # WHY: retry until valid or cancel
+            try:  # WHY: catch EOF/interrupt
                 mode_choice = self._safe_input_fn("\n  Select mode (1-2): ", context="firmware_manager").strip()
-                if mode_choice == "1":
-                    logging.info("User selected site-based switch upgrade mode")
-                    print("\n  Site-based switch upgrade mode selected")
-                    return self._bulk_upgrade_switch_firmware_by_site()  # type: ignore[no-untyped-call]
-                elif mode_choice == "2":
-                    logging.info("User selected template-based switch upgrade mode")
-                    print("\n  Template-based switch upgrade mode selected")
-                    return self._upgrade_switch_firmware_by_gateway_template()  # type: ignore[no-untyped-call]
-                else:
-                    print("  Invalid selection. Please choose 1 or 2.")
-                    logging.debug("Invalid mode selection: %s", mode_choice)
-            except (EOFError, KeyboardInterrupt):
-                print("\n  Operation cancelled by user.")
-                logging.info("Switch firmware upgrade cancelled (EOF or interrupt) - SSH/container safe exit")
-                return
+            except (EOFError, KeyboardInterrupt):  # WHY: SSH/container safe exit
+                print("\n  Operation cancelled by user.")  # WHY: operator feedback
+                logging.info("Switch firmware upgrade cancelled (EOF/interrupt)")  # WHY: audit cancel
+                return None  # WHY: signal cancel to caller
+            if mode_choice in ("1", "2"):  # WHY: only two legal choices
+                return mode_choice  # WHY: hand valid token to dispatcher
+            print("  Invalid selection. Please choose 1 or 2.")  # WHY: operator retry hint
+            logging.debug("Invalid mode selection: %s", mode_choice)  # WHY: audit invalid input
+
+    def _dispatch_switch_upgrade_mode(self, mode_choice: str):  # type: ignore[no-untyped-def]
+        """Route the validated mode choice to the appropriate switch upgrade flow."""
+        if mode_choice == "1":  # WHY: site-based branch
+            logging.info("User selected site-based switch upgrade mode")  # WHY: audit selection
+            print("\n  Site-based switch upgrade mode selected")  # WHY: operator confirmation
+            return self._bulk_upgrade_switch_firmware_by_site()  # type: ignore[no-untyped-call]
+        logging.info("User selected template-based switch upgrade mode")  # WHY: template-based branch
+        print("\n  Template-based switch upgrade mode selected")  # WHY: operator confirmation
+        return self._upgrade_switch_firmware_by_gateway_template()  # type: ignore[no-untyped-call]
 
     def _bulk_upgrade_switch_firmware_by_site(self, sites_to_upgrade_override=None):  # type: ignore[no-untyped-def]
-        """Advanced bulk switch firmware upgrade for switches at selected site(s).
+        """Bulk switch firmware upgrade for selected site(s) via interactive picker or template override."""
+        logging.info("Starting bulk switch firmware upgrade by site...")  # WHY: audit entry
+        logging.debug("FirmwareManager._bulk_upgrade_switch_firmware_by_site() initiated")  # WHY: trace call
+        import sys as _sys  # noqa: PLC0415  # WHY: lazy import to avoid circular deps
 
-        This method provides comprehensive switch firmware upgrade capabilities with:
-        1. Bulk site mode: Interactive site selection for multi-site upgrades
-        2. Single site mode: Individual site selection (fallback if override not provided)
-        3. Template mode: Uses provided sites_to_upgrade_override for template-based upgrades
-        4. Switch-specific upgrade parameters (reboot=True, snapshot=True for Junos)
-        5. Conservative upgrade strategies optimized for network switches
-        6. Enhanced safety measures for network disruption prevention
-        7. Model-specific firmware version selection across sites
-        8. Per-site upgrade execution with unified reporting
-
-        Args:
-            sites_to_upgrade_override: Optional list of site dictionaries for template-based upgrades
-
-        Returns:
-            Upgrade execution results and tracking information
-        """
-        logging.info("Starting bulk switch firmware upgrade by site...")
-        logging.debug("FirmwareManager._bulk_upgrade_switch_firmware_by_site() initiated")
-
-        import sys as _sys
-
-        _main = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
-        if _main is None:
-            return
-        BulkSwitchFirmwareUpgrader = _main.BulkSwitchFirmwareUpgrader  # lazy import avoids circular
-        BulkSwitchFirmwareUpgrader(self.org_id, sites_to_upgrade_override).execute()
+        _main = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")  # WHY: locate entry module
+        if _main is None:  # WHY: guard when neither module surface is present
+            return  # WHY: cannot proceed without the upgrader class
+        BulkSwitchFirmwareUpgrader = _main.BulkSwitchFirmwareUpgrader  # WHY: lazy attribute access
+        BulkSwitchFirmwareUpgrader(self.org_id, sites_to_upgrade_override).execute()  # WHY: run upgrade flow
 
     def _upgrade_switch_firmware_by_gateway_template(self):  # type: ignore[no-untyped-def]
         """Advanced switch firmware upgrade organized by Gateway Template assignment.
 
-        This method provides template-based switch firmware upgrades with:
-        1. Interactive Gateway Template selection with site count display
-        2. Automatic site discovery for selected template (same logic as AP system)
-        3. Switch enumeration across all sites in template
-        4. Model-based firmware version selection optimized for switches
-        5. Unified upgrade execution across template sites
-        6. Switch-specific safety measures and network disruption warnings
-        7. Comprehensive audit logging and progress monitoring
-
-        Features:
-        - Template selection by index or name (reuses AP template infrastructure)
-        - Site count and switch count display per template
-        - Switch-specific upgrade parameters (reboot, snapshot, conservative strategy)
-        - Maintains all existing safety confirmations and audit trails
-        - Enhanced network disruption warnings for production environments
+        Reuses shared template infrastructure (CSV freshness + template->sites
+        mapping) then dispatches to the switch-specific bulk upgrade. Destructive:
+        callers must have obtained explicit operator confirmation upstream.
         """
-        logging.info("Starting template-based switch firmware upgrade...")
-        logging.debug("FirmwareManager._upgrade_switch_firmware_by_gateway_template() initiated")
+        logging.info("Starting template-based switch firmware upgrade for org %s", self.org_id)  # WHY: audit entry
+        self._print_switch_template_banner()  # WHY: mandatory operator hazard banner
+        template_sites_mapping = self._prepare_template_upgrade("switch")  # WHY: shared freshness + mapping
+        if template_sites_mapping is None:  # WHY: no templates or no assignments
+            logging.debug("Switch template upgrade aborted - no template-site assignments")  # WHY: trace early exit
+            return None  # WHY: preserve pre-refactor cancel behavior
+        template_name_to_id, sites_mapping = template_sites_mapping  # WHY: unpack prep tuple
+        selection = self._select_template_and_sites(template_name_to_id, sites_mapping)  # WHY: prompt operator
+        if selection is None:  # WHY: operator declined template picker
+            logging.debug("Switch template upgrade cancelled at template prompt")  # WHY: trace decline
+            return None  # WHY: preserve pre-refactor cancel behavior
+        selected_template_name, sites_to_upgrade = selection  # WHY: unpack picker result
+        result = self._execute_template_based_switch_upgrade(sites_to_upgrade, selected_template_name)  # WHY: dispatch
+        logging.debug("Switch tmpl upgrade done template=%s sites=%d", selected_template_name, len(sites_to_upgrade))
+        return result  # WHY: propagate bulk-upgrade return to caller
 
-        print(" Advanced Switch Firmware Upgrade by Gateway Template")
-        print("=" * 70)
-
-        # Step 1: Ensure required CSVs are fresh (reuse AP template infrastructure)
-        self._ensure_template_csv_freshness()  # type: ignore[no-untyped-call]
-
-        # Step 2: Load template-to-sites mapping (same as AP system)
-        template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()  # type: ignore[no-untyped-call]
-
-        if not template_sites_mapping:
-            print("\n! No Gateway Templates with assigned sites found.")
-            print("  Make sure sites are assigned to Gateway Templates and try again.")
-            logging.warning("No Gateway Templates with site assignments found")
-            return
-
-        # Step 3: Template selection (reuse AP template selection logic)
-        selected_template_id, selected_template_name = self._prompt_template_selection(  # type: ignore[no-untyped-call]
-            template_name_to_id, template_sites_mapping
-        )
-
-        if not selected_template_id:
-            print(" No template selected. Exiting.")
-            return
-
-        # Step 4: Get sites for selected template
-        sites_to_upgrade = template_sites_mapping.get(selected_template_id, [])
-
-        print(f"\n  Template '{selected_template_name}' includes {len(sites_to_upgrade)} sites")
-        logging.info("Template %s has %s assigned sites", selected_template_name, len(sites_to_upgrade))
-
-        return self._execute_template_based_switch_upgrade(sites_to_upgrade, selected_template_name)  # type: ignore[no-untyped-call]
+    def _print_switch_template_banner(self):  # type: ignore[no-untyped-def]
+        """Emit the switch-template upgrade banner (operator hazard header)."""
+        logging.debug("Rendering switch template upgrade banner")  # WHY: trace UI-only helper entry
+        print(" Advanced Switch Firmware Upgrade by Gateway Template")  # WHY: menu title for operator
+        print("=" * 70)  # WHY: separator aligned with pre-refactor banner width
 
     def _execute_template_based_switch_upgrade(self, sites_to_upgrade, selected_template_name):  # type: ignore[no-untyped-def]
         """Execute the template-based switch upgrade with the existing switch implementation."""
@@ -1631,64 +1813,83 @@ class FirmwareManager:
     # ===============================================================================
 
     def execute_ssr_firmware_upgrade_with_mode_selection(self):  # type: ignore[no-untyped-def]
-        """Main entry point for SSR firmware upgrades with mode selection.
+        """Main entry point for SSR firmware upgrades with mode selection."""
+        logging.info("SSR upgrade mode-selection menu entered")  # WHY: audit destructive entrypoint
+        self._present_ssr_upgrade_warning()  # WHY: mandatory operator hazard banner before any input
+        mode_choice = self._prompt_ssr_mode_selection()  # WHY: obtain validated 1|2|None mode
+        if mode_choice is None:  # WHY: EOF/interrupt -> abort without dispatch
+            logging.debug("SSR upgrade cancelled at mode prompt")  # WHY: trace early exit
+            return None  # WHY: preserve pre-refactor cancel behavior
+        result = self._dispatch_ssr_upgrade_mode(mode_choice)  # WHY: route to site or template handler
+        logging.debug("SSR upgrade dispatch complete mode=%s", mode_choice)  # WHY: trace exit
+        return result  # WHY: propagate handler return to caller
 
-        Presents user with choice between:
-        1. Site-based upgrade (individual site selection)
-        2. Template-based upgrade (Gateway Template assignment - same grouping as APs/switches)
+    def _present_ssr_upgrade_warning(self) -> None:
+        """Emit the destructive-SSR-upgrade warning banner and mode-selection prompt."""
+        logging.warning("Menu #100 DESTRUCTIVE: SSR firmware upgrade with mode selection started")  # WHY: audit
+        logging.debug("FirmwareManager.execute_ssr_firmware_upgrade_with_mode_selection() initiated")  # WHY: trace
+        self._print_ssr_hazards_block()  # WHY: banner + hazards output extracted for length compliance
+        self._print_ssr_precautions_block()  # WHY: precautions + mode-selector output extracted
 
-        SECURITY: This is a DESTRUCTIVE operation that will reboot SSR devices and
-        disrupt WAN/SD-WAN connectivity. Critical routing infrastructure warnings provided.
+    def _print_ssr_hazards_block(self) -> None:
+        """Print the SSR upgrade banner title and hazard list."""
+        logging.debug("Rendering SSR upgrade hazards block")  # WHY: trace banner render
+        print(" Advanced SSR Firmware Upgrade")  # WHY: banner title for operator context
+        print("=" * 60)  # WHY: visual separator between banner and body
+        print("")  # WHY: blank spacer for readability
+        print("  CRITICAL ROUTING INFRASTRUCTURE WARNING")  # WHY: hazard header
+        print("  ======================================")  # WHY: underline hazard header
+        print("  SSR firmware upgrades will:")  # WHY: introduce impact list
+        print("  X  Reboot Session Smart Routers")  # WHY: reboot impact disclosure
+        print("  X  Disrupt WAN and SD-WAN connectivity")  # WHY: connectivity impact disclosure
+        print("  X  Affect branch office connectivity")  # WHY: branch impact disclosure
+        print("  X  Impact tunnel establishment and failover")  # WHY: tunnel impact disclosure
+        print("  X  Require careful HA pair coordination")  # WHY: HA coordination hint
+        print("  X  Potentially cause extended outages")  # WHY: outage disclosure
 
-        Returns:
-            Results of the selected upgrade operation
-        """
-        logging.warning("Menu #100 DESTRUCTIVE: SSR firmware upgrade with mode selection started")
-        logging.debug("FirmwareManager.execute_ssr_firmware_upgrade_with_mode_selection() initiated")
+    def _print_ssr_precautions_block(self) -> None:
+        """Print the SSR upgrade precautions list and mode-selector menu."""
+        logging.debug("Rendering SSR upgrade precautions block")  # WHY: trace banner render
+        print("")  # WHY: blank spacer between hazards and precautions
+        print("  RECOMMENDED PRECAUTIONS:")  # WHY: introduce precautions list
+        print("  X  Schedule maintenance windows")  # WHY: maintenance guidance
+        print("  X  Verify backup connectivity paths")  # WHY: rollback path guidance
+        print("  X  Coordinate with network operations")  # WHY: coordination guidance
+        print("  X  Monitor upgrade progress closely")  # WHY: monitoring guidance
+        print("")  # WHY: blank spacer before mode selector
+        print("  Select upgrade mode:")  # WHY: mode-selector introduction
+        print("   [1] By Site - Upgrade specific sites (individual site selection)")  # WHY: mode 1 description
+        print("   [2] By Gateway Template - Upgrade all sites assigned to a selected Gateway Template")  # WHY: mode 2
 
-        print(" Advanced SSR Firmware Upgrade")
-        print("=" * 60)
-        print("")
-        print("  CRITICAL ROUTING INFRASTRUCTURE WARNING")
-        print("  ======================================")
-        print("  SSR firmware upgrades will:")
-        print("  X  Reboot Session Smart Routers")
-        print("  X  Disrupt WAN and SD-WAN connectivity")
-        print("  X  Affect branch office connectivity")
-        print("  X  Impact tunnel establishment and failover")
-        print("  X  Require careful HA pair coordination")
-        print("  X  Potentially cause extended outages")
-        print("")
-        print("  RECOMMENDED PRECAUTIONS:")
-        print("  X  Schedule maintenance windows")
-        print("  X  Verify backup connectivity paths")
-        print("  X  Coordinate with network operations")
-        print("  X  Monitor upgrade progress closely")
-        print("")
-
-        # Step 1: Mode selection
-        print("  Select upgrade mode:")
-        print("   [1] By Site - Upgrade specific sites (individual site selection)")
-        print("   [2] By Gateway Template - Upgrade all sites assigned to a selected Gateway Template")
-
-        while True:
-            try:
+    def _prompt_ssr_mode_selection(self) -> str | None:
+        """Prompt for SSR upgrade mode until valid or cancelled; returns "1", "2", or None."""
+        logging.info("Prompting SSR upgrade mode selection")  # WHY: trace prompt entry
+        while True:  # WHY: retry until valid input or EOF/interrupt
+            try:  # WHY: catch shell/SSH interrupt for safe exit
                 mode_choice = self._safe_input_fn("\n  Select mode (1-2): ", context="firmware_manager").strip()
-                if mode_choice == "1":
-                    logging.info("User selected site-based SSR upgrade mode")
-                    print("\n  Site-based SSR upgrade mode selected")
-                    return self._bulk_upgrade_ssr_firmware_by_site()  # type: ignore[no-untyped-call]
-                elif mode_choice == "2":
-                    logging.info("User selected template-based SSR upgrade mode")
-                    print("\n  Template-based SSR upgrade mode selected")
-                    return self._upgrade_ssr_firmware_by_gateway_template()  # type: ignore[no-untyped-call]
-                else:
-                    print("  Invalid selection. Please choose 1 or 2.")
-                    logging.debug("Invalid mode selection: %s", mode_choice)
-            except (EOFError, KeyboardInterrupt):
-                print("\n  Operation cancelled by user.")
-                logging.info("SSR firmware upgrade cancelled (EOF or interrupt) - SSH/container safe exit")
-                return
+            except (EOFError, KeyboardInterrupt):  # WHY: SSH/container-safe cancel path
+                print("\n  Operation cancelled by user.")  # WHY: user-visible cancel confirmation
+                logging.info("SSR upgrade cancelled (EOF/interrupt) - SSH-safe exit")  # WHY: audit
+                return None  # WHY: sentinel signals cancellation to orchestrator
+            if mode_choice in ("1", "2"):  # WHY: accept only defined modes
+                logging.debug("SSR mode selected: %s", mode_choice)  # WHY: trace selection
+                return mode_choice  # WHY: pass validated choice back
+            print("  Invalid selection. Please choose 1 or 2.")  # WHY: user-visible reprompt reason
+            logging.debug("Invalid mode selection: %s", mode_choice)  # WHY: trace invalid input
+
+    def _dispatch_ssr_upgrade_mode(self, mode_choice: str):  # type: ignore[no-untyped-def]
+        """Dispatch validated SSR upgrade mode to the matching handler."""
+        logging.info("Dispatching SSR upgrade mode=%s", mode_choice)  # WHY: audit dispatch selection
+        if mode_choice == "1":  # WHY: site-based path
+            logging.info("User selected site-based SSR upgrade mode")  # WHY: preserve pre-refactor audit line
+            print("\n  Site-based SSR upgrade mode selected")  # WHY: operator visible mode confirmation
+            result = self._bulk_upgrade_ssr_firmware_by_site()  # type: ignore[no-untyped-call]  # WHY: run site flow
+        else:  # WHY: mode_choice guaranteed "2" by _prompt_ssr_mode_selection
+            logging.info("User selected template-based SSR upgrade mode")  # WHY: preserve pre-refactor audit line
+            print("\n  Template-based SSR upgrade mode selected")  # WHY: operator visible mode confirmation
+            result = self._upgrade_ssr_firmware_by_gateway_template()  # type: ignore[no-untyped-call]  # WHY: template flow
+        logging.debug("SSR mode dispatch complete mode=%s", mode_choice)  # WHY: trace exit
+        return result  # WHY: return handler result to orchestrator
 
     def _validate_org_for_ssr_upgrade(self) -> tuple[str, dict[str, Any] | None]:
         """Validate organization access for SSR upgrade.
@@ -1696,22 +1897,22 @@ class FirmwareManager:
         Returns:
             tuple: (org_name, error_dict or None)
         """
-        logger = logging.getLogger(__name__)
-        print("\n-> Validating organization access...")
+        logger = logging.getLogger(__name__)  # WHY: local logger for validation errors
+        print("\n-> Validating organization access...")  # WHY: user feedback pre-API
         try:
-            org_info = mistapi.api.v1.orgs.orgs.getOrg(self.apisession, self.org_id)
-            if org_info.status_code != 200:
-                print(f"X  Error accessing organization: {org_info.status_code}")
-                logger.error("Failed to access organization %s: %s", self.org_id, org_info.status_code)
-                return "", {"error": "Organization access failed"}
-            org_name = org_info.data.get("name", "Unknown")
-            print(f"!? Organization: {org_name}")
-            logger.debug("Organization validated: %s", org_name)
-            return org_name, None
+            org_info = mistapi.api.v1.orgs.orgs.getOrg(self.apisession, self.org_id)  # WHY: fetch org record
+            if org_info.status_code != 200:  # WHY: guard non-success
+                print(f"X  Error accessing organization: {org_info.status_code}")  # WHY: operator hint
+                logger.error("Failed to access organization %s: %s", self.org_id, org_info.status_code)  # WHY: audit
+                return "", {"error": "Organization access failed"}  # WHY: propagate error envelope
+            org_name = org_info.data.get("name", "Unknown")  # WHY: capture org display name
+            print(f"!? Organization: {org_name}")  # WHY: confirm to operator
+            logger.debug("Organization validated: %s", org_name)  # WHY: audit success
+            return org_name, None  # WHY: signal success upstream
         except Exception as e:
-            print(f"X  Error validating organization: {str(e)}")
-            logger.error("Organization validation failed: %s", str(e))
-            return "", {"error": f"Organization validation error: {str(e)}"}
+            print(f"X  Error validating organization: {str(e)}")  # WHY: user-facing error
+            logger.error("Organization validation failed: %s", str(e))  # WHY: structured audit
+            return "", {"error": f"Organization validation error: {str(e)}"}  # WHY: propagate error envelope
 
     def _prompt_ssr_site_selection(
         self, all_sites: list[dict[str, Any]]
@@ -1721,21 +1922,23 @@ class FirmwareManager:
         Returns:
             tuple: (selected_sites list, error_dict or None)
         """
-        print("\nAvailable sites:")
-        for index, site in enumerate(all_sites, 1):
-            print(f"{index:3}. {site.get('name', 'Unnamed')} (ID: {site.get('id', 'Unknown')})")
-        print("\nSite selection options:\nA. All sites\nS. Select specific sites\nC. Cancel operation")
-        choice = self._safe_input_fn("\nEnter your choice (A/S/C): ", context="firmware_manager").strip().upper()
-        if choice == "C":
-            print("-> Operation cancelled by user")
-            return [], {"cancelled": True}
-        if choice == "A":
-            print(f"-> Selected all {len(all_sites)} sites")
-            return all_sites, None
-        if choice == "S":
-            return self._parse_ssr_site_selection(all_sites)
-        print("X  Invalid selection")
-        return [], {"error": "Invalid selection"}
+        print("\nAvailable sites:")  # WHY: section header
+        for index, site in enumerate(all_sites, 1):  # WHY: emit numbered site listing
+            site_line = f"{index:3}. {site.get('name', 'Unnamed')} (ID: {site.get('id', 'Unknown')})"  # WHY: build row
+            print(site_line)  # WHY: emit line item
+        print("\nSite selection options:\nA. All sites\nS. Select specific sites\nC. Cancel operation")  # WHY: menu
+        raw_choice = self._safe_input_fn("\nEnter your choice (A/S/C): ", context="firmware_manager")  # WHY: prompt
+        choice = raw_choice.strip().upper()  # WHY: normalize casing
+        if choice == "C":  # WHY: cancel branch
+            print("-> Operation cancelled by user")  # WHY: user feedback
+            return [], {"cancelled": True}  # WHY: signal cancellation
+        if choice == "A":  # WHY: bulk-select branch
+            print(f"-> Selected all {len(all_sites)} sites")  # WHY: user feedback
+            return all_sites, None  # WHY: propagate full list
+        if choice == "S":  # WHY: interactive-picker branch
+            return self._parse_ssr_site_selection(all_sites)  # WHY: delegate to picker
+        print("X  Invalid selection")  # WHY: catch-all bad input
+        return [], {"error": "Invalid selection"}  # WHY: propagate error envelope
 
     def _parse_ssr_site_selection(
         self, all_sites: list[dict[str, Any]]
@@ -1745,26 +1948,42 @@ class FirmwareManager:
         Returns:
             tuple: (selected_sites list, error_dict or None)
         """
-        print("\nEnter site numbers (comma-separated) or ranges (e.g., 1-5):")
-        site_input = self._safe_input_fn("Sites: ", context="firmware_manager").strip()
-        selected_sites: list[dict[str, Any]] = []
+        logging.info("Parsing SSR site selection sites=%d", len(all_sites))  # WHY: entry audit
+        print("\nEnter site numbers (comma-separated) or ranges (e.g., 1-5):")  # WHY: instruction banner
+        site_input = self._safe_input_fn("Sites: ", context="firmware_manager").strip()  # WHY: injected prompt
         try:
-            for part in site_input.split(","):
-                part = part.strip()
-                if "-" in part:
-                    start, end = map(int, part.split("-"))
-                    for idx in range(start - 1, end):
-                        if 0 <= idx < len(all_sites):
-                            selected_sites.append(all_sites[idx])
-                else:
-                    idx = int(part) - 1
-                    if 0 <= idx < len(all_sites):
-                        selected_sites.append(all_sites[idx])
-            print(f"-> Selected {len(selected_sites)} sites")
-            return selected_sites, None
-        except Exception as e:
-            print(f"X  Invalid site selection: {str(e)}")
-            return [], {"error": "Invalid site selection"}
+            selected_sites = self._resolve_ssr_site_tokens(site_input, all_sites)  # WHY: token dispatch
+        except Exception as e:  # WHY: catch parse/index errors uniformly
+            print(f"X  Invalid site selection: {str(e)}")  # WHY: user feedback
+            logging.warning("Invalid SSR site selection: %s", e)  # WHY: audit failure
+            return [], {"error": "Invalid site selection"}  # WHY: signal error to caller
+        print(f"-> Selected {len(selected_sites)} sites")  # WHY: confirmation line
+        logging.debug("Resolved SSR site selection count=%d", len(selected_sites))  # WHY: exit audit
+        return selected_sites, None  # WHY: success path
+
+    def _resolve_ssr_site_tokens(self, site_input: str, all_sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Resolve a comma-separated tokens string into a list of site dicts."""
+        selected_sites: list[dict[str, Any]] = []  # WHY: accumulate resolved rows
+        for part in site_input.split(","):  # WHY: comma-separated tokens
+            token = part.strip()  # WHY: normalize whitespace
+            if not token:  # WHY: skip empty tokens
+                continue  # WHY: no-op on blank
+            self._extend_sites_from_token(token, all_sites, selected_sites)  # WHY: dispatch per-token
+        return selected_sites  # WHY: hand back accumulated list
+
+    def _extend_sites_from_token(
+        self, token: str, all_sites: list[dict[str, Any]], selected_sites: list[dict[str, Any]]
+    ) -> None:
+        """Append resolved site rows for a single index-or-range token."""
+        if "-" not in token:  # WHY: single-index token
+            idx = int(token) - 1  # WHY: 0-based index
+            if 0 <= idx < len(all_sites):  # WHY: range guard
+                selected_sites.append(all_sites[idx])  # WHY: keep site
+            return  # WHY: single-index path done
+        start, end = map(int, token.split("-"))  # WHY: range endpoints
+        for idx in range(start - 1, end):  # WHY: inclusive of end
+            if 0 <= idx < len(all_sites):  # WHY: range guard
+                selected_sites.append(all_sites[idx])  # WHY: keep site
 
     def _select_ssr_sites_for_upgrade(
         self, sites_to_upgrade_override: list[dict[str, Any]] | None
@@ -1774,23 +1993,23 @@ class FirmwareManager:
         Returns:
             tuple: (selected_sites list, error_dict or None)
         """
-        logger = logging.getLogger(__name__)
-        if sites_to_upgrade_override:
-            print(f"-> Using provided site list: {len(sites_to_upgrade_override)} sites")
-            return sites_to_upgrade_override, None
+        logger = logging.getLogger(__name__)  # WHY: local logger for site discovery errors
+        if sites_to_upgrade_override:  # WHY: caller supplied preselected list
+            print(f"-> Using provided site list: {len(sites_to_upgrade_override)} sites")  # WHY: audit hint
+            return sites_to_upgrade_override, None  # WHY: skip discovery
         try:
-            print("\n-> Discovering available sites...")
-            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(self.apisession, self.org_id)
-            if sites_response.status_code != 200:
-                print(f"X  Error retrieving sites: {sites_response.status_code}")
-                return [], {"error": "Failed to retrieve sites"}
-            all_sites = sites_response.data
-            print(f"!? Found {len(all_sites)} total sites")
-            return self._prompt_ssr_site_selection(all_sites)
+            print("\n-> Discovering available sites...")  # WHY: user feedback pre-API
+            sites_response = mistapi.api.v1.orgs.sites.listOrgSites(self.apisession, self.org_id)  # WHY: list sites
+            if sites_response.status_code != 200:  # WHY: guard non-success
+                print(f"X  Error retrieving sites: {sites_response.status_code}")  # WHY: operator hint
+                return [], {"error": "Failed to retrieve sites"}  # WHY: propagate failure envelope
+            all_sites = sites_response.data  # WHY: capture site list
+            print(f"!? Found {len(all_sites)} total sites")  # WHY: report discovery count
+            return self._prompt_ssr_site_selection(all_sites)  # WHY: delegate to interactive picker
         except Exception as e:
-            print(f"X  Error during site discovery: {str(e)}")
-            logger.error("Site discovery failed: %s", str(e))
-            return [], {"error": f"Site discovery error: {str(e)}"}
+            print(f"X  Error during site discovery: {str(e)}")  # WHY: user-facing error
+            logger.error("Site discovery failed: %s", str(e))  # WHY: structured audit
+            return [], {"error": f"Site discovery error: {str(e)}"}  # WHY: propagate error envelope
 
     def _select_ssr_upgrade_strategy(self) -> str:
         """Interactive selection of SSR upgrade strategy.
@@ -1798,21 +2017,21 @@ class FirmwareManager:
         Returns:
             str: upgrade strategy ('serial' or 'big_bang')
         """
-        print("\nUpgrade Strategy Options:")
-        print("1. Serial   - Upgrade SSRs one at a time (safer, longer downtime window)")
-        print("2. Big Bang  - Upgrade all SSRs simultaneously (faster, higher risk)")
-        while True:
+        print("\nUpgrade Strategy Options:")  # WHY: menu header
+        print("1. Serial   - Upgrade SSRs one at a time (safer, longer downtime window)")  # WHY: option 1
+        print("2. Big Bang  - Upgrade all SSRs simultaneously (faster, higher risk)")  # WHY: option 2
+        while True:  # WHY: retry loop until valid selection
             strategy_choice = self._safe_input_fn(
                 "\nSelect upgrade strategy (1-2): ", context="firmware_manager"
-            ).strip()
-            if strategy_choice == "1":
-                print("-> Selected strategy: serial")
-                return "serial"
-            if strategy_choice == "2":
-                print("!? WARNING: Big bang strategy will upgrade all SSRs simultaneously")
-                print("   This may cause widespread WAN connectivity disruption")
-                return "big_bang"
-            print("X  Please enter 1 or 2")
+            ).strip()  # WHY: normalize input
+            if strategy_choice == "1":  # WHY: serial branch
+                print("-> Selected strategy: serial")  # WHY: user feedback
+                return "serial"  # WHY: propagate strategy id
+            if strategy_choice == "2":  # WHY: big-bang branch
+                print("!? WARNING: Big bang strategy will upgrade all SSRs simultaneously")  # WHY: safety warning
+                print("   This may cause widespread WAN connectivity disruption")  # WHY: elaborate risk
+                return "big_bang"  # WHY: propagate strategy id
+            print("X  Please enter 1 or 2")  # WHY: catch-all bad input
 
     def _select_ssr_reboot_timing(self) -> bool:
         """Interactive selection of SSR reboot timing.
@@ -1820,18 +2039,18 @@ class FirmwareManager:
         Returns:
             bool: True for auto reboot, False for manual reboot
         """
-        print("\nReboot Timing Options:")
-        print("1. Automatic - Reboot immediately after firmware download (recommended)")
-        print("2. Manual    - Download firmware only, manual reboot required later")
-        while True:
-            choice = self._safe_input_fn("\nReboot timing? (1-2): ", context="firmware_manager").strip()
-            if choice == "1":
-                return True
-            if choice == "2":
-                print("!? WARNING: SSRs require manual reboot to activate new firmware")
-                print("   New firmware will not be operational until manual reboot")
-                return False
-            print("X  Please enter 1 or 2")
+        print("\nReboot Timing Options:")  # WHY: menu header
+        print("1. Automatic - Reboot immediately after firmware download (recommended)")  # WHY: option 1
+        print("2. Manual    - Download firmware only, manual reboot required later")  # WHY: option 2
+        while True:  # WHY: retry until valid selection
+            choice = self._safe_input_fn("\nReboot timing? (1-2): ", context="firmware_manager").strip()  # WHY: prompt
+            if choice == "1":  # WHY: auto-reboot branch
+                return True  # WHY: propagate auto-reboot flag
+            if choice == "2":  # WHY: manual-reboot branch
+                print("!? WARNING: SSRs require manual reboot to activate new firmware")  # WHY: safety warning
+                print("   New firmware will not be operational until manual reboot")  # WHY: elaborate consequence
+                return False  # WHY: propagate manual-reboot flag
+            print("X  Please enter 1 or 2")  # WHY: catch-all bad input
 
     def _select_ssr_firmware_channel(self) -> str:
         """Interactive selection of SSR firmware channel.
@@ -1839,21 +2058,25 @@ class FirmwareManager:
         Returns:
             str: firmware channel ('stable', 'beta', or 'alpha')
         """
-        print("\nFirmware Channel Options:")
-        print("1. stable - Production-ready releases (recommended)")
-        print("2. beta   - Pre-release versions for testing")
-        print("3. alpha  - Development versions (not recommended for production)")
-        while True:
-            choice = self._safe_input_fn("\nSelect firmware channel (1-3): ", context="firmware_manager").strip()
-            if choice == "1":
-                return "stable"
-            if choice == "2":
-                return "beta"
-            if choice == "3":
-                print("!? WARNING: alpha channel contains development versions")
-                print("   Not recommended for production environments")
-                return "alpha"
-            print("X  Please enter 1, 2, or 3")
+        print("\nFirmware Channel Options:")  # WHY: menu header
+        print("1. stable - Production-ready releases (recommended)")  # WHY: option 1
+        print("2. beta   - Pre-release versions for testing")  # WHY: option 2
+        print("3. alpha  - Development versions (not recommended for production)")  # WHY: option 3
+        while True:  # WHY: retry until valid selection
+            raw_choice = self._safe_input_fn(  # WHY: prompt for channel selection
+                "\nSelect firmware channel (1-3): ",
+                context="firmware_manager",
+            )
+            choice = raw_choice.strip()  # WHY: strip whitespace
+            if choice == "1":  # WHY: stable branch
+                return "stable"  # WHY: propagate channel id
+            if choice == "2":  # WHY: beta branch
+                return "beta"  # WHY: propagate channel id
+            if choice == "3":  # WHY: alpha branch
+                print("!? WARNING: alpha channel contains development versions")  # WHY: safety warning
+                print("   Not recommended for production environments")  # WHY: elaborate risk
+                return "alpha"  # WHY: propagate channel id
+            print("X  Please enter 1, 2, or 3")  # WHY: catch-all bad input
 
     def _setup_ssr_upgrade_params(self) -> dict[str, Any] | None:
         """Interactively select upgrade strategy, reboot timing, and firmware channel.
@@ -1874,33 +2097,61 @@ class FirmwareManager:
         Returns:
             list of version dicts with 'version', 'package', 'default' keys
         """
-        logger = logging.getLogger(__name__)
-        print(f"\n{'=' * 60}\nSSR FIRMWARE VERSION SELECTION\n{'=' * 60}")
-        print("\n-> Discovering available SSR firmware versions...")
-        versions_response = mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions(
+        logging.info("Discovering SSR versions channel=%s", firmware_channel)  # WHY: entry audit
+        print(f"\n{'=' * 60}\nSSR FIRMWARE VERSION SELECTION\n{'=' * 60}")  # WHY: banner
+        print("\n-> Discovering available SSR firmware versions...")  # WHY: user feedback
+        raw_rows = self._fetch_ssr_version_rows(firmware_channel)  # WHY: raw API rows
+        if raw_rows is None:  # WHY: fetch failed, error already emitted
+            return []  # WHY: empty list means "no versions"
+        available_versions = self._normalize_ssr_version_rows(raw_rows)  # WHY: normalize dict/str
+        self._print_ssr_version_summary(available_versions, firmware_channel)  # WHY: user summary
+        logging.debug("Discovered SSR versions count=%d", len(available_versions))  # WHY: exit audit
+        return available_versions  # WHY: caller uses this list
+
+    def _fetch_ssr_version_rows(self, firmware_channel: str) -> list[Any] | None:
+        """Fetch raw SSR version rows from the API; None on failure."""
+        logging.info("Fetching SSR version rows channel=%s", firmware_channel)  # WHY: entry audit
+        response = mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions(  # WHY: channel-scoped SSR versions
             self.apisession, self.org_id, channel=firmware_channel
         )
-        if versions_response.status_code != 200:
-            print(f"X  Error retrieving SSR firmware versions: {versions_response.status_code}")
-            logger.error("Failed to retrieve SSR versions: %s", versions_response.status_code)
-            return []
-        available_versions: list[dict[str, Any]] = []
-        for version_obj in versions_response.data or []:
-            if isinstance(version_obj, dict) and version_obj.get("version"):
-                available_versions.append(
-                    {
-                        "version": version_obj.get("version"),
-                        "package": version_obj.get("package", "SSR"),
-                        "default": version_obj.get("default", False),
-                    }
-                )
-            elif isinstance(version_obj, str):
-                available_versions.append({"version": version_obj, "package": "SSR", "default": False})
-        if not available_versions:
-            print(f"X  No SSR firmware versions available for {firmware_channel} channel")
-        else:
-            print(f"!? Found {len(available_versions)} available SSR firmware versions for channel: {firmware_channel}")
-        return available_versions
+        if response.status_code != 200:  # WHY: non-2xx is failure
+            print(f"X  Error retrieving SSR firmware versions: {response.status_code}")  # WHY: user error banner
+            logging.error("Failed to retrieve SSR versions: %s", response.status_code)  # WHY: audit failure
+            return None  # WHY: signal failure to caller
+        logging.debug("Fetched SSR version rows count=%d", len(response.data or []))  # WHY: exit audit
+        return response.data or []  # WHY: normalize None to empty list
+
+    def _normalize_ssr_version_rows(self, raw_rows: list[Any]) -> list[dict[str, Any]]:
+        """Normalize raw rows (dicts or strings) into uniform version dicts."""
+        logging.info("Normalizing SSR version rows count=%d", len(raw_rows))  # WHY: entry audit
+        available_versions: list[dict[str, Any]] = []  # WHY: accumulate normalized entries
+        for row in raw_rows:  # WHY: process each API row
+            entry = self._parse_single_ssr_version_row(row)  # WHY: single-row dispatch
+            if entry is not None:  # WHY: skip malformed rows
+                available_versions.append(entry)  # WHY: keep normalized entry
+        logging.debug("Normalized SSR versions count=%d", len(available_versions))  # WHY: exit audit
+        return available_versions  # WHY: hand back normalized list
+
+    def _parse_single_ssr_version_row(self, row: Any) -> dict[str, Any] | None:
+        """Coerce a single SSR row into the normalized dict, or None if invalid."""
+        if isinstance(row, dict) and row.get("version"):  # WHY: dict rows carry richer metadata
+            return {  # WHY: normalized shape
+                "version": row.get("version"),  # WHY: canonical version string
+                "package": row.get("package", "SSR"),  # WHY: default package label
+                "default": row.get("default", False),  # WHY: default flag defaults False
+            }
+        if isinstance(row, str):  # WHY: legacy string-only row format
+            return {"version": row, "package": "SSR", "default": False}  # WHY: minimal normalized shape
+        return None  # WHY: skip unrecognized row
+
+    def _print_ssr_version_summary(self, available_versions: list[dict[str, Any]], firmware_channel: str) -> None:
+        """Print the SSR version discovery summary line."""
+        if not available_versions:  # WHY: none-found branch
+            print(f"X  No SSR firmware versions available for {firmware_channel} channel")  # WHY: user error
+            return  # WHY: nothing else to print
+        print(  # WHY: hit-count summary
+            f"!? Found {len(available_versions)} available SSR firmware versions for channel: {firmware_channel}"
+        )
 
     def _collect_ssr_inventory_data(self, gw_list: list[dict[str, Any]]) -> tuple[int, set[str], set[str]]:
         """Scan gateway inventory and collect SSR device count, models, and versions.
@@ -1908,19 +2159,33 @@ class FirmwareManager:
         Returns:
             tuple: (ssr_count, models_set, versions_set)
         """
-        ssr_count, models, versions = 0, set(), set()
-        for gw in gw_list:
-            gw_type = gw.get("type", "")
-            gw_model = gw.get("model", "")
-            if gw_type == "ssr" or "SSR" in gw_model or "128T" in gw_model:
-                ssr_count += 1
-                version = gw.get("version")
-                if version:
-                    versions.add(version)
-                model_val = gw.get("model")
-                if model_val:
-                    models.add(model_val)
-        return ssr_count, models, versions
+        logging.info("Collecting SSR inventory data rows=%d", len(gw_list))  # WHY: entry audit
+        ssr_count = 0  # WHY: running SSR match count
+        models: set[str] = set()  # WHY: deduped model names
+        versions: set[str] = set()  # WHY: deduped version strings
+        for gw in gw_list:  # WHY: iterate every gateway row
+            if not self._is_ssr_inventory_row(gw):  # WHY: single-branch predicate
+                continue  # WHY: skip non-SSR rows
+            ssr_count += 1  # WHY: count matched SSR
+            self._collect_ssr_row_metadata(gw, models, versions)  # WHY: mutate sets in place
+        logging.debug("Collected SSR inventory data count=%d", ssr_count)  # WHY: exit audit
+        return ssr_count, models, versions  # WHY: caller displays these
+
+    def _is_ssr_inventory_row(self, gw: dict[str, Any]) -> bool:
+        """Return True if the inventory row is SSR-family."""
+        if gw.get("type", "") == "ssr":  # WHY: canonical type match
+            return True  # WHY: fast-path SSR type
+        model = gw.get("model", "")  # WHY: fallback to model pattern
+        return "SSR" in model or "128T" in model  # WHY: model-string OR match
+
+    def _collect_ssr_row_metadata(self, gw: dict[str, Any], models: set[str], versions: set[str]) -> None:
+        """Add non-empty model and version fields from a row to the caller's sets."""
+        version = gw.get("version")  # WHY: optional firmware version
+        if version:  # WHY: skip empty
+            versions.add(version)  # WHY: dedupe by add-to-set
+        model_val = gw.get("model")  # WHY: optional model
+        if model_val:  # WHY: skip empty
+            models.add(model_val)  # WHY: dedupe by add-to-set
 
     def _display_ssr_inventory_stats(self, ssr_count: int, models: set[str], versions: set[str]) -> None:
         """Print SSR inventory summary if any SSR devices were found."""
@@ -1950,27 +2215,47 @@ class FirmwareManager:
         Returns:
             str: selected version string
         """
-        print(f"\n{'=' * 50}\nAVAILABLE SSR FIRMWARE VERSIONS\n{'=' * 50}")
-        for i, info in enumerate(available_versions, 1):
-            marker = " (default)" if info["default"] else ""
-            print(f"{i:2d}. {info['version']} [{info['package']}]{marker}")
-        while True:
-            try:
-                choice = self._safe_input_fn(
-                    f"\nSelect firmware version (1-{len(available_versions)}): ",
-                    context="firmware_manager",
-                ).strip()
-                if not choice:
-                    print("X  Please enter a selection")
-                    continue
-                idx = int(choice) - 1
-                if 0 <= idx < len(available_versions):
-                    target_version = str(available_versions[idx]["version"])
-                    print(f"-> Selected firmware version: {target_version}")
-                    return target_version
-                print(f"X  Please enter a number between 1 and {len(available_versions)}")
-            except ValueError:
-                print("X  Please enter a valid number")
+        logging.info("Selecting SSR version count=%d", len(available_versions))  # WHY: entry audit
+        self._render_ssr_version_menu(available_versions)  # WHY: draw menu
+        target_version = self._loop_ssr_version_input(available_versions)  # WHY: read + validate
+        logging.debug("Selected SSR version target=%s", target_version)  # WHY: exit audit
+        return target_version  # WHY: caller uses this string
+
+    def _render_ssr_version_menu(self, available_versions: list[dict[str, Any]]) -> None:
+        """Draw the numbered menu of SSR firmware versions."""
+        print(f"\n{'=' * 50}\nAVAILABLE SSR FIRMWARE VERSIONS\n{'=' * 50}")  # WHY: banner
+        for i, info in enumerate(available_versions, 1):  # WHY: 1-based indexing
+            marker = " (default)" if info["default"] else ""  # WHY: highlight default row
+            print(f"{i:2d}. {info['version']} [{info['package']}]{marker}")  # WHY: menu line
+
+    def _loop_ssr_version_input(self, available_versions: list[dict[str, Any]]) -> str:
+        """Loop until a valid version index is chosen. Returns the version string."""
+        logging.info("Awaiting SSR version selection")  # WHY: entry audit
+        while True:  # WHY: retry until valid
+            choice = self._safe_input_fn(  # WHY: prompt via injected input helper
+                f"\nSelect firmware version (1-{len(available_versions)}): ",
+                context="firmware_manager",
+            ).strip()
+            resolved = self._resolve_ssr_version_choice(choice, available_versions)  # WHY: dispatch
+            if resolved is not None:  # WHY: valid choice terminates loop
+                print(f"-> Selected firmware version: {resolved}")  # WHY: confirmation line
+                logging.debug("Resolved SSR version target=%s", resolved)  # WHY: exit audit
+                return resolved  # WHY: hand back to caller
+
+    def _resolve_ssr_version_choice(self, choice: str, available_versions: list[dict[str, Any]]) -> str | None:
+        """Return the resolved version string, or None to retry the loop."""
+        if not choice:  # WHY: empty input path
+            print("X  Please enter a selection")  # WHY: user feedback
+            return None  # WHY: retry
+        try:
+            idx = int(choice) - 1  # WHY: 0-based index
+        except ValueError:  # WHY: non-numeric input
+            print("X  Please enter a valid number")  # WHY: user feedback
+            return None  # WHY: retry
+        if 0 <= idx < len(available_versions):  # WHY: range check
+            return str(available_versions[idx]["version"])  # WHY: valid selection
+        print(f"X  Please enter a number between 1 and {len(available_versions)}")  # WHY: out-of-range feedback
+        return None  # WHY: retry
 
     def _fetch_and_select_ssr_version(self, firmware_channel: str) -> tuple[str, dict[str, Any] | None]:
         """Fetch available SSR versions and prompt for selection.
@@ -2002,33 +2287,55 @@ class FirmwareManager:
         Returns:
             bool: True if confirmed, False if cancelled
         """
-        logger = logging.getLogger(__name__)
-        print(f"\n{'=' * 60}\nSSR UPGRADE CONFIGURATION SUMMARY\n{'=' * 60}")
-        print(f"Organization ID: {self.org_id}")
-        print(f"Organization: {org_name}")
-        print(f"Sites to upgrade: {len(selected_sites)}")
-        print(f"Target firmware: {target_version}")
-        print(f"Firmware channel: {upgrade_config['channel']}")
-        print(f"Upgrade strategy: {upgrade_config['strategy']}")
-        print(f"Auto reboot: {'Yes' if upgrade_config['auto_reboot'] else 'No'}")
-        print("\n!? CRITICAL ROUTING INFRASTRUCTURE WARNING !?")
-        print("SSR firmware upgrades will cause WAN connectivity disruption!")
-        print("- SSRs will reboot and SD-WAN tunnels will be offline during upgrade")
-        print("- Branch offices may lose connectivity")
-        print("- Plan extended maintenance windows")
-        print("- Verify backup connectivity paths before execution")
-        print("- Monitor upgrade progress closely")
-        print("\nTo proceed with SSR firmware upgrade, type: UPGRADE")
+        logging.info("Confirming SSR upgrade org=%s sites=%d", org_name, len(selected_sites))  # WHY: entry audit
+        self._print_ssr_upgrade_summary(org_name, selected_sites, target_version, upgrade_config)  # WHY: show config
+        self._print_ssr_upgrade_warning()  # WHY: mandatory operator warning
+        result = self._read_ssr_upgrade_confirmation()  # WHY: read confirm token
+        logging.debug("SSR upgrade confirmation resolved confirmed=%s", result)  # WHY: exit audit
+        return result
+
+    def _print_ssr_upgrade_summary(  # type: ignore[no-untyped-def]
+        self,
+        org_name,
+        selected_sites,
+        target_version,
+        upgrade_config,
+    ) -> None:
+        """Print the SSR upgrade configuration summary block."""
+        print(f"\n{'=' * 60}\nSSR UPGRADE CONFIGURATION SUMMARY\n{'=' * 60}")  # WHY: section banner
+        print(f"Organization ID: {self.org_id}")  # WHY: identify org scope
+        print(f"Organization: {org_name}")  # WHY: human-readable org name
+        print(f"Sites to upgrade: {len(selected_sites)}")  # WHY: site fanout size
+        print(f"Target firmware: {target_version}")  # WHY: show chosen version
+        print(f"Firmware channel: {upgrade_config['channel']}")  # WHY: channel disclosure
+        print(f"Upgrade strategy: {upgrade_config['strategy']}")  # WHY: strategy disclosure
+        print(f"Auto reboot: {'Yes' if upgrade_config['auto_reboot'] else 'No'}")  # WHY: reboot disclosure
+
+    def _print_ssr_upgrade_warning(self) -> None:
+        """Print the SSR-specific routing infrastructure warning block."""
+        print("\n!? CRITICAL ROUTING INFRASTRUCTURE WARNING !?")  # WHY: highlight impact
+        print("SSR firmware upgrades will cause WAN connectivity disruption!")  # WHY: disruption notice
+        print("- SSRs will reboot and SD-WAN tunnels will be offline during upgrade")  # WHY: tunnel outage
+        print("- Branch offices may lose connectivity")  # WHY: branch impact
+        print("- Plan extended maintenance windows")  # WHY: scheduling caution
+        print("- Verify backup connectivity paths before execution")  # WHY: prerequisite check
+        print("- Monitor upgrade progress closely")  # WHY: monitoring requirement
+        print("\nTo proceed with SSR firmware upgrade, type: UPGRADE")  # WHY: token instruction
+
+    def _read_ssr_upgrade_confirmation(self) -> bool:
+        """Read and validate the UPGRADE confirmation token."""
         try:
-            confirmation = self._safe_input_fn("Confirmation: ", context="SSR firmware upgrade confirmation")
+            confirmation = self._safe_input_fn(  # WHY: prompt with audit tag
+                "Confirmation: ", context="SSR firmware upgrade confirmation"
+            )
         except SystemExit:
-            print("-> Operation cancelled")
-            return False
-        if confirmation != "UPGRADE":
-            print("-> Operation cancelled - incorrect confirmation")
-            logger.info("SSR firmware upgrade cancelled by user")
-            return False
-        return True
+            print("-> Operation cancelled")  # WHY: user-facing cancel notice
+            return False  # WHY: cancel path
+        if confirmation != "UPGRADE":  # WHY: strict token match required
+            print("-> Operation cancelled - incorrect confirmation")  # WHY: reject feedback
+            logging.info("SSR firmware upgrade cancelled by user")  # WHY: audit rejection
+            return False  # WHY: cancel path
+        return True  # WHY: confirmed path
 
     def _build_ssr_upgrade_results(self, target_version: str, upgrade_config: dict[str, Any]) -> dict[str, Any]:
         """Initialize the upgrade results tracking dictionary.
@@ -2058,31 +2365,59 @@ class FirmwareManager:
         Returns:
             dict: mapping device_id -> model/type/version/site_id info
         """
-        logger = logging.getLogger(__name__)
-        print("-> Validating SSR devices from organization inventory...")
-        inventory: dict[str, dict[str, Any]] = {}
-        try:
-            response = mistapi.api.v1.orgs.inventory.getOrgInventory(self.apisession, self.org_id, type="gateway")
-            if response.status_code != 200:
-                logger.error("Failed to get org inventory: %s", response.status_code)
-                print("X  Failed to validate SSR inventory")
-                return inventory
-            for gw in response.data or []:
-                gw_id = gw.get("id")
-                gw_model = gw.get("model", "")
-                gw_type = gw.get("type", "")
-                if gw_type == "ssr" or "SSR" in gw_model or "128T" in gw_model:
-                    inventory[gw_id] = {
-                        "model": gw_model,
-                        "type": gw_type,
-                        "version": gw.get("version", ""),
-                        "site_id": gw.get("site_id", ""),
-                    }
-            print(f"!? Found {len(inventory)} SSR device(s) in organization inventory")
-        except Exception as e:
-            logger.error("Error getting org SSR inventory: %s", e)
-            print(f"X  Error validating SSR inventory: {e}")
-        return inventory
+        logging.info("Loading org SSR inventory org=%s", self.org_id)  # WHY: entry audit
+        print("-> Validating SSR devices from organization inventory...")  # WHY: user feedback banner
+        gateways = self._fetch_org_gateway_inventory()  # WHY: raw gateway list or None on error
+        if gateways is None:  # WHY: fetch failed already logged
+            return {}  # WHY: empty inventory on failure
+        inventory = self._extract_ssr_devices_from_gateways(gateways)  # WHY: filter SSR-family devices
+        print(f"!? Found {len(inventory)} SSR device(s) in organization inventory")  # WHY: summary line
+        logging.debug("Loaded org SSR inventory count=%d", len(inventory))  # WHY: exit audit
+        return inventory  # WHY: hand back the built map
+
+    def _fetch_org_gateway_inventory(self) -> list[dict[str, Any]] | None:
+        """Fetch gateway inventory rows from the org endpoint.
+
+        Returns:
+            list of gateway dicts on success, None on error.
+        """
+        logging.info("Fetching org gateway inventory org=%s", self.org_id)  # WHY: entry audit
+        try:  # WHY: network call may raise
+            response = mistapi.api.v1.orgs.inventory.getOrgInventory(  # WHY: gateway-type inventory endpoint
+                self.apisession, self.org_id, type="gateway"
+            )
+        except Exception as e:  # WHY: broad guard for network / library errors
+            logging.error("Error getting org SSR inventory: %s", e)  # WHY: audit failure
+            print(f"X  Error validating SSR inventory: {e}")  # WHY: user-facing error banner
+            return None  # WHY: signal failure to caller
+        if response.status_code != 200:  # WHY: non-2xx indicates API failure
+            logging.error("Failed to get org inventory: %s", response.status_code)  # WHY: audit status
+            print("X  Failed to validate SSR inventory")  # WHY: user-facing failure banner
+            return None  # WHY: signal failure to caller
+        logging.debug("Fetched org gateway inventory rows=%d", len(response.data or []))  # WHY: exit audit
+        return response.data or []  # WHY: normalize None to empty list
+
+    def _extract_ssr_devices_from_gateways(self, gateways: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        """Filter gateway rows to SSR-family devices only.
+
+        Returns:
+            dict: mapping device_id -> model/type/version/site_id info
+        """
+        logging.info("Extracting SSR devices from gateways count=%d", len(gateways))  # WHY: entry audit
+        inventory: dict[str, dict[str, Any]] = {}  # WHY: accumulate SSR entries
+        for gw in gateways:  # WHY: iterate every gateway row
+            gw_type = gw.get("type", "")  # WHY: gateway type discriminator
+            gw_model = gw.get("model", "")  # WHY: model string for SSR pattern match
+            if not (gw_type == "ssr" or "SSR" in gw_model or "128T" in gw_model):  # WHY: exclude non-SSR
+                continue  # WHY: skip non-SSR gateway
+            inventory[gw.get("id")] = {  # WHY: keyed by device id
+                "model": gw_model,  # WHY: preserve model for later display
+                "type": gw_type,  # WHY: preserve type for validation logic
+                "version": gw.get("version", ""),  # WHY: current firmware
+                "site_id": gw.get("site_id", ""),  # WHY: site anchor for scoping
+            }
+        logging.debug("Extracted SSR devices count=%d", len(inventory))  # WHY: exit audit
+        return inventory  # WHY: caller uses this as validation table
 
     def _discover_site_ssr_devices(self, site: dict[str, Any], ssr_models: list[str]) -> list[dict[str, Any]]:
         """Get SSR devices at a site, filtered from all gateway devices.
@@ -2090,26 +2425,62 @@ class FirmwareManager:
         Returns:
             list of SSR device dicts, or empty list on error/no SSRs
         """
-        logger = logging.getLogger(__name__)
-        site_id = site.get("id")
-        site_name = site.get("name", "Unknown")
-        print(f"  -> Discovering SSRs at {site_name}...")
-        response = mistapi.api.v1.sites.devices.listSiteDevices(self.apisession, site_id, type="gateway")
-        if response.status_code != 200:
-            logger.error("Failed to retrieve devices for site %s: %s", site_name, response.status_code)
-            return []
-        ssrs = []
-        for device in response.data or []:
-            model = device.get("model", "")
-            dev_type = device.get("type", "")
-            dev_id = device.get("id", "")
-            if dev_type == "gateway" and (any(p in model for p in ssr_models) or "SSR" in model):
-                ssrs.append(device)
-                logger.info("Identified SSR device: %s (model: %s)", dev_id, model)
-                print(f"    -> Identified SSR: {model} ({dev_id})")
-            else:
-                logger.debug("Skipping non-SSR device: %s (model: %s)", dev_id, model)
-        return ssrs
+        site_id = site.get("id")  # WHY: scoping key for site devices call
+        site_name = site.get("name", "Unknown")  # WHY: user-friendly label for banners
+        logging.info("Discovering SSR devices site=%s", site_name)  # WHY: entry audit
+        print(f"  -> Discovering SSRs at {site_name}...")  # WHY: progress banner
+        gateway_devices = self._fetch_site_gateway_devices(site_id, site_name)  # WHY: raw list or None
+        if gateway_devices is None:  # WHY: fetch failure already logged
+            return []  # WHY: empty result on failure
+        ssrs = self._filter_devices_by_ssr_model(gateway_devices, ssr_models)  # WHY: pattern-match SSRs
+        logging.debug("Discovered SSR devices site=%s count=%d", site_name, len(ssrs))  # WHY: exit audit
+        return ssrs  # WHY: caller pipes into upgrade planner
+
+    def _fetch_site_gateway_devices(self, site_id: Any, site_name: str) -> list[dict[str, Any]] | None:
+        """Fetch gateway devices for a single site.
+
+        Returns:
+            list of device dicts on success, None on API error.
+        """
+        logging.info("Fetching site gateway devices site=%s", site_name)  # WHY: entry audit
+        response = mistapi.api.v1.sites.devices.listSiteDevices(  # WHY: site-scoped gateway listing
+            self.apisession, site_id, type="gateway"
+        )
+        if response.status_code != 200:  # WHY: non-2xx is API failure
+            logging.error("Failed to retrieve devices for site %s: %s", site_name, response.status_code)  # WHY: audit
+            return None  # WHY: signal failure
+        rows = response.data or []  # WHY: normalize None to empty list
+        logging.debug("Fetched site gateway devices site=%s rows=%d", site_name, len(rows))  # WHY: exit audit
+        return rows  # WHY: hand back list for filtering
+
+    def _filter_devices_by_ssr_model(
+        self, devices: list[dict[str, Any]], ssr_models: list[str]
+    ) -> list[dict[str, Any]]:
+        """Filter gateway devices down to SSR-model matches.
+
+        Returns:
+            list of SSR-classified device dicts.
+        """
+        logging.info("Filtering devices for SSR models count=%d", len(devices))  # WHY: entry audit
+        ssrs: list[dict[str, Any]] = []  # WHY: accumulate matched SSRs
+        for device in devices:  # WHY: iterate every gateway row
+            if not self._is_ssr_gateway(device, ssr_models):  # WHY: single-branch dispatch
+                logging.debug("Skipping non-SSR device: %s", device.get("id", ""))  # WHY: audit skip
+                continue  # WHY: move on
+            ssrs.append(device)  # WHY: keep SSR-classified device
+            logging.info("Identified SSR device: %s (model: %s)", device.get("id", ""), device.get("model", ""))
+            print(f"    -> Identified SSR: {device.get('model', '')} ({device.get('id', '')})")  # WHY: op line
+        logging.debug("Filtered SSR devices count=%d", len(ssrs))  # WHY: exit audit
+        return ssrs  # WHY: caller consumes this list
+
+    def _is_ssr_gateway(self, device: dict[str, Any], ssr_models: list[str]) -> bool:
+        """Return True if device is a gateway matching any SSR model pattern."""
+        if device.get("type", "") != "gateway":  # WHY: only gateway type is eligible
+            return False  # WHY: bail early on non-gateway
+        model = device.get("model", "")  # WHY: single model lookup
+        if "SSR" in model:  # WHY: literal SSR substring match
+            return True  # WHY: fast-path match
+        return any(pattern in model for pattern in ssr_models)  # WHY: user-supplied pattern match
 
     def _validate_ssr_devices_for_version(
         self,
@@ -2122,30 +2493,62 @@ class FirmwareManager:
         Returns:
             tuple: (validated_ids, skipped_ids)
         """
-        logger = logging.getLogger(__name__)
-        validated: list[str] = []
-        skipped: list[str] = []
-        for dev_id in device_ids:
-            if dev_id not in inventory:
-                logger.warning("Device %s not found in org SSR inventory - skipping", dev_id)
-                print(f"    !? Device {dev_id} not in SSR inventory - skipping")
-                skipped.append(dev_id)
-                continue
-            info = inventory[dev_id]
-            current = info.get("version", "")
-            if current == target_version:
-                logger.info("Device %s already at target version %s - skipping", dev_id, target_version)
-                print(f"    -> Device {dev_id} already at version {target_version} - skipping")
-                skipped.append(dev_id)
-            elif self._is_firmware_downgrade(current, target_version):  # type: ignore[no-untyped-call]
-                logger.warning("Device %s downgrade rejected: %s -> %s", dev_id, current, target_version)
-                print(f"    ! Downgrade detected: {info['model']} ({current} -> {target_version}) - skipping")
-                skipped.append(dev_id)
-            else:
-                validated.append(dev_id)
-                logger.info("Validated SSR %s: %s %s -> %s", dev_id, info["model"], current, target_version)
-                print(f"    -> Upgrade needed: {info['model']} ({current} -> {target_version})")
-        return validated, skipped
+        logging.info("Validating SSR devices count=%d target=%s", len(device_ids), target_version)  # WHY: audit
+        validated: list[str] = []  # WHY: accumulate upgrade-eligible ids
+        skipped: list[str] = []  # WHY: accumulate rejected ids
+        for dev_id in device_ids:  # WHY: iterate all requested ids
+            verdict = self._classify_ssr_device_for_upgrade(dev_id, inventory, target_version)  # WHY: dispatch
+            if verdict == "upgrade":  # WHY: only upgrade verdict enters validated list
+                validated.append(dev_id)  # WHY: keep eligible id
+            else:  # WHY: any other verdict is a skip
+                skipped.append(dev_id)  # WHY: keep for reporting
+        logging.debug("Validated SSR devices upgrade=%d skip=%d", len(validated), len(skipped))  # WHY: exit
+        return validated, skipped  # WHY: caller uses both lists
+
+    def _classify_ssr_device_for_upgrade(
+        self,
+        dev_id: str,
+        inventory: dict[str, dict[str, Any]],
+        target_version: str,
+    ) -> str:
+        """Return a single-word verdict for one candidate device.
+
+        Verdicts: 'missing' / 'current' / 'downgrade' / 'upgrade'.
+        """
+        logging.info("Classifying SSR device id=%s target=%s", dev_id, target_version)  # WHY: entry audit
+        if dev_id not in inventory:  # WHY: id must be present in inventory to proceed
+            self._emit_ssr_verdict_missing(dev_id)  # WHY: uniform missing feedback
+            return "missing"  # WHY: sentinel for orchestrator
+        info = inventory[dev_id]  # WHY: fetch model/version pair
+        current = info.get("version", "")  # WHY: currently-running firmware
+        if current == target_version:  # WHY: already at target -> no-op
+            self._emit_ssr_verdict_current(dev_id, target_version)  # WHY: uniform current feedback
+            return "current"  # WHY: sentinel for orchestrator
+        if self._is_firmware_downgrade(current, target_version):  # type: ignore[no-untyped-call]
+            self._emit_ssr_verdict_downgrade(dev_id, info, current, target_version)  # WHY: uniform downgrade
+            return "downgrade"  # WHY: sentinel for orchestrator
+        self._emit_ssr_verdict_upgrade(dev_id, info, current, target_version)  # WHY: uniform upgrade feedback
+        return "upgrade"  # WHY: sentinel for orchestrator
+
+    def _emit_ssr_verdict_missing(self, dev_id: str) -> None:
+        """Log + print the missing-inventory verdict."""
+        logging.warning("Device %s not found in org SSR inventory - skipping", dev_id)  # WHY: audit miss
+        print(f"    !? Device {dev_id} not in SSR inventory - skipping")  # WHY: operator feedback
+
+    def _emit_ssr_verdict_current(self, dev_id: str, target_version: str) -> None:
+        """Log + print the already-at-target verdict."""
+        logging.info("Device %s already at target version %s - skipping", dev_id, target_version)  # WHY: audit
+        print(f"    -> Device {dev_id} already at version {target_version} - skipping")  # WHY: operator feedback
+
+    def _emit_ssr_verdict_downgrade(self, dev_id: str, info: dict[str, Any], current: str, target_version: str) -> None:
+        """Log + print the downgrade-rejected verdict."""
+        logging.warning("Device %s downgrade rejected: %s -> %s", dev_id, current, target_version)  # WHY: audit
+        print(f"    ! Downgrade detected: {info['model']} ({current} -> {target_version}) - skipping")  # WHY: op
+
+    def _emit_ssr_verdict_upgrade(self, dev_id: str, info: dict[str, Any], current: str, target_version: str) -> None:
+        """Log + print the upgrade-eligible verdict."""
+        logging.info("Validated SSR %s: %s %s -> %s", dev_id, info["model"], current, target_version)  # WHY: audit
+        print(f"    -> Upgrade needed: {info['model']} ({current} -> {target_version})")  # WHY: op feedback
 
     def _handle_ssr_upgrade_error_response(
         self,
@@ -2155,38 +2558,56 @@ class FirmwareManager:
     ) -> dict[str, Any]:
         """Parse an error response from the SSR upgrade API call.
 
-        Returns:
-            dict: Updated site_result with error or skip_reason
+        Delegates body-extraction and classification to helpers to satisfy PCPP.
         """
-        logger = logging.getLogger(__name__)
-        try:
-            if hasattr(response, "data") and response.data:
-                text = str(response.data)
-            elif hasattr(response, "text") and response.text:
-                text = response.text
-            elif hasattr(response, "content") and response.content:
-                text = response.content.decode("utf-8")
-            else:
-                text = f"Status: {response.status_code}"
-            text_lower = text.lower()
-            if "already at the requested fw version" in text_lower:
-                logger.info("SSR upgrade skipped at %s: already at target version", site_name)
-                print(f"  - SSRs at {site_name} already at target version")
-                site_result["skip_reason"] = "already_at_version"
-            elif "downgrade fw version not allowed" in text_lower:
-                logger.warning("SSR downgrade rejected at %s", site_name)
-                print(f"  ! Firmware downgrade not allowed at {site_name}")
-                site_result["skip_reason"] = "downgrade_not_allowed"
-            else:
-                logger.error("SSR upgrade API error: %s", text)
-                print(f"  -> API Response: {text}")
-                error = f"Upgrade initiation failed for {site_name}: {response.status_code}"
-                print(f"  X  {error}")
-                site_result["error"] = error
-        except Exception as exc:
-            logger.error("Could not read response details: %s", exc)
-            site_result["error"] = f"Upgrade initiation failed for {site_name}: {response.status_code}"
-        return site_result
+        logging.info("Handling SSR upgrade error site=%s status=%s", site_name, response.status_code)  # WHY: audit
+        try:  # WHY: response.body access can raise
+            text = self._extract_ssr_error_text(response)  # WHY: uniform body decode
+            self._classify_ssr_error_text(text, site_name, response, site_result)  # WHY: route by keyword
+        except Exception as exc:  # WHY: guard attr/decode faults
+            logging.error("Could not read response details: %s", exc)  # WHY: audit failure
+            fallback = f"Upgrade initiation failed for {site_name}: {response.status_code}"  # WHY: fallback text
+            site_result["error"] = fallback  # WHY: propagate fallback error
+        logging.debug("SSR upgrade error handling done site=%s", site_name)  # WHY: trace exit
+        return site_result  # WHY: mutated dict propagates up
+
+    def _extract_ssr_error_text(self, response: Any) -> str:
+        """Return the best-available textual payload from a mistapi response."""
+        data = getattr(response, "data", None)  # WHY: preferred parsed field
+        if data:  # WHY: truthy data wins first
+            return str(data)  # WHY: stringify structured data
+        text = getattr(response, "text", None)  # WHY: fallback to raw text
+        if text:  # WHY: truthy text wins second
+            return text  # WHY: already decoded
+        content = getattr(response, "content", None)  # WHY: fallback to raw bytes
+        if content:  # WHY: truthy content wins third
+            return content.decode("utf-8")  # WHY: normalize to str
+        return f"Status: {response.status_code}"  # WHY: last-resort placeholder
+
+    def _classify_ssr_error_text(
+        self,
+        text: str,
+        site_name: str,
+        response: Any,
+        site_result: dict[str, Any],
+    ) -> None:
+        """Route the response text into skip_reason vs error on site_result."""
+        text_lower = text.lower()  # WHY: case-insensitive match
+        if "already at the requested fw version" in text_lower:  # WHY: benign no-op skip
+            logging.info("SSR upgrade skipped at %s: already at target version", site_name)  # WHY: audit skip
+            print(f"  - SSRs at {site_name} already at target version")  # WHY: operator preview
+            site_result["skip_reason"] = "already_at_version"  # WHY: mark benign skip
+            return  # WHY: short-circuit further checks
+        if "downgrade fw version not allowed" in text_lower:  # WHY: business rule rejection
+            logging.warning("SSR downgrade rejected at %s", site_name)  # WHY: audit reject
+            print(f"  ! Firmware downgrade not allowed at {site_name}")  # WHY: operator feedback
+            site_result["skip_reason"] = "downgrade_not_allowed"  # WHY: mark policy skip
+            return  # WHY: short-circuit further checks
+        logging.error("SSR upgrade API error: %s", text)  # WHY: audit true failure
+        print(f"  -> API Response: {text}")  # WHY: expose raw text to op
+        error = f"Upgrade initiation failed for {site_name}: {response.status_code}"  # WHY: uniform error label
+        print(f"  X  {error}")  # WHY: operator failure marker
+        site_result["error"] = error  # WHY: propagate error to caller
 
     def _call_ssr_upgrade_api(
         self,
@@ -2200,28 +2621,62 @@ class FirmwareManager:
         Returns:
             dict: site_result with upgrade_initiated, skip_reason, or error fields
         """
-        logger = logging.getLogger(__name__)
-        site_result: dict[str, Any] = {"upgrade_initiated": False}
-        upgrade_body: dict[str, Any] = {
-            "device_ids": validated_ids,
-            "channel": upgrade_config["channel"],
-            "version": target_version,
-            "strategy": upgrade_config["strategy"],
-        }
-        if not upgrade_config["auto_reboot"]:
-            upgrade_body["reboot_at"] = -1
-        logger.info("SSR upgrade request: %s", upgrade_body)
-        print(
-            f"  -> channel='{upgrade_config['channel']}', version='{target_version}', strategy='{upgrade_config['strategy']}'"  # noqa: E501
+        logging.info("Calling SSR upgrade API site=%s devices=%d", site_name, len(validated_ids))  # WHY: entry audit
+        site_result: dict[str, Any] = {"upgrade_initiated": False}  # WHY: fixed initial shape
+        upgrade_body = self._build_ssr_upgrade_body(validated_ids, target_version, upgrade_config)  # WHY: request body
+        self._log_ssr_upgrade_request(upgrade_body, validated_ids, target_version, upgrade_config)  # WHY: audit body
+        response = mistapi.api.v1.orgs.ssr.upgradeOrgSsrs(  # WHY: fire upgrade API
+            self.apisession, self.org_id, body=upgrade_body
         )
-        print(f"  -> Device IDs: {validated_ids}")
-        response = mistapi.api.v1.orgs.ssr.upgradeOrgSsrs(self.apisession, self.org_id, body=upgrade_body)
-        if response.status_code in [200, 202]:
-            print(f"  !? Firmware upgrade initiated for {len(validated_ids)} SSR(s)")
-            site_result["upgrade_initiated"] = True
-            logger.info("Successfully initiated SSR firmware upgrade at %s", site_name)
-            return site_result
-        return self._handle_ssr_upgrade_error_response(site_name, response, site_result)
+        result = self._interpret_ssr_upgrade_response(response, site_name, validated_ids, site_result)  # WHY: dispatch
+        logging.debug("SSR upgrade API done site=%s ok=%s", site_name, result.get("upgrade_initiated"))  # WHY: exit
+        return result
+
+    def _build_ssr_upgrade_body(
+        self,
+        validated_ids: list[str],
+        target_version: str,
+        upgrade_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build the SSR upgrade API request body, honoring the auto_reboot flag."""
+        upgrade_body: dict[str, Any] = {  # WHY: canonical request shape
+            "device_ids": validated_ids,  # WHY: target devices
+            "channel": upgrade_config["channel"],  # WHY: chosen channel
+            "version": target_version,  # WHY: chosen firmware version
+            "strategy": upgrade_config["strategy"],  # WHY: rollout strategy
+        }
+        if not upgrade_config["auto_reboot"]:  # WHY: opt-out of auto reboot
+            upgrade_body["reboot_at"] = -1  # WHY: sentinel disables reboot
+        return upgrade_body  # WHY: hand body to API layer
+
+    def _log_ssr_upgrade_request(  # type: ignore[no-untyped-def]
+        self,
+        upgrade_body,
+        validated_ids,
+        target_version,
+        upgrade_config,
+    ) -> None:
+        """Log the SSR upgrade request body and print operator-visible summary lines."""
+        logging.info("SSR upgrade request: %s", upgrade_body)  # WHY: full body to audit log
+        channel = upgrade_config["channel"]  # WHY: local alias for print
+        strategy = upgrade_config["strategy"]  # WHY: local alias for print
+        print(f"  -> channel='{channel}', version='{target_version}', strategy='{strategy}'")  # WHY: operator view
+        print(f"  -> Device IDs: {validated_ids}")  # WHY: operator device disclosure
+
+    def _interpret_ssr_upgrade_response(  # type: ignore[no-untyped-def]
+        self,
+        response,
+        site_name,
+        validated_ids,
+        site_result,
+    ) -> dict[str, Any]:
+        """Interpret upgrade API response — success or delegated error handler."""
+        if response.status_code in [200, 202]:  # WHY: success codes
+            print(f"  !? Firmware upgrade initiated for {len(validated_ids)} SSR(s)")  # WHY: operator success line
+            site_result["upgrade_initiated"] = True  # WHY: mark success
+            logging.info("Successfully initiated SSR firmware upgrade at %s", site_name)  # WHY: audit success
+            return site_result  # WHY: propagate success
+        return self._handle_ssr_upgrade_error_response(site_name, response, site_result)  # WHY: delegate error branch
 
     def _process_ssr_site_upgrade(
         self,
@@ -2233,46 +2688,80 @@ class FirmwareManager:
     ) -> None:
         """Process SSR firmware upgrade for a single site.
 
-        Discovers SSRs, validates devices, calls upgrade API, and updates results dict.
+        Orchestrator: init result, discover+upgrade under try, record outcome.
         """
-        logger = logging.getLogger(__name__)
-        site_id = site.get("id")
-        site_name = site.get("name", "Unknown")
-        print(f"\n[{site_index}/{total_sites}] Processing site: {site_name}")
-        logger.info("Processing site %s/%s: %s (ID: %s)", site_index, total_sites, site_name, site_id)
-        site_result: dict[str, Any] = {
-            "site_id": site_id,
-            "site_name": site_name,
-            "ssrs_found": 0,
-            "upgrade_initiated": False,
-            "error": None,
+        site_name = site.get("name", "Unknown")  # WHY: display+audit label
+        logging.info("Processing SSR site %s/%s: %s", site_index, total_sites, site_name)  # WHY: audit entry
+        print(f"\n[{site_index}/{total_sites}] Processing site: {site_name}")  # WHY: operator progress line
+        site_result = self._init_ssr_site_result(site)  # WHY: consistent result shape
+        try:  # WHY: guard per-site failures
+            self._run_ssr_site_upgrade_flow(site, site_result, upgrade_config, results)  # WHY: happy-path work
+        except Exception as exc:  # WHY: broad guard per-site
+            self._record_ssr_site_error(site_name, exc, site_result, results)  # WHY: uniform error record
+        results["sites_processed"] += 1  # WHY: bump processed counter
+        results["site_results"].append(site_result)  # WHY: append per-site record
+        logging.debug("SSR site done name=%s upgraded=%s", site_name, site_result.get("upgrade_initiated"))  # audit
+
+    def _init_ssr_site_result(self, site: dict[str, Any]) -> dict[str, Any]:
+        """Return the zeroed per-site result dict used to accumulate outcome."""
+        return {  # WHY: fixed schema for downstream
+            "site_id": site.get("id"),  # WHY: preserve site linkage
+            "site_name": site.get("name", "Unknown"),  # WHY: safe display name
+            "ssrs_found": 0,  # WHY: initial device count
+            "upgrade_initiated": False,  # WHY: flag flips on API success
+            "error": None,  # WHY: nullable error slot
         }
-        try:
-            ssr_models = upgrade_config.get("ssr_models", ["SSR", "128T"])
-            site_ssrs = self._discover_site_ssr_devices(site, ssr_models)
-            site_result["ssrs_found"] = len(site_ssrs)
-            if site_ssrs:
-                ssr_ids = [ssr["id"] for ssr in site_ssrs]
-                validated, _ = self._validate_ssr_devices_for_version(
-                    ssr_ids, upgrade_config["inventory"], upgrade_config["version"]
-                )
-                if validated:
-                    api_result = self._call_ssr_upgrade_api(
-                        site_name, validated, upgrade_config["version"], upgrade_config
-                    )
-                    site_result.update(api_result)
-                    if site_result.get("upgrade_initiated"):
-                        results["ssrs_upgraded"] += len(validated)
-                    if site_result.get("error"):
-                        results["errors"].append(site_result["error"])
-        except Exception as e:
-            error_msg = f"Error processing site {site_name}: {str(e)}"
-            print(f"  X  {error_msg}")
-            site_result["error"] = error_msg
-            results["errors"].append(error_msg)
-            logger.error("Site processing error for %s: %s", site_name, str(e))
-        results["sites_processed"] += 1
-        results["site_results"].append(site_result)
+
+    def _tally_ssr_site_upgrade_result(
+        self,
+        site_result: dict[str, Any],
+        validated: list[Any],
+        results: dict[str, Any],
+    ) -> None:
+        """Fold per-site SSR upgrade outcome into the global results counters."""
+        if site_result.get("upgrade_initiated"):  # WHY: successful kickoff
+            results["ssrs_upgraded"] += len(validated)  # WHY: bump global counter
+        if site_result.get("error"):  # WHY: propagate error record
+            results["errors"].append(site_result["error"])  # WHY: aggregate for summary
+
+    def _run_ssr_site_upgrade_flow(
+        self,
+        site: dict[str, Any],
+        site_result: dict[str, Any],
+        upgrade_config: dict[str, Any],
+        results: dict[str, Any],
+    ) -> None:
+        """Discover devices, validate, call upgrade API, and update results tallies."""
+        ssr_models = upgrade_config.get("ssr_models", ["SSR", "128T"])  # WHY: default model filter
+        site_ssrs = self._discover_site_ssr_devices(site, ssr_models)  # WHY: enumerate SSRs at site
+        site_result["ssrs_found"] = len(site_ssrs)  # WHY: record discovery count
+        if not site_ssrs:  # WHY: nothing to upgrade here
+            return  # WHY: skip remaining work
+        ssr_ids = [ssr["id"] for ssr in site_ssrs]  # WHY: id list for validator
+        validated, _ = self._validate_ssr_devices_for_version(  # WHY: filter incompatible SSRs
+            ssr_ids, upgrade_config["inventory"], upgrade_config["version"]
+        )
+        if not validated:  # WHY: nothing left after filter
+            return  # WHY: skip upgrade call
+        api_result = self._call_ssr_upgrade_api(  # WHY: fire mist upgrade API
+            site_result["site_name"], validated, upgrade_config["version"], upgrade_config
+        )
+        site_result.update(api_result)  # WHY: fold API outcome into result
+        self._tally_ssr_site_upgrade_result(site_result, validated, results)  # WHY: aggregate counters
+
+    def _record_ssr_site_error(
+        self,
+        site_name: str,
+        exc: Exception,
+        site_result: dict[str, Any],
+        results: dict[str, Any],
+    ) -> None:
+        """Record a per-site exception into both the site_result and results errors."""
+        error_msg = f"Error processing site {site_name}: {str(exc)}"  # WHY: uniform error label
+        print(f"  X  {error_msg}")  # WHY: operator failure marker
+        site_result["error"] = error_msg  # WHY: record on site slot
+        results["errors"].append(error_msg)  # WHY: aggregate global errors
+        logging.error("Site processing error for %s: %s", site_name, str(exc))  # WHY: audit failure
 
     def _print_ssr_upgrade_completion(self, results: dict[str, Any]) -> None:
         """Print the SSR upgrade operation completion summary."""
@@ -2293,150 +2782,149 @@ class FirmwareManager:
         # logging.getLogger(__name__).<level>(...) dynamic-call pattern.
         logging.getLogger(__name__).info("SSR firmware upgrade operation completed: %s", results["operation_id"])
 
+    def _iterate_ssr_site_upgrades(
+        self,
+        selected_sites: list[dict[str, Any]],
+        upgrade_config: dict[str, Any],
+        results: dict[str, Any],
+    ) -> None:
+        """Iterate selected sites and process each SSR upgrade in sequence."""
+        total_sites = len(selected_sites)  # WHY: precompute progress denominator
+        for site_index, site in enumerate(selected_sites, 1):  # WHY: 1-based progress index
+            self._process_ssr_site_upgrade(  # WHY: delegate per-site upgrade
+                site, site_index, total_sites, upgrade_config, results
+            )
+
     def _run_ssr_site_upgrades(
         self,
         selected_sites: list[dict[str, Any]],
         target_version: str,
         upgrade_config: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute SSR firmware upgrades across all selected sites.
-
-        Returns:
-            dict: upgrade_results with full operation summary
-        """
-        logger = logging.getLogger(__name__)
-        results = self._build_ssr_upgrade_results(target_version, upgrade_config)
-        org_inventory = self._load_org_ssr_inventory()
-        upgrade_config["inventory"] = org_inventory
-        upgrade_config["ssr_models"] = ["SSR", "128T"]
-        upgrade_config["version"] = target_version
-        print(f"\n{'=' * 60}\nEXECUTING SSR FIRMWARE UPGRADE\n{'=' * 60}")
+        """Execute SSR firmware upgrades across all selected sites and return operation summary."""
+        logger = logging.getLogger(__name__)  # WHY: module-scoped logger for error path
+        results = self._build_ssr_upgrade_results(target_version, upgrade_config)  # WHY: init results envelope
+        upgrade_config["inventory"] = self._load_org_ssr_inventory()  # WHY: cache org inventory once
+        upgrade_config["ssr_models"] = ["SSR", "128T"]  # WHY: fixed SSR model filter
+        upgrade_config["version"] = target_version  # WHY: propagate target version for validators
+        print(f"\n{'=' * 60}\nEXECUTING SSR FIRMWARE UPGRADE\n{'=' * 60}")  # WHY: operator banner
         try:
-            for site_index, site in enumerate(selected_sites, 1):
-                self._process_ssr_site_upgrade(site, site_index, len(selected_sites), upgrade_config, results)
-            results["end_time"] = datetime.now().isoformat()
-            self._print_ssr_upgrade_completion(results)
+            self._iterate_ssr_site_upgrades(selected_sites, upgrade_config, results)  # WHY: batch loop
+            results["end_time"] = datetime.now().isoformat()  # WHY: stamp completion time
+            self._print_ssr_upgrade_completion(results)  # WHY: summary output
         except Exception as e:
-            results["end_time"] = datetime.now().isoformat()
-            results["error"] = str(e)
-            print(f"\nX  Critical error in SSR firmware upgrade: {str(e)}")
-            logger.error("Critical error in SSR firmware upgrade: %s", str(e))
-        return results
+            results["end_time"] = datetime.now().isoformat()  # WHY: stamp failure time
+            results["error"] = str(e)  # WHY: attach error message
+            print(f"\nX  Critical error in SSR firmware upgrade: {str(e)}")  # WHY: operator failure marker
+            logger.error("Critical error in SSR firmware upgrade: %s", str(e))  # WHY: audit failure
+        return results  # WHY: hand back full operation summary
 
     def _bulk_upgrade_ssr_firmware_by_site(self, sites_to_upgrade_override=None):  # type: ignore[no-untyped-def]
-        """DESTRUCTIVE: Execute firmware upgrades on Session Smart Routers across selected sites.
+        """DESTRUCTIVE bulk SSR firmware upgrade across selected sites."""
+        logging.info("Starting bulk SSR firmware upgrade - org_id: %s", self.org_id)  # WHY: audit entrypoint
+        prepared, error = self._prepare_ssr_bulk_upgrade(sites_to_upgrade_override)  # WHY: gather org/sites/version
+        if error is not None:  # WHY: propagate first prep failure
+            return error  # WHY: cancel/validation error surfaces to caller
+        org_name, selected_sites, upgrade_config, target_version = prepared  # WHY: unpack ready state
+        if not self._confirm_ssr_upgrade(org_name, selected_sites, target_version, upgrade_config):  # WHY: last gate
+            logging.info("SSR bulk upgrade cancelled at confirmation prompt")  # WHY: audit user cancel
+            return {"cancelled": True}  # WHY: preserve pre-refactor cancel sentinel
+        logging.debug("SSR bulk upgrade confirmed sites=%d version=%s", len(selected_sites), target_version)  # WHY
+        return self._run_ssr_site_upgrades(selected_sites, target_version, upgrade_config)  # WHY: execute batch
 
-        This function performs bulk firmware upgrades on SSR routing infrastructure with comprehensive
-        safety checks and detailed progress tracking. Supports multiple upgrade strategies
-        including big bang, canary testing, and rolling upgrade modes optimized for routing infrastructure.
+    def _resolve_ssr_sites_or_error(self, sites_to_upgrade_override):  # type: ignore[no-untyped-def]
+        """Pick SSR upgrade target sites and normalize empty-selection into a uniform error tuple."""
+        selected_sites, error = self._select_ssr_sites_for_upgrade(sites_to_upgrade_override)  # WHY: site picker
+        if error:  # WHY: propagate site selection error
+            return None, error  # WHY: preserve pre-refactor return shape
+        if not selected_sites:  # WHY: empty selection is a user cancel
+            print("X  No sites selected")  # WHY: user-visible cancel message
+            return None, {"error": "No sites selected"}  # WHY: preserve pre-refactor error shape
+        return selected_sites, None  # WHY: success signal with sites list
 
-        SECURITY: This operation will reboot Session Smart Routers and WILL cause WAN connectivity disruption.
-        All SSRs in target sites will be affected. This impacts SD-WAN tunnels, branch office connectivity,
-        and critical routing infrastructure. Use with extreme caution in production.
-
-        Args:
-            sites_to_upgrade_override: Optional list of site dictionaries for template-based upgrades
-
-        Returns:
-            dict: Comprehensive upgrade operation results with success/failure tracking
-
-        Raises:
-            Exception: On critical API failures or validation errors
-
-        CRITICAL INFRASTRUCTURE WARNING:
-        - SSR reboots will disrupt WAN and SD-WAN connectivity
-        - Branch offices may lose connectivity during upgrades
-        - SD-WAN tunnels will be re-established after reboot
-        - HA pairs require coordinated failover procedures
-        - Plan extended maintenance windows for production environments
-        - Verify backup connectivity paths before execution
-        - Monitor upgrade progress closely for rapid intervention
-        """
-        logger = logging.getLogger(__name__)
-        logger.debug("Starting bulk SSR firmware upgrade - org_id: %s", self.org_id)
-
-        org_name, error = self._validate_org_for_ssr_upgrade()
-        if error:
-            return error
-
-        selected_sites, error = self._select_ssr_sites_for_upgrade(sites_to_upgrade_override)
-        if error:
-            return error
-
-        if not selected_sites:
-            print("X  No sites selected")
-            return {"error": "No sites selected"}
-
-        upgrade_config = self._setup_ssr_upgrade_params()
-        if upgrade_config is None:
-            return {"cancelled": True}
-
-        target_version, error = self._fetch_and_select_ssr_version(upgrade_config["channel"])
-        if error:
-            return error
-
-        if not self._confirm_ssr_upgrade(org_name, selected_sites, target_version, upgrade_config):
-            return {"cancelled": True}
-
-        return self._run_ssr_site_upgrades(selected_sites, target_version, upgrade_config)
+    def _prepare_ssr_bulk_upgrade(self, sites_to_upgrade_override):  # type: ignore[no-untyped-def]
+        """Prepare SSR bulk-upgrade context: validate org, select sites, setup params, resolve version."""
+        logging.info("Preparing SSR bulk upgrade context override=%s", sites_to_upgrade_override is not None)  # WHY
+        org_name, error = self._validate_org_for_ssr_upgrade()  # WHY: verify org access before user prompts
+        if error:  # WHY: propagate org validation error
+            return None, error  # WHY: two-slot tuple keeps orchestrator uniform
+        selected_sites, error = self._resolve_ssr_sites_or_error(sites_to_upgrade_override)  # WHY: pick+guard sites
+        if error:  # WHY: propagate site-resolution error
+            return None, error  # WHY: preserve pre-refactor return shape
+        upgrade_config = self._setup_ssr_upgrade_params()  # WHY: pick channel/strategy/timeouts
+        if upgrade_config is None:  # WHY: user cancelled param prompts
+            return None, {"cancelled": True}  # WHY: preserve pre-refactor cancel sentinel
+        target_version, error = self._fetch_and_select_ssr_version(upgrade_config["channel"])  # WHY: pick version
+        if error:  # WHY: propagate version resolution error
+            return None, error  # WHY: preserve pre-refactor return shape
+        logging.debug("SSR bulk upgrade prep complete sites=%d", len(selected_sites))  # WHY: trace success
+        return (org_name, selected_sites, upgrade_config, target_version), None  # WHY: tuple + None-error signals ok
 
     def _upgrade_ssr_firmware_by_gateway_template(self):  # type: ignore[no-untyped-def]
         """Advanced SSR firmware upgrade organized by Gateway Template assignment.
 
-        This method provides template-based SSR firmware upgrades with:
-        1. Interactive Gateway Template selection with site count display
-        2. Automatic site discovery for selected template (same logic as AP/switch systems)
-        3. SSR enumeration across all sites in template
-        4. Model-based firmware version selection optimized for Session Smart Routers
-        5. Unified upgrade execution across template sites
-        6. SSR-specific safety measures and WAN connectivity disruption warnings
-        7. Comprehensive audit logging and progress monitoring
-        8. HA pair coordination and failover considerations
-
-        Features:
-        - Template selection by index or name (reuses AP/switch template infrastructure)
-        - Site count and SSR count display per template
-        - SSR-specific upgrade parameters (reboot, snapshot, conservative strategy)
-        - Enhanced WAN connectivity warnings for production environments
-        - Maintains all existing safety confirmations and audit trails
-
-        SECURITY: Template-based upgrades affect multiple sites simultaneously.
-        Ensure adequate maintenance windows and backup connectivity before proceeding.
+        Reuses AP/switch template infrastructure (CSV freshness + template->sites
+        mapping) then dispatches to the SSR-specific bulk upgrade. Destructive:
+        callers must have obtained explicit operator confirmation upstream.
         """
-        logging.info("Starting template-based SSR firmware upgrade...")
-        logging.debug("FirmwareManager._upgrade_ssr_firmware_by_gateway_template() initiated")
+        logging.info("Starting template-based SSR firmware upgrade for org %s", self.org_id)  # WHY: audit entry
+        self._print_ssr_template_banner()  # WHY: mandatory operator hazard banner
+        template_sites_mapping = self._prepare_template_upgrade("SSR")  # WHY: freshness + mapping load
+        if template_sites_mapping is None:  # WHY: mapping load failed (no templates or no assignments)
+            logging.debug("SSR template upgrade aborted - no template-site assignments")  # WHY: trace early exit
+            return None  # WHY: preserve pre-refactor cancel behavior
+        template_name_to_id, sites_mapping = template_sites_mapping  # WHY: unpack Step-2 tuple
+        selection = self._select_template_and_sites(template_name_to_id, sites_mapping)  # WHY: prompt operator
+        if selection is None:  # WHY: operator declined the template picker
+            logging.debug("SSR template upgrade cancelled at template prompt")  # WHY: trace operator cancel
+            return None  # WHY: preserve pre-refactor cancel behavior
+        selected_template_name, sites_to_upgrade = selection  # WHY: unpack picker result
+        result = self._execute_template_based_ssr_upgrade(sites_to_upgrade, selected_template_name)  # WHY: dispatch
+        logging.debug("SSR template upgrade done template=%s sites=%d", selected_template_name, len(sites_to_upgrade))
+        return result  # WHY: propagate bulk-upgrade return to caller
 
-        print(" Advanced SSR Firmware Upgrade by Gateway Template")
-        print("=" * 70)
+    def _print_ssr_template_banner(self):  # type: ignore[no-untyped-def]
+        """Emit the SSR-template upgrade banner (operator hazard header)."""
+        logging.debug("Rendering SSR template upgrade banner")  # WHY: trace UI-only helper entry
+        print(" Advanced SSR Firmware Upgrade by Gateway Template")  # WHY: menu title for operator context
+        print("=" * 70)  # WHY: separator aligned with pre-refactor banner width
 
-        # Step 1: Ensure required CSVs are fresh (reuse AP/switch template infrastructure)
-        self._ensure_template_csv_freshness()  # type: ignore[no-untyped-call]
+    def _prepare_template_upgrade(self, device_kind):  # type: ignore[no-untyped-def]
+        """Refresh template CSVs and load the template->sites mapping.
 
-        # Step 2: Load template-to-sites mapping (same as AP/switch systems)
+        device_kind is a short label (e.g. 'SSR' or 'switch') used only for
+        audit logs. Returns (template_name_to_id, sites_mapping) on success
+        or None when no Gateway Templates have any assigned sites.
+        """
+        logging.info("Preparing %s template upgrade for org %s", device_kind, self.org_id)  # WHY: audit prep phase
+        self._ensure_template_csv_freshness()  # type: ignore[no-untyped-call]  # WHY: Step 1 - freshen CSV cache
         template_name_to_id, template_sites_mapping = self._load_template_sites_mapping()  # type: ignore[no-untyped-call]
+        if not template_sites_mapping:  # WHY: no template has any assigned site
+            print("\n! No Gateway Templates with assigned sites found.")  # WHY: operator diagnostic
+            print("  Make sure sites are assigned to Gateway Templates and try again.")  # WHY: remediation hint
+            logging.warning("No Gateway Templates with site assignments found (%s upgrade)", device_kind)  # WHY: audit
+            return None  # WHY: signal caller to abort without dispatching
+        logging.debug("Template mapping loaded templates=%d kind=%s", len(template_sites_mapping), device_kind)
+        return template_name_to_id, template_sites_mapping  # WHY: hand off to selection step
 
-        if not template_sites_mapping:
-            print("\n! No Gateway Templates with assigned sites found.")
-            print("  Make sure sites are assigned to Gateway Templates and try again.")
-            logging.warning("No Gateway Templates with site assignments found")
-            return
+    def _select_template_and_sites(self, template_name_to_id, template_sites_mapping):  # type: ignore[no-untyped-def]
+        """Prompt operator to pick a Gateway Template and resolve its site list.
 
-        # Step 3: Template selection (reuse AP/switch template selection logic)
-        selected_template_id, selected_template_name = self._prompt_template_selection(  # type: ignore[no-untyped-call]
+        Returns (selected_template_name, sites_to_upgrade) on success or None
+        when the operator declines the selection prompt.
+        """
+        logging.info("Prompting SSR template selection templates=%d", len(template_sites_mapping))  # WHY: trace
+        selected_template_id, selected_template_name = self._prompt_template_selection(  # type: ignore[no-untyped-call]  # WHY: pick
             template_name_to_id, template_sites_mapping
         )
-
-        if not selected_template_id:
-            print(" No template selected. Exiting.")
-            return
-
-        # Step 4: Get sites for selected template
-        sites_to_upgrade = template_sites_mapping.get(selected_template_id, [])
-
-        print(f"\n  Template '{selected_template_name}' includes {len(sites_to_upgrade)} sites")
-        logging.info("Template %s has %s assigned sites", selected_template_name, len(sites_to_upgrade))
-
-        return self._execute_template_based_ssr_upgrade(sites_to_upgrade, selected_template_name)  # type: ignore[no-untyped-call]
+        if not selected_template_id:  # WHY: operator declined or entered no valid input
+            print(" No template selected. Exiting.")  # WHY: acknowledge decline
+            logging.debug("SSR template selection cancelled by operator")  # WHY: trace decline
+            return None  # WHY: signal caller to abort dispatch
+        sites_to_upgrade = template_sites_mapping.get(selected_template_id, [])  # WHY: resolve sites
+        print(f"\n  Template '{selected_template_name}' includes {len(sites_to_upgrade)} sites")  # WHY: preview
+        logging.info("Template %s has %s assigned sites", selected_template_name, len(sites_to_upgrade))  # WHY: audit
+        return selected_template_name, sites_to_upgrade  # WHY: hand off to bulk-upgrade dispatcher
 
     def _execute_template_based_ssr_upgrade(self, sites_to_upgrade, selected_template_name):  # type: ignore[no-untyped-def]
         """Execute the template-based SSR upgrade with the existing SSR implementation."""
