@@ -31,7 +31,7 @@ with patch.dict(
         "mistapi.api.v1.const.device_models": MagicMock(),
     },
 ):
-    from src.firmware.bulk_ap_upgrader import BulkAPFirmwareUpgrader
+    from src.firmware.bulk_ap_upgrader import BulkAPFirmwareUpgrader, BulkAPUpgraderConfig
 
 
 # ===================================================================
@@ -79,8 +79,9 @@ def _make_upgrader(**kwargs):
         "check_firmware_status_fn": MagicMock(),
         "get_org_id_fn": MagicMock(return_value="org-123"),
     }
-    defaults.update(kwargs)
-    return BulkAPFirmwareUpgrader(**defaults)
+    defaults.update(kwargs)  # WHY: preserve per-test override semantics before we freeze the config
+    config = BulkAPUpgraderConfig(**defaults)  # WHY: build immutable config from merged dict per contracts/constructor.md
+    return BulkAPFirmwareUpgrader(config)  # WHY: single-arg construction per FR-004 / Constitution I
 
 
 # ===================================================================

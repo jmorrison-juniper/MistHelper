@@ -19791,23 +19791,27 @@ class BulkAPFirmwareUpgrader:
 
     def execute(self):
         """Execute - delegates to extracted module."""
+        # WHY: local import keeps MistHelper import cheap for menus that never touch bulk-AP
         from src.firmware.bulk_ap_upgrader import BulkAPFirmwareUpgrader as _Impl
+        from src.firmware.bulk_ap_upgrader import BulkAPUpgraderConfig
 
-        upgrader = _Impl(
-            org_id=self.org_id,
-            apisession=apisession,
-            sites_override=self.sites_override,
-            dry_run=self.dry_run,
-            safe_input_fn=InputUtils.safe_input,
-            check_stop_fn=ConfigUtils.check_stop_signal,
-            fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
+        # WHY: build immutable config once from wrapper state + globals per FR-004
+        config = BulkAPUpgraderConfig(
+            org_id=self.org_id,  # WHY: propagate the org id captured at wrapper construction
+            apisession=apisession,  # WHY: ambient session used by menu 195
+            sites_override=self.sites_override,  # WHY: pre-selected sites bypass interactive prompt
+            dry_run=self.dry_run,  # WHY: dry-run flag flows through unchanged
+            safe_input_fn=InputUtils.safe_input,  # WHY: preserves Ctrl+C / stop-signal behavior
+            check_stop_fn=ConfigUtils.check_stop_signal,  # WHY: polled between long steps to abort
+            fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,  # WHY: cache-aware site fetch
+            get_csv_path_fn=FilePathUtils.get_csv_path,  # WHY: OS-safe CSV path resolution
+            # WHY: lazy so we resolve org_id at the moment of use
             check_firmware_status_fn=lambda: FirmwareManager.create(
                 apisession, ConfigUtils.get_cached_or_prompted_org_id()
             ).check_firmware_upgrade_status(),
-            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
+            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,  # WHY: seam so upgrader can re-prompt
         )
-        upgrader.execute()
+        _Impl(config).execute()  # WHY: single-arg constructor call per contracts/constructor.md
 
 
 # NOTE: bulk_upgrade_ap_firmware_by_site_impl removed - use BulkAPFirmwareUpgrader class directly
