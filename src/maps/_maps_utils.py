@@ -26,9 +26,7 @@ _MAX_FILENAME_LEN = 100
 _INVALID_FILENAME_CHARS = '<>:"/\\|?*'
 
 
-def flatten_dict_recursively(
-    d: dict[str, Any], parent_key: str = "", sep: str = "_"
-) -> dict[str, Any]:
+def flatten_dict_recursively(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
     """Flatten nested dicts/lists into a single flat mapping.
 
     Nested dicts contribute joined keys; lists of dicts contribute
@@ -58,9 +56,7 @@ def _flatten_list_value(value: list[Any], new_key: str, sep: str) -> list[tuple[
     if value and isinstance(value[0], dict):
         flattened: list[tuple[str, Any]] = []
         for idx, item in enumerate(value):
-            flattened.extend(
-                flatten_dict_recursively(item, f"{new_key}{sep}{idx}", sep=sep).items()
-            )
+            flattened.extend(flatten_dict_recursively(item, f"{new_key}{sep}{idx}", sep=sep).items())
         return flattened
     return [(new_key, str(value))]
 

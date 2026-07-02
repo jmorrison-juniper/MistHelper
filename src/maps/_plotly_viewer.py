@@ -73,6 +73,7 @@ except ImportError:  # pragma: no cover - mistapi absent means viewer is unreach
 try:
     from tqdm import tqdm  # type: ignore[import-untyped]
 except ImportError:
+
     def tqdm(iterable, **_kwargs):
         """No-op fallback for tqdm progress bar."""
         return iterable

@@ -272,6 +272,4 @@ def backup_map_geometry(
     Kept as a module-level factory so callers can invoke the backup
     without instantiating :class:`_MapsBackup` directly.
     """
-    return _MapsBackup(maps_manager)._backup_map_geometry(
-        api_session, site_id, map_id, map_name, backup_reason
-    )
+    return _MapsBackup(maps_manager)._backup_map_geometry(api_session, site_id, map_id, map_name, backup_reason)

@@ -11,7 +11,6 @@ the container heuristics fire; direct execution stays on localhost.
 
 from __future__ import annotations
 
-import json as _json
 import logging
 from typing import Any, Callable
 
@@ -23,47 +22,49 @@ logger = logging.getLogger(__name__)
 
 
 def _handle_map_data_request(
-api_session,
-all_sites: list[dict],
-site_id: str,
-map_id: str,
-collect_payload_fn: Callable,
-build_response_fn: Callable,
+    api_session,
+    all_sites: list[dict],
+    site_id: str,
+    map_id: str,
+    collect_payload_fn: Callable,
+    build_response_fn: Callable,
 ):
-        """Top-level orchestrator for the Flask /api/map endpoint. Returns a Flask Response."""
-        from flask import jsonify
+    """Top-level orchestrator for the Flask /api/map endpoint. Returns a Flask Response."""
+    from flask import jsonify
 
-        logging.info("[Flask API] Fetching map data for site %s, map %s", site_id, map_id)
-        try:
-            map_data, layers = collect_payload_fn(api_session, all_sites, site_id, map_id)
-            if map_data is None:
-                return jsonify({"error": "Map not found"}), 404
-            payload = build_response_fn(site_id, map_id, map_data, layers)
-            return jsonify(payload)
-        except Exception as e:
-            logging.exception("Error fetching map data: %s", e)
-            return jsonify({"error": "Failed to fetch map data. Check server logs for details."}), 500
+    logging.info("[Flask API] Fetching map data for site %s, map %s", site_id, map_id)
+    try:
+        map_data, layers = collect_payload_fn(api_session, all_sites, site_id, map_id)
+        if map_data is None:
+            return jsonify({"error": "Map not found"}), 404
+        payload = build_response_fn(site_id, map_id, map_data, layers)
+        return jsonify(payload)
+    except Exception as e:
+        logging.exception("Error fetching map data: %s", e)
+        return jsonify({"error": "Failed to fetch map data. Check server logs for details."}), 500
+
 
 def _render_viewer_page(
-html_template: str,
-json_module,
-render_template_string,
-initial_site_id: str,
-initial_map_id: str,
-all_sites: list[dict],
-all_maps: list[dict],
+    html_template: str,
+    json_module,
+    render_template_string,
+    initial_site_id: str,
+    initial_map_id: str,
+    all_sites: list[dict],
+    all_maps: list[dict],
 ):
-        """Render the Flask root page; injects sorted-sites + maps JSON into the HTML template."""
-        sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())
-        sites_json = json_module.dumps([{"id": s.get("id"), "name": s.get("name", "Unnamed")} for s in sites_sorted])
-        maps_json = json_module.dumps([{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in all_maps])
-        return render_template_string(
-            html_template,
-            initial_site_id=initial_site_id,
-            initial_map_id=initial_map_id,
-            all_sites_json=sites_json,
-            all_maps_json=maps_json,
-        )
+    """Render the Flask root page; injects sorted-sites + maps JSON into the HTML template."""
+    sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())
+    sites_json = json_module.dumps([{"id": s.get("id"), "name": s.get("name", "Unnamed")} for s in sites_sorted])
+    maps_json = json_module.dumps([{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in all_maps])
+    return render_template_string(
+        html_template,
+        initial_site_id=initial_site_id,
+        initial_map_id=initial_map_id,
+        all_sites_json=sites_json,
+        all_maps_json=maps_json,
+    )
+
 
 def _handle_site_maps_request(api_session, jsonify, site_id: str):
     """Flask /api/site/<id>/maps handler -- returns the site's maps list as JSON."""
@@ -81,6 +82,7 @@ def _handle_site_maps_request(api_session, jsonify, site_id: str):
             500,
         )
 
+
 def _fetch_map_image_bytes(api_session, site_id: str, map_id: str):
     """Look up the map record, fetch its image bytes with auth. Returns (response, error_tuple)."""
     import requests as req_lib
@@ -95,6 +97,7 @@ def _fetch_map_image_bytes(api_session, site_id: str, map_id: str):
     headers = {"Authorization": f"Token {token}"} if token else {}
     image_response = req_lib.get(image_url, headers=headers, timeout=30)
     return image_response, None
+
 
 def _handle_map_image_request(api_session, site_id: str, map_id: str):
     """Flask /api/map-image/<site>/<map> handler -- proxies the authenticated image fetch."""
@@ -114,6 +117,7 @@ def _handle_map_image_request(api_session, site_id: str, map_id: str):
         logging.exception("Error fetching map image: %s", e)
         return "Failed to fetch map image. Check server logs for details.", 500
 
+
 def _resolve_flask_bind_address() -> tuple[str, int]:
     """Return ``(host, port)`` for the Flask server, binding all interfaces in a container."""
     port = 8050
@@ -121,6 +125,7 @@ def _resolve_flask_bind_address() -> tuple[str, int]:
         logging.debug("Container detected: binding Flask to 0.0.0.0")
         return "0.0.0.0", port  # nosec B104 - container must bind all interfaces
     return "127.0.0.1", port
+
 
 def _print_flask_viewer_banner(host: str, port: int) -> None:
     """Print the pre-launch ASCII banner that lists URL + key features."""
@@ -135,6 +140,7 @@ def _print_flask_viewer_banner(host: str, port: int) -> None:
     print("!   - Refresh button for live data")
     print("! Press Ctrl+C to stop server")
     print("-" * 80)
+
 
 def _maybe_open_browser(port: int) -> None:
     """Spawn a daemon thread to open the browser after a short delay, unless in a container."""
@@ -153,6 +159,7 @@ def _maybe_open_browser(port: int) -> None:
 
     threading.Thread(target=open_browser, daemon=True).start()
 
+
 def _run_flask_server(flask_app, host: str, port: int) -> None:
     """Run the Flask server until interrupted; mirror the original KeyboardInterrupt path."""
     try:
@@ -165,38 +172,42 @@ def _run_flask_server(flask_app, host: str, port: int) -> None:
         logging.exception("Error running Flask server: %s", e)
         print(f"\n! Error running map viewer: {e}")
 
+
 def launch_flask_viewer(
-api_session,
-initial_site_id: str,
-initial_map_id: str,
-all_sites: list[dict],
-all_maps: list[dict],
-collect_payload_fn: Callable,
-build_response_fn: Callable,
+    api_session,
+    initial_site_id: str,
+    initial_map_id: str,
+    all_sites: list[dict],
+    all_maps: list[dict],
+    collect_payload_fn: Callable,
+    build_response_fn: Callable,
 ):
-        """Launch interactive Flask-based map viewer (simpler alternative to Dash).
+    """Launch interactive Flask-based map viewer (simpler alternative to Dash).
 
-        This viewer uses Flask for server-side rendering and Plotly.js for client-side
-        map display. Site/map switching is handled via JavaScript fetch() calls to
-        Flask API endpoints, which is more reliable than Dash callbacks.
+    This viewer uses Flask for server-side rendering and Plotly.js for client-side
+    map display. Site/map switching is handled via JavaScript fetch() calls to
+    Flask API endpoints, which is more reliable than Dash callbacks.
 
-        Args:
-            initial_site_id: Site ID to load initially
-            initial_map_id: Map ID to load initially
-            all_sites: List of all sites in the organization
-            all_maps: List of maps for the initial site
-        """
-        import json as json_module
+    Args:
+        api_session: Authenticated mistapi session used for API calls.
+        initial_site_id: Site ID to load initially
+        initial_map_id: Map ID to load initially
+        all_sites: List of all sites in the organization
+        all_maps: List of maps for the initial site
+        collect_payload_fn: Callable that assembles the map payload dict.
+        build_response_fn: Callable that builds the map-data HTTP response.
+    """
+    import json as json_module
 
-        from flask import Flask, jsonify, render_template_string
+    from flask import Flask, jsonify, render_template_string
 
-        logging.info("_launch_flask_viewer: Starting Flask viewer for site %s, map %s", initial_site_id, initial_map_id)
+    logging.info("_launch_flask_viewer: Starting Flask viewer for site %s, map %s", initial_site_id, initial_map_id)
 
-        flask_app = Flask(__name__)
-        flask_app.config["JSON_SORT_KEYS"] = False
+    flask_app = Flask(__name__)
+    flask_app.config["JSON_SORT_KEYS"] = False
 
-        # HTML template with embedded Plotly.js
-        HTML_TEMPLATE = """
+    # HTML template with embedded Plotly.js
+    HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -1197,37 +1208,35 @@ build_response_fn: Callable,
 </html>
         """
 
-        @flask_app.route("/")
-        def index():
-            """Serve the main viewer page."""
-            return _render_viewer_page(
-                HTML_TEMPLATE,
-                json_module,
-                render_template_string,
-                initial_site_id,
-                initial_map_id,
-                all_sites,
-                all_maps,
-            )
+    @flask_app.route("/")
+    def index():
+        """Serve the main viewer page."""
+        return _render_viewer_page(
+            HTML_TEMPLATE,
+            json_module,
+            render_template_string,
+            initial_site_id,
+            initial_map_id,
+            all_sites,
+            all_maps,
+        )
 
-        @flask_app.route("/api/site/<site_id>/maps")
-        def get_site_maps(site_id):
-            """API endpoint -- proxies to _handle_site_maps_request."""
-            return _handle_site_maps_request(api_session, jsonify, site_id)
+    @flask_app.route("/api/site/<site_id>/maps")
+    def get_site_maps(site_id):
+        """API endpoint -- proxies to _handle_site_maps_request."""
+        return _handle_site_maps_request(api_session, jsonify, site_id)
 
-        @flask_app.route("/api/map-image/<site_id>/<map_id>")
-        def get_map_image(site_id, map_id):
-            """Proxy endpoint -- delegates to _handle_map_image_request."""
-            return _handle_map_image_request(api_session, site_id, map_id)
+    @flask_app.route("/api/map-image/<site_id>/<map_id>")
+    def get_map_image(site_id, map_id):
+        """Proxy endpoint -- delegates to _handle_map_image_request."""
+        return _handle_map_image_request(api_session, site_id, map_id)
 
-        @flask_app.route("/api/map/<site_id>/<map_id>")
-        def get_map_data(site_id, map_id):
-            """Delegate to MapsManager._handle_map_data_request -- routes Flask request to the orchestrator."""
-            return _handle_map_data_request(
-                api_session, all_sites, site_id, map_id, collect_payload_fn, build_response_fn
-            )
+    @flask_app.route("/api/map/<site_id>/<map_id>")
+    def get_map_data(site_id, map_id):
+        """Delegate to MapsManager._handle_map_data_request -- routes Flask request to the orchestrator."""
+        return _handle_map_data_request(api_session, all_sites, site_id, map_id, collect_payload_fn, build_response_fn)
 
-        flask_host, flask_port = _resolve_flask_bind_address()
-        _print_flask_viewer_banner(flask_host, flask_port)
-        _maybe_open_browser(flask_port)
-        _run_flask_server(flask_app, flask_host, flask_port)
+    flask_host, flask_port = _resolve_flask_bind_address()
+    _print_flask_viewer_banner(flask_host, flask_port)
+    _maybe_open_browser(flask_port)
+    _run_flask_server(flask_app, flask_host, flask_port)

@@ -375,19 +375,11 @@ class _MapsCoverage:
         }
 
 
-def collect_map_payload(
-    maps_manager: Any, api_session, all_sites: list, site_id: str, map_id: str
-):
+def collect_map_payload(maps_manager: Any, api_session, all_sites: list, site_id: str, map_id: str):
     """Entry point mirroring MapsManager._collect_map_payload."""
-    return _MapsCoverage(maps_manager)._collect_map_payload(
-        api_session, all_sites, site_id, map_id
-    )
+    return _MapsCoverage(maps_manager)._collect_map_payload(api_session, all_sites, site_id, map_id)
 
 
-def build_map_data_response(
-    maps_manager: Any, site_id: str, map_id: str, map_data: dict, layers: tuple
-) -> dict:
+def build_map_data_response(maps_manager: Any, site_id: str, map_id: str, map_data: dict, layers: tuple) -> dict:
     """Entry point mirroring MapsManager._build_map_data_response."""
-    return _MapsCoverage(maps_manager)._build_map_data_response(
-        site_id, map_id, map_data, layers
-    )
+    return _MapsCoverage(maps_manager)._build_map_data_response(site_id, map_id, map_data, layers)
