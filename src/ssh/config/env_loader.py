@@ -46,12 +46,7 @@ class EnvSshConfigLoader:
     def load(self, env_file: str = ".env") -> dict[str, Any]:
         """Return SSH config keys (hosts/username/password/commands) from ``env_file``."""
         logger.info("EnvSshConfigLoader.load: env_file=%s", env_file)  # Pre-action log
-        config: dict[str, Any] = {  # nosec B105 - empty password is a sentinel for "not provided"
-            "hosts": [],
-            "username": None,
-            "password": None,
-            "commands": [],
-        }
+        config = self._build_empty_config()  # Sentinel-only default config populated below
         if not self._is_safe_env_path(env_file):  # Reject obvious path-traversal / absolute paths
             return config  # Return empty config so callers fall back to interactive prompts
         if not os.path.exists(env_file):  # File missing — nothing to load
@@ -62,14 +57,31 @@ class EnvSshConfigLoader:
             self._populate_via_dotenv(env_file, config)  # Delegated to focused helper
         else:
             self._populate_via_manual_parse(env_file, config)  # Fallback parser path
-        logger.debug(  # Post-action log (never log password — only counts/presence)
+        self._log_load_result(config)  # Post-action log (never log password — only counts/presence)
+        return config  # Final assembled config
+
+    @staticmethod
+    def _build_empty_config() -> dict[str, Any]:
+        """Return the sentinel-only default config dict populated by ``load``."""
+        # WHY: extracting keeps ``load`` under the 25-line STRUCT-LENGTH cap.
+        return {  # nosec B105 - empty password is a sentinel for "not provided"
+            "hosts": [],
+            "username": None,
+            "password": None,
+            "commands": [],
+        }
+
+    @staticmethod
+    def _log_load_result(config: dict[str, Any]) -> None:
+        """Emit the post-load debug log with counts/presence only (never the password)."""
+        # WHY: extracting the multi-line debug call keeps ``load`` under 25 physical lines.
+        logger.debug(
             "EnvSshConfigLoader.load: hosts=%s username_present=%s commands=%s password_present=%s",
             len(config.get("hosts", [])),
             bool(config.get("username")),
             len(config.get("commands", [])),
             bool(config.get("password")),
         )
-        return config  # Final assembled config
 
     @staticmethod
     def _is_safe_env_path(env_file: str) -> bool:
@@ -111,17 +123,22 @@ class EnvSshConfigLoader:
         """Populate ``config`` with a defensive manual line-by-line parser."""
         try:
             with open(env_file, encoding="utf-8", errors="ignore") as file_handle:  # Tolerate decode errors
-                for line_count, raw_line in enumerate(file_handle, 1):  # 1-based for the cap comparison
-                    if line_count > _MAX_MANUAL_LINES:  # Stop runaway files defensively
-                        print("[WARNING] .env file has too many lines, stopping at 1000")  # Preserve user-facing string
-                        break  # Exit the read loop
-                    self._apply_env_line(raw_line, config)  # Delegated single-line handler
+                self._read_and_apply_lines(file_handle, config)  # Delegated read+cap+dispatch loop
         except UnicodeDecodeError as error:  # Should be rare due to errors="ignore" but kept for parity
             print(f"[WARNING] .env file encoding error: {error}")  # Preserve user-facing string
         except OSError as error:  # Filesystem-level errors
             print(f"[WARNING] Error reading {env_file}: {error}")  # Preserve user-facing string
         except Exception as error:  # noqa: BLE001 - mirror original broad catch
             print(f"[WARNING] Unexpected error reading {env_file}: {error}")  # Preserve user-facing string
+
+    def _read_and_apply_lines(self, file_handle: Any, config: dict[str, Any]) -> None:
+        """Iterate the file handle, cap runaway files, and apply each line to ``config``."""
+        # WHY: extracting the loop drops _populate_via_manual_parse CC from 6 to 4.
+        for line_count, raw_line in enumerate(file_handle, 1):  # 1-based for the cap comparison
+            if line_count > _MAX_MANUAL_LINES:  # Stop runaway files defensively
+                print("[WARNING] .env file has too many lines, stopping at 1000")  # Preserve user-facing string
+                return  # Exit early once the cap is exceeded
+            self._apply_env_line(raw_line, config)  # Delegated single-line handler
 
     def _apply_env_line(self, raw_line: str, config: dict[str, Any]) -> None:
         """Parse one raw .env line and apply it to ``config`` if it's a known key."""
