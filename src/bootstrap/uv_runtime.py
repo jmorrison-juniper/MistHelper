@@ -1,32 +1,35 @@
 """UV runtime helper utilities used by dependency bootstrap workflows."""
 
-from __future__ import annotations
+from __future__ import annotations  # Enable PEP 604 union types on older Python targets.
 
-import logging
-from typing import Any
+import logging  # Stdlib logger for diagnostic breadcrumbs during version parsing.
+from typing import Any  # Type hint used by build_runtime_helpers return dict.
 
 _VERSION_OPERATORS = (">=", "<=", "==", "!=", ">", "<")  # 2-char operators listed first to match before 1-char.
 
 
-class UVRuntimeHelper:
+class UVRuntimeHelper:  # Groups version parsing/comparison helpers under one namespace.
     """Helper methods for comparing and validating package versions."""
 
     @staticmethod
-    def parse_version(version_str: str) -> tuple[int, ...]:
+    def _parse_numeric_prefix(raw_part: str) -> int:  # Extracted to keep parse_version CC <= 5.
+        """Return the leading numeric prefix of a version segment as an int (0 if empty)."""
+        # WHY: extracted from parse_version so the outer function stays CC 2 (try/except only).
+        numeric_part = ""  # Accumulator for consecutive leading digit characters.
+        for char in raw_part:  # Walk segment left-to-right consuming digits.
+            if char.isdigit():  # Digit contributes to the numeric prefix.
+                numeric_part += char  # Append to accumulator.
+            else:
+                break  # First non-digit terminates the numeric prefix.
+        return int(numeric_part) if numeric_part else 0  # Empty prefix -> 0 (matches legacy behavior).
+
+    @staticmethod
+    def parse_version(version_str: str) -> tuple[int, ...]:  # Public parser used by version_satisfies.
         """Parse a version string into a comparable numeric tuple."""
-        try:
-            parts: list[int] = []
-            for raw_part in version_str.split("."):
-                numeric_part = ""
-                for char in raw_part:
-                    if char.isdigit():
-                        numeric_part += char
-                    else:
-                        break
-                parts.append(int(numeric_part) if numeric_part else 0)
-            return tuple(parts)
-        except Exception:
-            return (0,)
+        try:  # Legacy contract: any parse error collapses to (0,) sentinel.
+            return tuple(UVRuntimeHelper._parse_numeric_prefix(p) for p in version_str.split("."))
+        except Exception:  # Broad catch mirrors original defensive shape.
+            return (0,)  # Sentinel used by version_satisfies to reject bad input.
 
     @staticmethod
     def _split_operator_and_required(spec: str) -> tuple[str, str]:
@@ -73,18 +76,18 @@ class UVRuntimeHelper:
     @staticmethod
     def package_name_from_spec(package_spec: str) -> str:
         """Extract the package name from a versioned package specification."""
-        package_name = package_spec
-        for operator in [">=", "<=", "==", "!=", ">", "<"]:
-            if operator in package_name:
-                package_name = package_name.split(operator, 1)[0]
-                break
-        return package_name.strip()
+        package_name = package_spec  # Start with the full spec; strip operator tail if any is found.
+        for operator in [">=", "<=", "==", "!=", ">", "<"]:  # 2-char operators first to avoid '>' false-match.
+            if operator in package_name:  # Spec contains this operator token.
+                package_name = package_name.split(operator, 1)[0]  # Keep only the name portion.
+                break  # Only strip the first matching operator.
+        return package_name.strip()  # Trim any surrounding whitespace before returning.
 
 
-def build_runtime_helpers() -> dict[str, Any]:
+def build_runtime_helpers() -> dict[str, Any]:  # Dependency-injection hook for bootstrap orchestration.
     """Return callable helpers for dependency injection in bootstrap orchestration."""
-    return {
-        "parse_version": UVRuntimeHelper.parse_version,
-        "version_satisfies": UVRuntimeHelper.version_satisfies,
-        "package_name_from_spec": UVRuntimeHelper.package_name_from_spec,
+    return {  # Bundle the three public helpers into a plain dict for injection.
+        "parse_version": UVRuntimeHelper.parse_version,  # Version tuple parser.
+        "version_satisfies": UVRuntimeHelper.version_satisfies,  # Version spec checker.
+        "package_name_from_spec": UVRuntimeHelper.package_name_from_spec,  # Name extractor.
     }
