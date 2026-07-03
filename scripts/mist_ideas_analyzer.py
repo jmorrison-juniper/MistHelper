@@ -705,31 +705,9 @@ def count_cache_files(cache_dir: Path) -> int:
 # ---------------------------------------------------------------------------
 
 
-class IdeaAnalyzer:
-    """Classify ideas using AI and perform deduplication."""
-
-    def __init__(
-        self,
-        backend_config: dict,
-        api_index: dict,
-        refresh: bool = False,
-        batch_size: int = DEFAULT_BATCH_SIZE,
-    ) -> None:
-        self.backend_config = backend_config
-        self.client = OpenAI(
-            base_url=backend_config["base_url"],
-            api_key=backend_config["api_key"],
-        )
-        self.model = backend_config["model"]
-        self.is_ollama = backend_config.get("backend") == "ollama"
-        self.api_index = api_index
-        self.refresh = refresh
-        self.batch_size = batch_size
-        self.system_prompt = self._build_system_prompt()
-
-    def _build_system_prompt(self) -> str:
-        """Build the system prompt with MistHelper scope and schema."""
-        return """You are a technical analyst classifying Mist community feature ideas
+# WHY: extracted from IdeaAnalyzer._build_system_prompt to shrink that method
+# below the 25-line STRUCT-LENGTH limit; the 100+ line prompt is data, not code.
+_SYSTEM_PROMPT = """You are a technical analyst classifying Mist community feature ideas
 by MistHelper feasibility.
 
 ## MistHelper Scope
@@ -836,6 +814,33 @@ genuinely not applicable.
     }
   ]
 }"""
+
+
+class IdeaAnalyzer:
+    """Classify ideas using AI and perform deduplication."""
+
+    def __init__(
+        self,
+        backend_config: dict,
+        api_index: dict,
+        refresh: bool = False,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+    ) -> None:
+        self.backend_config = backend_config
+        self.client = OpenAI(
+            base_url=backend_config["base_url"],
+            api_key=backend_config["api_key"],
+        )
+        self.model = backend_config["model"]
+        self.is_ollama = backend_config.get("backend") == "ollama"
+        self.api_index = api_index
+        self.refresh = refresh
+        self.batch_size = batch_size
+        self.system_prompt = self._build_system_prompt()
+
+    def _build_system_prompt(self) -> str:  # WHY: thin accessor kept for backward compat
+        """Return the module-level system prompt constant."""
+        return _SYSTEM_PROMPT  # WHY: centralize the prompt to keep this method under 25 lines
 
     @staticmethod
     def _build_user_prompt(
