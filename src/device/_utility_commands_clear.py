@@ -29,7 +29,7 @@ from typing import Any  # WHY: Any narrows the SDK response type
 
 import mistapi  # WHY: direct SDK access mirrors parent module usage
 
-from src.device._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
+from ._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
 
 class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring earlier phase clusters

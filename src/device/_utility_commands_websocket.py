@@ -32,7 +32,7 @@ from dataclasses import dataclass  # WHY: frozen bundle structs replace multi-ar
 from datetime import UTC, datetime  # WHY: ISO timestamp on exported command results
 from typing import Any, cast  # WHY: cast narrows Any from __getattr__ proxy
 
-from src.device._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
+from ._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
 
 @dataclass(frozen=True)  # WHY: frozen so callers cannot mutate mid-flow

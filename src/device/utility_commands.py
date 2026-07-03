@@ -15,19 +15,19 @@ from collections.abc import Callable  # WHY: type aliases for DI callables
 from dataclasses import dataclass  # WHY: bundle 6 injected deps into a frozen struct
 from typing import Any  # WHY: broad response typing for mistapi wrappers
 
-from src.device._utility_commands_action import (
+from ._utility_commands_action import (
     _UtilityCommandsAction,  # WHY: management/action command cluster (Phase 4a split)
 )
-from src.device._utility_commands_clear import (
+from ._utility_commands_clear import (
     _UtilityCommandsClear,  # WHY: destructive clear/reset command cluster (Phase 4b split)
 )
-from src.device._utility_commands_selection import (
+from ._utility_commands_selection import (
     _UtilityCommandsSelection,  # WHY: selection helper cluster (Phase 1 split)
 )
-from src.device._utility_commands_show import (
+from ._utility_commands_show import (
     _UtilityCommandsShow,  # WHY: show/diagnostic command cluster (Phase 3 split)
 )
-from src.device._utility_commands_websocket import (
+from ._utility_commands_websocket import (
     _UtilityCommandsWebsocket,  # WHY: websocket helper cluster (Phase 2 split)
 )
 

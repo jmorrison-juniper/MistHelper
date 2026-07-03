@@ -24,7 +24,7 @@ from typing import Any, cast  # WHY: Any parameterizes SDK payload dicts; cast n
 
 import mistapi  # WHY: stats + device APIs live under mistapi.api.v1.sites.*
 
-from src.device._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
+from ._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
 _PHYSICAL_PORT_PREFIXES: tuple[str, ...] = ("ge-", "xe-", "et-", "mge-")  # WHY: Juniper physical port prefixes
 

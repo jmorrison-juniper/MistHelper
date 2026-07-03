@@ -25,7 +25,7 @@ from typing import Any  # WHY: Any narrows the SDK response type
 
 import mistapi  # WHY: direct SDK access mirrors parent module's usage
 
-from src.device._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
+from ._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
 # WHY: menu-selected support-file categories exposed to the operator.
 _SUPPORT_FILE_TYPES: tuple[str, ...] = (

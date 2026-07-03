@@ -36,8 +36,8 @@ from typing import Any  # WHY: Any parameterizes bundle dataclasses and dict pay
 
 import mistapi  # WHY: device show / diagnostic SDK calls live under mistapi.api.v1.sites.devices
 
-from src.device._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
-from src.device._utility_commands_websocket import ExportResultSpec  # WHY: single-arg spec for exporter
+from ._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
+from ._utility_commands_websocket import ExportResultSpec  # WHY: single-arg spec for exporter
 
 
 @dataclass(frozen=True)  # WHY: frozen so shared module constants cannot be mutated at runtime
