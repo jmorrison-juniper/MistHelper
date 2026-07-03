@@ -5,6 +5,7 @@ import tempfile
 
 import pytest
 
+from src.audit._renderer_delta import DiffKeyContext
 from src.audit.analyzer import AdminTimeline, AuditAnalysisResult, ObjectChange, ObjectChangelog, RollbackDiff
 from src.audit.renderer import AuditReportRenderer
 
@@ -407,18 +408,21 @@ class TestDiffKey:
     def test_dict_values(self):
         delta_b: dict[str, object] = {}
         delta_a: dict[str, object] = {}
-        AuditReportRenderer._diff_key("cfg", {"a": 1}, {"a": 2}, {"cfg": {"a": 1}}, {"cfg": {"a": 2}}, delta_b, delta_a)
+        ctx = DiffKeyContext(key="cfg", val_b={"a": 1}, val_a={"a": 2}, in_before=True, in_after=True)
+        AuditReportRenderer._diff_key(ctx, delta_b, delta_a)
         assert "cfg" in delta_b
 
     def test_list_values(self):
         delta_b: dict[str, object] = {}
         delta_a: dict[str, object] = {}
-        AuditReportRenderer._diff_key("ports", [1, 2], [3, 4], {"ports": [1, 2]}, {"ports": [3, 4]}, delta_b, delta_a)
+        ctx = DiffKeyContext(key="ports", val_b=[1, 2], val_a=[3, 4], in_before=True, in_after=True)
+        AuditReportRenderer._diff_key(ctx, delta_b, delta_a)
         assert "ports" in delta_b
 
     def test_scalar_values(self):
         delta_b: dict[str, object] = {}
         delta_a: dict[str, object] = {}
-        AuditReportRenderer._diff_key("v", 1, 2, {"v": 1}, {"v": 2}, delta_b, delta_a)
+        ctx = DiffKeyContext(key="v", val_b=1, val_a=2, in_before=True, in_after=True)
+        AuditReportRenderer._diff_key(ctx, delta_b, delta_a)
         assert delta_b["v"] == 1
         assert delta_a["v"] == 2
