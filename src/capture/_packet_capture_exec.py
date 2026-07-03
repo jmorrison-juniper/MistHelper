@@ -39,7 +39,6 @@ def _pc() -> Any:
     return _pc_mod  # WHY: attribute lookup on returned module resolves patches at call time
 
 
-
 class PacketCaptureExec:
     """Wrapper class holding the extracted exec/monitor/download methods."""
 
