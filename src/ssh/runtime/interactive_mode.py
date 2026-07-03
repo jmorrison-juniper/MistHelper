@@ -4,7 +4,7 @@ Decomposed from EnhancedSSHRunner._interactive_mode (was CC=C). Each prompt
 helper has CC <= 10. Real call, not a façade.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # PEP 563: postpone annotation evaluation for forward refs.
 
 import getpass  # Standard-library secure password prompt
 import logging  # Action logging for every interactive step
@@ -19,11 +19,11 @@ from src.ssh.connection.connector import SshConnector  # Exposes _validate_port 
 from src.utils.input_utils import InputUtils  # EOF-safe input wrapper (issue #452: replace raw input()).
 
 
-class InteractiveMode:
+class InteractiveMode:  # Groups the interactive REPL prompt helpers under one namespace.
     """Run the SSH runner in interactive REPL mode with input validation."""
 
     @staticmethod
-    def _prompt_hostname() -> str:
+    def _prompt_hostname() -> str:  # Public prompt entry-point for the hostname phase.
         """Loop until the user enters a syntactically valid hostname/IP."""
         logging.info("Prompting user for SSH hostname")  # Before-action log
         while True:  # Validation loop
@@ -31,39 +31,39 @@ class InteractiveMode:
                 "- Enter hostname or IP address: ", context="ssh_hostname"
             )  # EOF-safe read.
             if not hostname:  # Empty -> reprompt
-                print("X  Hostname is required")
-                continue
+                print("X  Hostname is required")  # User-facing required-field message.
+                continue  # Re-enter the validation loop.
             if not validate_hostname(hostname):  # Reject invalid syntax
-                print("X  Invalid hostname or IP address format")
-                continue
+                print("X  Invalid hostname or IP address format")  # User-facing format error.
+                continue  # Re-enter the validation loop.
             logging.debug("Hostname accepted: %s", hostname)  # After-action log
-            return hostname
+            return hostname  # Hand the validated hostname back to the caller.
 
     @staticmethod
-    def _prompt_username() -> str:
+    def _prompt_username() -> str:  # Public prompt entry-point for the username phase.
         """Loop until the user enters a syntactically valid username."""
         logging.info("Prompting user for SSH username")  # Before-action log
         while True:  # Validation loop
             username = InputUtils.safe_input("X  Enter username: ", context="ssh_username")  # EOF-safe read.
             if not username:  # Empty -> reprompt
-                print("X  Username is required")
-                continue
+                print("X  Username is required")  # User-facing required-field message.
+                continue  # Re-enter the validation loop.
             if not validate_username(username):  # Reject invalid chars
-                print("X  Invalid username format (alphanumeric, underscore, hyphen, dot only)")
-                continue
+                print("X  Invalid username format (alphanumeric, underscore, hyphen, dot only)")  # Format error.
+                continue  # Re-enter the validation loop.
             logging.debug("Username accepted: %s", username)  # After-action log
-            return username
+            return username  # Hand the validated username back to the caller.
 
     @staticmethod
-    def _prompt_password() -> str:
+    def _prompt_password() -> str:  # Public prompt entry-point for the password phase.
         """Prompt securely for the SSH password (no validation loop)."""
         logging.info("Prompting user for SSH password (hidden input)")  # Before-action log
         password = getpass.getpass("!? Enter password: ")  # Hidden input via getpass
         logging.debug("Password received (length=%d)", len(password))  # After-action log w/o secret
-        return password
+        return password  # Hand the raw password back to the caller.
 
     @staticmethod
-    def _prompt_port() -> int:
+    def _prompt_port() -> int:  # Public prompt entry-point for the port phase.
         """Prompt for SSH port number with validation, default 22."""
         logging.info("Prompting user for SSH port")  # Before-action log
         while True:  # Validation loop
@@ -72,37 +72,50 @@ class InteractiveMode:
                     ">> Enter SSH port (default 22): ", context="ssh_port"
                 )  # EOF-safe read.
                 if not port_input:  # Default port path
-                    logging.debug("Port defaulted to 22")
-                    return 22
+                    logging.debug("Port defaulted to 22")  # Trace default-branch decision.
+                    return 22  # Return the documented default port.
                 port = int(port_input)  # Parse user-provided integer
                 if not SshConnector._validate_port(port):  # Range check 1..65535
-                    print("X  Port must be between 1 and 65535")
-                    continue
+                    print("X  Port must be between 1 and 65535")  # User-facing range-error message.
+                    continue  # Re-enter the validation loop.
                 logging.debug("Port accepted: %d", port)  # After-action log
-                return port
+                return port  # Hand the validated port back to the caller.
             except ValueError:  # Non-numeric input
-                print("X  Port must be a valid number")
+                print("X  Port must be a valid number")  # User-facing parse-error message.
 
     @staticmethod
     def _prompt_timeout() -> int:
         """Prompt for connection timeout with validation, default 30."""
         logging.info("Prompting user for SSH timeout")  # Before-action log
         while True:  # Validation loop
-            try:  # Catch non-numeric input
-                timeout_input = InputUtils.safe_input(
-                    "- Enter timeout in seconds (default 30): ", context="ssh_timeout"
-                )  # EOF-safe.
-                if not timeout_input:  # Default timeout path
-                    logging.debug("Timeout defaulted to 30")
-                    return 30
-                timeout = int(timeout_input)  # Parse user-provided integer
-                if not (isinstance(timeout, int) and 1 <= timeout <= 3600):  # Bounded
-                    print("X  Timeout must be between 1 and 3600 seconds")
-                    continue
+            timeout = InteractiveMode._read_bounded_timeout()  # Delegate parse+range check to helper.
+            if timeout is not None:  # Helper returned an accepted value.
                 logging.debug("Timeout accepted: %d", timeout)  # After-action log
-                return timeout
-            except ValueError:  # Non-numeric input
-                print("X  Timeout must be a valid number")
+                return timeout  # Hand the validated timeout back to the caller.
+
+    @staticmethod
+    def _read_bounded_timeout() -> int | None:
+        """Read one timeout entry; return validated int, or None to re-prompt."""
+        # WHY: extracting parse/validate drops _prompt_timeout CC from 6 to 3.
+        try:  # Catch non-numeric input from the user.
+            timeout_input = InputUtils.safe_input(
+                "- Enter timeout in seconds (default 30): ", context="ssh_timeout"
+            )  # EOF-safe read.
+        except ValueError:  # Defensive; safe_input can raise on non-str contexts.
+            print("X  Timeout must be a valid number")  # User-facing parse-error message.
+            return None  # Signal caller to re-prompt.
+        if not timeout_input:  # Empty entry selects the default timeout.
+            logging.debug("Timeout defaulted to 30")  # Trace default-branch decision.
+            return 30  # Return the documented default.
+        try:  # int() raises ValueError on non-numeric strings.
+            timeout = int(timeout_input)  # Parse user-provided integer.
+        except ValueError:  # Non-numeric input entered.
+            print("X  Timeout must be a valid number")  # User-facing parse-error message.
+            return None  # Signal caller to re-prompt.
+        if not 1 <= timeout <= 3600:  # Bounded range check.
+            print("X  Timeout must be between 1 and 3600 seconds")  # User-facing range-error message.
+            return None  # Signal caller to re-prompt.
+        return timeout  # Validated, in-range timeout value.
 
     @staticmethod
     def _prompt_shell_mode() -> bool:
