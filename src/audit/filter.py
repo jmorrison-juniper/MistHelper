@@ -30,7 +30,8 @@ class AuditLogFilter:  # Encapsulates noise-filtering rules for audit entries
             noise_phrases: List of message substrings to filter.
                 Uses defaults if None.
         """
-        self.noise_phrases = noise_phrases if noise_phrases is not None else NOISE_PHRASES  # Fall back to module defaults
+        # Fall back to module defaults when caller passes None.
+        self.noise_phrases = noise_phrases if noise_phrases is not None else NOISE_PHRASES
 
     def is_noise(self, entry: dict[str, Any]) -> bool:  # Public predicate used by filter methods
         """Determine if an audit log entry is noise.
