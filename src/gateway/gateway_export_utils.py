@@ -463,9 +463,9 @@ class GatewayExportUtils:
     @staticmethod
     def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:
         """Update gateway template WAN2 variable through extracted migrator."""
-        from src.gateway.wan2_variable import GatewayWan2VariableMigrator  # noqa: PLC0415
+        from src.gateway.wan2_variable import GatewayWan2VariableMigrator, Wan2VariableDeps  # noqa: PLC0415
 
-        migrator = GatewayWan2VariableMigrator(
+        deps = Wan2VariableDeps(
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
             apisession=apisession,
             site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
@@ -477,4 +477,5 @@ class GatewayExportUtils:
             input_fn=InputUtils.safe_input,
             connection_pool_fn=execute_with_connection_pool_management,
         )
+        migrator = GatewayWan2VariableMigrator(deps)
         migrator.execute(fast=fast, dry_run=dry_run)
