@@ -22,12 +22,34 @@ from typing import Any  # WHY: broad response typing for mistapi wrappers
 import mistapi  # WHY: paginated fetch + REST call factories
 
 from ._ssid_template_cache import (  # WHY: re-export helpers referenced by name in tests
-    _SsidTemplateCacheCluster,  # WHY: cache/resume cluster bound in __init__
     _cache_age_minutes,  # WHY: re-export for tests + module-level use in _phase1_load_or_fetch
     _check_cache_exists,  # WHY: re-export for backward-compat imports
     _check_prerequisite_for_all,  # WHY: re-export for run-all-phases pre-flight
     _handle_completed_resume,  # WHY: re-export used by parent _offer_resume delegate
     _handle_partial_resume,  # WHY: re-export used by parent _offer_resume delegate
+    _SsidTemplateCacheCluster,  # WHY: cache/resume cluster bound in __init__
+)
+from ._ssid_template_phase1 import (  # WHY: re-export phase 1 helpers referenced by name in tests
+    _analyze_group_deviations,  # WHY: re-export for backward-compat imports
+    _append_drift_record,  # WHY: re-export for backward-compat imports
+    _assemble_site_row,  # WHY: re-export for backward-compat imports
+    _build_deviation_record,  # WHY: re-export for backward-compat imports
+    _build_mxtunnel_lookup,  # WHY: re-export for backward-compat imports
+    _build_site_row,  # WHY: re-export for backward-compat imports
+    _build_sitegroup_lookup,  # WHY: re-export for backward-compat imports
+    _build_template_lookup,  # WHY: re-export for backward-compat imports
+    _classify_site,  # WHY: re-export for backward-compat imports
+    _collect_comparison_keys,  # WHY: re-export for backward-compat imports
+    _collect_group_wlan_configs,  # WHY: re-export for backward-compat imports
+    _collect_key_values,  # WHY: re-export for backward-compat imports
+    _detect_cross_cluster_drift,  # WHY: re-export for backward-compat imports
+    _determine_target_group,  # WHY: re-export for backward-compat imports
+    _find_target_wlan,  # WHY: re-export for backward-compat imports
+    _get_template_wlans,  # WHY: re-export for backward-compat imports
+    _group_by_target,  # WHY: re-export for backward-compat imports
+    _print_phase1_summary,  # WHY: re-export for backward-compat imports
+    _resolve_template,  # WHY: re-export for backward-compat imports
+    _SsidTemplatePhase1Cluster,  # WHY: phase-1 audit cluster bound in __init__
 )
 
 # ---------------------------------------------------------------------------
@@ -36,6 +58,28 @@ from ._ssid_template_cache import (  # WHY: re-export helpers referenced by name
 SafeInputFn = Any  # Callable[[str, ...], str]
 WriteDataFn = Any  # Callable[[...], None]
 GetOrgIdFn = Any  # Callable[[], str | None]
+
+
+def _fetch_and_log(
+    label: str,
+    api_fn: Any,
+    session: Any,
+    org_id: str,
+    **kwargs: Any,
+) -> list[dict[str, Any]]:
+    """Fetch data via API, paginate, and log count.
+
+    Defined in the parent module (rather than re-exported from
+    ``_ssid_template_phase1``) so its ``__globals__`` binding is the
+    parent module's namespace. That keeps tests that use
+    ``patch.object(ssid_template_consolidation, "mistapi", ...)``
+    observable when they call ``_mod._fetch_and_log`` directly.
+    """
+    print(f"    Fetching {label}...")  # WHY: operator telemetry during multi-call fetch
+    response = api_fn(session, org_id, **kwargs)  # WHY: mistapi list endpoint call
+    data: list[dict[str, Any]] = mistapi.get_all(response=response, mist_session=session) or []
+    logging.info("%s fetched: %d", label.capitalize(), len(data))  # WHY: audit trail per collection
+    return data
 
 
 @dataclass(frozen=True)
@@ -116,6 +160,7 @@ class SSIDTemplateConsolidationManager:
         self.cache: dict[str, Any] = {}  # WHY: Phase 1 org-data cache shared across phases
         self._clusters: tuple[Any, ...] = (  # WHY: bundle clusters so parent stays under R0902 gate
             _SsidTemplateCacheCluster(self),  # WHY: cache + resume + phase-result I/O cluster
+            _SsidTemplatePhase1Cluster(self),  # WHY: read-only audit + matrix + deviation cluster
         )
 
     def __getattr__(self, name: str) -> Any:
@@ -269,175 +314,8 @@ class SSIDTemplateConsolidationManager:
         return True
 
     # ------------------------------------------------------------------
-    # Phase 1: Read-Only Audit
+    # Phase 1: Read-Only Audit (methods live in _ssid_template_phase1.py)
     # ------------------------------------------------------------------
-
-    def phase1_audit(self) -> None:
-        """Phase 1 orchestrator — fetch data, build matrix, analyze."""
-        print("\n=== Phase 1: Read-Only Audit ===")
-        logging.info(
-            "Phase 1: Starting read-only audit for SSID '%s'",
-            self.target_ssid,
-        )
-
-        org_data = self._phase1_load_or_fetch()
-        if not org_data:
-            print("! Failed to load or fetch organization data.")
-            return
-
-        matrix = self._build_matrix(org_data)
-        deviations = self._analyze_deviations(matrix, org_data)
-        self._phase1_save_and_report(org_data, matrix, deviations)
-
-    def _phase1_load_or_fetch(self) -> dict[str, Any] | None:
-        """Load cached data or fetch fresh from API."""
-        cached = self._load_cache()  # WHY: cache cluster proxy returns dict[str, Any] | None
-        if cached and cached.get("data"):
-            age = _cache_age_minutes(cached.get("collected_at", ""))
-            print(f"  Cached data found ({age:.0f} minutes old).")
-            choice = self.safe_input_fn(
-                "  Use cached data? (Y/n): ",
-                default_value="Y",
-                context="ssid_consolidation_cache_reuse",
-            )
-            if choice.strip().lower() not in ("n", "no"):
-                logging.info("Using cached org data")
-                cached_data: dict[str, Any] | None = cached.get("data")  # WHY: proxy erases type -> narrow
-                return cached_data
-        print("  Fetching fresh organization data...")
-        return self._fetch_all_org_data()
-
-    def _phase1_save_and_report(
-        self,
-        org_data: dict[str, Any],
-        matrix: list[dict[str, Any]],
-        deviations: list[dict[str, Any]],
-    ) -> None:
-        """Save Phase 1 outputs and print summary."""
-        cache_payload: dict[str, Any] = {
-            "data": org_data,
-            "matrix": matrix,
-            "deviations": deviations,
-        }
-        self._save_cache(cache_payload)
-
-        self.write_data_fn(
-            data=matrix,
-            filename_or_table="ssid_consolidation_matrix",
-            api_function_name="ssidConsolidationMatrix",
-        )
-        self.write_data_fn(
-            data=deviations,
-            filename_or_table="ssid_consolidation_deviations",
-            api_function_name="ssidConsolidationDeviation",
-        )
-
-        _print_phase1_summary(matrix, deviations)
-
-    def _fetch_all_org_data(self) -> dict[str, Any]:
-        """Fetch all org data using 5 bulk API calls."""
-        result: dict[str, Any] = {}
-        session = self.apisession
-
-        result["wlan_templates"] = _fetch_and_log(
-            "templates",
-            mistapi.api.v1.orgs.templates.listOrgTemplates,
-            session,
-            self.org_id,
-        )
-        result["org_wlans"] = _fetch_and_log(
-            "org WLANs",
-            mistapi.api.v1.orgs.wlans.listOrgWlans,
-            session,
-            self.org_id,
-            limit=self.page_limit,
-        )
-        result["sites"] = _fetch_and_log(
-            "sites",
-            mistapi.api.v1.orgs.sites.listOrgSites,
-            session,
-            self.org_id,
-            limit=self.page_limit,
-        )
-        result["mxtunnels"] = _fetch_and_log(
-            "Mist Edge tunnels",
-            mistapi.api.v1.orgs.mxtunnels.listOrgMxTunnels,
-            session,
-            self.org_id,
-        )
-        result["sitegroups"] = _fetch_and_log(
-            "site groups",
-            mistapi.api.v1.orgs.sitegroups.listOrgSiteGroups,
-            session,
-            self.org_id,
-        )
-
-        total_calls = 5
-        logging.info("Total org-level API calls: %d", total_calls)
-        print(f"    Done ({total_calls} API calls)")
-        return result
-
-    # ------------------------------------------------------------------
-    # Phase 1: Matrix builder
-    # ------------------------------------------------------------------
-
-    def _build_matrix(self, org_data: dict[str, Any]) -> list[dict[str, Any]]:
-        """Build per-site consolidation matrix from org data."""
-        mxtunnel_lookup = _build_mxtunnel_lookup(org_data.get("mxtunnels", []))
-        template_lookup = _build_template_lookup(org_data.get("wlan_templates", []))
-        sitegroup_lookup = _build_sitegroup_lookup(org_data.get("sitegroups", []))
-
-        matrix: list[dict[str, Any]] = []
-        for site in org_data.get("sites", []):
-            row = _build_site_row(
-                site,
-                self.target_ssid,
-                self.PSK_AUTH_TYPES,
-                self.PILOT_PATTERN,
-                template_lookup,
-                sitegroup_lookup,
-                mxtunnel_lookup,
-            )
-            if row:
-                matrix.append(row)
-        logging.info("Matrix built: %d sites", len(matrix))
-        return matrix
-
-    # ------------------------------------------------------------------
-    # Phase 1: Deviation analysis
-    # ------------------------------------------------------------------
-
-    def _analyze_deviations(
-        self,
-        matrix: list[dict[str, Any]],
-        org_data: dict[str, Any],
-    ) -> list[dict[str, Any]]:
-        """Detect per-cluster deviations and cross-cluster drift."""
-        eligible = [row for row in matrix if not row.get("anomaly") and not row.get("psk_detected")]
-        template_lookup = _build_template_lookup(org_data.get("wlan_templates", []))
-
-        groups = _group_by_target(eligible)
-        deviations: list[dict[str, Any]] = []
-        cluster_canonicals: dict[str, dict[str, Any]] = {}
-
-        for group_name, rows in groups.items():
-            group_devs, canonicals = _analyze_group_deviations(
-                group_name,
-                rows,
-                template_lookup,
-                self.target_ssid,
-                self.METADATA_FIELDS,
-            )
-            deviations.extend(group_devs)
-            cluster_canonicals[group_name] = canonicals
-
-        drift = _detect_cross_cluster_drift(cluster_canonicals)
-        deviations.extend(drift)
-        logging.info(
-            "Deviations found: %d (including cross-cluster drift)",
-            len(deviations),
-        )
-        return deviations
 
     # ------------------------------------------------------------------
     # Phase 2: Site Variables
@@ -693,354 +571,6 @@ class SSIDTemplateConsolidationManager:
             if len(results) % 10 == 0:
                 self._save_phase_results(5, results)
         return results
-
-
-# ======================================================================
-# Module-level helper functions (pure logic, no self)
-# ======================================================================
-
-
-def _fetch_and_log(
-    label: str,
-    api_fn: Any,
-    session: Any,
-    org_id: str,
-    **kwargs: Any,
-) -> list[dict[str, Any]]:
-    """Fetch data via API, paginate, and log count."""
-    print(f"    Fetching {label}...")
-    response = api_fn(session, org_id, **kwargs)
-    data: list[dict[str, Any]] = mistapi.get_all(response=response, mist_session=session) or []
-    logging.info("%s fetched: %d", label.capitalize(), len(data))
-    return data
-
-
-def _build_mxtunnel_lookup(
-    mxtunnels: list[dict[str, Any]],
-) -> dict[str, str]:
-    """Build cluster_id -> cluster_name lookup."""
-    return {tunnel.get("id", ""): tunnel.get("name", "") for tunnel in mxtunnels if tunnel.get("id")}
-
-
-def _build_template_lookup(
-    templates: list[dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    """Build template_id -> template object lookup."""
-    return {tmpl.get("id", ""): tmpl for tmpl in templates if tmpl.get("id")}
-
-
-def _build_sitegroup_lookup(
-    sitegroups: list[dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    """Build sitegroup_id -> sitegroup object lookup."""
-    return {group.get("id", ""): group for group in sitegroups if group.get("id")}
-
-
-def _build_site_row(
-    site: dict[str, Any],
-    target_ssid: str,
-    psk_auth_types: tuple[str, ...],
-    pilot_pattern: re.Pattern[str],
-    template_lookup: dict[str, dict[str, Any]],
-    sitegroup_lookup: dict[str, dict[str, Any]],
-    mxtunnel_lookup: dict[str, str],
-) -> dict[str, Any] | None:
-    """Build a single matrix row for one site."""
-    site_id = site.get("id", "")
-    site_name = site.get("name", "")
-    if not site_id:
-        return None
-
-    template, template_id = _resolve_template(site, template_lookup, sitegroup_lookup)
-    template_name = template.get("name", "") if template else ""
-    wlans = _get_template_wlans(template) if template else []
-    matched_wlan = _find_target_wlan(wlans, target_ssid)
-
-    psk, anomaly, reason = _classify_site(template, wlans, matched_wlan, mxtunnel_lookup, psk_auth_types)
-
-    mxtunnel_ids = matched_wlan.get("mxtunnel_ids", []) if matched_wlan else []
-    first_tunnel_id = mxtunnel_ids[0] if mxtunnel_ids else ""
-    cluster_name = mxtunnel_lookup.get(first_tunnel_id, "")
-    target_group = _determine_target_group(site_name, cluster_name, pilot_pattern)
-
-    return _assemble_site_row(
-        site_name,
-        site_id,
-        template_name,
-        template_id,
-        matched_wlan,
-        first_tunnel_id,
-        cluster_name,
-        psk,
-        anomaly,
-        reason,
-        wlans,
-        site,
-        target_group,
-    )
-
-
-def _assemble_site_row(
-    site_name: str,
-    site_id: str,
-    template_name: str,
-    template_id: str,
-    matched_wlan: dict[str, Any] | None,
-    first_tunnel_id: str,
-    cluster_name: str,
-    psk_detected: bool,
-    anomaly: bool,
-    anomaly_reason: str,
-    wlans: list[dict[str, Any]],
-    site: dict[str, Any],
-    target_group: str,
-) -> dict[str, Any]:
-    """Assemble the final site row dictionary."""
-    return {
-        "site_name": site_name,
-        "site_id": site_id,
-        "template_name": template_name,
-        "template_id": template_id,
-        "ssid_name": (matched_wlan.get("ssid", "") if matched_wlan else ""),
-        "ssid_id": (matched_wlan.get("id", "") if matched_wlan else ""),
-        "auth_type": (matched_wlan.get("auth", {}).get("type", "") if matched_wlan else ""),
-        "vlan_id": (str(matched_wlan.get("vlan_id", "")) if matched_wlan else ""),
-        "mxtunnel_id": first_tunnel_id,
-        "mxtunnel_name": cluster_name,
-        "psk_detected": psk_detected,
-        "anomaly": anomaly,
-        "anomaly_reason": anomaly_reason,
-        "ssid_enabled": (matched_wlan.get("enabled", True) if matched_wlan else False),
-        "ssid_count_in_template": len(wlans),
-        "sitegroup_ids": json.dumps(site.get("sitegroup_ids") or []),
-        "target_group": target_group,
-    }
-
-
-def _resolve_template(
-    site: dict[str, Any],
-    template_lookup: dict[str, dict[str, Any]],
-    sitegroup_lookup: dict[str, dict[str, Any]],
-) -> tuple[dict[str, Any] | None, str]:
-    """Find the WLAN template assigned to a site via applies scope."""
-    for template_id, template in template_lookup.items():
-        applies = template.get("applies", {})
-        site_ids = applies.get("site_ids") or []
-        if site.get("id") in site_ids:
-            return template, template_id
-        group_ids = applies.get("sitegroup_ids") or []
-        site_groups = site.get("sitegroup_ids") or []
-        if any(gid in group_ids for gid in site_groups):
-            return template, template_id
-    return None, ""
-
-
-def _get_template_wlans(
-    template: dict[str, Any],
-) -> list[dict[str, Any]]:
-    """Extract WLANs list from a template object."""
-    wlans: list[dict[str, Any]] = template.get("wlans", []) or []
-    return wlans
-
-
-def _find_target_wlan(wlans: list[dict[str, Any]], target_ssid: str) -> dict[str, Any] | None:
-    """Find the WLAN matching the target SSID name."""
-    for wlan in wlans:
-        if wlan.get("ssid", "").lower() == target_ssid.lower():
-            return wlan
-    return None
-
-
-def _classify_site(
-    template: dict[str, Any] | None,
-    wlans: list[dict[str, Any]],
-    matched_wlan: dict[str, Any] | None,
-    mxtunnel_lookup: dict[str, str],
-    psk_auth_types: tuple[str, ...],
-) -> tuple[bool, bool, str]:
-    """Classify a site as PSK, anomaly, or eligible."""
-    if not template:
-        return False, True, "no template assigned"
-    if not matched_wlan:
-        return False, True, "target SSID not found"
-    ssid_count = len(wlans)
-    if ssid_count == 0:
-        return False, True, "0 SSIDs"
-    if ssid_count == 1:
-        return False, True, "1 SSID"
-    if ssid_count >= 3:
-        return False, True, "3+ SSIDs"
-    auth_type = matched_wlan.get("auth", {}).get("type", "")
-    psk_detected = auth_type in psk_auth_types
-    mxtunnel_ids = matched_wlan.get("mxtunnel_ids", [])
-    first_id = mxtunnel_ids[0] if mxtunnel_ids else ""
-    if not first_id or first_id not in mxtunnel_lookup:
-        return psk_detected, True, "no Edge cluster mapping"
-    return psk_detected, False, ""
-
-
-def _determine_target_group(
-    site_name: str,
-    cluster_name: str,
-    pilot_pattern: re.Pattern[str],
-) -> str:
-    """Assign target group — pilot if name matches pattern, else cluster."""
-    if pilot_pattern.search(site_name):
-        return "pilot"
-    return cluster_name if cluster_name else "unknown"
-
-
-# ------------------------------------------------------------------
-# Deviation analysis helpers
-# ------------------------------------------------------------------
-
-
-def _group_by_target(
-    rows: list[dict[str, Any]],
-) -> dict[str, list[dict[str, Any]]]:
-    """Group matrix rows by target_group name."""
-    groups: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        group_name = row.get("target_group", "unknown")
-        groups.setdefault(group_name, []).append(row)
-    return groups
-
-
-def _analyze_group_deviations(
-    group_name: str,
-    rows: list[dict[str, Any]],
-    template_lookup: dict[str, dict[str, Any]],
-    target_ssid: str,
-    metadata_fields: set[str],
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Analyze deviations within a single group."""
-    wlan_configs = _collect_group_wlan_configs(rows, template_lookup, target_ssid)
-    if not wlan_configs:
-        return [], {}
-
-    all_keys = _collect_comparison_keys(wlan_configs, metadata_fields)
-    deviations: list[dict[str, Any]] = []
-    canonicals: dict[str, Any] = {}
-
-    for key in all_keys:
-        values_map = _collect_key_values(key, wlan_configs, rows)
-        if len(values_map) > 1:
-            deviation = _build_deviation_record(group_name, rows, key, values_map)
-            deviations.append(deviation)
-            canonicals[key] = deviation.get("canonical_value")
-        elif values_map:
-            canonicals[key] = next(iter(values_map.keys()))
-    return deviations, canonicals
-
-
-def _collect_group_wlan_configs(
-    rows: list[dict[str, Any]],
-    template_lookup: dict[str, dict[str, Any]],
-    target_ssid: str,
-) -> list[dict[str, Any]]:
-    """Collect matched WLAN JSON dicts for all rows in a group."""
-    configs: list[dict[str, Any]] = []
-    for row in rows:
-        template = template_lookup.get(row.get("template_id", ""))
-        if not template:
-            continue
-        wlans = _get_template_wlans(template)
-        matched = _find_target_wlan(wlans, target_ssid)
-        if matched:
-            configs.append(matched)
-    return configs
-
-
-def _collect_comparison_keys(
-    wlan_configs: list[dict[str, Any]],
-    metadata_fields: set[str],
-) -> set[str]:
-    """Build union of all WLAN config keys excluding metadata."""
-    all_keys: set[str] = set()
-    for config in wlan_configs:
-        all_keys.update(config.keys())
-    return all_keys - metadata_fields
-
-
-def _collect_key_values(
-    key: str,
-    wlan_configs: list[dict[str, Any]],
-    rows: list[dict[str, Any]],
-) -> dict[str, list[str]]:
-    """Collect unique values for a key with their site names."""
-    values_map: dict[str, list[str]] = {}
-    for index, config in enumerate(wlan_configs):
-        value = json.dumps(config.get(key), default=str, sort_keys=True)
-        site_name = rows[index].get("site_name", "") if index < len(rows) else ""
-        values_map.setdefault(value, []).append(site_name)
-    return values_map
-
-
-def _build_deviation_record(
-    group_name: str,
-    rows: list[dict[str, Any]],
-    key: str,
-    values_map: dict[str, list[str]],
-) -> dict[str, Any]:
-    """Build a deviation record for a parameter with multiple values."""
-    unique_values = [
-        {
-            "value": json.loads(value),
-            "sites": sites,
-            "count": len(sites),
-        }
-        for value, sites in values_map.items()
-    ]
-    unique_values.sort(key=lambda entry: entry["count"], reverse=True)
-    canonical = unique_values[0]["value"] if unique_values else None
-    cluster_id = rows[0].get("mxtunnel_id", "") if rows else ""
-    return {
-        "cluster_name": group_name,
-        "cluster_id": cluster_id,
-        "parameter": key,
-        "unique_values": json.dumps(unique_values, default=str),
-        "canonical_value": json.dumps(canonical, default=str),
-    }
-
-
-def _detect_cross_cluster_drift(
-    cluster_canonicals: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Detect parameters where canonical values differ across clusters."""
-    if len(cluster_canonicals) < 2:
-        return []
-    all_params: set[str] = set()
-    for canonicals in cluster_canonicals.values():
-        all_params.update(canonicals.keys())
-
-    drift: list[dict[str, Any]] = []
-    for param in all_params:
-        values_by_cluster: dict[str, Any] = {}
-        for cluster_name, canonicals in cluster_canonicals.items():
-            if param in canonicals:
-                values_by_cluster[cluster_name] = canonicals[param]
-        unique_canonical = {json.dumps(value, default=str, sort_keys=True) for value in values_by_cluster.values()}
-        if len(unique_canonical) > 1:
-            _append_drift_record(drift, param, values_by_cluster)
-    return drift
-
-
-def _append_drift_record(
-    drift: list[dict[str, Any]],
-    param: str,
-    values_by_cluster: dict[str, Any],
-) -> None:
-    """Append a cross-cluster drift deviation record."""
-    unique_values = [{"value": value, "sites": [cluster], "count": 1} for cluster, value in values_by_cluster.items()]
-    drift.append(
-        {
-            "cluster_name": "cross_cluster",
-            "cluster_id": "",
-            "parameter": param,
-            "unique_values": json.dumps(unique_values, default=str),
-            "canonical_value": "",
-        }
-    )
 
 
 # ------------------------------------------------------------------
@@ -1896,27 +1426,6 @@ def _set_ssid_disabled(wlans: list[dict[str, Any]], ssid_id: str) -> bool:
 # ------------------------------------------------------------------
 # Shared output helpers
 # ------------------------------------------------------------------
-
-
-def _print_phase1_summary(
-    matrix: list[dict[str, Any]],
-    deviations: list[dict[str, Any]],
-) -> None:
-    """Print Phase 1 audit summary."""
-    eligible = [row for row in matrix if not row.get("anomaly") and not row.get("psk_detected")]
-    psk_count = sum(1 for row in matrix if row.get("psk_detected"))
-    anomaly_count = sum(1 for row in matrix if row.get("anomaly"))
-    print(f"\n  Total sites:   {len(matrix)}")
-    print(f"  Eligible:      {len(eligible)}")
-    print(f"  PSK excluded:  {psk_count}")
-    print(f"  Anomalies:     {anomaly_count}")
-    print(f"  Deviations:    {len(deviations)}")
-    logging.info(
-        "Phase 1 complete: %d sites, %d eligible, %d deviations",
-        len(matrix),
-        len(eligible),
-        len(deviations),
-    )
 
 
 def _print_phase_summary(phase_label: str, results: list[dict[str, Any]]) -> None:
