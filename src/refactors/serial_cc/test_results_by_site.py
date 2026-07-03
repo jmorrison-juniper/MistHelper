@@ -43,28 +43,40 @@ class GatewayTestResultsService:
             deps.ValidationUtils.validate_site_id(
                 site_id, "GatewayTestResultsService._fetch_site_tests"
             )  # Reject malformed site_id before issuing API call
-            if connection_semaphore:  # Pool-managed path acquires semaphore before call
-                with connection_semaphore:  # Limit concurrent connections via semaphore
-                    response = deps.mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(
-                        deps.apisession, site_id
-                    )  # Fetch test results under semaphore
-            else:  # Sequential path has no semaphore
-                response = deps.mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(
-                    deps.apisession, site_id
-                )  # Fetch test results directly
-            if not hasattr(response, "data"):  # Guard against malformed API responses
-                logging.warning("No data attribute in response for site %s", site_id)  # Warn for diagnostics
-                return []  # Return empty list so caller accumulates cleanly
-            results: list[dict[str, Any]] = (
-                response.data.get("results", []) if isinstance(response.data, dict) else []
-            )  # Extract result list from dict payload; empty list for unexpected shapes
-            for result in results:
-                result["site_id"] = site_id  # Tag every row with its source site_id
+            response = GatewayTestResultsService._invoke_search_api(deps, site_id, connection_semaphore)
+            results = GatewayTestResultsService._extract_tagged_results(response, site_id)  # Parse+tag
             logging.debug("Retrieved %d test results for site %s", len(results), site_id)  # Log after success
             return results  # Return tagged result rows for the caller to accumulate
         except Exception as exception:  # Non-fatal: skip this site and continue to the next
             logging.warning("Failed to fetch test results for site %s: %s", site_id, exception)  # Warn with context
             return []  # Return empty list so caller continues to the next site
+
+    @staticmethod
+    def _invoke_search_api(deps: SimpleNamespace, site_id: str, connection_semaphore: Any) -> Any:
+        """Call searchSiteSyntheticTest, honouring an optional connection semaphore."""
+        # WHY: extracted so _fetch_site_tests drops from 29 lines to <25 and CC from 6 to <=5.
+        if connection_semaphore:  # Pool-managed path acquires semaphore before call
+            with connection_semaphore:  # Limit concurrent connections via semaphore
+                return deps.mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(
+                    deps.apisession, site_id
+                )  # Fetch test results under semaphore
+        return deps.mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(
+            deps.apisession, site_id
+        )  # Sequential path — fetch test results directly without a semaphore
+
+    @staticmethod
+    def _extract_tagged_results(response: Any, site_id: str) -> list[dict[str, Any]]:
+        """Return the results list from ``response.data``, tagging each row with ``site_id``."""
+        # WHY: extracted so _fetch_site_tests drops from 29 lines to <25 and CC from 6 to <=5.
+        if not hasattr(response, "data"):  # Guard against malformed API responses
+            logging.warning("No data attribute in response for site %s", site_id)  # Warn for diagnostics
+            return []  # Return empty list so caller accumulates cleanly
+        results: list[dict[str, Any]] = (
+            response.data.get("results", []) if isinstance(response.data, dict) else []
+        )  # Extract result list from dict payload; empty list for unexpected shapes
+        for result in results:  # Tag every row with its source site_id for downstream joins
+            result["site_id"] = site_id  # Tag every row with its source site_id
+        return results  # Hand back the tagged rows to the caller
 
     @staticmethod
     def _load_fast_site_ids(deps: SimpleNamespace) -> list[str]:
