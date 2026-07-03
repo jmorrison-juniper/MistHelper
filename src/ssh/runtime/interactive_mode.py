@@ -49,7 +49,7 @@ class InteractiveMode:  # Groups the interactive REPL prompt helpers under one n
                 print("X  Username is required")  # User-facing required-field message.
                 continue  # Re-enter the validation loop.
             if not validate_username(username):  # Reject invalid chars
-                print("X  Invalid username format (alphanumeric, underscore, hyphen, dot only)")  # User-facing format error.
+                print("X  Invalid username format (alphanumeric, underscore, hyphen, dot only)")  # Format error.
                 continue  # Re-enter the validation loop.
             logging.debug("Username accepted: %s", username)  # After-action log
             return username  # Hand the validated username back to the caller.
