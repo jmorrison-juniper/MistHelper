@@ -30,10 +30,9 @@ import logging  # WHY: exception-level logging when WebSocket calls fail
 import time  # WHY: 1s sleep after subscription to let the channel settle
 from dataclasses import dataclass  # WHY: frozen bundle structs replace multi-arg method signatures
 from datetime import UTC, datetime  # WHY: ISO timestamp on exported command results
-from typing import TYPE_CHECKING, Any, cast  # WHY: cast narrows Any from __getattr__ proxy
+from typing import Any, cast  # WHY: cast narrows Any from __getattr__ proxy
 
-if TYPE_CHECKING:  # WHY: only pulled in by type checkers; skipped at runtime
-    from src.device.utility_commands import DeviceUtilityCommands  # WHY: parent type for annotation
+from src.device._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
 
 @dataclass(frozen=True)  # WHY: frozen so callers cannot mutate mid-flow
@@ -71,19 +70,8 @@ class ExportResultSpec:  # WHY: bundle for _display_and_export_result single-arg
     filename: str  # WHY: output CSV filename
 
 
-class _UtilityCommandsWebsocket:  # WHY: cluster wrapper mirroring _UtilityCommandsSelection
+class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring _UtilityCommandsSelection
     """Wrapper class holding the WebSocket + confirm helpers."""
-
-    def __init__(self, parent: DeviceUtilityCommands) -> None:  # WHY: bind parent for delegated lookups
-        """Store the parent :class:`DeviceUtilityCommands` for delegate lookups."""
-        self._uc = parent  # WHY: enable __getattr__ delegation back to parent state
-
-    def __getattr__(self, name: str) -> Any:  # WHY: proxy unknown attrs back to parent
-        """Delegate unknown attributes to the wrapped parent object."""
-        parent = self.__dict__.get("_uc")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
-            raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
-        return getattr(parent, name)  # WHY: transparent proxy so self._apisession / _ws_factory work
 
     # ------------------------------------------------------------------
     # WebSocket command lifecycle (request/response)

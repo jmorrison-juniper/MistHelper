@@ -32,14 +32,12 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 
 import logging  # WHY: menu-level info logging on every command entry
 from dataclasses import dataclass  # WHY: frozen ShowCommandSpec preset per command
-from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids runtime import cycle
+from typing import Any  # WHY: Any parameterizes bundle dataclasses and dict payloads
 
 import mistapi  # WHY: device show / diagnostic SDK calls live under mistapi.api.v1.sites.devices
 
+from src.device._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 from src.device._utility_commands_websocket import ExportResultSpec  # WHY: single-arg spec for exporter
-
-if TYPE_CHECKING:  # WHY: only pulled in by type checkers; skipped at runtime
-    from src.device.utility_commands import DeviceUtilityCommands  # WHY: parent type for annotation
 
 
 @dataclass(frozen=True)  # WHY: frozen so shared module constants cannot be mutated at runtime
@@ -150,19 +148,8 @@ _CABLE_TEST_SPEC = ShowCommandSpec(  # WHY: Menu #141 cable test preset
 )
 
 
-class _UtilityCommandsShow:  # WHY: cluster wrapper mirroring _UtilityCommandsWebsocket
+class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _UtilityCommandsWebsocket
     """Wrapper class holding the 16 read-only show / diagnostic commands."""
-
-    def __init__(self, parent: DeviceUtilityCommands) -> None:  # WHY: bind parent for delegated lookups
-        """Store the parent :class:`DeviceUtilityCommands` for delegate lookups."""
-        self._uc = parent  # WHY: enable __getattr__ delegation back to parent state
-
-    def __getattr__(self, name: str) -> Any:  # WHY: proxy unknown attrs back to parent
-        """Delegate unknown attributes to the wrapped parent object."""
-        parent = self.__dict__.get("_uc")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
-            raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
-        return getattr(parent, name)  # WHY: transparent proxy so self._apisession / mistapi calls work
 
     # ------------------------------------------------------------------
     # Common dispatch helper

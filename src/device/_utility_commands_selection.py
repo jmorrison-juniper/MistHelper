@@ -20,13 +20,11 @@ mirrors the wrapper + ``__getattr__`` pattern used by
 from __future__ import annotations  # WHY: postponed evaluation for forward-ref type hints
 
 import logging  # WHY: debug-level logging when stat lookups fail silently
-from typing import TYPE_CHECKING, Any, cast  # WHY: TYPE_CHECKING avoids runtime import cycle
+from typing import Any, cast  # WHY: Any parameterizes SDK payload dicts; cast narrows API responses
 
 import mistapi  # WHY: stats + device APIs live under mistapi.api.v1.sites.*
 
-if TYPE_CHECKING:  # WHY: only pulled in by type checkers; skipped at runtime
-    from src.device.utility_commands import DeviceUtilityCommands  # WHY: parent type for annotation
-
+from src.device._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
 _PHYSICAL_PORT_PREFIXES: tuple[str, ...] = ("ge-", "xe-", "et-", "mge-")  # WHY: Juniper physical port prefixes
 
@@ -41,19 +39,8 @@ _ROUTABLE_IFACE_PREFIXES: tuple[str, ...] = (  # WHY: routable interface name pr
 )
 
 
-class _UtilityCommandsSelection:  # WHY: cluster wrapper matching the routing_utils split pattern
+class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching the routing_utils split pattern
     """Wrapper class holding the 24 extracted selection helpers."""
-
-    def __init__(self, parent: DeviceUtilityCommands) -> None:  # WHY: bind parent for delegated lookups
-        """Store the parent :class:`DeviceUtilityCommands` for delegate lookups."""
-        self._uc = parent  # WHY: enable __getattr__ delegation back to parent state
-
-    def __getattr__(self, name: str) -> Any:  # WHY: proxy unknown attrs back to parent
-        """Delegate unknown attributes to the wrapped parent object."""
-        parent = self.__dict__.get("_uc")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
-            raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
-        return getattr(parent, name)  # WHY: transparent proxy to parent so self._apisession works
 
     # ------------------------------------------------------------------
     # Device type + site+device selection

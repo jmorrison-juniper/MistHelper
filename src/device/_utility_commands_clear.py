@@ -25,27 +25,15 @@ cyclomatic complexity <= 5.
 from __future__ import annotations  # WHY: postponed evaluation for forward-ref type hints
 
 import logging  # WHY: exception-level logging when API calls fail
-from typing import TYPE_CHECKING, Any  # WHY: Any narrows the SDK response type
+from typing import Any  # WHY: Any narrows the SDK response type
 
 import mistapi  # WHY: direct SDK access mirrors parent module usage
 
-if TYPE_CHECKING:  # WHY: only pulled in by type checkers; skipped at runtime
-    from src.device.utility_commands import DeviceUtilityCommands  # WHY: parent type for annotation
+from src.device._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
 
-class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clusters
+class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring earlier phase clusters
     """Wrapper class holding the 9 clear/reset commands and 2 helpers."""
-
-    def __init__(self, parent: DeviceUtilityCommands) -> None:  # WHY: bind parent for delegated lookups
-        """Store the parent :class:`DeviceUtilityCommands` for delegate lookups."""
-        self._uc = parent  # WHY: enable __getattr__ delegation back to parent state
-
-    def __getattr__(self, name: str) -> Any:  # WHY: proxy unknown attrs back to parent
-        """Delegate unknown attributes to the wrapped parent object."""
-        parent = self.__dict__.get("_uc")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
-            raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
-        return getattr(parent, name)  # WHY: transparent proxy so self._apisession / helpers work
 
     # ------------------------------------------------------------------
     # clear_arp_cache
@@ -59,7 +47,10 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
             return  # WHY: no work when operator cancels
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         body = self._build_arp_body(site_id, device_id)  # WHY: gather ARP filter inputs
-        if not self._confirm_destructive("Type 'CLEAR' to clear ARP cache: ", "CLEAR", "clear_arp"):  # WHY: typed-CLEAR gate
+        # WHY: typed-CLEAR gate below rejects mistypes to prevent accidental wipes
+        if not self._confirm_destructive(
+            "Type 'CLEAR' to clear ARP cache: ", "CLEAR", "clear_arp",
+        ):
             return  # WHY: typed-keyword gate aborts on cancel
         self._invoke_arp_clear(site_id, device_id, body)  # WHY: run API + report
 
@@ -87,7 +78,7 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
         """Call the SSR ARP-clear SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.clearSiteSsrArpCache(
-                self._uc._apisession, site_id, device_id, body,  # noqa: SLF001
+                self._apisession, site_id, device_id, body,
             )  # WHY: send ARP-clear request
             self._print_api_result(
                 response,
@@ -112,7 +103,10 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
         body = self._build_bgp_body()  # WHY: gather required + optional BGP filters
         if body is None:  # WHY: missing neighbor -> already messaged
             return  # WHY: bail without confirming when input invalid
-        if not self._confirm_destructive("Type 'CLEAR' to clear BGP routes: ", "CLEAR", "clear_bgp"):  # WHY: typed-CLEAR gate
+        # WHY: typed-CLEAR gate below rejects mistypes to prevent accidental wipes
+        if not self._confirm_destructive(
+            "Type 'CLEAR' to clear BGP routes: ", "CLEAR", "clear_bgp",
+        ):
             return  # WHY: typed-keyword gate aborts on cancel
         self._invoke_bgp_clear(site_id, device_id, body)  # WHY: run API + report
 
@@ -128,8 +122,12 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
             return None  # WHY: propagate missing-required signal to caller
         body: dict[str, Any] = {"neighbor": neighbor}  # WHY: seed with required field
         self._maybe_add_bgp_type(body)  # WHY: optional direction filter
-        self._maybe_add_input(body, "vrf", "VRF (Enter to skip): ", "clear_bgp_vrf")  # WHY: optional VRF scope
-        self._maybe_add_input(body, "node", "Node (node0/node1, Enter to skip): ", "clear_bgp_node")  # WHY: optional VC node
+        # WHY: optional VRF scope narrows clear to a single VRF instance
+        self._maybe_add_input(body, "vrf", "VRF (Enter to skip): ", "clear_bgp_vrf")
+        # WHY: optional VC node targets one member of a virtual chassis
+        self._maybe_add_input(
+            body, "node", "Node (node0/node1, Enter to skip): ", "clear_bgp_node",
+        )
         return body  # WHY: hand assembled filter body to invoker
 
     def _maybe_add_bgp_type(self, body: dict[str, Any]) -> None:  # WHY: validate BGP direction before add
@@ -153,7 +151,7 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
         """Call the SSR BGP-clear SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.clearSiteSsrBgpRoutes(
-                self._uc._apisession, site_id, device_id, body,  # noqa: SLF001
+                self._apisession, site_id, device_id, body,
             )  # WHY: send BGP-clear request
             self._print_api_result(
                 response,
@@ -178,15 +176,20 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
         body = self._build_clear_session_body()  # WHY: gather session filter
         if body is None:  # WHY: cancelled at CLEAR-ALL prompt
             return  # WHY: honor operator's cancel decision
-        if not self._confirm_destructive("Type 'CLEAR' to clear session(s): ", "CLEAR", "clear_session"):  # WHY: typed-CLEAR gate
+        # WHY: typed-CLEAR gate below rejects mistypes to prevent accidental wipes
+        if not self._confirm_destructive(
+            "Type 'CLEAR' to clear session(s): ", "CLEAR", "clear_session",
+        ):
             return  # WHY: typed-keyword gate aborts on cancel
         self._invoke_session_clear(site_id, device_id, body)  # WHY: run API + report
 
-    def _invoke_session_clear(self, site_id: str, device_id: str, body: dict[str, Any]) -> None:  # WHY: isolate SDK call
+    def _invoke_session_clear(
+        self, site_id: str, device_id: str, body: dict[str, Any],
+    ) -> None:  # WHY: isolate SDK call
         """Call the session-clear SDK and route errors through the shared handler."""
         try:  # WHY: guard SDK/transport failures
             response = mistapi.api.v1.sites.devices.clearSiteDeviceSession(
-                self._uc._apisession, site_id, device_id, body,  # noqa: SLF001
+                self._apisession, site_id, device_id, body,
             )  # WHY: send session-clear request
             self._print_api_result(
                 response,
@@ -195,7 +198,7 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
             )  # WHY: emit success/error line
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
             logging.exception("Clear session failed: %s", error)  # WHY: audit failure with stack
-            self._uc._handle_clear_session_error(error)  # noqa: SLF001  # WHY: shared 400-aware error UX
+            self._handle_clear_session_error(error)  # WHY: shared 400-aware error UX
 
     def _build_clear_session_body(self) -> dict[str, Any] | None:  # WHY: gather + validate session filters
         """Gather clear-session parameters from user input, or return None on cancel."""
@@ -210,7 +213,10 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
         )  # WHY: optional session-id list
         if not self._apply_session_filter(body, service_name, session_ids_input):  # WHY: honor CLEAR-ALL cancel
             return None  # WHY: cancelled at CLEAR-ALL prompt
-        self._maybe_add_input(body, "node", "Node (node0/node1, Enter to skip): ", "clear_session_node")  # WHY: optional VC node
+        # WHY: optional VC node targets one member of a virtual chassis
+        self._maybe_add_input(
+            body, "node", "Node (node0/node1, Enter to skip): ", "clear_session_node",
+        )
         return body  # WHY: hand assembled filter body to invoker
 
     def _apply_session_filter(  # WHY: pick which filter (service/ids/all) to apply
@@ -260,7 +266,7 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
         """Call the MAC-table-clear SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.clearSiteDeviceMacTable(
-                self._uc._apisession, site_id, device_id, body,  # noqa: SLF001
+                self._apisession, site_id, device_id, body,
             )  # WHY: send MAC-table clear request
             self._print_api_result(
                 response,
@@ -292,7 +298,7 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
         """Call the BPDU-clear SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch(
-                self._uc._apisession, site_id, device_id, body,  # noqa: SLF001
+                self._apisession, site_id, device_id, body,
             )  # WHY: send BPDU-clear request
             self._print_api_result(
                 response,
@@ -334,7 +340,7 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
         body: dict[str, Any] = {"ports": [port_with_unit]}  # WHY: single-port list
         try:
             response = mistapi.api.v1.sites.devices.clearAllLearnedMacsFromPortOnSwitch(
-                self._uc._apisession, site_id, device_id, body,  # noqa: SLF001
+                self._apisession, site_id, device_id, body,
             )  # WHY: send learned-MAC-clear request
             self._print_api_result(
                 response,
@@ -370,7 +376,7 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
         """Call the policy-hit-count-clear SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.clearSiteDevicePolicyHitCount(
-                self._uc._apisession, site_id, device_id, body,  # noqa: SLF001
+                self._apisession, site_id, device_id, body,
             )  # WHY: send policy-hit-count-clear request
             self._print_api_result(
                 response,
@@ -426,7 +432,7 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
         """Call the DHCP-release SDK (switch/gateway) and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.releaseSiteDeviceDhcpLease(
-                self._uc._apisession, site_id, device_id, body,  # noqa: SLF001
+                self._apisession, site_id, device_id, body,
             )  # WHY: send DHCP-release request
             self._print_api_result(
                 response,
@@ -478,7 +484,7 @@ class _UtilityCommandsClear:  # WHY: cluster wrapper mirroring earlier phase clu
         """Call the SSR DHCP-release SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.releaseSiteSsrDhcpLease(
-                self._uc._apisession, site_id, device_id, body,  # noqa: SLF001
+                self._apisession, site_id, device_id, body,
             )  # WHY: send SSR DHCP-release request
             self._print_api_result(
                 response,

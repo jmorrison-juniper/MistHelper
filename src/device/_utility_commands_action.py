@@ -21,13 +21,11 @@ via its own ``__getattr__`` to sibling clusters when needed.
 from __future__ import annotations  # WHY: postponed evaluation for forward-ref type hints
 
 import logging  # WHY: exception-level logging when API calls fail
-from typing import TYPE_CHECKING, Any  # WHY: Any narrows the SDK response type
+from typing import Any  # WHY: Any narrows the SDK response type
 
 import mistapi  # WHY: direct SDK access mirrors parent module's usage
 
-if TYPE_CHECKING:  # WHY: only pulled in by type checkers; skipped at runtime
-    from src.device.utility_commands import DeviceUtilityCommands  # WHY: parent type for annotation
-
+from src.device._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
 # WHY: menu-selected support-file categories exposed to the operator.
 _SUPPORT_FILE_TYPES: tuple[str, ...] = (
@@ -41,19 +39,8 @@ _SUPPORT_FILE_TYPES: tuple[str, ...] = (
 )
 
 
-class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase clusters
+class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring earlier phase clusters
     """Wrapper class holding the 10 device-management commands."""
-
-    def __init__(self, parent: DeviceUtilityCommands) -> None:  # WHY: bind parent for delegated lookups
-        """Store the parent :class:`DeviceUtilityCommands` for delegate lookups."""
-        self._uc = parent  # WHY: enable __getattr__ delegation back to parent state
-
-    def __getattr__(self, name: str) -> Any:  # WHY: proxy unknown attrs back to parent
-        """Delegate unknown attributes to the wrapped parent object."""
-        parent = self.__dict__.get("_uc")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
-            raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
-        return getattr(parent, name)  # WHY: transparent proxy so self._apisession / helpers work
 
     # ------------------------------------------------------------------
     # locate / unlocate
@@ -85,7 +72,7 @@ class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase cl
         """Call the locate SDK and report success/failure to the operator."""
         try:
             response = mistapi.api.v1.sites.devices.startSiteLocateDevice(
-                self._uc._apisession, site_id, device_id, {"duration": duration},  # noqa: SLF001
+                self._apisession, site_id, device_id, {"duration": duration},
             )  # WHY: kick off LED blink for `duration` minutes
             if self._print_api_result(
                 response,
@@ -106,7 +93,7 @@ class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase cl
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         try:
             response = mistapi.api.v1.sites.devices.stopSiteLocateDevice(
-                self._uc._apisession, site_id, device_id,  # noqa: SLF001
+                self._apisession, site_id, device_id,
             )  # WHY: instruct device to stop blinking LED
             self._print_api_result(
                 response,
@@ -143,7 +130,7 @@ class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase cl
         if port_id.startswith(("vme", "ae", "irb")):  # WHY: block prefixes unsafe to bounce
             print(f"! Port '{port_id}' cannot be bounced (management/aggregate/IRB port).")  # WHY: signal reject
             return None
-        return port_id  # WHY: port is safe to bounce
+        return str(port_id)  # WHY: proxied picker returns Any; coerce to satisfy mypy strict
 
     def _confirm_bounce(self, port_id: str) -> bool:
         """Confirm the port-bounce with a y/N prompt."""
@@ -194,7 +181,7 @@ class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase cl
         """Call the reprovision SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.reprovisionSiteOctermDevice(
-                self._uc._apisession, site_id, device_id,  # noqa: SLF001
+                self._apisession, site_id, device_id,
             )  # WHY: trigger fresh-config push
             self._print_api_result(
                 response,
@@ -224,7 +211,7 @@ class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase cl
         """Return False (and print) when the device is not a VC member."""
         try:
             vc_resp = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(
-                self._uc._apisession, site_id, device_id,  # noqa: SLF001
+                self._apisession, site_id, device_id,
             )  # WHY: query VC membership
             vc_data = getattr(vc_resp, "data", None) or {}  # WHY: guard missing .data
             if not vc_data.get("is_virtual_chassis", False):  # WHY: readopt requires VC
@@ -238,7 +225,7 @@ class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase cl
         """Call the readopt SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.readoptSiteOctermDevice(
-                self._uc._apisession, site_id, device_id,  # noqa: SLF001
+                self._apisession, site_id, device_id,
             )  # WHY: request re-adoption
             self._print_api_result(
                 response,
@@ -262,7 +249,7 @@ class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase cl
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         try:
             response = mistapi.api.v1.sites.devices.getSiteDeviceZtpPassword(
-                self._uc._apisession, site_id, device_id,  # noqa: SLF001
+                self._apisession, site_id, device_id,
             )  # WHY: fetch one-time ZTP credential
             self._render_ztp_response(response)  # WHY: display on console only
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
@@ -292,7 +279,7 @@ class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase cl
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         try:
             response = mistapi.api.v1.sites.devices.getSiteDeviceConfigCmd(
-                self._uc._apisession, site_id, device_id,  # noqa: SLF001
+                self._apisession, site_id, device_id,
             )  # WHY: fetch generated CLI config bundle
             self._render_config_response(response)  # WHY: pretty-print each section
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
@@ -364,7 +351,7 @@ class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase cl
         """Call the support-upload SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.uploadSiteDeviceSupportFile(
-                self._uc._apisession, site_id, device_id, body,  # noqa: SLF001
+                self._apisession, site_id, device_id, body,
             )  # WHY: initiate upload to Mist support bucket
             if self._print_api_result(
                 response,
@@ -389,7 +376,7 @@ class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase cl
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         try:
             response = mistapi.api.v1.sites.devices.pollSiteSwitchStats(
-                self._uc._apisession, site_id, device_id,  # noqa: SLF001
+                self._apisession, site_id, device_id,
             )  # WHY: force a fresh telemetry poll
             if self._print_api_result(
                 response,
@@ -410,7 +397,7 @@ class _UtilityCommandsAction:  # WHY: cluster wrapper mirroring earlier phase cl
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         try:
             response = mistapi.api.v1.sites.devices.createSiteDeviceSnapshot(
-                self._uc._apisession, site_id, device_id,  # noqa: SLF001
+                self._apisession, site_id, device_id,
             )  # WHY: capture in-band device snapshot
             self._print_api_result(
                 response,
