@@ -12,16 +12,18 @@ Dependencies are injected via constructor for testability.
 from __future__ import annotations
 
 import logging
-import time
 from collections.abc import Callable
 from dataclasses import dataclass  # WHY: bundle 6 injected deps into a frozen struct
-from datetime import UTC, datetime
 from typing import Any
 
 import mistapi
 
 from src.device._utility_commands_selection import (
     _UtilityCommandsSelection,  # WHY: selection helper cluster (Phase 1 split)
+)
+from src.device._utility_commands_websocket import (
+    ExportResultSpec,  # WHY: bundle for _display_and_export_result (STRUCT-PARAMS)
+    _UtilityCommandsWebsocket,  # WHY: websocket helper cluster (Phase 2 split)
 )
 
 # ---------------------------------------------------------------------------
@@ -54,6 +56,7 @@ class UtilityCommandsDeps:
 # WHY: cluster attribute names looped over by __getattr__ for O(N) proxying.
 _CLUSTER_ATTRS: tuple[str, ...] = (
     "_selection",  # WHY: site/device/port/interface/network selection helpers
+    "_websocket",  # WHY: WebSocket command lifecycle + confirm/print helpers
 )
 
 
@@ -118,6 +121,7 @@ class DeviceUtilityCommands:
         self._write_export_fn = deps.write_export_fn  # WHY: exporter callable
         self._ws_factory = deps.websocket_manager_factory  # WHY: WSManager factory
         self._selection = _UtilityCommandsSelection(self)  # WHY: selection cluster binding
+        self._websocket = _UtilityCommandsWebsocket(self)  # WHY: websocket cluster binding
 
     def __getattr__(self, name: str) -> Any:
         """Proxy cluster-attribute access to helper clusters.
@@ -139,174 +143,6 @@ class DeviceUtilityCommands:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
-
-    def _run_websocket_command(
-        self,
-        site_id: str,
-        device_id: str,
-        sdk_method: Any,
-        body: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
-        """Execute WebSocket command: POST -> subscribe -> await."""
-        websocket_manager = self._ws_factory(self._apisession)
-        if not websocket_manager.connect():
-            print("! Failed to establish WebSocket connection.")
-            return None
-        channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-        if not websocket_manager.subscribe_to_channel(channel):
-            print("! Failed to subscribe to device command channel.")
-            websocket_manager.disconnect()
-            return None
-        time.sleep(1)
-        try:
-            return self._execute_ws_command(
-                site_id,
-                device_id,
-                sdk_method,
-                body,
-                websocket_manager,
-            )
-        except Exception as error:
-            logging.exception("WebSocket command failed: %s", error)
-            print(f"! Command failed: {error}")
-            return None
-        finally:
-            websocket_manager.disconnect()
-
-    def _execute_ws_command(
-        self,
-        site_id: str,
-        device_id: str,
-        sdk_method: Any,
-        body: dict[str, Any] | None,
-        websocket_manager: Any,
-    ) -> dict[str, Any] | None:
-        """Run SDK method and wait for WebSocket result."""
-        if body is not None:
-            response = sdk_method(self._apisession, site_id, device_id, body)
-        else:
-            response = sdk_method(self._apisession, site_id, device_id)
-        if not hasattr(response, "data"):
-            print("! No response data from API.")
-            return None
-        response_data = response.data if isinstance(response.data, dict) else {}
-        session_id = response_data.get("session")
-        if not session_id:
-            print("! No session ID returned from command.")
-            return None
-        print(f"-> Command issued (session: {session_id[:8]}...)")
-        print("-> Waiting for results...")
-        result: dict[str, Any] | None = websocket_manager.wait_for_command_result(session_id, timeout_seconds=120)
-        return result
-
-    def _run_streaming_command(  # noqa: PLR0913
-        self,
-        site_id: str,
-        device_id: str,
-        sdk_method: Any,
-        body: dict[str, Any] | None = None,
-        timeout_seconds: int = 120,
-    ) -> None:
-        """Execute streaming WebSocket command with output display."""
-        websocket_manager = self._ws_factory(self._apisession)
-        if not websocket_manager.connect():
-            print("! Failed to establish WebSocket connection.")
-            return
-        channel = f"/sites/{site_id}/devices/{device_id}/cmd"
-        if not websocket_manager.subscribe_to_channel(channel):
-            print("! Failed to subscribe to device command channel.")
-            websocket_manager.disconnect()
-            return
-        time.sleep(1)
-        try:
-            self._stream_ws_output(
-                site_id,
-                device_id,
-                sdk_method,
-                body,
-                websocket_manager,
-                timeout_seconds,
-            )
-        except KeyboardInterrupt:
-            print("\n-> Streaming stopped by user.")
-        except Exception as error:
-            logging.exception("Streaming command failed: %s", error)
-            print(f"! Streaming failed: {error}")
-        finally:
-            websocket_manager.disconnect()
-
-    def _stream_ws_output(  # noqa: PLR0913
-        self,
-        site_id: str,
-        device_id: str,
-        sdk_method: Any,
-        body: dict[str, Any] | None,
-        websocket_manager: Any,
-        timeout_seconds: int,
-    ) -> None:
-        """Stream WebSocket output to console."""
-        if body is not None:
-            response = sdk_method(self._apisession, site_id, device_id, body)
-        else:
-            response = sdk_method(self._apisession, site_id, device_id)
-        if not hasattr(response, "data"):
-            print("! No response data from API.")
-            return
-        response_data = response.data if isinstance(response.data, dict) else {}
-        session_id = response_data.get("session")
-        if not session_id:
-            print("! No session ID returned.")
-            return
-        print(f"-> Streaming started (session: {session_id[:8]}...)")
-        print("-> Press Ctrl+C to stop.\n")
-        result = websocket_manager.wait_for_command_result(
-            session_id,
-            timeout_seconds=timeout_seconds,
-            activity_timeout_seconds=30,
-        )
-        if result:
-            raw = result.get("raw", "")
-            if raw:
-                print(raw)
-
-    def _display_and_export_result(  # noqa: PLR0913
-        self,
-        result: dict[str, Any] | None,
-        command_name: str,
-        site_id: str,
-        device_id: str,
-        api_function_name: str,
-        filename: str,
-    ) -> None:
-        """Display WebSocket result and write to dual output."""
-        if not result:
-            print("! No results received (timeout or error).")
-            return
-        print("\n" + "=" * 60)
-        print(f"{command_name.upper()} RESULTS:")
-        print("=" * 60)
-        raw_output = result.get("raw", "")
-        if raw_output:
-            print(raw_output)
-        other_output = result.get("Output", "")
-        if other_output and other_output != raw_output:
-            print(other_output)
-        export_data = {
-            "device_id": device_id,
-            "site_id": site_id,
-            "command": command_name,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "raw_output": raw_output or other_output or str(result),
-        }
-        self._write_export_fn([export_data], filename, api_function_name)
-
-    def _confirm_destructive(self, prompt: str, keyword: str, context: str) -> bool:
-        """Require typed keyword confirmation for destructive ops."""
-        confirmation = self._safe_input_fn(prompt, context=context)
-        if confirmation != keyword:
-            print("! Operation cancelled - confirmation not matched.")
-            return False
-        return True
 
     @staticmethod
     def _print_api_result(response: Any, success_msg: str, fail_msg: str) -> bool:
@@ -358,12 +194,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "Traceroute",
-            site_id,
-            device_id,
-            "tracerouteFromDevice",
-            "DeviceTraceroute.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="Traceroute",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="tracerouteFromDevice",
+                filename="DeviceTraceroute.csv",
+            )
         )
 
     def show_ospf_neighbors(self) -> None:
@@ -391,12 +229,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "OSPF Neighbors",
-            site_id,
-            device_id,
-            "showSiteGatewayOspfNeighbors",
-            "DeviceOspfNeighbors.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="OSPF Neighbors",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="showSiteGatewayOspfNeighbors",
+                filename="DeviceOspfNeighbors.csv",
+            )
         )
 
     def show_ospf_interfaces(self) -> None:
@@ -424,12 +264,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "OSPF Interfaces",
-            site_id,
-            device_id,
-            "showSiteGatewayOspfInterfaces",
-            "DeviceOspfInterfaces.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="OSPF Interfaces",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="showSiteGatewayOspfInterfaces",
+                filename="DeviceOspfInterfaces.csv",
+            )
         )
 
     def show_ospf_database(self) -> None:
@@ -460,12 +302,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "OSPF Database",
-            site_id,
-            device_id,
-            "showSiteGatewayOspfDatabase",
-            "DeviceOspfDatabase.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="OSPF Database",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="showSiteGatewayOspfDatabase",
+                filename="DeviceOspfDatabase.csv",
+            )
         )
 
     def show_ospf_summary(self) -> None:
@@ -490,12 +334,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "OSPF Summary",
-            site_id,
-            device_id,
-            "showSiteGatewayOspfSummary",
-            "DeviceOspfSummary.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="OSPF Summary",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="showSiteGatewayOspfSummary",
+                filename="DeviceOspfSummary.csv",
+            )
         )
 
     def resolve_dns(self) -> None:
@@ -512,12 +358,14 @@ class DeviceUtilityCommands:
             mistapi.api.v1.sites.devices.testSiteSsrDnsResolution,
         )
         self._display_and_export_result(
-            result,
-            "DNS Resolution",
-            site_id,
-            device_id,
-            "testSiteSsrDnsResolution",
-            "DeviceDnsResolution.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="DNS Resolution",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="testSiteSsrDnsResolution",
+                filename="DeviceDnsResolution.csv",
+            )
         )
 
     def monitor_traffic(self) -> None:
@@ -603,12 +451,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "Sessions",
-            site_id,
-            device_id,
-            "showSiteSsrAndSrxSessions",
-            "DeviceSessions.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="Sessions",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="showSiteSsrAndSrxSessions",
+                filename="DeviceSessions.csv",
+            )
         )
 
     def show_service_path(self) -> None:
@@ -639,12 +489,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "Service Path",
-            site_id,
-            device_id,
-            "showSiteSsrServicePath",
-            "DeviceServicePath.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="Service Path",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="showSiteSsrServicePath",
+                filename="DeviceServicePath.csv",
+            )
         )
 
     def show_bgp_summary(self) -> None:
@@ -666,12 +518,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "BGP Summary",
-            site_id,
-            device_id,
-            "showSiteDeviceBgpSummary",
-            "DeviceBgpSummary.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="BGP Summary",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="showSiteDeviceBgpSummary",
+                filename="DeviceBgpSummary.csv",
+            )
         )
 
     def show_arp_table(self) -> None:
@@ -693,12 +547,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "ARP Table",
-            site_id,
-            device_id,
-            "showSiteDeviceArpTable",
-            "DeviceArpTable.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="ARP Table",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="showSiteDeviceArpTable",
+                filename="DeviceArpTable.csv",
+            )
         )
 
     def show_dhcp_leases(self) -> None:
@@ -723,12 +579,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "DHCP Leases",
-            site_id,
-            device_id,
-            "showSiteDeviceDhcpLeases",
-            "DeviceDhcpLeases.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="DHCP Leases",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="showSiteDeviceDhcpLeases",
+                filename="DeviceDhcpLeases.csv",
+            )
         )
 
     def show_dot1x(self) -> None:
@@ -750,12 +608,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "802.1X Table",
-            site_id,
-            device_id,
-            "showSiteDeviceDot1xTable",
-            "DeviceDot1xTable.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="802.1X Table",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="showSiteDeviceDot1xTable",
+                filename="DeviceDot1xTable.csv",
+            )
         )
 
     def show_evpn_database(self) -> None:
@@ -777,12 +637,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "EVPN Database",
-            site_id,
-            device_id,
-            "showSiteDeviceEvpnDatabase",
-            "DeviceEvpnDatabase.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="EVPN Database",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="showSiteDeviceEvpnDatabase",
+                filename="DeviceEvpnDatabase.csv",
+            )
         )
 
     # ------------------------------------------------------------------
@@ -889,12 +751,14 @@ class DeviceUtilityCommands:
             body,
         )
         self._display_and_export_result(
-            result,
-            "Cable Test",
-            site_id,
-            device_id,
-            "cableTestFromSwitch",
-            "DeviceCableTest.csv",
+            ExportResultSpec(
+                result=result,
+                command_name="Cable Test",
+                site_id=site_id,
+                device_id=device_id,
+                api_function_name="cableTestFromSwitch",
+                filename="DeviceCableTest.csv",
+            )
         )
 
     def reprovision_device(self) -> None:
