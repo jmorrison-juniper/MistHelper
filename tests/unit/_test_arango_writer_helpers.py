@@ -22,6 +22,264 @@ from typing import Any  # WHY: mapping payloads from arango_writer are opaque di
 
 
 # ---------------------------------------------------------------------------
+# Expected edge-definition catalogue
+# ---------------------------------------------------------------------------
+#
+# The full canonical set of edge_collection names that EDGE_DEFINITIONS
+# must expose. Splitting the set by tier keeps each block short enough
+# to stay under the compliance-analyzer length ceiling (25 statements)
+# and lets callers assert per-tier subsets without duplicating names.
+# The ALL_EXPECTED_EDGES union is what the wholesale audit test uses.
+
+_ORIGINAL_11_EDGES: frozenset[str] = frozenset({  # WHY: first-batch edges from the initial schema
+    "OrgContainsSite",
+    "OrgContainsDevice",
+    "SiteContainsDevice",
+    "TemplateAssignedToSite",
+    "DeviceHasPort",
+    "ClientConnectedToDevice",
+    "WlanBelongsToSite",
+    "WlanUsesTemplate",
+    "SiteBelongsToSiteGroup",
+    "MxEdgeBelongsToCluster",
+    "ConfigSnapshotForEntity",
+})
+
+_ORG_ENTITY_EDGES: frozenset[str] = frozenset({  # WHY: client + org-level ownership edges
+    "ClientConnectedToWlan",
+    "ClientBelongsToSite",
+    "NetworkBelongsToOrg",
+    "ServiceBelongsToOrg",
+    "VpnBelongsToOrg",
+})
+
+_EVENT_SECURITY_EDGES: frozenset[str] = frozenset({  # WHY: events, alarms, NAC and security edges
+    "AlarmBelongsToSite",
+    "EventBelongsToSite",
+    "EventOccurredOnDevice",
+    "NACRuleMatchesSite",
+    "NACRuleMatchesSiteGroup",
+    "NACTagBelongsToPortal",
+    "SecurityPolicyBelongsToOrg",
+})
+
+_ASSET_CONFIG_EDGES: frozenset[str] = frozenset({  # WHY: PSKs, assets, webhooks, site-group containment
+    "PSKBelongsToSite",
+    "AssetBelongsToSite",
+    "AssetOnMap",
+    "WebhookBelongsToSite",
+    "SiteGroupContainsSite",
+})
+
+_WLAN_TEMPLATE_EDGES: frozenset[str] = frozenset({  # WHY: WLAN + template application edges
+    "WlanUsesMxTunnel",
+    "TemplateAppliedToSite",
+    "TemplateAppliedToSiteGroup",
+})
+
+_TIER1_EDGES: frozenset[str] = frozenset({  # WHY: high-value entity relationships (tier 1)
+    "DeviceUsesProfile",
+    "PSKBelongsToWlan",
+    "AlarmOnDevice",
+    "NacPortalServesSiteGroup",
+    "MxTunnelUsesCluster",
+    "AuditLogBelongsToSite",
+    "GuestBelongsToSite",
+    "GuestAuthorizedOnWlan",
+    "GuestConnectedToAP",
+})
+
+_TIER2_EDGES: frozenset[str] = frozenset({  # WHY: event / search entity relationships (tier 2)
+    "ClientEventBelongsToSite",
+    "ClientEventOnDevice",
+    "SessionBelongsToSite",
+    "SessionOnWlan",
+    "SessionOnDevice",
+    "NacEventBelongsToSite",
+    "WanEventBelongsToSite",
+    "MxEdgeEventBelongsToSite",
+    "OtherEventBelongsToSite",
+    "OrgEventBelongsToSite",
+    "SystemEventBelongsToSite",
+})
+
+_TIER3_EDGES: frozenset[str] = frozenset({  # WHY: stats / telemetry relationships (tier 3)
+    "DeviceStatsBelongsToSite",
+    "DeviceStatsForDevice",
+    "BgpStatsBelongsToSite",
+    "OspfStatsBelongsToSite",
+    "PeerPathBelongsToSite",
+    "PortBelongsToSite",
+    "PortBelongsToDevice",
+    "TunnelBelongsToSite",
+    "MxEdgeStatsBelongsToSite",
+})
+
+_TIER4_EDGES: frozenset[str] = frozenset({  # WHY: WxLAN policy relationships (tier 4)
+    "WxRuleBelongsToTemplate",
+    "WxRuleMatchesSrcTag",
+    "WxRuleAllowsDstTag",
+    "WxRuleDeniesDstTag",
+})
+
+_TIER5_EDGES: frozenset[str] = frozenset({  # WHY: remaining entity relationships (tier 5)
+    "TicketBelongsToSite",
+    "PacketCaptureBelongsToSite",
+    "OtherDeviceBelongsToSite",
+    "EvpnBelongsToSite",
+})
+
+_ALARM_PROFILE_EDGES: frozenset[str] = frozenset({  # WHY: alarm templates, profiles, WLAN application
+    "AlarmTemplateAssignedToSite",
+    "SecurityPolicyAssignedToSite",
+    "DeviceConnectedToDevice",
+    "ProfileAppliedToSite",
+    "ProfileAppliedToSiteGroup",
+    "AlarmTemplateBelongsToOrg",
+    "WlanAppliedToSite",
+    "WlanAppliedToSiteGroup",
+    "SessionForClient",
+    "NacEventForClient",
+    "WanEventForClient",
+    "NACRuleUsesTag",
+    "ServicePolicyUsesService",
+})
+
+_ISSUE_169_EDGES: frozenset[str] = frozenset({  # WHY: coverage for unmapped org-level endpoints (issue #169)
+    "PskPortalServesSiteGroup",
+    "SuppressedAlarmBelongsToSite",
+    "DeviceConfigBelongsToSite",
+    "DeviceConfigForDevice",
+    "SiteStatsBelongsToSite",
+})
+
+_ISSUE_180_EDGES: frozenset[str] = frozenset({  # WHY: rogue detection edges (issue #180)
+    "RogueAPDetectedBySite",
+    "RogueAPDetectedByAP",
+    "RogueClientDetectedByAP",
+    "RogueClientOnBSSID",
+    "RogueEventBelongsToSite",
+    "RogueEventOnDevice",
+})
+
+_ISSUE_178_EDGES: frozenset[str] = frozenset({  # WHY: site-level MxEdge edges (issue #178)
+    "MxEdgeBelongsToSite",
+    "MxEdgeEventOnDevice",
+})
+
+_ISSUE_176_EDGES: frozenset[str] = frozenset({  # WHY: site-level asset edges (issue #176)
+    "AssetFilterBelongsToSite",
+    "DiscoveredAssetOnMap",
+    "AssetTrackedByAP",
+})
+
+_ISSUE_183_EDGES: frozenset[str] = frozenset({  # WHY: applications, calls, WAN usage, fingerprints (issue #183)
+    "ApplicationOnSite",
+    "CallOnDevice",
+    "WanUsageOnDevice",
+    "WanUsagePeerDevice",
+    "TroubleshootCallOnDevice",
+})
+
+_ISSUE_185_EDGES: frozenset[str] = frozenset({  # WHY: SLE impacted entity relationships (issue #185)
+    "SLEMetricForSite",
+    "SLEImpactedDevice",
+    "SLEImpactedClient",
+    "SLEImpactedApplication",
+    "SLEImpactedBySite",
+})
+
+_ISSUE_177_EDGES: frozenset[str] = frozenset({  # WHY: routing / network topology (issue #177)
+    "DeviceHasBGPPeer",
+    "DeviceHasOSPFNeighbor",
+    "PortConnectsToDevice",
+    "EVPNTopologyContainsSwitch",
+    "DiscoveredSwitchBelongsToSite",
+    "RrmNeighborBelongsToSite",
+})
+
+_ISSUE_175_EDGES: frozenset[str] = frozenset({  # WHY: maps, zones, location (issue #175)
+    "MapBelongsToSite",
+    "ZoneBelongsToMap",
+    "ZoneBelongsToSite",
+    "RssiZoneBelongsToMap",
+    "BeaconOnMap",
+    "BeaconBelongsToSite",
+    "VBeaconOnMap",
+    "DeviceOnMap",
+    "ZoneSessionInZone",
+    "ZoneSessionOnMap",
+})
+
+_ISSUE_174_EDGES: frozenset[str] = frozenset({  # WHY: events & alarms (issue #174)
+    "ServicePathEventOnDevice",
+    "ServicePathEventUsesVPN",
+    "ServicePathEventBelongsToSite",
+    "SkyatpEventBelongsToSite",
+    "RoamingEventBelongsToSite",
+    "RoamingEventOnDevice",
+    "RrmEventBelongsToSite",
+    "RrmEventOnDevice",
+    "AnomalyEventBelongsToSite",
+})
+
+_ISSUE_181_EDGES: frozenset[str] = frozenset({  # WHY: config history, synthetic tests, webhook deliveries (issue #181)
+    "ConfigHistoryForDevice",
+    "SyntheticTestOnDevice",
+    "WebhookDeliveryFromWebhook",
+    "PacketCaptureOnDevice",
+})
+
+_ISSUE_173_EDGES: frozenset[str] = frozenset({  # WHY: site-level WLANs, PSKs, webhooks, WxLAN policies (issue #173)
+    "WxRuleBelongsToSite",
+    "WxTagBelongsToSite",
+    "WxTunnelBelongsToSite",
+    "WlanUsesWxTunnel",
+})
+
+_ISSUE_172_EDGES: frozenset[str] = frozenset({  # WHY: site-level client relationships (issue #172)
+    "ClientUsedPSK",
+    "ClientMatchedNACRule",
+    "ClientEventForClient",
+    "UnconnectedClientOnMap",
+    "UnconnectedClientDetectedByAP",
+})
+
+_ISSUE_171_184_EDGES: frozenset[str] = frozenset({  # WHY: site-level device + derived config (issues #171, #184)
+    "SpectrumAnalysisForDevice",
+    "DerivedConfigForSite",
+    "DerivedFromTemplate",
+})
+
+ALL_EXPECTED_EDGES: frozenset[str] = frozenset().union(  # WHY: single canonical union of every tier for the wholesale audit
+    _ORIGINAL_11_EDGES,
+    _ORG_ENTITY_EDGES,
+    _EVENT_SECURITY_EDGES,
+    _ASSET_CONFIG_EDGES,
+    _WLAN_TEMPLATE_EDGES,
+    _TIER1_EDGES,
+    _TIER2_EDGES,
+    _TIER3_EDGES,
+    _TIER4_EDGES,
+    _TIER5_EDGES,
+    _ALARM_PROFILE_EDGES,
+    _ISSUE_169_EDGES,
+    _ISSUE_180_EDGES,
+    _ISSUE_178_EDGES,
+    _ISSUE_176_EDGES,
+    _ISSUE_183_EDGES,
+    _ISSUE_185_EDGES,
+    _ISSUE_177_EDGES,
+    _ISSUE_175_EDGES,
+    _ISSUE_174_EDGES,
+    _ISSUE_181_EDGES,
+    _ISSUE_173_EDGES,
+    _ISSUE_172_EDGES,
+    _ISSUE_171_184_EDGES,
+)
+
+
+# ---------------------------------------------------------------------------
 # Edge-definition assertions
 # ---------------------------------------------------------------------------
 
