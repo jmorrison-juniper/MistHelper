@@ -14308,6 +14308,8 @@ def _get_duc_instance():  # Build DeviceUtilityCommands.
     """Create DeviceUtilityCommands instance with MistHelper globals."""
     from src.device.utility_commands import (  # Import the extracted class + deps.
         DeviceUtilityCommands as _DUC,
+    )
+    from src.device.utility_commands import (
         UtilityCommandsDeps as _Deps,
     )
 
