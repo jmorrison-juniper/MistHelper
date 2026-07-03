@@ -198,9 +198,7 @@ class MarkdownReportGenerator:  # Renders scored file reports as Markdown.
             lines.extend(block)  # Append the phase block.
         return lines  # Return the assembled plan body.
 
-    def _prioritize_tasks(
-        self, all_tasks: list[tuple[str, Violation]]
-    ) -> list[tuple[str, Violation]]:
+    def _prioritize_tasks(self, all_tasks: list[tuple[str, Violation]]) -> list[tuple[str, Violation]]:
         """Return tasks sorted worst-severity-first and capped at ``_MAX_TASKS``."""
         # WHY: extracted so _plan_body drops from CC 7 to <=5.
         order = {severity: index for index, severity in enumerate(self._SEVERITY_ORDER)}  # Severity ranking.
