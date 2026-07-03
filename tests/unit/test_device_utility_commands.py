@@ -20,7 +20,8 @@ _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 
-from src.device.utility_commands import DeviceUtilityCommands
+from src.device._utility_commands_websocket import ExportResultSpec, StreamWsSpec
+from src.device.utility_commands import DeviceUtilityCommands, UtilityCommandsDeps
 
 
 def setup_module() -> None:
@@ -59,13 +60,18 @@ def mock_deps() -> dict[str, MagicMock]:
 @pytest.fixture()
 def duc(mock_deps: dict[str, MagicMock]) -> DeviceUtilityCommands:
     """Return a DeviceUtilityCommands instance with mocked deps."""
-    return DeviceUtilityCommands(**mock_deps)
+    return DeviceUtilityCommands(UtilityCommandsDeps(**mock_deps))
 
 
 @pytest.fixture()
 def mock_api():
-    """Patch mistapi in the module for isolated API mocking."""
-    with patch("src.device.utility_commands.mistapi") as mapi:
+    """Patch mistapi across every cluster module used by DeviceUtilityCommands."""
+    with (
+        patch("src.device._utility_commands_selection.mistapi") as mapi,  # WHY: primary mistapi mock
+        patch("src.device._utility_commands_show.mistapi", mapi),  # WHY: keep clusters sharing one mock
+        patch("src.device._utility_commands_action.mistapi", mapi),  # WHY: cover action-cluster SDK calls
+        patch("src.device._utility_commands_clear.mistapi", mapi),  # WHY: cover clear-cluster SDK calls
+    ):
         yield mapi
 
 
@@ -285,7 +291,16 @@ class TestDisplayAndExportResult:
         duc: DeviceUtilityCommands,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        duc._display_and_export_result(None, "test_cmd", "site-1", "dev-1", "apiFunc", "file.csv")
+        duc._display_and_export_result(
+            ExportResultSpec(
+                result=None,
+                command_name="test_cmd",
+                site_id="site-1",
+                device_id="dev-1",
+                api_function_name="apiFunc",
+                filename="file.csv",
+            )
+        )
         assert "No results" in capsys.readouterr().out
 
     def test_prints_raw_output(
@@ -295,7 +310,16 @@ class TestDisplayAndExportResult:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         result = {"raw": "output line 1\nline 2"}
-        duc._display_and_export_result(result, "traceroute", "site-1", "dev-1", "tracerouteFromDevice", "Trace.csv")
+        duc._display_and_export_result(
+            ExportResultSpec(
+                result=result,
+                command_name="traceroute",
+                site_id="site-1",
+                device_id="dev-1",
+                api_function_name="tracerouteFromDevice",
+                filename="Trace.csv",
+            )
+        )
         out = capsys.readouterr().out
         assert "output line 1" in out
         assert "TRACEROUTE RESULTS" in out
@@ -307,7 +331,16 @@ class TestDisplayAndExportResult:
         mock_deps: dict[str, MagicMock],
     ) -> None:
         result = {"raw": "hello"}
-        duc._display_and_export_result(result, "cmd", "s1", "d1", "apiFunc", "out.csv")
+        duc._display_and_export_result(
+            ExportResultSpec(
+                result=result,
+                command_name="cmd",
+                site_id="s1",
+                device_id="d1",
+                api_function_name="apiFunc",
+                filename="out.csv",
+            )
+        )
         call_args = mock_deps["write_export_fn"].call_args
         export_list = call_args[0][0]
         assert len(export_list) == 1
@@ -447,7 +480,7 @@ class TestRunWebsocketCommand:
         assert result is None
         ws_mgr.disconnect.assert_called_once()
 
-    @patch("src.device.utility_commands.time.sleep")
+    @patch("src.device._utility_commands_websocket.time.sleep")
     def test_success_path(
         self,
         mock_sleep: MagicMock,
@@ -1344,7 +1377,16 @@ class TestStreamWsOutput:
         sdk_method = MagicMock()
         sdk_method.return_value = MagicMock(spec=[])
         ws_mgr = MagicMock()
-        duc._stream_ws_output("s1", "d1", sdk_method, None, ws_mgr, 60)
+        duc._stream_ws_output(
+            StreamWsSpec(
+                site_id="s1",
+                device_id="d1",
+                sdk_method=sdk_method,
+                body=None,
+                websocket_manager=ws_mgr,
+                timeout_seconds=60,
+            )
+        )
         assert "No response data" in capsys.readouterr().out
 
     def test_no_session_id(
@@ -1357,7 +1399,16 @@ class TestStreamWsOutput:
         resp.data = {}
         sdk_method.return_value = resp
         ws_mgr = MagicMock()
-        duc._stream_ws_output("s1", "d1", sdk_method, None, ws_mgr, 60)
+        duc._stream_ws_output(
+            StreamWsSpec(
+                site_id="s1",
+                device_id="d1",
+                sdk_method=sdk_method,
+                body=None,
+                websocket_manager=ws_mgr,
+                timeout_seconds=60,
+            )
+        )
         assert "No session ID" in capsys.readouterr().out
 
     def test_success_prints_raw(
@@ -1371,7 +1422,16 @@ class TestStreamWsOutput:
         sdk_method.return_value = resp
         ws_mgr = MagicMock()
         ws_mgr.wait_for_command_result.return_value = {"raw": "streaming output"}
-        duc._stream_ws_output("s1", "d1", sdk_method, {"port": "ge-0/0/0"}, ws_mgr, 60)
+        duc._stream_ws_output(
+            StreamWsSpec(
+                site_id="s1",
+                device_id="d1",
+                sdk_method=sdk_method,
+                body={"port": "ge-0/0/0"},
+                websocket_manager=ws_mgr,
+                timeout_seconds=60,
+            )
+        )
         out = capsys.readouterr().out
         assert "streaming output" in out
 
@@ -1386,7 +1446,16 @@ class TestStreamWsOutput:
         sdk_method.return_value = resp
         ws_mgr = MagicMock()
         ws_mgr.wait_for_command_result.return_value = {"other": "data"}
-        duc._stream_ws_output("s1", "d1", sdk_method, None, ws_mgr, 60)
+        duc._stream_ws_output(
+            StreamWsSpec(
+                site_id="s1",
+                device_id="d1",
+                sdk_method=sdk_method,
+                body=None,
+                websocket_manager=ws_mgr,
+                timeout_seconds=60,
+            )
+        )
         out = capsys.readouterr().out
         assert "Streaming started" in out
 
@@ -1399,7 +1468,7 @@ class TestStreamWsOutput:
 class TestRunStreamingCommandExtended:
     """Extended tests for _run_streaming_command."""
 
-    @patch("src.device.utility_commands.time.sleep")
+    @patch("src.device._utility_commands_websocket.time.sleep")
     def test_subscribe_fail(
         self,
         mock_sleep: MagicMock,
@@ -1415,7 +1484,7 @@ class TestRunStreamingCommandExtended:
         assert "Failed to subscribe" in capsys.readouterr().out
         ws_mgr.disconnect.assert_called_once()
 
-    @patch("src.device.utility_commands.time.sleep")
+    @patch("src.device._utility_commands_websocket.time.sleep")
     def test_success_path(
         self,
         mock_sleep: MagicMock,
@@ -1431,7 +1500,7 @@ class TestRunStreamingCommandExtended:
             mock_stream.assert_called_once()
         ws_mgr.disconnect.assert_called_once()
 
-    @patch("src.device.utility_commands.time.sleep")
+    @patch("src.device._utility_commands_websocket.time.sleep")
     def test_exception_in_stream(
         self,
         mock_sleep: MagicMock,
@@ -1448,7 +1517,7 @@ class TestRunStreamingCommandExtended:
             assert "oops" in capsys.readouterr().out
         ws_mgr.disconnect.assert_called_once()
 
-    @patch("src.device.utility_commands.time.sleep")
+    @patch("src.device._utility_commands_websocket.time.sleep")
     def test_keyboard_interrupt(
         self,
         mock_sleep: MagicMock,
@@ -1474,7 +1543,7 @@ class TestRunStreamingCommandExtended:
 class TestRunWebsocketCommandExtended:
     """Extended tests for _run_websocket_command."""
 
-    @patch("src.device.utility_commands.time.sleep")
+    @patch("src.device._utility_commands_websocket.time.sleep")
     def test_exception_in_execute(
         self,
         mock_sleep: MagicMock,
@@ -2599,7 +2668,16 @@ class TestDisplayAndExportResultExtended:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         result = {"Output": "output text"}
-        duc._display_and_export_result(result, "cmd", "s1", "d1", "apiFunc", "file.csv")
+        duc._display_and_export_result(
+            ExportResultSpec(
+                result=result,
+                command_name="cmd",
+                site_id="s1",
+                device_id="d1",
+                api_function_name="apiFunc",
+                filename="file.csv",
+            )
+        )
         out = capsys.readouterr().out
         assert "output text" in out
 
