@@ -47,19 +47,30 @@ class ComparisonTableRenderer:
     def _build_row(self, result: AuditResult) -> list[str]:
         """Assemble one terminal row, truncating the two widest columns."""
         site = result.matched_site  # Match outcome for this row.
-        mist_text = self._format_address(site.mist_address)  # Current Mist address as text.
-        csv_text = self._format_csv_address(result.address_row)  # CSV address as text.
+        labels = self._row_labels(result)  # Site/Mist/CSV columns with '-' placeholders.
         snmp_text = self._truncate(site.snmp_location or "(none)")  # SNMP location (truncated).
         suggested = self._truncate(result.suggested_address or "-")  # Suggestion (truncated).
         return [  # Seven cells matching _COLUMN_NAMES order.
-            site.site_name or "-",  # Site name or placeholder.
-            mist_text or "-",  # Mist address or placeholder.
-            csv_text or "-",  # CSV address or placeholder.
+            labels[0],  # Site name column.
+            labels[1],  # Current Mist address column.
+            labels[2],  # CSV address column.
             snmp_text,  # Truncated SNMP location.
             suggested,  # Truncated suggestion.
             result.source,  # Source label.
             result.issue_type,  # Classification state.
         ]
+
+    def _row_labels(self, result: AuditResult) -> tuple[str, str, str]:
+        """Return (site, mist, csv) label strings with '-' fallback for blanks."""
+        # WHY: extracting the three placeholder short-circuits keeps _build_row's CC at 3.
+        site = result.matched_site  # Match outcome for this row.
+        mist_text = self._format_address(site.mist_address)  # Current Mist address as text.
+        csv_text = self._format_csv_address(result.address_row)  # CSV address as text.
+        return (
+            site.site_name or "-",  # Site name or placeholder.
+            mist_text or "-",  # Mist address or placeholder.
+            csv_text or "-",  # CSV address or placeholder.
+        )
 
     def prompt_post_table(self, results: list[AuditResult]) -> str:
         """Print a one-line summary, then loop until the operator picks save/quit."""
