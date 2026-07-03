@@ -14,10 +14,15 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass  # WHY: bundle 6 injected deps into a frozen struct
 from datetime import UTC, datetime
 from typing import Any
 
 import mistapi
+
+from src.device._utility_commands_selection import (
+    _UtilityCommandsSelection,  # WHY: selection helper cluster (Phase 1 split)
+)
 
 # ---------------------------------------------------------------------------
 # Type aliases for dependency injection
@@ -27,6 +32,29 @@ SelectDeviceFn = Callable[[str, str], str | None]
 SafeInputFn = Callable[..., str]
 WriteExportFn = Callable[[list[dict[str, Any]], str, str], bool]  # Exporter returns a success bool, not None
 WebSocketManagerFactory = Callable[[Any], Any]
+
+
+@dataclass(frozen=True)
+class UtilityCommandsDeps:
+    """Injected dependencies for :class:`DeviceUtilityCommands`.
+
+    Bundles the 6 dependencies into a single frozen dataclass so
+    construction sites and tests build one struct instead of passing 6
+    kwargs, and so the parent ``__init__`` fits the STRUCT-PARAMS limit.
+    """
+
+    apisession: Any  # WHY: mistapi.APISession handle used by every command
+    select_site_fn: SelectSiteFn  # WHY: interactive site picker
+    select_device_fn: SelectDeviceFn  # WHY: interactive device picker (filtered by type)
+    safe_input_fn: SafeInputFn  # WHY: EOF-safe stdin reader
+    write_export_fn: WriteExportFn  # WHY: exporter writing device-command output
+    websocket_manager_factory: WebSocketManagerFactory  # WHY: factory for WebSocketManager
+
+
+# WHY: cluster attribute names looped over by __getattr__ for O(N) proxying.
+_CLUSTER_ATTRS: tuple[str, ...] = (
+    "_selection",  # WHY: site/device/port/interface/network selection helpers
+)
 
 
 class DeviceUtilityCommands:
@@ -76,395 +104,41 @@ class DeviceUtilityCommands:
         "snapshot": ["switch"],
     }
 
-    def __init__(  # noqa: PLR0913
-        self,
-        *,
-        apisession: Any,
-        select_site_fn: SelectSiteFn,
-        select_device_fn: SelectDeviceFn,
-        safe_input_fn: SafeInputFn,
-        write_export_fn: WriteExportFn,
-        websocket_manager_factory: WebSocketManagerFactory,
-    ) -> None:
-        """Initialize with injected dependencies.
+    def __init__(self, deps: UtilityCommandsDeps) -> None:
+        """Initialize with the injected :class:`UtilityCommandsDeps` bundle.
 
         Args:
-            apisession: Authenticated Mist API session.
-            select_site_fn: Returns selected site_id or None.
-            select_device_fn: Returns selected device_id given site_id
-                and device_type filter.
-            safe_input_fn: Safe input with EOF handling.
-            write_export_fn: Writes export data (list, filename, api_name).
-            websocket_manager_factory: Creates WebSocketManager from session.
+            deps: Frozen dataclass carrying the 6 dependency callables/objects
+                consumed by the various device-command flows.
         """
-        self._apisession = apisession
-        self._select_site_fn = select_site_fn
-        self._select_device_fn = select_device_fn
-        self._safe_input_fn = safe_input_fn
-        self._write_export_fn = write_export_fn
-        self._ws_factory = websocket_manager_factory
+        self._apisession = deps.apisession  # WHY: mistapi handle
+        self._select_site_fn = deps.select_site_fn  # WHY: site picker callable
+        self._select_device_fn = deps.select_device_fn  # WHY: device picker callable
+        self._safe_input_fn = deps.safe_input_fn  # WHY: EOF-safe input
+        self._write_export_fn = deps.write_export_fn  # WHY: exporter callable
+        self._ws_factory = deps.websocket_manager_factory  # WHY: WSManager factory
+        self._selection = _UtilityCommandsSelection(self)  # WHY: selection cluster binding
+
+    def __getattr__(self, name: str) -> Any:
+        """Proxy cluster-attribute access to helper clusters.
+
+        Python only invokes ``__getattr__`` when normal lookup fails, so
+        this method resolves cluster method calls (``self._validate_device_type``,
+        ``self._select_site_and_device``, ``self._select_port_from_device``,
+        etc.) without explicit delegator wrappers. The class-level
+        ``hasattr`` check on ``type(cluster)`` avoids invoking the
+        cluster's own ``__getattr__`` (which would proxy back to this
+        class and cause infinite recursion for unknown attrs).
+        """
+        for attr in _CLUSTER_ATTRS:  # WHY: iterate cluster attribute names
+            cluster = self.__dict__.get(attr)  # WHY: direct dict avoids recursion
+            if cluster is not None and hasattr(type(cluster), name):  # WHY: class-level lookup only
+                return getattr(cluster, name)  # WHY: bound method resolves through cluster
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
-
-    def _validate_device_type(self, device_type: str, command_name: str) -> bool:
-        """Check device type against compatibility map."""
-        allowed = self.DEVICE_TYPE_COMPATIBILITY_MAP.get(command_name, [])
-        if device_type not in allowed:
-            allowed_str = ", ".join(allowed)
-            print(f"! This command is only available on: {allowed_str}")
-            print(f"! The selected device is a {device_type}.")
-            return False
-        return True
-
-    def _select_site_and_device(
-        self, command_name: str, device_type_filter: str = "all"
-    ) -> tuple[str, str, str] | None:
-        """Select site and device, validate type, warn if offline."""
-        site_id = self._select_site_fn()
-        if not site_id:
-            print("! No site selected. Operation cancelled.")
-            return None
-        device_id = self._select_device_fn(site_id, device_type_filter)
-        if not device_id:
-            print("! No device selected. Operation cancelled.")
-            return None
-        device_info = self._get_device_info(site_id, device_id)
-        if not device_info:
-            print("! Could not retrieve device info from stats API.")
-            return None
-        device_type = device_info.get("type")
-        if not device_type:
-            print("! Could not determine device type.")
-            return None
-        if not self._validate_device_type(device_type, command_name):
-            return None
-        status = device_info.get("status", "unknown")
-        if status != "connected":
-            print(f"[WARNING] Device status is '{status}'" " - command may not succeed.")
-        return (site_id, device_id, device_type)
-
-    def _get_device_info(self, site_id: str, device_id: str) -> dict[str, Any] | None:
-        """Fetch device type and status from stats API."""
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(self._apisession, site_id, device_id)
-            if hasattr(response, "data") and isinstance(response.data, dict):
-                return response.data
-        except Exception as error:
-            logging.error("Failed to get device stats: %s", error)
-        return None
-
-    def _select_port_from_device(self, site_id: str, device_id: str) -> str | None:
-        """Fetch ports from device stats, display list, return selected."""
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(self._apisession, site_id, device_id)
-            if not hasattr(response, "data") or not isinstance(response.data, dict):
-                return self._manual_port_entry()
-            ports = response.data.get("ports", [])
-            if ports:
-                return self._display_and_select_port(ports)
-            if_stat = response.data.get("if_stat", {})
-            if isinstance(if_stat, dict) and if_stat:
-                return self._display_and_select_ifstat(if_stat)
-            return self._manual_port_entry()
-        except Exception as error:
-            logging.debug("Could not fetch port list: %s", error)
-            return self._manual_port_entry()
-
-    def _display_and_select_port(self, ports: list[dict[str, Any]]) -> str | None:
-        """Display numbered port list and get selection."""
-        print("\nAvailable ports:")
-        for index, port in enumerate(ports, 1):
-            port_name = port.get("port_id", port.get("name", f"port_{index}"))
-            port_status = port.get("up", "unknown")
-            status_str = "UP" if port_status else "DOWN"
-            speed = port.get("speed", "")
-            print(f"  {index}. {port_name} [{status_str}] {speed}")
-        selection = self._safe_input_fn(
-            "\nSelect port by number or type port name: ",
-            context="port_selection",
-        )
-        if not selection:
-            print("! No port selected.")
-            return None
-        if selection.isdigit():
-            idx = int(selection) - 1
-            if 0 <= idx < len(ports):
-                result: str = str(ports[idx].get("port_id", ports[idx].get("name", "")))
-                return result
-            print("! Invalid port number.")
-            return None
-        return selection
-
-    def _display_and_select_ifstat(self, if_stat: dict[str, Any]) -> str | None:
-        """Display interfaces from if_stat dict."""
-        physical = [name for name in if_stat if name.startswith(("ge-", "xe-", "et-", "mge-"))]
-        if not physical:
-            physical = list(if_stat.keys())
-        physical.sort()
-        print("\nAvailable ports/interfaces:")
-        for idx, name in enumerate(physical, 1):
-            info = if_stat.get(name, {})
-            up = "UP" if info.get("up") else "DOWN"
-            print(f"  {idx}. {name} [{up}]")
-        selection = self._safe_input_fn(
-            "\nSelect by number or type port name: ",
-            context="ifstat_selection",
-        )
-        if not selection:
-            print("! No port selected.")
-            return None
-        if selection.isdigit():
-            sel_idx = int(selection) - 1
-            if 0 <= sel_idx < len(physical):
-                base = physical[sel_idx]
-                return base.split(".")[0] if "." in base else base
-            print("! Invalid port number.")
-            return None
-        return selection
-
-    def _manual_port_entry(self) -> str | None:
-        """Prompt for manual port name entry."""
-        port = self._safe_input_fn(
-            "Enter port name (e.g., ge-0/0/0): ",
-            context="manual_port_entry",
-        )
-        return port if port else None
-
-    def _select_port_optional(self, site_id: str, device_id: str) -> str:
-        """Show port list and let user pick or skip."""
-        port_names = self._discover_ports(site_id, device_id)
-        selection = self._safe_input_fn(
-            "Port (number, name, or Enter to skip): ",
-            context="port_optional",
-        )
-        if not selection:
-            return ""
-        return self._resolve_port_selection(selection, port_names)
-
-    def _discover_ports(self, site_id: str, device_id: str) -> list[str]:
-        """Fetch and display available ports from device stats."""
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(self._apisession, site_id, device_id)
-            if not hasattr(response, "data") or not isinstance(response.data, dict):
-                return []
-            ports = response.data.get("ports", [])
-            if ports:
-                return self._display_ports_from_list(ports)
-            return self._display_ports_from_if_stat(response.data.get("if_stat", {}))
-        except Exception:  # nosec B110
-            return []
-
-    @staticmethod
-    def _display_ports_from_list(ports: list[dict[str, Any]]) -> list[str]:
-        """Display ports from the ports array in stats response."""
-        port_names: list[str] = []
-        print("\nAvailable ports:")
-        for idx, port in enumerate(ports, 1):
-            name = port.get("port_id", port.get("name", f"port_{idx}"))
-            up = "UP" if port.get("up") else "DOWN"
-            print(f"  {idx}. {name} [{up}]")
-            port_names.append(name)
-        return port_names
-
-    @staticmethod
-    def _display_ports_from_if_stat(if_stat: Any) -> list[str]:
-        """Display physical ports from if_stat dict as fallback."""
-        if not isinstance(if_stat, dict) or not if_stat:
-            return []
-        physical = sorted(n for n in if_stat if n.startswith(("ge-", "xe-", "et-", "mge-")))
-        if not physical:
-            return []
-        port_names: list[str] = []
-        print("\nAvailable ports:")
-        for idx, name in enumerate(physical, 1):
-            info = if_stat.get(name, {})
-            up = "UP" if info.get("up") else "DOWN"
-            print(f"  {idx}. {name} [{up}]")
-            port_names.append(name)
-        return port_names
-
-    @staticmethod
-    def _resolve_port_selection(selection: str, port_names: list[str]) -> str:
-        """Resolve user selection to a port name."""
-        if selection.isdigit() and port_names:
-            idx = int(selection) - 1
-            if 0 <= idx < len(port_names):
-                base = port_names[idx]
-                return base.split(".")[0] if "." in base else base
-        return selection
-
-    def _select_interface_from_device(self, site_id: str, device_id: str) -> str | None:
-        """Fetch network interfaces from device stats."""
-        try:
-            response = mistapi.api.v1.sites.stats.getSiteDeviceStats(self._apisession, site_id, device_id)
-            if not hasattr(response, "data") or not isinstance(response.data, dict):
-                return self._manual_interface_entry()
-            if_stat = response.data.get("if_stat", {})
-            ip_stat = response.data.get("ip_stat", {})
-            ports = response.data.get("ports", [])
-            interfaces = self._extract_interfaces(if_stat, ip_stat, ports)
-            if not interfaces:
-                return self._manual_interface_entry()
-            self._print_interface_list(interfaces, if_stat, ip_stat)
-            return self._get_interface_selection(interfaces)
-        except Exception as error:
-            logging.debug("Could not fetch interface list: %s", error)
-            return self._manual_interface_entry()
-
-    @staticmethod
-    def _extract_interfaces(
-        if_stat: Any,
-        ip_stat: Any,
-        ports: list[dict[str, Any]],
-    ) -> list[str]:
-        """Extract interface names from stats, trying multiple sources."""
-        if isinstance(if_stat, dict) and if_stat:
-            return list(if_stat.keys())
-        ip_interfaces = DeviceUtilityCommands._interfaces_from_ip_stat(ip_stat)
-        if ip_interfaces:
-            return ip_interfaces
-        return [p.get("port_id", p.get("name", "")) for p in ports if p.get("port_id") or p.get("name")]
-
-    @staticmethod
-    def _interfaces_from_ip_stat(ip_stat: Any) -> list[str]:
-        """Extract interface names from ip_stat dict."""
-        if not isinstance(ip_stat, dict) or not ip_stat:
-            return []
-        iface_prefixes = ("ge-", "xe-", "et-", "mge-", "lte-", "irb", "lo")
-        return [k for k in ip_stat if k.startswith(iface_prefixes)]
-
-    def _print_interface_list(
-        self,
-        interfaces: list[str],
-        if_stat: dict[str, Any] | Any,
-        ip_stat: dict[str, Any] | Any,
-    ) -> None:
-        """Print numbered list of available interfaces."""
-        print("\nAvailable interfaces:")
-        for idx, iface in enumerate(interfaces, 1):
-            extra = ""
-            if isinstance(if_stat, dict) and iface in if_stat:
-                entry = if_stat[iface]
-                ips = entry.get("ips", [])
-                if ips:
-                    extra = f" ({', '.join(ips)})"
-            elif isinstance(ip_stat, dict) and iface in ip_stat:
-                ip_info = ip_stat[iface]
-                ip_addr = ip_info.get("ip", "")
-                if ip_addr:
-                    extra = f" ({ip_addr})"
-            print(f"  {idx}. {iface}{extra}")
-
-    def _get_interface_selection(self, interfaces: list[str]) -> str | None:
-        """Prompt user to select from interface list."""
-        selection = self._safe_input_fn(
-            "\nSelect interface by number or type name: ",
-            context="interface_selection",
-        )
-        if not selection:
-            print("! No interface selected.")
-            return None
-        if selection.isdigit():
-            sel_idx = int(selection) - 1
-            if 0 <= sel_idx < len(interfaces):
-                return interfaces[sel_idx]
-            print("! Invalid interface number.")
-            return None
-        return selection
-
-    def _manual_interface_entry(self) -> str | None:
-        """Prompt for manual interface name entry."""
-        iface = self._safe_input_fn(
-            "Enter interface name (e.g., ge-0/0/0, wan0): ",
-            context="manual_interface_entry",
-            allow_empty=False,
-        )
-        return iface if iface else None
-
-    def _select_network_from_device(self, site_id: str, device_id: str) -> str:
-        """Fetch DHCP/network config from device."""
-        network_names, network_labels = self._discover_networks(site_id, device_id)
-        if network_names:
-            self._display_network_list(network_names, network_labels)
-            if len(network_names) == 1:
-                print(f"\n-> Auto-selecting: {network_names[0]}")
-                return network_names[0]
-        selection = self._safe_input_fn(
-            "Select network (number or name, required): ",
-            context="dhcp_network",
-            allow_empty=False,
-        )
-        if not selection:
-            return ""
-        return self._resolve_network_selection(selection, network_names)
-
-    def _discover_networks(self, site_id: str, device_id: str) -> tuple[list[str], list[str]]:
-        """Fetch network names and labels from device config."""
-        network_names: list[str] = []
-        network_labels: list[str] = []
-        try:
-            response = mistapi.api.v1.sites.devices.getSiteDevice(self._apisession, site_id, device_id)
-            if hasattr(response, "data") and isinstance(response.data, dict):
-                self._collect_dhcp_networks(
-                    response.data.get("dhcpd_config", {}),
-                    network_names,
-                    network_labels,
-                )
-                self._collect_ip_networks(
-                    response.data.get("ip_config", {}),
-                    network_names,
-                    network_labels,
-                )
-        except Exception as error:
-            logging.debug("Could not fetch network config: %s", error)
-        return network_names, network_labels
-
-    @staticmethod
-    def _collect_dhcp_networks(
-        dhcpd_config: Any,
-        names: list[str],
-        labels: list[str],
-    ) -> None:
-        """Add DHCP server networks to the lists."""
-        if not isinstance(dhcpd_config, dict):
-            return
-        for net_name in dhcpd_config:
-            names.append(net_name)
-            labels.append(f"{net_name} (dhcp server)")
-
-    @staticmethod
-    def _collect_ip_networks(
-        ip_config: Any,
-        names: list[str],
-        labels: list[str],
-    ) -> None:
-        """Add IP config networks (not already in DHCP) to the lists."""
-        if not isinstance(ip_config, dict):
-            return
-        for net_name, net_cfg in ip_config.items():
-            if net_name not in names:
-                names.append(net_name)
-                ip_addr = net_cfg.get("ip", "") if isinstance(net_cfg, dict) else ""
-                label = f"{net_name} ({ip_addr})" if ip_addr else net_name
-                labels.append(label)
-
-    @staticmethod
-    def _display_network_list(network_names: list[str], network_labels: list[str]) -> None:
-        """Print numbered list of available networks."""
-        print("\nAvailable networks:")
-        for idx, label in enumerate(network_labels, 1):
-            print(f"  {idx}. {label}")
-
-    @staticmethod
-    def _resolve_network_selection(selection: str, network_names: list[str]) -> str:
-        """Resolve user selection to a network name."""
-        if selection.isdigit() and network_names:
-            sel_idx = int(selection) - 1
-            if 0 <= sel_idx < len(network_names):
-                return network_names[sel_idx]
-        return selection
 
     def _run_websocket_command(
         self,

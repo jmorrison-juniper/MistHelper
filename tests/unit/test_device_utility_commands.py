@@ -20,7 +20,7 @@ _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 
-from src.device.utility_commands import DeviceUtilityCommands
+from src.device.utility_commands import DeviceUtilityCommands, UtilityCommandsDeps
 
 
 def setup_module() -> None:
@@ -59,13 +59,16 @@ def mock_deps() -> dict[str, MagicMock]:
 @pytest.fixture()
 def duc(mock_deps: dict[str, MagicMock]) -> DeviceUtilityCommands:
     """Return a DeviceUtilityCommands instance with mocked deps."""
-    return DeviceUtilityCommands(**mock_deps)
+    return DeviceUtilityCommands(UtilityCommandsDeps(**mock_deps))
 
 
 @pytest.fixture()
 def mock_api():
-    """Patch mistapi in the module for isolated API mocking."""
-    with patch("src.device.utility_commands.mistapi") as mapi:
+    """Patch mistapi in both utility_commands and its selection cluster module."""
+    with (
+        patch("src.device.utility_commands.mistapi") as mapi,
+        patch("src.device._utility_commands_selection.mistapi", mapi),
+    ):
         yield mapi
 
 

@@ -11,12 +11,12 @@ These tests cover:
 
 from unittest.mock import MagicMock, patch
 
-from src.device.utility_commands import DeviceUtilityCommands
+from src.device.utility_commands import DeviceUtilityCommands, UtilityCommandsDeps
 
 
 def _make_duc(safe_input_fn):
     """Create a DeviceUtilityCommands instance with mocked dependencies."""
-    return DeviceUtilityCommands(
+    deps = UtilityCommandsDeps(
         apisession=MagicMock(),
         select_site_fn=MagicMock(return_value="site1"),
         select_device_fn=MagicMock(return_value="dev1"),
@@ -24,6 +24,7 @@ def _make_duc(safe_input_fn):
         write_export_fn=MagicMock(),
         websocket_manager_factory=MagicMock(),
     )
+    return DeviceUtilityCommands(deps)
 
 
 def _stub_selection(monkeypatch):
@@ -31,6 +32,7 @@ def _stub_selection(monkeypatch):
         DeviceUtilityCommands,
         "_select_site_and_device",
         lambda self, action, *args, **kwargs: ("site1", "dev1", "Device1"),
+        raising=False,
     )
 
 

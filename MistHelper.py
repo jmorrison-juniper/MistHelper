@@ -14306,11 +14306,12 @@ class RoutingUtils:  # Routing utils facade.
 
 def _get_duc_instance():  # Build DeviceUtilityCommands.
     """Create DeviceUtilityCommands instance with MistHelper globals."""
-    from src.device.utility_commands import (  # Import the extracted class.
+    from src.device.utility_commands import (  # Import the extracted class + deps.
         DeviceUtilityCommands as _DUC,
+        UtilityCommandsDeps as _Deps,
     )
 
-    return _DUC(  # Wire dependencies.
+    deps = _Deps(  # Bundle 6 dependencies into a frozen dataclass.
         apisession=apisession,
         select_site_fn=PromptUtils.select_site_id_from_csv,
         select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(site_id, device_type=dtype),
@@ -14318,6 +14319,7 @@ def _get_duc_instance():  # Build DeviceUtilityCommands.
         write_export_fn=lambda data, fn, api: DataExporter.write_with_format_selection(data, fn, api_function_name=api),
         websocket_manager_factory=WebSocketManager,
     )
+    return _DUC(deps)  # Instantiate with bundled deps.
 
 
 class DeviceUtilityCommands:  # Device utility command facade.
