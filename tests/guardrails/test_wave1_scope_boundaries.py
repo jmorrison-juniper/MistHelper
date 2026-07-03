@@ -21,6 +21,10 @@ _MENU_ACTIONS_BASELINE_COUNT = 178
 # Wave 1 exclusion: no packet-capture architecture decomposition beyond approved post-Wave-1 additions
 _CAPTURE_MODULE_BASELINE = {
     "__init__.py",
+    "_packet_capture_exec.py",  # Approved post-Wave-1: extracted exec/monitor/download cluster
+    "_packet_capture_org.py",  # Approved post-Wave-1: extracted org/mxedge cluster
+    "_packet_capture_prompts.py",  # Approved post-Wave-1: extracted prompts/summary cluster
+    "_packet_capture_tcpdump.py",  # Approved post-Wave-1: extracted tcpdump menu cluster
     "multi_ap_scan_workflow.py",  # Approved post-Wave-1: multi-AP scan orchestration
     "org_capture_workflow.py",  # Approved post-Wave-1: org-level capture workflow
     "org_pcap_wait_download_workflow.py",  # Approved post-Wave-1: org pcap download poller
