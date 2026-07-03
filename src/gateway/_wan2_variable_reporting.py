@@ -118,7 +118,9 @@ class _Wan2VariableReporting(_ClusterBase):
         self._dispatch_mode_guidance(results, device_results, devices_needing_migration, success_count)  # WHY: extract
         self._print_template_failure_warning(failure_count)  # WHY: extracted to cut CC
         self._print_device_failure_warning(device_results, devices_needing_migration)  # WHY: device warnings
-        self._log_operation_summary(success_count, failure_count, device_results, devices_needing_migration)  # WHY: audit
+        self._log_operation_summary(
+            success_count, failure_count, device_results, devices_needing_migration
+        )  # WHY: audit
 
     def _dispatch_mode_guidance(
         self,
