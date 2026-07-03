@@ -5,11 +5,11 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from src.utils.address_utils import (
-    AddressBusinessNameUtils,
     AddressUtils,
     AddressValidationConfig,
     NameNormalizationUtils,
     NominatimValidator,
+    _AddressFields,
     _check_parse_status,
     _check_partial_skip,
     _check_single_skip,
@@ -19,6 +19,7 @@ from src.utils.address_utils import (
     _detect_state,
     _detect_zip,
     _parse_address_parts,
+    _SkipEntry,
 )
 
 # ============================================================================
@@ -498,24 +499,21 @@ class TestCheckSingleSkip:
     """Tests for _check_single_skip."""
 
     def test_exact_match(self):
-        skip = {
-            "Skip_Address": "123 MAIN",
-            "Skip_City": "CITY",
-            "Skip_State": "IL",
-            "Skip_Zip": "62701",
-            "Reason": "exact",
-        }
-        result = _check_single_skip("123 MAIN", "CITY", "IL", "62701", skip, False)
+        skip = _SkipEntry(
+            fields=_AddressFields(address="123 MAIN", city="CITY", state="IL", zip_code="62701"),
+            reason="exact",
+        )
+        comp = _AddressFields(address="123 MAIN", city="CITY", state="IL", zip_code="62701")
+        result = _check_single_skip(comp, skip, False)
         assert result == (True, "exact")
 
     def test_no_match(self):
-        skip = {
-            "Skip_Address": "999 OTHER",
-            "Skip_City": "TOWN",
-            "Skip_State": "CA",
-            "Skip_Zip": "90210",
-        }
-        result = _check_single_skip("123 MAIN", "CITY", "IL", "62701", skip, False)
+        skip = _SkipEntry(
+            fields=_AddressFields(address="999 OTHER", city="TOWN", state="CA", zip_code="90210"),
+            reason="Address in skip list",
+        )
+        comp = _AddressFields(address="123 MAIN", city="CITY", state="IL", zip_code="62701")
+        result = _check_single_skip(comp, skip, False)
         assert result == (False, "")
 
 
@@ -528,17 +526,32 @@ class TestCheckPartialSkip:
     """Tests for _check_partial_skip."""
 
     def test_no_matches(self):
-        result = _check_partial_skip("A", "B", "C", "D", "X", "Y", "Z", "W", "reason", False)
+        comp = _AddressFields(address="A", city="B", state="C", zip_code="D")
+        skip = _SkipEntry(
+            fields=_AddressFields(address="X", city="Y", state="Z", zip_code="W"),
+            reason="reason",
+        )
+        result = _check_partial_skip(comp, skip, False)
         assert result == (False, "")
 
     def test_wildcard_match(self):
         # Only zip populated and matches
-        result = _check_partial_skip("A", "B", "C", "62701", "", "", "", "62701", "wildcard", False)
+        comp = _AddressFields(address="A", city="B", state="C", zip_code="62701")
+        skip = _SkipEntry(
+            fields=_AddressFields(address="", city="", state="", zip_code="62701"),
+            reason="wildcard",
+        )
+        result = _check_partial_skip(comp, skip, False)
         assert result == (True, "wildcard")
 
     def test_specific_match(self):
         # Two of four fields match
-        result = _check_partial_skip("A", "B", "IL", "62701", "A", "", "IL", "62701", "specific", False)
+        comp = _AddressFields(address="A", city="B", state="IL", zip_code="62701")
+        skip = _SkipEntry(
+            fields=_AddressFields(address="A", city="", state="IL", zip_code="62701"),
+            reason="specific",
+        )
+        result = _check_partial_skip(comp, skip, False)
         assert result == (True, "specific")
 
 
@@ -642,9 +655,6 @@ class TestNameNormalizationUtils:
     def test_calculate_org_name_similarity_match(self):
         sim = NameNormalizationUtils.calculate_org_name_similarity("acme", "Acme Corporation, Springfield IL")
         assert sim > 0.0
-
-    def test_backward_compat_alias(self):
-        assert AddressBusinessNameUtils is NameNormalizationUtils
 
 
 # ============================================================================
