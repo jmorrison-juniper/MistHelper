@@ -19,21 +19,25 @@ transparent.
 from __future__ import annotations  # WHY: postponed evaluation for consistency with parent
 
 import logging  # WHY: audit trail for capture lifecycle events
-import time  # WHY: elapsed-time tracking for polling loops
 from collections.abc import Callable  # WHY: type hint for list-captures callbacks
 from typing import Any, cast  # WHY: opaque manager plus typed cast for untyped SDK returns
-
-import mistapi  # WHY: primary Mist SDK for pcap REST endpoints
 
 from src.capture.packet_capture_download import PacketCaptureDownloadManager  # WHY: shared parser/downloader
 from src.capture.site_capture_loop import SiteCaptureLoopRunner  # WHY: shared loop-runner
 
 
-def _get_websocket_manager() -> Any:
-    """Lazy import WebSocketManager to avoid circular imports at load time."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: deferred to break cycle
+def _pc() -> Any:
+    """Return the ``packet_capture`` module for test-patchable name lookup.
 
-    return _mh.WebSocketManager  # WHY: caller instantiates stream manager for real-time captures
+    Helpers route ``mistapi``/``time``/``_get_*`` calls through this accessor so
+    unit tests patching ``src.capture.packet_capture.<name>`` intercept them
+    without needing per-helper patches. Deferred import breaks the
+    packet_capture <-> helper import cycle.
+    """
+    from src.capture import packet_capture as _pc_mod  # pylint: disable=import-outside-toplevel
+
+    return _pc_mod  # WHY: attribute lookup on returned module resolves patches at call time
+
 
 
 class PacketCaptureExec:
@@ -56,7 +60,7 @@ class PacketCaptureExec:
         try:  # WHY: broad guard so unexpected failures don't crash the CLI
             print(f"\n> Starting packet capture for site {site_id}...")  # WHY: user progress banner
             logging.info("Initiating site capture with payload: %s", payload)  # WHY: audit request
-            response = mistapi.api.v1.sites.pcaps.startSitePacketCapture(  # WHY: kick off capture
+            response = _pc().mistapi.api.v1.sites.pcaps.startSitePacketCapture(  # WHY: kick off capture
                 self.mist_session, site_id, payload
             )
             self._dispatch_start_response(site_id, response)  # WHY: branch on success/failure
@@ -125,7 +129,7 @@ class PacketCaptureExec:
 
         def list_fn() -> Any:
             """Local closure calling listSitePacketCaptures with a 1-day window."""
-            return mistapi.api.v1.sites.pcaps.listSitePacketCaptures(  # WHY: 1d window covers recent captures
+            return _pc().mistapi.api.v1.sites.pcaps.listSitePacketCaptures(  # WHY: 1d window covers recent captures
                 self.mist_session, site_id, duration="1d", limit=100
             )
 
@@ -149,7 +153,7 @@ class PacketCaptureExec:
     def _loop_start_call(self, site_id: str, payload: dict[str, Any], iteration: int) -> Any | None:
         """Wrapped startSitePacketCapture call that traps exceptions."""
         try:  # WHY: catch API/network faults so the loop keeps running
-            return mistapi.api.v1.sites.pcaps.startSitePacketCapture(  # WHY: kick off new capture
+            return _pc().mistapi.api.v1.sites.pcaps.startSitePacketCapture(  # WHY: kick off new capture
                 self.mist_session, site_id, payload
             )
         except Exception as capture_error:  # pylint: disable=broad-exception-caught  # WHY: log-and-continue
@@ -179,7 +183,8 @@ class PacketCaptureExec:
         print(f"    Duration: {duration} seconds")  # WHY: expose duration
         logging.info("Loop iteration %s: Capture started - ID=%s", iteration, capture_id)  # WHY: audit
         self._export_capture_info_to_csv(result, "site", site_id)  # WHY: persist metadata
-        return time.time()  # WHY: caller uses this as last_capture_time
+        now: float = _pc().time.time()  # WHY: caller uses this as last_capture_time
+        return now
 
     def execute_site_capture_loop(self, site_id: str, payload: dict[str, Any]) -> None:
         """Execute site-level packet captures in continuous loop mode."""
@@ -205,11 +210,12 @@ class PacketCaptureExec:
         if last_capture_time is None:  # WHY: first iteration always ready
             print("  First capture of this session - starting now")  # WHY: reassure user
             return 0  # WHY: no wait
-        elapsed = time.time() - last_capture_time  # WHY: seconds since last capture
+        now: float = _pc().time.time()  # WHY: bind to float so downstream math stays typed
+        elapsed = now - last_capture_time  # WHY: seconds since last capture
         if elapsed >= min_interval:  # WHY: interval satisfied
             print(f"  {elapsed:.0f}s elapsed since last capture (>= {min_interval}s) - ready")  # WHY: status
             return 0  # WHY: no wait
-        wait_time = min_interval - elapsed  # WHY: remaining wait
+        wait_time: float = min_interval - elapsed  # WHY: remaining wait
         print(f"  Only {elapsed:.0f}s elapsed - waiting {wait_time:.0f}s more...")  # WHY: user status
         return wait_time  # WHY: caller sleeps this long
 
@@ -258,7 +264,7 @@ class PacketCaptureExec:
         """Return True if the capture is complete, else None (still running)."""
         enabled = capture.get("enabled", True)  # WHY: Mist sets enabled=False when capture finishes
         timestamp = capture.get("timestamp", 0)  # WHY: capture start epoch
-        time_running = time.time() - timestamp if timestamp else elapsed  # WHY: fall back to local elapsed
+        time_running = _pc().time.time() - timestamp if timestamp else elapsed  # WHY: fall back to local elapsed
         if not enabled:  # WHY: primary completion signal
             logging.debug("Capture %s completed (enabled=False)", capture_id)  # WHY: audit
             return True  # WHY: complete
@@ -294,7 +300,7 @@ class PacketCaptureExec:
         poll_attempt: int,
     ) -> bool | None:
         """Perform a single capture-status poll cycle."""
-        response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(  # WHY: fetch latest captures
+        response = _pc().mistapi.api.v1.sites.pcaps.listSitePacketCaptures(  # WHY: fetch latest captures
             self.mist_session, site_id
         )
         if response.status_code != 200:  # WHY: only inspect on success
@@ -312,11 +318,11 @@ class PacketCaptureExec:
         poll_interval = 3  # WHY: 3s cadence balances responsiveness vs API load
         max_wait = expected_duration + 30  # WHY: allow small backend delay past declared duration
         max_polls = max_wait // poll_interval  # WHY: bound total iterations
-        start_time = time.time()  # WHY: reference epoch for elapsed calculation
+        start_time = _pc().time.time()  # WHY: reference epoch for elapsed calculation
         for poll_attempt in range(1, max_polls + 1):  # WHY: bounded loop
             if self._safe_poll(site_id, capture_id, expected_duration, start_time, poll_attempt):  # WHY: check
                 return True  # WHY: capture confirmed complete
-            time.sleep(poll_interval)  # WHY: back off between polls to reduce API load
+            _pc().time.sleep(poll_interval)  # WHY: back off between polls to reduce API load
         logging.warning("Capture %s completion check timed out after %ss", capture_id, max_wait)  # WHY: audit
         return False  # WHY: caller treats False as timeout
 
@@ -330,7 +336,7 @@ class PacketCaptureExec:
     ) -> bool:
         """Single poll iteration that traps errors so the wait loop keeps running."""
         try:  # WHY: isolate per-iteration errors
-            elapsed = time.time() - start_time  # WHY: seconds since wait began
+            elapsed = _pc().time.time() - start_time  # WHY: seconds since wait began
             result = self.poll_capture_once(site_id, capture_id, expected_duration, elapsed, poll_attempt)  # WHY: poll
             return result is True  # WHY: True short-circuits, else keep polling
         except Exception as poll_error:  # pylint: disable=broad-exception-caught  # WHY: never abort wait
@@ -354,7 +360,7 @@ class PacketCaptureExec:
     def _subscribe_channel(self, channel: str) -> bool:
         """Ensure WebSocket manager exists, connect, and subscribe; return confirmation."""
         if not self.websocket_manager:  # WHY: lazy WebSocket creation
-            self._mm.websocket_manager = _get_websocket_manager()(self.mist_session)  # WHY: instantiate on parent
+            self._mm.websocket_manager = _pc()._get_websocket_manager()(self.mist_session)  # WHY: instantiate on parent
         if not self.websocket_manager.connected:  # WHY: reuse existing connection when possible
             self.websocket_manager.connect()  # WHY: establish WebSocket
         self.websocket_manager.subscribe_to_channel(channel)  # WHY: subscribe to capture channel
@@ -378,12 +384,12 @@ class PacketCaptureExec:
         if self.websocket_manager is None:  # WHY: guard against uninitialized stream
             logging.error("WebSocket manager not available for stream reading")  # WHY: audit
             return  # WHY: nothing to read
-        state = {"count": 0, "start": time.time()}  # WHY: mutable state shared with helper
+        state = {"count": 0, "start": _pc().time.time()}  # WHY: mutable state shared with helper
         try:  # WHY: catch Ctrl-C to print summary
             while True:  # WHY: infinite drain; helper returns when capture ends
                 if self._drain_stream_batch(channel, capture_id, state):  # WHY: batch drain returns True on end
                     return  # WHY: capture ended cleanly
-                time.sleep(0.1)  # WHY: gentle CPU yield between batches
+                _pc().time.sleep(0.1)  # WHY: gentle CPU yield between batches
         except KeyboardInterrupt:  # WHY: user aborted monitoring
             print("\n\n! Monitoring stopped by user")  # WHY: user confirmation
             print(f"  Total packets received: {state['count']}")  # WHY: expose summary
@@ -414,7 +420,7 @@ class PacketCaptureExec:
     def _maybe_print_batch_progress(state: dict[str, Any]) -> None:
         """Print a running packet count every 10 packets."""
         if state["count"] % 10 == 0:  # WHY: throttle output to every 10 packets
-            elapsed = time.time() - state["start"]  # WHY: seconds since stream began
+            elapsed = _pc().time.time() - state["start"]  # WHY: seconds since stream began
             print(f"  Received {state['count']} packets ({elapsed:.1f}s elapsed)")  # WHY: user status
 
     def subscribe_to_site_capture_stream(self, site_id: str, capture_id: str) -> None:
@@ -433,22 +439,24 @@ class PacketCaptureExec:
 
         def list_fn() -> Any:
             """Local closure calling listSitePacketCaptures for polling."""
-            return mistapi.api.v1.sites.pcaps.listSitePacketCaptures(  # WHY: list captures for polling
+            return _pc().mistapi.api.v1.sites.pcaps.listSitePacketCaptures(  # WHY: list captures for polling
                 self.mist_session, site_id
             )
 
-        self.poll_and_download_pcap(list_fn, capture_id, duration, prefix="")  # WHY: shared polling flow
+        # WHY: route through manager delegator so tests patching manager._poll_and_download_pcap take effect
+        self._mm._poll_and_download_pcap(list_fn, capture_id, duration, prefix="")
 
     def wait_and_download_pcap_org(self, org_id: str, capture_id: str, duration: int) -> None:
         """Wait for org-level PCAP capture to complete and download the file."""
 
         def list_fn() -> Any:
             """Local closure calling listOrgPacketCaptures for polling."""
-            return mistapi.api.v1.orgs.pcaps.listOrgPacketCaptures(  # WHY: list org captures for polling
+            return _pc().mistapi.api.v1.orgs.pcaps.listOrgPacketCaptures(  # WHY: list org captures for polling
                 self.mist_session, org_id
             )
 
-        self.poll_and_download_pcap(list_fn, capture_id, duration, prefix="org_")  # WHY: shared polling flow
+        # WHY: route through manager delegator so tests patching manager._poll_and_download_pcap take effect
+        self._mm._poll_and_download_pcap(list_fn, capture_id, duration, prefix="org_")
 
     def poll_and_download_pcap(
         self,

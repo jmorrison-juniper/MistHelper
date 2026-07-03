@@ -4,6 +4,7 @@ from __future__ import annotations  # WHY: enable postponed annotation evaluatio
 
 import logging  # WHY: structured audit trail for capture lifecycle events
 import re  # WHY: MAC address validation and normalization regex patterns
+import time  # WHY: exposed at module scope so helper cluster can route sleep/time via this module for test patching
 from collections.abc import Callable  # WHY: type hints for callbacks passed to helpers
 from typing import TYPE_CHECKING, Any, cast  # WHY: type-only guard plus generic mistapi payload shapes
 
@@ -79,6 +80,16 @@ def _get_websocket_manager() -> Any:  # WHY: module-level factory for deferred W
     import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: deferred to break capture<->MistHelper cycle
 
     return _mh.WebSocketManager  # WHY: caller instantiates stream manager for real-time capture
+
+
+def _get_time() -> Any:  # WHY: module-level accessor exposing the time module for helper cluster + test patching
+    """Return the stdlib ``time`` module.
+
+    Helpers route ``time.sleep``/``time.time`` through this accessor so unit
+    tests can substitute a mock via ``patch('src.capture.packet_capture.time')``
+    without needing to patch every helper module independently.
+    """
+    return time  # WHY: resolves module-level ``time`` at call time so test patches take effect
 
 
 class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture flows

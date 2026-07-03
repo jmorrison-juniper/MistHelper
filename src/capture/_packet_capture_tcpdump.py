@@ -14,14 +14,19 @@ from __future__ import annotations  # WHY: postponed evaluation for consistency 
 from typing import Any  # WHY: manager is treated opaquely to avoid import cycles
 
 
-def _lazy_input_utils() -> Any:
-    """Return InputUtils lazily to avoid circular imports at load time."""
-    from MistHelper import InputUtils  # WHY: deferred to break capture<->MistHelper import cycle
+def _pc() -> Any:  # WHY: lazy accessor exposing packet_capture module for name lookup
+    """Return the ``packet_capture`` module for test-patchable name lookup."""
+    from src.capture import packet_capture as _pc_mod  # pylint: disable=import-outside-toplevel
 
-    return InputUtils  # WHY: caller uses this only to call safe_input helpers
+    return _pc_mod  # WHY: resolved at call time so test patches on packet_capture take effect
 
 
-_MENU_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+def _lazy_input_utils() -> Any:  # WHY: routes InputUtils lookup through packet_capture for test patch parity
+    """Return InputUtils via packet_capture so tests patch a single point."""
+    return _pc()._get_input_utils()  # WHY: reroute through packet_capture module for patch parity
+
+
+_MENU_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (  # WHY: module-level menu table drives the picker
     (
         "BASIC FILTERS",
         (
@@ -100,7 +105,7 @@ _MENU_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
-_EXPRESSIONS: dict[str, str] = {
+_EXPRESSIONS: dict[str, str] = {  # WHY: menu-choice-to-expression lookup keyed by user input string
     "1": "",
     "2": "port 443",
     "3": "port 80 or port 443",
@@ -143,14 +148,14 @@ _EXPRESSIONS: dict[str, str] = {
 }
 
 
-class PacketCaptureTcpdump:
+class PacketCaptureTcpdump:  # WHY: wraps tcpdump menu helpers extracted from PacketCaptureManager
     """Wrapper class holding the extracted tcpdump menu helpers."""
 
-    def __init__(self, manager: Any) -> None:
+    def __init__(self, manager: Any) -> None:  # WHY: bind parent manager so __getattr__ can proxy state
         """Store the parent manager for delegate lookups."""
         self._mm = manager  # WHY: enable __getattr__ delegation back to PacketCaptureManager
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy so callers see combined API
         """Delegate unknown attributes to the wrapped manager."""
         mm = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
         if mm is None:  # WHY: only trips during broken init; avoid infinite recursion
@@ -158,7 +163,7 @@ class PacketCaptureTcpdump:
         return getattr(mm, name)  # WHY: transparent proxy to the parent manager
 
     @staticmethod
-    def print_tcpdump_menu() -> None:
+    def print_tcpdump_menu() -> None:  # WHY: renders the picker header + all filter sections
         """Print the tcpdump filter selection menu using data-driven sections."""
         separator = "=" * 80  # WHY: consistent visual boundary matching original format
         print(f"\n{separator}")  # WHY: leading newline improves terminal readability
@@ -171,11 +176,11 @@ class PacketCaptureTcpdump:
         print(separator)  # WHY: closes the menu block visually
 
     @staticmethod
-    def get_tcpdump_expressions() -> dict[str, str]:
+    def get_tcpdump_expressions() -> dict[str, str]:  # WHY: exposes copy of choice-to-expression map
         """Return the menu-choice to tcpdump-expression mapping."""
         return dict(_EXPRESSIONS)  # WHY: return a shallow copy so callers cannot mutate the constant
 
-    def get_tcpdump_expression_selection(self) -> str:
+    def get_tcpdump_expression_selection(self) -> str:  # WHY: interactive picker returning the chosen expression
         """Prompt user for a tcpdump expression selection.
 
         Returns:
@@ -197,7 +202,7 @@ class PacketCaptureTcpdump:
         return ""  # WHY: safe default when user enters an unknown menu number
 
     @staticmethod
-    def _announce_expression(expr: str) -> str:
+    def _announce_expression(expr: str) -> str:  # WHY: shared user-feedback branch for happy-path selection
         """Print user feedback for a chosen expression and return it."""
         if expr:  # WHY: distinguish "no filter" from a real expression for UX clarity
             print(f"\n! Filter applied: {expr}")  # WHY: confirm to the user which filter is active
@@ -206,7 +211,7 @@ class PacketCaptureTcpdump:
         return expr  # WHY: hand the value back to the caller unchanged
 
     @staticmethod
-    def _prompt_custom_expression() -> str:
+    def _prompt_custom_expression() -> str:  # WHY: isolates free-form input branch from menu-driven path
         """Prompt for and validate a custom tcpdump expression."""
         print("\nEnter custom tcpdump expression:")  # WHY: guide user into free-form input mode
         print("  Examples: 'host 192.168.1.1', 'net 10.0.0.0/8', 'port 8080'")  # WHY: help user with syntax

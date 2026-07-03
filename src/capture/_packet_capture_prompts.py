@@ -20,33 +20,32 @@ from __future__ import annotations  # WHY: postponed annotation eval for forward
 import logging  # WHY: audit-trail logging for capture prompt lifecycle events
 from typing import Any, cast  # WHY: opaque manager reference plus typed cast for lazy proxies
 
-try:  # WHY: mistapi runtime-required, but tolerated missing during static analysis
-    import mistapi  # WHY: primary Mist SDK used for listSitePacketCaptures / stream helpers
 
-    MISTAPI_AVAILABLE = True  # WHY: feature flag consumed by callers to guard SDK usage
-except ImportError:  # WHY: allow module import without SDK for offline tooling/tests
-    MISTAPI_AVAILABLE = False  # WHY: signals disabled state to downstream consumers
+def _pc() -> Any:
+    """Return the ``packet_capture`` module for test-patchable name lookup.
+
+    Helpers route ``mistapi`` and lazy factory calls through this module so
+    unit tests patching ``src.capture.packet_capture.<name>`` intercept them
+    without needing per-helper patches.
+    """
+    from src.capture import packet_capture as _pc_mod  # pylint: disable=import-outside-toplevel
+
+    return _pc_mod  # WHY: attribute lookup at call time honors test patches
 
 
 def _lazy_input_utils() -> Any:
-    """Return InputUtils lazily to avoid circular imports at load time."""
-    from MistHelper import InputUtils  # WHY: deferred import breaks capture<->MistHelper cycle
-
-    return InputUtils  # WHY: caller uses safe_input wrapper for all user prompts
+    """Return InputUtils via packet_capture so tests patch a single point."""
+    return _pc()._get_input_utils()  # WHY: single indirection = single test patch point
 
 
 def _lazy_prompt_client_utils() -> Any:
-    """Return PromptClientUtils lazily to avoid circular imports."""
-    from MistHelper import PromptClientUtils  # WHY: deferred to break capture<->MistHelper cycle
-
-    return PromptClientUtils  # WHY: caller invokes select_client_mac interactive selection
+    """Return PromptClientUtils via packet_capture so tests patch a single point."""
+    return _pc()._get_prompt_client_utils()  # WHY: single indirection = single test patch point
 
 
 def _lazy_prompt_network_device_utils() -> Any:
-    """Return PromptNetworkDeviceUtils lazily to avoid circular imports."""
-    from MistHelper import PromptNetworkDeviceUtils  # WHY: deferred to break capture<->MistHelper cycle
-
-    return PromptNetworkDeviceUtils  # WHY: caller invokes device/port selection prompts
+    """Return PromptNetworkDeviceUtils via packet_capture so tests patch a single point."""
+    return _pc()._get_prompt_network_device_utils()  # WHY: single indirection = single test patch point
 
 
 _BAND_MAP: dict[str, str] = {  # WHY: menu-choice -> band code lookup shared by scan helpers
@@ -215,7 +214,7 @@ class PacketCapturePrompts:
     def _fetch_site_pcaps(self, site_id: str) -> list[dict[str, Any]] | None:
         """Return list of existing pcap captures for a site or None on error."""
         try:  # WHY: wrap network call so upstream flow tolerates SDK errors
-            response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(  # WHY: SDK call for existing pcaps
+            response = _pc().mistapi.api.v1.sites.pcaps.listSitePacketCaptures(  # WHY: SDK call for existing pcaps
                 self._mm.mist_session, site_id  # WHY: reuse manager's session + site scope
             )
             if response.status_code != 200:  # WHY: any non-200 is treated as unknown state

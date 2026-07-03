@@ -15,31 +15,42 @@ from __future__ import annotations  # WHY: postponed evaluation consistent with 
 import logging  # WHY: capture-lifecycle audit trail
 from typing import Any, cast  # WHY: opaque manager plus typed cast for lazy proxy returns
 
-import mistapi  # WHY: primary Mist SDK for org/mxedge REST calls
+
+def _pc() -> Any:  # WHY: lazy accessor exposing packet_capture module for name lookup
+    """Return the ``packet_capture`` module for test-patchable name lookup.
+
+    Helpers route ``mistapi`` and ``_get_*``/``_lazy_*`` accessor calls through
+    this module so unit tests can patch ``src.capture.packet_capture.<name>``
+    once and intercept all helper call sites without per-file patches.
+    """
+    from src.capture import packet_capture as _pc_mod  # pylint: disable=import-outside-toplevel
+
+    return _pc_mod  # WHY: attribute lookup at call time picks up test patches
 
 
-def _lazy_input_utils() -> Any:
-    """Return InputUtils lazily to avoid circular imports at load time."""
-    import MistHelper as _mh  # WHY: deferred break of capture<->MistHelper import cycle
-
-    return _mh.InputUtils  # WHY: caller uses safe_input for interactive prompts
+def _lazy_input_utils() -> Any:  # WHY: routes InputUtils lookup through packet_capture for test patch parity
+    """Return InputUtils via packet_capture so tests can patch ``_get_input_utils``."""
+    return _pc()._get_input_utils()  # WHY: single indirection = single test patch point
 
 
-def _lazy_data_exporter() -> Any:
-    """Return DataExporter lazily to avoid circular imports at load time."""
-    import MistHelper as _mh  # WHY: deferred break of capture<->MistHelper import cycle
-
-    return _mh.DataExporter  # WHY: caller uses write_with_format_selection for CSV export
+def _lazy_data_exporter() -> Any:  # WHY: routes DataExporter lookup through packet_capture for test patch parity
+    """Return DataExporter via packet_capture so tests can patch ``_get_data_exporter``."""
+    return _pc()._get_data_exporter()  # WHY: single indirection = single test patch point
 
 
-class PacketCaptureOrg:
+_API_LIMIT_NOTICE = (  # WHY: legacy notice hoisted to constant to keep call-site under line-length budget
+    "  ! API Limitation: Only 1 MxEdge can be captured at a time for organization-level captures"
+)
+
+
+class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from PacketCaptureManager
     """Wrapper class holding the extracted org/MxEdge capture helpers."""
 
-    def __init__(self, manager: Any) -> None:
+    def __init__(self, manager: Any) -> None:  # WHY: bind parent manager so __getattr__ can proxy state
         """Store the parent manager for delegate lookups."""
         self._mm = manager  # WHY: enable __getattr__ delegation back to PacketCaptureManager
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy so callers see combined API
         """Delegate unknown attributes to the wrapped manager."""
         mm = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
         if mm is None:  # WHY: only trips during broken init; avoid infinite recursion
@@ -50,7 +61,7 @@ class PacketCaptureOrg:
     # MxEdge discovery
     # ------------------------------------------------------------------
 
-    def fetch_org_mxedges(self) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:
+    def fetch_org_mxedges(self) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:  # WHY: two-step fetch entry
         """Fetch MxEdges and their stats for org-level captures.
 
         Returns:
@@ -63,13 +74,13 @@ class PacketCaptureOrg:
         stats_map = self._fetch_mxedge_stats_map()  # WHY: secondary stats call, best-effort
         return mxedges, stats_map  # WHY: return the two-tuple expected by the workflow
 
-    def _fetch_mxedge_list(self) -> list[dict[str, Any]] | None:
+    def _fetch_mxedge_list(self) -> list[dict[str, Any]] | None:  # WHY: primary listOrgMxEdges + error path
         """Fetch the MxEdge inventory or return None on empty/error."""
         try:  # WHY: swallow SDK errors and surface as None sentinel
-            response = mistapi.api.v1.orgs.mxedges.listOrgMxEdges(  # WHY: primary MxEdge listing endpoint
+            response = _pc().mistapi.api.v1.orgs.mxedges.listOrgMxEdges(  # WHY: primary MxEdge listing endpoint
                 self.mist_session, self.org_id, limit=1000
             )
-            mxedges = mistapi.get_all(
+            mxedges = _pc().mistapi.get_all(
                 response=response, mist_session=self.mist_session
             )  # WHY: paginate through everything
         except Exception as error:  # pylint: disable=broad-exception-caught
@@ -82,18 +93,18 @@ class PacketCaptureOrg:
             return None  # WHY: signal empty inventory as None
         return cast(list[dict[str, Any]], mxedges)  # WHY: mistapi returns list[dict] via untyped SDK
 
-    def _fetch_mxedge_stats_map(self) -> dict[str, Any]:
+    def _fetch_mxedge_stats_map(self) -> dict[str, Any]:  # WHY: best-effort stats fetch keyed by mxedge id
         """Return an ``{id: stats}`` map, best-effort (empty on error)."""
         print("  Fetching MxEdge status information...")  # WHY: cue user before secondary call
         stats_map: dict[str, Any] = {}  # WHY: default-empty so failure still yields a usable value
         try:  # WHY: stats are advisory; failures must not block capture
-            stats_response = mistapi.api.v1.orgs.stats.listOrgMxEdgesStats(  # WHY: org-scope stats endpoint
+            stats_response = _pc().mistapi.api.v1.orgs.stats.listOrgMxEdgesStats(  # WHY: org-scope stats endpoint
                 self.mist_session, self.org_id, limit=1000
             )
-            stats_data = mistapi.get_all(response=stats_response, mist_session=self.mist_session)  # WHY: paginate
+            stats_data = _pc().mistapi.get_all(response=stats_response, mist_session=self.mist_session)  # WHY: paginate
             for stat in stats_data or []:  # WHY: guard against None response payload
                 mxedge_id = stat.get("id")  # WHY: id keys the map, skip records lacking it
-                if mxedge_id:
+                if mxedge_id:  # WHY: id is required for the map key; skip records lacking it
                     stats_map[mxedge_id] = stat  # WHY: populate map keyed by mxedge id
         except Exception as error:  # pylint: disable=broad-exception-caught
             logging.warning("Menu #10: Failed to fetch MxEdge stats: %s", error)  # WHY: legacy log line
@@ -103,7 +114,7 @@ class PacketCaptureOrg:
     # MxEdge selection
     # ------------------------------------------------------------------
 
-    def display_and_select_mxedge(
+    def display_and_select_mxedge(  # WHY: interactive picker returning the chosen mxedge or None on cancel
         self,
         mxedges: list[dict[str, Any]],
         stats_map: dict[str, Any],
@@ -113,16 +124,16 @@ class PacketCaptureOrg:
         print("=" * 120)  # WHY: visual separator matching legacy width
         index_to_mxedge = self._render_mxedge_rows(mxedges, stats_map)  # WHY: build index map
         print()  # WHY: blank line before the API-limitation notice
-        print("  ! API Limitation: Only 1 MxEdge can be captured at a time for organization-level captures")
+        print(_API_LIMIT_NOTICE)  # WHY: legacy notice - org captures restricted to 1 MxEdge per session
         idx = self._prompt_mxedge_index(len(mxedges))  # WHY: prompt for numeric index
         if idx is None or idx not in index_to_mxedge:  # WHY: cancel or invalid index
             return None  # WHY: caller treats None as user-cancel
         selected = index_to_mxedge[idx]  # WHY: resolve chosen index to the mxedge dict
         print("\n  Selected MxEdge:")  # WHY: confirm selection to user
-        print(f"    -> {selected.get('name', 'Unnamed')} (ID: {selected.get('id')})")
+        print(f"    -> {selected.get('name', 'Unnamed')} (ID: {selected.get('id')})")  # WHY: show name+id
         return selected  # WHY: hand chosen mxedge back to workflow
 
-    def _render_mxedge_rows(
+    def _render_mxedge_rows(  # WHY: prints one row per mxedge and returns index->mxedge map
         self,
         mxedges: list[dict[str, Any]],
         stats_map: dict[str, Any],
@@ -134,35 +145,35 @@ class PacketCaptureOrg:
             index_to_mxedge[index] = mxedge  # WHY: bookkeeping for the later idx lookup
         return index_to_mxedge  # WHY: hand map to the outer prompt loop
 
-    def _prompt_mxedge_index(self, count: int) -> int | None:
+    def _prompt_mxedge_index(self, count: int) -> int | None:  # WHY: safe numeric-index prompt with bounds check
         """Prompt for a numeric MxEdge index; return None on cancel/invalid input."""
         try:  # WHY: safe_input can raise on EOF/Ctrl-C
-            selection_input = (
+            selection_input = (  # WHY: prompt and strip whitespace inline for parse below
                 _lazy_input_utils()
                 .safe_input(f"Select MxEdge index [0-{count - 1}]: ", context="mxedge_selection")
                 .strip()
             )
         except (EOFError, KeyboardInterrupt):  # WHY: legacy cancel path prints and returns None
-            print("\n! Operation cancelled")
-            logging.info("Menu #10: User cancelled MxEdge selection")
-            return None
+            print("\n! Operation cancelled")  # WHY: legacy user message on cancel
+            logging.info("Menu #10: User cancelled MxEdge selection")  # WHY: legacy audit log
+            return None  # WHY: signal cancel to caller
         try:  # WHY: int() may raise on non-numeric input
-            idx = int(selection_input)
-        except ValueError:
-            print("\n! Invalid input format. Please enter a single numeric index.")
-            logging.warning("Menu #10: Invalid selection input: %s", selection_input)
-            return None
+            idx = int(selection_input)  # WHY: parse index; ValueError caught below
+        except ValueError:  # WHY: non-numeric input path warns and returns None
+            print("\n! Invalid input format. Please enter a single numeric index.")  # WHY: legacy user error
+            logging.warning("Menu #10: Invalid selection input: %s", selection_input)  # WHY: legacy log line
+            return None  # WHY: signal invalid input to caller
         if not 0 <= idx < count:  # WHY: bounds check with legacy warning line
-            print(f"\n! Invalid index {idx}. Please select from 0-{count - 1}")  # nosec B608
-            logging.warning("Menu #10: Invalid MxEdge index: %s", idx)
-            return None
+            print(f"\n! Invalid index {idx}. Please select from 0-{count - 1}")  # nosec B608 # WHY: user error
+            logging.warning("Menu #10: Invalid MxEdge index: %s", idx)  # WHY: legacy audit log
+            return None  # WHY: signal out-of-range index to caller
         return idx  # WHY: valid index returned to caller
 
     # ------------------------------------------------------------------
     # MxEdge row rendering
     # ------------------------------------------------------------------
 
-    def print_mxedge_row(self, index: int, mxedge: dict[str, Any], stats_map: dict[str, Any]) -> None:
+    def print_mxedge_row(self, index: int, mxedge: dict[str, Any], stats_map: dict[str, Any]) -> None:  # WHY: row
         """Print a single MxEdge row with status details."""
         mxedge_name = mxedge.get("name", "Unnamed MxEdge")  # WHY: fall back to placeholder name
         mxedge_id = mxedge.get("id", "No ID")  # WHY: legacy placeholder for missing id
@@ -170,31 +181,31 @@ class PacketCaptureOrg:
         stat = stats_map.get(mxedge_id, {})  # WHY: default empty dict keeps .get chains simple
         status_marker, uptime_str = self._format_mxedge_status(stat)  # WHY: split status/uptime rendering
         mxagent_state, tunterm_state = self._extract_service_states(stat)  # WHY: split service parsing
-        print(
+        print(  # WHY: primary row printed as one formatted line matching legacy width
             f"  [{index}] {mxedge_name:30} | Model: {model:10}"
             f" | Status: {status_marker:8} | Uptime: {uptime_str:10}"
         )
-        print(f"       mxagent: {mxagent_state:15} | tunterm: {tunterm_state:15}")
+        print(f"       mxagent: {mxagent_state:15} | tunterm: {tunterm_state:15}")  # WHY: legacy secondary row
 
     @staticmethod
-    def _format_mxedge_status(stat: dict[str, Any]) -> tuple[str, str]:
+    def _format_mxedge_status(stat: dict[str, Any]) -> tuple[str, str]:  # WHY: legacy status/uptime formatter
         """Return (status_marker, uptime_str) for a stats record."""
         status = stat.get("status", "unknown")  # WHY: default "unknown" preserves legacy display
         uptime = stat.get("uptime", 0)  # WHY: 0 uptime maps to N/A per legacy
         if uptime > 0:  # WHY: only format non-zero uptimes into "Xd Yh"
-            uptime_str = f"{uptime // 86400}d {(uptime % 86400) // 3600}h"
+            uptime_str = f"{uptime // 86400}d {(uptime % 86400) // 3600}h"  # WHY: legacy day/hour format
         else:
             uptime_str = "N/A"  # WHY: legacy placeholder for missing uptime
         if status == "connected":  # WHY: legacy label mapping for status
-            status_marker = "ONLINE"
-        elif status == "disconnected":
-            status_marker = "OFFLINE"
+            status_marker = "ONLINE"  # WHY: legacy display for connected state
+        elif status == "disconnected":  # WHY: legacy branch for disconnected state
+            status_marker = "OFFLINE"  # WHY: legacy display for disconnected state
         else:
             status_marker = status.upper()  # WHY: fallback matches legacy behavior
         return status_marker, uptime_str  # WHY: caller renders both in one print
 
     @staticmethod
-    def _extract_service_states(stat: dict[str, Any]) -> tuple[str, str]:
+    def _extract_service_states(stat: dict[str, Any]) -> tuple[str, str]:  # WHY: legacy service-state extractor
         """Return (mxagent_state, tunterm_state) strings from a stats record."""
         service_stat = stat.get("service_stat", {})  # WHY: nested dict may be absent
         mxagent_state = service_stat.get("mxagent", {}).get("running_state", "Unknown")  # WHY: legacy default
@@ -205,7 +216,7 @@ class PacketCaptureOrg:
     # Port listing / selection
     # ------------------------------------------------------------------
 
-    def display_mxedge_ports(self, mxedge_name: str, port_stat: dict[str, Any]) -> list[str]:
+    def display_mxedge_ports(self, mxedge_name: str, port_stat: dict[str, Any]) -> list[str]:  # WHY: port list UI
         """Display MxEdge interface stats and return port name list."""
         port_list: list[str] = []  # WHY: preserve iteration order for later index lookup
         print(f"\n  {mxedge_name} - Available Interfaces:")  # WHY: legacy header
@@ -215,11 +226,11 @@ class PacketCaptureOrg:
             speed = port_info.get("speed", 0)  # WHY: 0 speed maps to N/A per legacy
             speed_str = f"{speed}Mbps" if speed else "N/A"  # WHY: format only when non-zero
             mac = port_info.get("mac", "N/A")  # WHY: legacy placeholder for missing MAC
-            print(f"    [{port_index}] {port_name:10} Status: {status:5} Speed: {speed_str:10} MAC: {mac}")
+            print(f"    [{port_index}] {port_name:10} Status: {status:5} Speed: {speed_str:10} MAC: {mac}")  # WHY: row
             port_list.append(port_name)  # WHY: order-preserving list for later index resolution
         return port_list  # WHY: caller passes this to the index prompt
 
-    def select_port_by_index(
+    def select_port_by_index(  # WHY: legacy interactive single-port selector
         self,
         port_list: list[str],
         mxedge_name: str,
@@ -230,15 +241,15 @@ class PacketCaptureOrg:
         print("  ! API Limitation: Only 1 port can be captured at a time")  # WHY: legacy notice
         port_input = self._prompt_port_input(port_list, mxedge_name, mxedge_id)  # WHY: extracted safe-prompt
         if port_input is None:  # WHY: cancel path from prompt
-            return None
+            return None  # WHY: propagate cancel to caller
         if not port_input:  # WHY: legacy path when user submits empty response
-            print("\n! Port selection is required. Please select a port index.")
-            logging.warning("Menu #10: No port selected")
-            return None
+            print("\n! Port selection is required. Please select a port index.")  # WHY: legacy user error line
+            logging.warning("Menu #10: No port selected")  # WHY: legacy audit log
+            return None  # WHY: signal empty selection to caller
         return self._resolve_port_index(port_list, port_input)  # WHY: parse and validate index
 
     @staticmethod
-    def _prompt_port_input(port_list: list[str], mxedge_name: str, mxedge_id: str) -> str | None:
+    def _prompt_port_input(port_list: list[str], mxedge_name: str, mxedge_id: str) -> str | None:  # WHY: safe prompt
         """Safely prompt for a port index string; None on cancel."""
         try:  # WHY: safe_input can raise on EOF/Ctrl-C
             return cast(  # WHY: safe_input->str traverses untyped lazy proxy
@@ -251,48 +262,48 @@ class PacketCaptureOrg:
                 .strip(),
             )
         except (EOFError, KeyboardInterrupt):  # WHY: legacy cancel path
-            print("\n! Operation cancelled")
-            logging.info("Menu #10: User cancelled port selection")
-            return None
+            print("\n! Operation cancelled")  # WHY: legacy user message on cancel
+            logging.info("Menu #10: User cancelled port selection")  # WHY: legacy audit log
+            return None  # WHY: signal cancel to caller
 
     @staticmethod
-    def _resolve_port_index(port_list: list[str], port_input: str) -> list[str] | None:
+    def _resolve_port_index(port_list: list[str], port_input: str) -> list[str] | None:  # WHY: legacy index parser
         """Parse a numeric index and return the selected single-port list."""
         try:  # WHY: int() may raise on non-numeric input
-            idx = int(port_input)
-        except ValueError:
-            print("\n! Invalid input format. Please enter a single numeric index.")
-            logging.warning("Menu #10: Invalid port input: %s", port_input)
-            return None
+            idx = int(port_input)  # WHY: parse port index; ValueError caught below
+        except ValueError:  # WHY: non-numeric input path warns and returns None
+            print("\n! Invalid input format. Please enter a single numeric index.")  # WHY: legacy user error
+            logging.warning("Menu #10: Invalid port input: %s", port_input)  # WHY: legacy audit log
+            return None  # WHY: signal parse failure to caller
         if not 0 <= idx < len(port_list):  # WHY: legacy bounds check with warning
-            print(f"\n! Invalid index {idx} (valid range: 0-{len(port_list) - 1})")
-            logging.warning("Menu #10: Invalid port index: %s", idx)
-            return None
+            print(f"\n! Invalid index {idx} (valid range: 0-{len(port_list) - 1})")  # WHY: legacy user error line
+            logging.warning("Menu #10: Invalid port index: %s", idx)  # WHY: legacy audit log
+            return None  # WHY: signal out-of-range index to caller
         selected_port = port_list[idx]  # WHY: resolve chosen index to the port name
         print(f"    -> Selected port: {selected_port}")  # WHY: confirm to user
         return [selected_port]  # WHY: API expects list-of-one for single-port capture
 
-    def fetch_and_select_mxedge_port(self, mxedge: dict[str, Any]) -> list[str] | None:
+    def fetch_and_select_mxedge_port(self, mxedge: dict[str, Any]) -> list[str] | None:  # WHY: legacy port picker
         """Fetch MxEdge interfaces and prompt port selection."""
         mxedge_id: str = mxedge.get("id", "")  # WHY: default empty preserves legacy None-safety
         mxedge_name: str = mxedge.get("name", "Unnamed MxEdge")  # WHY: display fallback
         stats_data = self._fetch_single_mxedge_stats(mxedge_id, mxedge_name)  # WHY: extracted API call
         if stats_data is None:  # WHY: fetch failure already reported to user
-            return None
+            return None  # WHY: propagate fetch failure to caller
         port_stat = stats_data.get("port_stat", {})  # WHY: nested field may be absent
         if not port_stat:  # WHY: legacy path when device exposes no port stats
-            print(f"\n  {mxedge_name} - No interface stats available")
-            return None
+            print(f"\n  {mxedge_name} - No interface stats available")  # WHY: legacy user message
+            return None  # WHY: no ports means nothing to capture
         port_list = self.display_mxedge_ports(mxedge_name, port_stat)  # WHY: prints + returns port names
         if not port_list:  # WHY: empty port list is a soft failure
-            print(f"\n  {mxedge_name}: No ports available")
-            return None
+            print(f"\n  {mxedge_name}: No ports available")  # WHY: legacy user message
+            return None  # WHY: empty port list means nothing to capture
         return self.select_port_by_index(port_list, mxedge_name, mxedge_id)  # WHY: interactive picker
 
     def _fetch_single_mxedge_stats(self, mxedge_id: str, mxedge_name: str) -> dict[str, Any] | None:
         """Fetch stats for a single MxEdge; return dict or None on failure."""
         try:  # WHY: SDK may raise on transport errors
-            stats_response = mistapi.api.v1.orgs.stats.getOrgMxEdgeStats(  # WHY: per-mxedge stats endpoint
+            stats_response = _pc().mistapi.api.v1.orgs.stats.getOrgMxEdgeStats(  # WHY: per-mxedge stats endpoint
                 self.mist_session, self.org_id, mxedge_id
             )
         except Exception as error:  # pylint: disable=broad-exception-caught
@@ -353,7 +364,7 @@ class PacketCaptureOrg:
         max_pkt_len = self._prompt_max_packet_length()  # WHY: delegate to prompts cluster
         if max_pkt_len is None:  # WHY: user cancelled the packet-length prompt
             return None
-        format_result = self.prompt_org_format_selection()  # WHY: extracted format prompt
+        format_result = self._prompt_org_format_selection()  # WHY: extracted format prompt
         if format_result is None:  # WHY: user cancelled or supplied invalid format
             return None
         capture_format, tzsp_host, tzsp_port = format_result  # WHY: unpack for return tuple
@@ -455,7 +466,7 @@ class PacketCaptureOrg:
         try:  # WHY: broad guard preserves legacy user-friendly error handling
             print("\n> Starting organization packet capture...")  # WHY: legacy progress line
             logging.info("Initiating org capture with payload: %s", payload)  # WHY: audit log
-            response = mistapi.api.v1.orgs.pcaps.startOrgPacketCapture(  # WHY: primary start endpoint
+            response = _pc().mistapi.api.v1.orgs.pcaps.startOrgPacketCapture(  # WHY: primary start endpoint
                 self.mist_session, self.org_id, payload
             )
             if response.status_code == 200:  # WHY: success branch continues into result handling
