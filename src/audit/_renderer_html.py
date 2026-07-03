@@ -14,9 +14,9 @@ from dataclasses import dataclass  # WHY: frozen bundle for template fragments (
 from datetime import UTC, datetime  # WHY: ISO-format timestamps for Plotly x-axis
 from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids circular import at runtime
 
-from src.audit._renderer_delta import compute_delta  # WHY: shared delta walker
-from src.audit._renderer_format import format_delta_html  # WHY: reused leaf HTML formatter
-from src.audit._renderer_time import epoch_to_readable  # WHY: shared timestamp formatter
+from ._renderer_delta import compute_delta  # WHY: shared delta walker (relative for pylint E0401)
+from ._renderer_format import format_delta_html  # WHY: reused leaf HTML formatter (relative import)
+from ._renderer_time import epoch_to_readable  # WHY: shared timestamp formatter (relative import)
 
 if TYPE_CHECKING:  # WHY: only imported by type-checkers
     from src.audit.analyzer import AuditAnalysisResult  # WHY: analysis payload type

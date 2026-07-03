@@ -10,8 +10,8 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 import json  # WHY: pretty-print original/final states in fenced code blocks
 from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids circular import at runtime
 
-from src.audit._renderer_delta import compute_delta  # WHY: shared delta walker
-from src.audit._renderer_time import epoch_to_readable, epoch_to_short  # WHY: shared timestamp formatters
+from ._renderer_delta import compute_delta  # WHY: shared delta walker (relative for pylint E0401)
+from ._renderer_time import epoch_to_readable, epoch_to_short  # WHY: shared timestamp formatters (relative)
 
 if TYPE_CHECKING:  # WHY: only imported by type-checkers
     from src.audit.analyzer import AuditAnalysisResult  # WHY: analysis payload type

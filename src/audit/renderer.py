@@ -19,7 +19,7 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 import os  # WHY: filesystem primitives for output-path handling
 from typing import TYPE_CHECKING  # WHY: TYPE_CHECKING avoids runtime import cycle
 
-from src.audit._renderer_delta import (  # WHY: shared delta engine bound to class for tests
+from ._renderer_delta import (  # WHY: relative import avoids pylint E0401 in CI
     DiffKeyContext,
     build_identity_map,
     check_reorder,
@@ -33,10 +33,10 @@ from src.audit._renderer_delta import (  # WHY: shared delta engine bound to cla
     reorder_label,
     strip_id_prefix,
 )
-from src.audit._renderer_format import format_delta_html  # WHY: HTML formatter bound for tests
-from src.audit._renderer_html import _HtmlCluster  # WHY: HTML rendering cluster
-from src.audit._renderer_mermaid import _MermaidCluster  # WHY: Mermaid rendering cluster
-from src.audit._renderer_time import epoch_to_readable, epoch_to_short  # WHY: shared timestamp formatters
+from ._renderer_format import format_delta_html  # WHY: relative import for pylint E0401 fix
+from ._renderer_html import _HtmlCluster  # WHY: relative import for pylint E0401 fix
+from ._renderer_mermaid import _MermaidCluster  # WHY: relative import for pylint E0401 fix
+from ._renderer_time import epoch_to_readable, epoch_to_short  # WHY: relative import for pylint E0401 fix
 
 if TYPE_CHECKING:  # WHY: only imported by type-checkers
     from src.audit.analyzer import AuditAnalysisResult  # WHY: analysis payload type
