@@ -71,6 +71,11 @@ class CSVAddressIngester:
         """Choose the delimiter that best splits the first data line into >=6 fields."""
         if not sample.strip():  # Empty file -> any delimiter works (no rows to parse).
             return ","  # Harmless default.
+        return self._choose_delimiter(sample)  # Delegate the probing loop to keep CC bounded.
+
+    def _choose_delimiter(self, sample: str) -> str:
+        """Probe each candidate delimiter and return the one giving the most fields."""
+        # WHY: split from _detect_delimiter so the empty-sample guard doesn't inflate CC past 5.
         best_delimiter = ","  # Fallback when nothing yields enough columns.
         best_count = -1  # Highest field count seen so far.
         for candidate in _CANDIDATE_DELIMITERS:  # Probe each candidate delimiter.
