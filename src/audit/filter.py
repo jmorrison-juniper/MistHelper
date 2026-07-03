@@ -104,6 +104,7 @@ def _is_adopted_flag_cascade(msg: str, entry: dict[str, Any]) -> bool:  # Helper
     # WHY: extracted so is_noise drops from CC 8 to <=5.
     if "Update Device" not in msg:  # Guard: only Update Device entries qualify
         return False  # Non-device entries never match this pattern
-    before = entry.get("before", {})  # Pre-change device attributes
-    after = entry.get("after", {})  # Post-change device attributes
-    return before == {"adopted": False} and after == {"adopted": False}  # Both sides carry only the cascade flag
+    before: dict[str, Any] = entry.get("before", {})  # Pre-change device attributes
+    after: dict[str, Any] = entry.get("after", {})  # Post-change device attributes
+    cascade = {"adopted": False}  # Sentinel diff shape indicating adopted-flag cascade
+    return before == cascade and after == cascade  # Both sides carry only the cascade flag
