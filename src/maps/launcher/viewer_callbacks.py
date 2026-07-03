@@ -208,21 +208,6 @@ class MapViewerCallbacks:  # WHY: thin coordinator over 6 extracted callback clu
             _n_intervals, refresh_times, toggle_value
         )
 
-    def update_clients_traces(  # noqa: PLR0913, STRUCT-PARAMS - signature mirrors Dash callback contract
-        self,
-        _n_intervals: int,
-        _manual_clicks: int | None,
-        config: dict[str, Any] | None,
-        current_fig: dict[str, Any],
-        _client_layers: Any,
-        refresh_times: dict[str, float] | None,
-    ) -> tuple[Any, Any]:
-        """Delegate to :class:`_ViewerRefresh` for update_clients_traces."""
-        refresh = self._refresh  # WHY: local alias avoids single-call delegate detection
-        return refresh.update_clients_traces(  # WHY: helper owns live-client trace refresh
-            _n_intervals, _manual_clicks, config, current_fig, _client_layers, refresh_times
-        )
-
     def update_coverage_heatmap(
         self,
         n_intervals: int,
@@ -238,7 +223,7 @@ class MapViewerCallbacks:  # WHY: thin coordinator over 6 extracted callback clu
         )
 
     # ------------------------------------------------------------------
-    # Wave E1: execute_clone_operation + handle_drawing_tools
+    # Wave E1: execute_clone_operation
     # ------------------------------------------------------------------
 
     def execute_clone_operation(
@@ -252,40 +237,6 @@ class MapViewerCallbacks:  # WHY: thin coordinator over 6 extracted callback clu
         clone = self._clone  # WHY: local alias avoids single-call delegate detection
         return clone.execute_clone_operation(  # WHY: helper owns full clone workflow
             n_clicks, new_name, config, cache_bust_data
-        )
-
-    # ------------------------------------------------------------------
-    # handle_drawing_tools + per-button helpers
-    # ------------------------------------------------------------------
-
-    def handle_drawing_tools(  # noqa: PLR0913, STRUCT-PARAMS, STRUCT-LENGTH - Dash callback contract
-        self,
-        _save_clicks: int,
-        _clear_clicks: int,
-        del_path_clicks: int,
-        _del_wayfinding_clicks: int,
-        del_wall_clicks: int,
-        _del_zone_clicks: int,
-        drawing_mode: str | None,
-        zone_name: str | None,
-        current_fig: dict[str, Any] | None,
-        config: dict[str, Any] | None,
-        cache_bust_data: dict[str, Any] | None,
-    ) -> tuple[Any, Any]:
-        """Delegate to :class:`_ViewerDrawing` for handle_drawing_tools."""
-        drawing = self._drawing  # WHY: local alias avoids single-call delegate detection
-        return drawing.handle_drawing_tools(  # WHY: helper owns drawing-button dispatch
-            _save_clicks,
-            _clear_clicks,
-            del_path_clicks,
-            _del_wayfinding_clicks,
-            del_wall_clicks,
-            _del_zone_clicks,
-            drawing_mode,
-            zone_name,
-            current_fig,
-            config,
-            cache_bust_data,
         )
 
     # ------------------------------------------------------------------
@@ -392,18 +343,33 @@ class MapViewerCallbacks:  # WHY: thin coordinator over 6 extracted callback clu
     # Wiring: bind every method above to its @app.callback
     # ------------------------------------------------------------------
 
-    def register_with(self, app: Dash) -> None:  # noqa: STRUCT-LENGTH - one-time Dash callback wiring block; extracting sections would fragment wiring
+    def register_with(self, app: Dash) -> None:
         """Attach all wave-A + wave-B + wave-C + wave-D + wave-E1 + wave-E2 callbacks to ``app``."""
-        # Import dash decorator helpers lazily so this module stays
-        # importable when dash is missing (matches the fallback behavior
-        # in MapsManager._launch_plotly_viewer).
-        from dash import Input, Output, State  # Local import keeps module import-light
-
         logging.info(  # Trace registration start so operators can confirm wiring
             "MapViewerCallbacks: registering %d callbacks (waves A+B+C+D+E1+E2)", 24
         )
+        self._register_wave_a(app)  # WHY: bind wave-A direct layer-toggle callback
+        # WHY: waves A + B + C UI toggles now live in :class:`_ViewerUI`;
+        # delegate registration to that cluster so this method only wires
+        # non-UI callbacks (refresh, drawing, clone, site/URL switch).
+        self._ui.register(app)  # WHY: bind 12 UI-toggle callbacks in one call
+        self._refresh.register(app)  # WHY: bind 3 live-refresh callbacks in one call
+        self._drawing.register(app)  # WHY: bind drawing-tools callback in one call
+        self._clone.register(app)  # WHY: bind clone-map callback in one call
+        self._site.register(app)  # WHY: bind 5 site-switch callbacks in one call
+        self._url.register(app)  # WHY: bind URL-switch callback in one call
+        logging.debug(  # Trace registration end
+            "MapViewerCallbacks: callbacks registered "
+            "(5 wave-A + 4 wave-B + 4 wave-C + 3 wave-D + 2 wave-E1 + 5 wave-E2 + 1 wave-E3)"
+        )
 
-        # --- Wave A ---------------------------------------------------
+    def _register_wave_a(self, app: Dash) -> None:
+        """Bind wave-A layer-toggle callback (single direct binding, not delegated)."""
+        # Import dash decorator helpers lazily so this module stays importable
+        # when dash is missing (matches the fallback behavior in
+        # MapsManager._launch_plotly_viewer).
+        from dash import Input, Output, State  # Local import keeps module import-light
+
         app.callback(  # PlotlyMapCallbackManager.apply_layer_toggles (registered directly, no adapter)
             Output("map-display", "figure"),  # Output: replaces the figure
             [
@@ -415,37 +381,3 @@ class MapViewerCallbacks:  # WHY: thin coordinator over 6 extracted callback clu
             ],
             State("map-display", "figure"),  # Current figure passed in last for mutation
         )(self._state.callback_manager.apply_layer_toggles)
-
-        # WHY: waves A + B + C UI toggles now live in :class:`_ViewerUI`;
-        # delegate registration to that cluster so this method only wires
-        # non-UI callbacks (refresh, drawing, clone, site/URL switch).
-        self._ui.register(app)  # WHY: bind 12 UI-toggle callbacks in one call
-
-        # --- Wave D ---------------------------------------------------
-        # WHY: wave-D live-refresh callbacks now live in :class:`_ViewerRefresh`;
-        # delegate registration so this method stays a coordinator.
-        self._refresh.register(app)  # WHY: bind 3 live-refresh callbacks in one call
-
-        # --- Wave E1 --------------------------------------------------
-        # WHY: wave-E1 drawing-tools callback now lives in :class:`_ViewerDrawing`;
-        # delegate registration so this method stays a coordinator.
-        self._drawing.register(app)  # WHY: bind drawing-tools callback in one call
-
-        # WHY: wave-E1 clone-map callback now lives in :class:`_ViewerClone`;
-        # delegate registration so this method stays a coordinator.
-        self._clone.register(app)  # WHY: bind clone-map callback in one call
-
-        # --- Wave E2 --------------------------------------------------
-        # WHY: wave-E2 site-switch callbacks now live in :class:`_ViewerSiteSwitch`;
-        # delegate registration so this method stays a coordinator.
-        self._site.register(app)  # WHY: bind 5 site-switch callbacks in one call
-
-        # --- Wave E3 --------------------------------------------------
-        # WHY: wave-E3 URL-switch callback now lives in :class:`_ViewerUrlSwitch`;
-        # delegate registration so this method stays a coordinator.
-        self._url.register(app)  # WHY: bind URL-switch callback in one call
-
-        logging.debug(  # Trace registration end
-            "MapViewerCallbacks: callbacks registered "
-            "(5 wave-A + 4 wave-B + 4 wave-C + 3 wave-D + 2 wave-E1 + 5 wave-E2 + 1 wave-E3)"
-        )

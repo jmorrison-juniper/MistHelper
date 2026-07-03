@@ -5,7 +5,7 @@ Covers the 2 callbacks newly on :class:`MapViewerCallbacks`:
 * :py:meth:`MapViewerCallbacks.execute_clone_operation` -- clone the
   current map (validate, fetch source, build payload, download image,
   create cloned map, upload image, clone zones).
-* :py:meth:`MapViewerCallbacks.handle_drawing_tools` -- dispatch the
+* :py:meth:`MapViewerCallbacks._drawing.handle_drawing_tools` -- dispatch the
   drawing toolbar buttons (save shape / delete walls / paths / zones).
 
 Uses the same dash-stub + autouse fixture pattern as
@@ -361,7 +361,7 @@ def test_handle_drawing_no_trigger_returns_empty(_dash_stub: types.ModuleType) -
     _dash_stub.callback_context.triggered = []
     callbacks = MapViewerCallbacks(state=_make_state())
 
-    msg, cache = callbacks.handle_drawing_tools(  # noqa: PLR0913 - dispatcher signature
+    msg, cache = callbacks._drawing.handle_drawing_tools(  # noqa: PLR0913 - dispatcher signature
         1, 0, 0, 0, 0, 0, "zone", "Z1", {"layout": {"shapes": []}}, {}, {}
     )
 
@@ -376,7 +376,9 @@ def test_handle_drawing_clear_button_returns_local_only_message(
     _trigger_dash(_dash_stub, "clear-drawings-btn")
     callbacks = MapViewerCallbacks(state=_make_state())
 
-    msg, cache = callbacks.handle_drawing_tools(0, 1, 0, 0, 0, 0, None, None, {"layout": {"shapes": []}}, None, None)
+    msg, cache = callbacks._drawing.handle_drawing_tools(
+        0, 1, 0, 0, 0, 0, None, None, {"layout": {"shapes": []}}, None, None
+    )
 
     assert isinstance(msg, dict) and "Span" in msg
     assert cache == "__NO_UPDATE__"
@@ -396,7 +398,7 @@ def test_handle_drawing_save_zone_rect_calls_createSiteZone(
             "shapes": [{"type": "rect", "x0": 0, "y0": 0, "x1": 100, "y1": 100}],
         }
     }
-    msg, cache = callbacks.handle_drawing_tools(
+    msg, cache = callbacks._drawing.handle_drawing_tools(
         1,
         0,
         0,
@@ -428,7 +430,7 @@ def test_handle_drawing_save_zone_without_name_returns_error(
     callbacks = MapViewerCallbacks(state=state)
 
     fig = {"layout": {"shapes": [{"type": "rect", "x0": 0, "y0": 0, "x1": 10, "y1": 10}]}}
-    msg, cache = callbacks.handle_drawing_tools(
+    msg, cache = callbacks._drawing.handle_drawing_tools(
         1,
         0,
         0,
@@ -454,7 +456,7 @@ def test_handle_drawing_save_no_shapes_returns_error(
     callbacks = MapViewerCallbacks(state=_make_state())
 
     fig: dict[str, Any] = {"layout": {"shapes": []}}
-    msg, cache = callbacks.handle_drawing_tools(
+    msg, cache = callbacks._drawing.handle_drawing_tools(
         1, 0, 0, 0, 0, 0, "zone", "Lobby", fig, {"site_id": "s", "map_id": "m", "ppm": 10}, {}
     )
 
@@ -483,7 +485,7 @@ def test_handle_drawing_delete_paths_calls_updateSiteMap(
     state = _make_state(mistapi_ref=mistapi_stub)
     callbacks = MapViewerCallbacks(state=state)
 
-    msg, cache = callbacks.handle_drawing_tools(
+    msg, cache = callbacks._drawing.handle_drawing_tools(
         0,
         0,
         1,
@@ -536,7 +538,7 @@ def test_handle_drawing_delete_zones_iterates_each_zone(
     state = _make_state(mistapi_ref=mistapi_stub)
     callbacks = MapViewerCallbacks(state=state)
 
-    msg, cache = callbacks.handle_drawing_tools(
+    msg, cache = callbacks._drawing.handle_drawing_tools(
         0,
         0,
         0,
