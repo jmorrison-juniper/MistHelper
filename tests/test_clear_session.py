@@ -60,7 +60,7 @@ def test_clear_session_with_service_name(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    with patch("src.device.utility_commands.mistapi") as mock_api:
+    with patch("src.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
         duc.clear_session()
 
@@ -91,7 +91,7 @@ def test_clear_session_with_session_ids(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    with patch("src.device.utility_commands.mistapi") as mock_api:
+    with patch("src.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
         duc.clear_session()
 
@@ -114,7 +114,7 @@ def test_clear_session_cancel_clear_all(monkeypatch, capsys):
         called["api"] = True
         return MagicMock()
 
-    with patch("src.device.utility_commands.mistapi") as mock_api:
+    with patch("src.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
         duc.clear_session()
 
@@ -141,7 +141,7 @@ def test_clear_session_confirm_clear_all_proceeds(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    with patch("src.device.utility_commands.mistapi") as mock_api:
+    with patch("src.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
         duc.clear_session()
 
@@ -177,7 +177,7 @@ def test_clear_session_handles_400(monkeypatch, capsys):
     def fake_clear_raise(apisession, site_id, device_id, body):
         raise FakeErr()
 
-    with patch("src.device.utility_commands.mistapi") as mock_api:
+    with patch("src.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear_raise
         duc.clear_session()
 

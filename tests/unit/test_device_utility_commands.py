@@ -65,10 +65,12 @@ def duc(mock_deps: dict[str, MagicMock]) -> DeviceUtilityCommands:
 
 @pytest.fixture()
 def mock_api():
-    """Patch mistapi in both utility_commands and its selection cluster module."""
+    """Patch mistapi across every cluster module used by DeviceUtilityCommands."""
     with (
-        patch("src.device.utility_commands.mistapi") as mapi,
-        patch("src.device._utility_commands_selection.mistapi", mapi),
+        patch("src.device._utility_commands_selection.mistapi") as mapi,  # WHY: primary mistapi mock
+        patch("src.device._utility_commands_show.mistapi", mapi),  # WHY: keep clusters sharing one mock
+        patch("src.device._utility_commands_action.mistapi", mapi),  # WHY: cover action-cluster SDK calls
+        patch("src.device._utility_commands_clear.mistapi", mapi),  # WHY: cover clear-cluster SDK calls
     ):
         yield mapi
 
