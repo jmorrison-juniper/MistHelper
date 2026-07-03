@@ -38,7 +38,7 @@ class DebugResultSaver:  # Owns the debug artifact write path for one API result
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Compact timestamp for filename
         return os.path.join(DEBUG_DIR, f"{func_name}_{timestamp}.json")  # Joined cross-platform path
 
-    def _build_payload(self, func_name: str, raw_result: Any, parsed_data: Any) -> dict[str, Any]:  # Assemble JSON body.
+    def _build_payload(self, func_name: str, raw_result: Any, parsed_data: Any) -> dict[str, Any]:  # JSON body.
         """Build the JSON-serializable artifact dict (with secret redaction)."""
         return {
             "function": func_name,  # Function name for the artifact
