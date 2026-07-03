@@ -84,12 +84,20 @@ class _Wan2VariableSelection(_ClusterBase):
         if raw == "all":  # WHY: shortcut for full modification
             return template_list  # WHY: entire list selected
         try:  # WHY: guard non-numeric input
-            indices = [int(i.strip()) - 1 for i in raw.split(",")]  # WHY: 1-indexed -> 0-indexed
-            return [template_list[i] for i in indices if 0 <= i < len(template_list)]  # WHY: bounds-safe
+            return self._parse_index_tokens(raw, template_list)  # WHY: extracted to keep CC <=5
         except (ValueError, IndexError) as exc:  # WHY: bad token / out-of-range hit
             print(f" Invalid selection: {exc}")  # WHY: user feedback
             logging.error("Invalid template selection in Menu #104: %s", exc)  # WHY: audit trail
             return None  # WHY: signal parse failure
+
+    @staticmethod
+    def _parse_index_tokens(
+        raw: str,
+        template_list: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Convert a comma-separated 1-indexed token string into template rows."""
+        indices = [int(i.strip()) - 1 for i in raw.split(",")]  # WHY: 1-indexed -> 0-indexed
+        return [template_list[i] for i in indices if 0 <= i < len(template_list)]  # WHY: bounds-safe
 
     @staticmethod
     def _print_selection_summary(selected: list[dict[str, Any]]) -> None:
