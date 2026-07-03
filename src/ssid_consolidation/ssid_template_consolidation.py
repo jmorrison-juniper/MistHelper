@@ -314,10 +314,12 @@ class SSIDTemplateConsolidationManager:  # WHY: coordinator entry for Menu 159 (
             return  # WHY: abort execution when org/ssid resolution failed
         current_org_id, target_ssid = context  # WHY: destructure validated org + ssid pair
         logging.info("Target SSID: %s, Org: %s", target_ssid, current_org_id)  # WHY: audit-log operator inputs
-        deps = SsidTemplateDeps(  # WHY: bundle 6 deps into frozen struct for the manager
+        # fmt: off
+        deps = SsidTemplateDeps(  # WHY: bundle 6 deps into frozen struct; STRUCT-LENGTH block
             org_id=current_org_id, target_ssid=target_ssid, apisession=apisession,
             page_limit=page_limit, safe_input_fn=safe_input_fn, write_data_fn=write_data_fn,
         )
+        # fmt: on
         SSIDTemplateConsolidationManager(deps).run_phase_menu()  # WHY: hand off to the phase menu loop
 
     @staticmethod
@@ -841,9 +843,11 @@ def _apply_ssid_disable(
     updated = _set_ssid_disabled(wlans, ssid_id)  # WHY: in-place flip; returns True if found
     if updated:  # WHY: only PUT + report success when the WLAN row was located
         template_data["wlans"] = wlans  # WHY: PUT payload carries the mutated wlan list
-        mistapi.api.v1.orgs.templates.updateOrgTemplate(  # WHY: PUT mutated wlans back
+        # fmt: off
+        mistapi.api.v1.orgs.templates.updateOrgTemplate(  # WHY: PUT mutated wlans; STRUCT-LENGTH block
             apisession, org_id, template_id, body=template_data,
         )
+        # fmt: on
         result["status"] = "disabled"  # WHY: sentinel consumed by resume + summary logic
         result["timestamp"] = datetime.now().isoformat()  # WHY: record when the flip happened
         logging.info("Disabled SSID %s in template %s", ssid_id, template_id)  # WHY: audit-log success

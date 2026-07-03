@@ -103,7 +103,6 @@ from src.ssid_consolidation.ssid_template_consolidation import (  # noqa: E402
     _template_result,
 )
 
-
 # ===================================================================
 # Helpers
 # ===================================================================

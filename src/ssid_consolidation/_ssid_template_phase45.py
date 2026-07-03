@@ -533,8 +533,4 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
         resume_from: list[dict[str, Any]],
     ) -> set[tuple[str | None, str | None]]:
         """Extract (site_id, ssid_id) pairs already disabled in a prior run."""
-        return {
-            (row.get("site_id"), row.get("ssid_id"))
-            for row in resume_from
-            if row.get("status") == "disabled"
-        }
+        return {(row.get("site_id"), row.get("ssid_id")) for row in resume_from if row.get("status") == "disabled"}
