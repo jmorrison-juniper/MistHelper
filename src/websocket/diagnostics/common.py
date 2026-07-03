@@ -101,6 +101,15 @@ def print_extra_result_fields(
     if not extra_keys:  # Nothing to show; keep output clean
         return  # Early return preserves prior visual layout
     print(f"\nOTHER AVAILABLE FIELDS: {extra_keys}")  # Header matches legacy phrasing
+    _print_extra_field_values(result_payload, extra_keys)  # Extracted so CC stays <=5
+
+
+def _print_extra_field_values(
+    result_payload: dict[str, Any],
+    extra_keys: list[str],
+) -> None:
+    """Print each non-empty extra key's value on its own line."""
+    # WHY: pulling the for/if pair out of print_extra_result_fields drops its CC from 6 to 4.
     for field_name in extra_keys:  # Walk each unexpected key for visibility
         field_value = result_payload.get(field_name)  # Look up the actual value
         if field_value:  # Skip empty/falsey values per legacy behavior
