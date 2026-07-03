@@ -15,7 +15,10 @@ _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 
-from src.gateway.wan2_variable import GatewayWan2VariableMigrator
+from src.gateway._wan2_variable_device import _Wan2VariableDevice
+from src.gateway._wan2_variable_io import _Wan2VariableIO
+from src.gateway._wan2_variable_reporting import _Wan2VariableReporting
+from src.gateway.wan2_variable import GatewayWan2VariableMigrator, Wan2VariableDeps
 
 
 def setup_module() -> None:
@@ -55,7 +58,8 @@ def _make_migrator(**overrides: object) -> GatewayWan2VariableMigrator:
         "connection_pool_fn": MagicMock(return_value=([], [])),
     }
     defaults.update(overrides)
-    return GatewayWan2VariableMigrator(**defaults)  # type: ignore[arg-type]
+    deps = Wan2VariableDeps(**defaults)  # type: ignore[arg-type]
+    return GatewayWan2VariableMigrator(deps)
 
 
 # --- Constructor tests ---
@@ -73,7 +77,7 @@ class TestConstructor:
         assert migrator._site_exclude_prefix == "LAB_"
 
     def test_default_input_fn_is_builtin_input(self) -> None:
-        migrator = GatewayWan2VariableMigrator(
+        deps = Wan2VariableDeps(
             org_id="org",
             apisession=MagicMock(),
             site_exclude_prefix="",
@@ -85,6 +89,7 @@ class TestConstructor:
             input_fn=None,
             connection_pool_fn=None,
         )
+        migrator = GatewayWan2VariableMigrator(deps)
         assert migrator._input_fn is input
 
     def test_runtime_state_initialized(self) -> None:
@@ -136,7 +141,7 @@ class TestCountTemplateAssignments:
             {"gatewaytemplate_id": "tmpl-1"},
             {"gatewaytemplate_id": "tmpl-2"},
         ]
-        counts = GatewayWan2VariableMigrator._count_template_assignments(sites)
+        counts = _Wan2VariableIO._count_template_assignments(sites)
         assert counts == {"tmpl-1": 2, "tmpl-2": 1}
 
     def test_ignores_empty_template_ids(self) -> None:
@@ -145,11 +150,11 @@ class TestCountTemplateAssignments:
             {"gatewaytemplate_id": ""},
             {"gatewaytemplate_id": "  "},
         ]
-        counts = GatewayWan2VariableMigrator._count_template_assignments(sites)
+        counts = _Wan2VariableIO._count_template_assignments(sites)
         assert counts == {"tmpl-1": 1}
 
     def test_empty_sites(self) -> None:
-        counts = GatewayWan2VariableMigrator._count_template_assignments([])
+        counts = _Wan2VariableIO._count_template_assignments([])
         assert counts == {}
 
 
@@ -204,7 +209,7 @@ class TestRenamePortKeys:
 
     def test_renames_exact_key(self) -> None:
         port_config = {"ge-0/0/1": {"ip": "1.2.3.4"}, "ge-0/0/0": {"ip": "5.6.7.8"}}
-        result = GatewayWan2VariableMigrator._rename_port_keys(port_config, "ge-0/0/1", "{{wan2_interface}}", "device1")
+        result = _Wan2VariableDevice._rename_port_keys(port_config, "ge-0/0/1", "{{wan2_interface}}", "device1")
         assert "{{wan2_interface}}" in port_config
         assert "ge-0/0/1" not in port_config
         assert "ge-0/0/0" in port_config
@@ -216,14 +221,14 @@ class TestRenamePortKeys:
             "ge-0/0/1": {"ip": "1.2.3.4"},
             "ge-0/0/1.100": {"vlan": 100},
         }
-        result = GatewayWan2VariableMigrator._rename_port_keys(port_config, "ge-0/0/1", "{{wan2_interface}}", "device1")
+        result = _Wan2VariableDevice._rename_port_keys(port_config, "ge-0/0/1", "{{wan2_interface}}", "device1")
         assert "{{wan2_interface}}" in port_config
         assert "{{wan2_interface}}.100" in port_config
         assert len(result) == 2
 
     def test_no_matching_keys(self) -> None:
         port_config = {"ge-0/0/0": {"ip": "1.2.3.4"}}
-        result = GatewayWan2VariableMigrator._rename_port_keys(port_config, "ge-0/0/1", "{{wan2_interface}}", "device1")
+        result = _Wan2VariableDevice._rename_port_keys(port_config, "ge-0/0/1", "{{wan2_interface}}", "device1")
         assert result == []
         assert port_config == {"ge-0/0/0": {"ip": "1.2.3.4"}}
 
@@ -1201,10 +1206,10 @@ class TestPrintReportPaths:
     """Test report path output."""
 
     def test_with_devices(self) -> None:
-        GatewayWan2VariableMigrator._print_report_paths("audit.csv", [{"id": "d1"}])
+        _Wan2VariableReporting._print_report_paths("audit.csv", [{"id": "d1"}])
 
     def test_without_devices(self) -> None:
-        GatewayWan2VariableMigrator._print_report_paths("audit.csv", [])
+        _Wan2VariableReporting._print_report_paths("audit.csv", [])
 
 
 # --- Final guidance tests ---
@@ -1272,13 +1277,13 @@ class TestPrintLiveGuidance:
     def test_with_devices(self) -> None:
         device_results = [{"status": "SUCCESS"}]
         devices = [{"id": "d1"}]
-        GatewayWan2VariableMigrator._print_live_guidance(1, device_results, devices)
+        _Wan2VariableReporting._print_live_guidance(1, device_results, devices)
 
     def test_without_devices(self) -> None:
-        GatewayWan2VariableMigrator._print_live_guidance(1, [], [])
+        _Wan2VariableReporting._print_live_guidance(1, [], [])
 
     def test_zero_success(self) -> None:
-        GatewayWan2VariableMigrator._print_live_guidance(0, [], [])
+        _Wan2VariableReporting._print_live_guidance(0, [], [])
 
 
 # --- Print device migration header tests ---
