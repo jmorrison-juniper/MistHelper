@@ -43,6 +43,7 @@ with patch.dict(
     import src.ssid_consolidation.ssid_template_consolidation as _mod
     from src.ssid_consolidation.ssid_template_consolidation import (
         SSIDTemplateConsolidationManager,
+        SsidTemplateDeps,
         _add_pilot_group,
         _append_drift_record,
         _append_ssid_to_template,
@@ -159,7 +160,7 @@ def _make_manager(**kwargs: object) -> SSIDTemplateConsolidationManager:
         "write_data_fn": MagicMock(),
     }
     defaults.update(kwargs)
-    return SSIDTemplateConsolidationManager(**defaults)  # type: ignore[arg-type]
+    return SSIDTemplateConsolidationManager(SsidTemplateDeps(**defaults))  # type: ignore[arg-type]
 
 
 # ===================================================================
@@ -175,12 +176,14 @@ class TestInit:
         safe_fn = MagicMock()
         write_fn = MagicMock()
         manager = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="TestSSID",
-            apisession=session,
-            page_limit=500,
-            safe_input_fn=safe_fn,
-            write_data_fn=write_fn,
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="TestSSID",
+                apisession=session,
+                page_limit=500,
+                safe_input_fn=safe_fn,
+                write_data_fn=write_fn,
+            )
         )
         assert manager.org_id == "org-1"
         assert manager.target_ssid == "TestSSID"
@@ -1815,12 +1818,14 @@ class TestPhaseOrchestrators:
     @staticmethod
     def _make_manager() -> SSIDTemplateConsolidationManager:
         return SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(return_value="CONFIRM"),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(return_value="CONFIRM"),
+                write_data_fn=MagicMock(),
+            )
         )
 
     def test_check_prerequisite_phase1(self) -> None:
@@ -1915,12 +1920,14 @@ class TestFetchAllOrgData:
 
     def test_fetches_five_endpoints(self) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         with patch.object(
             _mod.mistapi,
@@ -1940,12 +1947,14 @@ class TestBuildMatrix:
 
     def test_builds_from_org_data(self) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         org_data: dict[str, object] = {
             "sites": [{"id": "s1", "name": "HQ"}],
@@ -1962,12 +1971,14 @@ class TestAnalyzeDeviations:
 
     def test_no_eligible_sites(self) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         matrix = [
             {"anomaly": True, "psk_detected": False, "target_group": "East"},
@@ -1982,12 +1993,14 @@ class TestOfferResume:
 
     def test_no_prior_results(self) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         mgr._load_phase_results = MagicMock(return_value=None)  # type: ignore[method-assign]
         resuming, results = mgr._offer_resume(2, [])
@@ -2000,12 +2013,14 @@ class TestEnsureGroupsExist:
 
     def test_creates_missing_groups(self) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         plan = {
             "groups": [
@@ -2039,12 +2054,14 @@ class TestDisableSsids:
 
     def test_skips_non_disable_entries(self) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         mgr._save_phase_results = MagicMock()  # type: ignore[method-assign]
         plan = [{"status": "skipped", "site_id": "s1", "ssid_id": "w1"}]
@@ -2054,12 +2071,14 @@ class TestDisableSsids:
 
     def test_disables_entries(self) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         mgr._save_phase_results = MagicMock()  # type: ignore[method-assign]
         plan = [
@@ -2093,12 +2112,14 @@ class TestWriteSiteVariables:
 
     def test_writes_pending_entries(self) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         mgr.cache = {
             "data": {"sites": [{"id": "s1", "vars": {}}]},
@@ -2125,12 +2146,14 @@ class TestCreateOrUpdateTemplates:
 
     def test_creates_templates(self) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         mgr.cache = {"data": {"wlan_templates": []}}
         configs = {"G1": {"ssid": "Corp", "enabled": True}}
@@ -2151,24 +2174,28 @@ class TestLoadCache:
 
     def test_returns_none_when_no_file(self) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         with patch("os.path.exists", return_value=False):
             assert mgr._load_cache() is None
 
     def test_returns_fresh_cache(self, tmp_path: os.PathLike[str]) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         from pathlib import Path
 
@@ -2188,12 +2215,14 @@ class TestLoadCache:
         tmp_path: os.PathLike[str],
     ) -> None:
         mgr = SSIDTemplateConsolidationManager(
-            org_id="org-1",
-            target_ssid="Corp",
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
+            SsidTemplateDeps(
+                org_id="org-1",
+                target_ssid="Corp",
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+            )
         )
         from pathlib import Path
 
@@ -2845,7 +2874,7 @@ class TestInstanceMethods:
             "write_data_fn": MagicMock(),
         }
         defaults.update(kwargs)
-        return SSIDTemplateConsolidationManager(**defaults)
+        return SSIDTemplateConsolidationManager(SsidTemplateDeps(**defaults))  # type: ignore[arg-type]
 
     def test_check_prerequisite_phase1(self) -> None:
         mgr = self._make_manager()
@@ -3187,7 +3216,7 @@ class TestPhaseOrchestratorsCoverage:
             "write_data_fn": MagicMock(),
         }
         defaults.update(kwargs)
-        return SSIDTemplateConsolidationManager(**defaults)
+        return SSIDTemplateConsolidationManager(SsidTemplateDeps(**defaults))  # type: ignore[arg-type]
 
     def test_phase1_no_data(self) -> None:
         mgr = self._make_manager()

@@ -9,16 +9,26 @@ Extracted from MistHelper.py for maintainability.
 
 # pylint: disable=too-many-lines,logging-fstring-interpolation
 
-from __future__ import annotations
+from __future__ import annotations  # WHY: postponed evaluation of forward-referenced deps type
 
-import json
-import logging
-import os
-import re
-from datetime import datetime
-from typing import Any
+import json  # WHY: JSON is the persistence format for cache + phase results
+import logging  # WHY: workflow telemetry across all 5 phases
+import os  # WHY: file existence checks + path composition
+import re  # WHY: pilot-site regex pattern is a class constant
+from dataclasses import dataclass  # WHY: bundle 6 injected deps into a frozen struct
+from datetime import datetime  # WHY: ISO timestamps for confirmation + cache freshness
+from typing import Any  # WHY: broad response typing for mistapi wrappers
 
-import mistapi
+import mistapi  # WHY: paginated fetch + REST call factories
+
+from ._ssid_template_cache import (  # WHY: re-export helpers referenced by name in tests
+    _SsidTemplateCacheCluster,  # WHY: cache/resume cluster bound in __init__
+    _cache_age_minutes,  # WHY: re-export for tests + module-level use in _phase1_load_or_fetch
+    _check_cache_exists,  # WHY: re-export for backward-compat imports
+    _check_prerequisite_for_all,  # WHY: re-export for run-all-phases pre-flight
+    _handle_completed_resume,  # WHY: re-export used by parent _offer_resume delegate
+    _handle_partial_resume,  # WHY: re-export used by parent _offer_resume delegate
+)
 
 # ---------------------------------------------------------------------------
 # Type aliases for injected dependencies
@@ -26,6 +36,24 @@ import mistapi
 SafeInputFn = Any  # Callable[[str, ...], str]
 WriteDataFn = Any  # Callable[[...], None]
 GetOrgIdFn = Any  # Callable[[], str | None]
+
+
+@dataclass(frozen=True)
+class SsidTemplateDeps:
+    """Injected dependencies for :class:`SSIDTemplateConsolidationManager`.
+
+    Bundles the 6 constructor arguments into a single frozen dataclass so
+    construction sites and tests build one struct instead of passing 6
+    kwargs, and so the parent ``__init__`` stays under the STRUCT-PARAMS
+    limit (which Rank 5 established for :class:`DeviceUtilityCommands`).
+    """
+
+    org_id: str  # WHY: org scope for every Mist API call
+    target_ssid: str  # WHY: the SSID name being consolidated across sites
+    apisession: Any  # WHY: mistapi.APISession handle
+    page_limit: int  # WHY: paginated fetch limit
+    safe_input_fn: SafeInputFn  # WHY: EOF-safe stdin reader
+    write_data_fn: WriteDataFn  # WHY: exporter for matrix/deviation/plan tables
 
 
 class SSIDTemplateConsolidationManager:
@@ -72,23 +100,39 @@ class SSIDTemplateConsolidationManager:
     PILOT_PATTERN = re.compile(r"(?i)\b(pilot|test|lab)\b")
     CONFIRM_KEYWORD = "CONFIRM"
 
-    def __init__(
-        self,
-        org_id: str,
-        target_ssid: str,
-        apisession: Any,
-        page_limit: int,
-        safe_input_fn: SafeInputFn,
-        write_data_fn: WriteDataFn,
-    ) -> None:
-        """Initialize with org context and injected dependencies."""
-        self.org_id = org_id
-        self.target_ssid = target_ssid
-        self.apisession = apisession
-        self.page_limit = page_limit
-        self.safe_input_fn = safe_input_fn
-        self.write_data_fn = write_data_fn
-        self.cache: dict[str, Any] = {}
+    def __init__(self, deps: SsidTemplateDeps) -> None:
+        """Initialize with the injected :class:`SsidTemplateDeps` bundle.
+
+        Args:
+            deps: Frozen dataclass carrying the 6 dependency values consumed
+                by the various phase orchestrators.
+        """
+        self.org_id = deps.org_id  # WHY: expose as public attr (tests read it)
+        self.target_ssid = deps.target_ssid  # WHY: public attr referenced across phases
+        self.apisession = deps.apisession  # WHY: public attr used by cluster + phase code
+        self.page_limit = deps.page_limit  # WHY: public attr used by fetch helpers
+        self.safe_input_fn = deps.safe_input_fn  # WHY: public attr — cache cluster prompts
+        self.write_data_fn = deps.write_data_fn  # WHY: public attr — phase exporters
+        self.cache: dict[str, Any] = {}  # WHY: Phase 1 org-data cache shared across phases
+        self._clusters: tuple[Any, ...] = (  # WHY: bundle clusters so parent stays under R0902 gate
+            _SsidTemplateCacheCluster(self),  # WHY: cache + resume + phase-result I/O cluster
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        """Proxy cluster-attribute access to helper clusters.
+
+        Python only invokes ``__getattr__`` when normal lookup fails, so
+        this method resolves cluster method calls (``self._load_cache``,
+        ``self._save_phase_results``, ``self._offer_resume`` etc.) without
+        explicit delegator wrappers. The class-level ``hasattr`` check on
+        ``type(cluster)`` avoids invoking the cluster's own ``__getattr__``
+        (which would proxy back to this class and cause infinite recursion
+        for unknown attrs).
+        """
+        for cluster in self.__dict__.get("_clusters", ()):  # WHY: iterate bundled clusters
+            if hasattr(type(cluster), name):  # WHY: class-level lookup avoids cluster __getattr__ recursion
+                return getattr(cluster, name)  # WHY: bound method resolves through cluster
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
 
     # ------------------------------------------------------------------
     # Entry point
@@ -125,14 +169,15 @@ class SSIDTemplateConsolidationManager:
             return
 
         logging.info("Target SSID: %s, Org: %s", target_ssid, current_org_id)
-        manager = SSIDTemplateConsolidationManager(
-            current_org_id,
-            target_ssid,
+        deps = SsidTemplateDeps(  # WHY: bundle 6 deps into frozen struct for the manager
+            org_id=current_org_id,
+            target_ssid=target_ssid,
             apisession=apisession,
             page_limit=page_limit,
             safe_input_fn=safe_input_fn,
             write_data_fn=write_data_fn,
         )
+        manager = SSIDTemplateConsolidationManager(deps)
         manager.run_phase_menu()
 
     # ------------------------------------------------------------------
@@ -209,18 +254,6 @@ class SSIDTemplateConsolidationManager:
     # Shared helpers
     # ------------------------------------------------------------------
 
-    def _check_prerequisite(self, phase: int) -> bool:
-        """Verify that the prior phase's output exists."""
-        if phase <= 1:
-            return True
-        if phase == 2:
-            return _check_cache_exists(self.CACHE_FILE)
-        prior_file = self.PHASE_RESULT_FILES.get(phase - 1)
-        if prior_file and not os.path.exists(prior_file):
-            print(f"! Phase {phase - 1} results not found. " f"Run Phase {phase - 1} first.")
-            return False
-        return True
-
     def _confirm_or_cancel(self, summary: str) -> bool:
         """Display summary and require CONFIRM to proceed."""
         print(f"\n{summary}")
@@ -234,85 +267,6 @@ class SSIDTemplateConsolidationManager:
             return False
         logging.info("Operation confirmed at %s", datetime.now().isoformat())
         return True
-
-    def _load_cache(self) -> dict[str, Any] | None:
-        """Load Phase 1 cache if it exists and is fresh."""
-        if not os.path.exists(self.CACHE_FILE):
-            return None
-        try:
-            with open(self.CACHE_FILE, encoding="utf-8") as file_handle:
-                cached: dict[str, Any] = json.load(file_handle)
-            collected_at = cached.get("collected_at", "")
-            if collected_at:
-                age_minutes = _cache_age_minutes(collected_at)
-                if age_minutes <= self.CACHE_FRESHNESS_MINUTES:
-                    logging.info("Cache is fresh (%.1f minutes old)", age_minutes)
-                    return cached
-                logging.info("Cache is stale (%.1f minutes old)", age_minutes)
-            return cached
-        except (json.JSONDecodeError, OSError) as error:
-            logging.warning("Failed to load cache: %s", error)
-            return None
-
-    def _save_cache(self, data: dict[str, Any]) -> None:
-        """Write cache JSON with collection timestamp."""
-        data["collected_at"] = datetime.now().isoformat()
-        data["target_ssid"] = self.target_ssid
-        data["org_id"] = self.org_id
-        try:
-            with open(self.CACHE_FILE, "w", encoding="utf-8") as file_handle:
-                json.dump(data, file_handle, indent=2, default=str)
-            logging.info("Cache saved to %s", self.CACHE_FILE)
-        except OSError as error:
-            logging.error("Failed to save cache: %s", error)
-
-    def _save_phase_results(self, phase: int, results: list[dict[str, Any]]) -> None:
-        """Write phase results JSON for resume support."""
-        result_file = self.PHASE_RESULT_FILES.get(phase)
-        if not result_file:
-            return
-        payload = {
-            "phase": phase,
-            "target_ssid": self.target_ssid,
-            "started_at": datetime.now().isoformat(),
-            "total": len(results),
-            "results": results,
-        }
-        try:
-            with open(result_file, "w", encoding="utf-8") as file_handle:
-                json.dump(payload, file_handle, indent=2, default=str)
-            logging.info("Phase %d results saved to %s", phase, result_file)
-        except OSError as error:
-            logging.error("Failed to save phase %d results: %s", phase, error)
-
-    def _load_phase_results(self, phase: int) -> dict[str, Any] | None:
-        """Load phase results JSON if it exists."""
-        result_file = self.PHASE_RESULT_FILES.get(phase)
-        if not result_file or not os.path.exists(result_file):
-            return None
-        try:
-            with open(result_file, encoding="utf-8") as file_handle:
-                loaded: dict[str, Any] = json.load(file_handle)
-            return loaded
-        except (json.JSONDecodeError, OSError) as error:
-            logging.warning("Failed to load phase %d results: %s", phase, error)
-            return None
-
-    def _offer_resume(
-        self,
-        phase: int,
-        results: list[dict[str, Any]],
-    ) -> tuple[bool, list[dict[str, Any]]]:
-        """Detect partial run and offer to resume or restart."""
-        existing = self._load_phase_results(phase)
-        if not existing:
-            return False, []
-        prior_results: list[dict[str, Any]] = existing.get("results", [])
-        completed_count = sum(1 for row in prior_results if row.get("status") not in ("pending", "failed"))
-        total = existing.get("total", 0)
-        if completed_count >= total:
-            return _handle_completed_resume(phase, completed_count, total, self.safe_input_fn)
-        return _handle_partial_resume(phase, completed_count, total, prior_results, self.safe_input_fn)
 
     # ------------------------------------------------------------------
     # Phase 1: Read-Only Audit
@@ -337,7 +291,7 @@ class SSIDTemplateConsolidationManager:
 
     def _phase1_load_or_fetch(self) -> dict[str, Any] | None:
         """Load cached data or fetch fresh from API."""
-        cached = self._load_cache()
+        cached = self._load_cache()  # WHY: cache cluster proxy returns dict[str, Any] | None
         if cached and cached.get("data"):
             age = _cache_age_minutes(cached.get("collected_at", ""))
             print(f"  Cached data found ({age:.0f} minutes old).")
@@ -348,7 +302,8 @@ class SSIDTemplateConsolidationManager:
             )
             if choice.strip().lower() not in ("n", "no"):
                 logging.info("Using cached org data")
-                return cached.get("data")
+                cached_data: dict[str, Any] | None = cached.get("data")  # WHY: proxy erases type -> narrow
+                return cached_data
         print("  Fetching fresh organization data...")
         return self._fetch_all_org_data()
 
@@ -743,61 +698,6 @@ class SSIDTemplateConsolidationManager:
 # ======================================================================
 # Module-level helper functions (pure logic, no self)
 # ======================================================================
-
-
-def _cache_age_minutes(collected_at: str) -> float:
-    """Return age of cache in minutes from ISO timestamp."""
-    collected_time = datetime.fromisoformat(collected_at)
-    age_delta = datetime.now(tz=collected_time.tzinfo) - collected_time
-    return age_delta.total_seconds() / 60.0
-
-
-def _check_prerequisite_for_all(phase_number: int) -> bool:
-    """Check prerequisite for run-all-phases mode (phase > 1)."""
-    return phase_number <= 1
-
-
-def _check_cache_exists(cache_file: str) -> bool:
-    """Check if Phase 1 cache file exists."""
-    if not os.path.exists(cache_file):
-        print("! Phase 1 cache not found. Run Phase 1 first.")
-        return False
-    return True
-
-
-def _handle_completed_resume(
-    phase: int,
-    completed_count: int,
-    total: int,
-    safe_input_fn: SafeInputFn,
-) -> tuple[bool, list[dict[str, Any]]]:
-    """Handle resume when phase is already complete."""
-    print(f"Phase {phase} already completed " f"({completed_count}/{total}). Re-running will overwrite.")
-    choice: str = safe_input_fn(
-        "Re-run from scratch? (y/N): ",
-        context="ssid_consolidation_resume",
-    )
-    if choice.strip().lower() in ("y", "yes"):
-        return False, []
-    return True, []
-
-
-def _handle_partial_resume(
-    phase: int,
-    completed_count: int,
-    total: int,
-    prior_results: list[dict[str, Any]],
-    safe_input_fn: SafeInputFn,
-) -> tuple[bool, list[dict[str, Any]]]:
-    """Handle resume when phase is partially complete."""
-    print(f"Phase {phase} partially completed " f"({completed_count}/{total}).")
-    choice: str = safe_input_fn(
-        "Resume from last checkpoint? (Y/n): ",
-        context="ssid_consolidation_resume",
-    )
-    if choice.strip().lower() in ("n", "no"):
-        return False, []
-    return True, prior_results
 
 
 def _fetch_and_log(
