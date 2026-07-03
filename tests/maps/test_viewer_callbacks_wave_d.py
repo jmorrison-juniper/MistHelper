@@ -4,7 +4,7 @@ Covers the 3 live-refresh callbacks now on :class:`MapViewerCallbacks`:
 
 * :py:meth:`MapViewerCallbacks.update_countdown_display` -- pure time math
   for the per-second countdown label.
-* :py:meth:`MapViewerCallbacks.update_clients_traces` -- refresh WiFi /
+* :py:meth:`MapViewerCallbacks._refresh.update_clients_traces` -- refresh WiFi /
   wired client traces and label annotations from the Mist API.
 * :py:meth:`MapViewerCallbacks.update_coverage_heatmap` -- refresh the
   RF coverage heatmap trace from the Mist coverage API.
@@ -261,7 +261,7 @@ def test_update_countdown_display_returns_seconds_and_minutes_format() -> None:
 def test_update_clients_traces_skips_when_no_trigger() -> None:
     callbacks = MapViewerCallbacks(state=_make_state())
     fig: dict[str, Any] = {"data": []}
-    result_fig, result_times = callbacks.update_clients_traces(0, None, {}, fig, [], {})
+    result_fig, result_times = callbacks._refresh.update_clients_traces(0, None, {}, fig, [], {})
     assert result_fig == "__NO_UPDATE__"
     assert result_times == "__NO_UPDATE__"
 
@@ -271,7 +271,7 @@ def test_update_clients_traces_skips_when_site_id_missing(_dash_stub: types.Modu
     callbacks = MapViewerCallbacks(state=_make_state())
     fig: dict[str, Any] = {"data": []}
     config = {"map_id": "m1"}  # missing site_id
-    result_fig, result_times = callbacks.update_clients_traces(1, None, config, fig, [], {})
+    result_fig, result_times = callbacks._refresh.update_clients_traces(1, None, config, fig, [], {})
     assert result_fig == "__NO_UPDATE__"
     assert "client_last_refresh" in result_times
 
@@ -296,7 +296,7 @@ def test_update_clients_traces_updates_wifi_trace(_dash_stub: types.ModuleType) 
     }
     config = {"site_id": "s1", "map_id": "m1"}
 
-    result_fig, result_times = callbacks.update_clients_traces(1, None, config, fig, [], {})
+    result_fig, result_times = callbacks._refresh.update_clients_traces(1, None, config, fig, [], {})
 
     assert result_fig is fig  # mutated in place
     assert fig["data"][0]["x"] == [100]
@@ -312,7 +312,7 @@ def test_update_clients_traces_returns_no_update_on_api_failure(_dash_stub: type
     callbacks = MapViewerCallbacks(state=_make_state(mistapi_ref=fake_mistapi))
     fig: dict[str, Any] = {"data": []}
     config = {"site_id": "s1", "map_id": "m1"}
-    result_fig, result_times = callbacks.update_clients_traces(1, 1, config, fig, [], {})
+    result_fig, result_times = callbacks._refresh.update_clients_traces(1, 1, config, fig, [], {})
     assert result_fig == "__NO_UPDATE__"
     assert "client_last_refresh" in result_times
 
