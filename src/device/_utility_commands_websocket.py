@@ -85,7 +85,7 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
         body: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:  # WHY: request/response variant returns final payload
         """Execute WebSocket command: POST -> subscribe -> await."""
-        websocket_manager = self._uc._ws_factory(self._uc._apisession)  # noqa: SLF001
+        websocket_manager = self._ws_factory(self._apisession)  # WHY: __getattr__ proxy to parent state
         if not self._prepare_ws_channel(websocket_manager, site_id, device_id):  # WHY: connect+subscribe
             return None  # WHY: channel setup already emitted diagnostics
         return self._safe_execute_ws(  # WHY: extracted helper keeps this method <=25 lines
@@ -149,7 +149,7 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
         timeout_seconds: int = 120,
     ) -> None:  # WHY: streaming variant prints inline; no return payload
         """Execute streaming WebSocket command with output display."""
-        websocket_manager = self._uc._ws_factory(self._uc._apisession)  # noqa: SLF001
+        websocket_manager = self._ws_factory(self._apisession)  # WHY: __getattr__ proxy to parent state
         if not self._prepare_ws_channel(websocket_manager, site_id, device_id):  # WHY: connect+subscribe
             return  # WHY: helper already emitted diagnostics
         spec = StreamWsSpec(  # WHY: bundle 6 params so the streaming helper is single-arg
@@ -201,7 +201,7 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
             return
         raw_output, other_output = self._print_result_block(spec.command_name, spec.result)  # WHY: banner
         export_data = self._build_export_row(spec, raw_output, other_output)  # WHY: canonical payload
-        self._uc._write_export_fn([export_data], spec.filename, spec.api_function_name)  # noqa: SLF001
+        self._write_export_fn([export_data], spec.filename, spec.api_function_name)  # WHY: __getattr__ proxy
 
     # ------------------------------------------------------------------
     # Destructive-op confirmation
@@ -209,7 +209,7 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
 
     def _confirm_destructive(self, prompt: str, keyword: str, context: str) -> bool:
         """Require typed keyword confirmation for destructive ops."""
-        confirmation = self._uc._safe_input_fn(prompt, context=context)  # noqa: SLF001
+        confirmation = self._safe_input_fn(prompt, context=context)  # WHY: __getattr__ proxy
         if confirmation != keyword:  # WHY: exact-match gate; even leading/trailing space fails
             print("! Operation cancelled - confirmation not matched.")  # WHY: signal cancel
             return False
@@ -241,8 +241,8 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
     ) -> Any:
         """Invoke the mistapi SDK method with or without a body."""
         if body is not None:  # WHY: some SDK methods take a body, others do not
-            return sdk_method(self._uc._apisession, site_id, device_id, body)  # noqa: SLF001
-        return sdk_method(self._uc._apisession, site_id, device_id)  # noqa: SLF001
+            return sdk_method(self._apisession, site_id, device_id, body)  # WHY: __getattr__ proxy
+        return sdk_method(self._apisession, site_id, device_id)  # WHY: __getattr__ proxy
 
     @staticmethod
     def _extract_session_id(

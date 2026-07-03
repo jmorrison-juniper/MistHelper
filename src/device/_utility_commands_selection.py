@@ -83,11 +83,11 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
 
     def _resolve_site_device_ids(self, device_type_filter: str) -> tuple[str, str] | None:  # WHY: gather picks
         """Prompt the user for a site and device, returning both IDs."""
-        site_id = self._uc._select_site_fn()  # WHY: interactive site picker  # noqa: SLF001
+        site_id = self._select_site_fn()  # WHY: interactive site picker (via __getattr__ proxy)
         if not site_id:  # WHY: user cancelled or no site available
             print("! No site selected. Operation cancelled.")  # WHY: signal cancellation
             return None  # WHY: abort without a site
-        device_id = self._uc._select_device_fn(site_id, device_type_filter)  # WHY: device picker  # noqa: SLF001
+        device_id = self._select_device_fn(site_id, device_type_filter)  # WHY: device picker (proxy)
         if not device_id:  # WHY: user cancelled or no device available
             print("! No device selected. Operation cancelled.")  # WHY: signal cancellation
             return None  # WHY: abort without a device
@@ -104,7 +104,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         """Fetch device type and status from the stats API."""
         try:  # WHY: mistapi may raise on network/auth failures
             response = mistapi.api.v1.sites.stats.getSiteDeviceStats(  # WHY: authoritative type+status source
-                self._uc._apisession, site_id, device_id  # noqa: SLF001
+                self._apisession, site_id, device_id  # WHY: __getattr__ proxy
             )
             if hasattr(response, "data") and isinstance(response.data, dict):  # WHY: guard shape
                 return response.data  # WHY: caller consumes type/status keys
@@ -137,7 +137,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         """Fetch the raw stats data dict for a device, or None on any failure."""
         try:  # WHY: mistapi may raise on network/auth failures
             response = mistapi.api.v1.sites.stats.getSiteDeviceStats(  # WHY: source of port/if data
-                self._uc._apisession, site_id, device_id  # noqa: SLF001
+                self._apisession, site_id, device_id  # WHY: __getattr__ proxy
             )
             if not hasattr(response, "data") or not isinstance(response.data, dict):  # WHY: guard shape
                 return None
@@ -149,7 +149,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
     def _display_and_select_port(self, ports: list[dict[str, Any]]) -> str | None:
         """Display numbered port list and get selection."""
         self._render_port_rows(ports)  # WHY: emit numbered rows for user
-        selection = self._uc._safe_input_fn(  # WHY: EOF-safe prompt  # noqa: SLF001
+        selection = self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
             "\nSelect port by number or type port name: ",
             context="port_selection",
         )
@@ -185,7 +185,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         """Display interfaces from an if_stat dict and prompt for selection."""
         physical = self._physical_iface_names(if_stat)  # WHY: prefer physical ports
         self._render_ifstat_rows(if_stat, physical)  # WHY: emit numbered rows
-        selection = self._uc._safe_input_fn(  # WHY: EOF-safe prompt  # noqa: SLF001
+        selection = self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
             "\nSelect by number or type port name: ",
             context="ifstat_selection",
         )
@@ -226,7 +226,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
 
     def _manual_port_entry(self) -> str | None:
         """Prompt for manual port name entry."""
-        port = self._uc._safe_input_fn(  # WHY: EOF-safe prompt  # noqa: SLF001
+        port = self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
             "Enter port name (e.g., ge-0/0/0): ",
             context="manual_port_entry",
         )
@@ -235,7 +235,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
     def _select_port_optional(self, site_id: str, device_id: str) -> str:
         """Show port list and let the user pick or skip."""
         port_names = self._discover_ports(site_id, device_id)  # WHY: gather names for numeric input
-        selection = self._uc._safe_input_fn(  # WHY: EOF-safe prompt  # noqa: SLF001
+        selection = self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
             "Port (number, name, or Enter to skip): ",
             context="port_optional",
         )
@@ -396,10 +396,10 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
 
     def _get_interface_selection(self, interfaces: list[str]) -> str | None:
         """Prompt the user to select from an interface list."""
-        selection = self._uc._safe_input_fn(  # WHY: EOF-safe prompt  # noqa: SLF001
+        selection = cast("str", self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
             "\nSelect interface by number or type name: ",
             context="interface_selection",
-        )
+        ))
         if not selection:  # WHY: empty input cancels selection
             print("! No interface selected.")  # WHY: signal cancellation
             return None
@@ -413,7 +413,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
 
     def _manual_interface_entry(self) -> str | None:
         """Prompt for manual interface name entry."""
-        iface = self._uc._safe_input_fn(  # WHY: EOF-safe prompt  # noqa: SLF001
+        iface = self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
             "Enter interface name (e.g., ge-0/0/0, wan0): ",
             context="manual_interface_entry",
             allow_empty=False,
@@ -432,7 +432,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             if len(network_names) == 1:  # WHY: single option: auto-pick for operator convenience
                 print(f"\n-> Auto-selecting: {network_names[0]}")  # WHY: transparency about choice
                 return network_names[0]
-        selection = self._uc._safe_input_fn(  # WHY: EOF-safe prompt  # noqa: SLF001
+        selection = self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
             "Select network (number or name, required): ",
             context="dhcp_network",
             allow_empty=False,
@@ -459,7 +459,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         """Fetch the raw device-config dict, or None on any failure."""
         try:  # WHY: mistapi may raise on network/auth failures
             response = mistapi.api.v1.sites.devices.getSiteDevice(  # WHY: source of dhcpd/ip config
-                self._uc._apisession, site_id, device_id  # noqa: SLF001
+                self._apisession, site_id, device_id  # WHY: __getattr__ proxy
             )
             if hasattr(response, "data") and isinstance(response.data, dict):  # WHY: guard shape
                 return response.data
