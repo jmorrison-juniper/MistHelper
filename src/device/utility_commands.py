@@ -58,16 +58,6 @@ class UtilityCommandsDeps:
     websocket_manager_factory: WebSocketManagerFactory  # WHY: factory for WebSocketManager
 
 
-# WHY: cluster attribute names looped over by __getattr__ for O(N) proxying.
-_CLUSTER_ATTRS: tuple[str, ...] = (
-    "_selection",  # WHY: site/device/port/interface/network selection helpers
-    "_websocket",  # WHY: WebSocket command lifecycle + confirm/print helpers
-    "_show",  # WHY: read-only show / diagnostic commands (Phase 3)
-    "_action",  # WHY: management/action commands (Phase 4a)
-    "_clear",  # WHY: destructive clear/reset commands (Phase 4b)
-)
-
-
 # WHY: HTTP status codes >= this value denote an error response.
 _HTTP_ERROR_THRESHOLD = 400
 
@@ -149,11 +139,14 @@ class DeviceUtilityCommands:
         self._safe_input_fn = deps.safe_input_fn  # WHY: EOF-safe input
         self._write_export_fn = deps.write_export_fn  # WHY: exporter callable
         self._ws_factory = deps.websocket_manager_factory  # WHY: WSManager factory
-        self._selection = _UtilityCommandsSelection(self)  # WHY: selection cluster binding
-        self._websocket = _UtilityCommandsWebsocket(self)  # WHY: websocket cluster binding
-        self._show = _UtilityCommandsShow(self)  # WHY: show/diagnostic cluster binding
-        self._action = _UtilityCommandsAction(self)  # WHY: management/action cluster binding
-        self._clear = _UtilityCommandsClear(self)  # WHY: destructive clear/reset cluster binding
+        # WHY: bundle clusters in a single tuple so parent stays at 7 instance attrs (R0902 gate)
+        self._clusters: tuple[Any, ...] = (
+            _UtilityCommandsSelection(self),  # WHY: selection cluster binding
+            _UtilityCommandsWebsocket(self),  # WHY: websocket cluster binding
+            _UtilityCommandsShow(self),  # WHY: show/diagnostic cluster binding
+            _UtilityCommandsAction(self),  # WHY: management/action cluster binding
+            _UtilityCommandsClear(self),  # WHY: destructive clear/reset cluster binding
+        )
 
     def __getattr__(self, name: str) -> Any:
         """Proxy cluster-attribute access to helper clusters.
@@ -166,9 +159,8 @@ class DeviceUtilityCommands:
         cluster's own ``__getattr__`` (which would proxy back to this
         class and cause infinite recursion for unknown attrs).
         """
-        for attr in _CLUSTER_ATTRS:  # WHY: iterate cluster attribute names
-            cluster = self.__dict__.get(attr)  # WHY: direct dict avoids recursion
-            if cluster is not None and hasattr(type(cluster), name):  # WHY: class-level lookup only
+        for cluster in self.__dict__.get("_clusters", ()):  # WHY: iterate bundled clusters
+            if hasattr(type(cluster), name):  # WHY: class-level lookup avoids cluster __getattr__ recursion
                 return getattr(cluster, name)  # WHY: bound method resolves through cluster
         raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
 
@@ -205,8 +197,9 @@ class DeviceUtilityCommands:
                     " 'service_name' or 'session_ids' in the"
                     " request body."
                 )  # WHY: teach operator the fix
-                print("  Provide a service name or a comma-separated"
-                      " list of session IDs, and retry.")  # WHY: guide follow-up input
+                print(
+                    "  Provide a service name or a comma-separated list of session IDs, and retry."
+                )  # WHY: guide follow-up input
             else:
                 print(f"! Clear session failed: {error}")  # WHY: generic fallback
         except Exception:  # pylint: disable=broad-exception-caught

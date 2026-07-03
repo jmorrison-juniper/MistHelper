@@ -67,7 +67,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         # WHY: route through parent so patch.object(duc, "_get_device_info", ...) intercepts
         device_info = cast(  # WHY: parent proxy returns Any; narrow to concrete type
             "dict[str, Any] | None",
-            self._uc._get_device_info(site_id, device_id),  # noqa: SLF001
+            self._call("_get_device_info", site_id, device_id),
         )
         if not device_info:  # WHY: no info means we can't verify compatibility
             print("! Could not retrieve device info from stats API.")  # WHY: signal API failure
@@ -121,17 +121,17 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         stats = self._fetch_stats_data(site_id, device_id)  # WHY: shared stats fetch + guard
         if stats is None:  # WHY: stats unavailable, fall back to manual entry
             # WHY: route via parent so test patches on duc apply
-            return cast("str | None", self._uc._manual_port_entry())  # noqa: SLF001
+            return cast("str | None", self._call("_manual_port_entry"))
         ports = stats.get("ports", [])  # WHY: newer devices use the 'ports' array
         if ports:  # WHY: prefer structured port list when present
             # WHY: route via parent for test patches
-            return cast("str | None", self._uc._display_and_select_port(ports))  # noqa: SLF001
+            return cast("str | None", self._call("_display_and_select_port", ports))
         if_stat = stats.get("if_stat", {})  # WHY: fallback to legacy if_stat dict
         if isinstance(if_stat, dict) and if_stat:  # WHY: only use if it's a populated mapping
             # WHY: route via parent for test patches
-            return cast("str | None", self._uc._display_and_select_ifstat(if_stat))  # noqa: SLF001
+            return cast("str | None", self._call("_display_and_select_ifstat", if_stat))
         # WHY: no structured data, ask user directly; route via parent for patches
-        return cast("str | None", self._uc._manual_port_entry())  # noqa: SLF001
+        return cast("str | None", self._call("_manual_port_entry"))
 
     def _fetch_stats_data(self, site_id: str, device_id: str) -> dict[str, Any] | None:
         """Fetch the raw stats data dict for a device, or None on any failure."""
@@ -311,18 +311,18 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         stats = self._fetch_stats_data(site_id, device_id)  # WHY: shared stats fetch + guard
         if stats is None:  # WHY: no stats means we must fall back to manual entry
             # WHY: route via parent so test patches on duc apply
-            return cast("str | None", self._uc._manual_interface_entry())  # noqa: SLF001
+            return cast("str | None", self._call("_manual_interface_entry"))
         if_stat = stats.get("if_stat", {})  # WHY: primary interface source
         ip_stat = stats.get("ip_stat", {})  # WHY: fallback interface source with IP metadata
         ports = stats.get("ports", [])  # WHY: last-resort interface source
         interfaces = self._extract_interfaces(if_stat, ip_stat, ports)  # WHY: unified list
         if not interfaces:  # WHY: nothing discoverable, ask user directly
             # WHY: route via parent for test patches
-            return cast("str | None", self._uc._manual_interface_entry())  # noqa: SLF001
+            return cast("str | None", self._call("_manual_interface_entry"))
         # WHY: render menu via parent so tests can patch _print_interface_list on duc
-        self._uc._print_interface_list(interfaces, if_stat, ip_stat)  # noqa: SLF001
+        self._call("_print_interface_list", interfaces, if_stat, ip_stat)
         # WHY: prompt + resolve via parent so tests can patch _get_interface_selection on duc
-        return cast("str | None", self._uc._get_interface_selection(interfaces))  # noqa: SLF001
+        return cast("str | None", self._call("_get_interface_selection", interfaces))
 
     @staticmethod
     def _extract_interfaces(

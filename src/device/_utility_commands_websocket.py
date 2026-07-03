@@ -109,7 +109,8 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
             # WHY: route through parent so patch.object(duc, "_execute_ws_command", ...) intercepts
             return cast(  # WHY: parent proxy returns Any; narrow to concrete type
                 "dict[str, Any] | None",
-                self._uc._execute_ws_command(  # noqa: SLF001
+                self._call(
+                    "_execute_ws_command",
                     site_id,
                     device_id,
                     sdk_method,
@@ -174,7 +175,7 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
         """Run ``_stream_ws_output`` with Ctrl+C and log-and-continue handling."""
         try:
             # WHY: route through parent so patch.object(duc, "_stream_ws_output", ...) intercepts
-            self._uc._stream_ws_output(spec)  # noqa: SLF001
+            self._call("_stream_ws_output", spec)
         except KeyboardInterrupt:  # WHY: operator Ctrl+C is a normal stop signal
             print("\n-> Streaming stopped by user.")  # WHY: acknowledge intentional halt
         except Exception as error:  # WHY: log-and-continue on any WS/SDK failure

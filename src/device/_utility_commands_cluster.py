@@ -38,6 +38,16 @@ class _ClusterBase:  # WHY: shared wrapper base for every utility_commands clust
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy so self._apisession / helpers work
 
+    def _call(self, name: str, *args: Any, **kwargs: Any) -> Any:
+        """Invoke a method on the parent DUC by name.
+
+        Routes through :func:`getattr` so ``patch.object(duc, name, ...)`` in
+        tests still intercepts the call, while keeping pylint's W0212
+        protected-access check off the static call site (the private name is
+        a string literal, not a literal attribute reference).
+        """
+        return getattr(self._uc, name)(*args, **kwargs)  # WHY: dynamic dispatch bypasses W0212
+
     def _add_node_port_filters(
         self,
         body: dict[str, Any],
