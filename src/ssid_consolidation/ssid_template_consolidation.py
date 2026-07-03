@@ -209,7 +209,8 @@ class SsidTemplateDeps:  # WHY: frozen dataclass bundle keeps execute() under ST
     write_data_fn: WriteDataFn  # WHY: exporter for matrix/deviation/plan tables
 
 
-class SSIDTemplateConsolidationManager:  # WHY: coordinator entry for Menu 159 (5-phase workflow)
+class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-attributes
+    # WHY: coordinator entry for Menu 159 (5-phase workflow)
     """SSID Template Consolidation (Menu 159) — 5-Phase Guided Workflow.
 
     Consolidates per-site WLAN templates into cluster-based templates

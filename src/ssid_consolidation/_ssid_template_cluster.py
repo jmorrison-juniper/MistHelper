@@ -10,6 +10,12 @@ while preserving the ``self._method(...)`` ergonomics the clusters rely
 on.
 """
 
+# WHY: the base class delegates unknown attribute access back to the parent
+# manager (which owns all the private state and helpers), so pylint's
+# "too-few-public-methods" and "protected-access" alarms don't apply to this
+# proxy pattern.
+# pylint: disable=protected-access,too-few-public-methods
+
 from __future__ import annotations  # WHY: postponed evaluation for forward-ref parent type
 
 from typing import TYPE_CHECKING, Any  # WHY: Any lets __getattr__ proxy any parent method
@@ -50,3 +56,18 @@ class _ClusterBase:  # WHY: shared wrapper base for every ssid_template cluster
         a string literal, not a literal attribute reference).
         """
         return getattr(self._mm, name)(*args, **kwargs)  # WHY: dynamic dispatch bypasses W0212
+
+    def _load_cache_or_bail(self) -> bool:
+        """Load Phase 1 cache onto parent; return False + bail msg when missing.
+
+        Phase 2/3/4/5 orchestrators all share the same "load cache or abort"
+        preamble; centralising it here keeps pylint's R0801 duplicate-code
+        warning off the per-phase clusters without leaking parent internals.
+        """
+        parent = self._mm  # WHY: proxy alias
+        cached = parent._load_cache()  # noqa: SLF001 — cluster helper is intra-package
+        if not cached:
+            print("! Phase 1 cache not found. Run Phase 1 first.")  # WHY: user bail msg
+            return False
+        parent.cache = cached  # WHY: hand loaded cache to parent state
+        return True

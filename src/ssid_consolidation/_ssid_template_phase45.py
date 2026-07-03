@@ -27,6 +27,13 @@ parent module. Keeping those five helpers in the parent preserves those
 tests without teaching them about internal module boundaries.
 """
 
+# WHY: cluster methods intentionally reach into the parent manager's private
+# helpers (_load_cache, _offer_resume, _save_phase_results, _confirm_or_cancel)
+# and defer sibling imports until call-time to break import cycles. The class
+# also has only orchestrator methods so pylint's public-method threshold does
+# not fit this proxy pattern.
+# pylint: disable=protected-access,import-outside-toplevel,too-few-public-methods,cyclic-import
+
 from __future__ import annotations  # WHY: postponed evaluation for forward-ref parent type
 
 import json  # WHY: deviation ``unique_values`` are stored as JSON strings
@@ -49,7 +56,7 @@ SafeInputFn = Any  # WHY: Callable[[str, ...], str] — kept opaque so tests can
 
 
 @dataclass
-class TemplateOpParams:
+class TemplateOpParams:  # pylint: disable=too-many-instance-attributes
     """Bundle of shared arguments for template create/update helpers.
 
     The historical helper trio (``_create_new_template``,
@@ -148,7 +155,7 @@ def _record_deviation_choice(
             selected = unique_values[selected_index]["value"]  # WHY: canonical value chosen
             resolutions[(cluster, param)] = selected
             logging.info(
-                "Deviation resolved: %s/%s = %s " "(selected from %d options at %s)",
+                "Deviation resolved: %s/%s = %s (selected from %d options at %s)",
                 cluster,
                 param,
                 selected,
@@ -412,11 +419,8 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
     ) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, Any]]] | None:
         """Load cache + phase-3 results, resolve deviations, build template configs."""
         parent = self._mm  # WHY: proxy alias
-        cached = parent._load_cache()  # noqa: SLF001 — cluster helper is intra-package
-        if not cached:
-            print("! Phase 1 cache not found. Run Phase 1 first.")
+        if not self._load_cache_or_bail():
             return None
-        parent.cache = cached
 
         phase3_results = parent._load_phase_results(3)  # noqa: SLF001
         if not phase3_results:
@@ -490,11 +494,8 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
     ) -> tuple[bool, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]] | None:
         """Load cache, offer resume, and build the disable plan."""
         parent = self._mm  # WHY: proxy alias
-        cached = parent._load_cache()  # noqa: SLF001
-        if not cached:
-            print("! Phase 1 cache not found. Run Phase 1 first.")
+        if not self._load_cache_or_bail():
             return None
-        parent.cache = cached
 
         resuming, prior_results = parent._offer_resume(5, [])  # noqa: SLF001
         plan = _build_disable_plan(parent.cache)

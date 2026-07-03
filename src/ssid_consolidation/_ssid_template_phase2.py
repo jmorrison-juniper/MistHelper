@@ -16,6 +16,13 @@ module. Keeping that single helper in the parent preserves those
 tests without teaching them about internal module boundaries.
 """
 
+# WHY: cluster methods intentionally reach into the parent manager's private
+# helpers (_load_cache, _offer_resume, _save_phase_results, _confirm_or_cancel)
+# and defer sibling imports until call-time to break import cycles. The class
+# also has only orchestrator methods so pylint's public-method threshold does
+# not fit this proxy pattern.
+# pylint: disable=protected-access,import-outside-toplevel,too-few-public-methods,cyclic-import
+
 from __future__ import annotations  # WHY: postponed evaluation for forward-ref parent type
 
 from typing import Any  # WHY: broad typing for opaque cache / row payloads
@@ -175,11 +182,8 @@ class _SsidTemplatePhase2Cluster(_ClusterBase):
 
         logging.info("Phase 2: Starting site variable configuration")
 
-        cached = parent._load_cache()  # noqa: SLF001 — cluster helper is intra-package
-        if not cached:
-            print("! Phase 1 cache not found. Run Phase 1 first.")
+        if not self._load_cache_or_bail():
             return
-        parent.cache = cached
 
         resuming, prior_results = parent._offer_resume(2, [])  # noqa: SLF001
         plan = _compute_variable_plan(parent.cache)
