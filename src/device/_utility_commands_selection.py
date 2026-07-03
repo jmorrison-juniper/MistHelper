@@ -342,9 +342,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
     def _interfaces_from_ports(ports: list[dict[str, Any]]) -> list[str]:
         """Extract non-empty port names from a raw ports array."""
         return [
-            p.get("port_id", p.get("name", ""))
-            for p in ports
-            if p.get("port_id") or p.get("name")
+            p.get("port_id", p.get("name", "")) for p in ports if p.get("port_id") or p.get("name")
         ]  # WHY: pluck any usable name, drop empty entries
 
     @staticmethod
@@ -396,10 +394,13 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
 
     def _get_interface_selection(self, interfaces: list[str]) -> str | None:
         """Prompt the user to select from an interface list."""
-        selection = cast("str", self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
-            "\nSelect interface by number or type name: ",
-            context="interface_selection",
-        ))
+        selection = cast(
+            "str",
+            self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
+                "\nSelect interface by number or type name: ",
+                context="interface_selection",
+            ),
+        )
         if not selection:  # WHY: empty input cancels selection
             print("! No interface selected.")  # WHY: signal cancellation
             return None

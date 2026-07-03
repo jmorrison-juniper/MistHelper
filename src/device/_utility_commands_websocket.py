@@ -89,7 +89,11 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
         if not self._prepare_ws_channel(websocket_manager, site_id, device_id):  # WHY: connect+subscribe
             return None  # WHY: channel setup already emitted diagnostics
         return self._safe_execute_ws(  # WHY: extracted helper keeps this method <=25 lines
-            site_id, device_id, sdk_method, body, websocket_manager,
+            site_id,
+            device_id,
+            sdk_method,
+            body,
+            websocket_manager,
         )
 
     def _safe_execute_ws(  # noqa: PLR0913
@@ -106,7 +110,11 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
             return cast(  # WHY: parent proxy returns Any; narrow to concrete type
                 "dict[str, Any] | None",
                 self._uc._execute_ws_command(  # noqa: SLF001
-                    site_id, device_id, sdk_method, body, websocket_manager,
+                    site_id,
+                    device_id,
+                    sdk_method,
+                    body,
+                    websocket_manager,
                 ),
             )
         except Exception as error:  # WHY: log-and-continue on any WS/SDK failure

@@ -164,7 +164,10 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
     ) -> None:
         """Run the WebSocket command per ``spec`` then display + export the result."""
         result = self._run_websocket_command(  # WHY: __getattr__ -> websocket cluster (patchable via duc)
-            site_id, device_id, spec.sdk_method, body,
+            site_id,
+            device_id,
+            spec.sdk_method,
+            body,
         )
         self._display_and_export_result(  # WHY: renders banner + writes CSV row
             ExportResultSpec(

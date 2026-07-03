@@ -72,7 +72,10 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         """Call the locate SDK and report success/failure to the operator."""
         try:
             response = mistapi.api.v1.sites.devices.startSiteLocateDevice(
-                self._apisession, site_id, device_id, {"duration": duration},
+                self._apisession,
+                site_id,
+                device_id,
+                {"duration": duration},
             )  # WHY: kick off LED blink for `duration` minutes
             if self._print_api_result(
                 response,
@@ -93,7 +96,9 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         try:
             response = mistapi.api.v1.sites.devices.stopSiteLocateDevice(
-                self._apisession, site_id, device_id,
+                self._apisession,
+                site_id,
+                device_id,
             )  # WHY: instruct device to stop blinking LED
             self._print_api_result(
                 response,
@@ -181,7 +186,9 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         """Call the reprovision SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.reprovisionSiteOctermDevice(
-                self._apisession, site_id, device_id,
+                self._apisession,
+                site_id,
+                device_id,
             )  # WHY: trigger fresh-config push
             self._print_api_result(
                 response,
@@ -211,7 +218,9 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         """Return False (and print) when the device is not a VC member."""
         try:
             vc_resp = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(
-                self._apisession, site_id, device_id,
+                self._apisession,
+                site_id,
+                device_id,
             )  # WHY: query VC membership
             vc_data = getattr(vc_resp, "data", None) or {}  # WHY: guard missing .data
             if not vc_data.get("is_virtual_chassis", False):  # WHY: readopt requires VC
@@ -225,7 +234,9 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         """Call the readopt SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.readoptSiteOctermDevice(
-                self._apisession, site_id, device_id,
+                self._apisession,
+                site_id,
+                device_id,
             )  # WHY: request re-adoption
             self._print_api_result(
                 response,
@@ -249,7 +260,9 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         try:
             response = mistapi.api.v1.sites.devices.getSiteDeviceZtpPassword(
-                self._apisession, site_id, device_id,
+                self._apisession,
+                site_id,
+                device_id,
             )  # WHY: fetch one-time ZTP credential
             self._render_ztp_response(response)  # WHY: display on console only
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
@@ -279,7 +292,9 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         try:
             response = mistapi.api.v1.sites.devices.getSiteDeviceConfigCmd(
-                self._apisession, site_id, device_id,
+                self._apisession,
+                site_id,
+                device_id,
             )  # WHY: fetch generated CLI config bundle
             self._render_config_response(response)  # WHY: pretty-print each section
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
@@ -351,7 +366,10 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         """Call the support-upload SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.uploadSiteDeviceSupportFile(
-                self._apisession, site_id, device_id, body,
+                self._apisession,
+                site_id,
+                device_id,
+                body,
             )  # WHY: initiate upload to Mist support bucket
             if self._print_api_result(
                 response,
@@ -376,7 +394,9 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         try:
             response = mistapi.api.v1.sites.devices.pollSiteSwitchStats(
-                self._apisession, site_id, device_id,
+                self._apisession,
+                site_id,
+                device_id,
             )  # WHY: force a fresh telemetry poll
             if self._print_api_result(
                 response,
@@ -397,7 +417,9 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         try:
             response = mistapi.api.v1.sites.devices.createSiteDeviceSnapshot(
-                self._apisession, site_id, device_id,
+                self._apisession,
+                site_id,
+                device_id,
             )  # WHY: capture in-band device snapshot
             self._print_api_result(
                 response,

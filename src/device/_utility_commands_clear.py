@@ -49,7 +49,9 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         body = self._build_arp_body(site_id, device_id)  # WHY: gather ARP filter inputs
         # WHY: typed-CLEAR gate below rejects mistypes to prevent accidental wipes
         if not self._confirm_destructive(
-            "Type 'CLEAR' to clear ARP cache: ", "CLEAR", "clear_arp",
+            "Type 'CLEAR' to clear ARP cache: ",
+            "CLEAR",
+            "clear_arp",
         ):
             return  # WHY: typed-keyword gate aborts on cancel
         self._invoke_arp_clear(site_id, device_id, body)  # WHY: run API + report
@@ -70,7 +72,10 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         """Call the SSR ARP-clear SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.clearSiteSsrArpCache(
-                self._apisession, site_id, device_id, body,
+                self._apisession,
+                site_id,
+                device_id,
+                body,
             )  # WHY: send ARP-clear request
             self._print_api_result(
                 response,
@@ -97,7 +102,9 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             return  # WHY: bail without confirming when input invalid
         # WHY: typed-CLEAR gate below rejects mistypes to prevent accidental wipes
         if not self._confirm_destructive(
-            "Type 'CLEAR' to clear BGP routes: ", "CLEAR", "clear_bgp",
+            "Type 'CLEAR' to clear BGP routes: ",
+            "CLEAR",
+            "clear_bgp",
         ):
             return  # WHY: typed-keyword gate aborts on cancel
         self._invoke_bgp_clear(site_id, device_id, body)  # WHY: run API + report
@@ -118,7 +125,10 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         self._maybe_add_input(body, "vrf", "VRF (Enter to skip): ", "clear_bgp_vrf")
         # WHY: optional VC node targets one member of a virtual chassis
         self._maybe_add_input(
-            body, "node", "Node (node0/node1, Enter to skip): ", "clear_bgp_node",
+            body,
+            "node",
+            "Node (node0/node1, Enter to skip): ",
+            "clear_bgp_node",
         )
         return body  # WHY: hand assembled filter body to invoker
 
@@ -132,7 +142,11 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             body["type"] = bgp_type.lower()  # WHY: normalize case
 
     def _maybe_add_input(  # WHY: shared optional-input setter for BGP body
-        self, body: dict[str, Any], key: str, prompt: str, context: str,
+        self,
+        body: dict[str, Any],
+        key: str,
+        prompt: str,
+        context: str,
     ) -> None:
         """Read one optional input and only set ``body[key]`` when non-empty."""
         value = self._safe_input_fn(prompt, context=context)  # WHY: EOF-safe optional prompt
@@ -143,7 +157,10 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         """Call the SSR BGP-clear SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.clearSiteSsrBgpRoutes(
-                self._apisession, site_id, device_id, body,
+                self._apisession,
+                site_id,
+                device_id,
+                body,
             )  # WHY: send BGP-clear request
             self._print_api_result(
                 response,
@@ -170,18 +187,26 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             return  # WHY: honor operator's cancel decision
         # WHY: typed-CLEAR gate below rejects mistypes to prevent accidental wipes
         if not self._confirm_destructive(
-            "Type 'CLEAR' to clear session(s): ", "CLEAR", "clear_session",
+            "Type 'CLEAR' to clear session(s): ",
+            "CLEAR",
+            "clear_session",
         ):
             return  # WHY: typed-keyword gate aborts on cancel
         self._invoke_session_clear(site_id, device_id, body)  # WHY: run API + report
 
     def _invoke_session_clear(
-        self, site_id: str, device_id: str, body: dict[str, Any],
+        self,
+        site_id: str,
+        device_id: str,
+        body: dict[str, Any],
     ) -> None:  # WHY: isolate SDK call
         """Call the session-clear SDK and route errors through the shared handler."""
         try:  # WHY: guard SDK/transport failures
             response = mistapi.api.v1.sites.devices.clearSiteDeviceSession(
-                self._apisession, site_id, device_id, body,
+                self._apisession,
+                site_id,
+                device_id,
+                body,
             )  # WHY: send session-clear request
             self._print_api_result(
                 response,
@@ -207,12 +232,18 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             return None  # WHY: cancelled at CLEAR-ALL prompt
         # WHY: optional VC node targets one member of a virtual chassis
         self._maybe_add_input(
-            body, "node", "Node (node0/node1, Enter to skip): ", "clear_session_node",
+            body,
+            "node",
+            "Node (node0/node1, Enter to skip): ",
+            "clear_session_node",
         )
         return body  # WHY: hand assembled filter body to invoker
 
     def _apply_session_filter(  # WHY: pick which filter (service/ids/all) to apply
-        self, body: dict[str, Any], service_name: str, session_ids_input: str,
+        self,
+        body: dict[str, Any],
+        service_name: str,
+        session_ids_input: str,
     ) -> bool:
         """Apply session filters. Returns False when operator cancels the CLEAR-ALL prompt."""
         if service_name:  # WHY: prefer service filter when supplied
@@ -258,7 +289,10 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         """Call the MAC-table-clear SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.clearSiteDeviceMacTable(
-                self._apisession, site_id, device_id, body,
+                self._apisession,
+                site_id,
+                device_id,
+                body,
             )  # WHY: send MAC-table clear request
             self._print_api_result(
                 response,
@@ -290,7 +324,10 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         """Call the BPDU-clear SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch(
-                self._apisession, site_id, device_id, body,
+                self._apisession,
+                site_id,
+                device_id,
+                body,
             )  # WHY: send BPDU-clear request
             self._print_api_result(
                 response,
@@ -332,7 +369,10 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         body: dict[str, Any] = {"ports": [port_with_unit]}  # WHY: single-port list
         try:
             response = mistapi.api.v1.sites.devices.clearAllLearnedMacsFromPortOnSwitch(
-                self._apisession, site_id, device_id, body,
+                self._apisession,
+                site_id,
+                device_id,
+                body,
             )  # WHY: send learned-MAC-clear request
             self._print_api_result(
                 response,
@@ -359,7 +399,9 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         body: dict[str, Any] = {}  # WHY: seed empty; only add optional node
         self._maybe_add_input(body, "node", "Node (node0/node1, Enter to skip): ", "clear_policy_node")
         if not self._confirm_destructive(
-            "Type 'CLEAR' to clear policy hit count: ", "CLEAR", "clear_policy_hit_count",
+            "Type 'CLEAR' to clear policy hit count: ",
+            "CLEAR",
+            "clear_policy_hit_count",
         ):
             return  # WHY: typed-keyword gate aborts on cancel
         self._invoke_policy_clear(site_id, device_id, body)  # WHY: run API + report
@@ -368,7 +410,10 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         """Call the policy-hit-count-clear SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.clearSiteDevicePolicyHitCount(
-                self._apisession, site_id, device_id, body,
+                self._apisession,
+                site_id,
+                device_id,
+                body,
             )  # WHY: send policy-hit-count-clear request
             self._print_api_result(
                 response,
@@ -398,7 +443,10 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         self._invoke_dhcp_release(site_id, device_id, body)  # WHY: run API + report
 
     def _build_dhcp_body(
-        self, site_id: str, device_id: str, node_context: str,
+        self,
+        site_id: str,
+        device_id: str,
+        node_context: str,
     ) -> dict[str, Any] | None:
         """Build DHCP-release body from a required port pick + optional node."""
         port_id = self._select_port_from_device(site_id, device_id)  # WHY: required port picker
@@ -424,7 +472,10 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         """Call the DHCP-release SDK (switch/gateway) and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.releaseSiteDeviceDhcpLease(
-                self._apisession, site_id, device_id, body,
+                self._apisession,
+                site_id,
+                device_id,
+                body,
             )  # WHY: send DHCP-release request
             self._print_api_result(
                 response,
@@ -450,7 +501,9 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         self._invoke_ssr_dhcp_release(site_id, device_id, body)  # WHY: run API + report
 
     def _build_ssr_dhcp_body(
-        self, site_id: str, device_id: str,
+        self,
+        site_id: str,
+        device_id: str,
     ) -> dict[str, Any] | None:
         """Build SSR DHCP-release body from a required interface pick + optional node."""
         port_id = self._select_interface_from_device(site_id, device_id)  # WHY: SSR uses named ifaces
@@ -476,7 +529,10 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         """Call the SSR DHCP-release SDK and report success/failure."""
         try:
             response = mistapi.api.v1.sites.devices.releaseSiteSsrDhcpLease(
-                self._apisession, site_id, device_id, body,
+                self._apisession,
+                site_id,
+                device_id,
+                body,
             )  # WHY: send SSR DHCP-release request
             self._print_api_result(
                 response,
