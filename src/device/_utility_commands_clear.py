@@ -57,15 +57,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
     def _build_arp_body(self, site_id: str, device_id: str) -> dict[str, Any]:  # WHY: collect optional ARP filters
         """Gather ARP-clear filter inputs (node, port, ip) from the operator."""
         body: dict[str, Any] = {}  # WHY: seed empty; add only supplied filters
-        node = self._safe_input_fn(
-            "Node (node0/node1, Enter to skip): ",
-            context="clear_arp_node",
-        )  # WHY: optional VC node filter
-        if node:  # WHY: skip when operator wants all nodes
-            body["node"] = node  # WHY: constrain to single VC node
-        port_id = self._select_port_optional(site_id, device_id)  # WHY: optional port filter
-        if port_id:  # WHY: skip when operator wants all ports
-            body["port_id"] = port_id  # WHY: constrain to single port
+        self._add_node_port_filters(body, site_id, device_id, "clear_arp_node")  # WHY: shared helper (dedupes vs show)
         ip_addr = self._safe_input_fn(
             "IP address to clear (Enter for all): ",
             context="clear_arp_ip",

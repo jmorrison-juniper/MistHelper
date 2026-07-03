@@ -258,12 +258,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
         vrf = self._safe_input_fn("VRF (Enter to skip): ", context="ospf_vrf")  # WHY: optional VRF
         if vrf:  # WHY: skip filter if blank
             body["vrf"] = vrf  # WHY: propagate to SDK
-        node = self._safe_input_fn("Node (node0/node1, Enter to skip): ", context="ospf_node")  # WHY: node
-        if node:  # WHY: skip filter if blank
-            body["node"] = node  # WHY: propagate to SDK
-        port_id = self._select_port_optional(site_id, device_id)  # WHY: __getattr__ -> selection cluster
-        if port_id:  # WHY: only add if operator picked one
-            body["port_id"] = port_id  # WHY: propagate to SDK
+        self._add_node_port_filters(body, site_id, device_id, "ospf_node")  # WHY: shared helper (dedupes vs clear)
         return body  # WHY: dict consumed by _run_and_export
 
     def show_ospf_database(self) -> None:

@@ -37,3 +37,26 @@ class _ClusterBase:  # WHY: shared wrapper base for every utility_commands clust
         if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy so self._apisession / helpers work
+
+    def _add_node_port_filters(
+        self,
+        body: dict[str, Any],
+        site_id: str,
+        device_id: str,
+        node_context: str,
+    ) -> None:  # WHY: shared node+port filter builder used by show & clear clusters
+        """Prompt for node and port filters, adding non-empty values to ``body``.
+
+        Extracted to :class:`_ClusterBase` so both the show (OSPF) and clear
+        (ARP) filter builders share the same 5-line pattern without pylint
+        flagging R0801 duplicate-code across the two cluster modules.
+        """
+        node = self._safe_input_fn(  # noqa: SLF001  # WHY: proxied via __getattr__
+            "Node (node0/node1, Enter to skip): ",
+            context=node_context,
+        )  # WHY: optional VC node filter
+        if node:  # WHY: skip when operator wants all nodes
+            body["node"] = node  # WHY: constrain to single VC node
+        port_id = self._select_port_optional(site_id, device_id)  # WHY: proxied selection helper
+        if port_id:  # WHY: skip when operator wants all ports
+            body["port_id"] = port_id  # WHY: constrain to single port
