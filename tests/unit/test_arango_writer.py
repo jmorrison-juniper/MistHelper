@@ -3,13 +3,25 @@
 All python-arango interactions are mocked — no live ArangoDB required.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # WHY: postponed evaluation keeps forward refs cheap in tests
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch  # WHY: python-arango is mocked to avoid live DB dependency
 
-import pytest
+import pytest  # WHY: fixtures + parametrize entry points
 
-from src.db import DatabaseConfig
+from src.db import DatabaseConfig  # WHY: config fixture builds a DatabaseConfig instance
+from tests.unit._test_arango_writer_helpers import (  # WHY: shared single-assert helpers keep test CC=1
+    EdgeCase,
+    assert_edge_case,
+    assert_edge_cols_include,
+    assert_edge_fields,
+    assert_edge_to_vertex,
+    assert_edges_equal,
+    assert_edges_registered,
+    assert_ensure_target,
+    assert_entity_types_mapped,
+    assert_vertex_config,
+)
 
 
 @pytest.fixture
@@ -1479,18 +1491,18 @@ class TestArangoDBWriterSLEImpactedGraph:
         assert "SLEImpactedBySite" in edge_names
 
     def test_sle_entity_types_mapped(self):
-        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
-
-        assert ENTITY_TYPE_TO_VERTEX["listSiteSlesMetrics"] == "sle_metrics"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteSleMetricClassifiers"] == "sle_classifiers"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedAps"] == "sle_impacted_entities"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedSwitches"] == "sle_impacted_entities"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedGateways"] == "sle_impacted_entities"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedInterfaces"] == "sle_impacted_entities"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedChassis"] == "sle_impacted_entities"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedWirelessClients"] == "sle_impacted_entities"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedWiredClients"] == "sle_impacted_entities"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteSleImpactedApplications"] == "sle_impacted_entities"
+        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 10 asserts to CC=1
+            "listSiteSlesMetrics": "sle_metrics",
+            "listSiteSleMetricClassifiers": "sle_classifiers",
+            "listSiteSleImpactedAps": "sle_impacted_entities",
+            "listSiteSleImpactedSwitches": "sle_impacted_entities",
+            "listSiteSleImpactedGateways": "sle_impacted_entities",
+            "listSiteSleImpactedInterfaces": "sle_impacted_entities",
+            "listSiteSleImpactedChassis": "sle_impacted_entities",
+            "listSiteSleImpactedWirelessClients": "sle_impacted_entities",
+            "listSiteSleImpactedWiredClients": "sle_impacted_entities",
+            "listSiteSleImpactedApplications": "sle_impacted_entities",
+        })
 
 
 class TestArangoDBWriterSiteRoutingGraph:
@@ -1742,33 +1754,32 @@ class TestArangoDBWriterSiteMapsZonesGraph:
         assert "ZoneSessionOnMap" in edge_cols
 
     def test_maps_zones_edge_definitions_registered(self):
-        from src.db.arango_writer import EDGE_DEFINITIONS
-
-        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
-        assert "MapBelongsToSite" in edge_names
-        assert "ZoneBelongsToMap" in edge_names
-        assert "ZoneBelongsToSite" in edge_names
-        assert "RssiZoneBelongsToMap" in edge_names
-        assert "BeaconOnMap" in edge_names
-        assert "BeaconBelongsToSite" in edge_names
-        assert "VBeaconOnMap" in edge_names
-        assert "DeviceOnMap" in edge_names
-        assert "ZoneSessionInZone" in edge_names
-        assert "ZoneSessionOnMap" in edge_names
+        assert_edges_registered({  # WHY: single set-subset check collapses 10 asserts to CC=1
+            "MapBelongsToSite",
+            "ZoneBelongsToMap",
+            "ZoneBelongsToSite",
+            "RssiZoneBelongsToMap",
+            "BeaconOnMap",
+            "BeaconBelongsToSite",
+            "VBeaconOnMap",
+            "DeviceOnMap",
+            "ZoneSessionInZone",
+            "ZoneSessionOnMap",
+        })
 
     def test_maps_zones_entity_types_mapped(self):
-        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
-
-        assert ENTITY_TYPE_TO_VERTEX["listSiteMaps"] == "maps"
-        assert ENTITY_TYPE_TO_VERTEX["getSiteMap"] == "maps"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteMapStacks"] == "map_stacks"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteZones"] == "zones"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteZonesStats"] == "zone_stats"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteRssiZones"] == "rssizones"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteRssiZonesStats"] == "rssizone_stats"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteBeacons"] == "beacons"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteVBeacons"] == "vbeacons"
-        assert ENTITY_TYPE_TO_VERTEX["searchSiteZoneSessions"] == "zone_sessions"
+        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 10 asserts to CC=1
+            "listSiteMaps": "maps",
+            "getSiteMap": "maps",
+            "listSiteMapStacks": "map_stacks",
+            "listSiteZones": "zones",
+            "listSiteZonesStats": "zone_stats",
+            "listSiteRssiZones": "rssizones",
+            "listSiteRssiZonesStats": "rssizone_stats",
+            "listSiteBeacons": "beacons",
+            "listSiteVBeacons": "vbeacons",
+            "searchSiteZoneSessions": "zone_sessions",
+        })
 
 
 class TestArangoDBWriterSiteEventsAlarmsGraph:
@@ -1902,31 +1913,30 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:
         assert "AnomalyEventBelongsToSite" in edge_cols
 
     def test_events_alarms_edge_definitions_registered(self):
-        from src.db.arango_writer import EDGE_DEFINITIONS
-
-        edge_names = {e["edge_collection"] for e in EDGE_DEFINITIONS}
-        assert "ServicePathEventOnDevice" in edge_names
-        assert "ServicePathEventUsesVPN" in edge_names
-        assert "ServicePathEventBelongsToSite" in edge_names
-        assert "SkyatpEventBelongsToSite" in edge_names
-        assert "RoamingEventBelongsToSite" in edge_names
-        assert "RoamingEventOnDevice" in edge_names
-        assert "RrmEventBelongsToSite" in edge_names
-        assert "RrmEventOnDevice" in edge_names
-        assert "AnomalyEventBelongsToSite" in edge_names
+        assert_edges_registered({  # WHY: single set-subset check collapses 9 asserts to CC=1
+            "ServicePathEventOnDevice",
+            "ServicePathEventUsesVPN",
+            "ServicePathEventBelongsToSite",
+            "SkyatpEventBelongsToSite",
+            "RoamingEventBelongsToSite",
+            "RoamingEventOnDevice",
+            "RrmEventBelongsToSite",
+            "RrmEventOnDevice",
+            "AnomalyEventBelongsToSite",
+        })
 
     def test_events_alarms_entity_types_mapped(self):
-        from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX
-
-        assert ENTITY_TYPE_TO_VERTEX["searchSiteAlarms"] == "alarms"
-        assert ENTITY_TYPE_TO_VERTEX["searchSiteDeviceEvents"] == "events"
-        assert ENTITY_TYPE_TO_VERTEX["searchSiteSystemEvents"] == "system_events"
-        assert ENTITY_TYPE_TO_VERTEX["searchSiteOtherDeviceEvents"] == "other_events"
-        assert ENTITY_TYPE_TO_VERTEX["searchSiteSkyatpEvents"] == "skyatp_events"
-        assert ENTITY_TYPE_TO_VERTEX["searchSiteServicePathEvents"] == "service_path_events"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteRoamingEvents"] == "roaming_events"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteRrmEvents"] == "rrm_events"
-        assert ENTITY_TYPE_TO_VERTEX["listSiteAnomalyEvents"] == "anomaly_events"
+        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 9 asserts to CC=1
+            "searchSiteAlarms": "alarms",
+            "searchSiteDeviceEvents": "events",
+            "searchSiteSystemEvents": "system_events",
+            "searchSiteOtherDeviceEvents": "other_events",
+            "searchSiteSkyatpEvents": "skyatp_events",
+            "searchSiteServicePathEvents": "service_path_events",
+            "listSiteRoamingEvents": "roaming_events",
+            "listSiteRrmEvents": "rrm_events",
+            "listSiteAnomalyEvents": "anomaly_events",
+        })
 
     def test_service_path_ensure_target_vertices(self):
         from src.db.arango_writer import COLLECTION_VERTEX_MAP
