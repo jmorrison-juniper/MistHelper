@@ -430,3 +430,51 @@ def assert_edge_case(case: EdgeCase) -> None:
     assert got == expected, (  # WHY: single tuple-equality assertion covers both sides at once
         f"Edge {case.name!r} vertex config: expected {expected!r}, got {got!r}"
     )
+
+
+def _ops_carrying_edge(ops: list[str], edge_col: str) -> list[str]:
+    """Return ops whose COLLECTION_VERTEX_MAP entry registers ``edge_col``.
+
+    Centralizing this predicate keeps callers at CC=1 by moving all branching
+    (the outer op loop, the per-mapping edge set comprehension) inside a
+    helper. Ops without ``edges`` in their mapping return an empty edge set
+    via .get, so they naturally fall out of the result.
+    """
+    from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
+
+    return [  # WHY: list comprehension collects matching op names once
+        op for op in ops
+        if edge_col in {e["edge_col"] for e in COLLECTION_VERTEX_MAP.get(op, {}).get("edges", [])}
+    ]
+
+
+def _ops_missing_edge(ops: list[str], edge_col: str) -> list[str]:
+    """Return ops that declare edges but do NOT include ``edge_col``.
+
+    Ops with no ``edges`` entry are considered exempt (nothing to verify).
+    Used by "every edged op must include edge X" wholesale audit tests to
+    collapse a Python for-loop into a single set-difference assertion.
+    """
+    from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
+
+    return [  # WHY: list comp keeps caller assertion at CC=1
+        op for op in ops
+        if "edges" in COLLECTION_VERTEX_MAP.get(op, {})
+        and edge_col not in {e["edge_col"] for e in COLLECTION_VERTEX_MAP[op]["edges"]}
+    ]
+
+
+def assert_all_edged_ops_include(ops: list[str], edge_col: str) -> None:
+    """Assert every op with ``edges`` in its mapping declares ``edge_col``."""
+    missing = _ops_missing_edge(ops, edge_col)  # WHY: single helper call keeps caller CC=1
+    assert not missing, (  # WHY: single equality-style assert on the diff list
+        f"Ops missing {edge_col!r} edge: {missing!r}"
+    )
+
+
+def assert_ops_carrying_edge_include(ops: list[str], edge_col: str, expected_op: str) -> None:
+    """Assert ``expected_op`` is among the ops whose mapping registers ``edge_col``."""
+    carrying = _ops_carrying_edge(ops, edge_col)  # WHY: helper pushes the loop out of the caller
+    assert expected_op in carrying, (  # WHY: single membership assertion keeps CC=1
+        f"{expected_op!r} must carry {edge_col!r} edge; ops with edge: {carrying!r}"
+    )
