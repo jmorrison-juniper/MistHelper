@@ -22,7 +22,7 @@ _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 
 
-from src.network.routing_utils import RoutingTableContext, RoutingUtils, SsrRouteContext
+from src.network.routing_utils import RoutingDeps, RoutingTableContext, RoutingUtils, SsrRouteContext
 
 
 def setup_module() -> None:
@@ -61,7 +61,7 @@ def mock_deps() -> dict[str, MagicMock]:
 @pytest.fixture()
 def ru(mock_deps: dict[str, MagicMock]) -> RoutingUtils:
     """Return a RoutingUtils instance with mocked deps."""
-    return RoutingUtils(**mock_deps)
+    return RoutingUtils(RoutingDeps(**mock_deps))
 
 
 # ===================================================================
@@ -820,7 +820,7 @@ class TestExecuteForwardingTableCommand:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "sess-abc-123"}
-        with patch("src.network.routing_utils.requests") as mock_req:
+        with patch("src.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_forwarding_table_command("site-1", "dev-1", {"prefix": "0.0.0.0/0"}, False)
         assert result == "sess-abc-123"
@@ -831,7 +831,7 @@ class TestExecuteForwardingTableCommand:
         mock_resp = MagicMock()
         mock_resp.status_code = 500
         mock_resp.text = "Internal Server Error"
-        with patch("src.network.routing_utils.requests") as mock_req:
+        with patch("src.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_forwarding_table_command("site-1", "dev-1", {}, False)
         assert result is None
@@ -849,7 +849,7 @@ class TestExecuteForwardingTableCommand:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"status": "ok"}
-        with patch("src.network.routing_utils.requests") as mock_req:
+        with patch("src.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_forwarding_table_command("site-1", "dev-1", {}, False)
         assert result is None
@@ -869,7 +869,7 @@ class TestExecuteRoutingTableCommand:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "sess-def-456"}
-        with patch("src.network.routing_utils.requests") as mock_req:
+        with patch("src.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_routing_table_command("site-1", "dev-1", {"protocol": "any"}, False)
         assert result == "sess-def-456"
@@ -880,7 +880,7 @@ class TestExecuteRoutingTableCommand:
         mock_resp = MagicMock()
         mock_resp.status_code = 403
         mock_resp.text = "Forbidden"
-        with patch("src.network.routing_utils.requests") as mock_req:
+        with patch("src.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_routing_table_command("site-1", "dev-1", {}, False)
         assert result is None
@@ -897,7 +897,7 @@ class TestExecuteSsrRouteCommand:
     def test_success(self, ru: RoutingUtils) -> None:
         resp = MagicMock()
         resp.data = {"session": "ssr-sess-789"}
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        with patch("src.network._routing_utils_payload.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = resp
             result = ru._execute_ssr_route_command("site-1", "dev-1", {"protocol": "bgp"}, False)
         assert result == "ssr-sess-789"
@@ -905,13 +905,13 @@ class TestExecuteSsrRouteCommand:
     def test_no_session_in_response(self, ru: RoutingUtils) -> None:
         resp = MagicMock()
         resp.data = {"status": "ok"}
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        with patch("src.network._routing_utils_payload.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = resp
             result = ru._execute_ssr_route_command("site-1", "dev-1", {}, False)
         assert result is None
 
     def test_api_exception(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        with patch("src.network._routing_utils_payload.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.side_effect = RuntimeError("fail")
             result = ru._execute_ssr_route_command("site-1", "dev-1", {}, False)
         assert result is None
@@ -919,7 +919,7 @@ class TestExecuteSsrRouteCommand:
 
     def test_no_data_attr(self, ru: RoutingUtils) -> None:
         resp = MagicMock(spec=[])
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        with patch("src.network._routing_utils_payload.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = resp
             result = ru._execute_ssr_route_command("site-1", "dev-1", {}, False)
         assert result is None
@@ -1411,7 +1411,7 @@ class TestDisplayPrefixTableImplException:
 
     def test_prettytable_exception_fallback(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         entries = [{"destination": "10.0.0.0/8", "next_hop": "gw1", "interface": "eth0", "service": "svc"}]
-        with patch("src.network.routing_utils.PrettyTable", side_effect=RuntimeError("fail")):
+        with patch("src.network._routing_utils_display.PrettyTable", side_effect=RuntimeError("fail")):
             ru._display_prefix_table_impl(entries)
         output = capsys.readouterr().out
         assert "10.0.0.0/8" in output
@@ -1438,7 +1438,7 @@ class TestDisplayRoutingDetailsException:
                 "admin_distance": "170",
             },
         ]
-        with patch("src.network.routing_utils.PrettyTable", side_effect=RuntimeError("fail")):
+        with patch("src.network._routing_utils_display.PrettyTable", side_effect=RuntimeError("fail")):
             ru._display_routing_details(entries)
         output = capsys.readouterr().out
         assert "10.0.0.0/8" in output
@@ -1504,7 +1504,7 @@ class TestDisplaySsrRoutingDetailed:
                 "vrf": "default",
             },
         ]
-        with patch("src.network.routing_utils.PrettyTable", side_effect=RuntimeError("fail")):
+        with patch("src.network._routing_utils_display.PrettyTable", side_effect=RuntimeError("fail")):
             ru._display_ssr_routing(entries)
         output = capsys.readouterr().out
         assert "10.0.0.0/8" in output
@@ -1571,7 +1571,7 @@ class TestExecuteForwardingTableCommandDebug:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "sess-abc-123"}
         mock_resp.text = '{"session": "sess-abc-123"}'
-        with patch("src.network.routing_utils.requests") as mock_req:
+        with patch("src.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_forwarding_table_command("site-1", "dev-1", {"prefix": "0.0.0.0/0"}, True)
         output = capsys.readouterr().out
@@ -1590,7 +1590,7 @@ class TestExecuteRoutingTableCommandDebug:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "sess-def-456"}
         mock_resp.text = '{"session": "sess-def-456"}'
-        with patch("src.network.routing_utils.requests") as mock_req:
+        with patch("src.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_routing_table_command("site-1", "dev-1", {"protocol": "any"}, True)
         output = capsys.readouterr().out
@@ -1604,7 +1604,7 @@ class TestExecuteSsrRouteCommandDebug:
     def test_debug_output(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         resp = MagicMock()
         resp.data = {"session": "ssr-sess-789"}
-        with patch("src.network.routing_utils.mistapi") as mock_api:
+        with patch("src.network._routing_utils_payload.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = resp
             result = ru._execute_ssr_route_command("site-1", "dev-1", {"protocol": "bgp"}, True)
         output = capsys.readouterr().out
@@ -1822,7 +1822,7 @@ class TestExecuteShowForwardingTableHappyPath:
 
         with (
             patch("src.network.routing_utils.mistapi") as mock_api,
-            patch("src.network.routing_utils.requests") as mock_req,
+            patch("src.network._routing_utils_payload.requests") as mock_req,
             patch("src.network.routing_utils.time"),
         ):
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
@@ -1859,7 +1859,7 @@ class TestExecuteShowRoutingTableHappyPath:
 
         with (
             patch("src.network.routing_utils.mistapi") as mock_api,
-            patch("src.network.routing_utils.requests") as mock_req,
+            patch("src.network._routing_utils_payload.requests") as mock_req,
             patch("src.network.routing_utils.time"),
         ):
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
@@ -1899,10 +1899,11 @@ class TestExecuteShowSsrRoutesHappyPath:
 
         with (
             patch("src.network.routing_utils.mistapi") as mock_api,
+            patch("src.network._routing_utils_payload.mistapi") as mock_payload_api,
             patch("src.network.routing_utils.time"),
         ):
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
-            mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = api_resp
+            mock_payload_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = api_resp
             ru.execute_show_ssr_routes()
 
         ws_mgr.disconnect.assert_called()
@@ -1923,7 +1924,7 @@ class TestExecuteForwardingTableCommandEnvFallback:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "env-sess"}
         with (
-            patch("src.network.routing_utils.requests") as mock_req,
+            patch("src.network._routing_utils_payload.requests") as mock_req,
             patch.dict("os.environ", {"MIST_HOST": "env.mist.com", "MIST_APITOKEN": "env-tok"}),
         ):
             mock_req.post.return_value = mock_resp
@@ -1941,7 +1942,7 @@ class TestExecuteRoutingTableCommandEnvFallback:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "env-sess-r"}
         with (
-            patch("src.network.routing_utils.requests") as mock_req,
+            patch("src.network._routing_utils_payload.requests") as mock_req,
             patch.dict("os.environ", {"MIST_HOST": "env.mist.com", "MIST_APITOKEN": "env-tok"}),
         ):
             mock_req.post.return_value = mock_resp
@@ -1961,7 +1962,7 @@ class TestExecuteRoutingTableCommandEnvFallback:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"status": "ok"}
-        with patch("src.network.routing_utils.requests") as mock_req:
+        with patch("src.network._routing_utils_payload.requests") as mock_req:
             mock_req.post.return_value = mock_resp
             result = ru._execute_routing_table_command("site-1", "dev-1", {}, False)
         assert result is None

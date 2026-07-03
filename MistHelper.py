@@ -14256,15 +14256,21 @@ class ServicePingManager:  # Service ping facade.
 
 def _get_routing_utils_instance():  # Build a RoutingUtils.
     """Create RoutingUtils instance with MistHelper globals."""
+    from src.network.routing_utils import RoutingDeps as _RD  # Deps dataclass wrapper.
     from src.network.routing_utils import RoutingUtils as _RU  # Import the extracted class.
 
-    return _RU(  # Wire dependencies.
-        apisession=apisession,
-        select_site_fn=PromptUtils.select_site_id_from_csv,
-        select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(site_id, device_type=dtype),
-        safe_input_fn=InputUtils.safe_input,
-        websocket_manager_factory=WebSocketManager,
-        is_debug_mode_fn=is_debug_mode,
+    def _pick_device(site_id, dtype):  # Local wrapper for keyword-arg selector.
+        return PromptUtils.select_device_id_from_inventory(site_id, device_type=dtype)
+
+    return _RU(  # Wire dependencies via RoutingDeps.
+        _RD(
+            apisession=apisession,
+            select_site_fn=PromptUtils.select_site_id_from_csv,
+            select_device_fn=_pick_device,
+            safe_input_fn=InputUtils.safe_input,
+            websocket_manager_factory=WebSocketManager,
+            is_debug_mode_fn=is_debug_mode,
+        )
     )
 
 
