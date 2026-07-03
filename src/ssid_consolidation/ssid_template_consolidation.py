@@ -51,6 +51,17 @@ from ._ssid_template_phase1 import (  # WHY: re-export phase 1 helpers reference
     _resolve_template,  # WHY: re-export for backward-compat imports
     _SsidTemplatePhase1Cluster,  # WHY: phase-1 audit cluster bound in __init__
 )
+from ._ssid_template_phase2 import (  # WHY: re-export phase 2 helpers referenced by name in tests
+    _build_skip_entry,  # WHY: re-export for backward-compat imports
+    _build_variable_entry,  # WHY: re-export for backward-compat imports
+    _compute_variable_plan,  # WHY: re-export for backward-compat imports
+    _display_variable_summary,  # WHY: re-export for backward-compat imports
+    _extract_deviation_params,  # WHY: re-export for backward-compat imports
+    _get_cached_site_vars,  # WHY: re-export for backward-compat imports
+    _group_entries_by_site,  # WHY: re-export for backward-compat imports
+    _print_conflicts,  # WHY: re-export for backward-compat imports
+    _SsidTemplatePhase2Cluster,  # WHY: phase-2 site-variables cluster bound in __init__
+)
 
 # ---------------------------------------------------------------------------
 # Type aliases for injected dependencies
@@ -161,6 +172,7 @@ class SSIDTemplateConsolidationManager:
         self._clusters: tuple[Any, ...] = (  # WHY: bundle clusters so parent stays under R0902 gate
             _SsidTemplateCacheCluster(self),  # WHY: cache + resume + phase-result I/O cluster
             _SsidTemplatePhase1Cluster(self),  # WHY: read-only audit + matrix + deviation cluster
+            _SsidTemplatePhase2Cluster(self),  # WHY: site-variables plan + write cluster
         )
 
     def __getattr__(self, name: str) -> Any:
@@ -320,59 +332,8 @@ class SSIDTemplateConsolidationManager:
     # ------------------------------------------------------------------
     # Phase 2: Site Variables
     # ------------------------------------------------------------------
-
-    def phase2_site_variables(self) -> None:
-        """Phase 2 orchestrator — compute variable plan, write to sites."""
-        print("\n=== Phase 2: Write Site Variables ===")
-        logging.info("Phase 2: Starting site variable configuration")
-
-        cached = self._load_cache()
-        if not cached:
-            print("! Phase 1 cache not found. Run Phase 1 first.")
-            return
-        self.cache = cached
-
-        resuming, prior_results = self._offer_resume(2, [])
-        plan = _compute_variable_plan(self.cache)
-        if not plan:
-            print("  No site variables to configure " "(no deviations detected).")
-            return
-
-        _display_variable_summary(plan)
-        pending = len([p for p in plan if p["status"] == "pending"])
-        if not self._confirm_or_cancel(f"Write site variables for {pending} sites?"):
-            return
-
-        results = self._write_site_variables(plan, prior_results if resuming else [])
-        self._save_phase_results(2, results)
-        self.write_data_fn(
-            data=results,
-            filename_or_table="ssid_consolidation_site_vars",
-            api_function_name="ssidConsolidationSiteVars",
-        )
-        _print_phase_summary("Phase 2", results)
-
-    def _write_site_variables(
-        self,
-        plan: list[dict[str, Any]],
-        resume_from: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        """Write site variables via updateSiteInfo."""
-        completed_ids = {row.get("site_id") for row in resume_from if row.get("status") == "written"}
-        results: list[dict[str, Any]] = list(resume_from) if resume_from else []
-
-        pending_entries = [
-            entry for entry in plan if entry["status"] == "pending" and entry["site_id"] not in completed_ids
-        ]
-        site_groups = _group_entries_by_site(pending_entries)
-
-        for site_id, entries in site_groups.items():
-            result = _write_single_site_vars(site_id, entries, self.cache, self.apisession)
-            results.extend(result)
-            if len(results) % 10 == 0:
-                self._save_phase_results(2, results)
-
-        return results
+    # WHY: phase2_site_variables + _write_site_variables live on the
+    # phase-2 cluster; access is transparent via __getattr__ delegation.
 
     # ------------------------------------------------------------------
     # Phase 3: Site Groups
@@ -576,138 +537,15 @@ class SSIDTemplateConsolidationManager:
 # ------------------------------------------------------------------
 # Phase 2 helpers
 # ------------------------------------------------------------------
-
-
-def _compute_variable_plan(
-    cache: dict[str, Any],
-) -> list[dict[str, Any]]:
-    """Build variable assignment plan from Phase 1 deviations."""
-    deviations = cache.get("deviations", [])
-    matrix = cache.get("matrix", [])
-    variable_params = _extract_deviation_params(deviations)
-    if not variable_params:
-        return []
-
-    plan: list[dict[str, Any]] = []
-    for row in matrix:
-        if row.get("psk_detected") or row.get("anomaly"):
-            for param in variable_params:
-                plan.append(_build_skip_entry(row, param))
-            continue
-        site_vars = _get_cached_site_vars(cache, row.get("site_id", ""))
-        for param in variable_params:
-            entry = _build_variable_entry(row, param, site_vars)
-            plan.append(entry)
-    return plan
-
-
-def _extract_deviation_params(
-    deviations: list[dict[str, Any]],
-) -> list[str]:
-    """Extract unique parameter names from deviations."""
-    params: set[str] = set()
-    for deviation in deviations:
-        if deviation.get("cluster_name") != "cross_cluster":
-            params.add(deviation.get("parameter", ""))
-    return sorted(params - {""})
-
-
-def _build_skip_entry(row: dict[str, Any], param: str) -> dict[str, Any]:
-    """Build a skipped variable entry for PSK/anomaly sites."""
-    reason = "PSK site" if row.get("psk_detected") else f"Anomaly: {row.get('anomaly_reason', '')}"
-    return {
-        "site_name": row.get("site_name", ""),
-        "site_id": row.get("site_id", ""),
-        "variable_name": f"MISTHELPER_{param.upper()}",
-        "proposed_value": "",
-        "current_value": "",
-        "status": "skipped",
-        "reason": reason,
-        "timestamp": "",
-    }
-
-
-def _get_cached_site_vars(cache: dict[str, Any], site_id: str) -> dict[str, str]:
-    """Get existing site vars from cached org data."""
-    for site in cache.get("data", {}).get("sites", []):
-        if site.get("id") == site_id:
-            vars_dict: dict[str, str] = site.get("vars", {}) or {}
-            return vars_dict
-    return {}
-
-
-def _build_variable_entry(
-    row: dict[str, Any],
-    param: str,
-    site_vars: dict[str, str],
-) -> dict[str, Any]:
-    """Build a single variable assignment entry."""
-    var_name = f"MISTHELPER_{param.upper()}"
-    proposed = str(row.get(param, row.get("vlan_id", "")))
-    current = str(site_vars.get(var_name, ""))
-
-    if current and current == proposed:
-        status = "already_configured"
-        reason = "Same value already exists"
-    elif current and current != proposed:
-        status = "conflict"
-        reason = f"Existing value: {current}"
-    else:
-        status = "pending"
-        reason = ""
-
-    return {
-        "site_name": row.get("site_name", ""),
-        "site_id": row.get("site_id", ""),
-        "variable_name": var_name,
-        "proposed_value": proposed,
-        "current_value": current,
-        "status": status,
-        "reason": reason,
-        "timestamp": "",
-    }
-
-
-def _display_variable_summary(
-    plan: list[dict[str, Any]],
-) -> None:
-    """Display variable assignment summary table."""
-    pending = [e for e in plan if e["status"] == "pending"]
-    skipped = [e for e in plan if e["status"] == "skipped"]
-    configured = [e for e in plan if e["status"] == "already_configured"]
-    conflicts = [e for e in plan if e["status"] == "conflict"]
-
-    print("\n  Variable Assignment Plan:")
-    print(f"    Pending:            {len(pending)}")
-    print(f"    Already configured: {len(configured)}")
-    print(f"    Conflicts:          {len(conflicts)}")
-    print(f"    Skipped:            {len(skipped)}")
-
-    if conflicts:
-        _print_conflicts(conflicts)
-
-
-def _print_conflicts(conflicts: list[dict[str, Any]]) -> None:
-    """Print conflict details for variable summary."""
-    print("\n  Conflicts (existing value differs from proposed):")
-    for entry in conflicts[:10]:
-        site = entry["site_name"]
-        var_name = entry["variable_name"]
-        current = entry["current_value"]
-        proposed = entry["proposed_value"]
-        print(f"    {site}: {var_name} = {current} -> {proposed}")
-    if len(conflicts) > 10:
-        print(f"    ... and {len(conflicts) - 10} more")
-
-
-def _group_entries_by_site(
-    entries: list[dict[str, Any]],
-) -> dict[str, list[dict[str, Any]]]:
-    """Group variable entries by site_id for batched writes."""
-    groups: dict[str, list[dict[str, Any]]] = {}
-    for entry in entries:
-        groups.setdefault(entry["site_id"], []).append(entry)
-    return groups
+# WHY: The eight pure Phase-2 helpers (_compute_variable_plan,
+# _extract_deviation_params, _build_skip_entry, _get_cached_site_vars,
+# _build_variable_entry, _display_variable_summary, _print_conflicts,
+# _group_entries_by_site) now live in ``_ssid_template_phase2`` and
+# are re-exported from this module's import block at the top of the
+# file. Only ``_write_single_site_vars`` stays here because tests
+# patch ``mistapi`` through this module's namespace (``patch.object(
+# ssid_template_consolidation, "mistapi", ...)``), which only affects
+# functions whose ``__globals__`` binding is this module.
 
 
 def _write_single_site_vars(
