@@ -20,7 +20,6 @@ from __future__ import annotations  # WHY: postponed evaluation keeps forward re
 from dataclasses import dataclass  # WHY: frozen dataclass gives cheap immutable rows for assertion tables
 from typing import Any  # WHY: mapping payloads from arango_writer are opaque dict-of-dict shapes
 
-
 # ---------------------------------------------------------------------------
 # Expected edge-definition catalogue
 # ---------------------------------------------------------------------------
@@ -31,227 +30,275 @@ from typing import Any  # WHY: mapping payloads from arango_writer are opaque di
 # and lets callers assert per-tier subsets without duplicating names.
 # The ALL_EXPECTED_EDGES union is what the wholesale audit test uses.
 
-_ORIGINAL_11_EDGES: frozenset[str] = frozenset({  # WHY: first-batch edges from the initial schema
-    "OrgContainsSite",
-    "OrgContainsDevice",
-    "SiteContainsDevice",
-    "TemplateAssignedToSite",
-    "DeviceHasPort",
-    "ClientConnectedToDevice",
-    "WlanBelongsToSite",
-    "WlanUsesTemplate",
-    "SiteBelongsToSiteGroup",
-    "MxEdgeBelongsToCluster",
-    "ConfigSnapshotForEntity",
-})
+_ORIGINAL_11_EDGES: frozenset[str] = frozenset(
+    {  # WHY: first-batch edges from the initial schema
+        "OrgContainsSite",
+        "OrgContainsDevice",
+        "SiteContainsDevice",
+        "TemplateAssignedToSite",
+        "DeviceHasPort",
+        "ClientConnectedToDevice",
+        "WlanBelongsToSite",
+        "WlanUsesTemplate",
+        "SiteBelongsToSiteGroup",
+        "MxEdgeBelongsToCluster",
+        "ConfigSnapshotForEntity",
+    }
+)
 
-_ORG_ENTITY_EDGES: frozenset[str] = frozenset({  # WHY: client + org-level ownership edges
-    "ClientConnectedToWlan",
-    "ClientBelongsToSite",
-    "NetworkBelongsToOrg",
-    "ServiceBelongsToOrg",
-    "VpnBelongsToOrg",
-})
+_ORG_ENTITY_EDGES: frozenset[str] = frozenset(
+    {  # WHY: client + org-level ownership edges
+        "ClientConnectedToWlan",
+        "ClientBelongsToSite",
+        "NetworkBelongsToOrg",
+        "ServiceBelongsToOrg",
+        "VpnBelongsToOrg",
+    }
+)
 
-_EVENT_SECURITY_EDGES: frozenset[str] = frozenset({  # WHY: events, alarms, NAC and security edges
-    "AlarmBelongsToSite",
-    "EventBelongsToSite",
-    "EventOccurredOnDevice",
-    "NACRuleMatchesSite",
-    "NACRuleMatchesSiteGroup",
-    "NACTagBelongsToPortal",
-    "SecurityPolicyBelongsToOrg",
-})
+_EVENT_SECURITY_EDGES: frozenset[str] = frozenset(
+    {  # WHY: events, alarms, NAC and security edges
+        "AlarmBelongsToSite",
+        "EventBelongsToSite",
+        "EventOccurredOnDevice",
+        "NACRuleMatchesSite",
+        "NACRuleMatchesSiteGroup",
+        "NACTagBelongsToPortal",
+        "SecurityPolicyBelongsToOrg",
+    }
+)
 
-_ASSET_CONFIG_EDGES: frozenset[str] = frozenset({  # WHY: PSKs, assets, webhooks, site-group containment
-    "PSKBelongsToSite",
-    "AssetBelongsToSite",
-    "AssetOnMap",
-    "WebhookBelongsToSite",
-    "SiteGroupContainsSite",
-})
+_ASSET_CONFIG_EDGES: frozenset[str] = frozenset(
+    {  # WHY: PSKs, assets, webhooks, site-group containment
+        "PSKBelongsToSite",
+        "AssetBelongsToSite",
+        "AssetOnMap",
+        "WebhookBelongsToSite",
+        "SiteGroupContainsSite",
+    }
+)
 
-_WLAN_TEMPLATE_EDGES: frozenset[str] = frozenset({  # WHY: WLAN + template application edges
-    "WlanUsesMxTunnel",
-    "TemplateAppliedToSite",
-    "TemplateAppliedToSiteGroup",
-})
+_WLAN_TEMPLATE_EDGES: frozenset[str] = frozenset(
+    {  # WHY: WLAN + template application edges
+        "WlanUsesMxTunnel",
+        "TemplateAppliedToSite",
+        "TemplateAppliedToSiteGroup",
+    }
+)
 
-_TIER1_EDGES: frozenset[str] = frozenset({  # WHY: high-value entity relationships (tier 1)
-    "DeviceUsesProfile",
-    "PSKBelongsToWlan",
-    "AlarmOnDevice",
-    "NacPortalServesSiteGroup",
-    "MxTunnelUsesCluster",
-    "AuditLogBelongsToSite",
-    "GuestBelongsToSite",
-    "GuestAuthorizedOnWlan",
-    "GuestConnectedToAP",
-})
+_TIER1_EDGES: frozenset[str] = frozenset(
+    {  # WHY: high-value entity relationships (tier 1)
+        "DeviceUsesProfile",
+        "PSKBelongsToWlan",
+        "AlarmOnDevice",
+        "NacPortalServesSiteGroup",
+        "MxTunnelUsesCluster",
+        "AuditLogBelongsToSite",
+        "GuestBelongsToSite",
+        "GuestAuthorizedOnWlan",
+        "GuestConnectedToAP",
+    }
+)
 
-_TIER2_EDGES: frozenset[str] = frozenset({  # WHY: event / search entity relationships (tier 2)
-    "ClientEventBelongsToSite",
-    "ClientEventOnDevice",
-    "SessionBelongsToSite",
-    "SessionOnWlan",
-    "SessionOnDevice",
-    "NacEventBelongsToSite",
-    "WanEventBelongsToSite",
-    "MxEdgeEventBelongsToSite",
-    "OtherEventBelongsToSite",
-    "OrgEventBelongsToSite",
-    "SystemEventBelongsToSite",
-})
+_TIER2_EDGES: frozenset[str] = frozenset(
+    {  # WHY: event / search entity relationships (tier 2)
+        "ClientEventBelongsToSite",
+        "ClientEventOnDevice",
+        "SessionBelongsToSite",
+        "SessionOnWlan",
+        "SessionOnDevice",
+        "NacEventBelongsToSite",
+        "WanEventBelongsToSite",
+        "MxEdgeEventBelongsToSite",
+        "OtherEventBelongsToSite",
+        "OrgEventBelongsToSite",
+        "SystemEventBelongsToSite",
+    }
+)
 
-_TIER3_EDGES: frozenset[str] = frozenset({  # WHY: stats / telemetry relationships (tier 3)
-    "DeviceStatsBelongsToSite",
-    "DeviceStatsForDevice",
-    "BgpStatsBelongsToSite",
-    "OspfStatsBelongsToSite",
-    "PeerPathBelongsToSite",
-    "PortBelongsToSite",
-    "PortBelongsToDevice",
-    "TunnelBelongsToSite",
-    "MxEdgeStatsBelongsToSite",
-})
+_TIER3_EDGES: frozenset[str] = frozenset(
+    {  # WHY: stats / telemetry relationships (tier 3)
+        "DeviceStatsBelongsToSite",
+        "DeviceStatsForDevice",
+        "BgpStatsBelongsToSite",
+        "OspfStatsBelongsToSite",
+        "PeerPathBelongsToSite",
+        "PortBelongsToSite",
+        "PortBelongsToDevice",
+        "TunnelBelongsToSite",
+        "MxEdgeStatsBelongsToSite",
+    }
+)
 
-_TIER4_EDGES: frozenset[str] = frozenset({  # WHY: WxLAN policy relationships (tier 4)
-    "WxRuleBelongsToTemplate",
-    "WxRuleMatchesSrcTag",
-    "WxRuleAllowsDstTag",
-    "WxRuleDeniesDstTag",
-})
+_TIER4_EDGES: frozenset[str] = frozenset(
+    {  # WHY: WxLAN policy relationships (tier 4)
+        "WxRuleBelongsToTemplate",
+        "WxRuleMatchesSrcTag",
+        "WxRuleAllowsDstTag",
+        "WxRuleDeniesDstTag",
+    }
+)
 
-_TIER5_EDGES: frozenset[str] = frozenset({  # WHY: remaining entity relationships (tier 5)
-    "TicketBelongsToSite",
-    "PacketCaptureBelongsToSite",
-    "OtherDeviceBelongsToSite",
-    "EvpnBelongsToSite",
-})
+_TIER5_EDGES: frozenset[str] = frozenset(
+    {  # WHY: remaining entity relationships (tier 5)
+        "TicketBelongsToSite",
+        "PacketCaptureBelongsToSite",
+        "OtherDeviceBelongsToSite",
+        "EvpnBelongsToSite",
+    }
+)
 
-_ALARM_PROFILE_EDGES: frozenset[str] = frozenset({  # WHY: alarm templates, profiles, WLAN application
-    "AlarmTemplateAssignedToSite",
-    "SecurityPolicyAssignedToSite",
-    "DeviceConnectedToDevice",
-    "ProfileAppliedToSite",
-    "ProfileAppliedToSiteGroup",
-    "AlarmTemplateBelongsToOrg",
-    "WlanAppliedToSite",
-    "WlanAppliedToSiteGroup",
-    "SessionForClient",
-    "NacEventForClient",
-    "WanEventForClient",
-    "NACRuleUsesTag",
-    "ServicePolicyUsesService",
-})
+_ALARM_PROFILE_EDGES: frozenset[str] = frozenset(
+    {  # WHY: alarm templates, profiles, WLAN application
+        "AlarmTemplateAssignedToSite",
+        "SecurityPolicyAssignedToSite",
+        "DeviceConnectedToDevice",
+        "ProfileAppliedToSite",
+        "ProfileAppliedToSiteGroup",
+        "AlarmTemplateBelongsToOrg",
+        "WlanAppliedToSite",
+        "WlanAppliedToSiteGroup",
+        "SessionForClient",
+        "NacEventForClient",
+        "WanEventForClient",
+        "NACRuleUsesTag",
+        "ServicePolicyUsesService",
+    }
+)
 
-_ISSUE_169_EDGES: frozenset[str] = frozenset({  # WHY: coverage for unmapped org-level endpoints (issue #169)
-    "PskPortalServesSiteGroup",
-    "SuppressedAlarmBelongsToSite",
-    "DeviceConfigBelongsToSite",
-    "DeviceConfigForDevice",
-    "SiteStatsBelongsToSite",
-})
+_ISSUE_169_EDGES: frozenset[str] = frozenset(
+    {  # WHY: coverage for unmapped org-level endpoints (issue #169)
+        "PskPortalServesSiteGroup",
+        "SuppressedAlarmBelongsToSite",
+        "DeviceConfigBelongsToSite",
+        "DeviceConfigForDevice",
+        "SiteStatsBelongsToSite",
+    }
+)
 
-_ISSUE_180_EDGES: frozenset[str] = frozenset({  # WHY: rogue detection edges (issue #180)
-    "RogueAPDetectedBySite",
-    "RogueAPDetectedByAP",
-    "RogueClientDetectedByAP",
-    "RogueClientOnBSSID",
-    "RogueEventBelongsToSite",
-    "RogueEventOnDevice",
-})
+_ISSUE_180_EDGES: frozenset[str] = frozenset(
+    {  # WHY: rogue detection edges (issue #180)
+        "RogueAPDetectedBySite",
+        "RogueAPDetectedByAP",
+        "RogueClientDetectedByAP",
+        "RogueClientOnBSSID",
+        "RogueEventBelongsToSite",
+        "RogueEventOnDevice",
+    }
+)
 
-_ISSUE_178_EDGES: frozenset[str] = frozenset({  # WHY: site-level MxEdge edges (issue #178)
-    "MxEdgeBelongsToSite",
-    "MxEdgeEventOnDevice",
-})
+_ISSUE_178_EDGES: frozenset[str] = frozenset(
+    {  # WHY: site-level MxEdge edges (issue #178)
+        "MxEdgeBelongsToSite",
+        "MxEdgeEventOnDevice",
+    }
+)
 
-_ISSUE_176_EDGES: frozenset[str] = frozenset({  # WHY: site-level asset edges (issue #176)
-    "AssetFilterBelongsToSite",
-    "DiscoveredAssetOnMap",
-    "AssetTrackedByAP",
-})
+_ISSUE_176_EDGES: frozenset[str] = frozenset(
+    {  # WHY: site-level asset edges (issue #176)
+        "AssetFilterBelongsToSite",
+        "DiscoveredAssetOnMap",
+        "AssetTrackedByAP",
+    }
+)
 
-_ISSUE_183_EDGES: frozenset[str] = frozenset({  # WHY: applications, calls, WAN usage, fingerprints (issue #183)
-    "ApplicationOnSite",
-    "CallOnDevice",
-    "WanUsageOnDevice",
-    "WanUsagePeerDevice",
-    "TroubleshootCallOnDevice",
-})
+_ISSUE_183_EDGES: frozenset[str] = frozenset(
+    {  # WHY: applications, calls, WAN usage, fingerprints (issue #183)
+        "ApplicationOnSite",
+        "CallOnDevice",
+        "WanUsageOnDevice",
+        "WanUsagePeerDevice",
+        "TroubleshootCallOnDevice",
+    }
+)
 
-_ISSUE_185_EDGES: frozenset[str] = frozenset({  # WHY: SLE impacted entity relationships (issue #185)
-    "SLEMetricForSite",
-    "SLEImpactedDevice",
-    "SLEImpactedClient",
-    "SLEImpactedApplication",
-    "SLEImpactedBySite",
-})
+_ISSUE_185_EDGES: frozenset[str] = frozenset(
+    {  # WHY: SLE impacted entity relationships (issue #185)
+        "SLEMetricForSite",
+        "SLEImpactedDevice",
+        "SLEImpactedClient",
+        "SLEImpactedApplication",
+        "SLEImpactedBySite",
+    }
+)
 
-_ISSUE_177_EDGES: frozenset[str] = frozenset({  # WHY: routing / network topology (issue #177)
-    "DeviceHasBGPPeer",
-    "DeviceHasOSPFNeighbor",
-    "PortConnectsToDevice",
-    "EVPNTopologyContainsSwitch",
-    "DiscoveredSwitchBelongsToSite",
-    "RrmNeighborBelongsToSite",
-})
+_ISSUE_177_EDGES: frozenset[str] = frozenset(
+    {  # WHY: routing / network topology (issue #177)
+        "DeviceHasBGPPeer",
+        "DeviceHasOSPFNeighbor",
+        "PortConnectsToDevice",
+        "EVPNTopologyContainsSwitch",
+        "DiscoveredSwitchBelongsToSite",
+        "RrmNeighborBelongsToSite",
+    }
+)
 
-_ISSUE_175_EDGES: frozenset[str] = frozenset({  # WHY: maps, zones, location (issue #175)
-    "MapBelongsToSite",
-    "ZoneBelongsToMap",
-    "ZoneBelongsToSite",
-    "RssiZoneBelongsToMap",
-    "BeaconOnMap",
-    "BeaconBelongsToSite",
-    "VBeaconOnMap",
-    "DeviceOnMap",
-    "ZoneSessionInZone",
-    "ZoneSessionOnMap",
-})
+_ISSUE_175_EDGES: frozenset[str] = frozenset(
+    {  # WHY: maps, zones, location (issue #175)
+        "MapBelongsToSite",
+        "ZoneBelongsToMap",
+        "ZoneBelongsToSite",
+        "RssiZoneBelongsToMap",
+        "BeaconOnMap",
+        "BeaconBelongsToSite",
+        "VBeaconOnMap",
+        "DeviceOnMap",
+        "ZoneSessionInZone",
+        "ZoneSessionOnMap",
+    }
+)
 
-_ISSUE_174_EDGES: frozenset[str] = frozenset({  # WHY: events & alarms (issue #174)
-    "ServicePathEventOnDevice",
-    "ServicePathEventUsesVPN",
-    "ServicePathEventBelongsToSite",
-    "SkyatpEventBelongsToSite",
-    "RoamingEventBelongsToSite",
-    "RoamingEventOnDevice",
-    "RrmEventBelongsToSite",
-    "RrmEventOnDevice",
-    "AnomalyEventBelongsToSite",
-})
+_ISSUE_174_EDGES: frozenset[str] = frozenset(
+    {  # WHY: events & alarms (issue #174)
+        "ServicePathEventOnDevice",
+        "ServicePathEventUsesVPN",
+        "ServicePathEventBelongsToSite",
+        "SkyatpEventBelongsToSite",
+        "RoamingEventBelongsToSite",
+        "RoamingEventOnDevice",
+        "RrmEventBelongsToSite",
+        "RrmEventOnDevice",
+        "AnomalyEventBelongsToSite",
+    }
+)
 
-_ISSUE_181_EDGES: frozenset[str] = frozenset({  # WHY: config history, synthetic tests, webhook deliveries (issue #181)
-    "ConfigHistoryForDevice",
-    "SyntheticTestOnDevice",
-    "WebhookDeliveryFromWebhook",
-    "PacketCaptureOnDevice",
-})
+_ISSUE_181_EDGES: frozenset[str] = frozenset(
+    {  # WHY: config history, synthetic tests, webhook deliveries (issue #181)
+        "ConfigHistoryForDevice",
+        "SyntheticTestOnDevice",
+        "WebhookDeliveryFromWebhook",
+        "PacketCaptureOnDevice",
+    }
+)
 
-_ISSUE_173_EDGES: frozenset[str] = frozenset({  # WHY: site-level WLANs, PSKs, webhooks, WxLAN policies (issue #173)
-    "WxRuleBelongsToSite",
-    "WxTagBelongsToSite",
-    "WxTunnelBelongsToSite",
-    "WlanUsesWxTunnel",
-})
+_ISSUE_173_EDGES: frozenset[str] = frozenset(
+    {  # WHY: site-level WLANs, PSKs, webhooks, WxLAN policies (issue #173)
+        "WxRuleBelongsToSite",
+        "WxTagBelongsToSite",
+        "WxTunnelBelongsToSite",
+        "WlanUsesWxTunnel",
+    }
+)
 
-_ISSUE_172_EDGES: frozenset[str] = frozenset({  # WHY: site-level client relationships (issue #172)
-    "ClientUsedPSK",
-    "ClientMatchedNACRule",
-    "ClientEventForClient",
-    "UnconnectedClientOnMap",
-    "UnconnectedClientDetectedByAP",
-})
+_ISSUE_172_EDGES: frozenset[str] = frozenset(
+    {  # WHY: site-level client relationships (issue #172)
+        "ClientUsedPSK",
+        "ClientMatchedNACRule",
+        "ClientEventForClient",
+        "UnconnectedClientOnMap",
+        "UnconnectedClientDetectedByAP",
+    }
+)
 
-_ISSUE_171_184_EDGES: frozenset[str] = frozenset({  # WHY: site-level device + derived config (issues #171, #184)
-    "SpectrumAnalysisForDevice",
-    "DerivedConfigForSite",
-    "DerivedFromTemplate",
-})
+_ISSUE_171_184_EDGES: frozenset[str] = frozenset(
+    {  # WHY: site-level device + derived config (issues #171, #184)
+        "SpectrumAnalysisForDevice",
+        "DerivedConfigForSite",
+        "DerivedFromTemplate",
+    }
+)
 
-ALL_EXPECTED_EDGES: frozenset[str] = frozenset().union(  # WHY: single canonical union of every tier for the wholesale audit
+ALL_EXPECTED_EDGES: frozenset[str] = frozenset().union(  # WHY: single canonical union of every tier for the wholesale a
     _ORIGINAL_11_EDGES,
     _ORG_ENTITY_EDGES,
     _EVENT_SECURITY_EDGES,
@@ -292,9 +339,9 @@ def assert_edges_registered(expected_edges: set[str]) -> None:
     """
     from src.db.arango_writer import EDGE_DEFINITIONS  # WHY: local import avoids import cycles in helper collection
 
-    edge_names = {d["edge_collection"] for d in EDGE_DEFINITIONS}  # WHY: schema contract — every edge must register a name
+    edge_names = {d["edge_collection"] for d in EDGE_DEFINITIONS}  # WHY: schema contract — every edge must register a n
     missing = expected_edges - edge_names  # WHY: set-diff produces a readable failure diagnostic
-    assert not missing, f"Expected edges missing from EDGE_DEFINITIONS: {sorted(missing)}"  # WHY: single assert keeps CC low
+    assert not missing, f"Expected edges missing from EDGE_DEFINITIONS: {sorted(missing)}"  # WHY: single assert keeps C
 
 
 def assert_edges_equal(expected_edges: set[str]) -> None:
@@ -321,8 +368,7 @@ def assert_edge_to_vertex(edge_collection: str, vertex: str) -> None:
         d for d in EDGE_DEFINITIONS if d["edge_collection"] == edge_collection
     )
     assert vertex in match["to_vertex_collections"], (  # WHY: contract — edge must resolve to declared vertex
-        f"Edge {edge_collection!r} does not target vertex {vertex!r}: "
-        f"got {match['to_vertex_collections']!r}"
+        f"Edge {edge_collection!r} does not target vertex {vertex!r}: " f"got {match['to_vertex_collections']!r}"
     )
 
 
@@ -342,7 +388,9 @@ def assert_entity_types_mapped(expected: dict[str, str]) -> None:
     actual = {  # WHY: build a same-shape view so the diff-based failure below is precise
         key: ENTITY_TYPE_TO_VERTEX.get(key) for key in expected
     }
-    assert actual == expected, (  # WHY: single equality assertion diagnoses all mismatches at once
+    assert (
+        actual == expected
+    ), (  # WHY: single equality assertion diagnoses all mismatches at once
         f"ENTITY_TYPE_TO_VERTEX mismatch: expected {expected!r}, got {actual!r}"
     )
 
@@ -363,7 +411,10 @@ def assert_vertex_config(entity_type: str, vertex: str, key_field: str) -> None:
     """Assert ``entity_type`` maps to ``vertex`` with the given ``key_field``."""
     mapping = _get_mapping(entity_type)  # WHY: single lookup keeps helper simple
     got = (mapping.get("vertex"), mapping.get("key_field"))  # WHY: tuple compare beats two asserts
-    assert got == (vertex, key_field), (  # WHY: single equality on the (vertex, key_field) pair holds CC=1
+    assert got == (
+        vertex,
+        key_field,
+    ), (  # WHY: single equality on the (vertex, key_field) pair holds CC=1
         f"Mapping {entity_type!r} config mismatch: expected {(vertex, key_field)!r}, got {got!r}"
     )
 
@@ -373,7 +424,9 @@ def assert_edge_cols_include(entity_type: str, expected_cols: set[str]) -> None:
     mapping = _get_mapping(entity_type)  # WHY: retrieve schema entry
     actual = {e["edge_col"] for e in mapping["edges"]}  # WHY: set for subset check
     missing = expected_cols - actual  # WHY: named diff makes failure message actionable
-    assert not missing, (  # WHY: single assert keeps caller CC low
+    assert (
+        not missing
+    ), (  # WHY: single assert keeps caller CC low
         f"Mapping {entity_type!r} missing edge cols: {sorted(missing)}; present: {sorted(actual)}"
     )
 
@@ -386,8 +439,7 @@ def assert_edge_fields(entity_type: str, edge_col: str, expected: dict[str, Any]
     )
     actual = {key: edge.get(key) for key in expected}  # WHY: project only the fields under test
     assert actual == expected, (  # WHY: single dict-equality assertion checks all fields at once
-        f"Edge {edge_col!r} on {entity_type!r} field mismatch: "
-        f"expected {expected!r}, got {actual!r}"
+        f"Edge {edge_col!r} on {entity_type!r} field mismatch: " f"expected {expected!r}, got {actual!r}"
     )
 
 
@@ -395,7 +447,9 @@ def assert_ensure_target(entity_type: str, target: tuple[str, str]) -> None:
     """Assert ``target`` tuple is registered in the mapping's ensure_target_vertices."""
     mapping = _get_mapping(entity_type)  # WHY: retrieve schema entry
     targets = mapping.get("ensure_target_vertices", [])  # WHY: field is optional per schema
-    assert target in targets, (  # WHY: single membership check keeps CC=1
+    assert (
+        target in targets
+    ), (  # WHY: single membership check keeps CC=1
         f"ensure_target_vertices on {entity_type!r} missing {target!r}: got {targets!r}"
     )
 
@@ -427,7 +481,9 @@ def assert_edge_case(case: EdgeCase) -> None:
     )
     got = (match["from_vertex_collections"], match["to_vertex_collections"])  # WHY: normalized tuple for compare
     expected = ([case.from_vertex], [case.to_vertex])  # WHY: EDGE_DEFINITIONS stores lists per side
-    assert got == expected, (  # WHY: single tuple-equality assertion covers both sides at once
+    assert (
+        got == expected
+    ), (  # WHY: single tuple-equality assertion covers both sides at once
         f"Edge {case.name!r} vertex config: expected {expected!r}, got {got!r}"
     )
 
@@ -443,8 +499,7 @@ def _ops_carrying_edge(ops: list[str], edge_col: str) -> list[str]:
     from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
 
     return [  # WHY: list comprehension collects matching op names once
-        op for op in ops
-        if edge_col in {e["edge_col"] for e in COLLECTION_VERTEX_MAP.get(op, {}).get("edges", [])}
+        op for op in ops if edge_col in {e["edge_col"] for e in COLLECTION_VERTEX_MAP.get(op, {}).get("edges", [])}
     ]
 
 
@@ -458,7 +513,8 @@ def _ops_missing_edge(ops: list[str], edge_col: str) -> list[str]:
     from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
 
     return [  # WHY: list comp keeps caller assertion at CC=1
-        op for op in ops
+        op
+        for op in ops
         if "edges" in COLLECTION_VERTEX_MAP.get(op, {})
         and edge_col not in {e["edge_col"] for e in COLLECTION_VERTEX_MAP[op]["edges"]}
     ]
@@ -467,14 +523,16 @@ def _ops_missing_edge(ops: list[str], edge_col: str) -> list[str]:
 def assert_all_edged_ops_include(ops: list[str], edge_col: str) -> None:
     """Assert every op with ``edges`` in its mapping declares ``edge_col``."""
     missing = _ops_missing_edge(ops, edge_col)  # WHY: single helper call keeps caller CC=1
-    assert not missing, (  # WHY: single equality-style assert on the diff list
-        f"Ops missing {edge_col!r} edge: {missing!r}"
-    )
+    assert (
+        not missing
+    ), f"Ops missing {edge_col!r} edge: {missing!r}"  # WHY: single equality-style assert on the diff list
 
 
 def assert_ops_carrying_edge_include(ops: list[str], edge_col: str, expected_op: str) -> None:
     """Assert ``expected_op`` is among the ops whose mapping registers ``edge_col``."""
     carrying = _ops_carrying_edge(ops, edge_col)  # WHY: helper pushes the loop out of the caller
-    assert expected_op in carrying, (  # WHY: single membership assertion keeps CC=1
+    assert (
+        expected_op in carrying
+    ), (  # WHY: single membership assertion keeps CC=1
         f"{expected_op!r} must carry {edge_col!r} edge; ops with edge: {carrying!r}"
     )

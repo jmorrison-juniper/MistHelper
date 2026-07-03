@@ -12,9 +12,7 @@ import pytest  # WHY: fixtures + parametrize entry points
 from src.db import DatabaseConfig  # WHY: config fixture builds a DatabaseConfig instance
 from tests.unit._test_arango_writer_helpers import (  # WHY: shared single-assert helpers keep test CC=1
     ALL_EXPECTED_EDGES,
-    EdgeCase,
     assert_all_edged_ops_include,
-    assert_edge_case,
     assert_edge_cols_include,
     assert_edge_fields,
     assert_edge_to_vertex,
@@ -45,7 +43,7 @@ def mock_arango_client():  # WHY: fixture / helper function
         mock_client.db.return_value = mock_sys_db  # WHY: prime mock return value
         mock_sys_db.has_database.return_value = True  # WHY: prime mock return value
         mock_db = MagicMock()  # WHY: create mock double for python-arango
-        mock_client.db.side_effect = lambda name, **kw: (mock_sys_db if name == "_system" else mock_db)  # WHY: prime mock side effect
+        mock_client.db.side_effect = lambda name, **kw: (mock_sys_db if name == "_system" else mock_db)  # WHY: prime mo
         yield {  # WHY: hand mock context to the test
             "client_cls": mock_cls,
             "client": mock_client,
@@ -105,7 +103,7 @@ class TestArangoDBWriterWrite:  # WHY: pytest test class
         mock_collection = MagicMock()  # WHY: create mock double for python-arango
         mock_db.create_collection.return_value = mock_collection  # WHY: prime mock return value
         mock_db.collection.return_value = mock_collection  # WHY: prime mock return value
-        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}  # WHY: prime mock return value
+        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}  # WHY: prime mock return v
 
         strategy = {"type": "natural_pk", "primary_key": ["id"]}  # WHY: write strategy under test
         data = [{"id": "uuid-1", "name": "Test"}]  # WHY: test input data
@@ -122,7 +120,7 @@ class TestArangoDBWriterWrite:  # WHY: pytest test class
         mock_collection = MagicMock()  # WHY: create mock double for python-arango
         mock_db.has_collection.return_value = True  # WHY: prime mock return value
         mock_db.collection.return_value = mock_collection  # WHY: prime mock return value
-        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}  # WHY: prime mock return value
+        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}  # WHY: prime mock return v
 
         strategy = {  # WHY: write strategy under test
             "type": "auto_increment_with_unique",
@@ -159,7 +157,7 @@ class TestArangoDBWriterWrite:  # WHY: pytest test class
         mock_collection = MagicMock()  # WHY: create mock double for python-arango
         mock_db.has_collection.return_value = True  # WHY: prime mock return value
         mock_db.collection.return_value = mock_collection  # WHY: prime mock return value
-        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}  # WHY: prime mock return value
+        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}  # WHY: prime mock return v
 
         strategy = {"type": "natural_pk", "primary_key": ["id"]}  # WHY: write strategy under test
         data = [{"id": "uuid-1"}]  # WHY: test input data
@@ -213,7 +211,7 @@ class TestArangoDBWriterSoftDelete:  # WHY: pytest test class
         mock_collection = MagicMock()  # WHY: create mock double for python-arango
         mock_db.has_collection.return_value = True  # WHY: prime mock return value
         mock_db.collection.return_value = mock_collection  # WHY: prime mock return value
-        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}  # WHY: prime mock return value
+        mock_collection.import_bulk.return_value = {"created": 1, "updated": 0, "errors": 0}  # WHY: prime mock return v
 
         strategy = {"type": "natural_pk", "primary_key": ["id"]}  # WHY: write strategy under test
         data = [{"id": "uuid-1", "_misthelper_deleted_at": 1234567890}]  # WHY: test input data
@@ -275,7 +273,7 @@ class TestArangoDBWriterSnapshot:  # WHY: pytest test class
         assert edge_doc["_to"] == "sites/site-uuid-1"  # WHY: verify expected behavior
         assert edge_doc["entity_type"] == "listOrgSites"  # WHY: verify expected behavior
 
-    def test_snapshot_skips_edge_for_unknown_entity_type(self, config, mock_arango_client):  # WHY: pytest discovers this by name
+    def test_snapshot_skips_edge_for_unknown_entity_type(self, config, mock_arango_client):  # WHY: pytest discovers thi
         from src.db.arango_writer import ArangoDBWriter  # WHY: import ArangoDBWriter symbol under test
 
         writer = ArangoDBWriter(config)  # WHY: system under test
@@ -332,13 +330,15 @@ class TestArangoDBWriterWlanGraph:  # WHY: pytest test class
         )
 
     def test_entity_type_to_vertex_mapping(self):  # WHY: pytest discovers this by name
-        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 5 asserts to CC=1
-            "listOrgSites": "sites",
-            "listOrgGatewayTemplates": "templates",
-            "listOrgRfTemplates": "templates",
-            "listSiteDevices": "devices",
-            "getOrgWlans": "wlans",
-        })
+        assert_entity_types_mapped(
+            {  # WHY: single dict-subset check collapses 5 asserts to CC=1
+                "listOrgSites": "sites",
+                "listOrgGatewayTemplates": "templates",
+                "listOrgRfTemplates": "templates",
+                "listSiteDevices": "devices",
+                "getOrgWlans": "wlans",
+            }
+        )
 
 
 class TestArangoDBWriterEdgeDefinitions:  # WHY: pytest test class
@@ -371,7 +371,7 @@ class TestArangoDBWriterEdgeKey:  # WHY: pytest test class
         key2 = writer._edge_key("orgs/abc", "sites/xyz")  # WHY: arrange test state
         assert key1 == key2  # WHY: verify expected behavior
 
-    def test_edge_key_differs_for_different_inputs(self, config, mock_arango_client):  # WHY: pytest discovers this by name
+    def test_edge_key_differs_for_different_inputs(self, config, mock_arango_client):  # WHY: pytest discovers this by n
         from src.db.arango_writer import ArangoDBWriter  # WHY: import ArangoDBWriter symbol under test
 
         writer = ArangoDBWriter(config)  # WHY: system under test
@@ -407,13 +407,13 @@ class TestResolveNestedField:  # WHY: pytest test class
         from src.db.arango_writer import ArangoDBWriter  # WHY: import ArangoDBWriter symbol under test
 
         record = {"other": "value"}  # WHY: single input record
-        assert ArangoDBWriter._resolve_nested_field(record, "matching.site_ids") is None  # WHY: verify expected behavior
+        assert ArangoDBWriter._resolve_nested_field(record, "matching.site_ids") is None  # WHY: verify expected behavio
 
     def test_missing_nested(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ArangoDBWriter  # WHY: import ArangoDBWriter symbol under test
 
         record = {"matching": {"other": "value"}}  # WHY: single input record
-        assert ArangoDBWriter._resolve_nested_field(record, "matching.site_ids") is None  # WHY: verify expected behavior
+        assert ArangoDBWriter._resolve_nested_field(record, "matching.site_ids") is None  # WHY: verify expected behavio
 
     def test_deeply_nested(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ArangoDBWriter  # WHY: import ArangoDBWriter symbol under test
@@ -425,7 +425,7 @@ class TestResolveNestedField:  # WHY: pytest test class
         from src.db.arango_writer import ArangoDBWriter  # WHY: import ArangoDBWriter symbol under test
 
         record = {"matching": "not_a_dict"}  # WHY: single input record
-        assert ArangoDBWriter._resolve_nested_field(record, "matching.site_ids") is None  # WHY: verify expected behavior
+        assert ArangoDBWriter._resolve_nested_field(record, "matching.site_ids") is None  # WHY: verify expected behavio
 
 
 class TestArangoDBWriterSanitizeKey:  # WHY: pytest test class
@@ -514,7 +514,7 @@ class TestArangoDBWriterBuildEdges:  # WHY: pytest test class
         writer = ArangoDBWriter(config)  # WHY: system under test
         mock_db = mock_arango_client["db"]  # WHY: grab mocked DB handle
         mock_db.has_collection.return_value = False  # WHY: prime mock return value
-        mock_db.create_collection.return_value = MagicMock(all=MagicMock(return_value=[]))  # WHY: prime mock return value
+        mock_db.create_collection.return_value = MagicMock(all=MagicMock(return_value=[]))  # WHY: prime mock return val
 
         data = [{"id": "site-1", "sitegroup_ids": ["sg-1", "sg-2"]}]  # WHY: test input data
         edge_config = {  # WHY: arrange test state
@@ -536,7 +536,7 @@ class TestArangoDBWriterBuildEdges:  # WHY: pytest test class
         writer = ArangoDBWriter(config)  # WHY: system under test
         mock_db = mock_arango_client["db"]  # WHY: grab mocked DB handle
         mock_db.has_collection.return_value = False  # WHY: prime mock return value
-        mock_db.create_collection.return_value = MagicMock(all=MagicMock(return_value=[]))  # WHY: prime mock return value
+        mock_db.create_collection.return_value = MagicMock(all=MagicMock(return_value=[]))  # WHY: prime mock return val
 
         data = [{"id": "wlan-1", "template_id": "tmpl-1"}]  # WHY: test input data
         edge_config = {  # WHY: arrange test state
@@ -557,7 +557,7 @@ class TestArangoDBWriterBuildEdges:  # WHY: pytest test class
         writer = ArangoDBWriter(config)  # WHY: system under test
         mock_db = mock_arango_client["db"]  # WHY: grab mocked DB handle
         mock_db.has_collection.return_value = False  # WHY: prime mock return value
-        mock_db.create_collection.return_value = MagicMock(all=MagicMock(return_value=[]))  # WHY: prime mock return value
+        mock_db.create_collection.return_value = MagicMock(all=MagicMock(return_value=[]))  # WHY: prime mock return val
 
         data = [{"id": "wlan-1"}]  # WHY: test input data
         edge_config = {  # WHY: arrange test state
@@ -667,32 +667,46 @@ class TestArangoDBWriterBackfillEdges:  # WHY: pytest test class
         assert writer is not None  # WHY: smoke check the writer initialized without raising
 
 
+_DEVICE_VERTEX_INPUT = {  # WHY: canonical device shape reused by build-vertex tests, hoisted to keep tests short
+    "id": "dev-1",
+    "name": "AP-Lobby",
+    "org_id": "org-1",
+    "site_id": "site-1",
+    "type": "ap",
+    "model": "AP45",
+    "serial": "ABC123",
+    "mac": "aa:bb:cc:dd:ee:ff",
+    "ip": "10.0.0.1",
+}
+
+_DEVICE_VERTEX_INPUT_FULL = {  # WHY: fuller API response (issue #182) hoisted to keep test bodies under length ceiling
+    **_DEVICE_VERTEX_INPUT,
+    "firmware_version": "0.14.29411",
+    "last_seen": 1700000000,
+    "lldp_stat": {"chassis_id": "aa:bb:cc"},
+    "custom_field": "extra-data",
+}
+
+
 class TestArangoDBWriterBuildVertices:  # WHY: pytest test class
     """Tests for _build_vertices."""
 
-    def test_builds_vertex_with_metadata_fields(self, config, mock_arango_client):  # WHY: pytest discovers this by name
+    def test_builds_vertex_with_metadata_fields(self, config, mock_arango_client):  # WHY: pytest discovers by name
         from src.db.arango_writer import ArangoDBWriter  # WHY: local import defers side effects to test time
 
         writer = ArangoDBWriter(config)  # WHY: fresh writer under test
-        data = [
-            {
-                "id": "dev-1", "name": "AP-Lobby", "org_id": "org-1", "site_id": "site-1",
-                "type": "ap", "model": "AP45", "serial": "ABC123",
-                "mac": "aa:bb:cc:dd:ee:ff", "ip": "10.0.0.1",
-            }
-        ]  # WHY: canonical device shape for vertex building
-        vertices = writer._build_vertices(data, "id")  # WHY: invoke the vertex builder under test
-        vertex = vertices[0] if vertices else {}  # WHY: safe access even when the builder returns empty
-        got = (
+        vertices = writer._build_vertices([_DEVICE_VERTEX_INPUT], "id")  # WHY: invoke vertex builder under test
+        vertex = vertices[0] if vertices else {}  # WHY: safe access even when builder returns empty
+        got = (  # WHY: bundle every field check into one tuple to keep CC=1
             len(vertices),
             vertex.get("_key"),
             vertex.get("name"),
             vertex.get("type"),
             vertex.get("mac"),
             "_misthelper_updated_at" in vertex,
-        )  # WHY: bundle every field check into one tuple to keep CC=1
+        )
         expected = (1, "dev-1", "AP-Lobby", "ap", "aa:bb:cc:dd:ee:ff", True)  # WHY: expected shape after building
-        assert got == expected, f"vertex build mismatch: expected {expected!r}, got {got!r}"  # WHY: single equality assertion
+        assert got == expected, f"vertex build mismatch: expected {expected!r}, got {got!r}"  # WHY: single equality
 
     def test_skips_records_missing_key_field(self, config, mock_arango_client):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ArangoDBWriter  # WHY: import ArangoDBWriter symbol under test
@@ -702,23 +716,20 @@ class TestArangoDBWriterBuildVertices:  # WHY: pytest test class
         vertices = writer._build_vertices(data, "id")  # WHY: build vertices under test
         assert len(vertices) == 0  # WHY: verify expected behavior
 
-    def test_preserves_all_api_fields(self, config, mock_arango_client):  # WHY: pytest discovers this by name
+    def test_preserves_all_api_fields(self, config, mock_arango_client):  # WHY: pytest discovers by name
         """Issue #182: vertex must contain ALL fields from API response."""
-        from src.db.arango_writer import ArangoDBWriter  # WHY: local import keeps collection-time import side effects out
+        from src.db.arango_writer import (
+            ArangoDBWriter,  # WHY: local import keeps collection-time import side effects out
+        )
 
         writer = ArangoDBWriter(config)  # WHY: fresh writer under test
-        record = {
-            "id": "dev-1", "name": "AP-Lobby", "org_id": "org-1", "site_id": "site-1",
-            "type": "ap", "model": "AP45", "serial": "ABC123",
-            "mac": "aa:bb:cc:dd:ee:ff", "ip": "10.0.0.1",
-            "firmware_version": "0.14.29411", "last_seen": 1700000000,
-            "lldp_stat": {"chassis_id": "aa:bb:cc"}, "custom_field": "extra-data",
-        }  # WHY: full API response shape including nested + custom fields
-        vertex = writer._build_vertices([record], "id")[0]  # WHY: invoke builder, take single result
-        missing_fields = set(record) - set(vertex)  # WHY: set diff surfaces any dropped field
-        preserved_values = {key: vertex.get(key) for key in ("firmware_version", "lldp_stat", "custom_field")}  # WHY: check value fidelity too
-        expected_values = {key: record[key] for key in preserved_values}  # WHY: values must round-trip verbatim
-        assert (missing_fields, preserved_values) == (set(), expected_values), (  # WHY: single tuple compare covers coverage + fidelity
+        vertex = writer._build_vertices([_DEVICE_VERTEX_INPUT_FULL], "id")[0]  # WHY: build then take single result
+        missing_fields = set(_DEVICE_VERTEX_INPUT_FULL) - set(vertex)  # WHY: set diff surfaces dropped field names
+        preserved_values = {  # WHY: check custom + nested fields round-trip verbatim
+            key: vertex.get(key) for key in ("firmware_version", "lldp_stat", "custom_field")
+        }
+        expected_values = {key: _DEVICE_VERTEX_INPUT_FULL[key] for key in preserved_values}  # WHY: expected shape
+        assert (missing_fields, preserved_values) == (set(), expected_values), (  # WHY: one tuple compare, CC=1
             f"vertex must preserve all api fields; missing={sorted(missing_fields)}, "
             f"values={preserved_values!r} vs expected={expected_values!r}"
         )
@@ -727,7 +738,7 @@ class TestArangoDBWriterBuildVertices:  # WHY: pytest test class
 class TestArangoDBWriterPopulateGraph:  # WHY: pytest test class
     """Tests for _populate_graph end-to-end with mocked collections."""
 
-    def test_populate_graph_for_unmapped_collection(self, config, mock_arango_client):  # WHY: pytest discovers this by name
+    def test_populate_graph_for_unmapped_collection(self, config, mock_arango_client):  # WHY: pytest discovers this by
         from src.db.arango_writer import ArangoDBWriter  # WHY: import ArangoDBWriter symbol under test
 
         writer = ArangoDBWriter(config)  # WHY: system under test
@@ -794,10 +805,12 @@ class TestArangoDBWriterSiteGuestGraph:  # WHY: pytest test class
         assert_edges_registered({"GuestConnectedToAP"})  # WHY: subset check keeps CC=1
 
     def test_site_guest_entity_type_mapped(self):  # WHY: pytest discovers this by name
-        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 2 asserts to CC=1
-            "listSiteAllGuestAuthorizations": "guests",
-            "searchSiteGuestAuthorization": "guests",
-        })
+        assert_entity_types_mapped(
+            {  # WHY: single dict-subset check collapses 2 asserts to CC=1
+                "listSiteAllGuestAuthorizations": "guests",
+                "searchSiteGuestAuthorization": "guests",
+            }
+        )
 
 
 class TestArangoDBWriterSiteRogueGraph:  # WHY: pytest test class
@@ -836,21 +849,25 @@ class TestArangoDBWriterSiteRogueGraph:  # WHY: pytest test class
         )
 
     def test_rogue_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        assert_edges_registered({  # WHY: single subset check collapses 6 asserts to CC=1
-            "RogueAPDetectedBySite",
-            "RogueAPDetectedByAP",
-            "RogueClientDetectedByAP",
-            "RogueClientOnBSSID",
-            "RogueEventBelongsToSite",
-            "RogueEventOnDevice",
-        })
+        assert_edges_registered(
+            {  # WHY: single subset check collapses 6 asserts to CC=1
+                "RogueAPDetectedBySite",
+                "RogueAPDetectedByAP",
+                "RogueClientDetectedByAP",
+                "RogueClientOnBSSID",
+                "RogueEventBelongsToSite",
+                "RogueEventOnDevice",
+            }
+        )
 
     def test_rogue_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 3 asserts to CC=1
-            "listSiteRogueAPs": "rogue_aps",
-            "listSiteRogueClients": "rogue_clients",
-            "searchSiteRogueEvents": "rogue_events",
-        })
+        assert_entity_types_mapped(
+            {  # WHY: single dict-subset check collapses 3 asserts to CC=1
+                "listSiteRogueAPs": "rogue_aps",
+                "listSiteRogueClients": "rogue_clients",
+                "searchSiteRogueEvents": "rogue_events",
+            }
+        )
 
 
 class TestArangoDBWriterSiteMxEdgeGraph:  # WHY: pytest test class
@@ -881,11 +898,13 @@ class TestArangoDBWriterSiteMxEdgeGraph:  # WHY: pytest test class
         assert_edges_registered({"MxEdgeBelongsToSite", "MxEdgeEventOnDevice"})  # WHY: subset check
 
     def test_mxedge_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 3 asserts to CC=1
-            "listSiteMxEdges": "devices",
-            "listSiteMxEdgesStats": "mxedge_stats",
-            "searchSiteMistEdgeEvents": "mxedge_events",
-        })
+        assert_entity_types_mapped(
+            {  # WHY: single dict-subset check collapses 3 asserts to CC=1
+                "listSiteMxEdges": "devices",
+                "listSiteMxEdgesStats": "mxedge_stats",
+                "searchSiteMistEdgeEvents": "mxedge_events",
+            }
+        )
 
     def test_mxedge_ensure_target_vertices(self):  # WHY: pytest discovers this by name
         assert_ensure_target("listSiteMxEdges", ("mxcluster_id", "mxclusters"))  # WHY: single membership check
@@ -919,20 +938,24 @@ class TestArangoDBWriterSiteAssetGraph:  # WHY: pytest test class
         assert_edge_cols_include("listSiteAssetFilters", {"AssetFilterBelongsToSite"})  # WHY: subset check
 
     def test_asset_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        assert_edges_registered({  # WHY: subset check collapses 3 asserts to CC=1
-            "AssetFilterBelongsToSite",
-            "DiscoveredAssetOnMap",
-            "AssetTrackedByAP",
-        })
+        assert_edges_registered(
+            {  # WHY: subset check collapses 3 asserts to CC=1
+                "AssetFilterBelongsToSite",
+                "DiscoveredAssetOnMap",
+                "AssetTrackedByAP",
+            }
+        )
 
     def test_asset_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 5 asserts to CC=1
-            "listSiteAssets": "assets",
-            "searchSiteAssets": "assets",
-            "listSiteAssetsStats": "assets",
-            "listSiteDiscoveredAssets": "discovered_assets",
-            "listSiteAssetFilters": "asset_filters",
-        })
+        assert_entity_types_mapped(
+            {  # WHY: single dict-subset check collapses 5 asserts to CC=1
+                "listSiteAssets": "assets",
+                "searchSiteAssets": "assets",
+                "listSiteAssetsStats": "assets",
+                "listSiteDiscoveredAssets": "discovered_assets",
+                "listSiteAssetFilters": "asset_filters",
+            }
+        )
 
     def test_site_assets_ensure_target_vertices(self):  # WHY: pytest discovers this by name
         assert_ensure_target("listSiteAssets", ("map_id", "maps"))  # WHY: single membership check
@@ -969,23 +992,27 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         assert_edge_cols_include("listSiteTroubleshootCalls", {"TroubleshootCallOnDevice"})  # WHY: subset
 
     def test_apps_calls_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        assert_edges_registered({  # WHY: subset check collapses 5 asserts to CC=1
-            "ApplicationOnSite",
-            "CallOnDevice",
-            "WanUsageOnDevice",
-            "WanUsagePeerDevice",
-            "TroubleshootCallOnDevice",
-        })
+        assert_edges_registered(
+            {  # WHY: subset check collapses 5 asserts to CC=1
+                "ApplicationOnSite",
+                "CallOnDevice",
+                "WanUsageOnDevice",
+                "WanUsagePeerDevice",
+                "TroubleshootCallOnDevice",
+            }
+        )
 
     def test_apps_calls_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 6 asserts to CC=1
-            "listSiteApps": "applications",
-            "searchSiteCalls": "calls",
-            "searchSiteWanUsage": "wan_usage",
-            "searchOrgClientFingerprints": "fingerprints",
-            "listSiteUiSettings": "ui_settings",
-            "listSiteTroubleshootCalls": "troubleshoot_calls",
-        })
+        assert_entity_types_mapped(
+            {  # WHY: single dict-subset check collapses 6 asserts to CC=1
+                "listSiteApps": "applications",
+                "searchSiteCalls": "calls",
+                "searchSiteWanUsage": "wan_usage",
+                "searchOrgClientFingerprints": "fingerprints",
+                "listSiteUiSettings": "ui_settings",
+                "listSiteTroubleshootCalls": "troubleshoot_calls",
+            }
+        )
 
     def test_apps_no_edges(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
@@ -995,7 +1022,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
     def test_fingerprints_no_edges(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
 
-        assert COLLECTION_VERTEX_MAP["searchOrgClientFingerprints"]["edges"] == []  # WHY: fingerprints are leaf vertices
+        assert COLLECTION_VERTEX_MAP["searchOrgClientFingerprints"]["edges"] == []  # WHY: fingerprints are leaf vertice
 
     def test_ui_settings_no_edges(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
@@ -1082,7 +1109,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         ]:
             edges = COLLECTION_VERTEX_MAP[endpoint]["edges"]  # WHY: look up edges under test
             edge_cols = [e["edge_col"] for e in edges]  # WHY: collect edge column names
-            assert "SLEImpactedDevice" in edge_cols, f"{endpoint} missing SLEImpactedDevice"  # WHY: verify expected behavior
+            assert "SLEImpactedDevice" in edge_cols, f"{endpoint} missing SLEImpactedDevice"  # WHY: verify expected beh
 
     def test_sle_impacted_client_edges(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: import COLLECTION_VERTEX_MAP symbol under test
@@ -1093,7 +1120,7 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         ]:
             edges = COLLECTION_VERTEX_MAP[endpoint]["edges"]  # WHY: look up edges under test
             edge_cols = [e["edge_col"] for e in edges]  # WHY: collect edge column names
-            assert "SLEImpactedClient" in edge_cols, f"{endpoint} missing SLEImpactedClient"  # WHY: verify expected behavior
+            assert "SLEImpactedClient" in edge_cols, f"{endpoint} missing SLEImpactedClient"  # WHY: verify expected beh
 
     def test_sle_impacted_application_edges(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: import COLLECTION_VERTEX_MAP symbol under test
@@ -1103,27 +1130,31 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         assert "SLEImpactedApplication" in edge_cols  # WHY: verify expected behavior
 
     def test_sle_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        assert_edges_registered({  # WHY: single subset check keeps CC=1 vs 5 asserts
-            "SLEMetricForSite",
-            "SLEImpactedDevice",
-            "SLEImpactedClient",
-            "SLEImpactedApplication",
-            "SLEImpactedBySite",
-        })
+        assert_edges_registered(
+            {  # WHY: single subset check keeps CC=1 vs 5 asserts
+                "SLEMetricForSite",
+                "SLEImpactedDevice",
+                "SLEImpactedClient",
+                "SLEImpactedApplication",
+                "SLEImpactedBySite",
+            }
+        )
 
     def test_sle_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 10 asserts to CC=1
-            "listSiteSlesMetrics": "sle_metrics",
-            "listSiteSleMetricClassifiers": "sle_classifiers",
-            "listSiteSleImpactedAps": "sle_impacted_entities",
-            "listSiteSleImpactedSwitches": "sle_impacted_entities",
-            "listSiteSleImpactedGateways": "sle_impacted_entities",
-            "listSiteSleImpactedInterfaces": "sle_impacted_entities",
-            "listSiteSleImpactedChassis": "sle_impacted_entities",
-            "listSiteSleImpactedWirelessClients": "sle_impacted_entities",
-            "listSiteSleImpactedWiredClients": "sle_impacted_entities",
-            "listSiteSleImpactedApplications": "sle_impacted_entities",
-        })
+        assert_entity_types_mapped(
+            {  # WHY: single dict-subset check collapses 10 asserts to CC=1
+                "listSiteSlesMetrics": "sle_metrics",
+                "listSiteSleMetricClassifiers": "sle_classifiers",
+                "listSiteSleImpactedAps": "sle_impacted_entities",
+                "listSiteSleImpactedSwitches": "sle_impacted_entities",
+                "listSiteSleImpactedGateways": "sle_impacted_entities",
+                "listSiteSleImpactedInterfaces": "sle_impacted_entities",
+                "listSiteSleImpactedChassis": "sle_impacted_entities",
+                "listSiteSleImpactedWirelessClients": "sle_impacted_entities",
+                "listSiteSleImpactedWiredClients": "sle_impacted_entities",
+                "listSiteSleImpactedApplications": "sle_impacted_entities",
+            }
+        )
 
 
 class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
@@ -1230,26 +1261,30 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert "RrmNeighborBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_routing_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        assert_edges_registered({  # WHY: single subset check keeps CC=1 vs 6 asserts
-            "DeviceHasBGPPeer",
-            "DeviceHasOSPFNeighbor",
-            "PortConnectsToDevice",
-            "EVPNTopologyContainsSwitch",
-            "DiscoveredSwitchBelongsToSite",
-            "RrmNeighborBelongsToSite",
-        })
+        assert_edges_registered(
+            {  # WHY: single subset check keeps CC=1 vs 6 asserts
+                "DeviceHasBGPPeer",
+                "DeviceHasOSPFNeighbor",
+                "PortConnectsToDevice",
+                "EVPNTopologyContainsSwitch",
+                "DiscoveredSwitchBelongsToSite",
+                "RrmNeighborBelongsToSite",
+            }
+        )
 
     def test_routing_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 8 asserts to CC=1
-            "searchSiteBgpStats": "bgp_stats",
-            "searchSiteOspfStats": "ospf_stats",
-            "searchSiteSwOrGwPorts": "ports",
-            "listSiteEvpnTopologies": "evpn_topologies",
-            "searchSiteDiscoveredSwitches": "discovered_switches",
-            "listSiteDiscoveredSwitchesMetrics": "discovered_switch_metrics",
-            "searchSiteDiscoveredSwitchesMetrics": "discovered_switch_metrics",
-            "listSiteCurrentRrmNeighbors": "rrm_neighbors",
-        })
+        assert_entity_types_mapped(
+            {  # WHY: single dict-subset check collapses 8 asserts to CC=1
+                "searchSiteBgpStats": "bgp_stats",
+                "searchSiteOspfStats": "ospf_stats",
+                "searchSiteSwOrGwPorts": "ports",
+                "listSiteEvpnTopologies": "evpn_topologies",
+                "searchSiteDiscoveredSwitches": "discovered_switches",
+                "listSiteDiscoveredSwitchesMetrics": "discovered_switch_metrics",
+                "searchSiteDiscoveredSwitchesMetrics": "discovered_switch_metrics",
+                "listSiteCurrentRrmNeighbors": "rrm_neighbors",
+            }
+        )
 
 
 class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
@@ -1374,32 +1409,36 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert "ZoneSessionOnMap" in edge_cols  # WHY: verify expected behavior
 
     def test_maps_zones_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        assert_edges_registered({  # WHY: single set-subset check collapses 10 asserts to CC=1
-            "MapBelongsToSite",
-            "ZoneBelongsToMap",
-            "ZoneBelongsToSite",
-            "RssiZoneBelongsToMap",
-            "BeaconOnMap",
-            "BeaconBelongsToSite",
-            "VBeaconOnMap",
-            "DeviceOnMap",
-            "ZoneSessionInZone",
-            "ZoneSessionOnMap",
-        })
+        assert_edges_registered(
+            {  # WHY: single set-subset check collapses 10 asserts to CC=1
+                "MapBelongsToSite",
+                "ZoneBelongsToMap",
+                "ZoneBelongsToSite",
+                "RssiZoneBelongsToMap",
+                "BeaconOnMap",
+                "BeaconBelongsToSite",
+                "VBeaconOnMap",
+                "DeviceOnMap",
+                "ZoneSessionInZone",
+                "ZoneSessionOnMap",
+            }
+        )
 
     def test_maps_zones_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 10 asserts to CC=1
-            "listSiteMaps": "maps",
-            "getSiteMap": "maps",
-            "listSiteMapStacks": "map_stacks",
-            "listSiteZones": "zones",
-            "listSiteZonesStats": "zone_stats",
-            "listSiteRssiZones": "rssizones",
-            "listSiteRssiZonesStats": "rssizone_stats",
-            "listSiteBeacons": "beacons",
-            "listSiteVBeacons": "vbeacons",
-            "searchSiteZoneSessions": "zone_sessions",
-        })
+        assert_entity_types_mapped(
+            {  # WHY: single dict-subset check collapses 10 asserts to CC=1
+                "listSiteMaps": "maps",
+                "getSiteMap": "maps",
+                "listSiteMapStacks": "map_stacks",
+                "listSiteZones": "zones",
+                "listSiteZonesStats": "zone_stats",
+                "listSiteRssiZones": "rssizones",
+                "listSiteRssiZonesStats": "rssizone_stats",
+                "listSiteBeacons": "beacons",
+                "listSiteVBeacons": "vbeacons",
+                "searchSiteZoneSessions": "zone_sessions",
+            }
+        )
 
 
 class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
@@ -1533,30 +1572,34 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert "AnomalyEventBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_events_alarms_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        assert_edges_registered({  # WHY: single set-subset check collapses 9 asserts to CC=1
-            "ServicePathEventOnDevice",
-            "ServicePathEventUsesVPN",
-            "ServicePathEventBelongsToSite",
-            "SkyatpEventBelongsToSite",
-            "RoamingEventBelongsToSite",
-            "RoamingEventOnDevice",
-            "RrmEventBelongsToSite",
-            "RrmEventOnDevice",
-            "AnomalyEventBelongsToSite",
-        })
+        assert_edges_registered(
+            {  # WHY: single set-subset check collapses 9 asserts to CC=1
+                "ServicePathEventOnDevice",
+                "ServicePathEventUsesVPN",
+                "ServicePathEventBelongsToSite",
+                "SkyatpEventBelongsToSite",
+                "RoamingEventBelongsToSite",
+                "RoamingEventOnDevice",
+                "RrmEventBelongsToSite",
+                "RrmEventOnDevice",
+                "AnomalyEventBelongsToSite",
+            }
+        )
 
     def test_events_alarms_entity_types_mapped(self):  # WHY: pytest discovers this by name
-        assert_entity_types_mapped({  # WHY: single dict-subset check collapses 9 asserts to CC=1
-            "searchSiteAlarms": "alarms",
-            "searchSiteDeviceEvents": "events",
-            "searchSiteSystemEvents": "system_events",
-            "searchSiteOtherDeviceEvents": "other_events",
-            "searchSiteSkyatpEvents": "skyatp_events",
-            "searchSiteServicePathEvents": "service_path_events",
-            "listSiteRoamingEvents": "roaming_events",
-            "listSiteRrmEvents": "rrm_events",
-            "listSiteAnomalyEvents": "anomaly_events",
-        })
+        assert_entity_types_mapped(
+            {  # WHY: single dict-subset check collapses 9 asserts to CC=1
+                "searchSiteAlarms": "alarms",
+                "searchSiteDeviceEvents": "events",
+                "searchSiteSystemEvents": "system_events",
+                "searchSiteOtherDeviceEvents": "other_events",
+                "searchSiteSkyatpEvents": "skyatp_events",
+                "searchSiteServicePathEvents": "service_path_events",
+                "listSiteRoamingEvents": "roaming_events",
+                "listSiteRrmEvents": "rrm_events",
+                "listSiteAnomalyEvents": "anomaly_events",
+            }
+        )
 
     def test_service_path_ensure_target_vertices(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: import COLLECTION_VERTEX_MAP symbol under test
@@ -1572,7 +1615,7 @@ class TestConfigHistorySyntheticTestGraphStorage:  # WHY: pytest test class
     def test_config_history_entity_type(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
-        assert ENTITY_TYPE_TO_VERTEX["searchSiteDeviceConfigHistory"] == "config_history"  # WHY: verify expected behavior
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteDeviceConfigHistory"] == "config_history"  # WHY: verify expected behavi
 
     def test_last_configs_entity_type(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
@@ -1587,7 +1630,7 @@ class TestConfigHistorySyntheticTestGraphStorage:  # WHY: pytest test class
     def test_webhook_deliveries_entity_type(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
-        assert ENTITY_TYPE_TO_VERTEX["searchSiteWebhooksDeliveries"] == "webhook_deliveries"  # WHY: verify expected behavior
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteWebhooksDeliveries"] == "webhook_deliveries"  # WHY: verify expected beh
 
     def test_packet_captures_entity_type(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
@@ -1641,12 +1684,14 @@ class TestConfigHistorySyntheticTestGraphStorage:  # WHY: pytest test class
         assert "PacketCaptureBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        assert_edges_registered({  # WHY: single subset check keeps CC=1 vs 4 asserts
-            "ConfigHistoryForDevice",
-            "SyntheticTestOnDevice",
-            "WebhookDeliveryFromWebhook",
-            "PacketCaptureOnDevice",
-        })
+        assert_edges_registered(
+            {  # WHY: single subset check keeps CC=1 vs 4 asserts
+                "ConfigHistoryForDevice",
+                "SyntheticTestOnDevice",
+                "WebhookDeliveryFromWebhook",
+                "PacketCaptureOnDevice",
+            }
+        )
 
 
 class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
@@ -1741,12 +1786,14 @@ class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
         assert "WxTunnelBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        assert_edges_registered({  # WHY: single subset check keeps CC=1 vs 4 asserts
-            "WxRuleBelongsToSite",
-            "WxTagBelongsToSite",
-            "WxTunnelBelongsToSite",
-            "WlanUsesWxTunnel",
-        })
+        assert_edges_registered(
+            {  # WHY: single subset check keeps CC=1 vs 4 asserts
+                "WxRuleBelongsToSite",
+                "WxTagBelongsToSite",
+                "WxTunnelBelongsToSite",
+                "WlanUsesWxTunnel",
+            }
+        )
 
 
 class TestSiteClientsGraphStorage:  # WHY: pytest test class
@@ -1780,12 +1827,12 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
     def test_wireless_client_events_entity_type(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
-        assert ENTITY_TYPE_TO_VERTEX["searchSiteWirelessClientEvents"] == "client_events"  # WHY: verify expected behavior
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteWirelessClientEvents"] == "client_events"  # WHY: verify expected behavi
 
     def test_wireless_client_sessions_entity_type(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
-        assert ENTITY_TYPE_TO_VERTEX["searchSiteWirelessClientSessions"] == "client_sessions"  # WHY: verify expected behavior
+        assert ENTITY_TYPE_TO_VERTEX["searchSiteWirelessClientSessions"] == "client_sessions"  # WHY: verify expected be
 
     def test_wan_client_events_entity_type(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
@@ -1800,7 +1847,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
     def test_unconnected_clients_entity_type(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ENTITY_TYPE_TO_VERTEX  # WHY: import ENTITY_TYPE_TO_VERTEX symbol under test
 
-        assert ENTITY_TYPE_TO_VERTEX["listSiteUnconnectedClientStats"] == "unconnected_clients"  # WHY: verify expected behavior
+        assert ENTITY_TYPE_TO_VERTEX["listSiteUnconnectedClientStats"] == "unconnected_clients"  # WHY: verify expected
 
     def test_wireless_clients_edges(self):  # WHY: pytest discovers this by name
         assert_vertex_config("searchSiteWirelessClients", "clients", "mac")  # WHY: vertex+key check in one call
@@ -1811,7 +1858,7 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
 
     def test_wired_clients_edges(self):  # WHY: pytest discovers this by name
         assert_vertex_config("searchSiteWiredClients", "clients", "mac")  # WHY: vertex+key check in one call
-        assert_edge_cols_include("searchSiteWiredClients", {"ClientConnectedToDevice", "ClientBelongsToSite"})  # WHY: subset check
+        assert_edge_cols_include("searchSiteWiredClients", {"ClientConnectedToDevice", "ClientBelongsToSite"})  # WHY: s
 
     def test_wan_clients_edges(self):  # WHY: pytest discovers this by name
         assert_vertex_config("searchSiteWanClients", "clients", "mac")  # WHY: vertex+key check in one call
@@ -1863,13 +1910,15 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_edge_definitions_registered(self):  # WHY: pytest discovers this by name
-        assert_edges_registered({  # WHY: single subset check covers 5 asserts
-            "ClientUsedPSK",
-            "ClientMatchedNACRule",
-            "ClientEventForClient",
-            "UnconnectedClientOnMap",
-            "UnconnectedClientDetectedByAP",
-        })
+        assert_edges_registered(
+            {  # WHY: single subset check covers 5 asserts
+                "ClientUsedPSK",
+                "ClientMatchedNACRule",
+                "ClientEventForClient",
+                "UnconnectedClientOnMap",
+                "UnconnectedClientDetectedByAP",
+            }
+        )
 
 
 class TestSiteDevicesGraphStorage:  # WHY: pytest test class
@@ -2006,7 +2055,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
         from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
         mapping = COLLECTION_VERTEX_MAP["listSiteSpectrumAnalysis"]  # WHY: look up schema mapping
-        spectrum_edge = next(e for e in mapping["edges"] if e["edge_col"] == "SpectrumAnalysisForDevice")  # WHY: arrange test state
+        spectrum_edge = next(e for e in mapping["edges"] if e["edge_col"] == "SpectrumAnalysisForDevice")  # WHY: arrang
         assert spectrum_edge["to_key_lookup"] == "mac"  # WHY: verify expected behavior
 
     def test_list_site_device_radio_channels(self):  # WHY: pytest discovers this by name
@@ -2034,7 +2083,7 @@ class TestSiteDevicesGraphStorage:  # WHY: pytest test class
     def test_spectrum_analysis_edge_structure(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import EDGE_DEFINITIONS  # WHY: import EDGE_DEFINITIONS symbol under test
 
-        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "SpectrumAnalysisForDevice")  # WHY: look up edge under test
+        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "SpectrumAnalysisForDevice")  # WHY: look up
         assert edge["from_vertex_collections"] == ["spectrum_analysis"]  # WHY: verify expected behavior
         assert edge["to_vertex_collections"] == ["devices"]  # WHY: verify expected behavior
 
@@ -2106,7 +2155,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: import COLLECTION_VERTEX_MAP symbol under test
 
         for op in self.DERIVED_OPS:  # WHY: iterate over ops
-            assert op in COLLECTION_VERTEX_MAP, f"{op} missing from COLLECTION_VERTEX_MAP"  # WHY: verify expected behavior
+            assert op in COLLECTION_VERTEX_MAP, f"{op} missing from COLLECTION_VERTEX_MAP"  # WHY: verify expected behav
 
     def test_wlans_derived_vertex(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: import COLLECTION_VERTEX_MAP symbol under test
@@ -2191,7 +2240,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
     def test_derived_config_for_site_structure(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import EDGE_DEFINITIONS  # WHY: schema source of truth for edge shapes
 
-        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "DerivedConfigForSite")  # WHY: locate one edge
+        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "DerivedConfigForSite")  # WHY: locate one ed
         got = (  # WHY: bundle the two sides into one comparable tuple to keep CC=1
             "sites" in edge["to_vertex_collections"],
             {"wlans", "networks", "security_policies"} <= set(edge["from_vertex_collections"]),
@@ -2201,7 +2250,7 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
     def test_derived_from_template_structure(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import EDGE_DEFINITIONS  # WHY: import EDGE_DEFINITIONS symbol under test
 
-        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "DerivedFromTemplate")  # WHY: look up edge under test
+        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "DerivedFromTemplate")  # WHY: look up edge u
         assert "templates" in edge["to_vertex_collections"]  # WHY: verify expected behavior
         assert "wlans" in edge["from_vertex_collections"]  # WHY: verify expected behavior
 
@@ -2209,12 +2258,12 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert_all_edged_ops_include(self.DERIVED_OPS, "DerivedConfigForSite")  # WHY: single helper call keeps CC=1
 
     def test_only_wlans_has_derived_from_template(self):  # WHY: pytest discovers this by name
-        assert_ops_carrying_edge_include(self.DERIVED_OPS, "DerivedFromTemplate", "listSiteWlansDerived")  # WHY: single helper call
+        assert_ops_carrying_edge_include(self.DERIVED_OPS, "DerivedFromTemplate", "listSiteWlansDerived")  # WHY: single
 
     def test_new_vertex_collections_in_edge_defs(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import EDGE_DEFINITIONS  # WHY: import EDGE_DEFINITIONS symbol under test
 
-        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "DerivedConfigForSite")  # WHY: look up edge under test
+        edge = next(e for e in EDGE_DEFINITIONS if e["edge_collection"] == "DerivedConfigForSite")  # WHY: look up edge
         from_cols = set(edge["from_vertex_collections"])  # WHY: arrange test state
         expected_new = {  # WHY: arrange test state
             "ui_settings",
