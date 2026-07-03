@@ -32,48 +32,56 @@ class InputUtils:
         allow_empty: bool = True,
         context: str = "unknown",
     ) -> str:
-        """Safely handle user input with proper EOF and KeyboardInterrupt handling.
-
-        Args:
-            prompt: The prompt message to display.
-            default_value: Value to return if user provides empty input or EOF.
-            allow_empty: Whether to allow empty input (only applies when no default).
-            context: Context description for logging.
-
-        Returns:
-            User input, default_value on EOF/empty, or empty string on interrupt.
-        """
+        """Return trimmed user input, degrading to ``default_value`` on EOF/empty."""
         logging.debug("safe_input entered (context=%s)", context)  # Action-log entry per project rule.
         try:
             user_input = input(
                 prompt
             ).strip()  # noqa: STRUCT-PARAMS  # bare input() OK here -- this IS the safe wrapper.
-            if not user_input and default_value:  # Blank entry but a default is configured.
-                logging.debug(  # Action-log the default substitution for traceability.
-                    "Empty input for %s, using default: '%s'", context, default_value
-                )
-                return default_value  # Return the caller-supplied default verbatim.
-            if not user_input and allow_empty:  # Blank entry is acceptable here.
-                logging.debug("Empty input for %s allowed by caller", context)  # Action-log no-op return.
-                return user_input  # Return the empty string as-is.
-            if not user_input and not allow_empty:  # Blank entry rejected AND no default.
-                logging.warning(  # Warn so operator sees that an empty answer is not OK here.
-                    "Empty input not allowed for %s, returning empty string", context
-                )
-                return ""  # Signal invalid/empty response to the caller.
-            logging.debug("safe_input returned non-empty value (context=%s)", context)  # Action-log normal path.
-            return user_input  # Normal path: return the trimmed user response.
         except EOFError:  # Stream closed (Ctrl+D, broken pipe, SSH disconnect).
-            print(  # Notify operator at the terminal before degrading gracefully.
-                f"\n[EOF] Input stream closed during {context}. " f"Using default value: '{default_value}'"
-            )
-            logging.info(  # Action-log the disconnect with the substituted default.
-                "EOF encountered on input during %s - returning default: '%s'",
-                context,
-                default_value,
-            )
-            return default_value  # Degrade gracefully to the default instead of crashing.
+            return InputUtils._handle_eof(context, default_value)  # Degrade gracefully to the default.
         except KeyboardInterrupt:  # Operator pressed Ctrl+C to abort the prompt.
-            print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")  # Acknowledge cancellation.
-            logging.info("KeyboardInterrupt encountered during %s", context)  # Action-log the interrupt.
-            return ""  # Return empty so the caller can detect the abort.
+            return InputUtils._handle_interrupt(context)  # Acknowledge cancellation to caller.
+        if not user_input:  # Blank entry -- dispatch to the empty-value resolver.
+            return InputUtils._handle_empty(default_value, allow_empty, context)  # Return default/empty per policy.
+        logging.debug("safe_input returned non-empty value (context=%s)", context)  # Action-log normal path.
+        return user_input  # Normal path: return the trimmed user response.
+
+    @staticmethod
+    def _handle_empty(default_value: str, allow_empty: bool, context: str) -> str:
+        """Resolve the empty-input case per default/allow_empty policy."""
+        # WHY: extracted to keep safe_input CC<=5 and length<=25 lines.
+        if default_value:  # Blank entry but a default is configured.
+            logging.debug(  # Action-log the default substitution for traceability.
+                "Empty input for %s, using default: '%s'", context, default_value
+            )
+            return default_value  # Return the caller-supplied default verbatim.
+        if allow_empty:  # Blank entry is acceptable here.
+            logging.debug("Empty input for %s allowed by caller", context)  # Action-log no-op return.
+            return ""  # Return the empty string as-is.
+        logging.warning(  # Warn so operator sees that an empty answer is not OK here.
+            "Empty input not allowed for %s, returning empty string", context
+        )
+        return ""  # Signal invalid/empty response to the caller.
+
+    @staticmethod
+    def _handle_eof(context: str, default_value: str) -> str:
+        """Handle a closed input stream by degrading to ``default_value``."""
+        # WHY: extracted to keep safe_input CC<=5 and length<=25 lines.
+        print(  # Notify operator at the terminal before degrading gracefully.
+            f"\n[EOF] Input stream closed during {context}. " f"Using default value: '{default_value}'"
+        )
+        logging.info(  # Action-log the disconnect with the substituted default.
+            "EOF encountered on input during %s - returning default: '%s'",
+            context,
+            default_value,
+        )
+        return default_value  # Degrade gracefully to the default instead of crashing.
+
+    @staticmethod
+    def _handle_interrupt(context: str) -> str:
+        """Handle a Ctrl+C interrupt by returning an empty sentinel."""
+        # WHY: extracted to keep safe_input CC<=5 and length<=25 lines.
+        print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")  # Acknowledge cancellation.
+        logging.info("KeyboardInterrupt encountered during %s", context)  # Action-log the interrupt.
+        return ""  # Return empty so the caller can detect the abort.
