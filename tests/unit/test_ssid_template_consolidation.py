@@ -23,81 +23,85 @@ import pytest
 # Mock mistapi before importing the module under test
 # ---------------------------------------------------------------------------
 _mock_mistapi = MagicMock()
-with patch.dict(
-    sys.modules,
-    {
-        "mistapi": _mock_mistapi,
-        "mistapi.api": MagicMock(),
-        "mistapi.api.v1": MagicMock(),
-        "mistapi.api.v1.orgs": MagicMock(),
-        "mistapi.api.v1.orgs.templates": MagicMock(),
-        "mistapi.api.v1.orgs.wlans": MagicMock(),
-        "mistapi.api.v1.orgs.sites": MagicMock(),
-        "mistapi.api.v1.orgs.mxtunnels": MagicMock(),
-        "mistapi.api.v1.orgs.sitegroups": MagicMock(),
-        "mistapi.api.v1.sites": MagicMock(),
-        "mistapi.api.v1.sites.sites": MagicMock(),
-        "mistapi.get_all": MagicMock(),
-    },
-):
-    import src.ssid_consolidation.ssid_template_consolidation as _mod
-    from src.ssid_consolidation.ssid_template_consolidation import (
-        SSIDTemplateConsolidationManager,
-        SsidTemplateDeps,
-        _add_pilot_group,
-        _append_drift_record,
-        _append_ssid_to_template,
-        _assign_matrix_sites,
-        _build_all_template_configs,
-        _build_cluster_groups,
-        _build_deviation_record,
-        _build_disable_base,
-        _build_disable_plan,
-        _build_mxtunnel_lookup,
-        _build_site_row,
-        _build_sitegroup_lookup,
-        _build_skip_entry,
-        _build_template_config,
-        _build_template_lookup,
-        _build_variable_entry,
-        _cache_age_minutes,
-        _check_cache_exists,
-        _check_prerequisite_for_all,
-        _classify_disable_entry,
-        _classify_site,
-        _collect_comparison_keys,
-        _collect_group_wlan_configs,
-        _collect_key_values,
-        _compute_group_plan,
-        _compute_variable_plan,
-        _create_new_template,
-        _create_site_group,
-        _detect_cross_cluster_drift,
-        _determine_target_group,
-        _display_disable_plan,
-        _display_group_plan,
-        _display_template_plan,
-        _display_variable_summary,
-        _extract_deviation_params,
-        _find_representative,
-        _find_target_wlan,
-        _get_cached_site_vars,
-        _get_existing_group_site_ids,
-        _get_template_wlans,
-        _group_by_target,
-        _group_entries_by_site,
-        _handle_completed_resume,
-        _handle_existing_non_misthelper,
-        _handle_partial_resume,
-        _load_group_plan_from_results,
-        _populate_from_representative,
-        _print_conflicts,
-        _print_phase1_summary,
-        _print_phase_summary,
-        _resolve_template,
-        _set_ssid_disabled,
-        _template_result,
-    )
+# WHY: install mistapi mocks permanently in sys.modules so that any lazy
+# re-imports triggered by cluster methods (e.g. `from .ssid_template_consolidation
+# import _disable_single_ssid` inside _SsidTemplatePhase45Cluster) resolve the
+# same mocked mistapi.  A `with patch.dict(...)` block would REMOVE the fake
+# entries on exit, and the ssid_consolidation package itself, causing lazy
+# imports to trigger a real re-import with the real mistapi bound in globals.
+sys.modules["mistapi"] = _mock_mistapi
+sys.modules["mistapi.api"] = MagicMock()
+sys.modules["mistapi.api.v1"] = MagicMock()
+sys.modules["mistapi.api.v1.orgs"] = MagicMock()
+sys.modules["mistapi.api.v1.orgs.templates"] = MagicMock()
+sys.modules["mistapi.api.v1.orgs.wlans"] = MagicMock()
+sys.modules["mistapi.api.v1.orgs.sites"] = MagicMock()
+sys.modules["mistapi.api.v1.orgs.mxtunnels"] = MagicMock()
+sys.modules["mistapi.api.v1.orgs.sitegroups"] = MagicMock()
+sys.modules["mistapi.api.v1.sites"] = MagicMock()
+sys.modules["mistapi.api.v1.sites.sites"] = MagicMock()
+sys.modules["mistapi.get_all"] = MagicMock()
+
+import src.ssid_consolidation.ssid_template_consolidation as _mod  # noqa: E402
+from src.ssid_consolidation.ssid_template_consolidation import (  # noqa: E402
+    SSIDTemplateConsolidationManager,
+    SsidTemplateDeps,
+    TemplateOpParams,
+    TemplateOutcome,
+    _add_pilot_group,
+    _append_drift_record,
+    _append_ssid_to_template,
+    _assign_matrix_sites,
+    _build_all_template_configs,
+    _build_cluster_groups,
+    _build_deviation_record,
+    _build_disable_base,
+    _build_disable_plan,
+    _build_mxtunnel_lookup,
+    _build_site_row,
+    _build_sitegroup_lookup,
+    _build_skip_entry,
+    _build_template_config,
+    _build_template_lookup,
+    _build_variable_entry,
+    _cache_age_minutes,
+    _check_cache_exists,
+    _check_prerequisite_for_all,
+    _classify_disable_entry,
+    _classify_site,
+    _collect_comparison_keys,
+    _collect_group_wlan_configs,
+    _collect_key_values,
+    _compute_group_plan,
+    _compute_variable_plan,
+    _create_new_template,
+    _create_site_group,
+    _detect_cross_cluster_drift,
+    _determine_target_group,
+    _display_disable_plan,
+    _display_group_plan,
+    _display_template_plan,
+    _display_variable_summary,
+    _extract_deviation_params,
+    _find_representative,
+    _find_target_wlan,
+    _get_cached_site_vars,
+    _get_existing_group_site_ids,
+    _get_template_wlans,
+    _group_by_target,
+    _group_entries_by_site,
+    _handle_completed_resume,
+    _handle_existing_non_misthelper,
+    _handle_partial_resume,
+    _load_group_plan_from_results,
+    _populate_from_representative,
+    _print_conflicts,
+    _print_phase1_summary,
+    _print_phase_summary,
+    _resolve_template,
+    _set_ssid_disabled,
+    _template_result,
+)
 
 
 # ===================================================================
@@ -1100,14 +1104,18 @@ class TestDisablePlanHelpers:
         assert _set_ssid_disabled(wlans, "w999") is False
 
     def test_template_result(self) -> None:
-        result = _template_result(
-            name="T1",
-            template_id="t1",
+        params = TemplateOpParams(
+            template_name="T1",
+            wlan_config={},
             group_info={"group_name": "G1", "cluster_name": "East"},
-            action="created",
-            error="",
             timestamp="2025-01-01T00:00:00",
+            target_ssid="",
+            org_id="",
+            apisession=MagicMock(),
+            safe_input_fn=MagicMock(),
         )
+        outcome = TemplateOutcome(template_id="t1", action="created")
+        result = _template_result(params, outcome)
         assert result["action"] == "created"
 
 
@@ -1176,16 +1184,17 @@ class TestTemplateCreation:
                 return_value=mock_resp,
             ),
         ):
-            result = _append_ssid_to_template(
-                existing,
-                {"ssid": "Corp", "enabled": True},
-                "T1",
-                group_info,
-                "2025-01-01T00:00:00",
-                "Corp",
-                "org-1",
-                session,
+            params = TemplateOpParams(
+                template_name="T1",
+                wlan_config={"ssid": "Corp", "enabled": True},
+                group_info=group_info,
+                timestamp="2025-01-01T00:00:00",
+                target_ssid="Corp",
+                org_id="org-1",
+                apisession=session,
+                safe_input_fn=MagicMock(),
             )
+            result = _append_ssid_to_template(params, existing)
         assert result is not None
         assert result["action"] == "updated_append"
 
@@ -1200,15 +1209,17 @@ class TestTemplateCreation:
             "createOrgTemplate",
             return_value=mock_resp,
         ):
-            result = _create_new_template(
-                "T-New",
-                {"ssid": "Corp", "enabled": True},
-                "g1",
-                group_info,
-                "2025-01-01T00:00:00",
-                "org-1",
-                session,
+            params = TemplateOpParams(
+                template_name="T-New",
+                wlan_config={"ssid": "Corp", "enabled": True},
+                group_info=group_info,
+                timestamp="2025-01-01T00:00:00",
+                target_ssid="Corp",
+                org_id="org-1",
+                apisession=session,
+                safe_input_fn=MagicMock(),
             )
+            result = _create_new_template(params)
         assert result is not None
         assert result["action"] == "created"
 
@@ -1697,16 +1708,17 @@ class TestCreateOrUpdateSingleTemplate:
             "createOrgTemplate",
             return_value=mock_resp,
         ):
-            result = _create_or_update_single_template(
-                "misthelper_East_Corp",
-                {"ssid": "Corp", "enabled": True},
-                {"group_id": "g1", "cluster_name": "East"},
-                {},
-                "Corp",
-                "org-1",
-                MagicMock(),
-                MagicMock(),
+            params = TemplateOpParams(
+                template_name="misthelper_East_Corp",
+                wlan_config={"ssid": "Corp", "enabled": True},
+                group_info={"group_id": "g1", "cluster_name": "East"},
+                timestamp="2025-01-01T00:00:00",
+                target_ssid="Corp",
+                org_id="org-1",
+                apisession=MagicMock(),
+                safe_input_fn=MagicMock(),
             )
+            result = _create_or_update_single_template(params, {})
         assert result["action"] == "created"
 
     def test_updates_existing_misthelper(self) -> None:
@@ -1731,45 +1743,51 @@ class TestCreateOrUpdateSingleTemplate:
                 return_value=mock_update,
             ),
         ):
+            params = TemplateOpParams(
+                template_name="misthelper_East_Corp",
+                wlan_config={"ssid": "Corp", "enabled": True},
+                group_info={"group_id": "g1", "cluster_name": "East"},
+                timestamp="2025-01-01T00:00:00",
+                target_ssid="Corp",
+                org_id="org-1",
+                apisession=MagicMock(),
+                safe_input_fn=MagicMock(),
+            )
             result = _create_or_update_single_template(
-                "misthelper_East_Corp",
-                {"ssid": "Corp", "enabled": True},
-                {"group_id": "g1", "cluster_name": "East"},
+                params,
                 {"misthelper_East_Corp": existing},
-                "Corp",
-                "org-1",
-                MagicMock(),
-                MagicMock(),
             )
         assert result["action"] == "updated_append"
 
     def test_existing_non_misthelper_skip(self) -> None:
         mock_input = MagicMock(return_value="n")
-        result = _handle_existing_non_misthelper(
-            "manual_template",
-            {"ssid": "Corp"},
-            "g1",
-            {"group_id": "g1", "cluster_name": "East"},
-            "2025-01-01T00:00:00",
-            "org-1",
-            MagicMock(),
-            mock_input,
+        params = TemplateOpParams(
+            template_name="manual_template",
+            wlan_config={"ssid": "Corp"},
+            group_info={"group_id": "g1", "cluster_name": "East"},
+            timestamp="2025-01-01T00:00:00",
+            target_ssid="Corp",
+            org_id="org-1",
+            apisession=MagicMock(),
+            safe_input_fn=mock_input,
         )
+        result = _handle_existing_non_misthelper(params)
         assert result["action"] == "skipped"
 
     def test_handles_exception(self) -> None:
         with patch.object(_mod, "mistapi") as mock_api:
             mock_api.api.v1.orgs.templates.createOrgTemplate.side_effect = RuntimeError("API boom")
-            result = _mod._create_or_update_single_template(
-                "misthelper_East_Corp",
-                {"ssid": "Corp"},
-                {"group_id": "g1", "cluster_name": "East"},
-                {},
-                "Corp",
-                "org-1",
-                MagicMock(),
-                MagicMock(),
+            params = TemplateOpParams(
+                template_name="misthelper_East_Corp",
+                wlan_config={"ssid": "Corp"},
+                group_info={"group_id": "g1", "cluster_name": "East"},
+                timestamp="2025-01-01T00:00:00",
+                target_ssid="Corp",
+                org_id="org-1",
+                apisession=MagicMock(),
+                safe_input_fn=MagicMock(),
             )
+            result = _mod._create_or_update_single_template(params, {})
         assert result["action"] == "failed"
 
 
@@ -1778,16 +1796,17 @@ class TestHandleExistingNonMisthelper:
 
     def test_user_declines(self) -> None:
         mock_input = MagicMock(return_value="n")
-        result = _handle_existing_non_misthelper(
-            "OldTemplate",
-            {"ssid": "Corp"},
-            "g1",
-            {"group_id": "g1", "cluster_name": "East"},
-            "2025-01-01T00:00:00",
-            "org-1",
-            MagicMock(),
-            mock_input,
+        params = TemplateOpParams(
+            template_name="OldTemplate",
+            wlan_config={"ssid": "Corp"},
+            group_info={"group_id": "g1", "cluster_name": "East"},
+            timestamp="2025-01-01T00:00:00",
+            target_ssid="Corp",
+            org_id="org-1",
+            apisession=MagicMock(),
+            safe_input_fn=mock_input,
         )
+        result = _handle_existing_non_misthelper(params)
         assert result["action"] == "skipped"
 
     def test_user_accepts(self) -> None:
@@ -1799,16 +1818,17 @@ class TestHandleExistingNonMisthelper:
             "createOrgTemplate",
             return_value=mock_resp,
         ):
-            result = _handle_existing_non_misthelper(
-                "OldTemplate",
-                {"ssid": "Corp"},
-                "g1",
-                {"group_id": "g1", "cluster_name": "East"},
-                "2025-01-01T00:00:00",
-                "org-1",
-                MagicMock(),
-                mock_input,
+            params = TemplateOpParams(
+                template_name="OldTemplate",
+                wlan_config={"ssid": "Corp"},
+                group_info={"group_id": "g1", "cluster_name": "East"},
+                timestamp="2025-01-01T00:00:00",
+                target_ssid="Corp",
+                org_id="org-1",
+                apisession=MagicMock(),
+                safe_input_fn=mock_input,
             )
+            result = _handle_existing_non_misthelper(params)
         assert result["action"] == "created"
 
 
@@ -2091,17 +2111,8 @@ class TestDisableSsids:
         ]
         mock_get = MagicMock()
         mock_get.data = {"wlans": [{"id": "w1", "enabled": True}]}
-        with (
-            patch.object(
-                _mod.mistapi.api.v1.orgs.templates,
-                "getOrgTemplate",
-                return_value=mock_get,
-            ),
-            patch.object(
-                _mod.mistapi.api.v1.orgs.templates,
-                "updateOrgTemplate",
-            ),
-        ):
+        with patch.object(_mod, "mistapi") as mock_api:
+            mock_api.api.v1.orgs.templates.getOrgTemplate.return_value = mock_get
             results = mgr._disable_ssids(plan, [])
         assert len(results) == 1
         assert results[0]["status"] == "disabled"
@@ -2252,16 +2263,17 @@ class TestTemplateCreationExtra:
                 data={"id": "t1", "wlans": [{"ssid": "Guest"}]},
             )
             tmpl_mod.updateOrgTemplate.return_value = mock_resp
-            result = _append_ssid_to_template(
-                existing,
-                config,
-                "T1",
-                group_info,
-                "2025-01-01T00:00:00",
-                "Corp",
-                "org-1",
-                session,
+            params = TemplateOpParams(
+                template_name="T1",
+                wlan_config=config,
+                group_info=group_info,
+                timestamp="2025-01-01T00:00:00",
+                target_ssid="Corp",
+                org_id="org-1",
+                apisession=session,
+                safe_input_fn=MagicMock(),
             )
+            result = _append_ssid_to_template(params, existing)
         assert result is not None
         assert result["action"] == "updated_append"
 
@@ -2276,15 +2288,17 @@ class TestTemplateCreationExtra:
             import mistapi.api.v1.orgs.templates as tmpl_mod
 
             tmpl_mod.createOrgTemplate.return_value = mock_resp
-            result = _create_new_template(
-                "T-New",
-                config,
-                "g1",
-                group_info,
-                "2025-01-01T00:00:00",
-                "org-1",
-                session,
+            params = TemplateOpParams(
+                template_name="T-New",
+                wlan_config=config,
+                group_info=group_info,
+                timestamp="2025-01-01T00:00:00",
+                target_ssid="Corp",
+                org_id="org-1",
+                apisession=session,
+                safe_input_fn=MagicMock(),
             )
+            result = _create_new_template(params)
         assert result is not None
         assert result["action"] == "created"
 

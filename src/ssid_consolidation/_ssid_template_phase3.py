@@ -211,8 +211,11 @@ class _SsidTemplatePhase3Cluster(_ClusterBase):
             filename_or_table="ssid_consolidation_site_groups",
             api_function_name="ssidConsolidationSiteGroups",
         )
-        # WHY: parent still owns the shared summary helper — proxy through it.
-        from .ssid_template_consolidation import _print_phase_summary  # noqa: PLC0415 — local import breaks cycle
+        # WHY: phase45 owns the shared summary helper — import directly to avoid
+        # routing through the parent module (mypy [attr-defined] on re-export).
+        from ._ssid_template_phase45 import (
+            _print_phase_summary,  # noqa: PLC0415 — local import keeps import graph shallow
+        )
 
         _print_phase_summary("Phase 3", results)
 

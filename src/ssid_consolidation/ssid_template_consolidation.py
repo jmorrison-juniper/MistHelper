@@ -11,7 +11,6 @@ Extracted from MistHelper.py for maintainability.
 
 from __future__ import annotations  # WHY: postponed evaluation of forward-referenced deps type
 
-import json  # WHY: JSON is the persistence format for cache + phase results
 import logging  # WHY: workflow telemetry across all 5 phases
 import os  # WHY: file existence checks + path composition
 import re  # WHY: pilot-site regex pattern is a class constant
@@ -73,6 +72,94 @@ from ._ssid_template_phase3 import (  # WHY: re-export phase 3 helpers reference
     _get_existing_group_site_ids,  # WHY: re-export for backward-compat imports
     _SsidTemplatePhase3Cluster,  # WHY: phase-3 site-groups cluster bound in __init__
 )
+from ._ssid_template_phase45 import (  # WHY: re-export phase 4/5 helpers referenced by name in tests
+    TemplateOpParams,  # WHY: dataclass bundle used by parent's mistapi-touching template helpers
+    TemplateOutcome,  # WHY: dataclass bundle used by _template_result
+    _build_all_template_configs,  # WHY: re-export for backward-compat imports
+    _build_disable_base,  # WHY: re-export for backward-compat imports
+    _build_disable_plan,  # WHY: re-export for backward-compat imports
+    _build_template_config,  # WHY: re-export for backward-compat imports
+    _classify_disable_entry,  # WHY: re-export for backward-compat imports
+    _display_disable_plan,  # WHY: re-export for backward-compat imports
+    _display_template_plan,  # WHY: re-export for backward-compat imports
+    _find_representative,  # WHY: re-export for backward-compat imports
+    _load_group_plan_from_results,  # WHY: re-export for backward-compat imports
+    _populate_from_representative,  # WHY: re-export for backward-compat imports
+    _print_phase_summary,  # WHY: re-export shared per-phase status summary helper
+    _resolve_deviations,  # WHY: re-export for backward-compat imports
+    _resolve_single_deviation,  # WHY: re-export for backward-compat imports
+    _set_ssid_disabled,  # WHY: re-export for backward-compat imports
+    _SsidTemplatePhase45Cluster,  # WHY: phase-4/5 templates+disable cluster bound in __init__
+)
+
+# WHY: declare the module-level re-export surface so ruff F401 does not flag the
+# intentional pass-throughs above (tests reach these helpers by patching them at
+# ``ssid_template_consolidation.<name>``, which requires the symbol to bind here).
+__all__ = [  # WHY: explicit re-export list; keeps ruff F401 quiet on intentional pass-throughs
+    "SSIDTemplateConsolidationManager",
+    "SsidTemplateDeps",
+    "TemplateOpParams",
+    "TemplateOutcome",
+    "_add_pilot_group",
+    "_analyze_group_deviations",
+    "_append_drift_record",
+    "_assemble_site_row",
+    "_assign_matrix_sites",
+    "_build_all_template_configs",
+    "_build_assign_results",
+    "_build_cluster_groups",
+    "_build_deviation_record",
+    "_build_disable_base",
+    "_build_disable_plan",
+    "_build_failed_assign_results",
+    "_build_mxtunnel_lookup",
+    "_build_site_row",
+    "_build_sitegroup_lookup",
+    "_build_skip_entry",
+    "_build_template_config",
+    "_build_template_lookup",
+    "_build_variable_entry",
+    "_cache_age_minutes",
+    "_check_cache_exists",
+    "_check_prerequisite_for_all",
+    "_classify_disable_entry",
+    "_classify_site",
+    "_collect_comparison_keys",
+    "_collect_group_wlan_configs",
+    "_collect_key_values",
+    "_compute_group_plan",
+    "_compute_variable_plan",
+    "_detect_cross_cluster_drift",
+    "_determine_target_group",
+    "_display_disable_plan",
+    "_display_group_plan",
+    "_display_template_plan",
+    "_display_variable_summary",
+    "_extract_deviation_params",
+    "_find_representative",
+    "_find_target_wlan",
+    "_get_cached_site_vars",
+    "_get_existing_group_site_ids",
+    "_get_template_wlans",
+    "_group_by_target",
+    "_group_entries_by_site",
+    "_handle_completed_resume",
+    "_handle_partial_resume",
+    "_load_group_plan_from_results",
+    "_populate_from_representative",
+    "_print_conflicts",
+    "_print_phase1_summary",
+    "_print_phase_summary",
+    "_resolve_deviations",
+    "_resolve_single_deviation",
+    "_resolve_template",
+    "_set_ssid_disabled",
+    "_SsidTemplateCacheCluster",
+    "_SsidTemplatePhase1Cluster",
+    "_SsidTemplatePhase2Cluster",
+    "_SsidTemplatePhase3Cluster",
+    "_SsidTemplatePhase45Cluster",
+]
 
 # ---------------------------------------------------------------------------
 # Type aliases for injected dependencies
@@ -82,7 +169,7 @@ WriteDataFn = Any  # Callable[[...], None]
 GetOrgIdFn = Any  # Callable[[], str | None]
 
 
-def _fetch_and_log(
+def _fetch_and_log(  # WHY: parent-owned so its __globals__ points here for mistapi test patches
     label: str,
     api_fn: Any,
     session: Any,
@@ -99,13 +186,13 @@ def _fetch_and_log(
     """
     print(f"    Fetching {label}...")  # WHY: operator telemetry during multi-call fetch
     response = api_fn(session, org_id, **kwargs)  # WHY: mistapi list endpoint call
-    data: list[dict[str, Any]] = mistapi.get_all(response=response, mist_session=session) or []
+    data: list[dict[str, Any]] = mistapi.get_all(response=response, mist_session=session) or []  # WHY: paginate
     logging.info("%s fetched: %d", label.capitalize(), len(data))  # WHY: audit trail per collection
-    return data
+    return data  # WHY: caller receives the fully paginated list
 
 
 @dataclass(frozen=True)
-class SsidTemplateDeps:
+class SsidTemplateDeps:  # WHY: frozen dataclass bundle keeps execute() under STRUCT-PARAMS
     """Injected dependencies for :class:`SSIDTemplateConsolidationManager`.
 
     Bundles the 6 constructor arguments into a single frozen dataclass so
@@ -122,7 +209,7 @@ class SsidTemplateDeps:
     write_data_fn: WriteDataFn  # WHY: exporter for matrix/deviation/plan tables
 
 
-class SSIDTemplateConsolidationManager:
+class SSIDTemplateConsolidationManager:  # WHY: coordinator entry for Menu 159 (5-phase workflow)
     """SSID Template Consolidation (Menu 159) — 5-Phase Guided Workflow.
 
     Consolidates per-site WLAN templates into cluster-based templates
@@ -146,16 +233,16 @@ class SSIDTemplateConsolidationManager:
         )
     """
 
-    CACHE_FILE = os.path.join("data", "ssid_consolidation_cache.json")
-    PHASE_RESULT_FILES = {
+    CACHE_FILE = os.path.join("data", "ssid_consolidation_cache.json")  # WHY: on-disk Phase 1 cache
+    PHASE_RESULT_FILES = {  # WHY: per-phase result files for --resume support
         2: os.path.join("data", "ssid_consolidation_phase2_results.json"),
         3: os.path.join("data", "ssid_consolidation_phase3_results.json"),
         4: os.path.join("data", "ssid_consolidation_phase4_results.json"),
         5: os.path.join("data", "ssid_consolidation_phase5_results.json"),
     }
-    CACHE_FRESHNESS_MINUTES = 60
-    PSK_AUTH_TYPES = ("psk", "psk-tkip", "psk-wpa2-tkip")
-    METADATA_FIELDS = {
+    CACHE_FRESHNESS_MINUTES = 60  # WHY: prompt to refetch when cache is older than this
+    PSK_AUTH_TYPES = ("psk", "psk-tkip", "psk-wpa2-tkip")  # WHY: PSK auth types are excluded
+    METADATA_FIELDS = {  # WHY: fields ignored when comparing WLAN configs for drift
         "id",
         "org_id",
         "site_id",
@@ -163,10 +250,10 @@ class SSIDTemplateConsolidationManager:
         "created_time",
         "modified_time",
     }
-    PILOT_PATTERN = re.compile(r"(?i)\b(pilot|test|lab)\b")
-    CONFIRM_KEYWORD = "CONFIRM"
+    PILOT_PATTERN = re.compile(r"(?i)\b(pilot|test|lab)\b")  # WHY: sites matching this go to pilot group
+    CONFIRM_KEYWORD = "CONFIRM"  # WHY: literal typed by operator to unlock write actions
 
-    def __init__(self, deps: SsidTemplateDeps) -> None:
+    def __init__(self, deps: SsidTemplateDeps) -> None:  # WHY: single deps bundle keeps ctor lean
         """Initialize with the injected :class:`SsidTemplateDeps` bundle.
 
         Args:
@@ -185,9 +272,10 @@ class SSIDTemplateConsolidationManager:
             _SsidTemplatePhase1Cluster(self),  # WHY: read-only audit + matrix + deviation cluster
             _SsidTemplatePhase2Cluster(self),  # WHY: site-variables plan + write cluster
             _SsidTemplatePhase3Cluster(self),  # WHY: site-groups plan + create + assign cluster
+            _SsidTemplatePhase45Cluster(self),  # WHY: template create/update + disable-old cluster
         )
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # WHY: proxy unknown attrs to registered clusters
         """Proxy cluster-attribute access to helper clusters.
 
         Python only invokes ``__getattr__`` when normal lookup fails, so
@@ -201,14 +289,14 @@ class SSIDTemplateConsolidationManager:
         for cluster in self.__dict__.get("_clusters", ()):  # WHY: iterate bundled clusters
             if hasattr(type(cluster), name):  # WHY: class-level lookup avoids cluster __getattr__ recursion
                 return getattr(cluster, name)  # WHY: bound method resolves through cluster
-        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")  # WHY: no cluster matched
 
     # ------------------------------------------------------------------
     # Entry point
     # ------------------------------------------------------------------
 
     @staticmethod
-    def execute(
+    def execute(  # WHY: sole public entry point invoked by the CLI menu dispatcher
         *,
         apisession: Any,
         page_limit: int,
@@ -217,45 +305,59 @@ class SSIDTemplateConsolidationManager:
         get_org_id_fn: GetOrgIdFn,
     ) -> None:
         """Menu 159 entry point — prompt for SSID, launch phase menu."""
-        print("\n=== SSID Template Consolidation (5-Phase Guided Workflow) ===")
-        logging.info("Starting SSID Template Consolidation workflow")
+        print("\n=== SSID Template Consolidation (5-Phase Guided Workflow) ===")  # WHY: banner for operator context
+        logging.info("Starting SSID Template Consolidation workflow")  # WHY: audit-log workflow entry
+        context = SSIDTemplateConsolidationManager._resolve_target_context(  # WHY: extracted for STRUCT-LENGTH
+            get_org_id_fn, safe_input_fn
+        )
+        if context is None:  # WHY: resolver already printed the user-visible reason
+            return  # WHY: abort execution when org/ssid resolution failed
+        current_org_id, target_ssid = context  # WHY: destructure validated org + ssid pair
+        logging.info("Target SSID: %s, Org: %s", target_ssid, current_org_id)  # WHY: audit-log operator inputs
+        deps = SsidTemplateDeps(  # WHY: bundle 6 deps into frozen struct for the manager
+            org_id=current_org_id, target_ssid=target_ssid, apisession=apisession,
+            page_limit=page_limit, safe_input_fn=safe_input_fn, write_data_fn=write_data_fn,
+        )
+        SSIDTemplateConsolidationManager(deps).run_phase_menu()  # WHY: hand off to the phase menu loop
 
-        current_org_id: str | None = get_org_id_fn()
+    @staticmethod
+    def _resolve_target_context(  # WHY: extracted from execute() to satisfy STRUCT-LENGTH
+        get_org_id_fn: GetOrgIdFn,
+        safe_input_fn: SafeInputFn,
+    ) -> tuple[str, str] | None:
+        """Resolve (org_id, target_ssid) or None when either is missing."""
+        current_org_id: str | None = get_org_id_fn()  # WHY: pull active org from injected getter
         if not current_org_id:
-            print("! No organization selected. Exiting.")
-            return
+            print("! No organization selected. Exiting.")  # WHY: fail fast when no org is bound
+            return None  # WHY: caller treats None as an aborted workflow
+        target_ssid = SSIDTemplateConsolidationManager._prompt_target_ssid(safe_input_fn)  # WHY: prompt operator
+        if not target_ssid:
+            print("! No target SSID specified. Exiting.")  # WHY: empty SSID -> nothing to consolidate
+            return None  # WHY: caller treats None as an aborted workflow
+        return current_org_id, target_ssid  # WHY: hand off validated pair to execute()
 
-        default_ssid = os.getenv("MIST_TARGET_SSID", "")
-        prompt = f"Enter target SSID name [{default_ssid}]: " if default_ssid else "Enter target SSID name: "
-        target_ssid: str = safe_input_fn(
+    @staticmethod
+    def _prompt_target_ssid(safe_input_fn: SafeInputFn) -> str:  # WHY: split so execute() stays lean
+        """Prompt the operator for the target SSID (env default supported)."""
+        default_ssid = os.getenv("MIST_TARGET_SSID", "")  # WHY: env override for repeat runs
+        prompt = (  # WHY: show default in prompt only when one is set
+            f"Enter target SSID name [{default_ssid}]: " if default_ssid else "Enter target SSID name: "
+        )
+        target_ssid: str = safe_input_fn(  # WHY: EOF-safe stdin reader with context tag
             prompt,
             default_value=default_ssid,
             allow_empty=False,
             context="ssid_consolidation_ssid",
         )
-        if not target_ssid:
-            print("! No target SSID specified. Exiting.")
-            return
-
-        logging.info("Target SSID: %s, Org: %s", target_ssid, current_org_id)
-        deps = SsidTemplateDeps(  # WHY: bundle 6 deps into frozen struct for the manager
-            org_id=current_org_id,
-            target_ssid=target_ssid,
-            apisession=apisession,
-            page_limit=page_limit,
-            safe_input_fn=safe_input_fn,
-            write_data_fn=write_data_fn,
-        )
-        manager = SSIDTemplateConsolidationManager(deps)
-        manager.run_phase_menu()
+        return target_ssid  # WHY: caller consumes possibly-defaulted SSID name
 
     # ------------------------------------------------------------------
     # Phase menu
     # ------------------------------------------------------------------
 
-    def run_phase_menu(self) -> None:
+    def run_phase_menu(self) -> None:  # WHY: phase-menu loop used by execute() + tests
         """Display phase sub-menu and dispatch selected phase."""
-        phase_labels = {
+        phase_labels = {  # WHY: menu row -> human-readable phase description
             "1": "Phase 1: Read-Only Audit (matrix + deviation report)",
             "2": "Phase 2: Write Site Variables",
             "3": "Phase 3: Create / Assign Site Groups",
@@ -263,30 +365,36 @@ class SSIDTemplateConsolidationManager:
             "5": "Phase 5: Disable Old SSIDs",
             "6": "Run All Phases Sequentially",
         }
-        dispatch = self._build_phase_dispatch()
-        while True:
-            self._display_phase_menu(phase_labels)
-            choice = self.safe_input_fn(
+        dispatch = self._build_phase_dispatch()  # WHY: menu row -> bound phase handler
+        while True:  # WHY: keep prompting until operator quits or selects the all-phases path
+            self._display_phase_menu(phase_labels)  # WHY: reprint menu each iteration
+            choice = self.safe_input_fn(  # WHY: EOF-safe stdin reader with menu context tag
                 "Select phase [1-6, q=quit]: ",
                 context="ssid_consolidation_menu",
             )
-            if choice.lower() in ("q", "quit", ""):
-                print("Returning to main menu.")
-                return
-            if choice == "6":
-                self._run_all_phases(dispatch)
-                return
-            if choice not in dispatch:
-                print(f"! Invalid selection: {choice}")
-                continue
-            phase_number = int(choice)
-            if not self._check_prerequisite(phase_number):
-                continue
-            dispatch[choice]()
+            if self._handle_menu_choice(choice, dispatch):  # WHY: helper returns True when menu should exit
+                return  # WHY: unwind the loop when the choice was terminal (quit / phase 6)
 
-    def _build_phase_dispatch(self) -> dict[str, Any]:
+    def _handle_menu_choice(self, choice: str, dispatch: dict[str, Any]) -> bool:  # WHY: extracted so complexity <= 5
+        """Route one menu selection; return True when the menu should exit."""
+        if choice.lower() in ("q", "quit", ""):  # WHY: quit tokens include blank enter
+            print("Returning to main menu.")  # WHY: operator feedback before unwinding
+            return True  # WHY: signal caller to exit the menu loop
+        if choice == "6":  # WHY: 6 = sequential run of all phases
+            self._run_all_phases(dispatch)  # WHY: delegates to shared runner
+            return True  # WHY: sequential run is terminal like quit
+        if choice not in dispatch:  # WHY: guard against typos before int() cast
+            print(f"! Invalid selection: {choice}")  # WHY: surface the bad token
+            return False  # WHY: stay in the menu after typo
+        phase_number = int(choice)  # WHY: dispatch keys are digit strings
+        if not self._check_prerequisite(phase_number):  # WHY: bail if the preceding phase artifact missing
+            return False  # WHY: stay in the menu when prereq check failed
+        dispatch[choice]()  # WHY: run the selected phase handler
+        return False  # WHY: return to menu after a single phase run
+
+    def _build_phase_dispatch(self) -> dict[str, Any]:  # WHY: menu number -> bound phase handler map
         """Build phase number -> handler mapping."""
-        return {
+        return {  # WHY: five phase entries drive the menu dispatch
             "1": self.phase1_audit,
             "2": self.phase2_site_variables,
             "3": self.phase3_site_groups,
@@ -294,48 +402,48 @@ class SSIDTemplateConsolidationManager:
             "5": self.phase5_disable_old,
         }
 
-    def _display_phase_menu(self, labels: dict[str, str]) -> None:
+    def _display_phase_menu(self, labels: dict[str, str]) -> None:  # WHY: printer split from loop for clarity
         """Print the numbered phase menu."""
-        print(f"\n--- SSID Template Consolidation: {self.target_ssid} ---")
-        for key, description in labels.items():
-            print(f"  {key}. {description}")
-        print("  q. Return to main menu")
+        print(f"\n--- SSID Template Consolidation: {self.target_ssid} ---")  # WHY: banner shows target SSID
+        for key, description in labels.items():  # WHY: iterate the ordered menu rows
+            print(f"  {key}. {description}")  # WHY: numbered menu row
+        print("  q. Return to main menu")  # WHY: escape hatch back to the top-level CLI
 
-    def _run_all_phases(self, dispatch: dict[str, Any]) -> None:
+    def _run_all_phases(self, dispatch: dict[str, Any]) -> None:  # WHY: sequential all-phases runner
         """Execute phases 1-5 sequentially, stopping on failure."""
-        for phase_key in ("1", "2", "3", "4", "5"):
-            phase_number = int(phase_key)
-            print(f"\n{'=' * 60}")
-            print(f"  Starting Phase {phase_number}")
-            print(f"{'=' * 60}")
-            if not _check_prerequisite_for_all(phase_number):
-                print(f"! Phase {phase_number} prerequisite not met. Stopping.")
-                return
+        for phase_key in ("1", "2", "3", "4", "5"):  # WHY: run every phase in order
+            phase_number = int(phase_key)  # WHY: dispatch keys are digit strings
+            print(f"\n{'=' * 60}")  # WHY: visual separator between phases
+            print(f"  Starting Phase {phase_number}")  # WHY: operator sees which phase started
+            print(f"{'=' * 60}")  # WHY: closing separator for banner symmetry
+            if not _check_prerequisite_for_all(phase_number):  # WHY: gate the phase on its prerequisite artifact
+                print(f"! Phase {phase_number} prerequisite not met. Stopping.")  # WHY: fail-fast message
+                return  # WHY: stop the run-all when prereqs are missing
             try:
-                dispatch[phase_key]()
-            except Exception as error:
-                logging.exception("Phase %d failed: %s", phase_number, error)
-                print(f"! Phase {phase_number} failed: {error}")
-                return
-        print("\nAll 5 phases completed successfully.")
+                dispatch[phase_key]()  # WHY: invoke the phase's bound handler
+            except Exception as error:  # WHY: convert phase failures into operator-visible messages
+                logging.exception("Phase %d failed: %s", phase_number, error)  # WHY: audit-log full traceback
+                print(f"! Phase {phase_number} failed: {error}")  # WHY: surface the error to the operator
+                return  # WHY: halt the sequence on the first failure
+        print("\nAll 5 phases completed successfully.")  # WHY: success message after full sequence
 
     # ------------------------------------------------------------------
     # Shared helpers
     # ------------------------------------------------------------------
 
-    def _confirm_or_cancel(self, summary: str) -> bool:
+    def _confirm_or_cancel(self, summary: str) -> bool:  # WHY: shared CONFIRM gate for write phases
         """Display summary and require CONFIRM to proceed."""
-        print(f"\n{summary}")
-        confirmation = self.safe_input_fn(
+        print(f"\n{summary}")  # WHY: print the operator-facing plan summary before prompting
+        confirmation = self.safe_input_fn(  # WHY: EOF-safe stdin reader with confirmation context tag
             f'Type "{self.CONFIRM_KEYWORD}" to proceed: ',
             context="ssid_consolidation_confirm",
         )
-        if confirmation != self.CONFIRM_KEYWORD:
-            logging.warning("Operation cancelled - confirmation not provided")
-            print("! Operation cancelled.")
-            return False
-        logging.info("Operation confirmed at %s", datetime.now().isoformat())
-        return True
+        if confirmation != self.CONFIRM_KEYWORD:  # WHY: literal-match gate blocks accidental writes
+            logging.warning("Operation cancelled - confirmation not provided")  # WHY: audit-log cancel
+            print("! Operation cancelled.")  # WHY: user-visible cancel message
+            return False  # WHY: caller aborts the write path
+        logging.info("Operation confirmed at %s", datetime.now().isoformat())  # WHY: audit-log confirmation time
+        return True  # WHY: caller proceeds with the write
 
     # ------------------------------------------------------------------
     # Phase 1: Read-Only Audit (methods live in _ssid_template_phase1.py)
@@ -357,128 +465,14 @@ class SSIDTemplateConsolidationManager:
     # ------------------------------------------------------------------
     # Phase 4: Templates
     # ------------------------------------------------------------------
-
-    def phase4_templates(self) -> None:
-        """Phase 4 orchestrator — resolve deviations, create templates."""
-        print("\n=== Phase 4: Create Consolidated Templates ===")
-        logging.info("Phase 4: Starting template creation")
-
-        cached = self._load_cache()
-        if not cached:
-            print("! Phase 1 cache not found. Run Phase 1 first.")
-            return
-        self.cache = cached
-
-        phase3_results = self._load_phase_results(3)
-        if not phase3_results:
-            print("! Phase 3 results not found. Run Phase 3 first.")
-            return
-
-        resolutions = _resolve_deviations(self.cache, self.safe_input_fn)
-        group_plan = _load_group_plan_from_results(phase3_results)
-        configs = _build_all_template_configs(group_plan, resolutions, self.cache, self.target_ssid)
-
-        _display_template_plan(configs, group_plan)
-        if not self._confirm_or_cancel(f"Create/update {len(configs)} templates?"):
-            return
-
-        results = self._create_or_update_templates(configs, group_plan)
-        self._save_phase_results(4, results)
-        self.write_data_fn(
-            data=results,
-            filename_or_table="ssid_consolidation_templates",
-            api_function_name="ssidConsolidationTemplates",
-        )
-        _print_phase_summary("Phase 4", results)
-
-    def _create_or_update_templates(
-        self,
-        configs: dict[str, dict[str, Any]],
-        group_plan: dict[str, dict[str, str]],
-    ) -> list[dict[str, Any]]:
-        """Create or update templates for each group."""
-        basename = os.environ.get("MIST_TEMPLATE_BASENAME", self.target_ssid)
-        existing_templates = {
-            tmpl.get("name", ""): tmpl for tmpl in self.cache.get("data", {}).get("wlan_templates", [])
-        }
-        results: list[dict[str, Any]] = []
-
-        for group_name, config in configs.items():
-            group_info = group_plan.get(group_name, {})
-            template_name = f"misthelper_{group_name}_{basename}"
-            result = _create_or_update_single_template(
-                template_name,
-                config,
-                group_info,
-                existing_templates,
-                self.target_ssid,
-                self.org_id,
-                self.apisession,
-                self.safe_input_fn,
-            )
-            results.append(result)
-        return results
+    # WHY: phase4_templates + _create_or_update_templates live on the
+    # phase-4/5 cluster; access is transparent via __getattr__ delegation.
 
     # ------------------------------------------------------------------
     # Phase 5: Disable Old SSIDs
     # ------------------------------------------------------------------
-
-    def phase5_disable_old(self) -> None:
-        """Phase 5 orchestrator — disable matching SSIDs in old templates."""
-        print("\n=== Phase 5: Disable Old SSIDs ===")
-        logging.info("Phase 5: Starting old SSID disable")
-
-        cached = self._load_cache()
-        if not cached:
-            print("! Phase 1 cache not found. Run Phase 1 first.")
-            return
-        self.cache = cached
-
-        resuming, prior_results = self._offer_resume(5, [])
-        plan = _build_disable_plan(self.cache)
-        to_disable = [entry for entry in plan if entry["status"] == "to_disable"]
-
-        _display_disable_plan(plan)
-        if not to_disable:
-            print("  No SSIDs to disable.")
-            return
-        if not self._confirm_or_cancel(f"Disable {len(to_disable)} SSIDs in old templates?"):
-            return
-
-        results = self._disable_ssids(plan, prior_results if resuming else [])
-        self._save_phase_results(5, results)
-        self.write_data_fn(
-            data=results,
-            filename_or_table="ssid_consolidation_disable",
-            api_function_name="ssidConsolidationDisable",
-        )
-        _print_phase_summary("Phase 5", results)
-
-    def _disable_ssids(
-        self,
-        plan: list[dict[str, Any]],
-        resume_from: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        """Disable SSIDs in old templates via GET-modify-PUT."""
-        completed_ids = {
-            (row.get("site_id"), row.get("ssid_id")) for row in resume_from if row.get("status") == "disabled"
-        }
-        results: list[dict[str, Any]] = list(resume_from) if resume_from else []
-
-        for entry in plan:
-            if entry["status"] != "to_disable":
-                key = (entry.get("site_id"), entry.get("ssid_id"))
-                if key not in completed_ids:
-                    results.append(entry)
-                continue
-            key = (entry.get("site_id"), entry.get("ssid_id"))
-            if key in completed_ids:
-                continue
-            result = _disable_single_ssid(entry, self.org_id, self.apisession)
-            results.append(result)
-            if len(results) % 10 == 0:
-                self._save_phase_results(5, results)
-        return results
+    # WHY: phase5_disable_old + _disable_ssids live on the phase-4/5
+    # cluster; access is transparent via __getattr__ delegation.
 
 
 # ------------------------------------------------------------------
@@ -495,40 +489,52 @@ class SSIDTemplateConsolidationManager:
 # functions whose ``__globals__`` binding is this module.
 
 
-def _write_single_site_vars(
+def _write_single_site_vars(  # WHY: parent-owned so tests can patch mistapi at this module
     site_id: str,
     entries: list[dict[str, Any]],
     cache: dict[str, Any],
     apisession: Any,
 ) -> list[dict[str, Any]]:
     """Write variables for a single site via GET-merge-PUT."""
-    results: list[dict[str, Any]] = []
     try:
-        existing_vars = _get_cached_site_vars(cache, site_id)
-        merged_vars = dict(existing_vars)
-        for entry in entries:
-            merged_vars[entry["variable_name"]] = entry["proposed_value"]
-
-        mistapi.api.v1.sites.sites.updateSiteInfo(apisession, site_id, body={"vars": merged_vars})
-        timestamp = datetime.now().isoformat()
-        for entry in entries:
-            entry_copy = dict(entry)
-            entry_copy["status"] = "written"
-            entry_copy["timestamp"] = timestamp
-            results.append(entry_copy)
-        logging.info(
-            "Site vars written for %s (%d vars)",
-            site_id,
-            len(entries),
+        existing_vars = _get_cached_site_vars(cache, site_id)  # WHY: pull current per-site vars from cache
+        merged_vars = dict(existing_vars)  # WHY: shallow copy so we can additively merge
+        for entry in entries:  # WHY: overlay MISTHELPER_* entries onto existing vars
+            merged_vars[entry["variable_name"]] = entry["proposed_value"]  # WHY: variable_name -> proposed_value
+        mistapi.api.v1.sites.sites.updateSiteInfo(  # WHY: PUT merged vars back to Mist
+            apisession, site_id, body={"vars": merged_vars}
         )
-    except Exception as error:
-        logging.error("Failed to write vars for site %s: %s", site_id, error)
-        for entry in entries:
-            entry_copy = dict(entry)
-            entry_copy["status"] = "failed"
-            entry_copy["reason"] = str(error)
-            results.append(entry_copy)
-    return results
+        logging.info("Site vars written for %s (%d vars)", site_id, len(entries))  # WHY: audit-log success
+        return _build_success_write_results(entries)  # WHY: mark each entry written+timestamp
+    except Exception as error:  # WHY: convert API/network failure into structured records
+        logging.error("Failed to write vars for site %s: %s", site_id, error)  # WHY: audit-log failure
+        return _build_failed_write_results(entries, error)  # WHY: mark each entry failed+reason
+
+
+def _build_success_write_results(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:  # WHY: success rows builder
+    """Build ``status=written`` result records with a shared timestamp."""
+    timestamp = datetime.now().isoformat()  # WHY: single ISO timestamp for the batch
+    results: list[dict[str, Any]] = []  # WHY: accumulator for the per-entry success rows
+    for entry in entries:  # WHY: fan out per-variable success rows
+        entry_copy = dict(entry)  # WHY: don't mutate caller's plan entries
+        entry_copy["status"] = "written"  # WHY: sentinel consumed by resume logic
+        entry_copy["timestamp"] = timestamp  # WHY: record when the write happened
+        results.append(entry_copy)  # WHY: collect the success row
+    return results  # WHY: caller writes rows to the phase result file
+
+
+def _build_failed_write_results(  # WHY: failure rows builder mirrors the success builder
+    entries: list[dict[str, Any]],
+    error: Exception,
+) -> list[dict[str, Any]]:
+    """Build ``status=failed`` result records carrying the error text."""
+    results: list[dict[str, Any]] = []  # WHY: accumulator for the per-entry failure rows
+    for entry in entries:  # WHY: fan out per-variable failure rows
+        entry_copy = dict(entry)  # WHY: don't mutate caller's plan entries
+        entry_copy["status"] = "failed"  # WHY: sentinel consumed by resume + summary logic
+        entry_copy["reason"] = str(error)  # WHY: surface stringified error for the report
+        results.append(entry_copy)  # WHY: collect the failure row
+    return results  # WHY: caller writes rows to the phase result file
 
 
 # ------------------------------------------------------------------
@@ -545,31 +551,31 @@ def _write_single_site_vars(
 # ``patch.object(_mod, "mistapi", ...)``.
 
 
-def _create_site_group(group: dict[str, Any], org_id: str, apisession: Any) -> None:
+def _create_site_group(group: dict[str, Any], org_id: str, apisession: Any) -> None:  # WHY: mistapi-touching creator
     """Create a single site group via API."""
     try:
-        response = mistapi.api.v1.orgs.sitegroups.createOrgSiteGroup(
+        response = mistapi.api.v1.orgs.sitegroups.createOrgSiteGroup(  # WHY: POST createOrgSiteGroup
             apisession, org_id, body={"name": group["group_name"]}
         )
-        created = response.data if hasattr(response, "data") else {}
-        group["group_id"] = created.get("id", "")
-        group["exists"] = True
-        logging.info(
+        created = response.data if hasattr(response, "data") else {}  # WHY: mistapi returns .data
+        group["group_id"] = created.get("id", "")  # WHY: cache new id for downstream assignments
+        group["exists"] = True  # WHY: flip flag so downstream logic reuses this group
+        logging.info(  # WHY: audit-log the successful creation
             "Created group '%s' (id=%s)",
             group["group_name"],
             group["group_id"],
         )
-        print(f"  Created group: {group['group_name']}")
-    except Exception as error:
-        logging.error(
+        print(f"  Created group: {group['group_name']}")  # WHY: operator feedback for the create
+    except Exception as error:  # WHY: convert API/network failure into an audit-log + user message
+        logging.error(  # WHY: audit-log the failure with the group name
             "Failed to create group '%s': %s",
             group["group_name"],
             error,
         )
-        print(f"  ! Failed to create group: " f"{group['group_name']}: {error}")
+        print(f"  ! Failed to create group: " f"{group['group_name']}: {error}")  # WHY: user-visible failure line
 
 
-def _assign_group_sites(
+def _assign_group_sites(  # WHY: mistapi-touching site-group assigner (parent-owned for test patching)
     group: dict[str, Any],
     completed_ids: set[tuple[str, str]],
     cache: dict[str, Any],
@@ -577,38 +583,63 @@ def _assign_group_sites(
     apisession: Any,
 ) -> list[dict[str, Any]]:
     """Assign all sites for a single group."""
-    group_id = group["group_id"]
-    group_name = group["group_name"]
-    sites_to_assign = [site for site in group["sites"] if (site["site_id"], group_id) not in completed_ids]
-    if not sites_to_assign:
-        return []
-
+    group_id = group["group_id"]  # WHY: id of the sitegroup we're mutating
+    sites_to_assign = _filter_pending_sites(group, group_id, completed_ids)  # WHY: strip pairs already done
+    if not sites_to_assign:  # WHY: nothing pending -> skip API call entirely
+        return []  # WHY: no rows to append to results
     try:
-        existing_ids = _get_existing_group_site_ids(cache, group_id)
-        new_ids = [site["site_id"] for site in sites_to_assign if site["site_id"] not in existing_ids]
-        merged = list(set(existing_ids + new_ids))
+        return _do_assign_group_sites(group, sites_to_assign, cache, org_id, apisession)  # WHY: happy path
+    except Exception as error:  # WHY: convert API/network failure into structured records
+        logging.error("Failed to assign sites to group '%s': %s", group["group_name"], error)  # WHY: audit-log
+        return _build_failed_assign_results(sites_to_assign, group, group_id, error)  # WHY: failure rows
 
-        if new_ids:
-            mistapi.api.v1.orgs.sitegroups.updateOrgSiteGroup(
-                apisession,
-                org_id,
-                group_id,
-                body={"site_ids": merged},
-            )
-            logging.info(
-                "Updated group '%s' with %d new sites",
-                group_name,
-                len(new_ids),
-            )
 
-        return _build_assign_results(sites_to_assign, existing_ids, group, group_id)
-    except Exception as error:
-        logging.error(
-            "Failed to assign sites to group '%s': %s",
-            group_name,
-            error,
-        )
-        return _build_failed_assign_results(sites_to_assign, group, group_id, error)
+def _filter_pending_sites(  # WHY: split so _assign_group_sites stays under complexity 5
+    group: dict[str, Any],
+    group_id: str,
+    completed_ids: set[tuple[str, str]],
+) -> list[dict[str, Any]]:
+    """Return sites whose (site, group) pair is not already completed."""
+    return [  # WHY: filter out (site,group) pairs already completed in a prior run
+        site for site in group["sites"] if (site["site_id"], group_id) not in completed_ids
+    ]
+
+
+def _do_assign_group_sites(  # WHY: happy-path branch extracted for complexity reduction
+    group: dict[str, Any],
+    sites_to_assign: list[dict[str, Any]],
+    cache: dict[str, Any],
+    org_id: str,
+    apisession: Any,
+) -> list[dict[str, Any]]:
+    """Push merged site_ids and build success result rows (may raise)."""
+    group_id = group["group_id"]  # WHY: single source of truth for the sitegroup id
+    existing_ids = _get_existing_group_site_ids(cache, group_id)  # WHY: preserve unrelated members
+    new_ids = [  # WHY: subset that isn't already in the group -> triggers the API call
+        site["site_id"] for site in sites_to_assign if site["site_id"] not in existing_ids
+    ]
+    _push_group_site_ids(group, existing_ids, new_ids, org_id, apisession)  # WHY: PUT merged set
+    return _build_assign_results(sites_to_assign, existing_ids, group, group_id)  # WHY: success rows
+
+
+def _push_group_site_ids(  # WHY: mistapi PUT extracted so callers stay slim
+    group: dict[str, Any],
+    existing_ids: list[str],
+    new_ids: list[str],
+    org_id: str,
+    apisession: Any,
+) -> None:
+    """PUT merged site_ids to Mist when there is anything new to add."""
+    if not new_ids:  # WHY: no-op the API call when everything is already assigned
+        return  # WHY: caller still records success rows via _build_assign_results
+    merged = list(set(existing_ids + new_ids))  # WHY: union preserves prior members while adding new
+    mistapi.api.v1.orgs.sitegroups.updateOrgSiteGroup(  # WHY: additive PUT for the sitegroup
+        apisession,
+        org_id,
+        group["group_id"],
+        body={"site_ids": merged},
+    )
+    logging.info("Updated group '%s' with %d new sites", group["group_name"], len(new_ids))  # WHY: audit-log
 
 
 # WHY: _build_assign_results, _build_failed_assign_results, and
@@ -620,476 +651,217 @@ def _assign_group_sites(
 # ------------------------------------------------------------------
 # Phase 4 helpers
 # ------------------------------------------------------------------
+# WHY: The pure Phase-4 helpers (_resolve_deviations,
+# _resolve_single_deviation, _load_group_plan_from_results,
+# _build_all_template_configs, _build_template_config,
+# _find_representative, _populate_from_representative,
+# _display_template_plan) live in ``_ssid_template_phase45`` and are
+# re-exported from this module's import block at the top of the file.
+# The five mistapi-touching template helpers below stay in the parent
+# because tests patch ``mistapi`` through this module's namespace
+# (``patch.object(ssid_template_consolidation, "mistapi", ...)``),
+# which only intercepts functions whose ``__globals__`` binding is
+# this module.
 
 
-def _resolve_deviations(cache: dict[str, Any], safe_input_fn: SafeInputFn) -> dict[tuple[str, str], Any]:
-    """Interactively resolve deviations — no pre-selected default."""
-    deviations = cache.get("deviations", [])
-    resolutions: dict[tuple[str, str], Any] = {}
-
-    for deviation in deviations:
-        if deviation.get("cluster_name") == "cross_cluster":
-            continue
-        _resolve_single_deviation(deviation, resolutions, safe_input_fn)
-    return resolutions
-
-
-def _resolve_single_deviation(
-    deviation: dict[str, Any],
-    resolutions: dict[tuple[str, str], Any],
-    safe_input_fn: SafeInputFn,
-) -> None:
-    """Resolve a single deviation interactively."""
-    cluster = deviation.get("cluster_name", "")
-    param = deviation.get("parameter", "")
-    unique_values: list[dict[str, Any]] = json.loads(deviation.get("unique_values", "[]"))
-
-    print(f"\n  Deviation: {param} in cluster '{cluster}'")
-    for index, entry in enumerate(unique_values, 1):
-        sites_preview = ", ".join(entry["sites"][:3])
-        print(f"    {index}. {entry['value']} " f"({entry['count']} sites: {sites_preview})")
-        if len(entry["sites"]) > 3:
-            remaining = len(entry["sites"]) - 3
-            print(f"       ... and {remaining} more sites")
-
-    choice: str = safe_input_fn(
-        f"  Select canonical value [1-{len(unique_values)}]: ",
-        context="ssid_consolidation_deviation_resolution",
-    )
-    try:
-        selected_index = int(choice) - 1
-        if 0 <= selected_index < len(unique_values):
-            selected = unique_values[selected_index]["value"]
-            resolutions[(cluster, param)] = selected
-            logging.info(
-                "Deviation resolved: %s/%s = %s " "(selected from %d options at %s)",
-                cluster,
-                param,
-                selected,
-                len(unique_values),
-                datetime.now().isoformat(),
-            )
-        else:
-            print(f"  ! Invalid selection. Skipping {param}.")
-    except ValueError:
-        print(f"  ! Invalid input. Skipping {param}.")
-
-
-def _load_group_plan_from_results(
-    phase3_results: dict[str, Any],
-) -> dict[str, dict[str, str]]:
-    """Extract group_name -> group_id mapping from Phase 3 results."""
-    group_map: dict[str, dict[str, str]] = {}
-    for result in phase3_results.get("results", []):
-        group_name = result.get("group_name", "")
-        if group_name and group_name not in group_map:
-            group_map[group_name] = {
-                "group_id": result.get("group_id", ""),
-                "cluster_name": result.get("cluster_name", ""),
-            }
-    return group_map
-
-
-def _build_all_template_configs(
-    group_plan: dict[str, dict[str, str]],
-    resolutions: dict[tuple[str, str], Any],
-    cache: dict[str, Any],
-    target_ssid: str,
-) -> dict[str, dict[str, Any]]:
-    """Build WLAN configs for each group's template."""
-    configs: dict[str, dict[str, Any]] = {}
-    for group_name, group_info in group_plan.items():
-        cluster = group_info.get("cluster_name", "")
-        config = _build_template_config(cluster, resolutions, cache, target_ssid)
-        configs[group_name] = config
-    return configs
-
-
-def _build_template_config(
-    cluster_name: str,
-    resolutions: dict[tuple[str, str], Any],
-    cache: dict[str, Any],
-    target_ssid: str,
-) -> dict[str, Any]:
-    """Build a single WLAN config with variable refs for deviations."""
-    deviations = cache.get("deviations", [])
-    deviation_params = {
-        dev.get("parameter")
-        for dev in deviations
-        if dev.get("cluster_name") == cluster_name and dev.get("cluster_name") != "cross_cluster"
-    }
-
-    representative = _find_representative(cache, cluster_name)
-    config: dict[str, Any] = {
-        "ssid": target_ssid,
-        "enabled": True,
-    }
-    if representative:
-        _populate_from_representative(config, representative, deviation_params)
-
-    for param in deviation_params:
-        if param not in ("vlan_id",):
-            config[param] = f"{{{{MISTHELPER_{param.upper()}}}}}"
-    return config
-
-
-def _find_representative(cache: dict[str, Any], cluster_name: str) -> dict[str, Any] | None:
-    """Find a representative matrix row for the cluster."""
-    matrix: list[dict[str, Any]] = cache.get("matrix", [])
-    for row in matrix:
-        if row.get("target_group") == cluster_name and not row.get("anomaly") and not row.get("psk_detected"):
-            return row
-    for row in matrix:
-        if row.get("target_group") == "pilot" and not row.get("anomaly") and not row.get("psk_detected"):
-            return row
-    return None
-
-
-def _populate_from_representative(
-    config: dict[str, Any],
-    representative: dict[str, Any],
-    deviation_params: set[str | None],
-) -> None:
-    """Populate template config from representative row."""
-    if "vlan_id" in deviation_params:
-        config["vlan_id"] = "{{MISTHELPER_VLAN_ID}}"
-    else:
-        config["vlan_id"] = representative.get("vlan_id", "")
-    config["auth"] = {"type": representative.get("auth_type", "")}
-    mxtunnel_id = representative.get("mxtunnel_id", "")
-    if mxtunnel_id:
-        config["mxtunnel_ids"] = [mxtunnel_id]
-
-
-def _display_template_plan(
-    configs: dict[str, dict[str, Any]],
-    group_plan: dict[str, dict[str, str]],
-) -> None:
-    """Print template creation plan."""
-    print("\n  Template Plan:")
-    for group_name, config in configs.items():
-        group_info = group_plan.get(group_name, {})
-        group_id = group_info.get("group_id", "new")
-        print(f"    {group_name} (group_id={group_id})")
-        print(f"      SSID: {config.get('ssid', '')}")
-        for key, value in config.items():
-            if key != "ssid":
-                print(f"      {key}: {value}")
-
-
-def _create_or_update_single_template(
-    template_name: str,
-    wlan_config: dict[str, Any],
-    group_info: dict[str, str],
+def _create_or_update_single_template(  # WHY: mistapi-touching template dispatcher (parent-owned)
+    params: TemplateOpParams,
     existing_templates: dict[str, dict[str, Any]],
-    target_ssid: str,
-    org_id: str,
-    apisession: Any,
-    safe_input_fn: SafeInputFn,
 ) -> dict[str, Any]:
-    """Create or update a single template."""
-    group_id = group_info.get("group_id", "")
-    timestamp = datetime.now().isoformat()
-    existing = existing_templates.get(template_name)
+    """Create or update a single template.
 
+    Args:
+        params: :class:`TemplateOpParams` bundle carrying the shared
+            template create/update state.
+        existing_templates: name -> template lookup for the append path.
+    """
+    existing = existing_templates.get(params.template_name)  # WHY: dispatch on existing template presence
     try:
-        if existing and template_name.startswith("misthelper_"):
-            return _append_ssid_to_template(
-                existing,
-                wlan_config,
-                template_name,
-                group_info,
-                timestamp,
-                target_ssid,
-                org_id,
-                apisession,
-            )
-        if existing:
-            return _handle_existing_non_misthelper(
-                template_name,
-                wlan_config,
-                group_id,
-                group_info,
-                timestamp,
-                org_id,
-                apisession,
-                safe_input_fn,
-            )
-        return _create_new_template(
-            template_name,
-            wlan_config,
-            group_id,
-            group_info,
-            timestamp,
-            org_id,
-            apisession,
-        )
-    except Exception as error:
-        logging.error(
-            "Template operation failed for '%s': %s",
-            template_name,
-            error,
-        )
-        return _template_result(template_name, "", group_info, "failed", str(error), timestamp)
+        return _dispatch_template_op(params, existing)  # WHY: route to append/overwrite/create branch
+    except Exception as error:  # WHY: convert exceptions into structured failure records
+        logging.error("Template operation failed for '%s': %s", params.template_name, error)  # WHY: audit-log
+        return _template_result(params, TemplateOutcome(template_id="", action="failed", error=str(error)))
 
 
-def _handle_existing_non_misthelper(
-    template_name: str,
-    wlan_config: dict[str, Any],
-    group_id: str,
-    group_info: dict[str, str],
-    timestamp: str,
-    org_id: str,
-    apisession: Any,
-    safe_input_fn: SafeInputFn,
+def _dispatch_template_op(  # WHY: three-branch router keeps complexity of _create_or_update_single_template low
+    params: TemplateOpParams,
+    existing: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Route to the append / overwrite / create branch based on state."""
+    if existing and params.template_name.startswith("misthelper_"):  # WHY: MistHelper-owned -> additive
+        return _append_ssid_to_template(params, existing)  # WHY: safe additive path
+    if existing:  # WHY: 3rd-party template -> operator must confirm overwrite
+        return _handle_existing_non_misthelper(params)  # WHY: overwrite requires opt-in
+    return _create_new_template(params)  # WHY: nothing exists -> plain create
+
+
+def _handle_existing_non_misthelper(  # WHY: overwrite path split for readability
+    params: TemplateOpParams,
 ) -> dict[str, Any]:
     """Handle template that exists but was not created by this tool."""
-    confirm: str = safe_input_fn(
-        f"  Template '{template_name}' exists but was not " f"created by this tool. Overwrite? (y/N): ",
+    confirm: str = params.safe_input_fn(  # WHY: overwrite requires explicit operator opt-in
+        f"  Template '{params.template_name}' exists but was not " f"created by this tool. Overwrite? (y/N): ",
         context="ssid_consolidation_template_overwrite",
     )
-    if confirm.strip().lower() not in ("y", "yes"):
-        return _template_result(
-            template_name,
-            "",
-            group_info,
-            "skipped",
-            "User declined overwrite",
-            timestamp,
+    if confirm.strip().lower() not in ("y", "yes"):  # WHY: accept only affirmative yes tokens
+        return _template_result(  # WHY: record the skip so the report captures the operator decision
+            params,
+            TemplateOutcome(template_id="", action="skipped", error="User declined overwrite"),
         )
-    return _create_new_template(
-        template_name,
-        wlan_config,
-        group_id,
-        group_info,
-        timestamp,
-        org_id,
-        apisession,
-    )
+    return _create_new_template(params)  # WHY: operator confirmed -> proceed with fresh create
 
 
-def _append_ssid_to_template(
+def _append_ssid_to_template(  # WHY: additive path for misthelper_-owned templates
+    params: TemplateOpParams,
     existing: dict[str, Any],
-    wlan_config: dict[str, Any],
-    template_name: str,
-    group_info: dict[str, str],
-    timestamp: str,
-    target_ssid: str,
-    org_id: str,
-    apisession: Any,
 ) -> dict[str, Any]:
     """Append SSID to an existing misthelper template."""
-    template_id = existing.get("id", "")
-    full_response = mistapi.api.v1.orgs.templates.getOrgTemplate(apisession, org_id, template_id)
-    template_data = full_response.data if hasattr(full_response, "data") else existing
-    current_wlans: list[dict[str, Any]] = template_data.get("wlans", []) or []
+    template_id = existing.get("id", "")  # WHY: existing template id from cache lookup
+    template_data = _fetch_template_data(params, template_id, existing)  # WHY: refresh in case cache is stale
+    current_wlans: list[dict[str, Any]] = template_data.get("wlans", []) or []  # WHY: empty template edge case
 
-    for wlan in current_wlans:
-        if wlan.get("ssid", "").lower() == target_ssid.lower():
-            return _template_result(
-                template_name,
-                template_id,
-                group_info,
-                "already_exists",
-                "SSID already in template",
-                timestamp,
-            )
+    if _ssid_already_present(current_wlans, params.target_ssid):  # WHY: dedupe idempotently
+        return _template_result(  # WHY: record no-op with a clear reason for the report
+            params,
+            TemplateOutcome(template_id=template_id, action="already_exists", error="SSID already in template"),
+        )
 
-    current_wlans.append(wlan_config)
-    template_data["wlans"] = current_wlans
-    mistapi.api.v1.orgs.templates.updateOrgTemplate(apisession, org_id, template_id, body=template_data)
-    logging.info("Appended SSID to template '%s'", template_name)
-    return _template_result(
-        template_name,
-        template_id,
-        group_info,
-        "updated_append",
-        "",
-        timestamp,
+    current_wlans.append(params.wlan_config)  # WHY: additive merge preserves other SSIDs
+    template_data["wlans"] = current_wlans  # WHY: PUT payload carries the merged wlan list
+    mistapi.api.v1.orgs.templates.updateOrgTemplate(  # WHY: PUT updated wlan list back to Mist
+        params.apisession, params.org_id, template_id, body=template_data
+    )
+    logging.info("Appended SSID to template '%s'", params.template_name)  # WHY: audit-log the append
+    return _template_result(  # WHY: return updated_append row for the phase report
+        params,
+        TemplateOutcome(template_id=template_id, action="updated_append"),
     )
 
 
-def _create_new_template(
-    template_name: str,
-    wlan_config: dict[str, Any],
-    group_id: str,
-    group_info: dict[str, str],
-    timestamp: str,
-    org_id: str,
-    apisession: Any,
+def _fetch_template_data(  # WHY: refresh helper isolated for reuse + test patching
+    params: TemplateOpParams,
+    template_id: str,
+    fallback: dict[str, Any],
+) -> dict[str, Any]:
+    """Fetch fresh template data via getOrgTemplate (fallback to cached copy)."""
+    full_response = mistapi.api.v1.orgs.templates.getOrgTemplate(  # WHY: refetch full template body
+        params.apisession, params.org_id, template_id
+    )
+    data: dict[str, Any] = full_response.data if hasattr(full_response, "data") else fallback  # WHY: fallback on stub
+    return data  # WHY: caller merges wlans into this payload
+
+
+def _ssid_already_present(wlans: list[dict[str, Any]], target_ssid: str) -> bool:  # WHY: dedupe predicate
+    """Return True when target_ssid already exists in the wlan list (case-insensitive)."""
+    lowered = target_ssid.lower()  # WHY: single normalization outside the loop
+    return any(wlan.get("ssid", "").lower() == lowered for wlan in wlans)  # WHY: case-insensitive membership
+
+
+def _create_new_template(  # WHY: fresh-create path (used by initial create + overwrite branch)
+    params: TemplateOpParams,
 ) -> dict[str, Any]:
     """Create a brand new template."""
-    body: dict[str, Any] = {
-        "name": template_name,
-        "wlans": [wlan_config],
+    group_id = params.group_info.get("group_id", "")  # WHY: bind template to sitegroup when known
+    body: dict[str, Any] = {  # WHY: request body for createOrgTemplate
+        "name": params.template_name,
+        "wlans": [params.wlan_config],
         "applies": ({"sitegroup_ids": [group_id]} if group_id else {}),
     }
-    response = mistapi.api.v1.orgs.templates.createOrgTemplate(apisession, org_id, body=body)
-    created = response.data if hasattr(response, "data") else {}
-    template_id: str = created.get("id", "")
-    logging.info(
+    response = mistapi.api.v1.orgs.templates.createOrgTemplate(  # WHY: POST createOrgTemplate
+        params.apisession, params.org_id, body=body
+    )
+    created = response.data if hasattr(response, "data") else {}  # WHY: mistapi returns .data
+    template_id: str = created.get("id", "")  # WHY: id returned by createOrgTemplate
+    logging.info(  # WHY: audit-log the successful create
         "Created template '%s' (id=%s)",
-        template_name,
+        params.template_name,
         template_id,
     )
-    return _template_result(
-        template_name,
-        template_id,
-        group_info,
-        "created",
-        "",
-        timestamp,
+    return _template_result(  # WHY: return created row for the phase report
+        params,
+        TemplateOutcome(template_id=template_id, action="created"),
     )
 
 
-def _template_result(
-    name: str,
-    template_id: str,
-    group_info: dict[str, str],
-    action: str,
-    error: str,
-    timestamp: str,
+def _template_result(  # WHY: unified result-record builder used by every template branch
+    params: TemplateOpParams,
+    outcome: TemplateOutcome,
 ) -> dict[str, Any]:
     """Build a template result record."""
-    return {
-        "template_name": name,
-        "template_id": template_id,
-        "group_name": group_info.get("group_id", ""),
-        "group_id": group_info.get("group_id", ""),
+    return {  # WHY: schema used by phase result files + summary printers
+        "template_name": params.template_name,  # WHY: identity fields sourced from params bundle
+        "template_id": outcome.template_id,
+        "group_name": params.group_info.get("group_id", ""),
+        "group_id": params.group_info.get("group_id", ""),
         "ssid_name": "",
-        "action": action,
-        "status": "failed" if action == "failed" else "success",
-        "error": error,
-        "timestamp": timestamp,
+        "action": outcome.action,
+        "status": "failed" if outcome.action == "failed" else "success",
+        "error": outcome.error,
+        "timestamp": params.timestamp,
     }
 
 
 # ------------------------------------------------------------------
 # Phase 5 helpers
 # ------------------------------------------------------------------
-
-
-def _build_disable_plan(
-    cache: dict[str, Any],
-) -> list[dict[str, Any]]:
-    """Build plan for disabling old SSIDs."""
-    matrix = cache.get("matrix", [])
-    plan: list[dict[str, Any]] = []
-    for row in matrix:
-        plan.append(_classify_disable_entry(row))
-    return plan
-
-
-def _classify_disable_entry(
-    row: dict[str, Any],
-) -> dict[str, Any]:
-    """Classify a single site for disable action."""
-    base = _build_disable_base(row)
-    if row.get("psk_detected"):
-        base["status"] = "skipped"
-        base["reason"] = "PSK site"
-        return base
-    if row.get("anomaly"):
-        base["status"] = "skipped"
-        base["reason"] = f"Anomaly: {row.get('anomaly_reason', '')}"
-        return base
-    if not row.get("ssid_enabled", True):
-        base["status"] = "already_disabled"
-        base["reason"] = "SSID already disabled"
-        return base
-    if not row.get("ssid_id"):
-        base["status"] = "skipped"
-        base["reason"] = "No SSID ID found"
-        return base
-    base["status"] = "to_disable"
-    base["reason"] = ""
-    return base
-
-
-def _build_disable_base(row: dict[str, Any]) -> dict[str, Any]:
-    """Build base dictionary for a disable plan entry."""
-    return {
-        "site_name": row.get("site_name", ""),
-        "site_id": row.get("site_id", ""),
-        "old_template_name": row.get("template_name", ""),
-        "old_template_id": row.get("template_id", ""),
-        "ssid_name": row.get("ssid_name", ""),
-        "ssid_id": row.get("ssid_id", ""),
-        "previous_enabled": row.get("ssid_enabled", True),
-        "timestamp": "",
-    }
-
-
-def _display_disable_plan(
-    plan: list[dict[str, Any]],
-) -> None:
-    """Print disable plan summary."""
-    to_disable = [e for e in plan if e["status"] == "to_disable"]
-    already = [e for e in plan if e["status"] == "already_disabled"]
-    skipped = [e for e in plan if e["status"] == "skipped"]
-
-    print("\n  Disable Plan:")
-    print(f"    To disable:       {len(to_disable)}")
-    print(f"    Already disabled: {len(already)}")
-    print(f"    Skipped:          {len(skipped)}")
+# WHY: The pure Phase-5 helpers (_build_disable_plan, _classify_disable_entry,
+# _build_disable_base, _display_disable_plan, _set_ssid_disabled) live in
+# ``_ssid_template_phase45`` and are re-exported from this module's import
+# block at the top of the file. Only ``_disable_single_ssid`` stays here
+# because tests patch ``mistapi`` through this module's namespace
+# (``patch.object(ssid_template_consolidation, "mistapi", ...)``), which only
+# intercepts functions whose ``__globals__`` binding is this module.
 
 
 def _disable_single_ssid(entry: dict[str, Any], org_id: str, apisession: Any) -> dict[str, Any]:
     """Disable a single SSID in its old template."""
-    template_id = entry.get("old_template_id", "")
-    ssid_id = entry.get("ssid_id", "")
-    result = dict(entry)
+    template_id = entry.get("old_template_id", "")  # WHY: identify template holding the SSID
+    ssid_id = entry.get("ssid_id", "")  # WHY: identify the WLAN row to disable
+    result = dict(entry)  # WHY: copy so we don't mutate the input plan entry
     try:
-        response = mistapi.api.v1.orgs.templates.getOrgTemplate(apisession, org_id, template_id)
-        template_data = response.data if hasattr(response, "data") else {}
-        wlans: list[dict[str, Any]] = template_data.get("wlans", []) or []
-
-        updated = _set_ssid_disabled(wlans, ssid_id)
-        if updated:
-            template_data["wlans"] = wlans
-            mistapi.api.v1.orgs.templates.updateOrgTemplate(apisession, org_id, template_id, body=template_data)
-            result["status"] = "disabled"
-            result["timestamp"] = datetime.now().isoformat()
-            logging.info(
-                "Disabled SSID %s in template %s",
-                ssid_id,
-                template_id,
-            )
-        else:
-            result["status"] = "skipped"
-            result["reason"] = "SSID not found in template"
-    except Exception as error:
-        logging.error(
-            "Failed to disable SSID %s in template %s: %s",
-            ssid_id,
-            template_id,
-            error,
-        )
-        result["status"] = "failed"
-        result["reason"] = str(error)
+        _apply_ssid_disable(result, template_id, ssid_id, org_id, apisession)  # WHY: mutates result in place
+    except Exception as error:  # WHY: convert API/network failure into structured record
+        logging.error("Failed to disable SSID %s in template %s: %s", ssid_id, template_id, error)  # WHY: audit-log
+        result["status"] = "failed"  # WHY: sentinel consumed by resume + summary logic
+        result["reason"] = str(error)  # WHY: surface stringified error for the report
     return result
 
 
-def _set_ssid_disabled(wlans: list[dict[str, Any]], ssid_id: str) -> bool:
-    """Set enabled=False on the matching SSID. Returns True if found."""
-    for wlan in wlans:
-        if wlan.get("id") == ssid_id:
-            wlan["enabled"] = False
-            return True
-    return False
+def _apply_ssid_disable(
+    result: dict[str, Any],
+    template_id: str,
+    ssid_id: str,
+    org_id: str,
+    apisession: Any,
+) -> None:
+    """Fetch template, flip SSID enabled=false, PUT it back (mutates result)."""
+    response = mistapi.api.v1.orgs.templates.getOrgTemplate(apisession, org_id, template_id)  # WHY: fetch current
+    template_data = response.data if hasattr(response, "data") else {}  # WHY: mistapi returns .data
+    wlans: list[dict[str, Any]] = template_data.get("wlans", []) or []  # WHY: empty template edge case
+    updated = _set_ssid_disabled(wlans, ssid_id)  # WHY: in-place flip; returns True if found
+    if updated:  # WHY: only PUT + report success when the WLAN row was located
+        template_data["wlans"] = wlans  # WHY: PUT payload carries the mutated wlan list
+        mistapi.api.v1.orgs.templates.updateOrgTemplate(  # WHY: PUT mutated wlans back
+            apisession, org_id, template_id, body=template_data,
+        )
+        result["status"] = "disabled"  # WHY: sentinel consumed by resume + summary logic
+        result["timestamp"] = datetime.now().isoformat()  # WHY: record when the flip happened
+        logging.info("Disabled SSID %s in template %s", ssid_id, template_id)  # WHY: audit-log success
+    else:  # WHY: SSID row not in template -> record skip, don't PUT
+        result["status"] = "skipped"  # WHY: sentinel consumed by resume + summary logic
+        result["reason"] = "SSID not found in template"  # WHY: surface skip reason in the report
+
+
+# WHY: ``_set_ssid_disabled`` is imported from ``_ssid_template_phase45`` at the
+# top of this module (re-exported for backward-compat).  The parent's earlier
+# in-file def duplicated the same implementation and triggered mypy no-redef;
+# tests still access it via ``_mod._set_ssid_disabled`` because the re-export
+# binds the name into this module's namespace.
 
 
 # ------------------------------------------------------------------
 # Shared output helpers
 # ------------------------------------------------------------------
-
-
-def _print_phase_summary(phase_label: str, results: list[dict[str, Any]]) -> None:
-    """Print a summary of phase results by status."""
-    status_counts: dict[str, int] = {}
-    for result in results:
-        status = result.get("status", "unknown")
-        status_counts[status] = status_counts.get(status, 0) + 1
-    print(f"\n  {phase_label} Summary:")
-    for status, count in sorted(status_counts.items()):
-        print(f"    {status}: {count}")
+# WHY: ``_print_phase_summary`` lives in ``_ssid_template_phase45`` and is
+# re-exported at the top of this module. No mistapi calls -> no reason to
+# keep a copy in the parent namespace.
