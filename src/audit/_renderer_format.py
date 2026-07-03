@@ -45,7 +45,12 @@ def _format_dict(obj: dict[object, object], indent: int) -> str:  # WHY: dict-br
     lines = ["{"]  # WHY: opening brace on its own line
     for idx, (key, val) in enumerate(items):  # WHY: idx drives trailing-comma placement
         ctx = _DictItemCtx(  # WHY: bundle six params into a single ctx object
-            key=key, val=val, idx=idx, total=total, inner_pad=inner_pad, indent=indent,
+            key=key,
+            val=val,
+            idx=idx,
+            total=total,
+            inner_pad=inner_pad,
+            indent=indent,
         )
         lines.append(_render_dict_item(ctx))  # WHY: append one rendered entry line
     lines.append(f"{pad}}}")  # WHY: closing brace aligned with parent indent

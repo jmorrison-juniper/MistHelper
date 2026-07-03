@@ -103,8 +103,7 @@ class _MermaidCluster:  # WHY: private cluster owned by AuditReportRenderer
             start = epoch_to_readable(timeline.first_action)  # WHY: shared formatter, module-level import
             end = epoch_to_readable(timeline.last_action)  # WHY: shared formatter, module-level import
             lines.append(  # WHY: emit one markdown bullet summarizing this admin's activity
-                f"- **{timeline.admin_name}**: {timeline.action_count} actions "
-                f"({start} to {end})"
+                f"- **{timeline.admin_name}**: {timeline.action_count} actions " f"({start} to {end})"
             )
 
     def object_changelogs(self, analysis: AuditAnalysisResult) -> str:  # WHY: public entry for per-object tables
@@ -116,10 +115,7 @@ class _MermaidCluster:  # WHY: private cluster owned by AuditReportRenderer
 
     def _emit_changelog_table(self, changelog: Any, lines: list[str]) -> None:
         """Append one changelog table for a single object."""
-        lines.append(
-            f"### {changelog.object_type}: {changelog.object_name} "
-            f"({len(changelog.changes)} changes)"
-        )
+        lines.append(f"### {changelog.object_type}: {changelog.object_name} " f"({len(changelog.changes)} changes)")
         lines.append("")  # WHY: blank line between heading and table
         lines.append("| Time | Admin | Action |")  # WHY: markdown table header
         lines.append("| - | - | - |")  # WHY: markdown separator row

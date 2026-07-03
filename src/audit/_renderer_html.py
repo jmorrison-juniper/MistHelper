@@ -10,6 +10,7 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 
 import html  # WHY: escape user-supplied strings before embedding in HTML
 import json  # WHY: serialize Plotly trace/layout dicts
+from dataclasses import dataclass  # WHY: frozen bundle for template fragments (fixes R0903)
 from datetime import UTC, datetime  # WHY: ISO-format timestamps for Plotly x-axis
 from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids circular import at runtime
 
@@ -147,27 +148,15 @@ class _HtmlCluster:  # WHY: private cluster owned by AuditReportRenderer, not pa
         )
 
 
-class _HtmlParts:  # WHY: bundle template kwargs so build() call stays under 5-param limit
-    """Bundle rendered HTML fragments passed into the document template.
+@dataclass(frozen=True)  # WHY: immutable bundle keeps template kwargs <=5 (fixes STRUCT-PARAMS/R0903)
+class _HtmlParts:  # WHY: bundle rendered fragments passed into the document template
+    """Bundle rendered HTML fragments passed into the document template."""
 
-    Kept as a plain class (not a dataclass) to avoid adding dependencies;
-    frozen semantics are unnecessary because instances are short-lived.
-    """
-
-    def __init__(  # WHY: struct-style ctor keeps template kwargs bundled in one object
-        self,
-        timeline_data: str,
-        diffs: str,
-        user_diffs: str,
-        rollback: str,
-        squashed: str,
-    ) -> None:
-        """Store the five HTML fragments produced by the cluster."""
-        self.timeline_data = timeline_data  # WHY: Plotly script for the timeline chart
-        self.diffs = diffs  # WHY: object-scoped diff sections
-        self.user_diffs = user_diffs  # WHY: admin-scoped diff sections
-        self.rollback = rollback  # WHY: rollback summary table
-        self.squashed = squashed  # WHY: starting-vs-ending config blocks
+    timeline_data: str  # WHY: Plotly script for the timeline chart
+    diffs: str  # WHY: object-scoped diff sections
+    user_diffs: str  # WHY: admin-scoped diff sections
+    rollback: str  # WHY: rollback summary table
+    squashed: str  # WHY: starting-vs-ending config blocks
 
 
 def _render_html_document(analysis: AuditAnalysisResult, parts: _HtmlParts) -> str:  # WHY: pure template renderer
@@ -334,8 +323,8 @@ def _group_changes_by_admin(
             user_changes.setdefault(change.admin_name, []).append(
                 (changelog.object_type, changelog.object_name, change)
             )
-    for admin in user_changes:  # WHY: chronological order per admin
-        user_changes[admin].sort(key=lambda row: row[2].timestamp)
+    for rows in user_changes.values():  # WHY: chronological order per admin
+        rows.sort(key=lambda row: row[2].timestamp)
     return user_changes
 
 
