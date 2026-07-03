@@ -144,15 +144,22 @@ class LoginOrchestrator:
             logging.error("APISession constructor returned None")  # Legacy error log preserved
             print("  X Failed to create API session")  # Legacy console message preserved verbatim
             return None  # Caller will short-circuit the login
-        if apisession._apitoken:  # Pre-existing tokens would skip the password path
-            logging.debug(  # Legacy debug log preserved verbatim
-                "Clearing API token to force email/password login (had %s token(s))",
-                len(apisession._apitoken),
-            )
-            apisession._apitoken = []  # Force the SDK to use the email/password credentials
-            apisession._apitoken_index = -1  # Reset the cursor that picks the next token
+        LoginOrchestrator._clear_pre_existing_token(apisession)  # Force email/password path
         logging.debug("APISession created successfully")  # Trace successful construction
         return apisession  # Hand the session back to the login pipeline
+
+    @staticmethod
+    def _clear_pre_existing_token(apisession: Any) -> None:
+        """Clear any cached SDK API token so email/password login is used."""
+        # WHY: extracted so _create_api_session drops from 29 lines to 22 (STRUCT-LENGTH).
+        if not apisession._apitoken:  # No cached token; nothing to clear
+            return  # Fast exit preserves legacy behaviour
+        logging.debug(  # Legacy debug log preserved verbatim
+            "Clearing API token to force email/password login (had %s token(s))",
+            len(apisession._apitoken),
+        )
+        apisession._apitoken = []  # Force the SDK to use the email/password credentials
+        apisession._apitoken_index = -1  # Reset the cursor that picks the next token
 
     @staticmethod
     def _initial_login(apisession: Any) -> dict[str, Any] | None:
@@ -275,11 +282,25 @@ class LoginOrchestrator:
         lower_message: str,
     ) -> None:
         """Print the legacy 'X ...' message for a generic login error."""
-        if "invalid" in lower_message or "credential" in lower_message:  # Credential surface
+        if LoginOrchestrator._is_credential_error(lower_message):  # Credential surface
             print("  X Invalid email or password")  # Legacy console message preserved verbatim
-        elif "two_factor" in lower_message or "2fa" in lower_message:  # 2FA failure surface
+            return  # Guard clause keeps CC at 4
+        if LoginOrchestrator._is_two_factor_error(lower_message):  # 2FA failure surface
             print("  X Two-factor authentication failed")  # Legacy console message preserved
-        elif "401" in error_message:  # HTTP 401 in the original message string
+            return  # Guard clause keeps CC at 4
+        if "401" in error_message:  # HTTP 401 in the original message string
             print("  X Invalid email or password (authentication failed)")  # Legacy message preserved
-        else:
-            print(f"  X Login failed: {login_error}")  # Legacy fallback message preserved verbatim
+            return  # Guard clause keeps CC at 4
+        print(f"  X Login failed: {login_error}")  # Legacy fallback message preserved verbatim
+
+    @staticmethod
+    def _is_credential_error(lower_message: str) -> bool:
+        """Return True when the error message reads as a credential problem."""
+        # WHY: extracting the two-substring check drops _print_generic_error_message CC from 6 to 4.
+        return "invalid" in lower_message or "credential" in lower_message  # Same substrings as legacy
+
+    @staticmethod
+    def _is_two_factor_error(lower_message: str) -> bool:
+        """Return True when the error message reads as a 2FA failure."""
+        # WHY: extracting the two-substring check drops _print_generic_error_message CC from 6 to 4.
+        return "two_factor" in lower_message or "2fa" in lower_message  # Same substrings as legacy
