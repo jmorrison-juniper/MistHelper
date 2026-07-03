@@ -62,6 +62,17 @@ from ._ssid_template_phase2 import (  # WHY: re-export phase 2 helpers reference
     _print_conflicts,  # WHY: re-export for backward-compat imports
     _SsidTemplatePhase2Cluster,  # WHY: phase-2 site-variables cluster bound in __init__
 )
+from ._ssid_template_phase3 import (  # WHY: re-export phase 3 helpers referenced by name in tests
+    _add_pilot_group,  # WHY: re-export for backward-compat imports
+    _assign_matrix_sites,  # WHY: re-export for backward-compat imports
+    _build_assign_results,  # WHY: re-export for backward-compat imports
+    _build_cluster_groups,  # WHY: re-export for backward-compat imports
+    _build_failed_assign_results,  # WHY: re-export for backward-compat imports
+    _compute_group_plan,  # WHY: re-export for backward-compat imports
+    _display_group_plan,  # WHY: re-export for backward-compat imports
+    _get_existing_group_site_ids,  # WHY: re-export for backward-compat imports
+    _SsidTemplatePhase3Cluster,  # WHY: phase-3 site-groups cluster bound in __init__
+)
 
 # ---------------------------------------------------------------------------
 # Type aliases for injected dependencies
@@ -173,6 +184,7 @@ class SSIDTemplateConsolidationManager:
             _SsidTemplateCacheCluster(self),  # WHY: cache + resume + phase-result I/O cluster
             _SsidTemplatePhase1Cluster(self),  # WHY: read-only audit + matrix + deviation cluster
             _SsidTemplatePhase2Cluster(self),  # WHY: site-variables plan + write cluster
+            _SsidTemplatePhase3Cluster(self),  # WHY: site-groups plan + create + assign cluster
         )
 
     def __getattr__(self, name: str) -> Any:
@@ -338,74 +350,9 @@ class SSIDTemplateConsolidationManager:
     # ------------------------------------------------------------------
     # Phase 3: Site Groups
     # ------------------------------------------------------------------
-
-    def phase3_site_groups(self) -> None:
-        """Phase 3 orchestrator — create groups and assign sites."""
-        print("\n=== Phase 3: Create / Assign Site Groups ===")
-        logging.info("Phase 3: Starting site group configuration")
-
-        cached = self._load_cache()
-        if not cached:
-            print("! Phase 1 cache not found. Run Phase 1 first.")
-            return
-        self.cache = cached
-
-        resuming, prior_results = self._offer_resume(3, [])
-        group_plan = _compute_group_plan(self.cache)
-        _display_group_plan(group_plan)
-
-        group_count = len(group_plan["groups"])
-        if not self._confirm_or_cancel(f"Create/assign {group_count} site groups?"):
-            return
-
-        group_plan = self._ensure_groups_exist(group_plan)
-        results = self._assign_sites_to_groups(group_plan, prior_results if resuming else [])
-        self._save_phase_results(3, results)
-        self.write_data_fn(
-            data=results,
-            filename_or_table="ssid_consolidation_site_groups",
-            api_function_name="ssidConsolidationSiteGroups",
-        )
-        _print_phase_summary("Phase 3", results)
-
-    def _ensure_groups_exist(self, plan: dict[str, Any]) -> dict[str, Any]:
-        """Create missing site groups and record their IDs."""
-        for group in plan.get("groups", []):
-            if group["exists"]:
-                logging.info(
-                    "Group '%s' already exists (id=%s)",
-                    group["group_name"],
-                    group["group_id"],
-                )
-                continue
-            _create_site_group(group, self.org_id, self.apisession)
-        return plan
-
-    def _assign_sites_to_groups(
-        self,
-        plan: dict[str, Any],
-        resume_from: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        """Assign sites to their target groups via additive merge."""
-        completed_ids: set[tuple[str, str]] = {
-            (str(row.get("site_id", "")), str(row.get("group_id", "")))
-            for row in resume_from
-            if row.get("status") == "assigned"
-        }
-        results: list[dict[str, Any]] = list(resume_from) if resume_from else []
-
-        for group in plan.get("groups", []):
-            if not group.get("group_id"):
-                continue
-            group_results = _assign_group_sites(
-                group,
-                completed_ids,
-                self.cache,
-                self.org_id,
-                self.apisession,
-            )
-            results.extend(group_results)
-        return results
+    # WHY: phase3_site_groups + _ensure_groups_exist +
+    # _assign_sites_to_groups live on the phase-3 cluster; access is
+    # transparent via __getattr__ delegation.
 
     # ------------------------------------------------------------------
     # Phase 4: Templates
@@ -587,93 +534,15 @@ def _write_single_site_vars(
 # ------------------------------------------------------------------
 # Phase 3 helpers
 # ------------------------------------------------------------------
-
-
-def _compute_group_plan(cache: dict[str, Any]) -> dict[str, Any]:
-    """Build site group assignment plan from matrix data."""
-    matrix = cache.get("matrix", [])
-    mxtunnels = cache.get("data", {}).get("mxtunnels", [])
-    existing_groups = cache.get("data", {}).get("sitegroups", [])
-    existing_lookup = {group.get("name", ""): group for group in existing_groups}
-
-    cluster_names = sorted({tunnel.get("name", "") for tunnel in mxtunnels if tunnel.get("name")})
-    groups = _build_cluster_groups(cluster_names, existing_lookup)
-    _add_pilot_group(groups, existing_lookup)
-
-    group_name_map = {g["group_name"]: g for g in groups}
-    _assign_matrix_sites(matrix, group_name_map)
-    return {"groups": groups}
-
-
-def _build_cluster_groups(
-    cluster_names: list[str],
-    existing_lookup: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Build production group entries for each cluster."""
-    groups: list[dict[str, Any]] = []
-    for cluster_name in cluster_names:
-        group_name = f"misthelper_prod_{cluster_name}"
-        existing = existing_lookup.get(group_name)
-        groups.append(
-            {
-                "group_name": group_name,
-                "cluster_name": cluster_name,
-                "group_id": (existing.get("id", "") if existing else ""),
-                "exists": bool(existing),
-                "sites": [],
-            }
-        )
-    return groups
-
-
-def _add_pilot_group(
-    groups: list[dict[str, Any]],
-    existing_lookup: dict[str, dict[str, Any]],
-) -> None:
-    """Add the pilot site group entry."""
-    pilot_existing = existing_lookup.get("misthelper_pilot")
-    groups.append(
-        {
-            "group_name": "misthelper_pilot",
-            "cluster_name": "pilot",
-            "group_id": (pilot_existing.get("id", "") if pilot_existing else ""),
-            "exists": bool(pilot_existing),
-            "sites": [],
-        }
-    )
-
-
-def _assign_matrix_sites(
-    matrix: list[dict[str, Any]],
-    group_name_map: dict[str, dict[str, Any]],
-) -> None:
-    """Assign matrix sites to their target groups."""
-    for row in matrix:
-        if row.get("psk_detected") or row.get("anomaly"):
-            continue
-        target = row.get("target_group", "")
-        mapped = "misthelper_pilot" if target == "pilot" else f"misthelper_prod_{target}"
-        target_group = group_name_map.get(mapped)
-        if target_group:
-            target_group["sites"].append(
-                {
-                    "site_id": row.get("site_id", ""),
-                    "site_name": row.get("site_name", ""),
-                }
-            )
-
-
-def _display_group_plan(plan: dict[str, Any]) -> None:
-    """Print the group assignment plan."""
-    print("\n  Site Group Plan:")
-    for group in plan.get("groups", []):
-        status = "exists" if group["exists"] else "to create"
-        site_count = len(group["sites"])
-        print(f"    {group['group_name']} ({status}) " f"- {site_count} sites")
-        for site in group["sites"][:5]:
-            print(f"      - {site['site_name']}")
-        if len(group["sites"]) > 5:
-            print(f"      ... and {len(group['sites']) - 5} more")
+# WHY: pure helpers (_compute_group_plan, _build_cluster_groups,
+# _add_pilot_group, _assign_matrix_sites, _display_group_plan,
+# _build_assign_results, _build_failed_assign_results,
+# _get_existing_group_site_ids) live on the phase-3 cluster module
+# and are re-exported from this parent for test import continuity.
+# _create_site_group and _assign_group_sites stay in the parent so
+# their ``mistapi`` name resolution follows the parent module's
+# ``__globals__`` — required by tests that use
+# ``patch.object(_mod, "mistapi", ...)``.
 
 
 def _create_site_group(group: dict[str, Any], org_id: str, apisession: Any) -> None:
@@ -742,61 +611,10 @@ def _assign_group_sites(
         return _build_failed_assign_results(sites_to_assign, group, group_id, error)
 
 
-def _build_assign_results(
-    sites: list[dict[str, Any]],
-    existing_ids: list[str],
-    group: dict[str, Any],
-    group_id: str,
-) -> list[dict[str, Any]]:
-    """Build assignment result records for successful operations."""
-    timestamp = datetime.now().isoformat()
-    results: list[dict[str, Any]] = []
-    for site in sites:
-        status = "already_assigned" if site["site_id"] in existing_ids else "assigned"
-        results.append(
-            {
-                "site_name": site["site_name"],
-                "site_id": site["site_id"],
-                "group_name": group["group_name"],
-                "group_id": group_id,
-                "cluster_name": group.get("cluster_name", ""),
-                "status": status,
-                "reason": "",
-                "timestamp": timestamp,
-            }
-        )
-    return results
-
-
-def _build_failed_assign_results(
-    sites: list[dict[str, Any]],
-    group: dict[str, Any],
-    group_id: str,
-    error: Exception,
-) -> list[dict[str, Any]]:
-    """Build failed assignment result records."""
-    return [
-        {
-            "site_name": site["site_name"],
-            "site_id": site["site_id"],
-            "group_name": group["group_name"],
-            "group_id": group_id,
-            "cluster_name": group.get("cluster_name", ""),
-            "status": "failed",
-            "reason": str(error),
-            "timestamp": datetime.now().isoformat(),
-        }
-        for site in sites
-    ]
-
-
-def _get_existing_group_site_ids(cache: dict[str, Any], group_id: str) -> list[str]:
-    """Get current site_ids from cached sitegroup data."""
-    for group in cache.get("data", {}).get("sitegroups", []):
-        if group.get("id") == group_id:
-            ids: list[str] = group.get("site_ids", []) or []
-            return ids
-    return []
+# WHY: _build_assign_results, _build_failed_assign_results, and
+# _get_existing_group_site_ids live on the phase-3 cluster module and
+# are imported at the top of this parent for tests + for the
+# ``_assign_group_sites`` helper above.
 
 
 # ------------------------------------------------------------------
