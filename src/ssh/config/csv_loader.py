@@ -73,8 +73,16 @@ class CommandCsvLoader:
             commands.append(first_cell)  # Accept this row's command
             return  # Done with this row
         # Format an invalid-row marker the same way the original did
-        invalid_cmd = first_cell[:50] + "..." if len(first_cell) > 50 else first_cell
+        invalid_cmd = CommandCsvLoader._truncate_invalid(first_cell)  # Extracted to keep CC<=5
         invalid.append(f"line {row_num}: {invalid_cmd}")  # Track for warning summary
+
+    @staticmethod
+    def _truncate_invalid(first_cell: str) -> str:
+        """Trim a rejected command to 50 chars with an ellipsis when needed."""
+        # WHY: pulling the ternary out of _consume_csv_row drops that method's CC from 6 to 5.
+        if len(first_cell) > 50:  # Original truncation threshold preserved
+            return first_cell[:50] + "..."  # Long form -- trim + ellipsis marker
+        return first_cell  # Short enough to display verbatim
 
     @staticmethod
     def _warn_invalid_rows(invalid: list[str], csv_file_path: str) -> None:
