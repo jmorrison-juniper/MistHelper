@@ -12,7 +12,7 @@ import logging  # Action logging for every phase
 import multiprocessing  # Default thread-count derivation
 from typing import Any  # Loose typing for argparse Namespace + env config dict
 
-from src.ssh.batch.batch_executor import BatchExecutor  # Multi-command, single-host executor
+from src.ssh.batch.batch_executor import BatchExecutor, BatchRunRequest  # Multi-command, single-host executor
 from src.ssh.batch.multi_host_runner import MultiHostRunner  # Threaded multi-host orchestrator
 from src.ssh.command.command_runner import SingleCommandRunner  # Single-command, single-host orchestrator
 from src.ssh.config.csv_loader import CommandCsvLoader  # SSH_COMMANDS.CSV loader
@@ -233,7 +233,16 @@ class AppRunner:
             )
         if len(hosts) == 1:  # Single host, many commands
             logging.info("Dispatching to BatchExecutor.run (1 host / %d cmds)", len(commands))
-            return bool(BatchExecutor.run(hosts[0], user, password, commands, args.port, args.timeout, use_shell))
+            batch_request = BatchRunRequest(  # WHY: dataclass keeps BatchExecutor.run at 1 param.
+                hostname=hosts[0],
+                username=user,
+                password=password,
+                commands=tuple(commands),
+                port=args.port,
+                timeout=args.timeout,
+                use_shell=use_shell,
+            )
+            return bool(BatchExecutor.run(batch_request))
         return AppRunner._dispatch_multi_host(hosts, user, password, commands, args, use_shell)  # Many hosts
 
     @staticmethod
