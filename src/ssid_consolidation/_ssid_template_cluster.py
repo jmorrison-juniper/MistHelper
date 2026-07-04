@@ -47,7 +47,7 @@ class _ClusterBase:  # WHY: shared wrapper base for every ssid_template cluster
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy so self.org_id / helpers work
 
-    def _call(self, name: str, *args: Any, **kwargs: Any) -> Any:
+    def _call(self, name: str, *args: Any, **kwargs: Any) -> Any:  # WHY: dynamic dispatch to parent by name
         """Invoke a method on the parent manager by name.
 
         Routes through :func:`getattr` so ``patch.object(mgr, name, ...)`` in
@@ -57,7 +57,7 @@ class _ClusterBase:  # WHY: shared wrapper base for every ssid_template cluster
         """
         return getattr(self._mm, name)(*args, **kwargs)  # WHY: dynamic dispatch bypasses W0212
 
-    def _load_cache_or_bail(self) -> bool:
+    def _load_cache_or_bail(self) -> bool:  # WHY: shared Phase 2-5 cache preamble
         """Load Phase 1 cache onto parent; return False + bail msg when missing.
 
         Phase 2/3/4/5 orchestrators all share the same "load cache or abort"
@@ -66,8 +66,8 @@ class _ClusterBase:  # WHY: shared wrapper base for every ssid_template cluster
         """
         parent = self._mm  # WHY: proxy alias
         cached = parent._load_cache()  # noqa: SLF001 — cluster helper is intra-package
-        if not cached:
+        if not cached:  # WHY: cache missing means Phase 1 was skipped
             print("! Phase 1 cache not found. Run Phase 1 first.")  # WHY: user bail msg
-            return False
+            return False  # WHY: signal to caller to abort the phase
         parent.cache = cached  # WHY: hand loaded cache to parent state
-        return True
+        return True  # WHY: cache loaded successfully, phase can proceed
