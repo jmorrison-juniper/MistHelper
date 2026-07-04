@@ -6,13 +6,17 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from src.site import site_config_manager as module
-from src.site.site_config_manager import SiteConfigManager, configure_site_config_manager_dependencies
+from src.site.site_config_manager import (
+    SiteConfigDependencies,
+    SiteConfigManager,
+    configure_site_config_manager_dependencies,
+)
 
 
 def _configure_dependencies() -> None:
     """Configure minimal dependency graph for SiteConfigManager unit tests."""
-    configure_site_config_manager_dependencies(
-        apisession_dependency=object(),
+    deps = SiteConfigDependencies(
+        apisession=object(),
         config_utils=SimpleNamespace(
             get_cached_or_prompted_org_id=MagicMock(return_value="org-1"),
             check_stop_signal=MagicMock(return_value=False),
@@ -20,18 +24,24 @@ def _configure_dependencies() -> None:
         file_path_utils=SimpleNamespace(get_csv_path=MagicMock(return_value="test.csv")),
         input_utils=SimpleNamespace(safe_input=MagicMock(return_value="CREATE")),
         data_exporter=SimpleNamespace(write_with_format_selection=MagicMock()),
-        mistapi_dependency=SimpleNamespace(),
+        mistapi=SimpleNamespace(),
         default_api_page_limit=1000,
     )
+    configure_site_config_manager_dependencies(deps)
+
+
+def _set_safe_input(value: str) -> None:
+    """Replace input_utils.safe_input on the module-level dependency holder."""
+    module._DEPS.input_utils = SimpleNamespace(safe_input=MagicMock(return_value=value))
 
 
 def test_confirm_test_site_creation_requires_exact_keyword() -> None:
     """Menu 171 confirmation accepts only exact CREATE keyword."""
     _configure_dependencies()
-    module.InputUtils.safe_input = MagicMock(return_value="create")
+    _set_safe_input("create")
     assert SiteConfigManager._confirm_test_site_creation() is False
 
-    module.InputUtils.safe_input = MagicMock(return_value="CREATE")
+    _set_safe_input("CREATE")
     assert SiteConfigManager._confirm_test_site_creation() is True
 
 
@@ -61,10 +71,10 @@ def test_build_site_payload_omits_missing_optional_fields() -> None:
 def test_confirm_profile_assignment_requires_assign_keyword() -> None:
     """Menu 174 confirmation gate enforces exact ASSIGN keyword."""
     _configure_dependencies()
-    module.InputUtils.safe_input = MagicMock(return_value="yes")
+    _set_safe_input("yes")
     assert SiteConfigManager._confirm_profile_assignment([{"mac": "a"}], []) is False
 
-    module.InputUtils.safe_input = MagicMock(return_value="ASSIGN")
+    _set_safe_input("ASSIGN")
     assert SiteConfigManager._confirm_profile_assignment([{"mac": "a"}], []) is True
 
 
