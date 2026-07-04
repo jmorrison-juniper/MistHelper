@@ -13,7 +13,7 @@ from typing import Any  # Wildcard inner type for the loosely-typed Mist asset d
 
 
 @dataclass(frozen=True, slots=True)
-class MapWizardPreviewContext:
+class MapWizardPreviewContext:  # Bundle inputs for the preview render step.
     """Inputs the preview step needs to render the upcoming changes."""
 
     current_map: dict[str, Any]  # Existing map record so original PPM/dimensions show in the preview.
@@ -22,7 +22,7 @@ class MapWizardPreviewContext:
 
 
 @dataclass(frozen=True, slots=True)
-class MapWizardApplyTarget:
+class MapWizardApplyTarget:  # Bundle the target-map identifiers and upload path.
     """Identifies the map being replaced and the image file going into it."""
 
     site_id: str  # Mist site UUID that owns the map being updated.
@@ -31,7 +31,7 @@ class MapWizardApplyTarget:
 
 
 @dataclass(frozen=True, slots=True)
-class MapWizardApplyContext:
+class MapWizardApplyContext:  # Bundle mutable apply-step state (assets + errors).
     """Mutable state the apply step uses to scale assets and record failures."""
 
     current_map: dict[str, Any]  # Pre-replacement record (drives wall/wayfinding path scaling).
@@ -40,7 +40,7 @@ class MapWizardApplyContext:
 
 
 @dataclass(frozen=True, slots=True)
-class MapWizardSummaryContext:
+class MapWizardSummaryContext:  # Bundle inputs for the summary printer.
     """Inputs the final wizard summary printer needs to display results."""
 
     map_name: str  # Human-readable map name printed in the summary header.
