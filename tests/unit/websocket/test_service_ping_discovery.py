@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from src.websocket.service_ping_discovery import (
+    ServicePingDiscoveryDependencies,
     ServicePingDiscoveryMixin,
     configure_service_ping_discovery_dependencies,
 )
@@ -63,21 +64,23 @@ def _configure_discovery_with_defaults(*, safe_inputs: list[str] | None = None) 
     """Configure extracted discovery dependencies for a test case."""
     safe_input_mock = MagicMock(side_effect=safe_inputs or [])
     configure_service_ping_discovery_dependencies(
-        apisession_dependency=object(),
-        mistapi_dependency=SimpleNamespace(
-            api=SimpleNamespace(
-                v1=SimpleNamespace(
-                    sites=SimpleNamespace(
-                        devices=SimpleNamespace(getSiteDevice=MagicMock()),
-                        stats=SimpleNamespace(getSiteDeviceStats=MagicMock()),
+        ServicePingDiscoveryDependencies(
+            apisession=object(),
+            mistapi=SimpleNamespace(
+                api=SimpleNamespace(
+                    v1=SimpleNamespace(
+                        sites=SimpleNamespace(
+                            devices=SimpleNamespace(getSiteDevice=MagicMock()),
+                            stats=SimpleNamespace(getSiteDeviceStats=MagicMock()),
+                        )
                     )
                 )
-            )
-        ),
-        api_tenant_fetch_utils=_TenantUtils,
-        config_utils=SimpleNamespace(get_cached_or_prompted_org_id=MagicMock(return_value="org-1")),
-        api_fetch_utils=SimpleNamespace(organization_services=MagicMock(return_value=[{"name": "svc-a"}])),
-        input_utils=SimpleNamespace(safe_input=safe_input_mock),
+            ),
+            api_tenant_fetch_utils=_TenantUtils,
+            config_utils=SimpleNamespace(get_cached_or_prompted_org_id=MagicMock(return_value="org-1")),
+            api_fetch_utils=SimpleNamespace(organization_services=MagicMock(return_value=[{"name": "svc-a"}])),
+            input_utils=SimpleNamespace(safe_input=safe_input_mock),
+        )
     )
     return safe_input_mock
 
