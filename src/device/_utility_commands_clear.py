@@ -48,7 +48,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         body = self._build_arp_body(site_id, device_id)  # WHY: gather ARP filter inputs
         # WHY: typed-CLEAR gate below rejects mistypes to prevent accidental wipes
-        if not self._confirm_destructive(
+        if not self._confirm_destructive(  # WHY: enforce typed-CLEAR safety gate before wiping ARP
             "Type 'CLEAR' to clear ARP cache: ",
             "CLEAR",
             "clear_arp",
@@ -101,7 +101,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         if body is None:  # WHY: missing neighbor -> already messaged
             return  # WHY: bail without confirming when input invalid
         # WHY: typed-CLEAR gate below rejects mistypes to prevent accidental wipes
-        if not self._confirm_destructive(
+        if not self._confirm_destructive(  # WHY: enforce typed-CLEAR safety gate before wiping BGP
             "Type 'CLEAR' to clear BGP routes: ",
             "CLEAR",
             "clear_bgp",
@@ -122,9 +122,9 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         body: dict[str, Any] = {"neighbor": neighbor}  # WHY: seed with required field
         self._maybe_add_bgp_type(body)  # WHY: optional direction filter
         # WHY: optional VRF scope narrows clear to a single VRF instance
-        self._maybe_add_input(body, "vrf", "VRF (Enter to skip): ", "clear_bgp_vrf")
+        self._maybe_add_input(body, "vrf", "VRF (Enter to skip): ", "clear_bgp_vrf")  # WHY: attach VRF filter
         # WHY: optional VC node targets one member of a virtual chassis
-        self._maybe_add_input(
+        self._maybe_add_input(  # WHY: attach optional VC-node target to the BGP clear body
             body,
             "node",
             "Node (node0/node1, Enter to skip): ",
@@ -186,7 +186,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         if body is None:  # WHY: cancelled at CLEAR-ALL prompt
             return  # WHY: honor operator's cancel decision
         # WHY: typed-CLEAR gate below rejects mistypes to prevent accidental wipes
-        if not self._confirm_destructive(
+        if not self._confirm_destructive(  # WHY: enforce typed-CLEAR gate before wiping sessions
             "Type 'CLEAR' to clear session(s): ",
             "CLEAR",
             "clear_session",
@@ -231,7 +231,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         if not self._apply_session_filter(body, service_name, session_ids_input):  # WHY: honor CLEAR-ALL cancel
             return None  # WHY: cancelled at CLEAR-ALL prompt
         # WHY: optional VC node targets one member of a virtual chassis
-        self._maybe_add_input(
+        self._maybe_add_input(  # WHY: attach optional VC-node target to the session-clear body
             body,
             "node",
             "Node (node0/node1, Enter to skip): ",
@@ -277,17 +277,26 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         logging.info("Menu #150: Clear MAC Table")  # WHY: audit menu entry
         selection = self._select_site_and_device("clear_mac_table")  # WHY: switch/gateway op
         if not selection:  # WHY: cancelled -> abort
-            return
+            return  # WHY: no work when operator cancels selection
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         body: dict[str, Any] = {}  # WHY: seed empty; only add optional node
-        self._maybe_add_input(body, "node", "Node (node0/node1, Enter to skip): ", "clear_mac_node")
-        if not self._confirm_destructive("Type 'CLEAR' to clear MAC table: ", "CLEAR", "clear_mac_table"):
+        self._maybe_add_input(  # WHY: attach optional VC-node target to MAC-clear body
+            body,
+            "node",
+            "Node (node0/node1, Enter to skip): ",
+            "clear_mac_node",
+        )
+        if not self._confirm_destructive(  # WHY: enforce typed-CLEAR gate before wiping MAC table
+            "Type 'CLEAR' to clear MAC table: ",
+            "CLEAR",
+            "clear_mac_table",
+        ):
             return  # WHY: typed-keyword gate aborts on cancel
         self._invoke_mac_clear(site_id, device_id, body)  # WHY: run API + report
 
-    def _invoke_mac_clear(self, site_id: str, device_id: str, body: dict[str, Any]) -> None:
+    def _invoke_mac_clear(self, site_id: str, device_id: str, body: dict[str, Any]) -> None:  # WHY: MAC-clear caller
         """Call the MAC-table-clear SDK and report success/failure."""
-        try:
+        try:  # WHY: guard SDK call so transport errors do not crash the wizard
             response = mistapi.api.v1.sites.devices.clearSiteDeviceMacTable(
                 self._apisession,
                 site_id,
@@ -303,12 +312,12 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             logging.exception("Clear MAC table failed: %s", error)  # WHY: audit failure with stack
             print(f"! Clear MAC table failed: {error}")  # WHY: surface error to operator
 
-    def clear_bpdu_error(self) -> None:
+    def clear_bpdu_error(self) -> None:  # WHY: menu 151 destructive BPDU-error clear entry
         """Menu 151: Clear BPDU errors on switch."""
         logging.info("Menu #151: Clear BPDU Errors")  # WHY: audit menu entry
         selection = self._select_site_and_device("clear_bpdu_error", "switch")  # WHY: switch-only
         if not selection:  # WHY: cancelled -> abort
-            return
+            return  # WHY: no work when operator cancels selection
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
         port_id = self._select_port_optional(site_id, device_id)  # WHY: optional port target
         port_target = port_id if port_id else "all"  # WHY: default to all ports
