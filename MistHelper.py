@@ -18303,16 +18303,23 @@ class VirtualChassisManager:  # Virtual chassis manager.
     def convert_single(dry_run: bool = False) -> None:  # Convert a single VC.
         """Convert a single VC switch to virtual MAC (Menu 92)."""
         from src.device.virtual_chassis import (  # Import the impl.
+            VCIODeps,
+        )
+        from src.device.virtual_chassis import (
             VirtualChassisManager as _VC,
         )
 
+        io_deps = VCIODeps(  # Bundle IO/cache dependencies to satisfy the 5-param limit.
+            get_csv_path_fn=FilePathUtils.get_csv_path,  # Resolve cache paths.
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,  # Refresh cached CSV.
+            inventory_generator=OrgInventoryExporter.inventory,  # Rebuild OrgInventory.csv.
+            sites_generator=OrgSiteExporter.sites,  # Rebuild SiteList.csv (unused here).
+        )
         _VC.convert_single(  # Delegate the conversion.
             apisession=apisession,
-            select_site_fn=PromptUtils.select_site,
+            io_deps=io_deps,
             safe_input_fn=InputUtils.safe_input,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-            inventory_generator=OrgInventoryExporter.inventory,
+            select_site_fn=PromptUtils.select_site,
             dry_run=dry_run,
         )
 
@@ -18320,35 +18327,48 @@ class VirtualChassisManager:  # Virtual chassis manager.
     def convert_by_site_list() -> None:  # Convert by site list.
         """Bulk convert VC switches from site list CSV (Menu 93)."""
         from src.device.virtual_chassis import (  # Import the impl.
+            VCIODeps,
+        )
+        from src.device.virtual_chassis import (
             VirtualChassisManager as _VC,
         )
 
+        io_deps = VCIODeps(  # Bundle IO/cache dependencies for the bulk path.
+            get_csv_path_fn=FilePathUtils.get_csv_path,  # Cache path resolver.
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,  # Refresh cached CSV.
+            inventory_generator=OrgInventoryExporter.inventory,  # Rebuild OrgInventory.csv.
+            sites_generator=OrgSiteExporter.sites,  # Rebuild SiteList.csv.
+            create_csv_template_fn=FilePathUtils.create_csv_template,  # Write empty VCConvert.CSV.
+        )
         _VC.convert_by_site_list(  # Delegate the conversion.
             apisession=apisession,
+            io_deps=io_deps,
             safe_input_fn=InputUtils.safe_input,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            create_csv_template_fn=FilePathUtils.create_csv_template,
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-            inventory_generator=OrgInventoryExporter.inventory,
-            sites_generator=OrgSiteExporter.sites,
         )
 
     @staticmethod
     def check_status() -> None:  # Check VC status.
         """Check conversion status of all VC switches (Menu 94)."""
         from src.device.virtual_chassis import (  # Import the impl.
+            VCExportDeps,
+            VCIODeps,
+        )
+        from src.device.virtual_chassis import (
             VirtualChassisManager as _VC,
         )
 
-        _VC.check_status(  # Delegate the check.
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-            inventory_generator=OrgInventoryExporter.inventory,
-            sites_generator=OrgSiteExporter.sites,
-            flatten_fields_fn=DataProcessingUtils.flatten_nested_fields,
-            escape_multiline_fn=DataProcessingUtils.escape_multiline,
-            save_data_fn=DataExporter.write_with_format_selection,
+        io_deps = VCIODeps(  # Bundle IO/cache dependencies.
+            get_csv_path_fn=FilePathUtils.get_csv_path,  # Cache path resolver.
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,  # Refresh cached CSV.
+            inventory_generator=OrgInventoryExporter.inventory,  # Rebuild OrgInventory.csv.
+            sites_generator=OrgSiteExporter.sites,  # Rebuild SiteList.csv.
         )
+        export_deps = VCExportDeps(  # Bundle export dependencies.
+            flatten_fields_fn=DataProcessingUtils.flatten_nested_fields,  # Flatten nested rows.
+            escape_multiline_fn=DataProcessingUtils.escape_multiline,  # Escape multiline content.
+            save_data_fn=DataExporter.write_with_format_selection,  # Physical writer.
+        )
+        _VC.check_status(io_deps=io_deps, export_deps=export_deps)  # Delegate the check.
 
 
 # ============================================================================

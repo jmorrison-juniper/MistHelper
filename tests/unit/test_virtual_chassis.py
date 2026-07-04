@@ -17,9 +17,33 @@ import pytest
 # We need to mock mistapi before importing the module under test because
 # the module uses lazy ``import mistapi`` inside certain methods.
 # ---------------------------------------------------------------------------
-_mock_mistapi = MagicMock()
-with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
-    from src.device.virtual_chassis import VirtualChassisManager
+_mock_mistapi = MagicMock()  # WHY: stub mistapi to avoid real SDK during import
+with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):  # WHY: ensure lazy imports resolve
+    from src.device.virtual_chassis import (  # WHY: import public API + dataclass groupings
+        VCExportDeps,
+        VCIODeps,
+        VirtualChassisManager,
+    )
+
+
+def _make_io_deps(deps):  # WHY: builds VCIODeps from the shared fixture dict for public-method calls
+    """Build a ``VCIODeps`` instance from the ``deps`` fixture mock dict."""
+    return VCIODeps(  # WHY: dataclass groups the 5 IO callables the manager needs
+        get_csv_path_fn=deps["get_csv_path_fn"],  # WHY: resolve on-disk CSV paths in tests
+        check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],  # WHY: satisfy CSV-refresh dependency
+        inventory_generator=deps["inventory_generator"],  # WHY: inventory export dependency
+        sites_generator=deps["sites_generator"],  # WHY: sites export dependency
+        create_csv_template_fn=deps["create_csv_template_fn"],  # WHY: optional template creator for bulk flow
+    )
+
+
+def _make_export_deps(deps):  # WHY: builds VCExportDeps for status-export flow tests
+    """Build a ``VCExportDeps`` instance from the ``deps`` fixture mock dict."""
+    return VCExportDeps(  # WHY: dataclass groups the 3 export callables status uses
+        flatten_fields_fn=deps["flatten_fields_fn"],  # WHY: flatten nested payloads for CSV rows
+        escape_multiline_fn=deps["escape_multiline_fn"],  # WHY: sanitize embedded newlines
+        save_data_fn=deps["save_data_fn"],  # WHY: persist final status report
+    )
 
 
 # ===================================================================
@@ -699,16 +723,14 @@ class TestConvertSingle:
     """Tests for the convert_single public entry-point."""
 
     def test_no_site_selected(self, deps, capsys):
-        deps["select_site_fn"].return_value = None
-        VirtualChassisManager.convert_single(
-            apisession=deps["apisession"],
-            select_site_fn=deps["select_site_fn"],
-            safe_input_fn=deps["safe_input_fn"],
-            get_csv_path_fn=deps["get_csv_path_fn"],
-            check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-            inventory_generator=deps["inventory_generator"],
+        deps["select_site_fn"].return_value = None  # WHY: simulate user cancelling site picker
+        VirtualChassisManager.convert_single(  # WHY: exercise the guard branch that exits early
+            apisession=deps["apisession"],  # WHY: mock API session, not touched on cancel path
+            io_deps=_make_io_deps(deps),  # WHY: grouped IO callables via VCIODeps
+            safe_input_fn=deps["safe_input_fn"],  # WHY: kept separate from grouped IO deps
+            select_site_fn=deps["select_site_fn"],  # WHY: user-facing site picker mock
         )
-        assert "No site selected" in capsys.readouterr().out
+        assert "No site selected" in capsys.readouterr().out  # WHY: verify guard-branch output
 
     def test_no_switches_found(self, deps, tmp_path, capsys):
         inv_path = str(tmp_path / "data" / "OrgInventory.csv")
@@ -718,13 +740,11 @@ class TestConvertSingle:
             resp = MagicMock()
             resp.data = {"name": "TestSite"}
             _mock_mistapi.api.v1.sites.getSite.return_value = resp
-            VirtualChassisManager.convert_single(
-                apisession=deps["apisession"],
-                select_site_fn=deps["select_site_fn"],
-                safe_input_fn=deps["safe_input_fn"],
-                get_csv_path_fn=deps["get_csv_path_fn"],
-                check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-                inventory_generator=deps["inventory_generator"],
+            VirtualChassisManager.convert_single(  # WHY: run full flow to hit no-switches guard
+                apisession=deps["apisession"],  # WHY: mock API session
+                io_deps=_make_io_deps(deps),  # WHY: grouped IO callables via VCIODeps
+                safe_input_fn=deps["safe_input_fn"],  # WHY: input mock
+                select_site_fn=deps["select_site_fn"],  # WHY: site picker mock
             )
         assert "No virtual chassis switches" in capsys.readouterr().out
 
@@ -740,14 +760,12 @@ class TestConvertSingle:
             resp = MagicMock()
             resp.data = {"name": "TestSite"}
             _mock_mistapi.api.v1.sites.getSite.return_value = resp
-            VirtualChassisManager.convert_single(
-                apisession=deps["apisession"],
-                select_site_fn=deps["select_site_fn"],
-                safe_input_fn=deps["safe_input_fn"],
-                get_csv_path_fn=deps["get_csv_path_fn"],
-                check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-                inventory_generator=deps["inventory_generator"],
-                dry_run=True,
+            VirtualChassisManager.convert_single(  # WHY: exercise dry_run branch
+                apisession=deps["apisession"],  # WHY: mock API session
+                io_deps=_make_io_deps(deps),  # WHY: grouped IO callables
+                safe_input_fn=deps["safe_input_fn"],  # WHY: input mock preselects switch 0
+                select_site_fn=deps["select_site_fn"],  # WHY: site picker mock
+                dry_run=True,  # WHY: assert we hit the DRY RUN print
             )
         assert "DRY RUN" in capsys.readouterr().out
 
@@ -764,13 +782,11 @@ class TestConvertSingle:
             resp = MagicMock()
             resp.data = {"name": "TestSite"}
             _mock_mistapi.api.v1.sites.getSite.return_value = resp
-            VirtualChassisManager.convert_single(
-                apisession=deps["apisession"],
-                select_site_fn=deps["select_site_fn"],
-                safe_input_fn=deps["safe_input_fn"],
-                get_csv_path_fn=deps["get_csv_path_fn"],
-                check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-                inventory_generator=deps["inventory_generator"],
+            VirtualChassisManager.convert_single(  # WHY: exercise cancellation branch
+                apisession=deps["apisession"],  # WHY: mock API session
+                io_deps=_make_io_deps(deps),  # WHY: grouped IO callables
+                safe_input_fn=deps["safe_input_fn"],  # WHY: input mock provides "0" then "NOPE"
+                select_site_fn=deps["select_site_fn"],  # WHY: site picker mock
             )
         assert "cancelled" in capsys.readouterr().out
 
@@ -786,13 +802,11 @@ class TestConvertSingle:
             resp = MagicMock()
             resp.data = {"name": "TestSite"}
             _mock_mistapi.api.v1.sites.getSite.return_value = resp
-            VirtualChassisManager.convert_single(
-                apisession=deps["apisession"],
-                select_site_fn=deps["select_site_fn"],
-                safe_input_fn=deps["safe_input_fn"],
-                get_csv_path_fn=deps["get_csv_path_fn"],
-                check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-                inventory_generator=deps["inventory_generator"],
+            VirtualChassisManager.convert_single(  # WHY: verify DESTRUCTIVE prompt path
+                apisession=deps["apisession"],  # WHY: mock API session
+                io_deps=_make_io_deps(deps),  # WHY: grouped IO callables
+                safe_input_fn=deps["safe_input_fn"],  # WHY: input mock returns non-numeric selection
+                select_site_fn=deps["select_site_fn"],  # WHY: site picker mock
             )
         # Should return silently with no crash
         out = capsys.readouterr().out
@@ -818,13 +832,11 @@ class TestConvertSingle:
                 "_prompt_switch_selection",
                 return_value={"name": "sw1", "id": ""},
             ):
-                VirtualChassisManager.convert_single(
-                    apisession=deps["apisession"],
-                    select_site_fn=deps["select_site_fn"],
-                    safe_input_fn=deps["safe_input_fn"],
-                    get_csv_path_fn=deps["get_csv_path_fn"],
-                    check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-                    inventory_generator=deps["inventory_generator"],
+                VirtualChassisManager.convert_single(  # WHY: verify missing-device_id guard
+                    apisession=deps["apisession"],  # WHY: mock API session
+                    io_deps=_make_io_deps(deps),  # WHY: grouped IO callables
+                    safe_input_fn=deps["safe_input_fn"],  # WHY: input mock
+                    select_site_fn=deps["select_site_fn"],  # WHY: site picker mock
                 )
         assert "Missing device_id" in capsys.readouterr().out
 
@@ -841,17 +853,13 @@ class TestConvertBySiteList:
         csv_path = str(tmp_path / "data" / "VCConvert.CSV")
         _write_vc_csv(csv_path, [])
         deps["get_csv_path_fn"].side_effect = lambda f: str(tmp_path / "data" / f)
-        VirtualChassisManager.convert_by_site_list(
-            apisession=deps["apisession"],
-            safe_input_fn=deps["safe_input_fn"],
-            get_csv_path_fn=deps["get_csv_path_fn"],
-            create_csv_template_fn=deps["create_csv_template_fn"],
-            check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-            inventory_generator=deps["inventory_generator"],
-            sites_generator=deps["sites_generator"],
+        VirtualChassisManager.convert_by_site_list(  # WHY: verify empty-CSV early exit
+            apisession=deps["apisession"],  # WHY: mock API session
+            io_deps=_make_io_deps(deps),  # WHY: grouped IO callables include template creator
+            safe_input_fn=deps["safe_input_fn"],  # WHY: input mock
         )
         # Empty CSV returns empty list, function returns early before printing
-        deps["check_and_generate_csv_fn"].assert_not_called()
+        deps["check_and_generate_csv_fn"].assert_not_called()  # WHY: prove short-circuit before refresh
 
     def test_no_valid_sites(self, deps, tmp_path, capsys):
         csv_path = str(tmp_path / "data" / "VCConvert.CSV")
@@ -863,14 +871,10 @@ class TestConvertBySiteList:
             return str(tmp_path / "data" / f)
 
         deps["get_csv_path_fn"].side_effect = path_fn
-        VirtualChassisManager.convert_by_site_list(
-            apisession=deps["apisession"],
-            safe_input_fn=deps["safe_input_fn"],
-            get_csv_path_fn=deps["get_csv_path_fn"],
-            create_csv_template_fn=deps["create_csv_template_fn"],
-            check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-            inventory_generator=deps["inventory_generator"],
-            sites_generator=deps["sites_generator"],
+        VirtualChassisManager.convert_by_site_list(  # WHY: verify no-valid-sites branch
+            apisession=deps["apisession"],  # WHY: mock API session
+            io_deps=_make_io_deps(deps),  # WHY: grouped IO callables
+            safe_input_fn=deps["safe_input_fn"],  # WHY: input mock
         )
         out = capsys.readouterr().out
         assert "No valid sites found" in out
@@ -891,14 +895,10 @@ class TestConvertBySiteList:
 
         deps["get_csv_path_fn"].side_effect = path_fn
         deps["safe_input_fn"].return_value = "no"
-        VirtualChassisManager.convert_by_site_list(
-            apisession=deps["apisession"],
-            safe_input_fn=deps["safe_input_fn"],
-            get_csv_path_fn=deps["get_csv_path_fn"],
-            create_csv_template_fn=deps["create_csv_template_fn"],
-            check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-            inventory_generator=deps["inventory_generator"],
-            sites_generator=deps["sites_generator"],
+        VirtualChassisManager.convert_by_site_list(  # WHY: verify user-cancel path
+            apisession=deps["apisession"],  # WHY: mock API session
+            io_deps=_make_io_deps(deps),  # WHY: grouped IO callables
+            safe_input_fn=deps["safe_input_fn"],  # WHY: input mock returns "no" to abort
         )
         out = capsys.readouterr().out
         assert "cancelled" in out
@@ -920,14 +920,9 @@ class TestCheckStatus:
             return str(tmp_path / "data" / f)
 
         deps["get_csv_path_fn"].side_effect = path_fn
-        VirtualChassisManager.check_status(
-            get_csv_path_fn=deps["get_csv_path_fn"],
-            check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-            inventory_generator=deps["inventory_generator"],
-            sites_generator=deps["sites_generator"],
-            flatten_fields_fn=deps["flatten_fields_fn"],
-            escape_multiline_fn=deps["escape_multiline_fn"],
-            save_data_fn=deps["save_data_fn"],
+        VirtualChassisManager.check_status(  # WHY: verify empty-vc-mac guard branch
+            io_deps=_make_io_deps(deps),  # WHY: grouped IO callables
+            export_deps=_make_export_deps(deps),  # WHY: grouped export callables
         )
         out = capsys.readouterr().out
         assert "No switches with vc_mac" in out
@@ -958,14 +953,9 @@ class TestCheckStatus:
             return str(tmp_path / "data" / f)
 
         deps["get_csv_path_fn"].side_effect = path_fn
-        VirtualChassisManager.check_status(
-            get_csv_path_fn=deps["get_csv_path_fn"],
-            check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-            inventory_generator=deps["inventory_generator"],
-            sites_generator=deps["sites_generator"],
-            flatten_fields_fn=deps["flatten_fields_fn"],
-            escape_multiline_fn=deps["escape_multiline_fn"],
-            save_data_fn=deps["save_data_fn"],
+        VirtualChassisManager.check_status(  # WHY: verify full status-export flow
+            io_deps=_make_io_deps(deps),  # WHY: grouped IO callables
+            export_deps=_make_export_deps(deps),  # WHY: grouped export callables
         )
         out = capsys.readouterr().out
         assert "Converted to virtual MAC: 1" in out
@@ -1028,11 +1018,9 @@ class TestConvertSingleCoverageGaps:
                 with patch.object(VirtualChassisManager, "_execute_conversion") as mock_exec:  # spy
                     VirtualChassisManager.convert_single(  # call with preflight failing
                         apisession=deps["apisession"],
-                        select_site_fn=deps["select_site_fn"],
+                        io_deps=_make_io_deps(deps),  # WHY: grouped IO callables via VCIODeps
                         safe_input_fn=deps["safe_input_fn"],
-                        get_csv_path_fn=deps["get_csv_path_fn"],
-                        check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-                        inventory_generator=deps["inventory_generator"],
+                        select_site_fn=deps["select_site_fn"],
                     )
                     mock_exec.assert_not_called()  # line 102 hit: returned before _execute_conversion
 
@@ -1055,11 +1043,9 @@ class TestConvertSingleCoverageGaps:
                 with patch.object(VirtualChassisManager, "_execute_conversion") as mock_exec:  # spy
                     VirtualChassisManager.convert_single(  # call with all guards passing
                         apisession=deps["apisession"],
-                        select_site_fn=deps["select_site_fn"],
+                        io_deps=_make_io_deps(deps),  # WHY: grouped IO callables via VCIODeps
                         safe_input_fn=deps["safe_input_fn"],
-                        get_csv_path_fn=deps["get_csv_path_fn"],
-                        check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-                        inventory_generator=deps["inventory_generator"],
+                        select_site_fn=deps["select_site_fn"],
                     )
                     mock_exec.assert_called_once()  # line 112: _execute_conversion reached
 
@@ -1085,12 +1071,8 @@ class TestConvertBySiteListCoverageGaps:
         deps["get_csv_path_fn"].side_effect = path_fn  # return correct paths per filename
         VirtualChassisManager.convert_by_site_list(  # call; should return early at line 153
             apisession=deps["apisession"],
+            io_deps=_make_io_deps(deps),  # WHY: grouped IO callables include template creator
             safe_input_fn=deps["safe_input_fn"],
-            get_csv_path_fn=deps["get_csv_path_fn"],
-            create_csv_template_fn=deps["create_csv_template_fn"],
-            check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-            inventory_generator=deps["inventory_generator"],
-            sites_generator=deps["sites_generator"],
         )
         assert "SiteA" in capsys.readouterr().out  # site names printed before early return
 
@@ -1109,12 +1091,8 @@ class TestConvertBySiteListCoverageGaps:
         deps["get_csv_path_fn"].side_effect = path_fn  # return correct paths per filename
         VirtualChassisManager.convert_by_site_list(  # call; should hit lines 169-171
             apisession=deps["apisession"],
+            io_deps=_make_io_deps(deps),  # WHY: grouped IO callables via VCIODeps
             safe_input_fn=deps["safe_input_fn"],
-            get_csv_path_fn=deps["get_csv_path_fn"],
-            create_csv_template_fn=deps["create_csv_template_fn"],
-            check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-            inventory_generator=deps["inventory_generator"],
-            sites_generator=deps["sites_generator"],
         )
         out = capsys.readouterr().out  # capture printed output
         assert "No virtual chassis switches" in out  # lines 169-171: message printed
@@ -1139,12 +1117,8 @@ class TestConvertBySiteListCoverageGaps:
         with patch.object(VirtualChassisManager, "_execute_bulk_conversion") as mock_exec:  # spy
             VirtualChassisManager.convert_by_site_list(  # call; should reach line 184
                 apisession=deps["apisession"],
+                io_deps=_make_io_deps(deps),  # WHY: grouped IO callables via VCIODeps
                 safe_input_fn=deps["safe_input_fn"],
-                get_csv_path_fn=deps["get_csv_path_fn"],
-                create_csv_template_fn=deps["create_csv_template_fn"],
-                check_and_generate_csv_fn=deps["check_and_generate_csv_fn"],
-                inventory_generator=deps["inventory_generator"],
-                sites_generator=deps["sites_generator"],
             )
         mock_exec.assert_called_once()  # line 184: _execute_bulk_conversion reached
 
