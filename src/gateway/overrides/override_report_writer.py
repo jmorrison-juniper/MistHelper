@@ -102,11 +102,25 @@ class OverrideReportWriter:
         target_ports: list[str],
     ) -> None:
         """Print the legacy operator-facing console summary block verbatim."""
-        if entries:  # Same distinct-device math used for the console block as for the log block
-            gateways_with_overrides = len({entry["device_id"] for entry in entries})  # Unique device_id count
-        else:
-            gateways_with_overrides = 0  # No entries means zero gateways had overrides (sanity for print line)
-        total_overridden_ports = len(entries)  # Count of CSV rows for the console summary line
+        # WHY: distinct-device math matches the log-summary branch above for parity across outputs.
+        gateways_with_overrides = len({entry["device_id"] for entry in entries}) if entries else 0
+        OverrideReportWriter._print_summary_lines(  # WHY: extracted printer keeps this method under STRUCT-LENGTH.
+            total_overridden_ports=len(entries),
+            gateways_with_overrides=gateways_with_overrides,
+            total_gateways=total_gateways,
+            devices_with_overrides_count=devices_with_overrides_count,
+            target_ports=target_ports,
+        )
+
+    @staticmethod
+    def _print_summary_lines(
+        total_overridden_ports: int,
+        gateways_with_overrides: int,
+        total_gateways: int,
+        devices_with_overrides_count: int,
+        target_ports: list[str],
+    ) -> None:
+        """Emit the legacy console summary lines given precomputed stats."""
         saved_calls = total_gateways - devices_with_overrides_count  # API calls saved by the override pre-filter
         print(f"! Gateway override report written to {OUTPUT_FILENAME}")  # Legacy console line preserved
         print(  # Legacy console line preserved verbatim across two physical lines
