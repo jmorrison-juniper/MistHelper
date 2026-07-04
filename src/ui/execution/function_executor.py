@@ -150,7 +150,9 @@ class FunctionExecutor:  # WHY: extracted from MistHelperTUI to own Live-mode ex
         tui = self._tui  # Local alias
         if not (isinstance(parsed_data, dict) and "results" in parsed_data):  # Only paginate result-wrapped payloads
             return result, parsed_data
-        session = tui.function_params.get("mist_session") or tui.function_params.get("apisession")  # WHY: pager needs a session
+        session = tui.function_params.get("mist_session") or tui.function_params.get(
+            "apisession"
+        )  # WHY: pager needs a session
         if not session:  # Guard: no session -> return single page as-is
             return result, parsed_data
         return self._collect_pages(result, parsed_data, session)  # Delegate page loop to helper
@@ -163,7 +165,9 @@ class FunctionExecutor:  # WHY: extracted from MistHelperTUI to own Live-mode ex
         while self._has_next_cursor(result):  # Loop while cursor is available
             page_count += 1  # Increment page counter
             tui.output_lines = [f"[EXECUTING] Fetching page {page_count} (total results so far: {len(accumulated)})..."]
-            result, parsed_data, stop = self._fetch_next_page(result, session, page_count, accumulated)  # WHY: one page step
+            result, parsed_data, stop = self._fetch_next_page(
+                result, session, page_count, accumulated
+            )  # WHY: one page step
             if stop:  # Error or empty page -> exit loop
                 break
         if page_count > 1:  # Patch the accumulated list in
