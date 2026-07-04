@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging  # Structured logging for the new host runner
 from typing import TYPE_CHECKING
 
-from src.ssh.batch.batch_executor import BatchExecutor  # Real collaborator (no façade)
+from src.ssh.batch.batch_executor import BatchExecutor, BatchRunRequest  # Real collaborator (no façade)
 from src.ssh.batch.interactive_batch_executor import (  # Real collaborator (no façade)
     InteractiveBatchExecutor,
     InteractiveSessionRequest,
@@ -122,7 +122,16 @@ class HostRunner:
             interactive_success = InteractiveBatchExecutor.run(interactive_request)
             return (hostname, interactive_success, f"{len(commands)} interactive commands executed")
         # Default — sequential batch
-        batch_success = BatchExecutor.run(hostname, username, password, commands, port, timeout, use_shell)
+        batch_request = BatchRunRequest(  # WHY: dataclass keeps BatchExecutor.run at 1 param.
+            hostname=hostname,
+            username=username,
+            password=password,
+            commands=tuple(commands),
+            port=port,
+            timeout=timeout,
+            use_shell=use_shell,
+        )
+        batch_success = BatchExecutor.run(batch_request)
         return (hostname, batch_success, f"{len(commands)} commands executed")
 
     @staticmethod

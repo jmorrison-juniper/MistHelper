@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.ssh.batch.batch_executor import BatchExecutor  # T013c: extracted multi-command executor
+from src.ssh.batch.batch_executor import BatchExecutor, BatchRunRequest  # T013c: extracted multi-command executor
 from src.ssh.batch.host_runner import HostRunner  # T013c: extracted per-host worker
 from src.ssh.batch.interactive_batch_executor import (  # T013c: extracted interactive executor
     InteractiveBatchExecutor,
@@ -772,12 +772,14 @@ class TestRunMultipleSSHCommands:
         mock_exec.return_value = (True, "output", "")
 
         result = BatchExecutor.run(
-            hostname="10.0.0.1",
-            username="admin",
-            password="pass",
-            commands=["show version", "show route"],
-            port=22,
-            timeout=30,
+            BatchRunRequest(
+                hostname="10.0.0.1",
+                username="admin",
+                password="pass",
+                commands=("show version", "show route"),
+                port=22,
+                timeout=30,
+            )
         )
         assert result is True
         assert mock_exec.call_count == 2
@@ -792,7 +794,14 @@ class TestRunMultipleSSHCommands:
         mock_connect.return_value.connect.return_value = (None, None)
 
         result = BatchExecutor.run(
-            hostname="10.0.0.1", username="admin", password="pass", commands=["show version"], port=22, timeout=30
+            BatchRunRequest(
+                hostname="10.0.0.1",
+                username="admin",
+                password="pass",
+                commands=("show version",),
+                port=22,
+                timeout=30,
+            )
         )
         assert result is False
         mock_exec.assert_not_called()
@@ -808,19 +817,21 @@ class TestRunMultipleSSHCommands:
         mock_exec.side_effect = [(True, "ok", ""), (False, "", "error")]
 
         result = BatchExecutor.run(
-            hostname="10.0.0.1",
-            username="admin",
-            password="pass",
-            commands=["show version", "bad cmd"],
-            port=22,
-            timeout=30,
+            BatchRunRequest(
+                hostname="10.0.0.1",
+                username="admin",
+                password="pass",
+                commands=("show version", "bad cmd"),
+                port=22,
+                timeout=30,
+            )
         )
         assert result is False
 
     def test_missing_params_raises(self):
         """Missing required params raises ValueError."""
         with pytest.raises(ValueError):
-            BatchExecutor.run(hostname=None, username="admin", password="pass")
+            BatchRunRequest(hostname="", username="admin", password="pass")
 
     @patch("src.ssh.batch.batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
@@ -834,7 +845,7 @@ class TestRunMultipleSSHCommands:
 
         config = SSHConnectionConfig(hostname="10.0.0.1", username="admin", password="pass")
         exec_config = SSHExecutionConfig(commands=["show version"])
-        result = BatchExecutor.run(config=config, exec_config=exec_config)
+        result = BatchExecutor.run(BatchRunRequest.from_configs(config, exec_config))
         assert result is True
 
 
@@ -1412,7 +1423,14 @@ class TestRunMultipleSSHCommandsDeep:
         mock_exec.side_effect = RuntimeError("SSH channel closed")
 
         result = BatchExecutor.run(
-            hostname="10.0.0.1", username="admin", password="pass", commands=["show version"], port=22, timeout=30
+            BatchRunRequest(
+                hostname="10.0.0.1",
+                username="admin",
+                password="pass",
+                commands=("show version",),
+                port=22,
+                timeout=30,
+            )
         )
         assert result is False
         mock_disc.assert_called()
@@ -1427,9 +1445,16 @@ class TestRunMultipleSSHCommandsDeep:
         mock_connect.return_value.connect.return_value = (MagicMock(), "data/ssh_known_hosts")
         mock_exec.return_value = (True, "output", "")
 
-        commands = [f"show interface ge-0/0/{i}" for i in range(10)]
+        commands = tuple(f"show interface ge-0/0/{i}" for i in range(10))
         result = BatchExecutor.run(
-            hostname="10.0.0.1", username="admin", password="pass", commands=commands, port=22, timeout=30
+            BatchRunRequest(
+                hostname="10.0.0.1",
+                username="admin",
+                password="pass",
+                commands=commands,
+                port=22,
+                timeout=30,
+            )
         )
         assert result is True
         assert mock_exec.call_count == 10
@@ -1445,7 +1470,14 @@ class TestRunMultipleSSHCommandsDeep:
         mock_exec.return_value = (True, "", "")
 
         result = BatchExecutor.run(
-            hostname="10.0.0.1", username="admin", password="pass", commands=["show version"], port=22, timeout=30
+            BatchRunRequest(
+                hostname="10.0.0.1",
+                username="admin",
+                password="pass",
+                commands=("show version",),
+                port=22,
+                timeout=30,
+            )
         )
         assert result is True
 
