@@ -18304,6 +18304,8 @@ class VirtualChassisManager:  # Virtual chassis manager.
         """Convert a single VC switch to virtual MAC (Menu 92)."""
         from src.device.virtual_chassis import (  # Import the impl.
             VCIODeps,
+        )
+        from src.device.virtual_chassis import (
             VirtualChassisManager as _VC,
         )
 
@@ -18326,6 +18328,8 @@ class VirtualChassisManager:  # Virtual chassis manager.
         """Bulk convert VC switches from site list CSV (Menu 93)."""
         from src.device.virtual_chassis import (  # Import the impl.
             VCIODeps,
+        )
+        from src.device.virtual_chassis import (
             VirtualChassisManager as _VC,
         )
 
@@ -18348,6 +18352,8 @@ class VirtualChassisManager:  # Virtual chassis manager.
         from src.device.virtual_chassis import (  # Import the impl.
             VCExportDeps,
             VCIODeps,
+        )
+        from src.device.virtual_chassis import (
             VirtualChassisManager as _VC,
         )
 
