@@ -607,7 +607,9 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
     ) -> None:
         """Print the SELECT PORTS banner, device info, optional fallback notice, and the table."""
         print("\n" + "=" * 80)  # WHY: visual separator before header
-        print(f" SELECT PORTS FROM {request.device_type.upper()}: {request.device_name}")  # WHY: identify device
+        print(
+            f" SELECT PORTS FROM {request.device_type.upper()}: {request.device_name}"
+        )  # nosec B608 - display header, not SQL
         print("=" * 80)  # WHY: visual separator after title
         print(f"  Device MAC: {request.device_mac}")  # WHY: show MAC so operator can confirm target
         print(f"  Available Ports: {len(request.available_ports)}")  # WHY: show count up-front
