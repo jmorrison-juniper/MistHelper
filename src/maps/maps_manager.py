@@ -2585,9 +2585,10 @@ class MapsManager:  # WHY: declare MapsManager class
         """Delegating wrapper: payload assembly lives in src.maps._maps_coverage."""
         # Wrapper kept so launch_viewer_standalone can still pass
         # self._collect_map_payload as a bound callable to launch_flask_viewer.
-        from src.maps._maps_coverage import collect_map_payload  # WHY: import required module
+        from src.maps._maps_coverage import _MapsCoverage  # WHY: import extracted coverage helper class.
 
-        return collect_map_payload(self, api_session, all_sites, site_id, map_id)  # WHY: return computed result
+        coverage = _MapsCoverage(self)  # WHY: bind extracted helper to this MapsManager for __getattr__ delegation.
+        return coverage._collect_map_payload(api_session, all_sites, site_id, map_id)  # WHY: forward args to helper.
 
     def _build_map_data_response(
         self, site_id, map_id, map_data, layers
@@ -2595,9 +2596,10 @@ class MapsManager:  # WHY: declare MapsManager class
         """Delegating wrapper: response assembly lives in src.maps._maps_coverage."""
         # Wrapper kept so launch_viewer_standalone can still pass
         # self._build_map_data_response as a bound callable to launch_flask_viewer.
-        from src.maps._maps_coverage import build_map_data_response  # WHY: import required module
+        from src.maps._maps_coverage import _MapsCoverage  # WHY: import extracted coverage helper class.
 
-        return build_map_data_response(self, site_id, map_id, map_data, layers)  # WHY: return computed result
+        coverage = _MapsCoverage(self)  # WHY: bind extracted helper to this MapsManager for __getattr__ delegation.
+        return coverage._build_map_data_response(site_id, map_id, map_data, layers)  # WHY: forward args to helper.
 
     def launch_viewer_standalone(self):  # WHY: declare public method launch_viewer_standalone
         """Delegating wrapper: matplotlib viewer + launcher live in src.maps._maps_matplotlib."""
