@@ -11,7 +11,7 @@ import concurrent.futures  # ThreadPoolExecutor + wait()
 import logging  # Structured logging for the new multi-host runner
 from typing import TYPE_CHECKING, Any
 
-from src.ssh.batch.host_runner import HostRunner  # Real per-host worker (no façade)
+from src.ssh.batch.host_runner import HostRunner, HostRunRequest  # Real per-host worker + request bundle
 
 if TYPE_CHECKING:  # Imported only for type hints — avoids circular import at runtime
     from src.ssh.ssh_runner import SSHConnectionConfig, SSHExecutionConfig
@@ -162,13 +162,15 @@ class MultiHostRunner:
             future_to_host = {  # Submit one task per host (real HostRunner call — no façade)
                 executor.submit(
                     HostRunner.run,
-                    host,
-                    username,
-                    password,
-                    commands,
-                    port,
-                    timeout,
-                    use_shell,
+                    HostRunRequest(  # Immutable bundle collapses the 8-arg signature
+                        hostname=host,  # Per-host target
+                        username=username,  # Shared login
+                        password=password,  # Shared secret
+                        commands=tuple(commands),  # Immutable command tuple
+                        port=port,  # Shared TCP port
+                        timeout=timeout,  # Shared timeout
+                        use_shell=use_shell,  # Shared shell flag
+                    ),
                 ): host
                 for host in hosts
             }

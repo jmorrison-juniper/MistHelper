@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.ssh.batch.batch_executor import BatchExecutor, BatchRunRequest  # T013c: extracted multi-command executor
-from src.ssh.batch.host_runner import HostRunner  # T013c: extracted per-host worker
+from src.ssh.batch.host_runner import HostRunner, HostRunRequest  # T013c: extracted per-host worker + request bundle
 from src.ssh.batch.interactive_batch_executor import (  # T013c: extracted interactive executor
     InteractiveBatchExecutor,
     InteractiveSessionRequest,
@@ -860,9 +860,15 @@ class TestRunSSHCommandOnHost:
         """Single command delegates to SingleCommandRunner."""
         mock_run_single.return_value = True
 
-        hostname, success, summary = HostRunner.run(
-            hostname="10.0.0.1", username="admin", password="pass", commands=["show version"], port=22, timeout=30
+        request = HostRunRequest(
+            hostname="10.0.0.1",
+            username="admin",
+            password="pass",
+            commands=("show version",),
+            port=22,
+            timeout=30,
         )
+        hostname, success, summary = HostRunner.run(request)
         assert hostname == "10.0.0.1"
         assert success is True
         mock_run_single.assert_called_once()
@@ -872,14 +878,15 @@ class TestRunSSHCommandOnHost:
         """Multiple non-interactive commands delegate to BatchExecutor."""
         mock_run_multi.return_value = True
 
-        hostname, success, summary = HostRunner.run(
+        request = HostRunRequest(
             hostname="10.0.0.1",
             username="admin",
             password="pass",
-            commands=["show version", "show route"],
+            commands=("show version", "show route"),
             port=22,
             timeout=30,
         )
+        hostname, success, summary = HostRunner.run(request)
         assert hostname == "10.0.0.1"
         assert success is True
         mock_run_multi.assert_called_once()
@@ -889,14 +896,15 @@ class TestRunSSHCommandOnHost:
         """Interactive commands (su) detected and routed correctly."""
         mock_run_interactive.return_value = True
 
-        hostname, success, summary = HostRunner.run(
+        request = HostRunRequest(
             hostname="10.0.0.1",
             username="admin",
             password="pass",
-            commands=["su", "password123", "show version"],
+            commands=("su", "password123", "show version"),
             port=22,
             timeout=30,
         )
+        hostname, success, summary = HostRunner.run(request)
         assert hostname == "10.0.0.1"
         assert success is True
         mock_run_interactive.assert_called_once()
@@ -904,16 +912,22 @@ class TestRunSSHCommandOnHost:
     def test_missing_params_raises(self):
         """Missing required params raises ValueError."""
         with pytest.raises(ValueError):
-            HostRunner.run(hostname=None, username="admin", password="pass")
+            HostRunRequest(hostname="", username="admin", password="pass")
 
     @patch("src.ssh.batch.host_runner.SingleCommandRunner.run")
     def test_exception_returns_failure(self, mock_run_single):
         """Exception during execution returns failure tuple."""
         mock_run_single.side_effect = RuntimeError("connection lost")
 
-        hostname, success, summary = HostRunner.run(
-            hostname="10.0.0.1", username="admin", password="pass", commands=["show version"], port=22, timeout=30
+        request = HostRunRequest(
+            hostname="10.0.0.1",
+            username="admin",
+            password="pass",
+            commands=("show version",),
+            port=22,
+            timeout=30,
         )
+        hostname, success, summary = HostRunner.run(request)
         assert hostname == "10.0.0.1"
         assert success is False
         assert "Error" in summary
@@ -925,7 +939,8 @@ class TestRunSSHCommandOnHost:
 
         config = SSHConnectionConfig(hostname="10.0.0.1", username="admin", password="pass")
         exec_config = SSHExecutionConfig(commands=["show version", "show route"])
-        hostname, success, summary = HostRunner.run(config=config, exec_config=exec_config)
+        request = HostRunRequest.from_configs(config=config, exec_config=exec_config)
+        hostname, success, summary = HostRunner.run(request)
         assert hostname == "10.0.0.1"
         assert success is True
 
