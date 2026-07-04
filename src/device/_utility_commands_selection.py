@@ -94,13 +94,13 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         return (site_id, device_id)  # WHY: both IDs known; caller continues to stats lookup
 
     @staticmethod
-    def _warn_if_offline(device_info: dict[str, Any]) -> None:
+    def _warn_if_offline(device_info: dict[str, Any]) -> None:  # WHY: soft-warn helper
         """Emit a soft warning when the target device is not connected."""
         status = device_info.get("status", "unknown")  # WHY: default keeps message informative
         if status != "connected":  # WHY: only warn on non-connected states
             print(f"[WARNING] Device status is '{status}' - command may not succeed.")  # WHY: operator hint
 
-    def _get_device_info(self, site_id: str, device_id: str) -> dict[str, Any] | None:
+    def _get_device_info(self, site_id: str, device_id: str) -> dict[str, Any] | None:  # WHY: type+status
         """Fetch device type and status from the stats API."""
         try:  # WHY: mistapi may raise on network/auth failures
             response = mistapi.api.v1.sites.stats.getSiteDeviceStats(  # WHY: authoritative type+status source
@@ -116,37 +116,37 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
     # Port selection helpers
     # ------------------------------------------------------------------
 
-    def _select_port_from_device(self, site_id: str, device_id: str) -> str | None:
+    def _select_port_from_device(self, site_id: str, device_id: str) -> str | None:  # WHY: port picker
         """Fetch ports from device stats, display list, return selected."""
         stats = self._fetch_stats_data(site_id, device_id)  # WHY: shared stats fetch + guard
         if stats is None:  # WHY: stats unavailable, fall back to manual entry
             # WHY: route via parent so test patches on duc apply
-            return cast("str | None", self._call("_manual_port_entry"))
+            return cast("str | None", self._call("_manual_port_entry"))  # WHY: manual fallback path
         ports = stats.get("ports", [])  # WHY: newer devices use the 'ports' array
         if ports:  # WHY: prefer structured port list when present
             # WHY: route via parent for test patches
-            return cast("str | None", self._call("_display_and_select_port", ports))
+            return cast("str | None", self._call("_display_and_select_port", ports))  # WHY: structured path
         if_stat = stats.get("if_stat", {})  # WHY: fallback to legacy if_stat dict
         if isinstance(if_stat, dict) and if_stat:  # WHY: only use if it's a populated mapping
             # WHY: route via parent for test patches
-            return cast("str | None", self._call("_display_and_select_ifstat", if_stat))
+            return cast("str | None", self._call("_display_and_select_ifstat", if_stat))  # WHY: legacy path
         # WHY: no structured data, ask user directly; route via parent for patches
-        return cast("str | None", self._call("_manual_port_entry"))
+        return cast("str | None", self._call("_manual_port_entry"))  # WHY: last-resort manual entry
 
-    def _fetch_stats_data(self, site_id: str, device_id: str) -> dict[str, Any] | None:
+    def _fetch_stats_data(self, site_id: str, device_id: str) -> dict[str, Any] | None:  # WHY: raw stats
         """Fetch the raw stats data dict for a device, or None on any failure."""
         try:  # WHY: mistapi may raise on network/auth failures
             response = mistapi.api.v1.sites.stats.getSiteDeviceStats(  # WHY: source of port/if data
                 self._apisession, site_id, device_id  # WHY: __getattr__ proxy
             )
             if not hasattr(response, "data") or not isinstance(response.data, dict):  # WHY: guard shape
-                return None
+                return None  # WHY: caller treats None as unavailable
             return response.data  # WHY: caller drills into 'ports' / 'if_stat' / 'ip_stat'
         except Exception as error:  # WHY: log-and-return-None on any error
             logging.debug("Could not fetch device stats: %s", error)  # WHY: debug-only trace
-            return None
+            return None  # WHY: swallow error and signal unavailable
 
-    def _display_and_select_port(self, ports: list[dict[str, Any]]) -> str | None:
+    def _display_and_select_port(self, ports: list[dict[str, Any]]) -> str | None:  # WHY: numbered UI
         """Display numbered port list and get selection."""
         self._render_port_rows(ports)  # WHY: emit numbered rows for user
         selection = self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
@@ -155,11 +155,11 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         )
         if not selection:  # WHY: empty input cancels selection
             print("! No port selected.")  # WHY: signal cancellation
-            return None
+            return None  # WHY: caller treats None as user cancel
         return self._resolve_port_choice(selection, ports)  # WHY: numeric or literal path
 
     @staticmethod
-    def _render_port_rows(ports: list[dict[str, Any]]) -> None:
+    def _render_port_rows(ports: list[dict[str, Any]]) -> None:  # WHY: numbered-list printer
         """Print the numbered port list for interactive selection."""
         print("\nAvailable ports:")  # WHY: banner announcing list
         for index, port in enumerate(ports, 1):  # WHY: 1-based numbering matches operator input
@@ -170,18 +170,18 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             print(f"  {index}. {port_name} [{status_str}] {speed}")  # WHY: numbered row
 
     @staticmethod
-    def _resolve_port_choice(selection: str, ports: list[dict[str, Any]]) -> str | None:
+    def _resolve_port_choice(selection: str, ports: list[dict[str, Any]]) -> str | None:  # WHY: idx/name
         """Resolve a numeric or literal port choice to a port name."""
         if selection.isdigit():  # WHY: numeric input references list index
             idx = int(selection) - 1  # WHY: 0-based indexing
             if 0 <= idx < len(ports):  # WHY: bounds check
                 result: str = str(ports[idx].get("port_id", ports[idx].get("name", "")))  # WHY: fallback
-                return result
+                return result  # WHY: matched port name from index lookup
             print("! Invalid port number.")  # WHY: signal out-of-range
-            return None
+            return None  # WHY: out-of-range index yields no selection
         return selection  # WHY: literal port name typed by user
 
-    def _display_and_select_ifstat(self, if_stat: dict[str, Any]) -> str | None:
+    def _display_and_select_ifstat(self, if_stat: dict[str, Any]) -> str | None:  # WHY: legacy UI
         """Display interfaces from an if_stat dict and prompt for selection."""
         physical = self._physical_iface_names(if_stat)  # WHY: prefer physical ports
         self._render_ifstat_rows(if_stat, physical)  # WHY: emit numbered rows
@@ -191,20 +191,20 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         )
         if not selection:  # WHY: empty input cancels selection
             print("! No port selected.")  # WHY: signal cancellation
-            return None
+            return None  # WHY: caller treats None as user cancel
         return self._resolve_ifstat_choice(selection, physical)  # WHY: numeric or literal path
 
     @staticmethod
-    def _physical_iface_names(if_stat: dict[str, Any]) -> list[str]:
+    def _physical_iface_names(if_stat: dict[str, Any]) -> list[str]:  # WHY: physical filter
         """Return sorted physical-port names, falling back to all keys."""
         physical = [name for name in if_stat if name.startswith(_PHYSICAL_PORT_PREFIXES)]  # WHY: filter
         if not physical:  # WHY: some platforms report only logical interfaces
             physical = list(if_stat.keys())  # WHY: show whatever is available
         physical.sort()  # WHY: stable order for operator recognition
-        return physical
+        return physical  # WHY: sorted list ready for numbered display
 
     @staticmethod
-    def _render_ifstat_rows(if_stat: dict[str, Any], physical: list[str]) -> None:
+    def _render_ifstat_rows(if_stat: dict[str, Any], physical: list[str]) -> None:  # WHY: printer
         """Print numbered rows of if_stat entries with UP/DOWN status."""
         print("\nAvailable ports/interfaces:")  # WHY: banner announcing list
         for idx, name in enumerate(physical, 1):  # WHY: 1-based numbering
@@ -213,7 +213,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             print(f"  {idx}. {name} [{up}]")  # WHY: numbered row
 
     @staticmethod
-    def _resolve_ifstat_choice(selection: str, physical: list[str]) -> str | None:
+    def _resolve_ifstat_choice(selection: str, physical: list[str]) -> str | None:  # WHY: idx/name
         """Resolve a numeric or literal ifstat choice, stripping VLAN suffix."""
         if selection.isdigit():  # WHY: numeric selection references list index
             sel_idx = int(selection) - 1  # WHY: 0-based indexing
@@ -221,10 +221,10 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
                 base = physical[sel_idx]  # WHY: pick the matched interface
                 return base.split(".")[0] if "." in base else base  # WHY: drop unit suffix
             print("! Invalid port number.")  # WHY: signal out-of-range
-            return None
+            return None  # WHY: out-of-range index yields no selection
         return selection  # WHY: literal port name typed by user
 
-    def _manual_port_entry(self) -> str | None:
+    def _manual_port_entry(self) -> str | None:  # WHY: keyboard fallback path
         """Prompt for manual port name entry."""
         port = self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
             "Enter port name (e.g., ge-0/0/0): ",
