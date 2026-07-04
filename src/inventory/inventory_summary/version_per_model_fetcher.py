@@ -1,13 +1,13 @@
 """Fetches firmware version distribution per device model with VC/HA awareness."""
 
-from __future__ import annotations
+from __future__ import annotations  # WHY: postponed evaluation for forward-ref annotations
 
-import logging
+import logging  # WHY: structured log emission for orchestrator + fetcher tracing
 
 from src.inventory import org_device_inventory_summary as _parent  # Parent module exposes apisession / mistapi globals
 
 
-class VersionPerModelFetcher:
+class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-model expansion helpers
     """Decomposed replacement for the original `_fetch_versions_per_model` helper."""
 
     @staticmethod
@@ -29,12 +29,12 @@ class VersionPerModelFetcher:
                 gateway_records,
             )  # Delegate per-row expansion to a small helper
             all_rows.extend(rows)  # Append helper output verbatim; helper returns [] on skip
-        return all_rows
+        return all_rows  # WHY: caller merges these into the final row set
 
     @staticmethod
-    def _sort_row_key(row: dict) -> tuple:
+    def _sort_row_key(row: dict) -> tuple:  # WHY: pluck the three sort keys for stable ordering
         """Stable sort key for output rows: (device_type, model, -count)."""
-        return (
+        return (  # WHY: negative count sorts high-count entries first per legacy behavior
             row.get("device_type", ""),
             row.get("model", ""),
             -int(row.get("count", 0)),
@@ -66,8 +66,9 @@ class VersionPerModelFetcher:
         logging.info(
             "Fetching version distribution per model, org=%s", target_org_id
         )  # Trace orchestrator entry for ops visibility
-        switch_records = VersionPerModelFetcher._prefetch_switches(target_org_id, model_rows)
-        gateway_records = VersionPerModelFetcher._prefetch_gateways(target_org_id, model_rows)
+        # WHY: single switch/gateway fetch shared across all model rows
+        switch_records = VersionPerModelFetcher._prefetch_switches(target_org_id, model_rows)  # switches once
+        gateway_records = VersionPerModelFetcher._prefetch_gateways(target_org_id, model_rows)  # gateways once
         all_rows = VersionPerModelFetcher._expand_model_rows(
             target_org_id, model_rows, switch_records, gateway_records
         )  # Per-model expansion (non-AP)
@@ -78,16 +79,16 @@ class VersionPerModelFetcher:
         logging.debug(
             "Total version-per-model rows after fetch and sort: %d", len(all_rows)
         )  # Record final row count for diagnostics
-        return all_rows
+        return all_rows  # WHY: sorted, fully expanded rows returned to summary orchestrator
 
     @staticmethod
-    def _ap_rows(target_org_id: str, ap_records: list[dict] | None) -> list[dict]:
+    def _ap_rows(target_org_id: str, ap_records: list[dict] | None) -> list[dict]:  # WHY: bulk AP rows
         """Build per-model AP rows from full inventory, bucketing version into the three real states."""
         # APs are expanded from getOrgInventory (the portal "Claim APs" source) rather than the count
         # API, so claimed-but-never-connected APs (no firmware version) surface under an "unknown"
         # version bucket and unassigned APs under an "unassigned" bucket instead of vanishing entirely.
-        if ap_records is None:  # Direct/test callers may omit the shared fetch; pull it ourselves
-            ap_records = _parent.OrgDeviceInventorySummaryCore._fetch_ap_inventory(target_org_id)
+        if ap_records is None:  # WHY: fallback fetch preserves standalone usage
+            ap_records = _parent.OrgDeviceInventorySummaryCore._fetch_ap_inventory(target_org_id)  # AP fetch
         logging.info("Building AP version-per-model rows from %d records", len(ap_records))  # Log before aggregation
         counts: dict[tuple[str, str], int] = {}  # Running total per (model, version_bucket)
         for record in ap_records:  # Walk every claimed AP exactly once
@@ -102,7 +103,7 @@ class VersionPerModelFetcher:
             for (model_name, version), count in counts.items()
         ]
         logging.debug("AP version-per-model produced %d rows", len(rows))  # Record outcome
-        return rows
+        return rows  # WHY: caller extends the aggregate row set with these AP entries
 
     @staticmethod
     def _accumulate_unassigned(  # Folds unassigned-inventory records into (type, model) counts
@@ -115,7 +116,7 @@ class VersionPerModelFetcher:
             model_name = record.get("model") or "unknown"  # Keep real model so it lines up with assigned rows
             key = (device_type, model_name)  # Compose grouping key
             counts[key] = counts.get(key, 0) + 1  # Each unassigned record is one physical device
-        return counts
+        return counts  # WHY: caller materializes rows from these aggregate counts
 
     @staticmethod
     def _unassigned_rows(  # Builds rows for unassigned switch stock
@@ -126,9 +127,9 @@ class VersionPerModelFetcher:
         # never returns them. We surface them under a dedicated "unassigned" version so the pivot
         # renderer emits a clearly labelled column instead of silently undercounting. (Unassigned
         # APs are handled by _ap_rows, which counts all APs straight from inventory.)
-        if unassigned_records is None:  # Direct/test callers may omit the shared fetch; pull it ourselves
+        if unassigned_records is None:  # WHY: fallback fetch preserves standalone usage
             unassigned_records = _parent.OrgDeviceInventorySummaryCore._fetch_unassigned_inventory(target_org_id)
-        logging.info("Building unassigned version-per-model rows from %d records", len(unassigned_records))
+        logging.info("Building unassigned version-per-model rows from %d records", len(unassigned_records))  # log
         counts = VersionPerModelFetcher._accumulate_unassigned(unassigned_records)  # Delegate fold
         rows = [  # Materialize into standard rows with the synthetic "unassigned" version bucket
             {
@@ -140,15 +141,15 @@ class VersionPerModelFetcher:
             for (device_type, model_name), count in counts.items()
         ]
         logging.debug("Unassigned version-per-model produced %d rows", len(rows))  # Record outcome
-        return rows
+        return rows  # WHY: caller extends the aggregate row set with these unassigned entries
 
     @staticmethod
-    def _prefetch_switches(target_org_id: str, model_rows: list[dict]) -> list[dict]:
+    def _prefetch_switches(target_org_id: str, model_rows: list[dict]) -> list[dict]:  # WHY: single switch fetch
         """Fetch switch inventory once if any switch models are present."""
         if not any(
             row.get("device_type") == "switch" for row in model_rows
         ):  # Skip API call when no switches need expansion
-            return []
+            return []  # WHY: no switch models -> skip API entirely
         logging.info(
             "Pre-fetching switch inventory for version distribution, org=%s", target_org_id
         )  # Log before potentially slow API
@@ -160,15 +161,15 @@ class VersionPerModelFetcher:
             logging.exception("Switch inventory pre-fetch failed: %s", error)  # Capture traceback for postmortem
             records = []  # Degrade gracefully so per-model loop yields empty switch rows
         logging.debug("Switch pre-fetch returned %d records", len(records))  # Record outcome for diagnostics
-        return records
+        return records  # WHY: caller uses these for per-model switch expansion
 
     @staticmethod
-    def _prefetch_gateways(target_org_id: str, model_rows: list[dict]) -> list[dict]:
+    def _prefetch_gateways(target_org_id: str, model_rows: list[dict]) -> list[dict]:  # WHY: single gateway fetch
         """Fetch gateway inventory once if any gateway models are present."""
         if not any(
             row.get("device_type") == "gateway" for row in model_rows
         ):  # Skip API call when no gateways need expansion
-            return []
+            return []  # WHY: no gateway models -> skip API entirely
         logging.info(
             "Pre-fetching gateway inventory for version distribution, org=%s", target_org_id
         )  # Log before potentially slow API
