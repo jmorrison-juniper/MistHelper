@@ -105,18 +105,9 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
         websocket_manager: Any,
     ) -> dict[str, Any] | None:
         """Run ``_execute_ws_command`` with log-and-continue error handling."""
-        try:
-            # WHY: route through parent so patch.object(duc, "_execute_ws_command", ...) intercepts
-            return cast(  # WHY: parent proxy returns Any; narrow to concrete type
-                "dict[str, Any] | None",
-                self._call(
-                    "_execute_ws_command",
-                    site_id,
-                    device_id,
-                    sdk_method,
-                    body,
-                    websocket_manager,
-                ),
+        try:  # WHY: any SDK/WS error must fall through to disconnect
+            return self._dispatch_ws_call(  # WHY: extracted call-site keeps this method under 25 lines
+                site_id, device_id, sdk_method, body, websocket_manager
             )
         except Exception as error:  # WHY: log-and-continue on any WS/SDK failure
             logging.exception("WebSocket command failed: %s", error)  # WHY: audit failure with stack
@@ -124,6 +115,28 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
             return None  # WHY: caller treats None as no-result
         finally:
             websocket_manager.disconnect()  # WHY: always clean up socket
+
+    def _dispatch_ws_call(
+        self,
+        site_id: str,
+        device_id: str,
+        sdk_method: Any,
+        body: dict[str, Any] | None,
+        websocket_manager: Any,
+    ) -> dict[str, Any] | None:
+        """Route ``_execute_ws_command`` through the parent proxy and narrow the result."""
+        # WHY: route through parent so patch.object(duc, "_execute_ws_command", ...) intercepts
+        return cast(  # WHY: parent proxy returns Any; narrow to concrete type
+            "dict[str, Any] | None",
+            self._call(
+                "_execute_ws_command",
+                site_id,
+                device_id,
+                sdk_method,
+                body,
+                websocket_manager,
+            ),
+        )
 
     def _execute_ws_command(  # noqa: PLR0913
         self,
