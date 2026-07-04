@@ -13,7 +13,7 @@ from __future__ import annotations  # Enable PEP 604 union types on Python 3.10+
 
 from unittest.mock import MagicMock, patch  # Mock API session, injected callables, and mistapi module
 
-from src.device.prompt_utils import PromptNetworkDeviceUtils  # Class under test
+from src.device.prompt_utils import PromptNetworkDeviceUtils, _PortPromptRequest  # Class under test + request DTO
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -873,7 +873,8 @@ class TestPromptPortSelection:
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="c")  # Simulate cancel input
         ports = self._make_up_ports(3)  # Three UP ports
-        result = utils._prompt_port_selection(ports, {}, "aa:bb:cc:dd:ee:ff", "SW1", "switch", False)  # Invoke
+        request = _PortPromptRequest(ports, {}, "aa:bb:cc:dd:ee:ff", "SW1", "switch", False)  # Build request DTO
+        result = utils._prompt_port_selection(request)  # Invoke with bundled request
         assert result is None  # 'c' means cancel -- return None
         out = capsys.readouterr().out  # Capture printed output
         assert "cancelled" in out  # User should see a cancellation message
@@ -883,7 +884,8 @@ class TestPromptPortSelection:
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="")  # User presses Enter with no input
         ports = self._make_up_ports(3)  # Three ports -- within the 6-port API limit
-        result = utils._prompt_port_selection(ports, {}, "aa:bb:cc:dd:ee:ff", "SW1", "switch", False)  # Invoke
+        request = _PortPromptRequest(ports, {}, "aa:bb:cc:dd:ee:ff", "SW1", "switch", False)  # Build request DTO
+        result = utils._prompt_port_selection(request)  # Invoke with bundled request
         assert result == []  # Empty list is the 'all ports' sentinel
 
     def test_valid_index_returns_port_name(self):  # User picks index 1
@@ -891,7 +893,8 @@ class TestPromptPortSelection:
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="1")  # User selects index 1
         ports = self._make_up_ports(3)  # Three ports: ge-0/0/0, ge-0/0/1, ge-0/0/2
-        result = utils._prompt_port_selection(ports, {}, "aa:bb:cc:dd:ee:ff", "SW1", "switch", False)  # Invoke
+        request = _PortPromptRequest(ports, {}, "aa:bb:cc:dd:ee:ff", "SW1", "switch", False)  # Build request DTO
+        result = utils._prompt_port_selection(request)  # Invoke with bundled request
         assert result == ["ge-0/0/1"]  # Index 1 maps to ge-0/0/1
 
     def test_fallback_notice_displayed(self, capsys):  # _fallback=True triggers NOTE
@@ -901,9 +904,10 @@ class TestPromptPortSelection:
         fallback_ports = [  # Ports flagged as coming from config (not live stats)
             ("ge-0/0/0", {"up": True, "speed": 1000, "duplex": "full", "full_duplex": True, "_fallback": True})
         ]
-        utils._prompt_port_selection(  # Invoke -- cancel is fine, we just check output
+        request = _PortPromptRequest(  # Build request DTO with fallback ports
             fallback_ports, {}, "aa:bb:cc:dd:ee:ff", "SW1", "switch", False
         )
+        utils._prompt_port_selection(request)  # Invoke -- cancel is fine, we just check output
         out = capsys.readouterr().out  # Capture printed output
         assert "NOTE" in out  # Fallback notice must be printed when _fallback=True
 
@@ -912,9 +916,10 @@ class TestPromptPortSelection:
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="0")  # User selects index 0
         ports = self._make_up_ports(2)  # Two ports
-        result = utils._prompt_port_selection(  # Invoke with return_available flag
-            ports, {}, "aa:bb:cc:dd:ee:ff", "SW1", "switch", True  # return_available=True
+        request = _PortPromptRequest(  # Build request DTO with return_available=True
+            ports, {}, "aa:bb:cc:dd:ee:ff", "SW1", "switch", True
         )
+        result = utils._prompt_port_selection(request)  # Invoke with bundled request
         assert isinstance(result, tuple)  # Should wrap result in a tuple
         assert result[0] == ["ge-0/0/0"]  # First element is the selected port list
         assert result[1] == ports  # Second element is the full available list
@@ -924,9 +929,10 @@ class TestPromptPortSelection:
         utils = _make_utils()  # Create instance with mocked session
         utils._safe_input = MagicMock(return_value="c")  # Cancel immediately after display
         ports = self._make_up_ports(7)  # Seven ports -- exceeds the 6-port capture limit
-        utils._prompt_port_selection(  # Invoke -- user cancels after seeing the table
+        request = _PortPromptRequest(  # Build request DTO with over-limit ports
             ports, {}, "aa:bb:cc:dd:ee:ff", "SW1", "switch", False
         )
+        utils._prompt_port_selection(request)  # Invoke -- user cancels after seeing the table
         out = capsys.readouterr().out  # Capture printed output
         assert "exceeds 6" in out or "NOT AVAILABLE" in out  # Limit-exceeded warning shown
 
