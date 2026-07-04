@@ -4,89 +4,93 @@ Also owns ``_start_function_execution`` (CC=14) parameter discovery.
 Every helper here has CC <= 10.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # WHY: postponed evaluation for PEP 604 unions on 3.13
 
-import inspect
-import logging
-from typing import Any
+import inspect  # WHY: probe callable signatures for parameter discovery
+import logging  # WHY: action-log start/execute/error transitions
+from typing import Any  # WHY: TUI back-ref + parsed payloads are opaque
 
 _SECRET_TOKENS = ("pass", "token", "key", "secret")  # Substrings that flag secret-like names
 
 
-def _redact(name: str, value: Any) -> Any:
+def _redact(name: str, value: Any) -> Any:  # WHY: log-safe value transform for secret-ish names
     """Redact ``value`` when ``name`` looks like a secret parameter."""
     if any(token in name.lower() for token in _SECRET_TOKENS):  # Substring scan for secrets
-        return "***REDACTED***"
+        return "***REDACTED***"  # WHY: mask secret payload before returning to caller
     return value  # Pass-through for non-secret names
 
 
-class FunctionExecutor:
+class FunctionExecutor:  # WHY: extracted from MistHelperTUI to own Live-mode execution
     """Executes the currently-selected API function in Live (in-TUI) mode."""
 
-    def __init__(self, tui: Any) -> None:
+    def __init__(self, tui: Any) -> None:  # WHY: bind owning TUI for shared state
         """Store a back-reference to the owning TUI for shared state access."""
         self._tui = tui  # Back-reference for shared TUI state
 
     # ---- start: parameter discovery & prompting kickoff -----------------
 
-    def start(self, selected_item: dict[str, Any]) -> None:
+    def start(self, selected_item: dict[str, Any]) -> None:  # WHY: entrypoint from nav-Enter dispatch
         """Begin function execution: prep parameters, then either prompt or run."""
         tui = self._tui  # Local alias
         tui.current_function = selected_item  # Store under exec context
         func = selected_item.get("object")  # Callable to invoke
         func_name = selected_item.get("name")  # For logging + error messages
         if not func or not callable(func):  # Guard: invalid selection
-            tui.output_lines = ["[ERROR] Selected item is not callable"]
-            return
+            tui.output_lines = ["[ERROR] Selected item is not callable"]  # WHY: user-visible error line
+            return  # WHY: nothing to execute, bail out early
         logging.info("TUI: starting execution of %s", func_name)  # Action log before signature probe
         try:
             self._prepare_parameter_list(func)  # Build tui.param_list / function_params
         except Exception as error:  # Signature probing can fail on builtins
-            tui.output_lines = [f"[ERROR] Failed to prepare execution: {error}"]
-            logging.exception("TUI: Failed to prepare execution of %s: %s", func_name, error)
-            return
+            tui.output_lines = [f"[ERROR] Failed to prepare execution: {error}"]  # WHY: surface probe failure
+            logging.exception("TUI: Failed to prepare execution of %s: %s", func_name, error)  # WHY: log traceback
+            return  # WHY: probe failed, cannot execute
         self._begin_collection_or_execute()  # Branch on whether params remain
 
-    def _prepare_parameter_list(self, func: Any) -> None:
+    def _prepare_parameter_list(self, func: Any) -> None:  # WHY: signature probe + autofill dispatcher
         """Inspect ``func``'s signature; build param_list + auto-fill known names."""
         tui = self._tui  # Local alias
         sig = inspect.signature(func)  # Signature object
         tui.param_list = []  # Reset collection list
         tui.function_params = {}  # Reset captured params
         for param_name, param in sig.parameters.items():  # Walk each parameter
-            if param_name == "self":  # Skip implicit self
-                continue
-            if self._try_autofill_session(param_name):  # Try mist_session/apisession autofill
-                continue
-            if self._try_autofill_dotenv(param_name):  # Try .env autofill
-                continue
-            has_default = param.default != inspect.Parameter.empty  # Required vs optional flag
-            tui.param_list.append(
-                {  # Defer to interactive prompt
-                    "name": param_name,
-                    "has_default": has_default,
-                    "default": param.default if has_default else None,
-                }
-            )
+            self._process_signature_param(param_name, param)  # Delegate per-param handling to helper
 
-    def _try_autofill_session(self, param_name: str) -> bool:
+    def _process_signature_param(self, param_name: str, param: Any) -> None:  # WHY: per-param branch helper
+        """Handle one signature parameter: skip self, try autofills, else queue prompt."""
+        if param_name == "self":  # Skip implicit self
+            return  # WHY: never prompt for self
+        if self._try_autofill_session(param_name):  # Try mist_session/apisession autofill
+            return  # WHY: session handled by helper
+        if self._try_autofill_dotenv(param_name):  # Try .env autofill
+            return  # WHY: dotenv handled by helper
+        has_default = param.default != inspect.Parameter.empty  # Required vs optional flag
+        self._tui.param_list.append(  # Defer to interactive prompt
+            {
+                "name": param_name,
+                "has_default": has_default,
+                "default": param.default if has_default else None,
+            }
+        )
+
+    def _try_autofill_session(self, param_name: str) -> bool:  # WHY: session autofill probe
         """Autofill ``mist_session`` / ``apisession`` from the shared TUI session."""
         if param_name not in ("mist_session", "apisession"):  # Only specific session names
-            return False
+            return False  # WHY: not a session param, let caller continue
         tui = self._tui  # Local alias
         if getattr(tui, "apisession", None) is None:  # Guard: session missing
-            tui.output_lines = ["[ERROR] API session not available"]
+            tui.output_lines = ["[ERROR] API session not available"]  # WHY: user-visible error
             return True  # Stop iteration with error already set
         tui.function_params[param_name] = tui.apisession  # Inject session reference
-        return True
+        return True  # WHY: session param handled
 
-    def _try_autofill_dotenv(self, param_name: str) -> bool:
+    def _try_autofill_dotenv(self, param_name: str) -> bool:  # WHY: .env autofill probe
         """Autofill parameter from ``.env`` values when present."""
         tui = self._tui  # Local alias
         if param_name not in tui.dotenv_values:  # Not in .env -> caller continues
-            return False
+            return False  # WHY: no .env match, caller keeps trying
         tui.function_params[param_name] = tui.dotenv_values[param_name]  # Use .env value directly
-        return True
+        return True  # WHY: .env value injected
 
     def _begin_collection_or_execute(self) -> None:
         """Start prompting when params remain; otherwise execute immediately."""
@@ -141,30 +145,56 @@ class FunctionExecutor:
             logging.info("TUI: Execution complete - no grid display (data type: %s)", type(parsed_data).__name__)
         logging.debug("TUI: %s completed", func_name)  # Action log after success
 
-    def _paginate_if_possible(self, result: Any, parsed_data: Any) -> tuple[Any, Any]:
+    def _paginate_if_possible(self, result: Any, parsed_data: Any) -> tuple[Any, Any]:  # WHY: cursor-pagination entry
         """Follow ``result.next`` cursor pagination, accumulating results."""
         tui = self._tui  # Local alias
         if not (isinstance(parsed_data, dict) and "results" in parsed_data):  # Only paginate result-wrapped payloads
             return result, parsed_data
+        session = tui.function_params.get("mist_session") or tui.function_params.get("apisession")  # WHY: pager needs a session
+        if not session:  # Guard: no session -> return single page as-is
+            return result, parsed_data
+        return self._collect_pages(result, parsed_data, session)  # Delegate page loop to helper
+
+    def _collect_pages(self, result: Any, parsed_data: Any, session: Any) -> tuple[Any, Any]:  # WHY: pagination loop
+        """Iterate ``result.next`` until exhausted, patching accumulated results back in."""
+        tui = self._tui  # Local alias
         accumulated = list(parsed_data.get("results", []))  # Seed with first page
         page_count = 1  # Track for logging
-        session = tui.function_params.get("mist_session") or tui.function_params.get("apisession")
-        while hasattr(result, "next") and result.next is not None and session:  # Loop while cursor is available
+        while self._has_next_cursor(result):  # Loop while cursor is available
             page_count += 1  # Increment page counter
             tui.output_lines = [f"[EXECUTING] Fetching page {page_count} (total results so far: {len(accumulated)})..."]
-            try:
-                result = session.mist_get(result.next)  # Fetch next page via shared session
-            except Exception as error:  # Tolerate transient pagination errors
-                logging.debug("TUI: pagination error on page %s - %s, stopping", page_count, error)
+            result, parsed_data, stop = self._fetch_next_page(result, session, page_count, accumulated)  # WHY: one page step
+            if stop:  # Error or empty page -> exit loop
                 break
-            parsed_data = tui._api_parser.parse(result)  # Re-parse the wrapper via the parser collaborator
-            new_results = self._extract_page_results(parsed_data)  # Pull this page's items
-            if not new_results:  # Empty page -> done
-                break
-            accumulated.extend(new_results)  # Append to running list
         if page_count > 1:  # Patch the accumulated list in
             parsed_data["results"] = accumulated
         return result, parsed_data
+
+    @staticmethod
+    def _has_next_cursor(result: Any) -> bool:  # WHY: encapsulate hasattr+None guard for while-cond
+        """Return True when ``result`` carries a non-None ``next`` cursor."""
+        return hasattr(result, "next") and result.next is not None  # WHY: cursor may be attr-missing or None
+
+    def _fetch_next_page(  # WHY: single-step pager: fetch + parse + append
+        self,
+        result: Any,
+        session: Any,
+        page_count: int,
+        accumulated: list[Any],
+    ) -> tuple[Any, Any, bool]:
+        """Fetch one page via ``session.mist_get``, append to accumulator, signal stop."""
+        tui = self._tui  # Local alias
+        try:
+            result = session.mist_get(result.next)  # Fetch next page via shared session
+        except Exception as error:  # Tolerate transient pagination errors
+            logging.debug("TUI: pagination error on page %s - %s, stopping", page_count, error)
+            return result, None, True  # WHY: signal caller to break out of the loop
+        parsed_data = tui._api_parser.parse(result)  # Re-parse the wrapper via the parser collaborator
+        new_results = self._extract_page_results(parsed_data)  # Pull this page's items
+        if not new_results:  # Empty page -> done
+            return result, parsed_data, True  # WHY: end of stream, tell caller to stop
+        accumulated.extend(new_results)  # Append to running list
+        return result, parsed_data, False  # WHY: more pages may follow
 
     @staticmethod
     def _extract_page_results(parsed_data: Any) -> list[Any]:
