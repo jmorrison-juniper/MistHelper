@@ -9,7 +9,10 @@ import pytest
 
 from src.ssh.batch.batch_executor import BatchExecutor  # T013c: extracted multi-command executor
 from src.ssh.batch.host_runner import HostRunner  # T013c: extracted per-host worker
-from src.ssh.batch.interactive_batch_executor import InteractiveBatchExecutor  # T013c: extracted interactive executor
+from src.ssh.batch.interactive_batch_executor import (  # T013c: extracted interactive executor
+    InteractiveBatchExecutor,
+    InteractiveSessionRequest,
+)
 from src.ssh.batch.multi_host_runner import MultiHostRunner  # T013c: extracted multi-host orchestrator
 from src.ssh.config.command_parser import CommandListParser
 from src.ssh.config.csv_loader import CommandCsvLoader
@@ -1004,19 +1007,21 @@ class TestRunMultipleSSHCommandsInteractive:
         mock_connect.return_value.connect.return_value = (None, None)
 
         result = InteractiveBatchExecutor.run(
-            hostname="10.0.0.1",
-            username="admin",
-            password="pass",
-            commands=["su", "password123", "show version"],
-            port=22,
-            timeout=30,
+            InteractiveSessionRequest(
+                hostname="10.0.0.1",
+                username="admin",
+                password="pass",
+                commands=("su", "password123", "show version"),
+                port=22,
+                timeout=30,
+            )
         )
         assert result is False
 
     def test_missing_params_raises(self):
         """Missing required params raises ValueError."""
         with pytest.raises(ValueError):
-            InteractiveBatchExecutor.run(hostname=None, username="admin", password="pass")
+            InteractiveSessionRequest(hostname=None, username="admin", password="pass")
 
     @patch("src.ssh.batch.interactive_batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")
@@ -1028,7 +1033,7 @@ class TestRunMultipleSSHCommandsInteractive:
 
         config = SSHConnectionConfig(hostname="10.0.0.1", username="admin", password="pass")
         exec_config = SSHExecutionConfig(commands=["su", "pw"])
-        result = InteractiveBatchExecutor.run(config=config, exec_config=exec_config)
+        result = InteractiveBatchExecutor.run(InteractiveSessionRequest.from_configs(config, exec_config))
         assert result is False
 
 
@@ -1358,12 +1363,14 @@ class TestRunMultipleSSHCommandsInteractiveDeep:
         mock_shell.send.return_value = 20
 
         result = InteractiveBatchExecutor.run(
-            hostname="10.0.0.1",
-            username="admin",
-            password="pass",
-            commands=["show version", "show route"],
-            port=22,
-            timeout=30,
+            InteractiveSessionRequest(
+                hostname="10.0.0.1",
+                username="admin",
+                password="pass",
+                commands=("show version", "show route"),
+                port=22,
+                timeout=30,
+            )
         )
         assert isinstance(result, bool)
 
@@ -1381,7 +1388,9 @@ class TestRunMultipleSSHCommandsInteractiveDeep:
         mock_shell.send.return_value = 5
 
         result = InteractiveBatchExecutor.run(
-            hostname="10.0.0.1", username="admin", password="pass", commands=[], port=22, timeout=30
+            InteractiveSessionRequest(
+                hostname="10.0.0.1", username="admin", password="pass", commands=(), port=22, timeout=30
+            )
         )
         assert isinstance(result, bool)
 

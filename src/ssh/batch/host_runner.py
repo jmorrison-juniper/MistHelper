@@ -10,7 +10,10 @@ import logging  # Structured logging for the new host runner
 from typing import TYPE_CHECKING
 
 from src.ssh.batch.batch_executor import BatchExecutor  # Real collaborator (no façade)
-from src.ssh.batch.interactive_batch_executor import InteractiveBatchExecutor  # Real collaborator (no façade)
+from src.ssh.batch.interactive_batch_executor import (  # Real collaborator (no façade)
+    InteractiveBatchExecutor,
+    InteractiveSessionRequest,
+)
 from src.ssh.command.command_runner import SingleCommandRunner  # Existing single-command orchestrator
 
 if TYPE_CHECKING:  # Imported only for type hints — avoids circular import at runtime
@@ -107,15 +110,16 @@ class HostRunner:
             return (hostname, single_success, f"Single command: {commands[0]}")
         if HostRunner._needs_interactive(commands, hostname, logger):  # Detect su/sudo + password sequences
             logger.info("[%s] Using interactive mode for %d commands", hostname, len(commands))
-            interactive_success = InteractiveBatchExecutor.run(
-                hostname,
-                username,
-                password,
-                commands,
-                port,
-                timeout,
-                use_shell,
+            interactive_request = InteractiveSessionRequest(  # WHY: dataclass keeps run() at 1 param.
+                hostname=hostname,
+                username=username,
+                password=password,
+                commands=tuple(commands),
+                port=port,
+                timeout=timeout,
+                use_shell=use_shell,
             )
+            interactive_success = InteractiveBatchExecutor.run(interactive_request)
             return (hostname, interactive_success, f"{len(commands)} interactive commands executed")
         # Default — sequential batch
         batch_success = BatchExecutor.run(hostname, username, password, commands, port, timeout, use_shell)
