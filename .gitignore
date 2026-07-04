@@ -47,6 +47,7 @@ DEVICE*.csv
 data/
 Data/
 DATA/
+compliance_report.md
 output/
 Output/
 OUTPUT/
